@@ -1,0 +1,93 @@
+CREATE DATABASE IF NOT EXISTS sso;
+USE sso;
+
+-- =============================================
+-- 1. users (사용자)
+-- =============================================
+CREATE TABLE users (
+                       id             VARCHAR(36)   NOT NULL,
+                       email          VARCHAR(100)  NOT NULL,
+                       password       VARCHAR(255)  NULL,
+                       name           VARCHAR(50)   NOT NULL,
+                       phone          VARCHAR(20)   NULL,
+                       role           VARCHAR(20)   NOT NULL DEFAULT 'USER',
+                       status         VARCHAR(20)   NOT NULL DEFAULT 'ACTIVE',
+                       provider       VARCHAR(20)   NOT NULL DEFAULT 'LOCAL',
+                       provider_id    VARCHAR(100)  NULL,
+                       profile_image  VARCHAR(500)  NULL,
+                       email_verified BOOLEAN       NOT NULL DEFAULT FALSE,
+                       last_login_at  DATETIME      NULL,
+                       created_at     DATETIME      NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                       updated_at     DATETIME      NOT NULL DEFAULT CURRENT_TIMESTAMP
+                           ON UPDATE CURRENT_TIMESTAMP,
+
+                       CONSTRAINT pk_users           PRIMARY KEY (id),
+                       CONSTRAINT uq_users_email     UNIQUE (email),
+                       CONSTRAINT chk_users_role     CHECK (role     IN ('USER', 'ADMIN')),
+                       CONSTRAINT chk_users_status   CHECK (status   IN ('ACTIVE', 'INACTIVE')),
+                       CONSTRAINT chk_users_provider CHECK (provider IN ('LOCAL', 'KAKAO'))
+);
+
+-- =============================================
+-- 2. refresh_tokens (리프레시 토큰)
+-- =============================================
+CREATE TABLE refresh_tokens (
+                                id          BIGINT        NOT NULL AUTO_INCREMENT,
+                                user_id     VARCHAR(36)   NOT NULL,
+                                token       VARCHAR(500)  NOT NULL,
+                                expires_at  DATETIME      NOT NULL,
+                                created_at  DATETIME      NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+                                CONSTRAINT pk_refresh_tokens       PRIMARY KEY (id),
+                                CONSTRAINT uq_refresh_tokens_token UNIQUE (token),
+                                CONSTRAINT fk_refresh_tokens_user  FOREIGN KEY (user_id)
+                                    REFERENCES users(id) ON DELETE CASCADE
+);
+
+-- =============================================
+-- 3. access_logs (접속 로그)
+-- =============================================
+CREATE TABLE access_logs (
+                             id          BIGINT        NOT NULL AUTO_INCREMENT,
+                             user_id     VARCHAR(36)   NULL,
+                             client_id   VARCHAR(36)   NULL,
+                             action      VARCHAR(50)   NOT NULL,
+                             ip_address  VARCHAR(50)   NULL,
+                             user_agent  VARCHAR(500)  NULL,
+                             created_at  DATETIME      NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+                             CONSTRAINT pk_access_logs      PRIMARY KEY (id),
+                             CONSTRAINT fk_access_logs_user FOREIGN KEY (user_id)
+                                 REFERENCES users(id) ON DELETE SET NULL,
+                             CONSTRAINT chk_access_logs_action CHECK (
+                                 action IN ('LOGIN', 'LOGOUT', 'KAKAO_LOGIN',
+                                 'TOKEN_ISSUE', 'PASSWORD_RESET')
+)
+    );
+
+-- =============================================
+-- 인덱스
+-- =============================================
+CREATE INDEX idx_refresh_tokens_user_id ON refresh_tokens(user_id);
+CREATE INDEX idx_access_logs_user_id    ON access_logs(user_id);
+CREATE INDEX idx_access_logs_created_at ON access_logs(created_at);
+CREATE INDEX idx_users_provider_id      ON users(provider, provider_id);
+
+
+-- =============================================
+-- Redis 키 구조 (참고용)
+-- =============================================
+-- 이메일 인증코드:
+--   key:   email:verify:{email}
+--   value: "123456"
+--   TTL:   300초 (5분)
+--
+-- 비밀번호 재설정:
+--   key:   password:reset:{token}
+--   value: "{userId}"
+--   TTL:   1800초 (30분)
+--
+-- 블랙리스트:
+--   key:   blacklist:{accessToken}
+--   value: "logout"
+--   TTL:   토큰 남은 만료시간

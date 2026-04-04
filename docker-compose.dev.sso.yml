@@ -1,0 +1,44 @@
+services:
+  db:
+    image: mariadb:11.8
+    container_name: dmusso-dev-sso-db
+    restart: unless-stopped
+    env_file:
+      - .env.dev.sso
+    ports:
+      - "6406:3306"
+    volumes:
+      - dmusso-dev-sso-db-data:/var/lib/mysql
+    networks:
+      - app-net
+    healthcheck:
+      test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7.2
+    container_name: dmusso-dev-sso-redis
+    restart: unless-stopped
+    ports:
+      - "6506:6379"
+    volumes:
+      - dmusso-dev-sso-redis-data:/data
+    networks:
+      - app-net
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+networks:
+  app-net:
+    name: dmusso-dev-sso-net
+
+volumes:
+  dmusso-dev-sso-db-data:
+    name: dmusso-dev-sso-db-data
+  dmusso-dev-sso-redis-data:
+    name: dmusso-dev-sso-redis-data
