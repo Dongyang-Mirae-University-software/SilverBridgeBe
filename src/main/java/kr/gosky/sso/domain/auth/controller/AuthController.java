@@ -9,6 +9,7 @@ import kr.gosky.sso.domain.auth.service.AuthService;
 import kr.gosky.sso.global.response.ApiResponse;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 
 @RestController
@@ -35,5 +36,19 @@ public class AuthController {
                 httpRequest.getRemoteAddr(),
                 httpRequest.getHeader("User-Agent")
         ));
+    }
+
+    // 로그아웃
+    @PostMapping("/logout")
+    public ApiResponse<Void> logout(@RequestHeader("Authorization") String bearerToken,
+                                    @AuthenticationPrincipal String userId,
+                                    HttpServletRequest httpRequest) {
+        authService.logout(
+                bearerToken.substring(7),
+                userId,
+                httpRequest.getRemoteAddr(),
+                httpRequest.getHeader("User-Agent")
+        );
+        return ApiResponse.ok("로그아웃되었습니다.");
     }
 }

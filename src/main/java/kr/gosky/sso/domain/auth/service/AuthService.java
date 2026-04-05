@@ -91,6 +91,20 @@ public class AuthService {
         return LoginResponse.of(user, accessToken, refreshToken);
     }
 
+    // 로그아웃
+    // Access Token → Redis blacklist 등록 (남은 만료 시간만큼 TTL)
+    // Refresh Token → DB에서 삭제
+    @Transactional
+    public void logout(String accessToken, String userId, String ipAddress, String userAgent) {
+        long remaining = jwtTokenProvider.getRemainingExpiration(accessToken);
+        if (remaining > 0) {
+            redisTemplate.opsForValue()
+                    .set("blacklist:" + accessToken, "logout", remaining, java.util.concurrent.TimeUnit.MILLISECONDS);
+        }
+        refreshTokenRepository.deleteByUserId(userId);
+        saveAccessLog(userId, "LOGOUT", ipAddress, userAgent);
+    }
+
     // 접속 로그 저장 공통 메서드
     protected void saveAccessLog(String userId, String action, String ipAddress, String userAgent) {
         accessLogRepository.save(AccessLog.builder()
