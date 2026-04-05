@@ -72,6 +72,11 @@ public class User extends BaseTimeEntity {
         this.password = encodedPassword;
     }
 
+    // 계정 활성화
+    public void activate() {
+        this.status = Status.ACTIVE;
+    }
+
     // 계정 비활성화
     public void deactivate() {
         this.status = Status.INACTIVE;
