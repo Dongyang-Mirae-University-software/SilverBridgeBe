@@ -1,4 +1,23 @@
 services:
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: dmusso-dev-sso-api
+    image: dmusso-sso-api:dev
+    restart: unless-stopped
+    env_file:
+      - .env.dev.sso
+    ports:
+      - "6201:6201"
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - app-net
+
   db:
     image: mariadb:11.8
     container_name: dmusso-dev-sso-db
@@ -9,6 +28,7 @@ services:
       - "6406:3306"
     volumes:
       - dmusso-dev-sso-db-data:/var/lib/mysql
+      - ./db/schema.sql:/docker-entrypoint-initdb.d/schema.sql:ro
     networks:
       - app-net
     healthcheck:
