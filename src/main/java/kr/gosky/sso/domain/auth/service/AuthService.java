@@ -3,6 +3,8 @@ package kr.gosky.sso.domain.auth.service;
 import kr.gosky.sso.domain.auth.dto.LoginRequest;
 import kr.gosky.sso.domain.auth.dto.LoginResponse;
 import kr.gosky.sso.domain.auth.dto.RegisterRequest;
+import kr.gosky.sso.domain.auth.dto.TokenRefreshRequest;
+import kr.gosky.sso.domain.auth.dto.TokenRefreshResponse;
 import kr.gosky.sso.domain.auth.entity.AccessLog;
 import kr.gosky.sso.domain.auth.entity.RefreshToken;
 import kr.gosky.sso.domain.auth.repository.AccessLogRepository;
@@ -103,6 +105,29 @@ public class AuthService {
         }
         refreshTokenRepository.deleteByUserId(userId);
         saveAccessLog(userId, "LOGOUT", ipAddress, userAgent);
+    }
+
+    // Access Token 재발급
+    // DB에서 Refresh Token 검증 → 만료 확인 → 새 Access Token 발급
+    @Transactional
+    public TokenRefreshResponse refresh(TokenRefreshRequest request) {
+        RefreshToken savedToken = refreshTokenRepository.findByToken(request.getRefreshToken())
+                .orElseThrow(() -> new CustomException(ErrorCode.INVALID_TOKEN));
+
+        if (savedToken.getExpiresAt().isBefore(LocalDateTime.now())) {
+            refreshTokenRepository.delete(savedToken);
+            throw new CustomException(ErrorCode.EXPIRED_TOKEN);
+        }
+
+        User user = userRepository.findById(savedToken.getUserId())
+                .orElseThrow(() -> new CustomException(ErrorCode.USER_NOT_FOUND));
+
+        String newAccessToken = jwtTokenProvider.generateAccessToken(
+                user.getId(), user.getEmail(), user.getRole().name());
+
+        saveAccessLog(user.getId(), "TOKEN_ISSUE", null, null);
+
+        return new TokenRefreshResponse(newAccessToken);
     }
 
     // 접속 로그 저장 공통 메서드

@@ -5,6 +5,8 @@ import jakarta.validation.Valid;
 import kr.gosky.sso.domain.auth.dto.LoginRequest;
 import kr.gosky.sso.domain.auth.dto.LoginResponse;
 import kr.gosky.sso.domain.auth.dto.RegisterRequest;
+import kr.gosky.sso.domain.auth.dto.TokenRefreshRequest;
+import kr.gosky.sso.domain.auth.dto.TokenRefreshResponse;
 import kr.gosky.sso.domain.auth.service.AuthService;
 import kr.gosky.sso.global.response.ApiResponse;
 import lombok.RequiredArgsConstructor;
@@ -36,6 +38,12 @@ public class AuthController {
                 httpRequest.getRemoteAddr(),
                 httpRequest.getHeader("User-Agent")
         ));
+    }
+
+    // 토큰 재발급
+    @PostMapping("/refresh")
+    public ApiResponse<TokenRefreshResponse> refresh(@Valid @RequestBody TokenRefreshRequest request) {
+        return ApiResponse.ok(authService.refresh(request));
     }
 
     // 로그아웃
