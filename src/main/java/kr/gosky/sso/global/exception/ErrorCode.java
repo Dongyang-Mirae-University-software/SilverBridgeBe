@@ -25,7 +25,9 @@ public enum ErrorCode {
     INVALID_TOKEN(HttpStatus.UNAUTHORIZED, "유효하지 않은 토큰입니다."),
     EXPIRED_TOKEN(HttpStatus.UNAUTHORIZED, "만료된 토큰입니다."),
     INVALID_VERIFY_CODE(HttpStatus.BAD_REQUEST, "인증코드가 올바르지 않습니다."),
-    EXPIRED_VERIFY_CODE(HttpStatus.BAD_REQUEST, "만료된 인증코드입니다.");
+    EXPIRED_VERIFY_CODE(HttpStatus.BAD_REQUEST, "만료된 인증코드입니다."),
+    EMAIL_ALREADY_VERIFIED(HttpStatus.CONFLICT, "이미 인증된 이메일입니다."),
+    INVALID_RESET_TOKEN(HttpStatus.BAD_REQUEST, "유효하지 않거나 만료된 재설정 토큰입니다.");
 
     private final HttpStatus status;
     private final String message;
