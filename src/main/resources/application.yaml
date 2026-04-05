@@ -1,3 +1,31 @@
 spring:
   application:
     name: sso-backend
+
+  datasource:
+    url: jdbc:mariadb://localhost:6406/sso?serverTimezone=Asia/Seoul&characterEncoding=UTF-8
+    username: ${DB_USERNAME:sso}
+    password: ${DB_PASSWORD:sso}
+    driver-class-name: org.mariadb.jdbc.Driver
+
+  jpa:
+    hibernate:
+      ddl-auto: validate       # schema.sql 직접 관리 — 엔티티와 DB 스키마 불일치 시 시작 시점에 오류 발생
+    open-in-view: false
+    show-sql: false
+    properties:
+      hibernate:
+        format_sql: true
+
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6506}
+
+server:
+  port: 6201
+
+jwt:
+  secret: ${JWT_SECRET:silverbridge-sso-secret-key-must-be-at-least-256bit-long-for-hs256}
+  access-token-expiration: 1800000    # 30분 (ms)
+  refresh-token-expiration: 604800000 # 7일 (ms)
