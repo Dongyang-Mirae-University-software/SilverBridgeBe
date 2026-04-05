@@ -1,6 +1,7 @@
 HELP.md
 CLAUDE.md
 .env.*
+docs/
 .gradle
 build/
 !gradle/wrapper/gradle-wrapper.jar
