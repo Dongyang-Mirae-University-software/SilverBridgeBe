@@ -1,7 +1,6 @@
 package kr.gosky.sso.global.jwt;
 
 import io.jsonwebtoken.*;
-import io.jsonwebtoken.io.Decoders;
 import io.jsonwebtoken.security.Keys;
 import kr.gosky.sso.global.exception.CustomException;
 import kr.gosky.sso.global.exception.ErrorCode;
@@ -10,6 +9,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 
 import javax.crypto.SecretKey;
+import java.nio.charset.StandardCharsets;
 import java.util.Date;
 
 @Slf4j
@@ -19,10 +19,15 @@ public class JwtTokenProvider {
 
     private final JwtProperties jwtProperties;
 
-    // application.yaml의 secret을 SecretKey 객체로 변환
+    // application.yaml의 secret 문자열을 SecretKey 객체로 변환 (32바이트 이상 필요)
     private SecretKey getSigningKey() {
-        byte[] keyBytes = Decoders.BASE64.decode(jwtProperties.getSecret());
-        return Keys.hmacShaKeyFor(keyBytes);
+        return Keys.hmacShaKeyFor(jwtProperties.getSecret().getBytes(StandardCharsets.UTF_8));
+    }
+
+    // 로그아웃 시 Redis blacklist TTL 계산용 — 토큰 남은 유효 시간(ms) 반환
+    public long getRemainingExpiration(String token) {
+        Date expiration = getClaims(token).getExpiration();
+        return expiration.getTime() - System.currentTimeMillis();
     }
 
     // Access Token 생성
