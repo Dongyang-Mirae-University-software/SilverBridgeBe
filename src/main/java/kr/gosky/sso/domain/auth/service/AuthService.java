@@ -1,8 +1,12 @@
 package kr.gosky.sso.domain.auth.service;
 
+import kr.gosky.sso.domain.auth.dto.LoginRequest;
+import kr.gosky.sso.domain.auth.dto.LoginResponse;
 import kr.gosky.sso.domain.auth.dto.RegisterRequest;
 import kr.gosky.sso.domain.auth.entity.AccessLog;
+import kr.gosky.sso.domain.auth.entity.RefreshToken;
 import kr.gosky.sso.domain.auth.repository.AccessLogRepository;
+import kr.gosky.sso.domain.auth.repository.RefreshTokenRepository;
 import kr.gosky.sso.domain.user.entity.User;
 import kr.gosky.sso.domain.user.repository.UserRepository;
 import kr.gosky.sso.global.enums.Provider;
@@ -17,6 +21,7 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.LocalDateTime;
 import java.util.UUID;
 
 @Service
@@ -24,6 +29,7 @@ import java.util.UUID;
 public class AuthService {
 
     private final UserRepository userRepository;
+    private final RefreshTokenRepository refreshTokenRepository;
     private final AccessLogRepository accessLogRepository;
     private final JwtTokenProvider jwtTokenProvider;
     private final PasswordEncoder passwordEncoder;
@@ -50,6 +56,39 @@ public class AuthService {
                 .build();
 
         userRepository.save(user);
+    }
+
+    // 로그인
+    // 사용자 조회 → 계정 상태/비밀번호 검증 → 토큰 발급 → Refresh Token 저장 → 로그 기록
+    @Transactional
+    public LoginResponse login(LoginRequest request, String ipAddress, String userAgent) {
+        User user = userRepository.findByEmail(request.getEmail())
+                .orElseThrow(() -> new CustomException(ErrorCode.USER_NOT_FOUND));
+
+        if (user.getStatus() == Status.INACTIVE) {
+            throw new CustomException(ErrorCode.INACTIVE_USER);
+        }
+
+        if (!passwordEncoder.matches(request.getPassword(), user.getPassword())) {
+            throw new CustomException(ErrorCode.INVALID_PASSWORD);
+        }
+
+        String accessToken  = jwtTokenProvider.generateAccessToken(user.getId(), user.getEmail(), user.getRole().name());
+        String refreshToken = jwtTokenProvider.generateRefreshToken(user.getId());
+
+        // 기존 Refresh Token 삭제 후 새로 저장 (단일 디바이스 정책)
+        refreshTokenRepository.deleteByUserId(user.getId());
+        refreshTokenRepository.save(RefreshToken.builder()
+                .userId(user.getId())
+                .token(refreshToken)
+                .expiresAt(LocalDateTime.now().plusSeconds(
+                        jwtTokenProvider.getRemainingExpiration(refreshToken) / 1000))
+                .build());
+
+        user.updateLastLoginAt();
+        saveAccessLog(user.getId(), "LOGIN", ipAddress, userAgent);
+
+        return LoginResponse.of(user, accessToken, refreshToken);
     }
 
     // 접속 로그 저장 공통 메서드
