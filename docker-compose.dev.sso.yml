@@ -9,7 +9,7 @@ services:
     env_file:
       - .env.dev.sso
     ports:
-      - "6201:6201"
+      - "6201:8080"
     depends_on:
       db:
         condition: service_healthy
