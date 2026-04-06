@@ -30,9 +30,9 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
         String token = extractToken(request);
 
         if (StringUtils.hasText(token)) {
-            // 블랙리스트 확인 — 로그아웃된 토큰은 즉시 차단
-            if (isBlacklisted(token)) {
-                sendUnauthorized(response, "로그아웃된 토큰입니다.");
+            // 로그아웃된 토큰 확인 — 이미 로그아웃 처리된 토큰은 즉시 차단
+            if (isLoggedOut(token)) {
+                sendUnauthorized(response, "로그인이 필요합니다.");
                 return;
             }
 
@@ -65,9 +65,9 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
         return null;
     }
 
-    // Redis blacklist 등록 여부 확인
-    private boolean isBlacklisted(String token) {
-        return Boolean.TRUE.equals(redisTemplate.hasKey("blacklist:" + token));
+    // 로그아웃된 토큰인지 확인
+    private boolean isLoggedOut(String token) {
+        return Boolean.TRUE.equals(redisTemplate.hasKey("logout:" + token));
     }
 
     // 블랙리스트 토큰 요청에 401 JSON 응답 직접 반환
