@@ -2,6 +2,8 @@ package kr.gosky.sso.domain.auth.controller;
 
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
+import kr.gosky.sso.domain.auth.dto.FindEmailRequest;
+import kr.gosky.sso.domain.auth.dto.FindEmailResponse;
 import kr.gosky.sso.domain.auth.dto.LoginRequest;
 import kr.gosky.sso.domain.auth.dto.LoginResponse;
 import kr.gosky.sso.domain.auth.dto.RegisterRequest;
@@ -44,6 +46,12 @@ public class AuthController {
     @PostMapping("/refresh")
     public ApiResponse<TokenRefreshResponse> refresh(@Valid @RequestBody TokenRefreshRequest request) {
         return ApiResponse.ok(authService.refresh(request));
+    }
+
+    // 아이디(이메일) 찾기
+    @PostMapping("/find-email")
+    public ApiResponse<FindEmailResponse> findEmail(@Valid @RequestBody FindEmailRequest request) {
+        return ApiResponse.ok(authService.findEmail(request));
     }
 
     // 로그아웃

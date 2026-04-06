@@ -1,5 +1,7 @@
 package kr.gosky.sso.domain.auth.service;
 
+import kr.gosky.sso.domain.auth.dto.FindEmailRequest;
+import kr.gosky.sso.domain.auth.dto.FindEmailResponse;
 import kr.gosky.sso.domain.auth.dto.LoginRequest;
 import kr.gosky.sso.domain.auth.dto.LoginResponse;
 import kr.gosky.sso.domain.auth.dto.RegisterRequest;
@@ -128,6 +130,29 @@ public class AuthService {
         saveAccessLog(user.getId(), "TOKEN_ISSUE", null, null);
 
         return new TokenRefreshResponse(newAccessToken);
+    }
+
+    // 아이디(이메일) 찾기
+    // 이름 + 전화번호로 사용자 조회 → 이메일 앞부분 마스킹 후 반환
+    @Transactional(readOnly = true)
+    public FindEmailResponse findEmail(FindEmailRequest request) {
+        User user = userRepository.findByNameAndPhone(request.getName(), request.getPhone())
+                .orElseThrow(() -> new CustomException(ErrorCode.USER_NOT_FOUND));
+
+        return new FindEmailResponse(maskEmail(user.getEmail()));
+    }
+
+    // 이메일 마스킹 처리
+    // 예: user@example.com → us**@example.com
+    //     ab@example.com   → a**@example.com
+    private String maskEmail(String email) {
+        int atIndex = email.indexOf('@');
+        String local = email.substring(0, atIndex);   // @ 앞부분
+        String domain = email.substring(atIndex);      // @ 포함 뒷부분
+
+        // 앞 2자리 유지, 나머지를 **로 마스킹 (1자리면 1자리만 유지)
+        int visibleLength = Math.min(2, local.length() - 1);
+        return local.substring(0, visibleLength) + "**" + domain;
     }
 
     // 접속 로그 저장 공통 메서드
