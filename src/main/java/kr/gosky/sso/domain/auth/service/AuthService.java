@@ -101,7 +101,7 @@ public class AuthService {
         long remaining = jwtTokenProvider.getRemainingExpiration(accessToken);
         if (remaining > 0) {
             redisTemplate.opsForValue()
-                    .set("blacklist:" + accessToken, "logout", remaining, java.util.concurrent.TimeUnit.MILLISECONDS);
+                    .set("logout:" + accessToken, "true", remaining, java.util.concurrent.TimeUnit.MILLISECONDS);
         }
         refreshTokenRepository.deleteByUserId(userId);
         saveAccessLog(userId, "LOGOUT", ipAddress, userAgent);
