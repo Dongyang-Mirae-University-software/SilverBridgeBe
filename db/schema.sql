@@ -87,7 +87,7 @@ CREATE INDEX idx_users_provider_id      ON users(provider, provider_id);
 --   value: "{userId}"
 --   TTL:   1800초 (30분)
 --
--- 블랙리스트:
---   key:   blacklist:{accessToken}
---   value: "logout"
+-- 로그아웃된 토큰:
+--   key:   logout:{accessToken}
+--   value: "true"
 --   TTL:   토큰 남은 만료시간
