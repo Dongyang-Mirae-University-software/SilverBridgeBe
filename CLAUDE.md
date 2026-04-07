@@ -62,12 +62,14 @@ kr.silverbridge.main
 - `BaseTimeEntity` 공통 부모 클래스 사용
 
 ## Git Branch Strategy
-- `prod`: 운영 배포 기준
-- `dev`: 개발 기준 — feature 브랜치로부터 Merge Request로만 반영
-- `feature/*`: 기능 개발 — dev에서 분기, 작업 후 MR → dev, 브랜치 삭제
+
+### 브랜치 구조
+- `prod`: 배포의 기준 브랜치
+- `dev`: 개발의 기준 브랜치 — Merge Request를 통해서만 feature 브랜치로부터 반영
+- `feature/*`: 개발 작업 브랜치 — dev에서 분기, 작업 후 MR → dev, 브랜치 삭제
 
 ### 브랜치 네이밍
-형식: `type/short-description`
+형식: `type/short-description` 또는 `type/short-description-author`
 
 | type | 용도 |
 |------|------|
@@ -75,17 +77,52 @@ kr.silverbridge.main
 | `fix` | 버그 수정 |
 | `hotfix` | 운영 긴급 수정 |
 | `refactor` | 리팩토링 |
-| `docs` | 문서 |
-| `chore` | 설정/패키지 |
-| `infra` | 서버/Docker/CI |
+| `design` | UI/디자인 작업 |
+| `docs` | 문서 작업 |
+| `test` | 테스트 코드 |
+| `chore` | 설정/패키지/잡일 |
+| `infra` | 서버/Docker/Nginx/CI-CD |
 | `release` | 배포 준비 |
 
-예시: `feature/login-api`, `fix/token-refresh`, `infra/docker-nginx-setting`
+예시: `feature/login-api`, `fix/signup-validation`, `infra/docker-nginx-setting`
+이슈 번호 포함: `feature/123-login-api`, `fix/87-token-refresh`
 
-### 규칙
+### 브랜치 작업 순서
+1. `git pull origin dev` — 최신 코드 동기화
+2. `git checkout -b type/short-description` — 브랜치 분기
+3. 작업 및 커밋
+4. push 전 `git merge dev` → 충돌 해결
+5. push 후 MR(PR) 생성 → dev로 머지, 브랜치 삭제
+
+### 브랜치 작성 규칙
 - 전부 소문자, 띄어쓰기 금지, 단어 구분은 `-`
-- 작업 전 dev에서 최신 코드 pull 후 feature 브랜치 분기
-- Push 전 dev → feature 브랜치로 merge 후 충돌 해결
+- 너무 길지 않게, 기능 단위가 보이게 작성
+
+### 커밋 메시지 형식
+```
+type: 무슨 작업을 했는지 한국어로
+- 상세 내용 (선택)
+- 상세 내용 (선택)
+```
+
+| type | 용도 |
+|------|------|
+| `feat` | 새로운 기능 |
+| `fix` | 버그 수정 |
+| `refactor` | 리팩토링 |
+| `design` | UI/디자인 변경 |
+| `style` | 코드 포맷 (비즈니스 로직 변경 없음) |
+| `docs` | 문서 수정 |
+| `test` | 테스트 코드 |
+| `chore` | 기타 변경사항 |
+| `init` | 초기 생성 |
+| `rename` | 파일/폴더 이동 및 이름 변경 |
+| `remove` | 파일 삭제 |
+
+### 커밋 작성 규칙
+- 첫 글자는 소문자
+- 한 커밋 = 한 작업
+- 무슨 작업인지 바로 알 수 있게 작성
 
 ## DB
 - schema.sql: db/schema.sql 참고
