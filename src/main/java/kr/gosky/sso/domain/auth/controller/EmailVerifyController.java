@@ -1,5 +1,9 @@
 package kr.gosky.sso.domain.auth.controller;
 
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.responses.ApiResponse;
+import io.swagger.v3.oas.annotations.responses.ApiResponses;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import kr.gosky.sso.domain.auth.dto.EmailSendRequest;
 import kr.gosky.sso.domain.auth.dto.EmailVerifyRequest;
@@ -11,6 +15,7 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
+@Tag(name = "이메일 인증", description = "이메일 인증 코드 발송 및 검증 API")
 @RestController
 @RequestMapping("/api/auth/email")
 @RequiredArgsConstructor
@@ -18,20 +23,25 @@ public class EmailVerifyController {
 
     private final EmailVerifyService emailVerifyService;
 
-    // 이메일 인증 코드 발송
-    // 200 OK — 발송 성공
-    // 404 Not Found — 존재하지 않는 이메일
-    // 409 Conflict — 이미 인증된 이메일
+    @Operation(summary = "인증 코드 발송", description = "입력한 이메일로 6자리 인증 코드를 발송합니다. 코드의 유효 시간은 5분이며, 재발송 시 기존 코드는 무효화됩니다.")
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "인증 코드 발송 성공"),
+            @ApiResponse(responseCode = "400", description = "입력값 유효성 검증 실패"),
+            @ApiResponse(responseCode = "404", description = "존재하지 않는 이메일"),
+            @ApiResponse(responseCode = "409", description = "이미 인증 완료된 이메일")
+    })
     @PostMapping("/send")
     public ApiResponse<Void> send(@Valid @RequestBody EmailSendRequest request) {
         emailVerifyService.sendVerificationCode(request);
         return ApiResponse.ok("인증 코드가 발송되었습니다.");
     }
 
-    // 이메일 인증 코드 검증
-    // 200 OK — 인증 성공
-    // 400 Bad Request — 코드 불일치 또는 만료
-    // 404 Not Found — 존재하지 않는 이메일
+    @Operation(summary = "인증 코드 검증", description = "발송된 인증 코드를 검증합니다. 코드가 일치하면 이메일 인증 완료 처리됩니다.")
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "이메일 인증 완료"),
+            @ApiResponse(responseCode = "400", description = "인증 코드 불일치 또는 만료된 코드"),
+            @ApiResponse(responseCode = "404", description = "존재하지 않는 이메일")
+    })
     @PostMapping("/verify")
     public ApiResponse<Void> verify(@Valid @RequestBody EmailVerifyRequest request) {
         emailVerifyService.verifyCode(request);
