@@ -2,7 +2,9 @@ package kr.silverbridge.main.domain.auth.dto;
 
 import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Pattern;
+import kr.silverbridge.main.global.enums.Role;
 import lombok.Getter;
 
 @Getter
@@ -23,4 +25,8 @@ public class RegisterRequest {
     private String name;
 
     private String phone;
+
+    // WARD(피보호자) 또는 GUARDIAN(보호자) 중 하나 필수 선택
+    @NotNull(message = "역할을 선택해주세요. (WARD: 피보호자, GUARDIAN: 보호자)")
+    private Role role;
 }
