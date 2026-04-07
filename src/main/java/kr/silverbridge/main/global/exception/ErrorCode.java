@@ -17,6 +17,7 @@ public enum ErrorCode {
 
     // 사용자
     USER_NOT_FOUND(HttpStatus.NOT_FOUND, "사용자를 찾을 수 없습니다."),
+    INVALID_ROLE(HttpStatus.BAD_REQUEST, "역할은 WARD(피보호자) 또는 GUARDIAN(보호자)만 선택할 수 있습니다."),
     EMAIL_ALREADY_EXISTS(HttpStatus.CONFLICT, "이미 사용 중인 이메일입니다."),
     INVALID_PASSWORD(HttpStatus.UNAUTHORIZED, "비밀번호가 올바르지 않습니다."),
     INACTIVE_USER(HttpStatus.FORBIDDEN, "비활성화된 계정입니다."),

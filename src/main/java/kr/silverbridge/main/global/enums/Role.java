@@ -1,5 +1,7 @@
 package kr.silverbridge.main.global.enums;
 
 public enum Role {
-    USER, ADMIN
+    WARD,       // 피보호자
+    GUARDIAN,   // 보호자
+    ADMIN       // 관리자
 }
