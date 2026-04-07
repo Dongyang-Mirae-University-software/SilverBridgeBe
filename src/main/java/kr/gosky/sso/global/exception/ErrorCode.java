@@ -29,7 +29,10 @@ public enum ErrorCode {
     EMAIL_ALREADY_VERIFIED(HttpStatus.CONFLICT, "이미 인증된 이메일입니다."),
     INVALID_RESET_TOKEN(HttpStatus.BAD_REQUEST, "유효하지 않거나 만료된 재설정 토큰입니다."),
 
-    // OAuth
+    // 카카오 OAuth
+    KAKAO_INVALID_CODE(HttpStatus.UNAUTHORIZED, "유효하지 않거나 만료된 카카오 인가 코드입니다."),
+    KAKAO_PERMISSION_DENIED(HttpStatus.FORBIDDEN, "카카오 사용자 정보 접근 권한이 없습니다. 동의 항목을 확인해주세요."),
+    KAKAO_DORMANT_ACCOUNT(HttpStatus.FORBIDDEN, "휴면 또는 존재하지 않는 카카오계정입니다."),
     KAKAO_AUTH_ERROR(HttpStatus.UNAUTHORIZED, "카카오 인증에 실패했습니다.");
 
     private final HttpStatus status;
