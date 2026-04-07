@@ -30,15 +30,17 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 kr.silverbridge.main
 ├── domain
 │   ├── auth
-│   │   ├── controller
-│   │   ├── service
-│   │   ├── dto
-│   │   └── oauth           # 카카오 OAuth
+│   │   ├── controller      # AuthController, KakaoAuthController, EmailVerifyController, PasswordResetController
+│   │   ├── service         # AuthService, KakaoAuthService, EmailVerifyService, PasswordResetService
+│   │   ├── dto             # LoginRequest/Response, RegisterRequest, KakaoLoginResponse, KakaoRoleRequest 등
+│   │   ├── entity          # RefreshToken, AccessLog
+│   │   ├── repository
+│   │   └── oauth           # 카카오 OAuth 클라이언트
 │   ├── user
 │   │   ├── controller
 │   │   ├── service
 │   │   ├── repository
-│   │   ├── entity
+│   │   ├── entity          # User
 │   │   └── dto
 │   └── admin
 │       ├── controller
@@ -48,12 +50,19 @@ kr.silverbridge.main
     ├── config              # Redis, Mail, Web 설정
     ├── security            # Security 필터/설정
     ├── jwt                 # JWT 발급/검증
-    ├── enums               # Enum 클래스 모음
+    ├── enums               # Role, Status, Provider
     ├── entity              # BaseTimeEntity
     ├── response            # ApiResponse 공통 포맷
-    ├── exception           # GlobalExceptionHandler
+    ├── exception           # GlobalExceptionHandler, ErrorCode, CustomException
     └── aop                 # 공통 로그
 ```
+
+### 주요 Enum 값
+| Enum | 값 |
+|------|-----|
+| `Role` | `WARD`(피보호자), `GUARDIAN`(보호자), `ADMIN`(관리자) |
+| `Status` | `ACTIVE`(정상), `INACTIVE`(탈퇴), `PENDING`(카카오 신규 가입 역할 선택 대기) |
+| `Provider` | `LOCAL`, `KAKAO` |
 
 ## Coding Rules
 - Lombok 사용
@@ -126,12 +135,33 @@ type: 무슨 작업을 했는지 한국어로
 
 ## DB
 - schema.sql: db/schema.sql 참고
-- Redis 키 구조:
-    - email:verify:{email}   → 인증코드 (TTL 5분)
-    - password:reset:{token} → 재설정 토큰 (TTL 30분)
-    - logout:{accessToken}   → 로그아웃된 토큰 (TTL 토큰 만료시간)
+- 모든 날짜/시간 컬럼은 `TIMESTAMPTZ` 사용 (Java: `OffsetDateTime`)
 
 ### Redis (임시 저장)
 - `email:verify:{email}`   → 이메일 인증코드 (TTL 5분)
 - `password:reset:{token}` → 비번 재설정 토큰 (TTL 30분)
 - `logout:{accessToken}`   → 로그아웃된 토큰 (TTL 토큰 남은 만료시간)
+
+## 카카오 OAuth 플로우
+
+### 신규 가입 (2단계)
+```
+1. POST /api/auth/kakao
+   → isNewUser: true, accessToken만 발급 (refreshToken: null)
+   → 프론트에서 역할 선택 페이지로 이동
+
+2. POST /api/auth/kakao/role  (Bearer: accessToken)
+   body: { "role": "WARD" | "GUARDIAN" }
+   → 역할 확정 + ACTIVE 전환 + 정식 accessToken/refreshToken 발급
+```
+
+### 기존 사용자 로그인
+```
+POST /api/auth/kakao
+→ isNewUser: false, accessToken + refreshToken 발급
+```
+
+### PENDING 상태 주의사항
+- 카카오 신규 가입 후 역할 선택 전까지 `status=PENDING`
+- PENDING 사용자는 일반 이메일 로그인 불가 (403 반환)
+- 반드시 `/api/auth/kakao/role` 로 역할 선택 완료 후 정상 사용 가능
