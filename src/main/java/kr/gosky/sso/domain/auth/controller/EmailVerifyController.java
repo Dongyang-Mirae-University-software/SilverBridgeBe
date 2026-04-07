@@ -22,7 +22,7 @@ public class EmailVerifyController {
 
     private final EmailVerifyService emailVerifyService;
 
-    @Operation(summary = "인증 코드 발송", description = "입력한 이메일로 6자리 인증 코드를 발송합니다. 코드의 유효 시간은 5분이며, 재발송 시 기존 코드는 무효화됩니다.")
+    @Operation(summary = "인증 코드 발송 / 재발송", description = "입력한 이메일로 6자리 인증 코드를 발송합니다. 코드 유효 시간은 5분이며, 같은 API를 다시 호출하면 재발송됩니다. 재발송 시 기존 코드는 즉시 무효화됩니다.")
     @ApiResponses({
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "인증 코드 발송 성공"),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "입력값 유효성 검증 실패"),
