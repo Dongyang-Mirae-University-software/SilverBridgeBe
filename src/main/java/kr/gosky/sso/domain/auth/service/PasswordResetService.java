@@ -68,7 +68,10 @@ public class PasswordResetService {
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new CustomException(ErrorCode.USER_NOT_FOUND));
 
-        // 비밀번호 변경
+        // 이전 비밀번호 2개와 중복 검사
+        checkPasswordHistory(user, request.getNewPassword());
+
+        // 비밀번호 변경 (이력 자동 보관)
         user.updatePassword(passwordEncoder.encode(request.getNewPassword()));
 
         // 사용된 토큰 즉시 삭제 — 재사용 방지
@@ -82,6 +85,16 @@ public class PasswordResetService {
                 .userId(userId)
                 .action("PASSWORD_RESET")
                 .build());
+    }
+
+    // 이전 비밀번호 2개와 중복 여부 검사
+    private void checkPasswordHistory(User user, String newPassword) {
+        if (user.getPrevPassword1() != null && passwordEncoder.matches(newPassword, user.getPrevPassword1())) {
+            throw new CustomException(ErrorCode.PASSWORD_RECENTLY_USED);
+        }
+        if (user.getPrevPassword2() != null && passwordEncoder.matches(newPassword, user.getPrevPassword2())) {
+            throw new CustomException(ErrorCode.PASSWORD_RECENTLY_USED);
+        }
     }
 
     private void sendResetEmail(String to, String token) {
