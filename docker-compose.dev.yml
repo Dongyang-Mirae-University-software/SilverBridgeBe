@@ -19,7 +19,7 @@ services:
       - app-net
 
   db:
-    image: postgres:16
+    image: postgres:17
     container_name: dmusso-dev-db
     restart: unless-stopped
     env_file:
@@ -55,7 +55,7 @@ services:
 
 networks:
   app-net:
-    name: dmusso-dev-net
+    name: dmu-dev-net
     # AI 서버 등 외부 서비스 연동 시 해당 컨테이너를 app-net에 추가하거나
     # 이 네트워크를 external: true로 선언하여 공유 가능
 
