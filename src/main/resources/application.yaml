@@ -35,7 +35,7 @@ spring:
             enable: true
 
 server:
-  port: 6501
+  port: 6511
 
 jwt:
   secret: ${JWT_SECRET:silverbridge-sso-secret-key-must-be-at-least-256bit-long-for-hs256}
