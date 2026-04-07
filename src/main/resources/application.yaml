@@ -1,6 +1,6 @@
 spring:
   application:
-    name: sso-backend
+    name: dmu-backend
 
   datasource:
     url: jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5432}/silverbridge
