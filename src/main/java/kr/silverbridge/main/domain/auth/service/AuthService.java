@@ -78,6 +78,11 @@ public class AuthService {
             throw new CustomException(ErrorCode.INACTIVE_USER);
         }
 
+        // 카카오 신규 가입 후 역할 선택 미완료 계정은 일반 로그인 불가
+        if (user.getStatus() == Status.PENDING) {
+            throw new CustomException(ErrorCode.PENDING_USER);
+        }
+
         if (!passwordEncoder.matches(request.getPassword(), user.getPassword())) {
             throw new CustomException(ErrorCode.INVALID_PASSWORD);
         }
