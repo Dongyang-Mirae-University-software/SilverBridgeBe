@@ -5,7 +5,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ## Project Info
 - 메인 페이지: dmu.gosky.kr
 - 백엔드 API: api.dmu.gosky.kr : port 6511
-- PostgreSQL 16: port 6513
+- PostgreSQL 17: port 6513
 - Redis 7.2: port 6514
 
 ## Stack
