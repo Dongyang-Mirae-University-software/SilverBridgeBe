@@ -17,7 +17,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.net.URI;
 import java.net.URISyntaxException;
 import java.time.LocalDate;
-import java.time.LocalDateTime;
+import java.time.OffsetDateTime;
 import java.util.UUID;
 
 @Service
@@ -65,7 +65,7 @@ public class AdminService {
     // 대시보드 통계 조회
     @Transactional(readOnly = true)
     public DashboardResponse getDashboard() {
-        LocalDateTime todayStart = LocalDate.now().atStartOfDay();
+        OffsetDateTime todayStart = LocalDate.now().atStartOfDay().atOffset(OffsetDateTime.now().getOffset());
 
         return DashboardResponse.builder()
                 .totalUsers(userRepository.count())

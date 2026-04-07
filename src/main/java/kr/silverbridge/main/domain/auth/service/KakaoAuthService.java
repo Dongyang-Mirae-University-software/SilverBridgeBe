@@ -19,7 +19,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.time.LocalDateTime;
+import java.time.OffsetDateTime;
 import java.util.UUID;
 
 @Service
@@ -60,7 +60,7 @@ public class KakaoAuthService {
         refreshTokenRepository.save(RefreshToken.builder()
                 .userId(user.getId())
                 .token(refreshToken)
-                .expiresAt(LocalDateTime.now().plusSeconds(
+                .expiresAt(OffsetDateTime.now().plusSeconds(
                         jwtTokenProvider.getRemainingExpiration(refreshToken) / 1000))
                 .build());
 

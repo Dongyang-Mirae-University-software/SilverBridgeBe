@@ -4,7 +4,7 @@ import kr.silverbridge.main.domain.auth.entity.AccessLog;
 import lombok.Builder;
 import lombok.Getter;
 
-import java.time.LocalDateTime;
+import java.time.OffsetDateTime;
 
 @Getter
 @Builder
@@ -16,7 +16,7 @@ public class AccessLogResponse {
     private String action;
     private String ipAddress;
     private String userAgent;
-    private LocalDateTime createdAt;
+    private OffsetDateTime createdAt;
 
     public static AccessLogResponse from(AccessLog log) {
         return AccessLogResponse.builder()
