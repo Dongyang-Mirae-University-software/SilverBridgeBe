@@ -2,15 +2,18 @@ package kr.gosky.sso.domain.auth.oauth;
 
 import kr.gosky.sso.global.exception.CustomException;
 import kr.gosky.sso.global.exception.ErrorCode;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.MediaType;
 import org.springframework.stereotype.Component;
 import org.springframework.util.LinkedMultiValueMap;
 import org.springframework.util.MultiValueMap;
 import org.springframework.web.client.RestClient;
+import org.springframework.web.client.RestClientResponseException;
 import org.springframework.web.client.RestClientException;
 
 // 카카오 OAuth REST API 호출 클라이언트
+@Slf4j
 @Component
 public class KakaoOAuthClient {
 
@@ -40,7 +43,11 @@ public class KakaoOAuthClient {
                     .body(params)
                     .retrieve()
                     .body(KakaoTokenResponse.class);
+        } catch (RestClientResponseException e) {
+            log.error("카카오 토큰 발급 실패: status={}, body={}", e.getStatusCode(), e.getResponseBodyAsString());
+            throw new CustomException(ErrorCode.KAKAO_AUTH_ERROR);
         } catch (RestClientException e) {
+            log.error("카카오 토큰 발급 실패 (네트워크 오류): {}", e.getMessage());
             throw new CustomException(ErrorCode.KAKAO_AUTH_ERROR);
         }
     }
@@ -53,7 +60,11 @@ public class KakaoOAuthClient {
                     .header("Authorization", "Bearer " + kakaoAccessToken)
                     .retrieve()
                     .body(KakaoUserInfoResponse.class);
+        } catch (RestClientResponseException e) {
+            log.error("카카오 사용자 정보 조회 실패: status={}, body={}", e.getStatusCode(), e.getResponseBodyAsString());
+            throw new CustomException(ErrorCode.KAKAO_AUTH_ERROR);
         } catch (RestClientException e) {
+            log.error("카카오 사용자 정보 조회 실패 (네트워크 오류): {}", e.getMessage());
             throw new CustomException(ErrorCode.KAKAO_AUTH_ERROR);
         }
     }
