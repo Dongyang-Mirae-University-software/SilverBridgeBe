@@ -15,7 +15,6 @@ public class UserProfileResponse {
     private String name;
     private String phone;
     private String provider;
-    private String profileImage;
     private boolean emailVerified;
     private LocalDateTime lastLoginAt;
     private LocalDateTime createdAt;
@@ -27,7 +26,6 @@ public class UserProfileResponse {
                 .name(user.getName())
                 .phone(user.getPhone())
                 .provider(user.getProvider().name())
-                .profileImage(user.getProfileImage())
                 .emailVerified(user.isEmailVerified())
                 .lastLoginAt(user.getLastLoginAt())
                 .createdAt(user.getCreatedAt())
