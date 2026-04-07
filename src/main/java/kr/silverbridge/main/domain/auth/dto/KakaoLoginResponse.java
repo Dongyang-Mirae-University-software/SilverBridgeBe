@@ -15,6 +15,7 @@ public class KakaoLoginResponse {
     private String userId;
     private String email;
     private String name;
+    private String role;           // 신규 사용자(PENDING)는 null — 역할 선택 후 확정
 
     // 기존 사용자 로그인 응답
     public static KakaoLoginResponse ofExisting(User user, String accessToken, String refreshToken) {
@@ -25,6 +26,7 @@ public class KakaoLoginResponse {
                 .userId(user.getId())
                 .email(user.getEmail())
                 .name(user.getName())
+                .role(user.getRole().name())
                 .build();
     }
 
