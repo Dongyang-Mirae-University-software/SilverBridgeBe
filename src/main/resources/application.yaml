@@ -3,7 +3,7 @@ spring:
     name: sso-backend
 
   datasource:
-    url: jdbc:mariadb://${DB_HOST:localhost}:${DB_PORT:6503}/sso?serverTimezone=Asia/Seoul&characterEncoding=UTF-8
+    url: jdbc:mariadb://${DB_HOST:localhost}:${DB_PORT:3306}/sso?serverTimezone=Asia/Seoul&characterEncoding=UTF-8
     username: ${DB_USERNAME:sso}
     password: ${DB_PASSWORD:sso}
     driver-class-name: org.mariadb.jdbc.Driver
@@ -20,7 +20,7 @@ spring:
   data:
     redis:
       host: ${REDIS_HOST:localhost}
-      port: ${REDIS_PORT:6504}
+      port: ${REDIS_PORT:6379}
 
   mail:
     host: ${MAIL_HOST:smtp.gmail.com}
