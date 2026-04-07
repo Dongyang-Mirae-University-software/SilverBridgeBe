@@ -56,9 +56,12 @@ services:
 networks:
   app-net:
     name: dmusso-dev-sso-net
+    external: true
 
 volumes:
   dmusso-dev-sso-db-data:
     name: dmusso-dev-sso-db-data
+    external: true
   dmusso-dev-sso-redis-data:
     name: dmusso-dev-sso-redis-data
+    external: true
