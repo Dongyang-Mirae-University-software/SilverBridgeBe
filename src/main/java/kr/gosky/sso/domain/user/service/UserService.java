@@ -48,6 +48,15 @@ public class UserService {
             throw new CustomException(ErrorCode.INVALID_PASSWORD);
         }
 
+        // 이전 비밀번호 2개와 중복 검사
+        if (user.getPrevPassword1() != null && passwordEncoder.matches(newPassword, user.getPrevPassword1())) {
+            throw new CustomException(ErrorCode.PASSWORD_RECENTLY_USED);
+        }
+        if (user.getPrevPassword2() != null && passwordEncoder.matches(newPassword, user.getPrevPassword2())) {
+            throw new CustomException(ErrorCode.PASSWORD_RECENTLY_USED);
+        }
+
+        // 비밀번호 변경 (이력 자동 보관)
         user.updatePassword(passwordEncoder.encode(newPassword));
         // 비밀번호 변경 후 모든 기기에서 강제 로그아웃 처리
         refreshTokenRepository.deleteByUserId(userId);
