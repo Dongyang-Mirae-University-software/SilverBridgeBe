@@ -81,4 +81,10 @@ public class User extends BaseTimeEntity {
     public void deactivate() {
         this.status = Status.INACTIVE;
     }
+
+    // 프로필 정보 수정 (이름, 전화번호)
+    public void updateProfile(String name, String phone) {
+        this.name = name;
+        this.phone = phone;
+    }
 }
