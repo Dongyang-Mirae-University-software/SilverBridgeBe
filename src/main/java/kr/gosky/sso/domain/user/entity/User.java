@@ -54,6 +54,12 @@ public class User extends BaseTimeEntity {
     @Column(name = "email_verified", nullable = false)
     private boolean emailVerified;
 
+    @Column(name = "prev_password1", length = 255)
+    private String prevPassword1;
+
+    @Column(name = "prev_password2", length = 255)
+    private String prevPassword2;
+
     @Column(name = "last_login_at")
     private LocalDateTime lastLoginAt;
 
@@ -67,8 +73,11 @@ public class User extends BaseTimeEntity {
         this.emailVerified = true;
     }
 
-    // 비밀번호 변경
+    // 비밀번호 변경 (이력 보관: 최근 2개)
+    // 변경 전 현재 비밀번호를 prev_password2 → prev_password1 순으로 밀어냄
     public void updatePassword(String encodedPassword) {
+        this.prevPassword2 = this.prevPassword1;
+        this.prevPassword1 = this.password;
         this.password = encodedPassword;
     }
 
