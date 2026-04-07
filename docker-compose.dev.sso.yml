@@ -24,10 +24,8 @@ services:
     restart: unless-stopped
     env_file:
       - .env.dev.sso
-    environment:
-      MARIADB_TCP_PORT: 6503
     ports:
-      - "6503:6503"
+      - "6503:3306"
     volumes:
       - dmusso-dev-sso-db-data:/var/lib/mysql
       - ./db/schema.sql:/docker-entrypoint-initdb.d/schema.sql:ro
@@ -43,15 +41,14 @@ services:
     image: redis:7.2
     container_name: dmusso-dev-sso-redis
     restart: unless-stopped
-    command: redis-server --port 6504
     ports:
-      - "6504:6504"
+      - "6504:6379"
     volumes:
       - dmusso-dev-sso-redis-data:/data
     networks:
       - app-net
     healthcheck:
-      test: ["CMD", "redis-cli", "-p", "6504", "ping"]
+      test: ["CMD", "redis-cli", "ping"]
       interval: 10s
       timeout: 5s
       retries: 5
