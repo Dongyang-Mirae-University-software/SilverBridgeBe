@@ -18,7 +18,7 @@ CREATE TABLE users (
     password       VARCHAR(255)  NULL,
     name           VARCHAR(50)   NOT NULL,
     phone          VARCHAR(20)   NULL,
-    role           VARCHAR(20)   NOT NULL DEFAULT 'USER',
+    role           VARCHAR(20)   NOT NULL,
     status         VARCHAR(20)   NOT NULL DEFAULT 'ACTIVE',
     provider       VARCHAR(20)   NOT NULL DEFAULT 'LOCAL',
     provider_id    VARCHAR(100)  NULL,
@@ -32,7 +32,7 @@ CREATE TABLE users (
 
     CONSTRAINT pk_users           PRIMARY KEY (id),
     CONSTRAINT uq_users_email     UNIQUE (email),
-    CONSTRAINT chk_users_role     CHECK (role     IN ('USER', 'ADMIN')),
+    CONSTRAINT chk_users_role     CHECK (role     IN ('WARD', 'GUARDIAN', 'ADMIN')),
     CONSTRAINT chk_users_status   CHECK (status   IN ('ACTIVE', 'INACTIVE')),
     CONSTRAINT chk_users_provider CHECK (provider IN ('LOCAL', 'KAKAO'))
 );
