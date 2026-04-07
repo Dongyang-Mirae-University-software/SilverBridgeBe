@@ -7,7 +7,7 @@ import kr.silverbridge.main.global.enums.Role;
 import kr.silverbridge.main.global.enums.Status;
 import lombok.*;
 
-import java.time.LocalDateTime;
+import java.time.OffsetDateTime;
 
 @Entity
 @Table(name = "users")
@@ -61,11 +61,11 @@ public class User extends BaseTimeEntity {
     private String prevPassword2;
 
     @Column(name = "last_login_at")
-    private LocalDateTime lastLoginAt;
+    private OffsetDateTime lastLoginAt;
 
     // 마지막 로그인 시간 갱신
     public void updateLastLoginAt() {
-        this.lastLoginAt = LocalDateTime.now();
+        this.lastLoginAt = OffsetDateTime.now();
     }
 
     // 이메일 인증 완료 처리

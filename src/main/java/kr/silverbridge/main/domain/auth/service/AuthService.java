@@ -25,7 +25,7 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.time.LocalDateTime;
+import java.time.OffsetDateTime;
 import java.util.UUID;
 
 @Service
@@ -85,7 +85,7 @@ public class AuthService {
         refreshTokenRepository.save(RefreshToken.builder()
                 .userId(user.getId())
                 .token(refreshToken)
-                .expiresAt(LocalDateTime.now().plusSeconds(
+                .expiresAt(OffsetDateTime.now().plusSeconds(
                         jwtTokenProvider.getRemainingExpiration(refreshToken) / 1000))
                 .build());
 
@@ -116,7 +116,7 @@ public class AuthService {
         RefreshToken savedToken = refreshTokenRepository.findByToken(request.getRefreshToken())
                 .orElseThrow(() -> new CustomException(ErrorCode.INVALID_TOKEN));
 
-        if (savedToken.getExpiresAt().isBefore(LocalDateTime.now())) {
+        if (savedToken.getExpiresAt().isBefore(OffsetDateTime.now())) {
             refreshTokenRepository.delete(savedToken);
             throw new CustomException(ErrorCode.EXPIRED_TOKEN);
         }

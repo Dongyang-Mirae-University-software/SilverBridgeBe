@@ -5,7 +5,7 @@ import lombok.*;
 import org.springframework.data.annotation.CreatedDate;
 import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 
-import java.time.LocalDateTime;
+import java.time.OffsetDateTime;
 
 @Entity
 @Table(name = "refresh_tokens")
@@ -25,14 +25,14 @@ public class RefreshToken {
     private String token;
 
     @Column(name = "expires_at", nullable = false)
-    private LocalDateTime expiresAt;
+    private OffsetDateTime expiresAt;
 
     @CreatedDate
     @Column(name = "created_at", nullable = false, updatable = false)
-    private LocalDateTime createdAt;
+    private OffsetDateTime createdAt;
 
     @Builder
-    public RefreshToken(String userId, String token, LocalDateTime expiresAt) {
+    public RefreshToken(String userId, String token, OffsetDateTime expiresAt) {
         this.userId = userId;
         this.token = token;
         this.expiresAt = expiresAt;
