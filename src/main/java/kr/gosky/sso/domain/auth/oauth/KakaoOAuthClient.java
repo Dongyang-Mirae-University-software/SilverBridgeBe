@@ -3,7 +3,6 @@ package kr.gosky.sso.domain.auth.oauth;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import kr.gosky.sso.global.exception.CustomException;
 import kr.gosky.sso.global.exception.ErrorCode;
-import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.MediaType;
@@ -17,10 +16,9 @@ import org.springframework.web.client.RestClientException;
 // 카카오 OAuth REST API 호출 클라이언트
 @Slf4j
 @Component
-@RequiredArgsConstructor
 public class KakaoOAuthClient {
 
-    private final ObjectMapper objectMapper;
+    private final ObjectMapper objectMapper = new ObjectMapper();
 
     @Value("${kakao.rest-api-key}")
     private String restApiKey;
