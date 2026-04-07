@@ -2,7 +2,6 @@ package kr.gosky.sso.domain.admin.controller;
 
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
-import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -28,9 +27,9 @@ public class AdminController {
 
     @Operation(summary = "사용자 목록 조회", description = "전체 사용자 목록을 페이징하여 조회합니다. 기본 정렬: 가입일 내림차순, 페이지 크기: 20")
     @ApiResponses({
-            @ApiResponse(responseCode = "200", description = "사용자 목록 반환"),
-            @ApiResponse(responseCode = "401", description = "인증 토큰 없음 또는 만료"),
-            @ApiResponse(responseCode = "403", description = "관리자 권한 없음")
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "사용자 목록 반환"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "인증 토큰 없음 또는 만료"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "관리자 권한 없음")
     })
     @GetMapping("/users")
     public ApiResponse<Page<UserSummaryResponse>> getUsers(
@@ -41,10 +40,10 @@ public class AdminController {
 
     @Operation(summary = "사용자 상세 조회", description = "특정 사용자의 상세 정보를 조회합니다.")
     @ApiResponses({
-            @ApiResponse(responseCode = "200", description = "사용자 상세 정보 반환"),
-            @ApiResponse(responseCode = "401", description = "인증 토큰 없음 또는 만료"),
-            @ApiResponse(responseCode = "403", description = "관리자 권한 없음"),
-            @ApiResponse(responseCode = "404", description = "존재하지 않는 사용자")
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "사용자 상세 정보 반환"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "인증 토큰 없음 또는 만료"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "관리자 권한 없음"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "존재하지 않는 사용자")
     })
     @GetMapping("/users/{userId}")
     public ApiResponse<UserDetailResponse> getUser(
@@ -54,11 +53,11 @@ public class AdminController {
 
     @Operation(summary = "사용자 상태 변경", description = "사용자 계정을 활성화(ACTIVE) 또는 비활성화(INACTIVE) 처리합니다. 비활성화된 계정은 로그인이 차단됩니다.")
     @ApiResponses({
-            @ApiResponse(responseCode = "200", description = "상태 변경 성공"),
-            @ApiResponse(responseCode = "400", description = "입력값 유효성 검증 실패"),
-            @ApiResponse(responseCode = "401", description = "인증 토큰 없음 또는 만료"),
-            @ApiResponse(responseCode = "403", description = "관리자 권한 없음"),
-            @ApiResponse(responseCode = "404", description = "존재하지 않는 사용자")
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "상태 변경 성공"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "입력값 유효성 검증 실패"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "인증 토큰 없음 또는 만료"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "관리자 권한 없음"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "존재하지 않는 사용자")
     })
     @PatchMapping("/users/{userId}/status")
     public ApiResponse<Void> updateUserStatus(
@@ -70,9 +69,9 @@ public class AdminController {
 
     @Operation(summary = "접속 로그 조회", description = "전체 접속 로그를 페이징하여 조회합니다. 로그인/로그아웃/토큰 재발급/비밀번호 재설정 이력을 포함합니다. 기본 페이지 크기: 50")
     @ApiResponses({
-            @ApiResponse(responseCode = "200", description = "접속 로그 목록 반환"),
-            @ApiResponse(responseCode = "401", description = "인증 토큰 없음 또는 만료"),
-            @ApiResponse(responseCode = "403", description = "관리자 권한 없음")
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "접속 로그 목록 반환"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "인증 토큰 없음 또는 만료"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "관리자 권한 없음")
     })
     @GetMapping("/access-logs")
     public ApiResponse<Page<AccessLogResponse>> getAccessLogs(
