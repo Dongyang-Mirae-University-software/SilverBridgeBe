@@ -41,3 +41,7 @@ jwt:
   secret: ${JWT_SECRET:silverbridge-sso-secret-key-must-be-at-least-256bit-long-for-hs256}
   access-token-expiration: 1800000    # 30분 (ms)
   refresh-token-expiration: 604800000 # 7일 (ms)
+
+kakao:
+  rest-api-key: ${KAKAO_REST_API_KEY}
+  redirect-uri: ${KAKAO_REDIRECT_URI}
