@@ -4,8 +4,7 @@ import kr.silverbridge.main.domain.user.entity.User;
 import lombok.Builder;
 import lombok.Getter;
 
-import java.time.LocalDateTime;
-
+import java.time.OffsetDateTime;
 @Getter
 @Builder
 public class UserSummaryResponse {
@@ -17,8 +16,8 @@ public class UserSummaryResponse {
     private String status;
     private String provider;
     private boolean emailVerified;
-    private LocalDateTime lastLoginAt;
-    private LocalDateTime createdAt;
+    private OffsetDateTime lastLoginAt;
+    private OffsetDateTime createdAt;
 
     public static UserSummaryResponse from(User user) {
         return UserSummaryResponse.builder()

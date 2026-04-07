@@ -4,7 +4,7 @@ import kr.silverbridge.main.domain.admin.entity.SsoClient;
 import lombok.Builder;
 import lombok.Getter;
 
-import java.time.LocalDateTime;
+import java.time.OffsetDateTime;
 
 // 서비스 목록 조회 응답 — client_secret 미포함
 @Getter
@@ -16,7 +16,7 @@ public class ClientSummaryResponse {
     private String clientName;
     private String redirectUri;
     private boolean isActive;
-    private LocalDateTime createdAt;
+    private OffsetDateTime createdAt;
 
     public static ClientSummaryResponse from(SsoClient client) {
         return ClientSummaryResponse.builder()
