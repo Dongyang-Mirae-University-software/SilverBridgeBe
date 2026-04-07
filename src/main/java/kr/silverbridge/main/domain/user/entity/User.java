@@ -81,6 +81,12 @@ public class User extends BaseTimeEntity {
         this.password = encodedPassword;
     }
 
+    // 카카오 신규 가입 시 역할 확정 및 ACTIVE 전환
+    public void completeRole(Role role) {
+        this.role = role;
+        this.status = Status.ACTIVE;
+    }
+
     // 계정 활성화
     public void activate() {
         this.status = Status.ACTIVE;
