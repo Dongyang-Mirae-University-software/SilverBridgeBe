@@ -92,7 +92,7 @@ kr.silverbridge.main
 2. `git checkout -b type/short-description` — 브랜치 분기
 3. 작업 및 커밋
 4. push 전 `git merge dev` → 충돌 해결
-5. push 후 MR(PR) 생성 → dev로 머지, 브랜치 삭제
+5. push 후 MR(PR) 생성 → dev로 머지 후 **브랜치 삭제** (브랜치 삭제를 전제로 MR 진행)
 
 ### 브랜치 작성 규칙
 - 전부 소문자, 띄어쓰기 금지, 단어 구분은 `-`
