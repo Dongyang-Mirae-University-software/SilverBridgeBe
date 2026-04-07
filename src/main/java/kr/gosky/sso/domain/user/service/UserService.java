@@ -2,6 +2,7 @@ package kr.gosky.sso.domain.user.service;
 
 import kr.gosky.sso.domain.auth.repository.RefreshTokenRepository;
 import kr.gosky.sso.domain.user.dto.UserProfileResponse;
+import kr.gosky.sso.domain.user.dto.UserUpdateRequest;
 import kr.gosky.sso.domain.user.entity.User;
 import kr.gosky.sso.domain.user.repository.UserRepository;
 import kr.gosky.sso.global.exception.CustomException;
@@ -24,6 +25,15 @@ public class UserService {
     public UserProfileResponse getMyProfile(String userId) {
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new CustomException(ErrorCode.USER_NOT_FOUND));
+        return UserProfileResponse.from(user);
+    }
+
+    // 내 정보 수정 (이름, 전화번호)
+    @Transactional
+    public UserProfileResponse updateProfile(String userId, UserUpdateRequest request) {
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new CustomException(ErrorCode.USER_NOT_FOUND));
+        user.updateProfile(request.getName(), request.getPhone());
         return UserProfileResponse.from(user);
     }
 
