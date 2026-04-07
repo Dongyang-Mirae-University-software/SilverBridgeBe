@@ -3,9 +3,9 @@ spring:
     name: dmu-backend
 
   datasource:
-    url: jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5432}/silverbridge
-    username: ${DB_USERNAME:silverbridge}
-    password: ${DB_PASSWORD:silverbridge}
+    url: jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5432}/${DB_NAME:main}
+    username: ${DB_USERNAME:main}
+    password: ${DB_PASSWORD:main}
     driver-class-name: org.postgresql.Driver
 
   jpa:
@@ -38,7 +38,7 @@ server:
   port: 6511
 
 jwt:
-  secret: ${JWT_SECRET:silverbridge-sso-secret-key-must-be-at-least-256bit-long-for-hs256}
+  secret: ${JWT_SECRET:main-backend-secret-key-must-be-at-least-256bit-long-for-hs256}
   access-token-expiration: 1800000    # 30분 (ms)
   refresh-token-expiration: 604800000 # 7일 (ms)
 
