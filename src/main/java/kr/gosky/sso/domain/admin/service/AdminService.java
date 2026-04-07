@@ -16,6 +16,8 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.net.URI;
 import java.net.URISyntaxException;
+import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.util.UUID;
 
 @Service
@@ -58,6 +60,19 @@ public class AdminService {
     public Page<AccessLogResponse> getAccessLogs(Pageable pageable) {
         return accessLogRepository.findAll(pageable)
                 .map(AccessLogResponse::from);
+    }
+
+    // 대시보드 통계 조회
+    @Transactional(readOnly = true)
+    public DashboardResponse getDashboard() {
+        LocalDateTime todayStart = LocalDate.now().atStartOfDay();
+
+        return DashboardResponse.builder()
+                .totalUsers(userRepository.count())
+                .totalClients(ssoClientRepository.count())
+                .totalLogs(accessLogRepository.count())
+                .todayUsers(accessLogRepository.countByActionAndCreatedAtAfter("LOGIN", todayStart))
+                .build();
     }
 
     // 서비스 등록
