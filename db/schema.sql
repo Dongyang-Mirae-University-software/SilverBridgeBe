@@ -66,6 +66,24 @@ CREATE TABLE access_logs (
     );
 
 -- =============================================
+-- 4. sso_clients (등록된 서비스)
+-- =============================================
+CREATE TABLE sso_clients (
+    id            BIGINT        NOT NULL AUTO_INCREMENT,
+    client_id     VARCHAR(100)  NOT NULL,
+    client_name   VARCHAR(100)  NOT NULL,
+    client_secret VARCHAR(255)  NOT NULL,
+    redirect_uri  VARCHAR(500)  NOT NULL,
+    is_active     BOOLEAN       NOT NULL DEFAULT TRUE,
+    created_at    DATETIME      NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at    DATETIME      NOT NULL DEFAULT CURRENT_TIMESTAMP
+                      ON UPDATE CURRENT_TIMESTAMP,
+
+    CONSTRAINT pk_sso_clients          PRIMARY KEY (id),
+    CONSTRAINT uq_sso_clients_client_id UNIQUE (client_id)
+);
+
+-- =============================================
 -- 인덱스
 -- =============================================
 CREATE INDEX idx_refresh_tokens_user_id ON refresh_tokens(user_id);
