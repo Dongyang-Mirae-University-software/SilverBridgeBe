@@ -3,11 +3,11 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    container_name: dmusso-dev-sso-api
-    image: dmusso-sso-api:dev
+    container_name: dmusso-dev-api
+    image: dmusso-api:dev
     restart: unless-stopped
     env_file:
-      - .env.dev.sso
+      - .env.dev
     ports:
       - "6501:6501"
     depends_on:
@@ -19,32 +19,32 @@ services:
       - app-net
 
   db:
-    image: mariadb:11.8
-    container_name: dmusso-dev-sso-db
+    image: postgres:16
+    container_name: dmusso-dev-db
     restart: unless-stopped
     env_file:
-      - .env.dev.sso
+      - .env.dev
     ports:
-      - "6503:3306"
+      - "6503:5432"
     volumes:
-      - dmusso-dev-sso-db-data:/var/lib/mysql
+      - dmusso-dev-db-data:/var/lib/postgresql/data
       - ./db/schema.sql:/docker-entrypoint-initdb.d/schema.sql:ro
     networks:
       - app-net
     healthcheck:
-      test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
       interval: 10s
       timeout: 5s
       retries: 5
 
   redis:
     image: redis:7.2
-    container_name: dmusso-dev-sso-redis
+    container_name: dmusso-dev-redis
     restart: unless-stopped
     ports:
       - "6504:6379"
     volumes:
-      - dmusso-dev-sso-redis-data:/data
+      - dmusso-dev-redis-data:/data
     networks:
       - app-net
     healthcheck:
@@ -55,13 +55,10 @@ services:
 
 networks:
   app-net:
-    name: dmusso-dev-sso-net
-    external: true
+    name: dmusso-dev-net
 
 volumes:
-  dmusso-dev-sso-db-data:
-    name: dmusso-dev-sso-db-data
-    external: true
-  dmusso-dev-sso-redis-data:
-    name: dmusso-dev-sso-redis-data
-    external: true
+  dmusso-dev-db-data:
+    name: dmusso-dev-db-data
+  dmusso-dev-redis-data:
+    name: dmusso-dev-redis-data
