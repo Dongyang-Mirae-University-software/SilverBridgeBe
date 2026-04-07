@@ -14,8 +14,6 @@ public class UserProfileResponse {
     private String email;
     private String name;
     private String phone;
-    private String role;
-    private String status;
     private String provider;
     private String profileImage;
     private boolean emailVerified;
@@ -28,8 +26,6 @@ public class UserProfileResponse {
                 .email(user.getEmail())
                 .name(user.getName())
                 .phone(user.getPhone())
-                .role(user.getRole().name())
-                .status(user.getStatus().name())
                 .provider(user.getProvider().name())
                 .profileImage(user.getProfileImage())
                 .emailVerified(user.isEmailVerified())
