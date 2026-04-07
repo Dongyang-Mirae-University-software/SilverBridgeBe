@@ -1,6 +1,7 @@
 package kr.silverbridge.main.domain.auth.service;
 
 import kr.silverbridge.main.domain.auth.dto.KakaoLoginRequest;
+import kr.silverbridge.main.domain.auth.dto.KakaoLoginResponse;
 import kr.silverbridge.main.domain.auth.dto.LoginResponse;
 import kr.silverbridge.main.domain.auth.entity.RefreshToken;
 import kr.silverbridge.main.domain.auth.oauth.KakaoOAuthClient;
@@ -35,15 +36,16 @@ public class KakaoAuthService {
     // 카카오 로그인
     // 인가 코드 → 카카오 토큰 → 카카오 사용자 정보 → 회원 조회/생성 → JWT 발급
     @Transactional
-    public LoginResponse kakaoLogin(KakaoLoginRequest request, String ipAddress, String userAgent) {
+    public KakaoLoginResponse kakaoLogin(KakaoLoginRequest request, String ipAddress, String userAgent) {
         // 1. 카카오 인가 코드 → 카카오 액세스 토큰 교환
         KakaoTokenResponse kakaoToken = kakaoOAuthClient.getToken(request.getCode());
 
         // 2. 카카오 액세스 토큰으로 사용자 정보 조회
         KakaoUserInfoResponse kakaoUser = kakaoOAuthClient.getUserInfo(kakaoToken.getAccessToken());
 
-        // 3. 카카오 ID로 기존 사용자 조회, 없으면 신규 생성
+        // 3. 카카오 ID로 기존 사용자 조회, 없으면 신규 생성 (PENDING 상태)
         String kakaoId = String.valueOf(kakaoUser.getId());
+        boolean isNewUser = !userRepository.existsByProviderAndProviderId(Provider.KAKAO, kakaoId);
         User user = userRepository.findByProviderAndProviderId(Provider.KAKAO, kakaoId)
                 .orElseGet(() -> createKakaoUser(kakaoUser, kakaoId));
 
@@ -52,8 +54,50 @@ public class KakaoAuthService {
             throw new CustomException(ErrorCode.INACTIVE_USER);
         }
 
-        // 5. JWT 발급 및 Refresh Token 저장 (단일 디바이스 정책)
-        String accessToken  = jwtTokenProvider.generateAccessToken(user.getId(), user.getEmail(), user.getRole().name());
+        // 5. 신규 사용자(PENDING) — 임시 Access Token만 발급, 역할 선택 필요
+        String accessToken = jwtTokenProvider.generateAccessToken(user.getId(), user.getEmail(), user.getRole().name());
+        if (user.getStatus() == Status.PENDING) {
+            return KakaoLoginResponse.ofNewUser(user, accessToken);
+        }
+
+        // 6. 기존 사용자 — 정식 JWT 발급 및 Refresh Token 저장
+        String refreshToken = jwtTokenProvider.generateRefreshToken(user.getId());
+        refreshTokenRepository.deleteByUserId(user.getId());
+        refreshTokenRepository.save(RefreshToken.builder()
+                .userId(user.getId())
+                .token(refreshToken)
+                .expiresAt(OffsetDateTime.now().plusSeconds(
+                        jwtTokenProvider.getRemainingExpiration(refreshToken) / 1000))
+                .build());
+
+        user.updateLastLoginAt();
+        authService.saveAccessLog(user.getId(), "KAKAO_LOGIN", ipAddress, userAgent);
+
+        return KakaoLoginResponse.ofExisting(user, accessToken, refreshToken);
+    }
+
+    // 카카오 신규 가입 역할 선택 완료
+    // PENDING 상태 사용자의 역할을 확정하고 정식 토큰 발급
+    @Transactional
+    public LoginResponse completeRole(String userId, Role role, String ipAddress, String userAgent) {
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new CustomException(ErrorCode.USER_NOT_FOUND));
+
+        // PENDING 상태가 아니면 이미 역할이 선택된 사용자
+        if (user.getStatus() != Status.PENDING) {
+            throw new CustomException(ErrorCode.INVALID_ROLE);
+        }
+
+        // ADMIN 역할 선택 불가
+        if (role == Role.ADMIN) {
+            throw new CustomException(ErrorCode.INVALID_ROLE);
+        }
+
+        // 역할 확정 및 ACTIVE 전환
+        user.completeRole(role);
+
+        // 정식 JWT 발급 및 Refresh Token 저장
+        String accessToken  = jwtTokenProvider.generateAccessToken(user.getId(), user.getEmail(), role.name());
         String refreshToken = jwtTokenProvider.generateRefreshToken(user.getId());
 
         refreshTokenRepository.deleteByUserId(user.getId());
@@ -70,7 +114,7 @@ public class KakaoAuthService {
         return LoginResponse.of(user, accessToken, refreshToken);
     }
 
-    // 카카오 신규 사용자 생성
+    // 카카오 신규 사용자 생성 (역할 선택 전 PENDING 상태)
     private User createKakaoUser(KakaoUserInfoResponse kakaoUser, String kakaoId) {
         String email = kakaoUser.getEmail();
         // 이메일 제공 동의를 하지 않은 경우 카카오 ID 기반 임시 이메일 생성
@@ -92,9 +136,8 @@ public class KakaoAuthService {
                 .password(null)             // 소셜 로그인 사용자는 비밀번호 없음
                 .name(nickname)
                 .phone(null)
-                // TODO: 카카오 최초 가입 시 역할 선택 플로우 별도 구현 필요 (현재 WARD 임시 기본값)
-                .role(Role.WARD)
-                .status(Status.ACTIVE)
+                .role(Role.WARD)            // 역할 선택 전 임시값 (PENDING 상태에서 completeRole로 확정)
+                .status(Status.PENDING)     // 역할 선택 대기
                 .provider(Provider.KAKAO)
                 .providerId(kakaoId)
                 .profileImage(kakaoUser.getProfileImageUrl())

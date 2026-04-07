@@ -33,7 +33,7 @@ CREATE TABLE users (
     CONSTRAINT pk_users           PRIMARY KEY (id),
     CONSTRAINT uq_users_email     UNIQUE (email),
     CONSTRAINT chk_users_role     CHECK (role     IN ('WARD', 'GUARDIAN', 'ADMIN')),
-    CONSTRAINT chk_users_status   CHECK (status   IN ('ACTIVE', 'INACTIVE')),
+    CONSTRAINT chk_users_status   CHECK (status   IN ('ACTIVE', 'INACTIVE', 'PENDING')),
     CONSTRAINT chk_users_provider CHECK (provider IN ('LOCAL', 'KAKAO'))
 );
 

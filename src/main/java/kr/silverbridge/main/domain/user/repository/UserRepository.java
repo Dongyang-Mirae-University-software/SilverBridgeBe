@@ -19,4 +19,7 @@ public interface UserRepository extends JpaRepository<User, String> {
 
     // 소셜 로그인 사용자 조회 (provider + providerId)
     Optional<User> findByProviderAndProviderId(Provider provider, String providerId);
+
+    // 소셜 로그인 사용자 존재 여부 (신규 가입 여부 판별)
+    boolean existsByProviderAndProviderId(Provider provider, String providerId);
 }
