@@ -27,6 +27,18 @@ public class AdminController {
 
     private final AdminService adminService;
 
+    @Operation(summary = "대시보드 통계 조회", description = "총 사용자 수, 등록 서비스 수, 전체 로그 수, 오늘 로그인 수를 반환합니다.")
+    @ApiResponses({
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "통계 데이터 반환"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "인증 토큰 없음 또는 만료"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "관리자 권한 없음"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "500", description = "서버 내부 오류")
+    })
+    @GetMapping("/dashboard")
+    public ApiResponse<DashboardResponse> getDashboard() {
+        return ApiResponse.ok(adminService.getDashboard());
+    }
+
     @Operation(summary = "사용자 목록 조회", description = "전체 사용자 목록을 페이징하여 조회합니다. 기본 정렬: 가입일 내림차순, 페이지 크기: 20")
     @ApiResponses({
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "사용자 목록 반환"),
