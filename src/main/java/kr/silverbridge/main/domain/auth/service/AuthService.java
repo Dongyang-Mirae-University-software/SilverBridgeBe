@@ -47,13 +47,18 @@ public class AuthService {
             throw new CustomException(ErrorCode.EMAIL_ALREADY_EXISTS);
         }
 
+        // ADMIN 역할은 회원가입으로 선택 불가
+        if (request.getRole() == Role.ADMIN) {
+            throw new CustomException(ErrorCode.INVALID_ROLE);
+        }
+
         User user = User.builder()
                 .id(UUID.randomUUID().toString())
                 .email(request.getEmail())
                 .password(passwordEncoder.encode(request.getPassword()))
                 .name(request.getName())
                 .phone(request.getPhone())
-                .role(Role.USER)
+                .role(request.getRole())
                 .status(Status.ACTIVE)
                 .provider(Provider.LOCAL)
                 .emailVerified(false)

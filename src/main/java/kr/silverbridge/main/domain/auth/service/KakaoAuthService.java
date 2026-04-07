@@ -92,7 +92,8 @@ public class KakaoAuthService {
                 .password(null)             // 소셜 로그인 사용자는 비밀번호 없음
                 .name(nickname)
                 .phone(null)
-                .role(Role.USER)
+                // TODO: 카카오 최초 가입 시 역할 선택 플로우 별도 구현 필요 (현재 WARD 임시 기본값)
+                .role(Role.WARD)
                 .status(Status.ACTIVE)
                 .provider(Provider.KAKAO)
                 .providerId(kakaoId)
