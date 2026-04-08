@@ -58,7 +58,7 @@ class PasswordFieldValidationTest {
 
         assertEquals(1, violations.size());
         assertEquals(
-                "비밀번호는 영문 또는 한글, 숫자, 특수문자만 사용할 수 있으며 각 종류를 1개 이상 포함해야 하고 공백을 사용할 수 없습니다.",
+                "비밀번호는 영어, 한글, 숫자, 특수문자를 각각 하나 이상 포함해야 하며, 띄어쓰기는 사용할 수 없습니다.",
                 violations.iterator().next().getMessage()
         );
     }
@@ -67,11 +67,7 @@ class PasswordFieldValidationTest {
             @Size(min = 8, max = 24, message = "비밀번호는 8자 이상 24자 이하여야 합니다.")
             @Pattern(
                     regexp = "^(?=.*[A-Za-z가-힣])(?=.*[0-9])(?=.*[!@#$%^&*()_+\\-=\\[\\]{};':\"\\\\|,.<>/?`~])[A-Za-z0-9가-힣!@#$%^&*()_+\\-=\\[\\]{};':\"\\\\|,.<>/?`~]+$",
-                    message = "비밀번호는 영문 또는 한글, 숫자, 특수문자만 사용할 수 있으며 각 종류를 1개 이상 포함해야 하고 공백을 사용할 수 없습니다."
-            )
-            @Utf8ByteLength(
-                    max = 72,
-                    message = "비밀번호는 UTF-8 기준 72바이트 이하여야 합니다."
+                    message = "비밀번호는 영어, 한글, 숫자, 특수문자를 각각 하나 이상 포함해야 하며, 띄어쓰기는 사용할 수 없습니다."
             )
             String password
     ) {
