@@ -52,6 +52,7 @@ public class AdminService {
         switch (request.getStatus()) {
             case ACTIVE   -> user.activate();
             case INACTIVE -> user.deactivate();
+            default       -> throw new CustomException(ErrorCode.INVALID_STATUS);
         }
     }
 
