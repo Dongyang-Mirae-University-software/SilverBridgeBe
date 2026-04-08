@@ -80,41 +80,6 @@ public class KakaoAuthService {
         return KakaoLoginResponse.ofExisting(user, accessToken, refreshToken);
     }
 
-    // 개발 테스트용 콜백 — 인가 코드와 redirect_uri를 직접 지정하여 로그인 처리
-    @Transactional
-    public KakaoLoginResponse kakaoLoginWithRedirectUri(String code, String callbackRedirectUri,
-                                                        String ipAddress, String userAgent) {
-        KakaoTokenResponse kakaoToken = kakaoOAuthClient.getToken(code, callbackRedirectUri);
-        KakaoUserInfoResponse kakaoUser = kakaoOAuthClient.getUserInfo(kakaoToken.getAccessToken());
-
-        String kakaoId = String.valueOf(kakaoUser.getId());
-        User user = userRepository.findByProviderAndProviderId(Provider.KAKAO, kakaoId)
-                .orElseGet(() -> createKakaoUser(kakaoUser, kakaoId));
-
-        if (user.getStatus() == Status.INACTIVE) {
-            throw new CustomException(ErrorCode.INACTIVE_USER);
-        }
-
-        String accessToken = jwtTokenProvider.generateAccessToken(user.getId(), user.getEmail(), user.getRole().name());
-        if (user.getStatus() == Status.PENDING) {
-            return KakaoLoginResponse.ofNewUser(user, accessToken);
-        }
-
-        String refreshToken = jwtTokenProvider.generateRefreshToken(user.getId());
-        refreshTokenRepository.deleteByUserId(user.getId());
-        refreshTokenRepository.save(RefreshToken.builder()
-                .userId(user.getId())
-                .token(refreshToken)
-                .expiresAt(OffsetDateTime.now().plusSeconds(
-                        jwtTokenProvider.getRemainingExpiration(refreshToken) / 1000))
-                .build());
-
-        user.updateLastLoginAt();
-        authService.saveAccessLog(user.getId(), "KAKAO_LOGIN", ipAddress, userAgent);
-
-        return KakaoLoginResponse.ofExisting(user, accessToken, refreshToken);
-    }
-
     // 카카오 신규 가입 역할 선택 완료
     // PENDING 상태 사용자의 역할을 확정하고 정식 토큰 발급
     @Transactional
