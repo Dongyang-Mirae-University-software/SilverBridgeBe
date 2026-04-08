@@ -17,8 +17,8 @@ public class SwaggerConfig {
     public OpenAPI openAPI() {
         return new OpenAPI()
                 .info(new Info()
-                        .title("SilverBridge SSO API")
-                        .description("SilverBridge SSO 백엔드 API 문서")
+                        .title("SilverBridge Main API")
+                        .description("SilverBridge Main 백엔드 API 문서")
                         .version("v1.0.0"))
                 // 전역 JWT Bearer 인증 적용
                 .addSecurityItem(new SecurityRequirement().addList(SECURITY_SCHEME_NAME))
