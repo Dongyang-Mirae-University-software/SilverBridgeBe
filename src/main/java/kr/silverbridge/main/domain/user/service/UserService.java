@@ -5,6 +5,7 @@ import kr.silverbridge.main.domain.user.dto.UserProfileResponse;
 import kr.silverbridge.main.domain.user.dto.UserUpdateRequest;
 import kr.silverbridge.main.domain.user.entity.User;
 import kr.silverbridge.main.domain.user.repository.UserRepository;
+import kr.silverbridge.main.global.enums.Provider;
 import kr.silverbridge.main.global.exception.CustomException;
 import kr.silverbridge.main.global.exception.ErrorCode;
 import lombok.RequiredArgsConstructor;
@@ -44,8 +45,18 @@ public class UserService {
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new CustomException(ErrorCode.USER_NOT_FOUND));
 
+        // 소셜 로그인 사용자는 비밀번호 변경 불가
+        if (user.getProvider() != Provider.LOCAL) {
+            throw new CustomException(ErrorCode.SOCIAL_USER_NO_PASSWORD);
+        }
+
         if (!passwordEncoder.matches(currentPassword, user.getPassword())) {
             throw new CustomException(ErrorCode.INVALID_PASSWORD);
+        }
+
+        // 현재 비밀번호와 동일한 경우 차단
+        if (passwordEncoder.matches(newPassword, user.getPassword())) {
+            throw new CustomException(ErrorCode.SAME_AS_CURRENT_PASSWORD);
         }
 
         // 이전 비밀번호 2개와 중복 검사
@@ -63,15 +74,22 @@ public class UserService {
     }
 
     // 회원 탈퇴
-    // 비밀번호 확인 후 계정 비활성화, Refresh Token 삭제
+    // 일반 사용자: 비밀번호 확인 후 비활성화 / 소셜 사용자: 비밀번호 없이 비활성화
     @Transactional
     public void withdraw(String userId, String password) {
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new CustomException(ErrorCode.USER_NOT_FOUND));
 
-        if (!passwordEncoder.matches(password, user.getPassword())) {
-            throw new CustomException(ErrorCode.INVALID_PASSWORD);
+        if (user.getProvider() == Provider.LOCAL) {
+            // 일반 로그인 사용자: 비밀번호 검증 필수
+            if (password == null || password.isBlank()) {
+                throw new CustomException(ErrorCode.INVALID_PASSWORD);
+            }
+            if (!passwordEncoder.matches(password, user.getPassword())) {
+                throw new CustomException(ErrorCode.INVALID_PASSWORD);
+            }
         }
+        // 소셜 로그인 사용자: 비밀번호 검증 없이 탈퇴
 
         user.deactivate();
         refreshTokenRepository.deleteByUserId(userId);
