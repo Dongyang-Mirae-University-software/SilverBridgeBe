@@ -17,6 +17,7 @@ import kr.silverbridge.main.global.exception.CustomException;
 import kr.silverbridge.main.global.exception.ErrorCode;
 import kr.silverbridge.main.global.jwt.JwtTokenProvider;
 import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -33,12 +34,15 @@ public class KakaoAuthService {
     private final JwtTokenProvider jwtTokenProvider;
     private final AuthService authService;
 
+    @Value("${kakao.redirect-uri}")
+    private String redirectUri;
+
     // 카카오 로그인
     // 인가 코드 → 카카오 토큰 → 카카오 사용자 정보 → 회원 조회/생성 → JWT 발급
     @Transactional
     public KakaoLoginResponse kakaoLogin(KakaoLoginRequest request, String ipAddress, String userAgent) {
         // 1. 카카오 인가 코드 → 카카오 액세스 토큰 교환
-        KakaoTokenResponse kakaoToken = kakaoOAuthClient.getToken(request.getCode());
+        KakaoTokenResponse kakaoToken = kakaoOAuthClient.getToken(request.getCode(), redirectUri);
 
         // 2. 카카오 액세스 토큰으로 사용자 정보 조회
         KakaoUserInfoResponse kakaoUser = kakaoOAuthClient.getUserInfo(kakaoToken.getAccessToken());
@@ -61,6 +65,41 @@ public class KakaoAuthService {
         }
 
         // 6. 기존 사용자 — 정식 JWT 발급 및 Refresh Token 저장
+        String refreshToken = jwtTokenProvider.generateRefreshToken(user.getId());
+        refreshTokenRepository.deleteByUserId(user.getId());
+        refreshTokenRepository.save(RefreshToken.builder()
+                .userId(user.getId())
+                .token(refreshToken)
+                .expiresAt(OffsetDateTime.now().plusSeconds(
+                        jwtTokenProvider.getRemainingExpiration(refreshToken) / 1000))
+                .build());
+
+        user.updateLastLoginAt();
+        authService.saveAccessLog(user.getId(), "KAKAO_LOGIN", ipAddress, userAgent);
+
+        return KakaoLoginResponse.ofExisting(user, accessToken, refreshToken);
+    }
+
+    // 개발 테스트용 콜백 — 인가 코드와 redirect_uri를 직접 지정하여 로그인 처리
+    @Transactional
+    public KakaoLoginResponse kakaoLoginWithRedirectUri(String code, String callbackRedirectUri,
+                                                        String ipAddress, String userAgent) {
+        KakaoTokenResponse kakaoToken = kakaoOAuthClient.getToken(code, callbackRedirectUri);
+        KakaoUserInfoResponse kakaoUser = kakaoOAuthClient.getUserInfo(kakaoToken.getAccessToken());
+
+        String kakaoId = String.valueOf(kakaoUser.getId());
+        User user = userRepository.findByProviderAndProviderId(Provider.KAKAO, kakaoId)
+                .orElseGet(() -> createKakaoUser(kakaoUser, kakaoId));
+
+        if (user.getStatus() == Status.INACTIVE) {
+            throw new CustomException(ErrorCode.INACTIVE_USER);
+        }
+
+        String accessToken = jwtTokenProvider.generateAccessToken(user.getId(), user.getEmail(), user.getRole().name());
+        if (user.getStatus() == Status.PENDING) {
+            return KakaoLoginResponse.ofNewUser(user, accessToken);
+        }
+
         String refreshToken = jwtTokenProvider.generateRefreshToken(user.getId());
         refreshTokenRepository.deleteByUserId(user.getId());
         refreshTokenRepository.save(RefreshToken.builder()

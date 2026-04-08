@@ -23,16 +23,13 @@ public class KakaoOAuthClient {
     @Value("${kakao.rest-api-key}")
     private String restApiKey;
 
-    @Value("${kakao.redirect-uri}")
-    private String redirectUri;
-
     private static final String TOKEN_URL     = "https://kauth.kakao.com/oauth/token";
     private static final String USER_INFO_URL = "https://kapi.kakao.com/v2/user/me";
 
     private final RestClient restClient = RestClient.create();
 
     // 인가 코드 → 카카오 액세스 토큰 교환
-    public KakaoTokenResponse getToken(String code) {
+    public KakaoTokenResponse getToken(String code, String redirectUri) {
         MultiValueMap<String, String> params = new LinkedMultiValueMap<>();
         params.add("grant_type", "authorization_code");
         params.add("client_id", restApiKey);
