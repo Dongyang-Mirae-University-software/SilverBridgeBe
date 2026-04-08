@@ -33,21 +33,6 @@ public class GlobalExceptionHandler {
                 .body(ApiResponse.fail(message));
     }
 
-    @ExceptionHandler(IllegalArgumentException.class)
-    public ResponseEntity<ApiResponse<Void>> handleIllegalArgumentException(IllegalArgumentException e) {
-        if ("password cannot be more than 72 bytes".equals(e.getMessage())) {
-            log.warn("IllegalArgumentException: {}", e.getMessage());
-            return ResponseEntity
-                    .badRequest()
-                    .body(ApiResponse.fail(ErrorCode.PASSWORD_TOO_LONG.getMessage()));
-        }
-
-        log.error("IllegalArgumentException: ", e);
-        return ResponseEntity
-                .internalServerError()
-                .body(ApiResponse.fail(ErrorCode.INTERNAL_SERVER_ERROR.getMessage()));
-    }
-
     // 예상치 못한 서버 오류
     @ExceptionHandler(Exception.class)
     public ResponseEntity<ApiResponse<Void>> handleException(Exception e) {
