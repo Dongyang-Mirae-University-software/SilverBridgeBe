@@ -1,11 +1,10 @@
 package kr.silverbridge.main.domain.user.dto;
 
-import jakarta.validation.constraints.NotBlank;
 import lombok.Getter;
 
 @Getter
 public class WithdrawRequest {
 
-    @NotBlank(message = "비밀번호를 입력해주세요.")
+    // 일반 로그인 사용자: 필수 / 소셜 로그인 사용자: null 허용
     private String password;
 }
