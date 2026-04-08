@@ -7,6 +7,7 @@ import kr.silverbridge.main.domain.auth.repository.AccessLogRepository;
 import kr.silverbridge.main.domain.auth.repository.RefreshTokenRepository;
 import kr.silverbridge.main.domain.user.entity.User;
 import kr.silverbridge.main.domain.user.repository.UserRepository;
+import kr.silverbridge.main.global.enums.Provider;
 import kr.silverbridge.main.global.exception.CustomException;
 import kr.silverbridge.main.global.exception.ErrorCode;
 import lombok.RequiredArgsConstructor;
@@ -43,6 +44,11 @@ public class PasswordResetService {
         User user = userRepository.findByEmail(request.getEmail())
                 .orElseThrow(() -> new CustomException(ErrorCode.USER_NOT_FOUND));
 
+        // 소셜 로그인 사용자는 비밀번호 재설정 불가
+        if (user.getProvider() != Provider.LOCAL) {
+            throw new CustomException(ErrorCode.SOCIAL_USER_NO_PASSWORD);
+        }
+
         String token = UUID.randomUUID().toString();
 
         // Redis에 토큰 → userId 매핑 저장
@@ -67,6 +73,11 @@ public class PasswordResetService {
 
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new CustomException(ErrorCode.USER_NOT_FOUND));
+
+        // 현재 비밀번호와 동일한 경우 차단
+        if (passwordEncoder.matches(request.getNewPassword(), user.getPassword())) {
+            throw new CustomException(ErrorCode.SAME_AS_CURRENT_PASSWORD);
+        }
 
         // 이전 비밀번호 2개와 중복 검사
         checkPasswordHistory(user, request.getNewPassword());
