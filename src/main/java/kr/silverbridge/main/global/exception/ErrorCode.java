@@ -21,7 +21,6 @@ public enum ErrorCode {
     PENDING_USER(HttpStatus.FORBIDDEN, "카카오 로그인 후 역할 선택이 필요합니다. /api/auth/kakao/role 을 호출해주세요."),
     EMAIL_ALREADY_EXISTS(HttpStatus.CONFLICT, "이미 사용 중인 이메일입니다."),
     INVALID_PASSWORD(HttpStatus.UNAUTHORIZED, "비밀번호가 올바르지 않습니다."),
-    PASSWORD_TOO_LONG(HttpStatus.BAD_REQUEST, "비밀번호는 UTF-8 기준 72바이트 이하여야 합니다. 한글/이모지는 더 짧아도 제한에 걸릴 수 있습니다."),
     INACTIVE_USER(HttpStatus.FORBIDDEN, "비활성화된 계정입니다."),
 
     // 인증
