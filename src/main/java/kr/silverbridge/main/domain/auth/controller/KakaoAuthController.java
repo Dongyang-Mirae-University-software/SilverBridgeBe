@@ -13,7 +13,6 @@ import kr.silverbridge.main.domain.auth.dto.LoginResponse;
 import kr.silverbridge.main.domain.auth.service.KakaoAuthService;
 import kr.silverbridge.main.global.response.ApiResponse;
 import lombok.RequiredArgsConstructor;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 
@@ -24,9 +23,6 @@ import org.springframework.web.bind.annotation.*;
 public class KakaoAuthController {
 
     private final KakaoAuthService kakaoAuthService;
-
-    @Value("${kakao.dev-callback-uri}")
-    private String devCallbackUri;
 
     @Operation(
             summary = "카카오 로그인",
@@ -50,25 +46,6 @@ public class KakaoAuthController {
                                                       HttpServletRequest httpRequest) {
         return ApiResponse.ok(kakaoAuthService.kakaoLogin(
                 request,
-                httpRequest.getRemoteAddr(),
-                httpRequest.getHeader("User-Agent")
-        ));
-    }
-
-    @Operation(
-            summary = "[개발 테스트용] 카카오 OAuth 콜백",
-            description = """
-                    카카오 인가 코드를 직접 받아 로그인을 처리합니다. (프론트 없이 테스트할 때 사용)
-                    카카오 개발자 콘솔 redirect_uri에 이 엔드포인트 URL을 등록한 후, 아래 URL로 브라우저에서 접근:
-                    https://kauth.kakao.com/oauth/authorize?client_id={REST_API_KEY}&redirect_uri={THIS_URL}&response_type=code
-                    """
-    )
-    @GetMapping("/kakao/callback")
-    public ApiResponse<KakaoLoginResponse> kakaoCallback(@RequestParam String code,
-                                                         HttpServletRequest httpRequest) {
-        return ApiResponse.ok(kakaoAuthService.kakaoLoginWithRedirectUri(
-                code,
-                devCallbackUri,
                 httpRequest.getRemoteAddr(),
                 httpRequest.getHeader("User-Agent")
         ));
