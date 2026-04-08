@@ -45,4 +45,3 @@ jwt:
 kakao:
   rest-api-key: ${KAKAO_REST_API_KEY}
   redirect-uri: ${KAKAO_REDIRECT_URI}
-  dev-callback-uri: ${KAKAO_DEV_CALLBACK_URI:http://211.236.174.23:6511/api/auth/kakao/callback}
