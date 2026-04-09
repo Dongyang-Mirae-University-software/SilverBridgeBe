@@ -21,9 +21,6 @@ public class AccessLog {
     @Column(name = "user_id", length = 36)
     private String userId;
 
-    @Column(name = "client_id", length = 36)
-    private String clientId;
-
     // LOGIN, LOGOUT, KAKAO_LOGIN, TOKEN_ISSUE, PASSWORD_RESET
     @Column(nullable = false, length = 50)
     private String action;
@@ -39,10 +36,8 @@ public class AccessLog {
     private OffsetDateTime createdAt;
 
     @Builder
-    public AccessLog(String userId, String clientId, String action,
-                     String ipAddress, String userAgent) {
+    public AccessLog(String userId, String action, String ipAddress, String userAgent) {
         this.userId = userId;
-        this.clientId = clientId;
         this.action = action;
         this.ipAddress = ipAddress;
         this.userAgent = userAgent;

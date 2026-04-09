@@ -41,11 +41,6 @@ public enum ErrorCode {
     EXPIRED_SMS_CODE(HttpStatus.BAD_REQUEST, "만료된 SMS 인증코드입니다."),
     SMS_NOT_VERIFIED(HttpStatus.BAD_REQUEST, "SMS 인증이 완료되지 않았습니다."),
 
-    // SSO 클라이언트
-    CLIENT_NOT_FOUND(HttpStatus.NOT_FOUND, "등록된 서비스를 찾을 수 없습니다."),
-    CLIENT_ID_ALREADY_EXISTS(HttpStatus.CONFLICT, "이미 사용 중인 클라이언트 ID입니다."),
-    INVALID_REDIRECT_URI(HttpStatus.BAD_REQUEST, "redirect_uri는 gosky.kr 도메인만 허용됩니다."),
-
     // 카카오 OAuth
     KAKAO_INVALID_CODE(HttpStatus.UNAUTHORIZED, "유효하지 않거나 만료된 카카오 인가 코드입니다."),
     KAKAO_PERMISSION_DENIED(HttpStatus.FORBIDDEN, "카카오 사용자 정보 접근 권한이 없습니다. 동의 항목을 확인해주세요."),
