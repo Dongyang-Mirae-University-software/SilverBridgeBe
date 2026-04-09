@@ -35,6 +35,12 @@ public enum ErrorCode {
     INVALID_RESET_TOKEN(HttpStatus.BAD_REQUEST, "유효하지 않거나 만료된 재설정 토큰입니다."),
     PASSWORD_RECENTLY_USED(HttpStatus.BAD_REQUEST, "최근에 사용한 비밀번호는 다시 사용할 수 없습니다."),
 
+    // SMS 인증
+    SMS_SEND_FAILED(HttpStatus.INTERNAL_SERVER_ERROR, "SMS 발송에 실패했습니다."),
+    INVALID_SMS_CODE(HttpStatus.BAD_REQUEST, "SMS 인증코드가 올바르지 않습니다."),
+    EXPIRED_SMS_CODE(HttpStatus.BAD_REQUEST, "만료된 SMS 인증코드입니다."),
+    SMS_NOT_VERIFIED(HttpStatus.BAD_REQUEST, "SMS 인증이 완료되지 않았습니다."),
+
     // SSO 클라이언트
     CLIENT_NOT_FOUND(HttpStatus.NOT_FOUND, "등록된 서비스를 찾을 수 없습니다."),
     CLIENT_ID_ALREADY_EXISTS(HttpStatus.CONFLICT, "이미 사용 중인 클라이언트 ID입니다."),
