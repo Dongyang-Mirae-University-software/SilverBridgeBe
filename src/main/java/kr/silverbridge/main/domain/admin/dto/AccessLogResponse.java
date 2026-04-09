@@ -12,7 +12,6 @@ public class AccessLogResponse {
 
     private Long id;
     private String userId;
-    private String clientId;
     private String action;
     private String ipAddress;
     private String userAgent;
@@ -22,7 +21,6 @@ public class AccessLogResponse {
         return AccessLogResponse.builder()
                 .id(log.getId())
                 .userId(log.getUserId())
-                .clientId(log.getClientId())
                 .action(log.getAction())
                 .ipAddress(log.getIpAddress())
                 .userAgent(log.getUserAgent())
