@@ -52,6 +52,14 @@ public class AdminService {
         }
     }
 
+    // 사용자 강제 탈퇴 (계정 영구 삭제)
+    @Transactional
+    public void forceDeleteUser(String userId) {
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new CustomException(ErrorCode.USER_NOT_FOUND));
+        userRepository.delete(user);
+    }
+
     // 접속 로그 조회 (페이징)
     @Transactional(readOnly = true)
     public Page<AccessLogResponse> getAccessLogs(Pageable pageable) {
