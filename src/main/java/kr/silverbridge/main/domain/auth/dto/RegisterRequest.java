@@ -26,6 +26,10 @@ public class RegisterRequest {
     @NotBlank(message = "이름을 입력해주세요.")
     private String name;
 
+    @Pattern(
+            regexp = "^\\d{10,11}$",
+            message = "전화번호는 숫자만 입력 가능합니다. (10~11자리)"
+    )
     private String phone;
 
     // WARD(피보호자) 또는 GUARDIAN(보호자) 중 하나 필수 선택
