@@ -73,6 +73,21 @@ public class AdminController {
         return ApiResponse.ok("사용자 상태가 변경되었습니다.");
     }
 
+    @Operation(summary = "사용자 강제 탈퇴", description = "피보호자/보호자 계정을 강제로 삭제합니다. 삭제된 계정은 복구할 수 없습니다.")
+    @ApiResponses({
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "강제 탈퇴 성공"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "인증 토큰 없음 또는 만료"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "관리자 권한 없음"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "존재하지 않는 사용자"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "500", description = "서버 내부 오류")
+    })
+    @DeleteMapping("/users/{userId}")
+    public ApiResponse<Void> forceDeleteUser(
+            @Parameter(description = "사용자 UUID") @PathVariable String userId) {
+        adminService.forceDeleteUser(userId);
+        return ApiResponse.ok("사용자가 강제 탈퇴 처리되었습니다.");
+    }
+
     @Operation(summary = "접속 로그 조회", description = "전체 접속 로그를 페이징하여 조회합니다. 로그인/로그아웃/토큰 재발급/비밀번호 재설정 이력을 포함합니다. 기본 페이지 크기: 50")
     @ApiResponses({
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "접속 로그 목록 반환"),
