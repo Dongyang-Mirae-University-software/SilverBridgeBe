@@ -2,8 +2,12 @@ package kr.silverbridge.main.domain.user.repository;
 
 import kr.silverbridge.main.domain.user.entity.User;
 import kr.silverbridge.main.global.enums.Provider;
+import kr.silverbridge.main.global.enums.Role;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 
+import java.util.List;
 import java.util.Optional;
 
 public interface UserRepository extends JpaRepository<User, String> {
@@ -22,4 +26,7 @@ public interface UserRepository extends JpaRepository<User, String> {
 
     // 소셜 로그인 사용자 존재 여부 (신규 가입 여부 판별)
     boolean existsByProviderAndProviderId(Provider provider, String providerId);
+
+    // 역할 목록으로 사용자 조회 (피보호자/보호자 필터링)
+    Page<User> findByRoleIn(List<Role> roles, Pageable pageable);
 }
