@@ -1,5 +1,6 @@
 package kr.silverbridge.main.domain.auth.service;
 
+import kr.silverbridge.main.domain.auth.dto.EmailCheckRequest;
 import kr.silverbridge.main.domain.auth.dto.FindEmailRequest;
 import kr.silverbridge.main.domain.auth.dto.FindEmailResponse;
 import kr.silverbridge.main.domain.auth.dto.LoginRequest;
@@ -39,8 +40,15 @@ public class AuthService {
     private final PasswordEncoder passwordEncoder;
     private final StringRedisTemplate redisTemplate;
 
+    // 이메일 중복 확인 (회원가입 전 단계)
+    public void checkEmail(EmailCheckRequest request) {
+        if (userRepository.existsByEmail(request.getEmail())) {
+            throw new CustomException(ErrorCode.EMAIL_ALREADY_EXISTS);
+        }
+    }
+
     // 회원가입
-    // 이메일 중복 확인 → 비밀번호 암호화 → UUID로 사용자 생성
+    // 이메일 중복 확인 → SMS 인증 완료 여부 확인 → 비밀번호 암호화 → UUID로 사용자 생성
     @Transactional
     public void register(RegisterRequest request) {
         if (userRepository.existsByEmail(request.getEmail())) {
@@ -50,6 +58,12 @@ public class AuthService {
         // ADMIN 역할은 회원가입으로 선택 불가
         if (request.getRole() == Role.ADMIN) {
             throw new CustomException(ErrorCode.INVALID_ROLE);
+        }
+
+        // SMS 인증 완료 여부 확인
+        String verifiedKey = "sms:verified:" + request.getPhone();
+        if (Boolean.FALSE.equals(redisTemplate.hasKey(verifiedKey))) {
+            throw new CustomException(ErrorCode.SMS_NOT_VERIFIED);
         }
 
         User user = User.builder()
@@ -65,6 +79,9 @@ public class AuthService {
                 .build();
 
         userRepository.save(user);
+
+        // 회원가입 완료 후 인증 완료 키 삭제
+        redisTemplate.delete(verifiedKey);
     }
 
     // 로그인

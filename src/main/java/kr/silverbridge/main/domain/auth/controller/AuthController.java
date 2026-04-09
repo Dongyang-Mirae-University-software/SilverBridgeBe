@@ -6,6 +6,7 @@ import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
+import kr.silverbridge.main.domain.auth.dto.EmailCheckRequest;
 import kr.silverbridge.main.domain.auth.dto.FindEmailRequest;
 import kr.silverbridge.main.domain.auth.dto.FindEmailResponse;
 import kr.silverbridge.main.domain.auth.dto.LoginRequest;
@@ -27,6 +28,19 @@ import org.springframework.web.bind.annotation.*;
 public class AuthController {
 
     private final AuthService authService;
+
+    @Operation(summary = "이메일 중복 확인", description = "회원가입 전 이메일 중복 여부를 확인합니다. 사용 가능하면 200, 이미 존재하면 409를 반환합니다.")
+    @ApiResponses({
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "사용 가능한 이메일"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "이메일 형식 오류"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "409", description = "이미 사용 중인 이메일"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "500", description = "서버 내부 오류")
+    })
+    @PostMapping("/email/check")
+    public ApiResponse<Void> checkEmail(@Valid @RequestBody EmailCheckRequest request) {
+        authService.checkEmail(request);
+        return ApiResponse.ok("사용 가능한 이메일입니다.");
+    }
 
     @Operation(summary = "회원가입", description = "이메일과 비밀번호로 새 계정을 생성합니다.")
     @ApiResponses({
