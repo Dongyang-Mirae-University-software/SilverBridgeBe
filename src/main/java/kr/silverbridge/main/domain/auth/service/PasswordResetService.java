@@ -10,6 +10,7 @@ import kr.silverbridge.main.domain.auth.dto.PasswordResetConfirmRequest;
 import kr.silverbridge.main.domain.auth.dto.PasswordResetRequest;
 import kr.silverbridge.main.domain.auth.dto.PasswordResetSmsSendRequest;
 import kr.silverbridge.main.domain.auth.dto.PasswordResetSmsVerifyRequest;
+import kr.silverbridge.main.domain.auth.dto.PasswordResetTokenResponse;
 import kr.silverbridge.main.domain.auth.entity.AccessLog;
 import kr.silverbridge.main.domain.auth.repository.AccessLogRepository;
 import kr.silverbridge.main.domain.auth.repository.RefreshTokenRepository;
@@ -53,9 +54,6 @@ public class PasswordResetService {
     @Value("${solapi.sender-phone}")
     private String senderPhone;
 
-    @Value("${app.reset-password-url}")
-    private String resetPasswordUrl;
-
     private static final long RESET_TOKEN_TTL   = 30L;   // 재설정 코드 유효 시간 (분)
     private static final long SMS_CODE_TTL      = 5L;    // 인증코드 유효 시간 (분)
     private static final long SMS_COOLDOWN_TTL  = 1L;    // 재발송 대기 시간 (분)
@@ -66,8 +64,8 @@ public class PasswordResetService {
     private static final String SMS_COOLDOWN_PREFIX = "password:sms:cooldown:";
     private static final String SMS_ATTEMPT_PREFIX  = "password:sms:attempt:";
 
-    // [이메일 방식] 비밀번호 재설정 링크 발송
-    // 이메일로 사용자 조회 → 재설정 코드 생성 → 저장(30분 유효) → 링크 이메일 발송
+    // [이메일 방식] 비밀번호 재설정 이메일 발송
+    // 이메일로 사용자 조회 → 재설정 코드 생성 → 저장(30분 유효) → 이메일 발송
     // 보안을 위해 이메일이 없거나 카카오 사용자여도 동일하게 200 반환 (가입 여부 노출 방지)
     @Transactional(readOnly = true)
     public void requestReset(PasswordResetRequest request) {
@@ -137,9 +135,9 @@ public class PasswordResetService {
         log.info("비밀번호 재설정 SMS 발송 완료: {}", phone);
     }
 
-    // [SMS 방식] 인증코드 확인 후 재설정 링크 SMS 발송
-    // 코드 만료 확인 → 오류 횟수 확인 → 코드 일치 확인 → 재설정 링크 SMS 발송
-    public void verifySmsAndSendLink(PasswordResetSmsVerifyRequest request) {
+    // [SMS 방식] 인증코드 확인 후 재설정 코드 발급
+    // 코드 만료 확인 → 오류 횟수 확인 → 코드 일치 확인 → 재설정 코드 발급
+    public PasswordResetTokenResponse verifySmsAndIssueToken(PasswordResetSmsVerifyRequest request) {
         String phone      = request.getPhone();
         String verifyKey  = SMS_VERIFY_PREFIX + phone;
         String attemptKey = SMS_ATTEMPT_PREFIX + phone;
@@ -178,9 +176,8 @@ public class PasswordResetService {
         redisTemplate.opsForValue()
                 .set(RESET_PREFIX + token, user.getId(), RESET_TOKEN_TTL, TimeUnit.MINUTES);
 
-        // 재설정 링크 SMS 발송
-        sendResetSms(phone, token);
-        log.info("비밀번호 재설정 링크 SMS 발송 완료: {}", phone);
+        log.info("비밀번호 재설정 코드 발급 완료: {}", phone);
+        return new PasswordResetTokenResponse(token);
     }
 
     // 새 비밀번호 설정 (이메일/SMS 방식 공통)
@@ -232,43 +229,16 @@ public class PasswordResetService {
         }
     }
 
-    // 이메일 방식: 재설정 링크를 이메일로 발송
     private void sendResetEmail(String to, String token) {
-        String resetLink = resetPasswordUrl + "?token=" + token;
-
         SimpleMailMessage message = new SimpleMailMessage();
         message.setTo(to);
         message.setSubject("[SilverBridge] 비밀번호 재설정 안내");
         message.setText(
-                "아래 링크를 클릭하여 비밀번호를 재설정하세요.\n\n" +
-                resetLink + "\n\n" +
-                "링크 유효 시간: 30분\n\n" +
+                "비밀번호 재설정 코드: " + token + "\n\n" +
+                "유효 시간: 30분\n\n" +
                 "본인이 요청하지 않은 경우 이 메일을 무시하세요."
         );
         mailSender.send(message);
-    }
-
-    // SMS 방식: 재설정 링크를 SMS로 발송
-    private void sendResetSms(String phone, String token) {
-        String resetLink = resetPasswordUrl + "?token=" + token;
-
-        DefaultMessageService messageService =
-                SolapiClient.INSTANCE.createInstance(apiKey, apiSecret);
-
-        Message message = new Message();
-        message.setFrom(senderPhone);
-        message.setTo(phone);
-        message.setText("[SilverBridge] 비밀번호 재설정 링크\n" + resetLink + "\n유효 시간: 30분");
-
-        try {
-            messageService.send(message);
-        } catch (SolapiMessageNotReceivedException e) {
-            log.error("재설정 링크 SMS 발송 실패: {}", e.getFailedMessageList());
-            throw new CustomException(ErrorCode.SMS_SEND_FAILED);
-        } catch (SolapiEmptyResponseException | SolapiUnknownException e) {
-            log.error("재설정 링크 SMS 오류: {}", e.getMessage());
-            throw new CustomException(ErrorCode.SMS_SEND_FAILED);
-        }
     }
 
     private String generateCode() {

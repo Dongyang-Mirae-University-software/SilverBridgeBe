@@ -50,6 +50,3 @@ solapi:
   api-key: ${SOLAPI_API_KEY}
   api-secret: ${SOLAPI_API_SECRET}
   sender-phone: ${SOLAPI_SENDER_PHONE}
-
-app:
-  reset-password-url: ${RESET_PASSWORD_URL:https://dmu.gosky.kr/reset-password}

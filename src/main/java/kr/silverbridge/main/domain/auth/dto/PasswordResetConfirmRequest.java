@@ -10,7 +10,7 @@ import lombok.Getter;
 @Schema(description = "새 비밀번호 설정 요청 (이메일/SMS 방식 공통)")
 public class PasswordResetConfirmRequest {
 
-    @Schema(description = "재설정 링크 URL의 token 쿼리 파라미터 값. 예: https://dmu.gosky.kr/reset-password?token={이 값}", example = "550e8400-e29b-41d4-a716-446655440000")
+    @Schema(description = "이메일 방식: 메일로 받은 재설정 코드 / SMS 방식: POST /api/auth/password/sms/verify 응답의 token 값", example = "550e8400-e29b-41d4-a716-446655440000")
     @NotBlank(message = "재설정 토큰을 입력해주세요.")
     private String token;
 
