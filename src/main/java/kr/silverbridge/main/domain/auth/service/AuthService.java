@@ -42,6 +42,7 @@ public class AuthService {
     private final StringRedisTemplate redisTemplate;
 
     // 이메일 중복 확인 (회원가입 전 단계)
+    @Transactional(readOnly = true)
     public void checkEmail(EmailCheckRequest request) {
         if (userRepository.existsByEmail(request.getEmail())) {
             throw new CustomException(ErrorCode.EMAIL_ALREADY_EXISTS);
