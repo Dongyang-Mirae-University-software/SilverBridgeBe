@@ -275,16 +275,22 @@ POST /api/auth/kakao
 
 ### 이메일 방식
 ```
-1. POST /api/auth/password/reset-request   → 재설정 이메일 발송 (token 포함, 30분 유효)
-2. POST /api/auth/password/reset           → token + 새 비밀번호로 변경
+1. POST /api/auth/password/reset-request   → 재설정 링크 이메일 발송
+2. 사용자가 이메일 링크 클릭
+   → https://dmu.gosky.kr/reset-password?token={token} 으로 이동
+3. POST /api/auth/password/reset           → URL의 token + 새 비밀번호로 변경
 ```
 
 ### SMS 방식
 ```
 1. POST /api/auth/password/sms/send      → 인증코드 SMS 발송
-2. POST /api/auth/password/sms/verify    → 인증코드 확인 → token 반환 (30분 유효)
-3. POST /api/auth/password/reset         → token + 새 비밀번호로 변경
+2. POST /api/auth/password/sms/verify    → 인증코드 확인 → 재설정 링크 SMS 발송
+3. 사용자가 SMS 링크 클릭
+   → https://dmu.gosky.kr/reset-password?token={token} 으로 이동
+4. POST /api/auth/password/reset         → URL의 token + 새 비밀번호로 변경
 ```
+
+재설정 링크 URL: `app.reset-password-url` (application.yaml, 기본값: https://dmu.gosky.kr/reset-password)
 
 - 카카오 계정은 두 방식 모두 사용 불가
 - 보안상 계정 미존재 시에도 200 반환 (가입 여부 노출 방지)
