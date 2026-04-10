@@ -17,7 +17,7 @@ public enum ErrorCode {
 
     // 사용자
     USER_NOT_FOUND(HttpStatus.NOT_FOUND, "사용자를 찾을 수 없습니다."),
-    INVALID_ROLE(HttpStatus.BAD_REQUEST, "역할은 WARD(피보호자) 또는 GUARDIAN(보호자)만 선택할 수 있습니다."),
+    INVALID_ROLE(HttpStatus.BAD_REQUEST, "역할은 피보호자 또는 보호자만 선택할 수 있습니다."),
     PENDING_USER(HttpStatus.FORBIDDEN, "카카오 로그인 후 역할 선택이 필요합니다. /api/auth/kakao/role 을 호출해주세요."),
     EMAIL_ALREADY_EXISTS(HttpStatus.CONFLICT, "이미 사용 중인 이메일입니다."),
     INVALID_PASSWORD(HttpStatus.UNAUTHORIZED, "비밀번호가 올바르지 않습니다."),
@@ -32,7 +32,7 @@ public enum ErrorCode {
     INVALID_VERIFY_CODE(HttpStatus.BAD_REQUEST, "인증코드가 올바르지 않습니다."),
     EXPIRED_VERIFY_CODE(HttpStatus.BAD_REQUEST, "만료된 인증코드입니다."),
     EMAIL_ALREADY_VERIFIED(HttpStatus.CONFLICT, "이미 인증된 이메일입니다."),
-    INVALID_RESET_TOKEN(HttpStatus.BAD_REQUEST, "유효하지 않거나 만료된 재설정 토큰입니다."),
+    INVALID_RESET_TOKEN(HttpStatus.BAD_REQUEST, "비밀번호 재설정 링크가 만료되었거나 유효하지 않습니다."),
     PASSWORD_RECENTLY_USED(HttpStatus.BAD_REQUEST, "최근에 사용한 비밀번호는 다시 사용할 수 없습니다."),
 
     // SMS 인증

@@ -66,14 +66,14 @@ public class PasswordResetService {
 
     // [이메일 방식] 비밀번호 재설정 요청
     // 이메일 확인 → UUID 토큰 생성 → Redis 저장(TTL 30분) → 이메일 발송
+    // 존재하지 않는 이메일이어도 200 반환 — 이메일 존재 여부 노출 방지
     @Transactional(readOnly = true)
     public void requestReset(PasswordResetRequest request) {
-        User user = userRepository.findByEmail(request.getEmail())
-                .orElseThrow(() -> new CustomException(ErrorCode.USER_NOT_FOUND));
+        User user = userRepository.findByEmail(request.getEmail()).orElse(null);
 
-        // 소셜 로그인 사용자는 비밀번호 재설정 불가
-        if (user.getProvider() != Provider.LOCAL) {
-            throw new CustomException(ErrorCode.SOCIAL_USER_NO_PASSWORD);
+        // 사용자가 없거나 카카오 사용자면 조용히 종료 (존재 여부 노출 방지)
+        if (user == null || user.getProvider() != Provider.LOCAL) {
+            return;
         }
 
         String token = UUID.randomUUID().toString();
@@ -88,16 +88,16 @@ public class PasswordResetService {
 
     // [SMS 방식] 비밀번호 재설정 SMS 발송
     // 이름+전화번호로 사용자 확인 → 쿨다운 확인 → 인증코드 생성 → SMS 발송 → Redis 저장
+    // 존재하지 않는 사용자여도 200 반환 — 사용자 존재 여부 노출 방지
     @Transactional(readOnly = true)
     public void requestResetBySms(PasswordResetSmsSendRequest request) {
         String phone = request.getPhone();
 
-        User user = userRepository.findByNameAndPhone(request.getName(), phone)
-                .orElseThrow(() -> new CustomException(ErrorCode.USER_NOT_FOUND));
+        User user = userRepository.findByNameAndPhone(request.getName(), phone).orElse(null);
 
-        // 소셜 로그인 사용자는 비밀번호 재설정 불가
-        if (user.getProvider() != Provider.LOCAL) {
-            throw new CustomException(ErrorCode.SOCIAL_USER_NO_PASSWORD);
+        // 사용자가 없거나 카카오 사용자면 조용히 종료 (존재 여부 노출 방지)
+        if (user == null || user.getProvider() != Provider.LOCAL) {
+            return;
         }
 
         // 1분 이내 재발송 차단
