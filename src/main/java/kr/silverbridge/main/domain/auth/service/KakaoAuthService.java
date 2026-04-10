@@ -11,12 +11,14 @@ import kr.silverbridge.main.domain.auth.oauth.KakaoUserInfoResponse;
 import kr.silverbridge.main.domain.auth.repository.RefreshTokenRepository;
 import kr.silverbridge.main.domain.user.entity.User;
 import kr.silverbridge.main.domain.user.repository.UserRepository;
+import kr.silverbridge.main.global.enums.AccessAction;
 import kr.silverbridge.main.global.enums.Provider;
 import kr.silverbridge.main.global.enums.Role;
 import kr.silverbridge.main.global.enums.Status;
 import kr.silverbridge.main.global.exception.CustomException;
 import kr.silverbridge.main.global.exception.ErrorCode;
 import kr.silverbridge.main.global.jwt.JwtTokenProvider;
+import kr.silverbridge.main.global.util.RedisKeys;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.redis.core.StringRedisTemplate;
@@ -35,15 +37,13 @@ public class KakaoAuthService {
     private final UserRepository userRepository;
     private final RefreshTokenRepository refreshTokenRepository;
     private final JwtTokenProvider jwtTokenProvider;
-    private final AuthService authService;
+    private final AccessLogService accessLogService;
     private final StringRedisTemplate redisTemplate;
 
     @Value("${kakao.redirect-uri}")
     private String redirectUri;
 
     private static final long KAKAO_PENDING_TTL = 10L;
-    private static final String KAKAO_PENDING_PREFIX = "kakao:pending:";
-    private static final String SMS_VERIFIED_PREFIX  = "sms:verified:";
 
     // 카카오 로그인
     // 기존 사용자 → 바로 로그인
@@ -73,7 +73,7 @@ public class KakaoAuthService {
                             .build());
 
                     user.updateLastLoginAt();
-                    authService.saveAccessLog(user.getId(), "KAKAO_LOGIN", ipAddress, userAgent);
+                    accessLogService.log(user.getId(), AccessAction.KAKAO_LOGIN, ipAddress, userAgent);
 
                     return KakaoLoginResponse.ofExisting(user, accessToken, refreshToken);
                 })
@@ -96,26 +96,25 @@ public class KakaoAuthService {
 
                     // Redis에 카카오 정보 임시 저장 (TTL 10분)
                     redisTemplate.opsForValue()
-                            .set(KAKAO_PENDING_PREFIX + kakaoId, email, KAKAO_PENDING_TTL, TimeUnit.MINUTES);
+                            .set(RedisKeys.KAKAO_PENDING + kakaoId, email, KAKAO_PENDING_TTL, TimeUnit.MINUTES);
 
                     return KakaoLoginResponse.ofNewUser(kakaoId, email, name, kakaoUser.getProfileImageUrl());
                 });
     }
 
     // 카카오 신규 회원가입 완료
-    // SMS 인증 확인 → 카카오 세션 확인 → DB 저장 → 토큰 발급
+    // SMS 인증 확인 → 카카오 세션 확인 → 중복 검사 → DB 저장 → 토큰 발급
     @Transactional
     public LoginResponse kakaoRegister(KakaoRegisterRequest request, String ipAddress, String userAgent) {
         String kakaoId = request.getKakaoId();
 
         // SMS 인증 완료 여부 확인
-        String smsKey = SMS_VERIFIED_PREFIX + request.getPhone();
-        if (Boolean.FALSE.equals(redisTemplate.hasKey(smsKey))) {
+        if (Boolean.FALSE.equals(redisTemplate.hasKey(RedisKeys.SMS_VERIFIED + request.getPhone()))) {
             throw new CustomException(ErrorCode.SMS_NOT_VERIFIED);
         }
 
         // 카카오 세션 확인 (이메일 위변조 방지)
-        String pendingKey = KAKAO_PENDING_PREFIX + kakaoId;
+        String pendingKey = RedisKeys.KAKAO_PENDING + kakaoId;
         String email = redisTemplate.opsForValue().get(pendingKey);
         if (email == null) {
             throw new CustomException(ErrorCode.KAKAO_SESSION_EXPIRED);
@@ -155,7 +154,7 @@ public class KakaoAuthService {
 
         // Redis 키 삭제
         redisTemplate.delete(pendingKey);
-        redisTemplate.delete(smsKey);
+        redisTemplate.delete(RedisKeys.SMS_VERIFIED + request.getPhone());
 
         // 토큰 발급
         String accessToken  = jwtTokenProvider.generateAccessToken(user.getId(), email, user.getRole().name());
@@ -169,7 +168,7 @@ public class KakaoAuthService {
                 .build());
 
         user.updateLastLoginAt();
-        authService.saveAccessLog(user.getId(), "KAKAO_LOGIN", ipAddress, userAgent);
+        accessLogService.log(user.getId(), AccessAction.KAKAO_LOGIN, ipAddress, userAgent);
 
         return LoginResponse.of(user, accessToken, refreshToken);
     }
