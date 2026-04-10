@@ -6,6 +6,7 @@ import kr.silverbridge.main.global.enums.Provider;
 import kr.silverbridge.main.global.enums.Role;
 import kr.silverbridge.main.global.enums.Status;
 import lombok.*;
+import org.springframework.security.crypto.password.PasswordEncoder;
 
 import java.time.OffsetDateTime;
 
@@ -101,5 +102,21 @@ public class User extends BaseTimeEntity {
     public void updateProfile(String name, String phone) {
         this.name = name;
         this.phone = phone;
+    }
+
+    // 로컬(일반) 회원 여부 확인
+    public boolean isLocalProvider() {
+        return provider == Provider.LOCAL;
+    }
+
+    // 소셜(카카오) 회원 여부 확인
+    public boolean isSocialProvider() {
+        return provider != Provider.LOCAL;
+    }
+
+    // 최근 사용한 비밀번호 2개와 중복 여부 확인
+    public boolean isPasswordRecentlyUsed(String rawPassword, PasswordEncoder encoder) {
+        return (prevPassword1 != null && encoder.matches(rawPassword, prevPassword1))
+            || (prevPassword2 != null && encoder.matches(rawPassword, prevPassword2));
     }
 }

@@ -1,6 +1,7 @@
 package kr.silverbridge.main.domain.auth.entity;
 
 import jakarta.persistence.*;
+import kr.silverbridge.main.global.enums.AccessAction;
 import lombok.*;
 import org.springframework.data.annotation.CreatedDate;
 import org.springframework.data.jpa.domain.support.AuditingEntityListener;
@@ -21,9 +22,9 @@ public class AccessLog {
     @Column(name = "user_id", length = 36)
     private String userId;
 
-    // LOGIN, LOGOUT, KAKAO_LOGIN, TOKEN_ISSUE, PASSWORD_RESET
+    @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 50)
-    private String action;
+    private AccessAction action;
 
     @Column(name = "ip_address", length = 50)
     private String ipAddress;
@@ -36,7 +37,7 @@ public class AccessLog {
     private OffsetDateTime createdAt;
 
     @Builder
-    public AccessLog(String userId, String action, String ipAddress, String userAgent) {
+    public AccessLog(String userId, AccessAction action, String ipAddress, String userAgent) {
         this.userId = userId;
         this.action = action;
         this.ipAddress = ipAddress;
