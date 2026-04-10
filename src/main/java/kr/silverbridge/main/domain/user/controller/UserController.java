@@ -68,7 +68,18 @@ public class UserController {
         return ApiResponse.ok(userService.updateProfile(userId, request));
     }
 
-    @Operation(summary = "비밀번호 변경", description = "현재 비밀번호를 확인한 후 새 비밀번호로 변경합니다. 변경 후 모든 기기에서 자동 로그아웃됩니다.")
+    @Operation(
+            summary = "비밀번호 변경 (로그인 상태)",
+            description = """
+                    현재 비밀번호를 알고 있는 로그인된 사용자가 새 비밀번호로 변경합니다.
+                    비밀번호를 잊어버린 경우에는 이 API가 아닌 POST /api/auth/password/reset-request 또는 POST /api/auth/password/sms/send 를 사용하세요.
+
+                    변경 성공 시 모든 기기에서 자동 로그아웃됩니다. (재로그인 필요)
+
+                    [요청 헤더]
+                    Authorization: Bearer {accessToken}
+                    """
+    )
     @ApiResponses({
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "비밀번호 변경 성공"),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "입력값 유효성 검증 실패 (새 비밀번호 8자 미만 등)"),
