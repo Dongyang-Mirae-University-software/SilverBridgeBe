@@ -14,7 +14,7 @@ import kr.silverbridge.main.global.response.ApiResponse;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.*;
 
-@Tag(name = "카카오 인증", description = "카카오 로그인 및 회원가입 API")
+@Tag(name = "인증")
 @RestController
 @RequestMapping("/api/auth")
 @RequiredArgsConstructor
