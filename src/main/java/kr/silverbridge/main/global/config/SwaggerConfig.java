@@ -30,11 +30,14 @@ public class SwaggerConfig {
                 // Swagger UI 태그 순서 및 설명 정의 (표시 순서 = 리스트 순서)
                 .tags(List.of(
                         new Tag().name("인증")
-                                .description("회원가입 / 로그인 / 로그아웃 / 이메일·카카오 인증 / SMS 인증 / 비밀번호 찾기 및 재설정"),
+                                .description("회원가입 / 로그인 / 로그아웃 / 이메일·카카오 인증 / SMS 인증 / 비밀번호 찾기 및 재설정\n" +
+                                        "※ 로그인·회원가입 관련 API는 토큰 없이 호출 가능. 로그아웃은 토큰 필요."),
                         new Tag().name("사용자")
-                                .description("내 정보 조회 및 수정 / 비밀번호 변경 / 회원 탈퇴"),
+                                .description("내 정보 조회 및 수정 / 비밀번호 변경 / 회원 탈퇴\n" +
+                                        "※ 모든 API에 Authorization: Bearer {accessToken} 헤더 필수."),
                         new Tag().name("관리자")
-                                .description("사용자 관리 및 접속 로그 조회 (ADMIN 권한 필요)")
+                                .description("사용자 관리 및 접속 로그 조회\n" +
+                                        "※ 모든 API에 Authorization: Bearer {accessToken} 헤더 필수. ADMIN 권한 계정만 호출 가능.")
                 ))
                 // 전역 JWT Bearer 인증 적용
                 .addSecurityItem(new SecurityRequirement().addList(SECURITY_SCHEME_NAME))
