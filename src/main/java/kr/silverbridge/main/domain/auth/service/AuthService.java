@@ -55,6 +55,11 @@ public class AuthService {
             throw new CustomException(ErrorCode.EMAIL_ALREADY_EXISTS);
         }
 
+        // 전화번호 중복 확인
+        if (userRepository.existsByPhone(request.getPhone())) {
+            throw new CustomException(ErrorCode.PHONE_ALREADY_EXISTS);
+        }
+
         // ADMIN 역할은 회원가입으로 선택 불가
         if (request.getRole() == Role.ADMIN) {
             throw new CustomException(ErrorCode.INVALID_ROLE);

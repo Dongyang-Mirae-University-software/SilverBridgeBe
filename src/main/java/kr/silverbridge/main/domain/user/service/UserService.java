@@ -40,11 +40,15 @@ public class UserService {
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new CustomException(ErrorCode.USER_NOT_FOUND));
 
-        // 전화번호가 변경되는 경우 SMS 인증 완료 여부 확인
+        // 전화번호가 변경되는 경우 SMS 인증 완료 여부 및 중복 확인
         String newPhone = request.getPhone();
         if (newPhone != null && !newPhone.equals(user.getPhone())) {
             if (Boolean.FALSE.equals(redisTemplate.hasKey(SMS_VERIFIED_PREFIX + newPhone))) {
                 throw new CustomException(ErrorCode.SMS_NOT_VERIFIED);
+            }
+            // 다른 계정이 이미 사용 중인 전화번호인지 확인
+            if (userRepository.existsByPhone(newPhone)) {
+                throw new CustomException(ErrorCode.PHONE_ALREADY_EXISTS);
             }
             // 인증 완료 키 삭제
             redisTemplate.delete(SMS_VERIFIED_PREFIX + newPhone);
