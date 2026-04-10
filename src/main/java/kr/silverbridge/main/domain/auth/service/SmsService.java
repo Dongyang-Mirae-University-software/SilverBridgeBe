@@ -8,6 +8,7 @@ import com.solapi.sdk.message.model.Message;
 import com.solapi.sdk.message.service.DefaultMessageService;
 import kr.silverbridge.main.domain.auth.dto.SmsSendRequest;
 import kr.silverbridge.main.domain.auth.dto.SmsVerifyRequest;
+import kr.silverbridge.main.domain.user.repository.UserRepository;
 import kr.silverbridge.main.global.exception.CustomException;
 import kr.silverbridge.main.global.exception.ErrorCode;
 import kr.silverbridge.main.global.util.RedisKeys;
@@ -25,6 +26,7 @@ import java.util.concurrent.TimeUnit;
 @RequiredArgsConstructor
 public class SmsService {
 
+    private final UserRepository userRepository;
     private final StringRedisTemplate redisTemplate;
 
     @Value("${solapi.api-key}")
@@ -45,6 +47,11 @@ public class SmsService {
     // 재발송 대기 확인(1분) → 인증코드 생성 → SMS 발송 → 저장(5분 유효) → 재발송 대기 설정
     public void sendVerificationCode(SmsSendRequest request) {
         String phone = request.getPhone();
+
+        // 이미 가입된 전화번호인지 확인 (SMS 낭비 방지)
+        if (userRepository.existsByPhone(phone)) {
+            throw new CustomException(ErrorCode.PHONE_ALREADY_EXISTS);
+        }
 
         // 1분 이내 재발송 차단
         if (Boolean.TRUE.equals(redisTemplate.hasKey(RedisKeys.SMS_COOLDOWN + phone))) {
