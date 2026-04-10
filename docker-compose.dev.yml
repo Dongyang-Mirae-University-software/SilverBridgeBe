@@ -3,8 +3,8 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    container_name: dmusso-dev-api
-    image: dmusso-api:dev
+    container_name: dmu-dev-api
+    image: dmu-api:dev
     restart: unless-stopped
     env_file:
       - .env.dev
@@ -20,14 +20,14 @@ services:
 
   db:
     image: postgres:17
-    container_name: dmusso-dev-db
+    container_name: dmu-dev-db
     restart: unless-stopped
     env_file:
       - .env.dev
     ports:
       - "6513:5432"
     volumes:
-      - dmusso-dev-db-data:/var/lib/postgresql/data
+      - dmu-dev-db-data:/var/lib/postgresql/data
       - ./db/schema.sql:/docker-entrypoint-initdb.d/schema.sql:ro
     networks:
       - app-net
@@ -39,12 +39,12 @@ services:
 
   redis:
     image: redis:7.2
-    container_name: dmusso-dev-redis
+    container_name: dmu-dev-redis
     restart: unless-stopped
     ports:
       - "6514:6379"
     volumes:
-      - dmusso-dev-redis-data:/data
+      - dmu-dev-redis-data:/data
     networks:
       - app-net
     healthcheck:
@@ -60,7 +60,7 @@ networks:
     # 이 네트워크를 external: true로 선언하여 공유 가능
 
 volumes:
-  dmusso-dev-db-data:
-    name: dmusso-dev-db-data
-  dmusso-dev-redis-data:
-    name: dmusso-dev-redis-data
+  dmu-dev-db-data:
+    name: dmu-dev-db-data
+  dmu-dev-redis-data:
+    name: dmu-dev-redis-data
