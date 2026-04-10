@@ -131,6 +131,11 @@ public class KakaoAuthService {
             throw new CustomException(ErrorCode.EMAIL_ALREADY_EXISTS);
         }
 
+        // 전화번호 중복 확인
+        if (userRepository.existsByPhone(request.getPhone())) {
+            throw new CustomException(ErrorCode.PHONE_ALREADY_EXISTS);
+        }
+
         // 카카오 사용자 DB 저장
         User user = User.builder()
                 .id(UUID.randomUUID().toString())

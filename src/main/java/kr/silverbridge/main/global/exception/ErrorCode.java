@@ -22,6 +22,7 @@ public enum ErrorCode {
     INVALID_ROLE(HttpStatus.BAD_REQUEST, "역할은 피보호자 또는 보호자만 선택할 수 있습니다."),
     PENDING_USER(HttpStatus.FORBIDDEN, "카카오 로그인 후 역할 선택이 필요합니다. /api/auth/kakao/role 을 호출해주세요."),
     EMAIL_ALREADY_EXISTS(HttpStatus.CONFLICT, "이미 사용 중인 이메일입니다."),
+    PHONE_ALREADY_EXISTS(HttpStatus.CONFLICT, "이미 사용 중인 전화번호입니다."),
     INVALID_PASSWORD(HttpStatus.UNAUTHORIZED, "비밀번호가 올바르지 않습니다."),
     INACTIVE_USER(HttpStatus.FORBIDDEN, "비활성화된 계정입니다."),
     SOCIAL_USER_NO_PASSWORD(HttpStatus.BAD_REQUEST, "카카오로 로그인한 사용자는 비밀번호 재설정 기능을 사용할 수 없습니다."),
