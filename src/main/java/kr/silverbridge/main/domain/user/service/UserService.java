@@ -9,6 +9,7 @@ import kr.silverbridge.main.global.enums.Provider;
 import kr.silverbridge.main.global.exception.CustomException;
 import kr.silverbridge.main.global.exception.ErrorCode;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -20,6 +21,9 @@ public class UserService {
     private final UserRepository userRepository;
     private final RefreshTokenRepository refreshTokenRepository;
     private final PasswordEncoder passwordEncoder;
+    private final StringRedisTemplate redisTemplate;
+
+    private static final String SMS_VERIFIED_PREFIX = "sms:verified:";
 
     // 내 정보 조회
     @Transactional(readOnly = true)
@@ -30,11 +34,23 @@ public class UserService {
     }
 
     // 내 정보 수정 (이름, 전화번호)
+    // 전화번호 변경 시 SMS 인증 완료 여부 확인
     @Transactional
     public UserProfileResponse updateProfile(String userId, UserUpdateRequest request) {
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new CustomException(ErrorCode.USER_NOT_FOUND));
-        user.updateProfile(request.getName(), request.getPhone());
+
+        // 전화번호가 변경되는 경우 SMS 인증 완료 여부 확인
+        String newPhone = request.getPhone();
+        if (newPhone != null && !newPhone.equals(user.getPhone())) {
+            if (Boolean.FALSE.equals(redisTemplate.hasKey(SMS_VERIFIED_PREFIX + newPhone))) {
+                throw new CustomException(ErrorCode.SMS_NOT_VERIFIED);
+            }
+            // 인증 완료 키 삭제
+            redisTemplate.delete(SMS_VERIFIED_PREFIX + newPhone);
+        }
+
+        user.updateProfile(request.getName(), newPhone != null ? newPhone : user.getPhone());
         return UserProfileResponse.from(user);
     }
 
