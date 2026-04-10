@@ -29,7 +29,19 @@ public class AuthController {
 
     private final AuthService authService;
 
-    @Operation(summary = "이메일 중복 확인", description = "회원가입 전 이메일이 이미 사용 중인지 확인합니다.")
+    @Operation(
+            summary = "이메일 중복 확인",
+            description = """
+                    회원가입 전 이메일이 이미 사용 중인지 확인합니다.
+                    사용 가능하면 200, 이미 존재하면 409를 반환합니다.
+
+                    [일반 회원가입 전체 흐름]
+                    1. POST /api/auth/email/check     → 이메일 중복 확인
+                    2. POST /api/auth/sms/send        → SMS 인증코드 발송
+                    3. POST /api/auth/sms/verify      → SMS 인증코드 확인
+                    4. POST /api/auth/register        → 회원가입 완료
+                    """
+    )
     @ApiResponses({
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "사용 가능한 이메일"),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "이메일 형식이 올바르지 않음"),
@@ -42,10 +54,21 @@ public class AuthController {
         return ApiResponse.ok("사용 가능한 이메일입니다.");
     }
 
-    @Operation(summary = "회원가입", description = "이메일과 비밀번호로 새 계정을 만듭니다. SMS 인증 완료 후 호출해야 합니다.")
+    @Operation(
+            summary = "회원가입",
+            description = """
+                    이메일·비밀번호로 새 계정을 생성합니다.
+                    반드시 SMS 인증(POST /api/auth/sms/verify) 완료 후 호출해야 합니다.
+
+                    [주의사항]
+                    - SMS 인증 완료 후 10분 이내에 호출해야 합니다.
+                    - 비밀번호: 숫자·특수문자 포함, 공백 없이 8자 이상
+                    - role: WARD(피보호자) 또는 GUARDIAN(보호자) 중 하나 선택
+                    """
+    )
     @ApiResponses({
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "201", description = "회원가입 성공"),
-            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "입력값 오류 (이메일 형식, 비밀번호 8자 미만 등) 또는 SMS 인증 미완료"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "입력값 오류 또는 SMS 인증 미완료 (또는 10분 초과로 인증 만료)"),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "409", description = "이미 사용 중인 이메일"),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "500", description = "서버 오류")
     })
@@ -56,9 +79,21 @@ public class AuthController {
         return ApiResponse.ok("회원가입이 완료되었습니다.");
     }
 
-    @Operation(summary = "로그인", description = "이메일과 비밀번호로 로그인합니다. 로그인 성공 시 API 호출에 필요한 인증 토큰이 발급됩니다.")
+    @Operation(
+            summary = "로그인",
+            description = """
+                    이메일·비밀번호로 로그인합니다.
+                    성공 시 accessToken과 refreshToken이 발급됩니다.
+
+                    [토큰 사용 방법]
+                    - accessToken: 이후 모든 API 요청 시 헤더에 포함
+                      → Header: Authorization: Bearer {accessToken}
+                    - refreshToken: accessToken 만료(1시간) 시 POST /api/auth/refresh 로 재발급
+                      → refreshToken 유효 시간: 14일
+                    """
+    )
     @ApiResponses({
-            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "로그인 성공"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "로그인 성공. accessToken, refreshToken 반환"),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "입력값 오류"),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "비밀번호 불일치"),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "비활성화된 계정"),
@@ -75,11 +110,21 @@ public class AuthController {
         ));
     }
 
-    @Operation(summary = "인증 토큰 갱신", description = "로그인 시 발급된 갱신 토큰(refreshToken)으로 만료된 인증 토큰을 새로 발급받습니다.")
+    @Operation(
+            summary = "Access Token 재발급",
+            description = """
+                    Access Token이 만료(1시간)된 경우 Refresh Token으로 새 Access Token을 발급받습니다.
+                    Refresh Token은 로그인 시 발급된 refreshToken 값을 사용합니다.
+
+                    [주의사항]
+                    - Refresh Token도 만료(14일)된 경우 401이 반환되며, 재로그인이 필요합니다.
+                    - 새로 발급된 accessToken으로 이후 요청의 Authorization 헤더를 업데이트하세요.
+                    """
+    )
     @ApiResponses({
-            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "새 인증 토큰 발급 성공"),
-            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "갱신 토큰 누락"),
-            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "갱신 토큰이 만료되었거나 유효하지 않음"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "새 Access Token 발급 성공"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "refreshToken 값 누락"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "Refresh Token이 만료되었거나 유효하지 않음 → 재로그인 필요"),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "사용자를 찾을 수 없음"),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "500", description = "서버 오류")
     })
@@ -88,11 +133,20 @@ public class AuthController {
         return ApiResponse.ok(authService.refresh(request));
     }
 
-    @Operation(summary = "로그아웃", description = "현재 로그인 상태를 종료합니다. 로그아웃 후에는 모든 기기에서 재로그인이 필요합니다.")
+    @Operation(
+            summary = "로그아웃",
+            description = """
+                    현재 로그인 상태를 종료합니다.
+                    모든 기기에서 로그아웃됩니다 (Refresh Token 삭제).
+
+                    [요청 헤더]
+                    Authorization: Bearer {accessToken}
+                    """
+    )
     @ApiResponses({
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "로그아웃 성공"),
-            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "인증 토큰 누락"),
-            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "인증 토큰이 만료되었거나 유효하지 않음"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "Authorization 헤더 누락"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "Access Token이 만료되었거나 유효하지 않음"),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "500", description = "서버 오류")
     })
     @SecurityRequirement(name = "Bearer Authentication")
@@ -109,9 +163,16 @@ public class AuthController {
         return ApiResponse.ok("로그아웃되었습니다.");
     }
 
-    @Operation(summary = "아이디(이메일) 찾기", description = "이름과 전화번호로 가입된 이메일을 조회합니다. 보안을 위해 이메일 일부는 가려져 반환됩니다. (예: us**@example.com)")
+    @Operation(
+            summary = "아이디(이메일) 찾기",
+            description = """
+                    이름과 전화번호로 가입된 이메일을 조회합니다.
+                    보안을 위해 이메일 앞 2자리만 노출하고 나머지는 **로 마스킹합니다.
+                    예: us**@example.com
+                    """
+    )
     @ApiResponses({
-            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "이메일 조회 성공"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "이메일 조회 성공. maskedEmail 반환"),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "입력값 오류"),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "이름과 전화번호가 일치하는 계정 없음"),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "500", description = "서버 오류")
