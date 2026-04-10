@@ -232,6 +232,8 @@ type: 무슨 작업을 했는지 한국어로
 | `password:sms:attempt:{phone}` | 비밀번호 재설정 SMS 오류 횟수 | 5분 |
 | `kakao:pending:{kakaoId}` | 카카오 신규 가입 임시 이메일 | 10분 |
 | `logout:{accessToken}` | 로그아웃된 토큰 블랙리스트 | 토큰 남은 만료시간 |
+| `login:fail:{email}` | 로그인 실패 횟수 | 30분 |
+| `login:lock:{email}` | 로그인 잠금 상태 (5회 실패 시 설정) | 30분 |
 
 ## 카카오 OAuth 플로우
 
@@ -286,3 +288,19 @@ POST /api/auth/kakao
 
 - 카카오 계정은 두 방식 모두 사용 불가
 - 보안상 계정 미존재 시에도 200 반환 (가입 여부 노출 방지)
+
+## 보안 정책
+
+### 로그인 브루트포스 차단
+- 동일 이메일로 5회 연속 실패 → 30분 잠금
+- 잠금 중 시도 시 `LOGIN_LOCKED (429)` 반환
+- 로그인 성공 시 실패 횟수 초기화
+
+### ADMIN 계정 보호
+- 관리자 API에서 ADMIN 역할 계정은 상태 변경/강제 삭제 불가
+- 시도 시 `CANNOT_MODIFY_ADMIN (403)` 반환
+
+### 전화번호 변경 시 SMS 인증 필수
+- `PUT /api/users/me` 에서 phone 값이 현재와 다를 경우 `sms:verified:{phone}` 키 확인
+- SMS 인증 미완료 시 `SMS_NOT_VERIFIED (400)` 반환
+- 인증 완료 후 10분 이내에 변경 요청해야 함
