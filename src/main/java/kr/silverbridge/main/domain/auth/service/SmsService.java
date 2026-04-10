@@ -35,16 +35,27 @@ public class SmsService {
     @Value("${solapi.sender-phone}")
     private String senderPhone;
 
-    private static final long CODE_TTL     = 5L;   // 인증코드 TTL (분)
-    private static final long VERIFIED_TTL = 10L;  // 인증완료 TTL (분)
+    private static final long   CODE_TTL       = 5L;   // 인증코드 TTL (분)
+    private static final long   VERIFIED_TTL   = 10L;  // 인증완료 TTL (분)
+    private static final long   COOLDOWN_TTL   = 1L;   // 재발송 쿨다운 (분)
+    private static final int    MAX_ATTEMPTS   = 5;    // 최대 틀림 횟수
+
     private static final String VERIFY_PREFIX   = "sms:verify:";
     private static final String VERIFIED_PREFIX = "sms:verified:";
+    private static final String COOLDOWN_PREFIX = "sms:cooldown:";
+    private static final String ATTEMPT_PREFIX  = "sms:attempt:";
 
     // SMS 인증 코드 발송
-    // 6자리 코드 생성 → Redis 저장(TTL 5분) → Solapi로 SMS 발송
+    // 쿨다운 확인(1분) → 코드 생성 → Redis 저장(TTL 5분) → SMS 발송 → 쿨다운 설정
     public void sendVerificationCode(SmsSendRequest request) {
         String phone = request.getPhone();
-        String code  = generateCode();
+
+        // 1분 이내 재발송 차단
+        if (Boolean.TRUE.equals(redisTemplate.hasKey(COOLDOWN_PREFIX + phone))) {
+            throw new CustomException(ErrorCode.SMS_SEND_TOO_FREQUENT);
+        }
+
+        String code = generateCode();
 
         DefaultMessageService messageService =
                 SolapiClient.INSTANCE.createInstance(apiKey, apiSecret);
@@ -64,31 +75,48 @@ public class SmsService {
             throw new CustomException(ErrorCode.SMS_SEND_FAILED);
         }
 
-        // Redis에 인증 코드 저장 (재발송 시 덮어씀)
-        redisTemplate.opsForValue()
-                .set(VERIFY_PREFIX + phone, code, CODE_TTL, TimeUnit.MINUTES);
+        // 인증 코드 저장 (재발송 시 기존 코드 및 시도 횟수 초기화)
+        redisTemplate.opsForValue().set(VERIFY_PREFIX + phone, code, CODE_TTL, TimeUnit.MINUTES);
+        redisTemplate.delete(ATTEMPT_PREFIX + phone);
+
+        // 재발송 쿨다운 설정 (1분)
+        redisTemplate.opsForValue().set(COOLDOWN_PREFIX + phone, "1", COOLDOWN_TTL, TimeUnit.MINUTES);
 
         log.info("SMS 인증 코드 발송 완료: {}", phone);
     }
 
     // SMS 인증 코드 검증
-    // Redis 코드 확인 → 일치 시 인증 완료 표시(TTL 10분)
+    // 코드 만료 확인 → 시도 횟수 확인 → 코드 일치 확인 → 인증 완료 표시
     public void verifyCode(SmsVerifyRequest request) {
         String phone = request.getPhone();
-        String key   = VERIFY_PREFIX + phone;
+        String verifyKey  = VERIFY_PREFIX + phone;
+        String attemptKey = ATTEMPT_PREFIX + phone;
 
-        String savedCode = redisTemplate.opsForValue().get(key);
+        String savedCode = redisTemplate.opsForValue().get(verifyKey);
 
         if (savedCode == null) {
             throw new CustomException(ErrorCode.EXPIRED_SMS_CODE);
         }
 
         if (!savedCode.equals(request.getCode())) {
+            // 틀린 횟수 증가
+            Long attempts = redisTemplate.opsForValue().increment(attemptKey);
+            // 시도 횟수 TTL을 인증코드 TTL과 동기화
+            redisTemplate.expire(attemptKey, CODE_TTL, TimeUnit.MINUTES);
+
+            // 5회 초과 시 코드 즉시 무효화
+            if (attempts != null && attempts >= MAX_ATTEMPTS) {
+                redisTemplate.delete(verifyKey);
+                redisTemplate.delete(attemptKey);
+                throw new CustomException(ErrorCode.SMS_TOO_MANY_ATTEMPTS);
+            }
+
             throw new CustomException(ErrorCode.INVALID_SMS_CODE);
         }
 
-        // 인증 코드 삭제 후 완료 표시 저장
-        redisTemplate.delete(key);
+        // 인증 완료 — 코드 및 시도 횟수 삭제, 완료 표시 저장
+        redisTemplate.delete(verifyKey);
+        redisTemplate.delete(attemptKey);
         redisTemplate.opsForValue()
                 .set(VERIFIED_PREFIX + phone, "true", VERIFIED_TTL, TimeUnit.MINUTES);
 
