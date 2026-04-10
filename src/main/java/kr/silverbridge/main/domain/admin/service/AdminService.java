@@ -40,10 +40,15 @@ public class AdminService {
     }
 
     // 피보호자/보호자 계정 상태 변경 (활성화 / 비활성화)
+    // ADMIN 계정은 변경 불가
     @Transactional
     public void updateUserStatus(String userId, UserStatusUpdateRequest request) {
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new CustomException(ErrorCode.USER_NOT_FOUND));
+
+        if (user.getRole() == Role.ADMIN) {
+            throw new CustomException(ErrorCode.CANNOT_MODIFY_ADMIN);
+        }
 
         switch (request.getStatus()) {
             case ACTIVE   -> user.activate();
@@ -53,10 +58,16 @@ public class AdminService {
     }
 
     // 사용자 강제 탈퇴 (계정 영구 삭제)
+    // ADMIN 계정은 삭제 불가
     @Transactional
     public void forceDeleteUser(String userId) {
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new CustomException(ErrorCode.USER_NOT_FOUND));
+
+        if (user.getRole() == Role.ADMIN) {
+            throw new CustomException(ErrorCode.CANNOT_MODIFY_ADMIN);
+        }
+
         userRepository.delete(user);
     }
 
