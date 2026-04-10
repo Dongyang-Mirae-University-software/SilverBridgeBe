@@ -26,6 +26,10 @@ public class SmsController {
             summary = "SMS 인증코드 발송",
             description = """
                     입력한 전화번호로 6자리 인증코드를 발송합니다.
+                    회원가입 및 전화번호 변경 시 공통으로 사용합니다.
+
+                    이미 가입된 전화번호이면 SMS 발송 전에 409를 반환합니다.
+                    → 회원가입 흐름에서 전화번호 중복은 이 단계에서 먼저 확인됩니다.
 
                     [제한사항]
                     - 인증코드 유효 시간: 5분
@@ -36,6 +40,7 @@ public class SmsController {
     @ApiResponses({
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "SMS 발송 성공"),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "전화번호 형식 오류 또는 재발송 제한 중 (1분 이내 재발송 불가)"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "409", description = "이미 가입된 전화번호"),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "500", description = "SMS 발송 실패 (통신사 오류)")
     })
     @PostMapping("/send")
