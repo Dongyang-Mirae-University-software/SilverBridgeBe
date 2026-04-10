@@ -8,6 +8,7 @@ import kr.silverbridge.main.domain.auth.dto.PasswordResetConfirmRequest;
 import kr.silverbridge.main.domain.auth.dto.PasswordResetRequest;
 import kr.silverbridge.main.domain.auth.dto.PasswordResetSmsSendRequest;
 import kr.silverbridge.main.domain.auth.dto.PasswordResetSmsVerifyRequest;
+import kr.silverbridge.main.domain.auth.dto.PasswordResetTokenResponse;
 import kr.silverbridge.main.domain.auth.service.PasswordResetService;
 import kr.silverbridge.main.global.response.ApiResponse;
 import lombok.RequiredArgsConstructor;
@@ -25,21 +26,19 @@ public class PasswordResetController {
     private final PasswordResetService passwordResetService;
 
     @Operation(
-            summary = "[이메일 방식 1단계] 비밀번호 재설정 링크 이메일 발송",
+            summary = "[이메일 방식 1단계] 비밀번호 재설정 이메일 발송",
             description = """
-                    가입된 이메일로 비밀번호 재설정 링크를 발송합니다.
-                    사용자가 이메일의 링크를 클릭하면 비밀번호 재설정 페이지로 이동합니다.
+                    가입된 이메일로 비밀번호 재설정 코드(token)를 메일로 발송합니다.
 
                     [이메일 방식 전체 흐름]
-                    1. POST /api/auth/password/reset-request    → 재설정 링크 이메일 발송
-                    2. 사용자가 이메일의 링크 클릭
-                       → https://dmu.gosky.kr/reset-password?token={token} 으로 이동
-                    3. POST /api/auth/password/reset            → URL의 token + 새 비밀번호로 변경
+                    1. POST /api/auth/password/reset-request    → 재설정 이메일 발송
+                    2. 이메일에서 token 값 확인
+                    3. POST /api/auth/password/reset            → token + 새 비밀번호로 변경
 
                     [주의사항]
-                    - 링크 유효 시간: 30분
-                    - 보안상 이유로 해당 이메일이 존재하지 않아도 200을 반환합니다.
-                    - 카카오로 가입한 계정은 발송되지 않습니다.
+                    - 보안상 이유로 해당 이메일이 존재하지 않아도 200을 반환합니다. (이메일 존재 여부 노출 방지)
+                    - 카카오로 가입한 계정은 이메일이 있어도 발송되지 않습니다.
+                    - token 유효 시간: 30분
                     """
     )
     @ApiResponses({
@@ -60,18 +59,14 @@ public class PasswordResetController {
 
                     [SMS 방식 전체 흐름]
                     1. POST /api/auth/password/sms/send      → 인증코드 SMS 발송
-                    2. POST /api/auth/password/sms/verify    → 인증코드 확인
-                       → 인증 성공 시 재설정 링크를 SMS로 발송
-                          (https://dmu.gosky.kr/reset-password?token={token})
-                    3. 사용자가 SMS의 링크 클릭
-                       → https://dmu.gosky.kr/reset-password?token={token} 으로 이동
-                    4. POST /api/auth/password/reset         → URL의 token + 새 비밀번호로 변경
+                    2. POST /api/auth/password/sms/verify    → 인증코드 확인 → token 반환
+                    3. POST /api/auth/password/reset         → token + 새 비밀번호로 변경
 
                     [주의사항]
+                    - 보안상 이유로 일치하는 계정이 없어도 200을 반환합니다. (가입 여부 노출 방지)
+                    - 카카오로 가입한 계정은 발송되지 않습니다.
                     - 인증코드 유효 시간: 5분 / 재발송 가능 시간: 1분 후
                     - 5회 이상 오류 시 인증코드 초기화 → 재발송 필요
-                    - 보안상 이유로 일치하는 계정이 없어도 200을 반환합니다.
-                    - 카카오로 가입한 계정은 발송되지 않습니다.
                     """
     )
     @ApiResponses({
@@ -86,41 +81,37 @@ public class PasswordResetController {
     }
 
     @Operation(
-            summary = "[SMS 방식 2단계] 인증코드 확인 및 재설정 링크 SMS 발송",
+            summary = "[SMS 방식 2단계] 인증코드 확인 및 재설정 token 발급",
             description = """
                     SMS로 받은 인증코드를 확인합니다.
-                    인증 성공 시 비밀번호 재설정 링크를 SMS로 발송합니다.
-                    사용자가 SMS의 링크를 클릭하면 비밀번호 재설정 페이지로 이동합니다.
-
-                    발송되는 링크 형식: https://dmu.gosky.kr/reset-password?token={token}
-                    → 프론트엔드에서 URL의 token 파라미터를 읽어 POST /api/auth/password/reset 에 전달하세요.
+                    인증 성공 시 비밀번호 변경에 필요한 token이 반환됩니다.
+                    반환된 token을 POST /api/auth/password/reset 의 token 필드에 전달하세요.
 
                     [제한사항]
-                    - 재설정 링크 유효 시간: 30분
+                    - token 유효 시간: 30분
                     - 5회 이상 오류 시 인증코드 초기화 → 인증코드 재발송 필요
                     """
     )
     @ApiResponses({
-            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "인증 성공. 재설정 링크를 SMS로 발송함"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "인증 성공. 응답의 token 값을 POST /api/auth/password/reset 에 전달하세요."),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "인증코드 불일치 / 인증코드 만료 / 5회 이상 오류로 인증코드 초기화됨"),
-            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "사용자를 찾을 수 없음"),
-            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "500", description = "SMS 발송 실패")
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "사용자를 찾을 수 없음")
     })
     @PostMapping("/sms/verify")
-    public ApiResponse<Void> verifySms(@Valid @RequestBody PasswordResetSmsVerifyRequest request) {
-        passwordResetService.verifySmsAndSendLink(request);
-        return ApiResponse.ok("비밀번호 재설정 링크가 발송되었습니다.");
+    public ApiResponse<PasswordResetTokenResponse> verifySms(@Valid @RequestBody PasswordResetSmsVerifyRequest request) {
+        PasswordResetTokenResponse response = passwordResetService.verifySmsAndIssueToken(request);
+        return ApiResponse.ok(response);
     }
 
     @Operation(
             summary = "[공통 마지막 단계] 새 비밀번호 설정",
             description = """
-                    이메일 또는 SMS로 받은 재설정 링크의 token 값과 새 비밀번호를 입력하여 비밀번호를 변경합니다.
+                    이메일 또는 SMS 방식으로 발급된 token과 새 비밀번호를 입력하여 비밀번호를 변경합니다.
                     변경 성공 시 모든 기기에서 자동 로그아웃됩니다. (재로그인 필요)
 
-                    [token 가져오는 방법]
-                    재설정 링크: https://dmu.gosky.kr/reset-password?token={token}
-                    → URL에서 token 쿼리 파라미터 값을 그대로 전달하세요.
+                    [token 출처]
+                    - 이메일 방식: 메일 본문의 token 값
+                    - SMS 방식: POST /api/auth/password/sms/verify 응답의 token 값
 
                     [비밀번호 조건]
                     - 숫자·특수문자 포함, 공백 없이 8자 이상
