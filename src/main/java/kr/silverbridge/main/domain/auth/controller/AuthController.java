@@ -21,7 +21,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 
-@Tag(name = "인증", description = "회원가입, 로그인, 로그아웃, 토큰 갱신, 아이디 찾기 API")
+@Tag(name = "인증", description = "회원가입, 로그인, 로그아웃, 아이디 찾기 API")
 @RestController
 @RequestMapping("/api/auth")
 @RequiredArgsConstructor
@@ -29,12 +29,12 @@ public class AuthController {
 
     private final AuthService authService;
 
-    @Operation(summary = "이메일 중복 확인", description = "회원가입 전 이메일 중복 여부를 확인합니다. 사용 가능하면 200, 이미 존재하면 409를 반환합니다.")
+    @Operation(summary = "이메일 중복 확인", description = "회원가입 전 이메일이 이미 사용 중인지 확인합니다.")
     @ApiResponses({
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "사용 가능한 이메일"),
-            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "이메일 형식 오류"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "이메일 형식이 올바르지 않음"),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "409", description = "이미 사용 중인 이메일"),
-            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "500", description = "서버 내부 오류")
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "500", description = "서버 오류")
     })
     @PostMapping("/email/check")
     public ApiResponse<Void> checkEmail(@Valid @RequestBody EmailCheckRequest request) {
@@ -42,12 +42,12 @@ public class AuthController {
         return ApiResponse.ok("사용 가능한 이메일입니다.");
     }
 
-    @Operation(summary = "회원가입", description = "이메일과 비밀번호로 새 계정을 생성합니다.")
+    @Operation(summary = "회원가입", description = "이메일과 비밀번호로 새 계정을 만듭니다. SMS 인증 완료 후 호출해야 합니다.")
     @ApiResponses({
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "201", description = "회원가입 성공"),
-            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "입력값 유효성 검증 실패 (이메일 형식 오류, 비밀번호 8자 미만 등)"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "입력값 오류 (이메일 형식, 비밀번호 8자 미만 등) 또는 SMS 인증 미완료"),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "409", description = "이미 사용 중인 이메일"),
-            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "500", description = "서버 내부 오류")
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "500", description = "서버 오류")
     })
     @PostMapping("/register")
     @ResponseStatus(HttpStatus.CREATED)
@@ -56,14 +56,14 @@ public class AuthController {
         return ApiResponse.ok("회원가입이 완료되었습니다.");
     }
 
-    @Operation(summary = "로그인", description = "이메일과 비밀번호로 로그인하여 Access Token과 Refresh Token을 발급받습니다.")
+    @Operation(summary = "로그인", description = "이메일과 비밀번호로 로그인합니다. 로그인 성공 시 API 호출에 필요한 인증 토큰이 발급됩니다.")
     @ApiResponses({
-            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "로그인 성공, Access Token / Refresh Token 반환"),
-            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "입력값 유효성 검증 실패"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "로그인 성공"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "입력값 오류"),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "비밀번호 불일치"),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "비활성화된 계정"),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "존재하지 않는 이메일"),
-            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "500", description = "서버 내부 오류")
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "500", description = "서버 오류")
     })
     @PostMapping("/login")
     public ApiResponse<LoginResponse> login(@Valid @RequestBody LoginRequest request,
@@ -75,25 +75,25 @@ public class AuthController {
         ));
     }
 
-    @Operation(summary = "토큰 갱신", description = "Refresh Token으로 만료된 Access Token을 재발급받습니다.")
+    @Operation(summary = "인증 토큰 갱신", description = "로그인 시 발급된 갱신 토큰(refreshToken)으로 만료된 인증 토큰을 새로 발급받습니다.")
     @ApiResponses({
-            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "새 Access Token 반환"),
-            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "Refresh Token 값 누락"),
-            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "유효하지 않거나 만료된 Refresh Token"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "새 인증 토큰 발급 성공"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "갱신 토큰 누락"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "갱신 토큰이 만료되었거나 유효하지 않음"),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "사용자를 찾을 수 없음"),
-            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "500", description = "서버 내부 오류")
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "500", description = "서버 오류")
     })
     @PostMapping("/refresh")
     public ApiResponse<TokenRefreshResponse> refresh(@Valid @RequestBody TokenRefreshRequest request) {
         return ApiResponse.ok(authService.refresh(request));
     }
 
-    @Operation(summary = "로그아웃", description = "현재 Access Token을 무효화하고 Refresh Token을 삭제합니다. 이후 해당 토큰으로 API 호출 시 401이 반환됩니다.")
+    @Operation(summary = "로그아웃", description = "현재 로그인 상태를 종료합니다. 로그아웃 후에는 모든 기기에서 재로그인이 필요합니다.")
     @ApiResponses({
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "로그아웃 성공"),
-            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "Authorization 헤더 누락"),
-            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "유효하지 않거나 만료된 토큰"),
-            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "500", description = "서버 내부 오류")
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "인증 토큰 누락"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "인증 토큰이 만료되었거나 유효하지 않음"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "500", description = "서버 오류")
     })
     @SecurityRequirement(name = "Bearer Authentication")
     @PostMapping("/logout")
@@ -109,12 +109,12 @@ public class AuthController {
         return ApiResponse.ok("로그아웃되었습니다.");
     }
 
-    @Operation(summary = "아이디(이메일) 찾기", description = "이름과 전화번호가 일치하는 계정의 이메일을 마스킹하여 반환합니다. (예: us**@example.com)")
+    @Operation(summary = "아이디(이메일) 찾기", description = "이름과 전화번호로 가입된 이메일을 조회합니다. 보안을 위해 이메일 일부는 가려져 반환됩니다. (예: us**@example.com)")
     @ApiResponses({
-            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "마스킹된 이메일 반환"),
-            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "입력값 유효성 검증 실패"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "이메일 조회 성공"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "입력값 오류"),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "이름과 전화번호가 일치하는 계정 없음"),
-            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "500", description = "서버 내부 오류")
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "500", description = "서버 오류")
     })
     @PostMapping("/find-email")
     public ApiResponse<FindEmailResponse> findEmail(@Valid @RequestBody FindEmailRequest request) {

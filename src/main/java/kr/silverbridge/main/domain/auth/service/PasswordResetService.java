@@ -54,31 +54,31 @@ public class PasswordResetService {
     @Value("${solapi.sender-phone}")
     private String senderPhone;
 
-    private static final long RESET_TOKEN_TTL   = 30L;   // 재설정 토큰 TTL (분)
-    private static final long SMS_CODE_TTL      = 5L;    // 인증코드 TTL (분)
-    private static final long SMS_COOLDOWN_TTL  = 1L;    // 재발송 쿨다운 (분)
-    private static final int  SMS_MAX_ATTEMPTS  = 5;     // 최대 틀림 횟수
+    private static final long RESET_TOKEN_TTL   = 30L;   // 재설정 코드 유효 시간 (분)
+    private static final long SMS_CODE_TTL      = 5L;    // 인증코드 유효 시간 (분)
+    private static final long SMS_COOLDOWN_TTL  = 1L;    // 재발송 대기 시간 (분)
+    private static final int  SMS_MAX_ATTEMPTS  = 5;     // 최대 오류 횟수
 
     private static final String RESET_PREFIX        = "password:reset:";
     private static final String SMS_VERIFY_PREFIX   = "password:sms:verify:";
     private static final String SMS_COOLDOWN_PREFIX = "password:sms:cooldown:";
     private static final String SMS_ATTEMPT_PREFIX  = "password:sms:attempt:";
 
-    // [이메일 방식] 비밀번호 재설정 요청
-    // 이메일 확인 → UUID 토큰 생성 → Redis 저장(TTL 30분) → 이메일 발송
-    // 존재하지 않는 이메일이어도 200 반환 — 이메일 존재 여부 노출 방지
+    // [이메일 방식] 비밀번호 재설정 이메일 발송
+    // 이메일로 사용자 조회 → 재설정 코드 생성 → 저장(30분 유효) → 이메일 발송
+    // 보안을 위해 이메일이 없거나 카카오 사용자여도 동일하게 200 반환 (가입 여부 노출 방지)
     @Transactional(readOnly = true)
     public void requestReset(PasswordResetRequest request) {
         User user = userRepository.findByEmail(request.getEmail()).orElse(null);
 
-        // 사용자가 없거나 카카오 사용자면 조용히 종료 (존재 여부 노출 방지)
+        // 사용자가 없거나 카카오 사용자면 조용히 종료 (가입 여부 노출 방지)
         if (user == null || user.getProvider() != Provider.LOCAL) {
             return;
         }
 
         String token = UUID.randomUUID().toString();
 
-        // Redis에 토큰 → userId 매핑 저장
+        // 재설정 코드 임시 저장 (30분 유효)
         redisTemplate.opsForValue()
                 .set(RESET_PREFIX + token, user.getId(), RESET_TOKEN_TTL, TimeUnit.MINUTES);
 
@@ -86,16 +86,16 @@ public class PasswordResetService {
         log.info("비밀번호 재설정 이메일 발송 완료: {}", user.getEmail());
     }
 
-    // [SMS 방식] 비밀번호 재설정 SMS 발송
-    // 이름+전화번호로 사용자 확인 → 쿨다운 확인 → 인증코드 생성 → SMS 발송 → Redis 저장
-    // 존재하지 않는 사용자여도 200 반환 — 사용자 존재 여부 노출 방지
+    // [SMS 방식] 비밀번호 재설정 인증코드 발송
+    // 이름+전화번호로 사용자 조회 → 재발송 대기 확인 → 인증코드 생성 → SMS 발송 → 저장
+    // 보안을 위해 사용자가 없거나 카카오 사용자여도 동일하게 200 반환 (가입 여부 노출 방지)
     @Transactional(readOnly = true)
     public void requestResetBySms(PasswordResetSmsSendRequest request) {
         String phone = request.getPhone();
 
         User user = userRepository.findByNameAndPhone(request.getName(), phone).orElse(null);
 
-        // 사용자가 없거나 카카오 사용자면 조용히 종료 (존재 여부 노출 방지)
+        // 사용자가 없거나 카카오 사용자면 조용히 종료 (가입 여부 노출 방지)
         if (user == null || user.getProvider() != Provider.LOCAL) {
             return;
         }
@@ -125,18 +125,18 @@ public class PasswordResetService {
             throw new CustomException(ErrorCode.SMS_SEND_FAILED);
         }
 
-        // 인증 코드 저장 (재발송 시 기존 코드 및 시도 횟수 초기화)
+        // 인증코드 저장 (재발송 시 기존 코드 및 오류 횟수 초기화)
         redisTemplate.opsForValue().set(SMS_VERIFY_PREFIX + phone, code, SMS_CODE_TTL, TimeUnit.MINUTES);
         redisTemplate.delete(SMS_ATTEMPT_PREFIX + phone);
 
-        // 재발송 쿨다운 설정 (1분)
+        // 재발송 대기 설정 (1분)
         redisTemplate.opsForValue().set(SMS_COOLDOWN_PREFIX + phone, "1", SMS_COOLDOWN_TTL, TimeUnit.MINUTES);
 
         log.info("비밀번호 재설정 SMS 발송 완료: {}", phone);
     }
 
-    // [SMS 방식] 인증코드 검증 → 재설정 토큰 발급
-    // 코드 만료 확인 → 시도 횟수 확인 → 코드 일치 확인 → 재설정 토큰 반환
+    // [SMS 방식] 인증코드 확인 후 재설정 코드 발급
+    // 코드 만료 확인 → 오류 횟수 확인 → 코드 일치 확인 → 재설정 코드 발급
     public PasswordResetTokenResponse verifySmsAndIssueToken(PasswordResetSmsVerifyRequest request) {
         String phone      = request.getPhone();
         String verifyKey  = SMS_VERIFY_PREFIX + phone;
@@ -149,10 +149,12 @@ public class PasswordResetService {
         }
 
         if (!savedCode.equals(request.getCode())) {
+            // 오류 횟수 증가
             Long attempts = redisTemplate.opsForValue().increment(attemptKey);
+            // 오류 횟수 만료 시간을 인증코드와 동일하게 설정
             redisTemplate.expire(attemptKey, SMS_CODE_TTL, TimeUnit.MINUTES);
 
-            // 5회 초과 시 코드 즉시 무효화
+            // 5회 이상 오류 시 인증코드 즉시 무효화
             if (attempts != null && attempts >= SMS_MAX_ATTEMPTS) {
                 redisTemplate.delete(verifyKey);
                 redisTemplate.delete(attemptKey);
@@ -162,12 +164,11 @@ public class PasswordResetService {
             throw new CustomException(ErrorCode.INVALID_SMS_CODE);
         }
 
-        // 인증 완료 — 코드 및 시도 횟수 삭제
+        // 인증 완료 — 인증코드 및 오류 횟수 삭제
         redisTemplate.delete(verifyKey);
         redisTemplate.delete(attemptKey);
 
-        // 재설정 토큰 발급 (30분 유효)
-        // 전화번호로 사용자 조회 → userId를 토큰에 매핑
+        // 전화번호로 사용자 조회 후 재설정 코드 발급 (30분 유효)
         User user = userRepository.findByPhone(phone)
                 .orElseThrow(() -> new CustomException(ErrorCode.USER_NOT_FOUND));
 
@@ -175,18 +176,18 @@ public class PasswordResetService {
         redisTemplate.opsForValue()
                 .set(RESET_PREFIX + token, user.getId(), RESET_TOKEN_TTL, TimeUnit.MINUTES);
 
-        log.info("비밀번호 재설정 토큰 발급 완료: {}", phone);
+        log.info("비밀번호 재설정 코드 발급 완료: {}", phone);
         return new PasswordResetTokenResponse(token);
     }
 
-    // 비밀번호 재설정 확인 (이메일/SMS 방식 공통)
-    // 토큰으로 userId 조회 → 비밀번호 변경 → Redis 삭제 → Refresh Token 전체 삭제 → 로그 기록
+    // 새 비밀번호 설정 (이메일/SMS 방식 공통)
+    // 재설정 코드 확인 → 비밀번호 변경 → 코드 삭제 → 모든 기기 로그아웃 → 로그 기록
     @Transactional
     public void confirmReset(PasswordResetConfirmRequest request) {
         String key    = RESET_PREFIX + request.getToken();
         String userId = redisTemplate.opsForValue().get(key);
 
-        // Redis에 키가 없으면 만료되거나 존재하지 않는 토큰
+        // 저장된 코드가 없으면 만료되거나 유효하지 않은 요청
         if (userId == null) {
             throw new CustomException(ErrorCode.INVALID_RESET_TOKEN);
         }
@@ -199,26 +200,26 @@ public class PasswordResetService {
             throw new CustomException(ErrorCode.SAME_AS_CURRENT_PASSWORD);
         }
 
-        // 이전 비밀번호 2개와 중복 검사
+        // 최근 사용한 비밀번호 2개와 중복 검사
         checkPasswordHistory(user, request.getNewPassword());
 
-        // 비밀번호 변경 (이력 자동 보관)
+        // 비밀번호 변경
         user.updatePassword(passwordEncoder.encode(request.getNewPassword()));
 
-        // 사용된 토큰 즉시 삭제 — 재사용 방지
+        // 사용된 재설정 코드 즉시 삭제 (재사용 방지)
         redisTemplate.delete(key);
 
-        // 모든 디바이스 Refresh Token 삭제 — 비밀번호 변경 후 재로그인 강제
+        // 비밀번호 변경 후 모든 기기에서 자동 로그아웃
         refreshTokenRepository.deleteByUserId(userId);
 
-        // 비밀번호 재설정 로그 기록
+        // 비밀번호 재설정 이력 기록
         accessLogRepository.save(AccessLog.builder()
                 .userId(userId)
                 .action("PASSWORD_RESET")
                 .build());
     }
 
-    // 이전 비밀번호 2개와 중복 여부 검사
+    // 최근 사용한 비밀번호 2개와 중복 여부 검사
     private void checkPasswordHistory(User user, String newPassword) {
         if (user.getPrevPassword1() != null && passwordEncoder.matches(newPassword, user.getPrevPassword1())) {
             throw new CustomException(ErrorCode.PASSWORD_RECENTLY_USED);
@@ -233,7 +234,7 @@ public class PasswordResetService {
         message.setTo(to);
         message.setSubject("[SilverBridge] 비밀번호 재설정 안내");
         message.setText(
-                "비밀번호 재설정 토큰: " + token + "\n\n" +
+                "비밀번호 재설정 코드: " + token + "\n\n" +
                 "유효 시간: 30분\n\n" +
                 "본인이 요청하지 않은 경우 이 메일을 무시하세요."
         );
