@@ -21,7 +21,7 @@ public class AccessLogResponse {
         return AccessLogResponse.builder()
                 .id(log.getId())
                 .userId(log.getUserId())
-                .action(log.getAction())
+                .action(log.getAction().name())
                 .ipAddress(log.getIpAddress())
                 .userAgent(log.getUserAgent())
                 .createdAt(log.getCreatedAt())

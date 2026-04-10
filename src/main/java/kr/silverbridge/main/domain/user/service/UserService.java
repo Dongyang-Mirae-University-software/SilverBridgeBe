@@ -1,13 +1,14 @@
 package kr.silverbridge.main.domain.user.service;
 
 import kr.silverbridge.main.domain.auth.repository.RefreshTokenRepository;
+import kr.silverbridge.main.domain.user.dto.PasswordChangeRequest;
 import kr.silverbridge.main.domain.user.dto.UserProfileResponse;
 import kr.silverbridge.main.domain.user.dto.UserUpdateRequest;
 import kr.silverbridge.main.domain.user.entity.User;
 import kr.silverbridge.main.domain.user.repository.UserRepository;
-import kr.silverbridge.main.global.enums.Provider;
 import kr.silverbridge.main.global.exception.CustomException;
 import kr.silverbridge.main.global.exception.ErrorCode;
+import kr.silverbridge.main.global.util.RedisKeys;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -23,8 +24,6 @@ public class UserService {
     private final PasswordEncoder passwordEncoder;
     private final StringRedisTemplate redisTemplate;
 
-    private static final String SMS_VERIFIED_PREFIX = "sms:verified:";
-
     // 내 정보 조회
     @Transactional(readOnly = true)
     public UserProfileResponse getMyProfile(String userId) {
@@ -34,16 +33,15 @@ public class UserService {
     }
 
     // 내 정보 수정 (이름, 전화번호)
-    // 전화번호 변경 시 SMS 인증 완료 여부 확인
+    // 전화번호 변경 시 SMS 인증 완료 여부 및 중복 확인
     @Transactional
     public UserProfileResponse updateProfile(String userId, UserUpdateRequest request) {
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new CustomException(ErrorCode.USER_NOT_FOUND));
 
-        // 전화번호가 변경되는 경우 SMS 인증 완료 여부 및 중복 확인
         String newPhone = request.getPhone();
         if (newPhone != null && !newPhone.equals(user.getPhone())) {
-            if (Boolean.FALSE.equals(redisTemplate.hasKey(SMS_VERIFIED_PREFIX + newPhone))) {
+            if (Boolean.FALSE.equals(redisTemplate.hasKey(RedisKeys.SMS_VERIFIED + newPhone))) {
                 throw new CustomException(ErrorCode.SMS_NOT_VERIFIED);
             }
             // 다른 계정이 이미 사용 중인 전화번호인지 확인
@@ -51,7 +49,7 @@ public class UserService {
                 throw new CustomException(ErrorCode.PHONE_ALREADY_EXISTS);
             }
             // 인증 완료 키 삭제
-            redisTemplate.delete(SMS_VERIFIED_PREFIX + newPhone);
+            redisTemplate.delete(RedisKeys.SMS_VERIFIED + newPhone);
         }
 
         user.updateProfile(request.getName(), newPhone != null ? newPhone : user.getPhone());
@@ -66,7 +64,7 @@ public class UserService {
                 .orElseThrow(() -> new CustomException(ErrorCode.USER_NOT_FOUND));
 
         // 소셜 로그인 사용자는 비밀번호 변경 불가
-        if (user.getProvider() != Provider.LOCAL) {
+        if (user.isSocialProvider()) {
             throw new CustomException(ErrorCode.SOCIAL_USER_NO_PASSWORD);
         }
 
@@ -80,10 +78,7 @@ public class UserService {
         }
 
         // 이전 비밀번호 2개와 중복 검사
-        if (user.getPrevPassword1() != null && passwordEncoder.matches(newPassword, user.getPrevPassword1())) {
-            throw new CustomException(ErrorCode.PASSWORD_RECENTLY_USED);
-        }
-        if (user.getPrevPassword2() != null && passwordEncoder.matches(newPassword, user.getPrevPassword2())) {
+        if (user.isPasswordRecentlyUsed(newPassword, passwordEncoder)) {
             throw new CustomException(ErrorCode.PASSWORD_RECENTLY_USED);
         }
 
@@ -100,16 +95,11 @@ public class UserService {
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new CustomException(ErrorCode.USER_NOT_FOUND));
 
-        if (user.getProvider() == Provider.LOCAL) {
-            // 일반 로그인 사용자: 비밀번호 검증 필수
-            if (password == null || password.isBlank()) {
-                throw new CustomException(ErrorCode.INVALID_PASSWORD);
-            }
+        if (user.isLocalProvider()) {
             if (!passwordEncoder.matches(password, user.getPassword())) {
                 throw new CustomException(ErrorCode.INVALID_PASSWORD);
             }
         }
-        // 소셜 로그인 사용자: 비밀번호 검증 없이 탈퇴
 
         user.deactivate();
         refreshTokenRepository.deleteByUserId(userId);

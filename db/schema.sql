@@ -83,6 +83,8 @@ CREATE INDEX idx_refresh_tokens_user_id ON refresh_tokens(user_id);
 CREATE INDEX idx_access_logs_user_id    ON access_logs(user_id);
 CREATE INDEX idx_access_logs_created_at ON access_logs(created_at);
 CREATE INDEX idx_users_provider_id      ON users(provider, provider_id);
+CREATE INDEX idx_users_email            ON users(email);
+CREATE INDEX idx_users_phone            ON users(phone);
 
 
 -- =============================================

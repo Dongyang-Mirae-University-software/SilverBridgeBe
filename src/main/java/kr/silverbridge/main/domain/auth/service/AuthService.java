@@ -8,18 +8,18 @@ import kr.silverbridge.main.domain.auth.dto.LoginResponse;
 import kr.silverbridge.main.domain.auth.dto.RegisterRequest;
 import kr.silverbridge.main.domain.auth.dto.TokenRefreshRequest;
 import kr.silverbridge.main.domain.auth.dto.TokenRefreshResponse;
-import kr.silverbridge.main.domain.auth.entity.AccessLog;
 import kr.silverbridge.main.domain.auth.entity.RefreshToken;
-import kr.silverbridge.main.domain.auth.repository.AccessLogRepository;
 import kr.silverbridge.main.domain.auth.repository.RefreshTokenRepository;
 import kr.silverbridge.main.domain.user.entity.User;
 import kr.silverbridge.main.domain.user.repository.UserRepository;
+import kr.silverbridge.main.global.enums.AccessAction;
 import kr.silverbridge.main.global.enums.Provider;
 import kr.silverbridge.main.global.enums.Role;
 import kr.silverbridge.main.global.enums.Status;
 import kr.silverbridge.main.global.exception.CustomException;
 import kr.silverbridge.main.global.exception.ErrorCode;
 import kr.silverbridge.main.global.jwt.JwtTokenProvider;
+import kr.silverbridge.main.global.util.RedisKeys;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -28,6 +28,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.OffsetDateTime;
 import java.util.UUID;
+import java.util.concurrent.TimeUnit;
 
 @Service
 @RequiredArgsConstructor
@@ -35,7 +36,7 @@ public class AuthService {
 
     private final UserRepository userRepository;
     private final RefreshTokenRepository refreshTokenRepository;
-    private final AccessLogRepository accessLogRepository;
+    private final AccessLogService accessLogService;
     private final JwtTokenProvider jwtTokenProvider;
     private final PasswordEncoder passwordEncoder;
     private final StringRedisTemplate redisTemplate;
@@ -48,7 +49,7 @@ public class AuthService {
     }
 
     // 회원가입
-    // 이메일 중복 확인 → SMS 인증 완료 여부 확인 → 비밀번호 암호화 → UUID로 사용자 생성
+    // 이메일/전화번호 중복 확인 → SMS 인증 완료 여부 확인 → 비밀번호 암호화 → UUID로 사용자 생성
     @Transactional
     public void register(RegisterRequest request) {
         if (userRepository.existsByEmail(request.getEmail())) {
@@ -66,8 +67,7 @@ public class AuthService {
         }
 
         // SMS 인증 완료 여부 확인
-        String verifiedKey = "sms:verified:" + request.getPhone();
-        if (Boolean.FALSE.equals(redisTemplate.hasKey(verifiedKey))) {
+        if (Boolean.FALSE.equals(redisTemplate.hasKey(RedisKeys.SMS_VERIFIED + request.getPhone()))) {
             throw new CustomException(ErrorCode.SMS_NOT_VERIFIED);
         }
 
@@ -86,21 +86,19 @@ public class AuthService {
         userRepository.save(user);
 
         // 회원가입 완료 후 인증 완료 키 삭제
-        redisTemplate.delete(verifiedKey);
+        redisTemplate.delete(RedisKeys.SMS_VERIFIED + request.getPhone());
     }
 
-    private static final int    LOGIN_MAX_ATTEMPTS = 5;    // 최대 로그인 실패 횟수
-    private static final long   LOGIN_LOCK_TTL     = 30L;  // 잠금 유지 시간 (분)
-    private static final String LOGIN_FAIL_PREFIX  = "login:fail:";
-    private static final String LOGIN_LOCK_PREFIX  = "login:lock:";
+    private static final int  LOGIN_MAX_ATTEMPTS = 5;   // 최대 로그인 실패 횟수
+    private static final long LOGIN_LOCK_TTL     = 30L; // 잠금 유지 시간 (분)
 
     // 로그인
     // 잠금 확인 → 사용자 조회 → 계정 상태 검증 → 비밀번호 검증 → 토큰 발급 → Refresh Token 저장 → 로그 기록
     @Transactional
     public LoginResponse login(LoginRequest request, String ipAddress, String userAgent) {
         String email    = request.getEmail();
-        String lockKey  = LOGIN_LOCK_PREFIX + email;
-        String failKey  = LOGIN_FAIL_PREFIX + email;
+        String lockKey  = RedisKeys.LOGIN_LOCK + email;
+        String failKey  = RedisKeys.LOGIN_FAIL + email;
 
         // 잠금 상태 확인 (5회 실패 시 30분 잠금)
         if (Boolean.TRUE.equals(redisTemplate.hasKey(lockKey))) {
@@ -117,12 +115,12 @@ public class AuthService {
         if (!passwordEncoder.matches(request.getPassword(), user.getPassword())) {
             // 실패 횟수 증가
             Long attempts = redisTemplate.opsForValue().increment(failKey);
-            redisTemplate.expire(failKey, LOGIN_LOCK_TTL, java.util.concurrent.TimeUnit.MINUTES);
+            redisTemplate.expire(failKey, LOGIN_LOCK_TTL, TimeUnit.MINUTES);
 
             // 5회 이상 실패 시 잠금 설정
             if (attempts != null && attempts >= LOGIN_MAX_ATTEMPTS) {
                 redisTemplate.delete(failKey);
-                redisTemplate.opsForValue().set(lockKey, "1", LOGIN_LOCK_TTL, java.util.concurrent.TimeUnit.MINUTES);
+                redisTemplate.opsForValue().set(lockKey, "1", LOGIN_LOCK_TTL, TimeUnit.MINUTES);
             }
 
             throw new CustomException(ErrorCode.INVALID_PASSWORD);
@@ -144,7 +142,7 @@ public class AuthService {
                 .build());
 
         user.updateLastLoginAt();
-        saveAccessLog(user.getId(), "LOGIN", ipAddress, userAgent);
+        accessLogService.log(user.getId(), AccessAction.LOGIN, ipAddress, userAgent);
 
         return LoginResponse.of(user, accessToken, refreshToken);
     }
@@ -157,10 +155,10 @@ public class AuthService {
         long remaining = jwtTokenProvider.getRemainingExpiration(accessToken);
         if (remaining > 0) {
             redisTemplate.opsForValue()
-                    .set("logout:" + accessToken, "true", remaining, java.util.concurrent.TimeUnit.MILLISECONDS);
+                    .set(RedisKeys.LOGOUT_TOKEN + accessToken, "true", remaining, TimeUnit.MILLISECONDS);
         }
         refreshTokenRepository.deleteByUserId(userId);
-        saveAccessLog(userId, "LOGOUT", ipAddress, userAgent);
+        accessLogService.log(userId, AccessAction.LOGOUT, ipAddress, userAgent);
     }
 
     // Access Token 재발급
@@ -181,7 +179,7 @@ public class AuthService {
         String newAccessToken = jwtTokenProvider.generateAccessToken(
                 user.getId(), user.getEmail(), user.getRole().name());
 
-        saveAccessLog(user.getId(), "TOKEN_ISSUE", null, null);
+        accessLogService.log(user.getId(), AccessAction.TOKEN_ISSUE);
 
         return new TokenRefreshResponse(newAccessToken);
     }
@@ -207,15 +205,5 @@ public class AuthService {
         // 앞 2자리 유지, 나머지를 **로 마스킹 (1자리면 1자리만 유지)
         int visibleLength = Math.min(2, local.length() - 1);
         return local.substring(0, visibleLength) + "**" + domain;
-    }
-
-    // 접속 로그 저장 공통 메서드
-    protected void saveAccessLog(String userId, String action, String ipAddress, String userAgent) {
-        accessLogRepository.save(AccessLog.builder()
-                .userId(userId)
-                .action(action)
-                .ipAddress(ipAddress)
-                .userAgent(userAgent)
-                .build());
     }
 }

@@ -10,6 +10,7 @@ import kr.silverbridge.main.domain.auth.dto.SmsSendRequest;
 import kr.silverbridge.main.domain.auth.dto.SmsVerifyRequest;
 import kr.silverbridge.main.global.exception.CustomException;
 import kr.silverbridge.main.global.exception.ErrorCode;
+import kr.silverbridge.main.global.util.RedisKeys;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
@@ -35,15 +36,10 @@ public class SmsService {
     @Value("${solapi.sender-phone}")
     private String senderPhone;
 
-    private static final long   CODE_TTL       = 5L;    // 인증코드 유효 시간 (분)
-    private static final long   VERIFIED_TTL   = 10L;   // 인증 완료 상태 유지 시간 (분)
-    private static final long   COOLDOWN_TTL   = 1L;    // 재발송 대기 시간 (분)
-    private static final int    MAX_ATTEMPTS   = 5;     // 최대 오류 횟수
-
-    private static final String VERIFY_PREFIX   = "sms:verify:";
-    private static final String VERIFIED_PREFIX = "sms:verified:";
-    private static final String COOLDOWN_PREFIX = "sms:cooldown:";
-    private static final String ATTEMPT_PREFIX  = "sms:attempt:";
+    private static final long CODE_TTL     = 5L;  // 인증코드 유효 시간 (분)
+    private static final long VERIFIED_TTL = 10L; // 인증 완료 상태 유지 시간 (분)
+    private static final long COOLDOWN_TTL = 1L;  // 재발송 대기 시간 (분)
+    private static final int  MAX_ATTEMPTS = 5;   // 최대 오류 횟수
 
     // 인증코드 발송
     // 재발송 대기 확인(1분) → 인증코드 생성 → SMS 발송 → 저장(5분 유효) → 재발송 대기 설정
@@ -51,7 +47,7 @@ public class SmsService {
         String phone = request.getPhone();
 
         // 1분 이내 재발송 차단
-        if (Boolean.TRUE.equals(redisTemplate.hasKey(COOLDOWN_PREFIX + phone))) {
+        if (Boolean.TRUE.equals(redisTemplate.hasKey(RedisKeys.SMS_COOLDOWN + phone))) {
             throw new CustomException(ErrorCode.SMS_SEND_TOO_FREQUENT);
         }
 
@@ -76,11 +72,11 @@ public class SmsService {
         }
 
         // 인증코드 저장 (재발송 시 기존 코드 및 오류 횟수 초기화)
-        redisTemplate.opsForValue().set(VERIFY_PREFIX + phone, code, CODE_TTL, TimeUnit.MINUTES);
-        redisTemplate.delete(ATTEMPT_PREFIX + phone);
+        redisTemplate.opsForValue().set(RedisKeys.SMS_VERIFY + phone, code, CODE_TTL, TimeUnit.MINUTES);
+        redisTemplate.delete(RedisKeys.SMS_ATTEMPT + phone);
 
         // 재발송 대기 설정 (1분)
-        redisTemplate.opsForValue().set(COOLDOWN_PREFIX + phone, "1", COOLDOWN_TTL, TimeUnit.MINUTES);
+        redisTemplate.opsForValue().set(RedisKeys.SMS_COOLDOWN + phone, "1", COOLDOWN_TTL, TimeUnit.MINUTES);
 
         log.info("SMS 인증코드 발송 완료: {}", phone);
     }
@@ -88,9 +84,9 @@ public class SmsService {
     // 인증코드 확인
     // 코드 만료 확인 → 오류 횟수 확인 → 코드 일치 확인 → 인증 완료 처리
     public void verifyCode(SmsVerifyRequest request) {
-        String phone = request.getPhone();
-        String verifyKey  = VERIFY_PREFIX + phone;
-        String attemptKey = ATTEMPT_PREFIX + phone;
+        String phone      = request.getPhone();
+        String verifyKey  = RedisKeys.SMS_VERIFY + phone;
+        String attemptKey = RedisKeys.SMS_ATTEMPT + phone;
 
         String savedCode = redisTemplate.opsForValue().get(verifyKey);
 
@@ -118,7 +114,7 @@ public class SmsService {
         redisTemplate.delete(verifyKey);
         redisTemplate.delete(attemptKey);
         redisTemplate.opsForValue()
-                .set(VERIFIED_PREFIX + phone, "true", VERIFIED_TTL, TimeUnit.MINUTES);
+                .set(RedisKeys.SMS_VERIFIED + phone, "true", VERIFIED_TTL, TimeUnit.MINUTES);
 
         log.info("SMS 인증 완료: {}", phone);
     }

@@ -4,6 +4,7 @@ import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
+import kr.silverbridge.main.global.util.RedisKeys;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.http.MediaType;
@@ -67,7 +68,7 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
     // 로그아웃된 토큰인지 확인
     private boolean isLoggedOut(String token) {
-        return Boolean.TRUE.equals(redisTemplate.hasKey("logout:" + token));
+        return Boolean.TRUE.equals(redisTemplate.hasKey(RedisKeys.LOGOUT_TOKEN + token));
     }
 
     // 블랙리스트 토큰 요청에 401 JSON 응답 직접 반환
