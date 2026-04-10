@@ -8,14 +8,19 @@ import lombok.Getter;
 @Builder
 public class KakaoLoginResponse {
 
-    // 신규 사용자 여부 (true이면 역할 선택 필요)
     private boolean isNewUser;
-    private String accessToken;
-    private String refreshToken;  // 신규 사용자(PENDING)는 null
-    private String userId;
+
+    // 신규 사용자 전용 (가입 폼에 표시용)
+    private String kakaoId;
     private String email;
     private String name;
-    private String role;           // 신규 사용자(PENDING)는 null — 역할 선택 후 확정
+    private String profileImageUrl;
+
+    // 기존 사용자 전용
+    private String accessToken;
+    private String refreshToken;
+    private String userId;
+    private String role;
 
     // 기존 사용자 로그인 응답
     public static KakaoLoginResponse ofExisting(User user, String accessToken, String refreshToken) {
@@ -30,15 +35,14 @@ public class KakaoLoginResponse {
                 .build();
     }
 
-    // 신규 사용자 응답 (역할 선택 대기, refreshToken 없음)
-    public static KakaoLoginResponse ofNewUser(User user, String accessToken) {
+    // 신규 사용자 응답 (DB 저장 전, 토큰 없음)
+    public static KakaoLoginResponse ofNewUser(String kakaoId, String email, String name, String profileImageUrl) {
         return KakaoLoginResponse.builder()
                 .isNewUser(true)
-                .accessToken(accessToken)
-                .refreshToken(null)
-                .userId(user.getId())
-                .email(user.getEmail())
-                .name(user.getName())
+                .kakaoId(kakaoId)
+                .email(email)
+                .name(name)
+                .profileImageUrl(profileImageUrl)
                 .build();
     }
 }
