@@ -3,9 +3,9 @@ spring:
     name: dmu-backend
 
   datasource:
-    url: jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5432}/${DB_NAME:main}
-    username: ${DB_USERNAME:main}
-    password: ${DB_PASSWORD:main}
+    url: jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5432}/${DB_NAME:dev}
+    username: ${DB_USERNAME:dev}
+    password: ${DB_PASSWORD:dev}
     driver-class-name: org.postgresql.Driver
 
   jpa:

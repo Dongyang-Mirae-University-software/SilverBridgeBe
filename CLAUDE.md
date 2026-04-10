@@ -19,8 +19,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Docker
 - 파일: `docker-compose.dev.yml`
-- container_name: `dmusso-{env}-{service}` (예: dmusso-dev-db)
-- 볼륨명: `dmusso-{env}-{service}-data`
+- container_name: `dmu-{env}-{service}` (예: dmu-dev-db)
+- 볼륨명: `dmu-{env}-{service}-data`
 - 네트워크명: `dmu-{env}-net`
 - 민감 정보는 `.env.dev` 파일로 분리
 - `.env.*` 파일은 git에 올리지 않음
