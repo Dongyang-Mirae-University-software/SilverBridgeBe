@@ -17,7 +17,15 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
-@Tag(name = "비밀번호 찾기 / 재설정", description = "비밀번호를 잊어버린 경우 이메일 또는 전화번호로 본인 인증 후 새 비밀번호로 변경하는 API입니다. 두 방식 모두 최종 단계는 POST /api/auth/password/reset 으로 동일합니다.")
+@Tag(
+        name = "비밀번호 찾기 / 재설정",
+        description = """
+                비밀번호를 잊어버렸을 때 사용하는 API입니다. (로그인 불필요)
+                이메일 방식 또는 전화번호(SMS) 방식 중 하나를 선택해 본인 인증 후 새 비밀번호를 설정합니다.
+
+                ※ 로그인된 상태에서 현재 비밀번호를 알고 있다면 PUT /api/users/me/password 를 사용하세요.
+                """
+)
 @RestController
 @RequestMapping("/api/auth/password")
 @RequiredArgsConstructor
