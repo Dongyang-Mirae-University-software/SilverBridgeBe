@@ -17,7 +17,7 @@ import org.springframework.data.domain.Sort;
 import org.springframework.data.web.PageableDefault;
 import org.springframework.web.bind.annotation.*;
 
-@Tag(name = "관리자", description = "사용자 관리 및 접속 로그 조회 API (ADMIN 권한 필요)")
+@Tag(name = "관리자")
 @RestController
 @RequestMapping("/api/admin")
 @RequiredArgsConstructor
