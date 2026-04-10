@@ -35,18 +35,18 @@ public class SmsService {
     @Value("${solapi.sender-phone}")
     private String senderPhone;
 
-    private static final long   CODE_TTL       = 5L;   // 인증코드 TTL (분)
-    private static final long   VERIFIED_TTL   = 10L;  // 인증완료 TTL (분)
-    private static final long   COOLDOWN_TTL   = 1L;   // 재발송 쿨다운 (분)
-    private static final int    MAX_ATTEMPTS   = 5;    // 최대 틀림 횟수
+    private static final long   CODE_TTL       = 5L;    // 인증코드 유효 시간 (분)
+    private static final long   VERIFIED_TTL   = 10L;   // 인증 완료 상태 유지 시간 (분)
+    private static final long   COOLDOWN_TTL   = 1L;    // 재발송 대기 시간 (분)
+    private static final int    MAX_ATTEMPTS   = 5;     // 최대 오류 횟수
 
     private static final String VERIFY_PREFIX   = "sms:verify:";
     private static final String VERIFIED_PREFIX = "sms:verified:";
     private static final String COOLDOWN_PREFIX = "sms:cooldown:";
     private static final String ATTEMPT_PREFIX  = "sms:attempt:";
 
-    // SMS 인증 코드 발송
-    // 쿨다운 확인(1분) → 코드 생성 → Redis 저장(TTL 5분) → SMS 발송 → 쿨다운 설정
+    // 인증코드 발송
+    // 재발송 대기 확인(1분) → 인증코드 생성 → SMS 발송 → 저장(5분 유효) → 재발송 대기 설정
     public void sendVerificationCode(SmsSendRequest request) {
         String phone = request.getPhone();
 
@@ -75,18 +75,18 @@ public class SmsService {
             throw new CustomException(ErrorCode.SMS_SEND_FAILED);
         }
 
-        // 인증 코드 저장 (재발송 시 기존 코드 및 시도 횟수 초기화)
+        // 인증코드 저장 (재발송 시 기존 코드 및 오류 횟수 초기화)
         redisTemplate.opsForValue().set(VERIFY_PREFIX + phone, code, CODE_TTL, TimeUnit.MINUTES);
         redisTemplate.delete(ATTEMPT_PREFIX + phone);
 
-        // 재발송 쿨다운 설정 (1분)
+        // 재발송 대기 설정 (1분)
         redisTemplate.opsForValue().set(COOLDOWN_PREFIX + phone, "1", COOLDOWN_TTL, TimeUnit.MINUTES);
 
-        log.info("SMS 인증 코드 발송 완료: {}", phone);
+        log.info("SMS 인증코드 발송 완료: {}", phone);
     }
 
-    // SMS 인증 코드 검증
-    // 코드 만료 확인 → 시도 횟수 확인 → 코드 일치 확인 → 인증 완료 표시
+    // 인증코드 확인
+    // 코드 만료 확인 → 오류 횟수 확인 → 코드 일치 확인 → 인증 완료 처리
     public void verifyCode(SmsVerifyRequest request) {
         String phone = request.getPhone();
         String verifyKey  = VERIFY_PREFIX + phone;
@@ -99,12 +99,12 @@ public class SmsService {
         }
 
         if (!savedCode.equals(request.getCode())) {
-            // 틀린 횟수 증가
+            // 오류 횟수 증가
             Long attempts = redisTemplate.opsForValue().increment(attemptKey);
-            // 시도 횟수 TTL을 인증코드 TTL과 동기화
+            // 오류 횟수 만료 시간을 인증코드와 동일하게 설정
             redisTemplate.expire(attemptKey, CODE_TTL, TimeUnit.MINUTES);
 
-            // 5회 초과 시 코드 즉시 무효화
+            // 5회 이상 오류 시 인증코드 즉시 무효화
             if (attempts != null && attempts >= MAX_ATTEMPTS) {
                 redisTemplate.delete(verifyKey);
                 redisTemplate.delete(attemptKey);
@@ -114,7 +114,7 @@ public class SmsService {
             throw new CustomException(ErrorCode.INVALID_SMS_CODE);
         }
 
-        // 인증 완료 — 코드 및 시도 횟수 삭제, 완료 표시 저장
+        // 인증 완료 — 인증코드 및 오류 횟수 삭제, 인증 완료 상태 저장 (10분 유효)
         redisTemplate.delete(verifyKey);
         redisTemplate.delete(attemptKey);
         redisTemplate.opsForValue()
