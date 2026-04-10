@@ -40,6 +40,8 @@ public enum ErrorCode {
     INVALID_SMS_CODE(HttpStatus.BAD_REQUEST, "SMS 인증코드가 올바르지 않습니다."),
     EXPIRED_SMS_CODE(HttpStatus.BAD_REQUEST, "만료된 SMS 인증코드입니다."),
     SMS_NOT_VERIFIED(HttpStatus.BAD_REQUEST, "SMS 인증이 완료되지 않았습니다."),
+    SMS_TOO_MANY_ATTEMPTS(HttpStatus.BAD_REQUEST, "인증코드를 5회 이상 틀렸습니다. 인증코드를 다시 요청해주세요."),
+    SMS_SEND_TOO_FREQUENT(HttpStatus.TOO_MANY_REQUESTS, "SMS는 1분에 1회만 요청할 수 있습니다."),
 
     // 카카오 OAuth
     KAKAO_INVALID_CODE(HttpStatus.UNAUTHORIZED, "유효하지 않거나 만료된 카카오 인가 코드입니다."),
