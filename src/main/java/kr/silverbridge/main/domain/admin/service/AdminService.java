@@ -5,7 +5,6 @@ import kr.silverbridge.main.domain.announcement.entity.Announcement;
 import kr.silverbridge.main.domain.announcement.repository.AnnouncementRepository;
 import kr.silverbridge.main.domain.anomaly.entity.AnomalyEvent;
 import kr.silverbridge.main.domain.anomaly.repository.AnomalyEventRepository;
-import kr.silverbridge.main.global.enums.Status;
 import kr.silverbridge.main.domain.auth.repository.AccessLogRepository;
 import kr.silverbridge.main.domain.connection.entity.Connection;
 import kr.silverbridge.main.domain.connection.repository.ConnectionRepository;
@@ -15,6 +14,7 @@ import kr.silverbridge.main.domain.user.repository.UserRepository;
 import kr.silverbridge.main.global.enums.ConnectionStatus;
 import kr.silverbridge.main.global.enums.GameType;
 import kr.silverbridge.main.global.enums.Role;
+import kr.silverbridge.main.global.enums.Status;
 import kr.silverbridge.main.global.exception.CustomException;
 import kr.silverbridge.main.global.exception.ErrorCode;
 import lombok.RequiredArgsConstructor;
@@ -37,6 +37,10 @@ public class AdminService {
     private final GameResultRepository gameResultRepository;
     private final AnnouncementRepository announcementRepository;
 
+    // =============================================
+    // 사용자 관리
+    // =============================================
+
     // 사용자 목록 조회 (페이징, role 필터링)
     // role 미입력 시 WARD + GUARDIAN 전체 조회, ADMIN 제외
     @Transactional(readOnly = true)
@@ -55,15 +59,11 @@ public class AdminService {
     }
 
     // 피보호자/보호자 계정 상태 변경 (활성화 / 비활성화)
-    // ADMIN 계정은 변경 불가
     @Transactional
     public void updateUserStatus(String userId, UserStatusUpdateRequest request) {
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new CustomException(ErrorCode.USER_NOT_FOUND));
-
-        if (user.getRole() == Role.ADMIN) {
-            throw new CustomException(ErrorCode.CANNOT_MODIFY_ADMIN);
-        }
+        validateNotAdmin(user);
 
         switch (request.getStatus()) {
             case ACTIVE   -> user.activate();
@@ -73,15 +73,11 @@ public class AdminService {
     }
 
     // 사용자 역할 변경 (WARD ↔ GUARDIAN)
-    // ADMIN 계정 변경 불가, ADMIN으로 변경 불가
     @Transactional
     public void updateUserRole(String userId, UserRoleUpdateRequest request) {
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new CustomException(ErrorCode.USER_NOT_FOUND));
-
-        if (user.getRole() == Role.ADMIN) {
-            throw new CustomException(ErrorCode.CANNOT_MODIFY_ADMIN);
-        }
+        validateNotAdmin(user);
 
         if (request.getRole() == Role.ADMIN) {
             throw new CustomException(ErrorCode.INVALID_ROLE);
@@ -91,30 +87,24 @@ public class AdminService {
     }
 
     // 사용자 강제 탈퇴 (계정 영구 삭제)
-    // ADMIN 계정은 삭제 불가
     @Transactional
     public void forceDeleteUser(String userId) {
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new CustomException(ErrorCode.USER_NOT_FOUND));
-
-        if (user.getRole() == Role.ADMIN) {
-            throw new CustomException(ErrorCode.CANNOT_MODIFY_ADMIN);
-        }
+        validateNotAdmin(user);
 
         userRepository.delete(user);
     }
+
+    // =============================================
+    // 연결 관계 관리
+    // =============================================
 
     // 전체 연결 관계 조회 (페이징)
     @Transactional(readOnly = true)
     public Page<ConnectionResponse> getConnections(Pageable pageable) {
         return connectionRepository.findAll(pageable)
-                .map(conn -> {
-                    User guardian = userRepository.findById(conn.getGuardianId())
-                            .orElseThrow(() -> new CustomException(ErrorCode.USER_NOT_FOUND));
-                    User ward = userRepository.findById(conn.getWardId())
-                            .orElseThrow(() -> new CustomException(ErrorCode.USER_NOT_FOUND));
-                    return ConnectionResponse.of(conn, guardian, ward);
-                });
+                .map(this::mapToConnectionResponse);
     }
 
     // 특정 보호자의 피보호자 목록 조회
@@ -128,13 +118,7 @@ public class AdminService {
         }
 
         return connectionRepository.findByGuardianId(guardianId, pageable)
-                .map(conn -> {
-                    User guardian = userRepository.findById(conn.getGuardianId())
-                            .orElseThrow(() -> new CustomException(ErrorCode.USER_NOT_FOUND));
-                    User ward = userRepository.findById(conn.getWardId())
-                            .orElseThrow(() -> new CustomException(ErrorCode.USER_NOT_FOUND));
-                    return ConnectionResponse.of(conn, guardian, ward);
-                });
+                .map(this::mapToConnectionResponse);
     }
 
     // 관리자 강제 연결 (바로 ACTIVE)
@@ -145,17 +129,14 @@ public class AdminService {
         User ward = userRepository.findById(request.getWardId())
                 .orElseThrow(() -> new CustomException(ErrorCode.USER_NOT_FOUND));
 
-        // 역할 검증
         if (guardian.getRole() != Role.GUARDIAN || ward.getRole() != Role.WARD) {
             throw new CustomException(ErrorCode.INVALID_CONNECTION_ROLE);
         }
 
-        // 비활성 사용자 강제 연결 차단
         if (guardian.getStatus() == Status.INACTIVE || ward.getStatus() == Status.INACTIVE) {
             throw new CustomException(ErrorCode.INACTIVE_USER);
         }
 
-        // 이미 연결 중인지 확인 (CANCELLED 제외)
         if (connectionRepository.existsByGuardianIdAndWardIdAndStatusNot(
                 request.getGuardianId(), request.getWardId(), ConnectionStatus.CANCELLED)) {
             throw new CustomException(ErrorCode.CONNECTION_ALREADY_EXISTS);
@@ -181,7 +162,10 @@ public class AdminService {
         connection.cancel();
     }
 
-    // 이상감지 이벤트 조회 (관리자용 — 날짜 범위 + 보호자 필터)
+    // =============================================
+    // 이상감지 이벤트 조회
+    // =============================================
+
     // guardianId 미입력 시 전체 조회, 입력 시 해당 보호자의 피보호자 이벤트만 조회
     @Transactional(readOnly = true)
     public Page<AnomalyEventResponse> getAnomalyEvents(
@@ -219,7 +203,10 @@ public class AdminService {
         });
     }
 
-    // 게임 결과 조회 (관리자용 — 피보호자 + 게임 유형 + 날짜 범위 필터)
+    // =============================================
+    // 게임 결과 조회
+    // =============================================
+
     @Transactional(readOnly = true)
     public Page<GameResultResponse> getGameResults(
             String userId,
@@ -244,6 +231,10 @@ public class AdminService {
                 });
     }
 
+    // =============================================
+    // 공지 관리
+    // =============================================
+
     // 공지 목록 조회 (isPublished 필터, 미입력 시 전체)
     @Transactional(readOnly = true)
     public Page<AnnouncementResponse> getAnnouncements(Boolean isPublished, Pageable pageable) {
@@ -251,24 +242,14 @@ public class AdminService {
                 ? announcementRepository.findByIsPublished(isPublished, pageable)
                 : announcementRepository.findAll(pageable);
 
-        return announcements.map(a -> {
-            User author = (a.getAuthorId() != null)
-                    ? userRepository.findById(a.getAuthorId()).orElse(null)
-                    : null;
-            return AnnouncementResponse.of(a, author);
-        });
+        return announcements.map(a -> AnnouncementResponse.of(a, findAuthor(a.getAuthorId())));
     }
 
     // 공지 상세 조회
     @Transactional(readOnly = true)
     public AnnouncementResponse getAnnouncement(Long id) {
-        Announcement announcement = announcementRepository.findById(id)
-                .orElseThrow(() -> new CustomException(ErrorCode.ANNOUNCEMENT_NOT_FOUND));
-
-        User author = (announcement.getAuthorId() != null)
-                ? userRepository.findById(announcement.getAuthorId()).orElse(null)
-                : null;
-        return AnnouncementResponse.of(announcement, author);
+        Announcement announcement = findAnnouncement(id);
+        return AnnouncementResponse.of(announcement, findAuthor(announcement.getAuthorId()));
     }
 
     // 공지 생성 (작성자 = 현재 로그인한 관리자)
@@ -282,51 +263,70 @@ public class AdminService {
                 .build();
 
         Announcement saved = announcementRepository.save(announcement);
-        User author = userRepository.findById(adminId).orElse(null);
-        return AnnouncementResponse.of(saved, author);
+        return AnnouncementResponse.of(saved, findAuthor(adminId));
     }
 
     // 공지 수정 (제목 + 내용)
     @Transactional
     public AnnouncementResponse updateAnnouncement(Long id, AnnouncementUpdateRequest request) {
-        Announcement announcement = announcementRepository.findById(id)
-                .orElseThrow(() -> new CustomException(ErrorCode.ANNOUNCEMENT_NOT_FOUND));
-
+        Announcement announcement = findAnnouncement(id);
         announcement.update(request.getTitle(), request.getContent());
-
-        User author = (announcement.getAuthorId() != null)
-                ? userRepository.findById(announcement.getAuthorId()).orElse(null)
-                : null;
-        return AnnouncementResponse.of(announcement, author);
+        return AnnouncementResponse.of(announcement, findAuthor(announcement.getAuthorId()));
     }
 
     // 공지 발행 토글 (미발행 → 발행, 발행 → 취소)
     @Transactional
     public AnnouncementResponse togglePublish(Long id) {
-        Announcement announcement = announcementRepository.findById(id)
-                .orElseThrow(() -> new CustomException(ErrorCode.ANNOUNCEMENT_NOT_FOUND));
-
+        Announcement announcement = findAnnouncement(id);
         announcement.togglePublish();
-
-        User author = (announcement.getAuthorId() != null)
-                ? userRepository.findById(announcement.getAuthorId()).orElse(null)
-                : null;
-        return AnnouncementResponse.of(announcement, author);
+        return AnnouncementResponse.of(announcement, findAuthor(announcement.getAuthorId()));
     }
 
     // 공지 삭제
     @Transactional
     public void deleteAnnouncement(Long id) {
-        Announcement announcement = announcementRepository.findById(id)
-                .orElseThrow(() -> new CustomException(ErrorCode.ANNOUNCEMENT_NOT_FOUND));
-
-        announcementRepository.delete(announcement);
+        announcementRepository.delete(findAnnouncement(id));
     }
 
-    // 접속 로그 조회 (페이징)
+    // =============================================
+    // 접속 로그 조회
+    // =============================================
+
     @Transactional(readOnly = true)
     public Page<AccessLogResponse> getAccessLogs(Pageable pageable) {
         return accessLogRepository.findAll(pageable)
                 .map(AccessLogResponse::from);
+    }
+
+    // =============================================
+    // private 헬퍼
+    // =============================================
+
+    // ADMIN 계정 수정/삭제 차단
+    private void validateNotAdmin(User user) {
+        if (user.getRole() == Role.ADMIN) {
+            throw new CustomException(ErrorCode.CANNOT_MODIFY_ADMIN);
+        }
+    }
+
+    // Connection → ConnectionResponse 변환 (guardian/ward 조회 포함)
+    private ConnectionResponse mapToConnectionResponse(Connection conn) {
+        User g = userRepository.findById(conn.getGuardianId())
+                .orElseThrow(() -> new CustomException(ErrorCode.USER_NOT_FOUND));
+        User w = userRepository.findById(conn.getWardId())
+                .orElseThrow(() -> new CustomException(ErrorCode.USER_NOT_FOUND));
+        return ConnectionResponse.of(conn, g, w);
+    }
+
+    // 공지 조회 (없으면 예외)
+    private Announcement findAnnouncement(Long id) {
+        return announcementRepository.findById(id)
+                .orElseThrow(() -> new CustomException(ErrorCode.ANNOUNCEMENT_NOT_FOUND));
+    }
+
+    // 공지 작성자 조회 (탈퇴 시 null 반환)
+    private User findAuthor(String authorId) {
+        if (authorId == null) return null;
+        return userRepository.findById(authorId).orElse(null);
     }
 }
