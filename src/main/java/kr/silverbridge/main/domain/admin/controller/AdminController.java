@@ -46,6 +46,18 @@ public class AdminController {
 
                     [기본 정렬]
                     - 가입일 내림차순, 페이지 크기 20
+
+                    [페이지네이션 쿼리 파라미터]
+                    - page: 페이지 번호 (0부터 시작, 기본값 0)
+                    - size: 페이지당 항목 수 (기본값 20)
+                    - sort: 정렬 기준 (예: sort=createdAt,desc / sort=name,asc)
+
+                    [페이지네이션 응답 구조]
+                    data.content       → 실제 목록 배열
+                    data.totalElements → 전체 항목 수
+                    data.totalPages    → 전체 페이지 수
+                    data.number        → 현재 페이지 번호 (0부터)
+                    data.size          → 페이지당 크기
                     """
     )
     @ApiResponses({
@@ -172,6 +184,18 @@ public class AdminController {
 
                     [기본 정렬]
                     - 연결 요청일 내림차순, 페이지 크기 20
+
+                    [페이지네이션 쿼리 파라미터]
+                    - page: 페이지 번호 (0부터 시작, 기본값 0)
+                    - size: 페이지당 항목 수 (기본값 20)
+                    - sort: 정렬 기준 (예: sort=createdAt,desc)
+
+                    [페이지네이션 응답 구조]
+                    data.content       → 실제 목록 배열
+                    data.totalElements → 전체 항목 수
+                    data.totalPages    → 전체 페이지 수
+                    data.number        → 현재 페이지 번호 (0부터)
+                    data.size          → 페이지당 크기
                     """
     )
     @ApiResponses({
@@ -194,6 +218,18 @@ public class AdminController {
 
                     [주의사항]
                     - guardianId는 반드시 GUARDIAN 역할 사용자여야 합니다. WARD UUID 입력 시 400 반환.
+
+                    [페이지네이션 쿼리 파라미터]
+                    - page: 페이지 번호 (0부터 시작, 기본값 0)
+                    - size: 페이지당 항목 수 (기본값 20)
+                    - sort: 정렬 기준 (예: sort=createdAt,desc)
+
+                    [페이지네이션 응답 구조]
+                    data.content       → 실제 목록 배열
+                    data.totalElements → 전체 항목 수
+                    data.totalPages    → 전체 페이지 수
+                    data.number        → 현재 페이지 번호 (0부터)
+                    data.size          → 페이지당 크기
                     """
     )
     @ApiResponses({
@@ -281,6 +317,18 @@ public class AdminController {
 
                     [피보호자 탈퇴 시]
                     wardName, wardEmail 은 null 로 반환됩니다.
+
+                    [페이지네이션 쿼리 파라미터]
+                    - page: 페이지 번호 (0부터 시작, 기본값 0)
+                    - size: 페이지당 항목 수 (기본값 20)
+                    - sort: 정렬 기준 (기본값: detectedAt,desc)
+
+                    [페이지네이션 응답 구조]
+                    data.content       → 실제 목록 배열
+                    data.totalElements → 전체 항목 수
+                    data.totalPages    → 전체 페이지 수
+                    data.number        → 현재 페이지 번호 (0부터)
+                    data.size          → 페이지당 크기
                     """
     )
     @ApiResponses({
@@ -322,6 +370,18 @@ public class AdminController {
                     - userId: 특정 피보호자의 결과만 조회. WARD 역할만 허용.
                     - gameType: 게임 유형 필터. 미입력 시 전체 유형 조회.
                     - startDate / endDate: 플레이 일시(playedAt) 범위. ISO 8601 형식 (예: 2025-01-01T00:00:00+09:00)
+
+                    [페이지네이션 쿼리 파라미터]
+                    - page: 페이지 번호 (0부터 시작, 기본값 0)
+                    - size: 페이지당 항목 수 (기본값 20)
+                    - sort: 정렬 기준 (기본값: playedAt,desc)
+
+                    [페이지네이션 응답 구조]
+                    data.content       → 실제 목록 배열
+                    data.totalElements → 전체 항목 수
+                    data.totalPages    → 전체 페이지 수
+                    data.number        → 현재 페이지 번호 (0부터)
+                    data.size          → 페이지당 크기
                     """
     )
     @ApiResponses({
@@ -365,6 +425,18 @@ public class AdminController {
                     1. POST /api/admin/announcements           → 공지 작성 (기본 미발행)
                     2. PUT  /api/admin/announcements/{id}      → 내용 수정
                     3. PATCH /api/admin/announcements/{id}/publish → 발행 처리
+
+                    [페이지네이션 쿼리 파라미터]
+                    - page: 페이지 번호 (0부터 시작, 기본값 0)
+                    - size: 페이지당 항목 수 (기본값 20)
+                    - sort: 정렬 기준 (기본값: createdAt,desc)
+
+                    [페이지네이션 응답 구조]
+                    data.content       → 실제 목록 배열
+                    data.totalElements → 전체 항목 수
+                    data.totalPages    → 전체 페이지 수
+                    data.number        → 현재 페이지 번호 (0부터)
+                    data.size          → 페이지당 크기
                     """
     )
     @ApiResponses({
@@ -506,6 +578,18 @@ public class AdminController {
 
                     [기본 정렬]
                     - 발생일 내림차순, 페이지 크기 50
+
+                    [페이지네이션 쿼리 파라미터]
+                    - page: 페이지 번호 (0부터 시작, 기본값 0)
+                    - size: 페이지당 항목 수 (기본값 50)
+                    - sort: 정렬 기준 (기본값: createdAt,desc)
+
+                    [페이지네이션 응답 구조]
+                    data.content       → 실제 목록 배열
+                    data.totalElements → 전체 항목 수
+                    data.totalPages    → 전체 페이지 수
+                    data.number        → 현재 페이지 번호 (0부터)
+                    data.size          → 페이지당 크기
                     """
     )
     @ApiResponses({
