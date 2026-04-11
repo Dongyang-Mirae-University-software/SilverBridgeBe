@@ -1,6 +1,7 @@
 package kr.silverbridge.main.domain.admin.service;
 
 import kr.silverbridge.main.domain.admin.dto.*;
+import kr.silverbridge.main.domain.anomaly.repository.AnomalyEventRepository;
 import kr.silverbridge.main.domain.auth.repository.AccessLogRepository;
 import kr.silverbridge.main.domain.connection.entity.Connection;
 import kr.silverbridge.main.domain.connection.repository.ConnectionRepository;
@@ -16,6 +17,7 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.OffsetDateTime;
 import java.util.List;
 
 @Service
@@ -25,6 +27,7 @@ public class AdminService {
     private final UserRepository userRepository;
     private final AccessLogRepository accessLogRepository;
     private final ConnectionRepository connectionRepository;
+    private final AnomalyEventRepository anomalyEventRepository;
 
     // 사용자 목록 조회 (페이징, role 필터링)
     // role 미입력 시 WARD + GUARDIAN 전체 조회, ADMIN 제외
@@ -159,6 +162,42 @@ public class AdminService {
                 .orElseThrow(() -> new CustomException(ErrorCode.CONNECTION_NOT_FOUND));
 
         connection.cancel();
+    }
+
+    // 이상감지 이벤트 조회 (관리자용 — 날짜 범위 + 보호자 필터)
+    // guardianId 미입력 시 전체 조회, 입력 시 해당 보호자의 피보호자 이벤트만 조회
+    @Transactional(readOnly = true)
+    public Page<AnomalyEventResponse> getAnomalyEvents(
+            String guardianId,
+            OffsetDateTime startDate,
+            OffsetDateTime endDate,
+            Pageable pageable
+    ) {
+        Page<kr.silverbridge.main.domain.anomaly.entity.AnomalyEvent> events;
+
+        if (guardianId != null) {
+            // 보호자가 존재하는지 확인
+            userRepository.findById(guardianId)
+                    .orElseThrow(() -> new CustomException(ErrorCode.USER_NOT_FOUND));
+
+            List<String> wardIds = anomalyEventRepository.findActiveWardIdsByGuardianId(guardianId);
+            if (wardIds.isEmpty()) {
+                return Page.empty(pageable);
+            }
+            events = anomalyEventRepository.findByWardIdsAndDateRange(wardIds, startDate, endDate, pageable);
+        } else {
+            events = anomalyEventRepository.findByDateRange(startDate, endDate, pageable);
+        }
+
+        return events.map(event -> {
+            if (event.getWardId() == null) {
+                return AnomalyEventResponse.ofDeleted(event);
+            }
+            User ward = userRepository.findById(event.getWardId()).orElse(null);
+            return ward != null
+                    ? AnomalyEventResponse.of(event, ward)
+                    : AnomalyEventResponse.ofDeleted(event);
+        });
     }
 
     // 접속 로그 조회 (페이징)
