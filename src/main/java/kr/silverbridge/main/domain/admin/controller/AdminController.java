@@ -234,6 +234,103 @@ public class AdminController {
         return ApiResponse.ok(adminService.getGameResults(userId, gameType, startDate, endDate, pageable));
     }
 
+    @Operation(summary = "공지 목록 조회", description = """
+            공지 목록을 페이징하여 조회합니다.
+
+            [필터 조건]
+            - isPublished: true(발행된 공지만) / false(미발행 공지만) / 미입력(전체 조회)
+
+            [작성자 탈퇴 시]
+            authorName 은 null 로 반환됩니다.
+            """)
+    @ApiResponses({
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "공지 목록 반환"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "인증 토큰 없음 또는 만료"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "관리자 권한 없음"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "500", description = "서버 내부 오류")
+    })
+    @GetMapping("/announcements")
+    public ApiResponse<Page<AnnouncementResponse>> getAnnouncements(
+            @Parameter(description = "발행 여부 필터 (true: 발행, false: 미발행, 미입력: 전체)")
+            @RequestParam(required = false) Boolean isPublished,
+            @PageableDefault(size = 20, sort = "createdAt", direction = Sort.Direction.DESC) Pageable pageable) {
+        return ApiResponse.ok(adminService.getAnnouncements(isPublished, pageable));
+    }
+
+    @Operation(summary = "공지 상세 조회")
+    @ApiResponses({
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "공지 상세 반환"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "인증 토큰 없음 또는 만료"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "관리자 권한 없음"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "존재하지 않는 공지"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "500", description = "서버 내부 오류")
+    })
+    @GetMapping("/announcements/{id}")
+    public ApiResponse<AnnouncementResponse> getAnnouncement(
+            @Parameter(description = "공지 ID") @PathVariable Long id) {
+        return ApiResponse.ok(adminService.getAnnouncement(id));
+    }
+
+    @Operation(summary = "공지 생성", description = "새 공지를 작성합니다. 생성 시 기본 상태는 미발행(isPublished=false)입니다. 발행하려면 PATCH /announcements/{id}/publish 를 호출하세요.")
+    @ApiResponses({
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "생성된 공지 반환"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "입력값 유효성 검증 실패"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "인증 토큰 없음 또는 만료"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "관리자 권한 없음"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "500", description = "서버 내부 오류")
+    })
+    @PostMapping("/announcements")
+    public ApiResponse<AnnouncementResponse> createAnnouncement(
+            @Valid @RequestBody AnnouncementCreateRequest request,
+            @AuthenticationPrincipal String adminId) {
+        return ApiResponse.ok(adminService.createAnnouncement(request, adminId));
+    }
+
+    @Operation(summary = "공지 수정", description = "제목과 내용을 수정합니다. 발행 상태는 변경되지 않습니다.")
+    @ApiResponses({
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "수정된 공지 반환"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "입력값 유효성 검증 실패"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "인증 토큰 없음 또는 만료"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "관리자 권한 없음"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "존재하지 않는 공지"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "500", description = "서버 내부 오류")
+    })
+    @PutMapping("/announcements/{id}")
+    public ApiResponse<AnnouncementResponse> updateAnnouncement(
+            @Parameter(description = "공지 ID") @PathVariable Long id,
+            @Valid @RequestBody AnnouncementUpdateRequest request) {
+        return ApiResponse.ok(adminService.updateAnnouncement(id, request));
+    }
+
+    @Operation(summary = "공지 발행/취소 토글", description = "미발행 공지는 발행 처리, 이미 발행된 공지는 취소 처리합니다.")
+    @ApiResponses({
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "변경된 공지 반환"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "인증 토큰 없음 또는 만료"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "관리자 권한 없음"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "존재하지 않는 공지"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "500", description = "서버 내부 오류")
+    })
+    @PatchMapping("/announcements/{id}/publish")
+    public ApiResponse<AnnouncementResponse> togglePublish(
+            @Parameter(description = "공지 ID") @PathVariable Long id) {
+        return ApiResponse.ok(adminService.togglePublish(id));
+    }
+
+    @Operation(summary = "공지 삭제")
+    @ApiResponses({
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "삭제 성공"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "인증 토큰 없음 또는 만료"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "관리자 권한 없음"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "존재하지 않는 공지"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "500", description = "서버 내부 오류")
+    })
+    @DeleteMapping("/announcements/{id}")
+    public ApiResponse<Void> deleteAnnouncement(
+            @Parameter(description = "공지 ID") @PathVariable Long id) {
+        adminService.deleteAnnouncement(id);
+        return ApiResponse.ok("공지가 삭제되었습니다.");
+    }
+
     @Operation(summary = "접속 로그 조회", description = "전체 접속 로그를 페이징하여 조회합니다. 로그인/로그아웃/토큰 재발급/비밀번호 재설정 이력을 포함합니다. 기본 페이지 크기: 50")
     @ApiResponses({
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "접속 로그 목록 반환"),
