@@ -21,6 +21,9 @@ spring:
     redis:
       host: ${REDIS_HOST:localhost}
       port: ${REDIS_PORT:6379}
+    web:
+      pageable:
+        max-page-size: 100    # ?size=999999 같은 과도한 요청 방지
 
   mail:
     host: ${MAIL_HOST:smtp.gmail.com}
