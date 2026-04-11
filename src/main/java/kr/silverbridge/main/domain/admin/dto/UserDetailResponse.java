@@ -42,13 +42,13 @@ public class UserDetailResponse {
     @Schema(description = "이메일 인증 여부", example = "true")
     private boolean emailVerified;
 
-    @Schema(description = "마지막 로그인 일시 (없으면 null)", nullable = true)
+    @Schema(description = "마지막 로그인 일시 (없으면 null)", example = "2025-01-01T09:00:00+09:00", nullable = true)
     private OffsetDateTime lastLoginAt;
 
-    @Schema(description = "가입 일시")
+    @Schema(description = "가입 일시", example = "2025-01-01T09:00:00+09:00")
     private OffsetDateTime createdAt;
 
-    @Schema(description = "정보 수정 일시")
+    @Schema(description = "정보 수정 일시", example = "2025-06-01T12:00:00+09:00")
     private OffsetDateTime updatedAt;
 
     public static UserDetailResponse from(User user) {

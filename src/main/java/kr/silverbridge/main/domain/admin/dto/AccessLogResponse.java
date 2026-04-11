@@ -27,7 +27,7 @@ public class AccessLogResponse {
     @Schema(description = "User-Agent (브라우저/앱 정보)", example = "Mozilla/5.0 ...")
     private String userAgent;
 
-    @Schema(description = "발생 일시")
+    @Schema(description = "발생 일시", example = "2025-01-01T09:00:00+09:00")
     private OffsetDateTime createdAt;
 
     public static AccessLogResponse from(AccessLog log) {
