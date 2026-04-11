@@ -11,6 +11,7 @@ import org.springframework.format.annotation.DateTimeFormat;
 
 import java.time.OffsetDateTime;
 import kr.silverbridge.main.domain.admin.service.AdminService;
+import kr.silverbridge.main.global.enums.GameType;
 import kr.silverbridge.main.global.enums.Role;
 import kr.silverbridge.main.global.response.ApiResponse;
 import lombok.RequiredArgsConstructor;
@@ -202,6 +203,35 @@ public class AdminController {
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) OffsetDateTime endDate,
             @PageableDefault(size = 20, sort = "detectedAt", direction = Sort.Direction.DESC) Pageable pageable) {
         return ApiResponse.ok(adminService.getAnomalyEvents(guardianId, startDate, endDate, pageable));
+    }
+
+    @Operation(summary = "게임 결과 조회", description = """
+            피보호자의 게임 플레이 결과 이력을 조회합니다.
+
+            [필터 조건]
+            - userId: 특정 피보호자의 결과만 조회. 미입력 시 전체 조회.
+            - gameType: MATCHING(짝 맞추기) / WORD_QUIZ(단어 퀴즈) / ADDITION(덧셈) / SUBTRACTION(뺄셈). 미입력 시 전체 유형 조회.
+            - startDate / endDate: 플레이 일시(playedAt) 범위 필터. ISO 8601 형식 (예: 2025-01-01T00:00:00+09:00)
+            """)
+    @ApiResponses({
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "게임 결과 목록 반환"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "인증 토큰 없음 또는 만료"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "관리자 권한 없음"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "존재하지 않는 사용자"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "500", description = "서버 내부 오류")
+    })
+    @GetMapping("/game-results")
+    public ApiResponse<Page<GameResultResponse>> getGameResults(
+            @Parameter(description = "피보호자 UUID (미입력 시 전체 조회)")
+            @RequestParam(required = false) String userId,
+            @Parameter(description = "게임 유형 (MATCHING / WORD_QUIZ / ADDITION / SUBTRACTION, 미입력 시 전체)")
+            @RequestParam(required = false) GameType gameType,
+            @Parameter(description = "조회 시작 일시 (ISO 8601, 예: 2025-01-01T00:00:00+09:00)")
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) OffsetDateTime startDate,
+            @Parameter(description = "조회 종료 일시 (ISO 8601, 예: 2025-12-31T23:59:59+09:00)")
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) OffsetDateTime endDate,
+            @PageableDefault(size = 20, sort = "playedAt", direction = Sort.Direction.DESC) Pageable pageable) {
+        return ApiResponse.ok(adminService.getGameResults(userId, gameType, startDate, endDate, pageable));
     }
 
     @Operation(summary = "접속 로그 조회", description = "전체 접속 로그를 페이징하여 조회합니다. 로그인/로그아웃/토큰 재발급/비밀번호 재설정 이력을 포함합니다. 기본 페이지 크기: 50")

@@ -5,9 +5,11 @@ import kr.silverbridge.main.domain.anomaly.repository.AnomalyEventRepository;
 import kr.silverbridge.main.domain.auth.repository.AccessLogRepository;
 import kr.silverbridge.main.domain.connection.entity.Connection;
 import kr.silverbridge.main.domain.connection.repository.ConnectionRepository;
+import kr.silverbridge.main.domain.game.repository.GameResultRepository;
 import kr.silverbridge.main.domain.user.entity.User;
 import kr.silverbridge.main.domain.user.repository.UserRepository;
 import kr.silverbridge.main.global.enums.ConnectionStatus;
+import kr.silverbridge.main.global.enums.GameType;
 import kr.silverbridge.main.global.enums.Role;
 import kr.silverbridge.main.global.exception.CustomException;
 import kr.silverbridge.main.global.exception.ErrorCode;
@@ -28,6 +30,7 @@ public class AdminService {
     private final AccessLogRepository accessLogRepository;
     private final ConnectionRepository connectionRepository;
     private final AnomalyEventRepository anomalyEventRepository;
+    private final GameResultRepository gameResultRepository;
 
     // 사용자 목록 조회 (페이징, role 필터링)
     // role 미입력 시 WARD + GUARDIAN 전체 조회, ADMIN 제외
@@ -198,6 +201,28 @@ public class AdminService {
                     ? AnomalyEventResponse.of(event, ward)
                     : AnomalyEventResponse.ofDeleted(event);
         });
+    }
+
+    // 게임 결과 조회 (관리자용 — 피보호자 + 게임 유형 + 날짜 범위 필터)
+    @Transactional(readOnly = true)
+    public Page<GameResultResponse> getGameResults(
+            String userId,
+            GameType gameType,
+            OffsetDateTime startDate,
+            OffsetDateTime endDate,
+            Pageable pageable
+    ) {
+        if (userId != null) {
+            userRepository.findById(userId)
+                    .orElseThrow(() -> new CustomException(ErrorCode.USER_NOT_FOUND));
+        }
+
+        return gameResultRepository.findByFilters(userId, gameType, startDate, endDate, pageable)
+                .map(result -> {
+                    User user = userRepository.findById(result.getUserId())
+                            .orElseThrow(() -> new CustomException(ErrorCode.USER_NOT_FOUND));
+                    return GameResultResponse.of(result, user);
+                });
     }
 
     // 접속 로그 조회 (페이징)
