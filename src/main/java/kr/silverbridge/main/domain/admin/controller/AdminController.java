@@ -7,6 +7,7 @@ import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import kr.silverbridge.main.domain.admin.dto.*;
+import kr.silverbridge.main.domain.admin.service.AdminAuditLogService;
 import kr.silverbridge.main.domain.admin.service.AdminService;
 import kr.silverbridge.main.global.enums.GameType;
 import kr.silverbridge.main.global.enums.Role;
@@ -30,6 +31,7 @@ import java.time.OffsetDateTime;
 public class AdminController {
 
     private final AdminService adminService;
+    private final AdminAuditLogService auditLogService;
 
     // =============================================
     // 사용자 관리
@@ -115,8 +117,9 @@ public class AdminController {
     @PatchMapping("/users/{userId}/status")
     public ApiResponse<Void> updateUserStatus(
             @Parameter(description = "사용자 UUID") @PathVariable String userId,
-            @Valid @RequestBody UserStatusUpdateRequest request) {
-        adminService.updateUserStatus(userId, request);
+            @Valid @RequestBody UserStatusUpdateRequest request,
+            @AuthenticationPrincipal String adminId) {
+        adminService.updateUserStatus(userId, request, adminId);
         return ApiResponse.ok("사용자 상태가 변경되었습니다.");
     }
 
@@ -128,7 +131,7 @@ public class AdminController {
                     [주의사항]
                     - ADMIN 계정은 역할 변경 불가합니다.
                     - ADMIN으로의 변경은 허용되지 않습니다.
-                    - 역할 변경 시 기존 연결 관계(connections)에는 영향을 주지 않습니다.
+                    - 역할 변경 시 해당 사용자의 ACTIVE/PENDING 연결이 자동으로 CANCELLED 처리됩니다.
                     """
     )
     @ApiResponses({
@@ -142,8 +145,9 @@ public class AdminController {
     @PatchMapping("/users/{userId}/role")
     public ApiResponse<Void> updateUserRole(
             @Parameter(description = "사용자 UUID") @PathVariable String userId,
-            @Valid @RequestBody UserRoleUpdateRequest request) {
-        adminService.updateUserRole(userId, request);
+            @Valid @RequestBody UserRoleUpdateRequest request,
+            @AuthenticationPrincipal String adminId) {
+        adminService.updateUserRole(userId, request, adminId);
         return ApiResponse.ok("사용자 역할이 변경되었습니다.");
     }
 
@@ -167,8 +171,9 @@ public class AdminController {
     })
     @DeleteMapping("/users/{userId}")
     public ApiResponse<Void> forceDeleteUser(
-            @Parameter(description = "사용자 UUID") @PathVariable String userId) {
-        adminService.forceDeleteUser(userId);
+            @Parameter(description = "사용자 UUID") @PathVariable String userId,
+            @AuthenticationPrincipal String adminId) {
+        adminService.forceDeleteUser(userId, adminId);
         return ApiResponse.ok("사용자가 강제 탈퇴 처리되었습니다.");
     }
 
@@ -292,8 +297,9 @@ public class AdminController {
     })
     @DeleteMapping("/connections/{connectionId}")
     public ApiResponse<Void> forceDisconnect(
-            @Parameter(description = "연결 ID (ConnectionResponse.id)") @PathVariable Long connectionId) {
-        adminService.forceDisconnect(connectionId);
+            @Parameter(description = "연결 ID (ConnectionResponse.id)") @PathVariable Long connectionId,
+            @AuthenticationPrincipal String adminId) {
+        adminService.forceDisconnect(connectionId, adminId);
         return ApiResponse.ok("연결이 해제되었습니다.");
     }
 
@@ -511,8 +517,9 @@ public class AdminController {
     @PutMapping("/announcements/{id}")
     public ApiResponse<AnnouncementResponse> updateAnnouncement(
             @Parameter(description = "공지 ID") @PathVariable Long id,
-            @Valid @RequestBody AnnouncementUpdateRequest request) {
-        return ApiResponse.ok(adminService.updateAnnouncement(id, request));
+            @Valid @RequestBody AnnouncementUpdateRequest request,
+            @AuthenticationPrincipal String adminId) {
+        return ApiResponse.ok(adminService.updateAnnouncement(id, request, adminId));
     }
 
     @Operation(
@@ -532,8 +539,9 @@ public class AdminController {
     })
     @PatchMapping("/announcements/{id}/publish")
     public ApiResponse<AnnouncementResponse> togglePublish(
-            @Parameter(description = "공지 ID") @PathVariable Long id) {
-        return ApiResponse.ok(adminService.togglePublish(id));
+            @Parameter(description = "공지 ID") @PathVariable Long id,
+            @AuthenticationPrincipal String adminId) {
+        return ApiResponse.ok(adminService.togglePublish(id, adminId));
     }
 
     @Operation(
@@ -555,8 +563,9 @@ public class AdminController {
     })
     @DeleteMapping("/announcements/{id}")
     public ApiResponse<Void> deleteAnnouncement(
-            @Parameter(description = "공지 ID") @PathVariable Long id) {
-        adminService.deleteAnnouncement(id);
+            @Parameter(description = "공지 ID") @PathVariable Long id,
+            @AuthenticationPrincipal String adminId) {
+        adminService.deleteAnnouncement(id, adminId);
         return ApiResponse.ok("공지가 삭제되었습니다.");
     }
 
@@ -602,5 +611,51 @@ public class AdminController {
     public ApiResponse<Page<AccessLogResponse>> getAccessLogs(
             @PageableDefault(size = 50, sort = "createdAt", direction = Sort.Direction.DESC) Pageable pageable) {
         return ApiResponse.ok(adminService.getAccessLogs(pageable));
+    }
+
+    // =============================================
+    // 관리자 행동 감사 로그 조회
+    // =============================================
+
+    @Operation(
+            summary = "관리자 행동 감사 로그 조회",
+            description = """
+                    관리자가 수행한 모든 행동 이력을 조회합니다.
+                    사용자 상태/역할 변경, 강제 탈퇴, 연결 관리, 공지 CRUD 등 모든 변경 작업이 기록됩니다.
+
+                    [기록되는 행동 유형]
+                    - USER_STATUS_CHANGE: 사용자 상태 변경 (ACTIVE/INACTIVE)
+                    - USER_ROLE_CHANGE: 사용자 역할 변경 + 연결 자동 해제
+                    - USER_FORCE_DELETE: 사용자 강제 탈퇴
+                    - FORCE_CONNECT: 보호자-피보호자 강제 연결
+                    - FORCE_DISCONNECT: 보호자-피보호자 강제 연결 해제
+                    - ANNOUNCEMENT_CREATE: 공지 생성
+                    - ANNOUNCEMENT_UPDATE: 공지 수정
+                    - ANNOUNCEMENT_PUBLISH: 공지 발행/취소 토글
+                    - ANNOUNCEMENT_DELETE: 공지 삭제
+
+                    [페이지네이션 쿼리 파라미터]
+                    - page: 페이지 번호 (0부터 시작, 기본값 0)
+                    - size: 페이지당 항목 수 (기본값 50)
+                    - sort: 정렬 기준 (기본값: createdAt,desc)
+
+                    [페이지네이션 응답 구조]
+                    data.content       → 실제 목록 배열
+                    data.totalElements → 전체 항목 수
+                    data.totalPages    → 전체 페이지 수
+                    data.number        → 현재 페이지 번호 (0부터)
+                    data.size          → 페이지당 크기
+                    """
+    )
+    @ApiResponses({
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "감사 로그 목록 반환"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "인증 토큰 없음 또는 만료"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "관리자 권한 없음"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "500", description = "서버 내부 오류")
+    })
+    @GetMapping("/audit-logs")
+    public ApiResponse<Page<AdminAuditLogResponse>> getAuditLogs(
+            @PageableDefault(size = 50, sort = "createdAt", direction = Sort.Direction.DESC) Pageable pageable) {
+        return ApiResponse.ok(auditLogService.getLogs(pageable));
     }
 }
