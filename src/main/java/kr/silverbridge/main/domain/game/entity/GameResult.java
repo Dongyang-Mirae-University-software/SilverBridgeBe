@@ -9,7 +9,9 @@ import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 import java.time.OffsetDateTime;
 
 @Entity
-@Table(name = "game_results")
+@Table(name = "game_results", indexes = {
+        @Index(name = "idx_game_results_user_played", columnList = "user_id, played_at")
+})
 @Getter
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 @Builder

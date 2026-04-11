@@ -8,7 +8,9 @@ import lombok.*;
 import java.time.OffsetDateTime;
 
 @Entity
-@Table(name = "connections")
+@Table(name = "connections", indexes = {
+        @Index(name = "idx_connections_guardian_status", columnList = "guardian_id, status")
+})
 @Getter
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 @Builder
