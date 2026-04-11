@@ -104,6 +104,11 @@ public class User extends BaseTimeEntity {
         this.phone = phone;
     }
 
+    // 역할 변경 (WARD ↔ GUARDIAN, ADMIN 전환 불가)
+    public void updateRole(Role role) {
+        this.role = role;
+    }
+
     // 로컬(일반) 회원 여부 확인
     public boolean isLocalProvider() {
         return provider == Provider.LOCAL;
