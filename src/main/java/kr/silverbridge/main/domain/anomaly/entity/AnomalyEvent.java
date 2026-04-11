@@ -10,7 +10,9 @@ import java.math.BigDecimal;
 import java.time.OffsetDateTime;
 
 @Entity
-@Table(name = "anomaly_events")
+@Table(name = "anomaly_events", indexes = {
+        @Index(name = "idx_anomaly_events_ward_detected", columnList = "ward_id, detected_at")
+})
 @Getter
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 @Builder
