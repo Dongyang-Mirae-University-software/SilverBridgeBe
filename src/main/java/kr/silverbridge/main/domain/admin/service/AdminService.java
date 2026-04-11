@@ -3,7 +3,9 @@ package kr.silverbridge.main.domain.admin.service;
 import kr.silverbridge.main.domain.admin.dto.*;
 import kr.silverbridge.main.domain.announcement.entity.Announcement;
 import kr.silverbridge.main.domain.announcement.repository.AnnouncementRepository;
+import kr.silverbridge.main.domain.anomaly.entity.AnomalyEvent;
 import kr.silverbridge.main.domain.anomaly.repository.AnomalyEventRepository;
+import kr.silverbridge.main.global.enums.Status;
 import kr.silverbridge.main.domain.auth.repository.AccessLogRepository;
 import kr.silverbridge.main.domain.connection.entity.Connection;
 import kr.silverbridge.main.domain.connection.repository.ConnectionRepository;
@@ -144,6 +146,11 @@ public class AdminService {
             throw new CustomException(ErrorCode.INVALID_CONNECTION_ROLE);
         }
 
+        // 비활성 사용자 강제 연결 차단
+        if (guardian.getStatus() == Status.INACTIVE || ward.getStatus() == Status.INACTIVE) {
+            throw new CustomException(ErrorCode.INACTIVE_USER);
+        }
+
         // 이미 연결 중인지 확인 (CANCELLED 제외)
         if (connectionRepository.existsByGuardianIdAndWardIdAndStatusNot(
                 request.getGuardianId(), request.getWardId(), ConnectionStatus.CANCELLED)) {
@@ -153,7 +160,7 @@ public class AdminService {
         Connection connection = Connection.builder()
                 .guardianId(request.getGuardianId())
                 .wardId(request.getWardId())
-                .status(ConnectionStatus.ACTIVE)
+                .status(ConnectionStatus.PENDING)
                 .initiatedBy(adminId)
                 .build();
         connection.activate();
@@ -179,12 +186,14 @@ public class AdminService {
             OffsetDateTime endDate,
             Pageable pageable
     ) {
-        Page<kr.silverbridge.main.domain.anomaly.entity.AnomalyEvent> events;
+        Page<AnomalyEvent> events;
 
         if (guardianId != null) {
-            // 보호자가 존재하는지 확인
-            userRepository.findById(guardianId)
+            User guardian = userRepository.findById(guardianId)
                     .orElseThrow(() -> new CustomException(ErrorCode.USER_NOT_FOUND));
+            if (guardian.getRole() != Role.GUARDIAN) {
+                throw new CustomException(ErrorCode.INVALID_CONNECTION_ROLE);
+            }
 
             List<String> wardIds = anomalyEventRepository.findActiveWardIdsByGuardianId(guardianId);
             if (wardIds.isEmpty()) {
@@ -216,8 +225,11 @@ public class AdminService {
             Pageable pageable
     ) {
         if (userId != null) {
-            userRepository.findById(userId)
+            User user = userRepository.findById(userId)
                     .orElseThrow(() -> new CustomException(ErrorCode.USER_NOT_FOUND));
+            if (user.getRole() != Role.WARD) {
+                throw new CustomException(ErrorCode.INVALID_ROLE);
+            }
         }
 
         return gameResultRepository.findByFilters(userId, gameType, startDate, endDate, pageable)
