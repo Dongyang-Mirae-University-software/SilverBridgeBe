@@ -46,6 +46,11 @@ public enum ErrorCode {
     SMS_TOO_MANY_ATTEMPTS(HttpStatus.BAD_REQUEST, "인증코드를 5회 이상 틀렸습니다. 인증코드를 다시 요청해주세요."),
     SMS_SEND_TOO_FREQUENT(HttpStatus.TOO_MANY_REQUESTS, "SMS는 1분에 1회만 요청할 수 있습니다."),
 
+    // 연결 관계
+    CONNECTION_NOT_FOUND(HttpStatus.NOT_FOUND, "연결 관계를 찾을 수 없습니다."),
+    CONNECTION_ALREADY_EXISTS(HttpStatus.CONFLICT, "이미 연결되어 있거나 요청 중인 관계입니다."),
+    INVALID_CONNECTION_ROLE(HttpStatus.BAD_REQUEST, "보호자와 피보호자 역할이 맞지 않습니다."),
+
     // 카카오 OAuth
     KAKAO_INVALID_CODE(HttpStatus.UNAUTHORIZED, "유효하지 않거나 만료된 카카오 인가 코드입니다."),
     KAKAO_PERMISSION_DENIED(HttpStatus.FORBIDDEN, "카카오 사용자 정보 접근 권한이 없습니다. 동의 항목을 확인해주세요."),
