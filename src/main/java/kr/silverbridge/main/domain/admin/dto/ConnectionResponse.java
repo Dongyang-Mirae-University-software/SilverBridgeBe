@@ -37,10 +37,10 @@ public class ConnectionResponse {
     @Schema(description = "연결 상태. PENDING: 수락 대기, ACTIVE: 연결됨, CANCELLED: 해제됨", allowableValues = {"PENDING", "ACTIVE", "CANCELLED"}, example = "ACTIVE")
     private String status;
 
-    @Schema(description = "연결 확정 일시 (ACTIVE 상태일 때만 존재, 그 외 null)", nullable = true)
+    @Schema(description = "연결 확정 일시 (ACTIVE 상태일 때만 존재, 그 외 null)", example = "2025-01-15T10:30:00+09:00", nullable = true)
     private OffsetDateTime connectedAt;
 
-    @Schema(description = "연결 요청 생성 일시")
+    @Schema(description = "연결 요청 생성 일시", example = "2025-01-15T10:00:00+09:00")
     private OffsetDateTime createdAt;
 
     public static ConnectionResponse of(Connection connection, User guardian, User ward) {
