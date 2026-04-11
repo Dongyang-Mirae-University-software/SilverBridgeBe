@@ -77,27 +77,6 @@ CREATE TABLE access_logs (
 );
 
 -- =============================================
--- 인덱스
--- =============================================
-CREATE INDEX idx_refresh_tokens_user_id ON refresh_tokens(user_id);
-CREATE INDEX idx_access_logs_user_id    ON access_logs(user_id);
-CREATE INDEX idx_access_logs_created_at ON access_logs(created_at);
-CREATE INDEX idx_users_provider_id      ON users(provider, provider_id);
-CREATE INDEX idx_users_email                  ON users(email);
-CREATE INDEX idx_users_phone                  ON users(phone);
-CREATE INDEX idx_connections_guardian_id      ON connections(guardian_id);
-CREATE INDEX idx_connections_ward_id          ON connections(ward_id);
-CREATE INDEX idx_connections_status           ON connections(status);
-CREATE INDEX idx_anomaly_events_ward_id       ON anomaly_events(ward_id);
-CREATE INDEX idx_anomaly_events_detected_at   ON anomaly_events(detected_at);
-CREATE INDEX idx_game_results_user_id         ON game_results(user_id);
-CREATE INDEX idx_game_results_played_at       ON game_results(played_at);
-CREATE INDEX idx_hospital_reservations_user_id ON hospital_reservations(user_id);
-CREATE INDEX idx_hospital_reservations_appointment_at ON hospital_reservations(appointment_at);
-CREATE INDEX idx_announcements_is_published   ON announcements(is_published);
-
-
--- =============================================
 -- 4. connections (보호자-피보호자 연결)
 -- =============================================
 CREATE TABLE connections (
@@ -111,7 +90,6 @@ CREATE TABLE connections (
     updated_at   TIMESTAMPTZ NOT NULL DEFAULT NOW(),
 
     CONSTRAINT pk_connections          PRIMARY KEY (id),
-    CONSTRAINT uq_connections          UNIQUE (guardian_id, ward_id),
     CONSTRAINT fk_connections_guardian FOREIGN KEY (guardian_id)  REFERENCES users(id) ON DELETE CASCADE,
     CONSTRAINT fk_connections_ward     FOREIGN KEY (ward_id)      REFERENCES users(id) ON DELETE CASCADE,
     CONSTRAINT fk_connections_init     FOREIGN KEY (initiated_by) REFERENCES users(id) ON DELETE CASCADE,
@@ -202,6 +180,30 @@ CREATE TABLE announcements (
 CREATE TRIGGER trg_announcements_updated_at
     BEFORE UPDATE ON announcements
     FOR EACH ROW EXECUTE FUNCTION update_updated_at();
+
+-- =============================================
+-- 인덱스
+-- =============================================
+CREATE INDEX idx_users_email                          ON users(email);
+CREATE INDEX idx_users_phone                          ON users(phone);
+CREATE INDEX idx_users_provider_id                    ON users(provider, provider_id);
+CREATE INDEX idx_refresh_tokens_user_id               ON refresh_tokens(user_id);
+CREATE INDEX idx_access_logs_user_id                  ON access_logs(user_id);
+CREATE INDEX idx_access_logs_created_at               ON access_logs(created_at);
+
+-- 동일 guardian-ward 쌍의 ACTIVE/PENDING 중복 방지 (CANCELLED 상태는 재연결 허용)
+CREATE UNIQUE INDEX uq_connections_active             ON connections(guardian_id, ward_id) WHERE status != 'CANCELLED';
+CREATE INDEX idx_connections_guardian_id              ON connections(guardian_id);
+CREATE INDEX idx_connections_ward_id                  ON connections(ward_id);
+CREATE INDEX idx_connections_status                   ON connections(status);
+
+CREATE INDEX idx_anomaly_events_ward_id               ON anomaly_events(ward_id);
+CREATE INDEX idx_anomaly_events_detected_at           ON anomaly_events(detected_at);
+CREATE INDEX idx_game_results_user_id                 ON game_results(user_id);
+CREATE INDEX idx_game_results_played_at               ON game_results(played_at);
+CREATE INDEX idx_hospital_reservations_user_id        ON hospital_reservations(user_id);
+CREATE INDEX idx_hospital_reservations_appointment_at ON hospital_reservations(appointment_at);
+CREATE INDEX idx_announcements_is_published           ON announcements(is_published);
 
 -- =============================================
 -- Redis 키 구조 (참고용)
