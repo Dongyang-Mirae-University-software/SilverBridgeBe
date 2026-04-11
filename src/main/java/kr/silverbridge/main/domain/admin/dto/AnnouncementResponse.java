@@ -27,13 +27,13 @@ public record AnnouncementResponse(
         @Schema(description = "발행 여부", example = "false")
         boolean isPublished,
 
-        @Schema(description = "발행 일시 (미발행 시 null)", nullable = true)
+        @Schema(description = "발행 일시 (미발행 시 null)", example = "2025-06-01T09:00:00+09:00", nullable = true)
         OffsetDateTime publishedAt,
 
-        @Schema(description = "생성 일시")
+        @Schema(description = "생성 일시", example = "2025-06-01T08:00:00+09:00")
         OffsetDateTime createdAt,
 
-        @Schema(description = "수정 일시")
+        @Schema(description = "수정 일시", example = "2025-06-01T08:30:00+09:00")
         OffsetDateTime updatedAt
 ) {
 

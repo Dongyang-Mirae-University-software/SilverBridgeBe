@@ -15,7 +15,10 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 
-@Tag(name = "사용자")
+@Tag(name = "사용자", description = """
+        로그인한 사용자 본인의 프로필 조회/수정, 비밀번호 변경, 회원 탈퇴 API.
+        모든 요청에 Authorization 헤더가 필요합니다: Authorization: Bearer {accessToken}
+        """)
 @RestController
 @RequestMapping("/api/users")
 @RequiredArgsConstructor
@@ -24,7 +27,16 @@ public class UserController {
 
     private final UserService userService;
 
-    @Operation(summary = "내 정보 조회", description = "로그인한 사용자의 프로필 정보를 반환합니다.")
+    @Operation(
+            summary = "내 정보 조회",
+            description = """
+                    로그인한 사용자의 프로필 정보를 반환합니다.
+                    이름, 이메일, 전화번호, 역할, 가입 경로 등을 포함합니다.
+
+                    [요청 헤더]
+                    Authorization: Bearer {accessToken}
+                    """
+    )
     @ApiResponses({
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "프로필 정보 반환"),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "인증 토큰 없음 또는 만료"),
@@ -95,7 +107,20 @@ public class UserController {
         return ApiResponse.ok("비밀번호가 변경되었습니다. 다시 로그인해주세요.");
     }
 
-    @Operation(summary = "회원 탈퇴", description = "비밀번호를 확인한 후 계정을 비활성화합니다. 탈퇴 후 해당 계정으로 로그인이 불가합니다.")
+    @Operation(
+            summary = "회원 탈퇴",
+            description = """
+                    비밀번호를 확인한 후 계정을 비활성화합니다.
+                    탈퇴 후 해당 계정으로 로그인이 불가합니다.
+
+                    [비밀번호 입력 여부]
+                    - 일반(LOCAL) 가입자: password 필수
+                    - 카카오(KAKAO) 가입자: password null 허용
+
+                    [요청 헤더]
+                    Authorization: Bearer {accessToken}
+                    """
+    )
     @ApiResponses({
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "회원 탈퇴 완료"),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "입력값 유효성 검증 실패"),
