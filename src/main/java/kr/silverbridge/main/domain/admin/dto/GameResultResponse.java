@@ -37,7 +37,7 @@ public record GameResultResponse(
         @Schema(description = "플레이 시간 (초, 없을 수 있음)", example = "120", nullable = true)
         Integer durationSeconds,
 
-        @Schema(description = "플레이 일시")
+        @Schema(description = "플레이 일시", example = "2025-06-01T15:00:00+09:00")
         OffsetDateTime playedAt
 ) {
 
