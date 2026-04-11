@@ -120,8 +120,12 @@ public class AdminService {
     // 특정 보호자의 피보호자 목록 조회
     @Transactional(readOnly = true)
     public Page<ConnectionResponse> getConnectionsByGuardian(String guardianId, Pageable pageable) {
-        userRepository.findById(guardianId)
+        User guardian = userRepository.findById(guardianId)
                 .orElseThrow(() -> new CustomException(ErrorCode.USER_NOT_FOUND));
+
+        if (guardian.getRole() != Role.GUARDIAN) {
+            throw new CustomException(ErrorCode.INVALID_CONNECTION_ROLE);
+        }
 
         return connectionRepository.findByGuardianId(guardianId, pageable)
                 .map(conn -> {
