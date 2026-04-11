@@ -57,6 +57,24 @@ public class AdminService {
         }
     }
 
+    // 사용자 역할 변경 (WARD ↔ GUARDIAN)
+    // ADMIN 계정 변경 불가, ADMIN으로 변경 불가
+    @Transactional
+    public void updateUserRole(String userId, UserRoleUpdateRequest request) {
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new CustomException(ErrorCode.USER_NOT_FOUND));
+
+        if (user.getRole() == Role.ADMIN) {
+            throw new CustomException(ErrorCode.CANNOT_MODIFY_ADMIN);
+        }
+
+        if (request.getRole() == Role.ADMIN) {
+            throw new CustomException(ErrorCode.INVALID_ROLE);
+        }
+
+        user.updateRole(request.getRole());
+    }
+
     // 사용자 강제 탈퇴 (계정 영구 삭제)
     // ADMIN 계정은 삭제 불가
     @Transactional
