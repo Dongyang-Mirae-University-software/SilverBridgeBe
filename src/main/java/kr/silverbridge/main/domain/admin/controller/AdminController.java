@@ -7,6 +7,7 @@ import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import kr.silverbridge.main.domain.admin.dto.*;
+import kr.silverbridge.main.domain.admin.dto.UserRoleUpdateRequest;
 import kr.silverbridge.main.domain.admin.service.AdminService;
 import kr.silverbridge.main.global.enums.Role;
 import kr.silverbridge.main.global.response.ApiResponse;
@@ -71,6 +72,23 @@ public class AdminController {
             @Valid @RequestBody UserStatusUpdateRequest request) {
         adminService.updateUserStatus(userId, request);
         return ApiResponse.ok("사용자 상태가 변경되었습니다.");
+    }
+
+    @Operation(summary = "사용자 역할 변경", description = "피보호자(WARD) ↔ 보호자(GUARDIAN) 역할을 변경합니다. ADMIN 계정은 변경 불가합니다.")
+    @ApiResponses({
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "역할 변경 성공"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "유효하지 않은 역할값 (ADMIN으로 변경 시도 포함)"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "인증 토큰 없음 또는 만료"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "관리자 권한 없음 또는 ADMIN 계정 변경 시도"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "존재하지 않는 사용자"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "500", description = "서버 내부 오류")
+    })
+    @PatchMapping("/users/{userId}/role")
+    public ApiResponse<Void> updateUserRole(
+            @Parameter(description = "사용자 UUID") @PathVariable String userId,
+            @Valid @RequestBody UserRoleUpdateRequest request) {
+        adminService.updateUserRole(userId, request);
+        return ApiResponse.ok("사용자 역할이 변경되었습니다.");
     }
 
     @Operation(summary = "사용자 강제 탈퇴", description = "피보호자/보호자 계정을 강제로 삭제합니다. 삭제된 계정은 복구할 수 없습니다.")
