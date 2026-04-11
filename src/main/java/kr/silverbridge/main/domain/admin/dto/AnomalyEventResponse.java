@@ -17,10 +17,10 @@ public record AnomalyEventResponse(
         @Schema(description = "피보호자 UUID", example = "uuid-ward-1234")
         String wardId,
 
-        @Schema(description = "피보호자 이름", example = "홍길동")
+        @Schema(description = "피보호자 이름 (탈퇴 시 null)", example = "홍길동", nullable = true)
         String wardName,
 
-        @Schema(description = "피보호자 이메일", example = "ward@example.com")
+        @Schema(description = "피보호자 이메일 (탈퇴 시 null)", example = "ward@example.com", nullable = true)
         String wardEmail,
 
         @Schema(description = "이벤트 유형", allowableValues = {"FIRE", "WEAPON", "FALL"}, example = "FALL")
@@ -29,13 +29,13 @@ public record AnomalyEventResponse(
         @Schema(description = "감지 신뢰도 (0.00 ~ 1.00)", example = "0.92")
         BigDecimal confidence,
 
-        @Schema(description = "감지 일시")
+        @Schema(description = "감지 일시", example = "2025-06-01T14:30:00+09:00")
         OffsetDateTime detectedAt,
 
         @Schema(description = "보호자 확인 여부", example = "false")
         boolean isConfirmed,
 
-        @Schema(description = "수신 일시")
+        @Schema(description = "수신 일시", example = "2025-06-01T14:30:01+09:00")
         OffsetDateTime createdAt
 ) {
 

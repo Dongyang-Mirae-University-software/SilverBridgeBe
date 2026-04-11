@@ -21,7 +21,18 @@ import org.springframework.http.HttpStatus;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 
-@Tag(name = "인증")
+@Tag(name = "인증", description = """
+        회원가입, 로그인, 토큰 재발급, 비밀번호 재설정 등 인증 관련 API.
+
+        [공통 응답 포맷]
+        모든 API는 아래 구조로 응답합니다.
+        { "code": 200, "message": "성공", "data": { ... } }
+
+        [토큰 인증이 필요한 API]
+        로그인 후 발급된 accessToken을 Swagger UI 우측 상단 Authorize 버튼에 입력하면
+        이후 모든 인증 필요 API에 자동 적용됩니다.
+        Header: Authorization: Bearer {accessToken}
+        """)
 @RestController
 @RequestMapping("/api/auth")
 @RequiredArgsConstructor
