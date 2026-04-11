@@ -1,6 +1,8 @@
 package kr.silverbridge.main.domain.admin.service;
 
 import kr.silverbridge.main.domain.admin.dto.*;
+import kr.silverbridge.main.domain.announcement.entity.Announcement;
+import kr.silverbridge.main.domain.announcement.repository.AnnouncementRepository;
 import kr.silverbridge.main.domain.anomaly.repository.AnomalyEventRepository;
 import kr.silverbridge.main.domain.auth.repository.AccessLogRepository;
 import kr.silverbridge.main.domain.connection.entity.Connection;
@@ -31,6 +33,7 @@ public class AdminService {
     private final ConnectionRepository connectionRepository;
     private final AnomalyEventRepository anomalyEventRepository;
     private final GameResultRepository gameResultRepository;
+    private final AnnouncementRepository announcementRepository;
 
     // 사용자 목록 조회 (페이징, role 필터링)
     // role 미입력 시 WARD + GUARDIAN 전체 조회, ADMIN 제외
@@ -223,6 +226,85 @@ public class AdminService {
                             .orElseThrow(() -> new CustomException(ErrorCode.USER_NOT_FOUND));
                     return GameResultResponse.of(result, user);
                 });
+    }
+
+    // 공지 목록 조회 (isPublished 필터, 미입력 시 전체)
+    @Transactional(readOnly = true)
+    public Page<AnnouncementResponse> getAnnouncements(Boolean isPublished, Pageable pageable) {
+        Page<Announcement> announcements = (isPublished != null)
+                ? announcementRepository.findByIsPublished(isPublished, pageable)
+                : announcementRepository.findAll(pageable);
+
+        return announcements.map(a -> {
+            User author = (a.getAuthorId() != null)
+                    ? userRepository.findById(a.getAuthorId()).orElse(null)
+                    : null;
+            return AnnouncementResponse.of(a, author);
+        });
+    }
+
+    // 공지 상세 조회
+    @Transactional(readOnly = true)
+    public AnnouncementResponse getAnnouncement(Long id) {
+        Announcement announcement = announcementRepository.findById(id)
+                .orElseThrow(() -> new CustomException(ErrorCode.ANNOUNCEMENT_NOT_FOUND));
+
+        User author = (announcement.getAuthorId() != null)
+                ? userRepository.findById(announcement.getAuthorId()).orElse(null)
+                : null;
+        return AnnouncementResponse.of(announcement, author);
+    }
+
+    // 공지 생성 (작성자 = 현재 로그인한 관리자)
+    @Transactional
+    public AnnouncementResponse createAnnouncement(AnnouncementCreateRequest request, String adminId) {
+        Announcement announcement = Announcement.builder()
+                .authorId(adminId)
+                .title(request.getTitle())
+                .content(request.getContent())
+                .isPublished(false)
+                .build();
+
+        Announcement saved = announcementRepository.save(announcement);
+        User author = userRepository.findById(adminId).orElse(null);
+        return AnnouncementResponse.of(saved, author);
+    }
+
+    // 공지 수정 (제목 + 내용)
+    @Transactional
+    public AnnouncementResponse updateAnnouncement(Long id, AnnouncementUpdateRequest request) {
+        Announcement announcement = announcementRepository.findById(id)
+                .orElseThrow(() -> new CustomException(ErrorCode.ANNOUNCEMENT_NOT_FOUND));
+
+        announcement.update(request.getTitle(), request.getContent());
+
+        User author = (announcement.getAuthorId() != null)
+                ? userRepository.findById(announcement.getAuthorId()).orElse(null)
+                : null;
+        return AnnouncementResponse.of(announcement, author);
+    }
+
+    // 공지 발행 토글 (미발행 → 발행, 발행 → 취소)
+    @Transactional
+    public AnnouncementResponse togglePublish(Long id) {
+        Announcement announcement = announcementRepository.findById(id)
+                .orElseThrow(() -> new CustomException(ErrorCode.ANNOUNCEMENT_NOT_FOUND));
+
+        announcement.togglePublish();
+
+        User author = (announcement.getAuthorId() != null)
+                ? userRepository.findById(announcement.getAuthorId()).orElse(null)
+                : null;
+        return AnnouncementResponse.of(announcement, author);
+    }
+
+    // 공지 삭제
+    @Transactional
+    public void deleteAnnouncement(Long id) {
+        Announcement announcement = announcementRepository.findById(id)
+                .orElseThrow(() -> new CustomException(ErrorCode.ANNOUNCEMENT_NOT_FOUND));
+
+        announcementRepository.delete(announcement);
     }
 
     // 접속 로그 조회 (페이징)
