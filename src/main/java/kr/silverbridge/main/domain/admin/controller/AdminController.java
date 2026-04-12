@@ -80,7 +80,7 @@ public class AdminController {
             summary = "사용자 상세 조회",
             description = """
                     특정 사용자의 전체 정보를 조회합니다.
-                    전화번호, 가입 경로(LOCAL/KAKAO), 이메일 인증 여부, 최근 로그인 일시 등을 포함합니다.
+                    전화번호, 가입 경로(LOCAL/KAKAO), 최근 로그인 일시 등을 포함합니다.
                     """
     )
     @ApiResponses({
@@ -422,15 +422,15 @@ public class AdminController {
                     공지 목록을 페이징하여 조회합니다.
 
                     [필터 조건]
-                    - isPublished: true(발행된 공지만) / false(미발행 공지만) / 미입력(전체 조회)
+                    - isPublished: true(게시된 공지만) / false(임시저장 공지만) / 미입력(전체 조회)
 
                     [작성자 탈퇴 시]
                     authorName 은 null 로 반환됩니다.
 
                     [공지 관리 흐름]
-                    1. POST /api/admin/announcements           → 공지 작성 (기본 미발행)
+                    1. POST /api/admin/announcements           → 공지 작성 (기본 임시저장)
                     2. PUT  /api/admin/announcements/{id}      → 내용 수정
-                    3. PATCH /api/admin/announcements/{id}/publish → 발행 처리
+                    3. PATCH /api/admin/announcements/{id}/publish → 게시 처리
 
                     [페이지네이션 쿼리 파라미터]
                     - page: 페이지 번호 (0부터 시작, 기본값 0)
@@ -453,7 +453,7 @@ public class AdminController {
     })
     @GetMapping("/announcements")
     public ApiResponse<Page<AnnouncementResponse>> getAnnouncements(
-            @Parameter(description = "발행 여부 필터 (true: 발행, false: 미발행, 미입력: 전체)")
+            @Parameter(description = "게시 여부 필터 (true: 게시됨, false: 임시저장, 미입력: 전체)")
             @RequestParam(required = false) Boolean isPublished,
             @PageableDefault(size = 20, sort = "createdAt", direction = Sort.Direction.DESC) Pageable pageable) {
         return ApiResponse.ok(adminService.getAnnouncements(isPublished, pageable));
@@ -461,7 +461,7 @@ public class AdminController {
 
     @Operation(
             summary = "공지 상세 조회",
-            description = "공지 ID로 단건 상세 조회합니다. 미발행 공지도 조회 가능합니다."
+            description = "공지 ID로 단건 상세 조회합니다. 임시저장 공지도 조회 가능합니다."
     )
     @ApiResponses({
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "공지 상세 반환"),
@@ -480,12 +480,12 @@ public class AdminController {
             summary = "공지 작성",
             description = """
                     새 공지를 작성합니다.
-                    작성 직후 isPublished=false(미발행) 상태입니다.
-                    발행하려면 PATCH /api/admin/announcements/{id}/publish 를 호출하세요.
+                    작성 직후 isPublished=false(임시저장) 상태입니다.
+                    게시하려면 PATCH /api/admin/announcements/{id}/publish 를 호출하세요.
                     """
     )
     @ApiResponses({
-            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "작성된 공지 반환 (isPublished=false)"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "작성된 공지 반환 (isPublished=false, 임시저장 상태)"),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "title 또는 content 누락 / title 200자 초과"),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "인증 토큰 없음 또는 만료"),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "관리자 권한 없음"),
@@ -523,11 +523,11 @@ public class AdminController {
     }
 
     @Operation(
-            summary = "공지 발행/취소 토글",
+            summary = "공지 게시 / 게시 취소",
             description = """
-                    공지의 발행 상태를 토글합니다.
-                    - 미발행(false) → 발행(true): publishedAt이 현재 시각으로 설정됩니다.
-                    - 발행(true) → 취소(false): publishedAt이 null로 초기화됩니다.
+                    공지의 게시 상태를 토글합니다.
+                    - 임시저장(false) → 게시(true): publishedAt이 현재 시각으로 설정됩니다.
+                    - 게시(true) → 게시 취소(false): publishedAt이 null로 초기화됩니다.
                     """
     )
     @ApiResponses({
@@ -551,7 +551,7 @@ public class AdminController {
 
                     [주의사항]
                     - 삭제된 공지는 복구할 수 없습니다.
-                    - 발행된 공지도 삭제 가능합니다.
+                    - 게시된 공지도 삭제 가능합니다.
                     """
     )
     @ApiResponses({
@@ -631,7 +631,7 @@ public class AdminController {
                     - FORCE_DISCONNECT: 보호자-피보호자 강제 연결 해제
                     - ANNOUNCEMENT_CREATE: 공지 생성
                     - ANNOUNCEMENT_UPDATE: 공지 수정
-                    - ANNOUNCEMENT_PUBLISH: 공지 발행/취소 토글
+                    - ANNOUNCEMENT_PUBLISH: 공지 게시 / 게시 취소
                     - ANNOUNCEMENT_DELETE: 공지 삭제
 
                     [페이지네이션 쿼리 파라미터]
