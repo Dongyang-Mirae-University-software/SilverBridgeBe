@@ -99,7 +99,7 @@ public class AuthController {
                     [토큰 사용 방법]
                     - accessToken: 이후 모든 API 요청 시 헤더에 포함
                       → Header: Authorization: Bearer {accessToken}
-                    - refreshToken: accessToken 만료(1시간) 시 POST /api/auth/refresh 로 재발급
+                    - refreshToken: accessToken 만료(30분) 시 POST /api/auth/refresh 로 재발급
                       → refreshToken 유효 시간: 14일
                     """
     )
@@ -124,7 +124,7 @@ public class AuthController {
     @Operation(
             summary = "Access Token 재발급",
             description = """
-                    Access Token이 만료(1시간)된 경우 Refresh Token으로 새 Access Token을 발급받습니다.
+                    Access Token이 만료(30분)된 경우 Refresh Token으로 새 Access Token을 발급받습니다.
                     Refresh Token은 로그인 시 발급된 refreshToken 값을 사용합니다.
 
                     [주의사항]
