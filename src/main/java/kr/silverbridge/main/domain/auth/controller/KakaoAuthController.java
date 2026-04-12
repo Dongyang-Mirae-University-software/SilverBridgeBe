@@ -75,7 +75,7 @@ public class KakaoAuthController {
                     [토큰 사용 방법]
                     - accessToken: 이후 모든 API 요청 헤더에 포함
                       → Header: Authorization: Bearer {accessToken}
-                    - refreshToken: accessToken 만료(1시간) 시 POST /api/auth/refresh 로 재발급
+                    - refreshToken: accessToken 만료(30분) 시 POST /api/auth/refresh 로 재발급
                     """
     )
     @ApiResponses({
