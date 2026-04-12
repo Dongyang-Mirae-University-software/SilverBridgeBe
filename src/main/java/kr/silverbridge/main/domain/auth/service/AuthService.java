@@ -81,7 +81,6 @@ public class AuthService {
                 .role(request.getRole())
                 .status(Status.ACTIVE)
                 .provider(Provider.LOCAL)
-                .emailVerified(false)
                 .build();
 
         userRepository.save(user);
