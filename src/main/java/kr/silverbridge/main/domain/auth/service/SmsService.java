@@ -60,23 +60,7 @@ public class SmsService {
 
         String code = generateCode();
 
-        DefaultMessageService messageService =
-                SolapiClient.INSTANCE.createInstance(apiKey, apiSecret);
-
-        Message message = new Message();
-        message.setFrom(senderPhone);
-        message.setTo(phone);
-        message.setText("[SilverBridge] 인증번호: " + code + "\n유효 시간: 5분");
-
-        try {
-            messageService.send(message);
-        } catch (SolapiMessageNotReceivedException e) {
-            log.error("SMS 발송 실패: {}", e.getFailedMessageList());
-            throw new CustomException(ErrorCode.SMS_SEND_FAILED);
-        } catch (SolapiEmptyResponseException | SolapiUnknownException e) {
-            log.error("SMS 오류: {}", e.getMessage());
-            throw new CustomException(ErrorCode.SMS_SEND_FAILED);
-        }
+        sendSms(phone, "[SilverBridge] 인증번호: " + code + "\n유효 시간: 5분");
 
         // 인증코드 저장 (재발송 시 기존 코드 및 오류 횟수 초기화)
         redisTemplate.opsForValue().set(RedisKeys.SMS_VERIFY + phone, code, CODE_TTL, TimeUnit.MINUTES);
@@ -126,7 +110,28 @@ public class SmsService {
         log.info("SMS 인증 완료: {}", phone);
     }
 
-    private String generateCode() {
+    // Solapi를 통해 SMS 발송 (공통 발송 처리)
+    void sendSms(String phone, String text) {
+        DefaultMessageService messageService =
+                SolapiClient.INSTANCE.createInstance(apiKey, apiSecret);
+
+        Message message = new Message();
+        message.setFrom(senderPhone);
+        message.setTo(phone);
+        message.setText(text);
+
+        try {
+            messageService.send(message);
+        } catch (SolapiMessageNotReceivedException e) {
+            log.error("SMS 발송 실패: {}", e.getFailedMessageList());
+            throw new CustomException(ErrorCode.SMS_SEND_FAILED);
+        } catch (SolapiEmptyResponseException | SolapiUnknownException e) {
+            log.error("SMS 오류: {}", e.getMessage());
+            throw new CustomException(ErrorCode.SMS_SEND_FAILED);
+        }
+    }
+
+    String generateCode() {
         return String.format("%06d", new SecureRandom().nextInt(1_000_000));
     }
 }
