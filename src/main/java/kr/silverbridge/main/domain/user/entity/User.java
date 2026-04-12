@@ -52,8 +52,6 @@ public class User extends BaseTimeEntity {
     @Column(name = "profile_image", length = 500)
     private String profileImage;
 
-    @Column(name = "email_verified", nullable = false)
-    private boolean emailVerified;
 
     @Column(name = "prev_password1", length = 255)
     private String prevPassword1;
@@ -67,11 +65,6 @@ public class User extends BaseTimeEntity {
     // 마지막 로그인 시간 갱신
     public void updateLastLoginAt() {
         this.lastLoginAt = OffsetDateTime.now();
-    }
-
-    // 이메일 인증 완료 처리
-    public void verifyEmail() {
-        this.emailVerified = true;
     }
 
     // 비밀번호 변경 (이력 보관: 최근 2개)
