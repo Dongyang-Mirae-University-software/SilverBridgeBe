@@ -134,12 +134,8 @@ public class AuthService {
 
         // 기존 Refresh Token 삭제 후 새로 저장 (단일 디바이스 정책)
         refreshTokenRepository.deleteByUserId(user.getId());
-        refreshTokenRepository.save(RefreshToken.builder()
-                .userId(user.getId())
-                .token(refreshToken)
-                .expiresAt(OffsetDateTime.now().plusSeconds(
-                        jwtTokenProvider.getRemainingExpiration(refreshToken) / 1000))
-                .build());
+        refreshTokenRepository.save(RefreshToken.of(user.getId(), refreshToken,
+                jwtTokenProvider.getRemainingExpiration(refreshToken)));
 
         user.updateLastLoginAt();
         accessLogService.log(user.getId(), AccessAction.LOGIN, ipAddress, userAgent);
@@ -182,12 +178,8 @@ public class AuthService {
 
         // 기존 Refresh Token 무효화 후 새 토큰 저장 (Rotation)
         refreshTokenRepository.delete(savedToken);
-        refreshTokenRepository.save(RefreshToken.builder()
-                .userId(user.getId())
-                .token(newRefreshToken)
-                .expiresAt(OffsetDateTime.now().plusSeconds(
-                        jwtTokenProvider.getRemainingExpiration(newRefreshToken) / 1000))
-                .build());
+        refreshTokenRepository.save(RefreshToken.of(user.getId(), newRefreshToken,
+                jwtTokenProvider.getRemainingExpiration(newRefreshToken)));
 
         accessLogService.log(user.getId(), AccessAction.TOKEN_ISSUE);
 
