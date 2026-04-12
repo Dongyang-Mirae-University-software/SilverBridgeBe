@@ -39,9 +39,6 @@ public class UserDetailResponse {
     @Schema(description = "프로필 이미지 URL (없으면 null)", nullable = true)
     private String profileImage;
 
-    @Schema(description = "이메일 인증 여부", example = "true")
-    private boolean emailVerified;
-
     @Schema(description = "마지막 로그인 일시 (없으면 null)", example = "2025-01-01T09:00:00+09:00", nullable = true)
     private OffsetDateTime lastLoginAt;
 
@@ -62,7 +59,6 @@ public class UserDetailResponse {
                 .provider(user.getProvider().name())
                 .providerId(user.getProviderId())
                 .profileImage(user.getProfileImage())
-                .emailVerified(user.isEmailVerified())
                 .lastLoginAt(user.getLastLoginAt())
                 .createdAt(user.getCreatedAt())
                 .updatedAt(user.getUpdatedAt())
