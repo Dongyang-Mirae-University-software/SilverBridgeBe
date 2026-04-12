@@ -38,3 +38,6 @@ out/
 
 ### VS Code ###
 .vscode/
+
+### Local Docker dev (postgres bind mount) ###
+.data/
