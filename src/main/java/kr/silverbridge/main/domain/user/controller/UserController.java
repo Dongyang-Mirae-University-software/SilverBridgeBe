@@ -14,6 +14,7 @@ import kr.silverbridge.main.global.response.ApiResponse;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.multipart.MultipartFile;
 
 @Tag(name = "사용자", description = """
         로그인한 사용자 본인의 프로필 조회/수정, 비밀번호 변경, 회원 탈퇴 API.
@@ -79,6 +80,33 @@ public class UserController {
     public ApiResponse<UserProfileResponse> updateProfile(@AuthenticationPrincipal String userId,
                                                           @Valid @RequestBody UserUpdateRequest request) {
         return ApiResponse.ok(userService.updateProfile(userId, request));
+    }
+
+    @Operation(
+            summary = "프로필 이미지 변경",
+            description = """
+                    프로필 이미지를 업로드하여 변경합니다.
+                    이미지 파일을 multipart/form-data 형식으로 전송하면 파일 서버에 업로드 후 URL이 저장됩니다.
+
+                    [요청 헤더]
+                    Authorization: Bearer {accessToken}
+                    Content-Type: multipart/form-data
+
+                    [파라미터]
+                    - file: 업로드할 이미지 파일 (form-data)
+                    """
+    )
+    @ApiResponses({
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "프로필 이미지 변경 성공, 수정된 프로필 정보 반환"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "파일 없음 또는 잘못된 요청"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "인증 토큰 없음 또는 만료"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "사용자를 찾을 수 없음"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "500", description = "파일 업로드 실패 또는 서버 오류")
+    })
+    @PatchMapping(value = "/me/profile-image", consumes = "multipart/form-data")
+    public ApiResponse<UserProfileResponse> updateProfileImage(@AuthenticationPrincipal String userId,
+                                                               @RequestParam("file") MultipartFile file) {
+        return ApiResponse.ok(userService.updateProfileImage(userId, file));
     }
 
     @Operation(
