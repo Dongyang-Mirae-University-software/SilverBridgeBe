@@ -14,12 +14,12 @@ public class PasswordChangeRequest {
     @NotBlank(message = "현재 비밀번호를 입력해주세요.")
     private String currentPassword;
 
-    @Schema(description = "새 비밀번호 (숫자·특수문자 포함, 공백 없이 8자 이상). 현재 비밀번호와 동일 불가.", example = "NewPassword1!")
+    @Schema(description = "새 비밀번호 (영문·숫자·특수문자 포함, 공백 없이 8자 이상). 현재 비밀번호와 동일 불가.", example = "NewPassword1!")
     @NotBlank(message = "새 비밀번호를 입력해주세요.")
-    @Size(min = 8, message = "비밀번호는 숫자·특수문자를 포함하고, 공백 없이 8글자 이상이어야 합니다.")
+    @Size(min = 8, message = "비밀번호는 영문·숫자·특수문자를 포함하고, 공백 없이 8글자 이상이어야 합니다.")
     @Pattern(
-            regexp = "^(?=.*[0-9])(?=.*[!@#$%^&*()_+\\-=\\[\\]{};':\"\\\\|,.<>/?`~])\\S+$",
-            message = "비밀번호는 숫자·특수문자를 포함하고, 공백 없이 8글자 이상이어야 합니다."
+            regexp = "^(?=.*[A-Za-z])(?=.*[0-9])(?=.*[!@#$%^&*()_+\\-=\\[\\]{};':\"\\\\|,.<>/?`~])[A-Za-z0-9!@#$%^&*()_+\\-=\\[\\]{};':\"\\\\|,.<>/?`~]+$",
+            message = "비밀번호는 영문·숫자·특수문자를 포함하고, 공백 없이 8글자 이상이어야 합니다."
     )
     private String newPassword;
 }
