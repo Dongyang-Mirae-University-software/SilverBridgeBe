@@ -26,8 +26,10 @@ services:
       - .env.dev
     ports:
       - "6513:5432"
+    # Docker 루트가 NTFS/FUSE 등인 경우 named volume에서 initdb chmod 실패함.
+    # 프로젝트 경로(ext4)에 바인드 마운트하여 PostgreSQL 데이터 디렉터리 권한 문제 회피.
     volumes:
-      - dmu-dev-db-data:/var/lib/postgresql/data
+      - ./.data/postgres:/var/lib/postgresql/data
       - ./db/schema.sql:/docker-entrypoint-initdb.d/schema.sql:ro
     networks:
       - app-net
@@ -60,7 +62,5 @@ networks:
     # 이 네트워크를 external: true로 선언하여 공유 가능
 
 volumes:
-  dmu-dev-db-data:
-    name: dmu-dev-db-data
   dmu-dev-redis-data:
     name: dmu-dev-redis-data
