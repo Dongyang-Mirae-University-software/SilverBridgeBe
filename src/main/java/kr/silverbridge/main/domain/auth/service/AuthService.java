@@ -196,15 +196,20 @@ public class AuthService {
     }
 
     // 이메일 마스킹 처리
-    // 예: user@example.com → us**@example.com
-    //     ab@example.com   → a**@example.com
+    // 예: username@example.com → us***me@example.com  (5자 이상: 앞 2자 + *** + 뒤 2자)
+    //     user@example.com    → u***r@example.com     (3~4자: 앞 1자 + *** + 뒤 1자)
+    //     ab@example.com      → a***@example.com      (2자 이하: 앞 1자 + ***)
     private String maskEmail(String email) {
         int atIndex = email.indexOf('@');
         String local = email.substring(0, atIndex);   // @ 앞부분
         String domain = email.substring(atIndex);      // @ 포함 뒷부분
 
-        // 앞 2자리 유지, 나머지를 **로 마스킹 (1자리면 1자리만 유지)
-        int visibleLength = Math.min(2, local.length() - 1);
-        return local.substring(0, visibleLength) + "**" + domain;
+        if (local.length() >= 5) {
+            return local.substring(0, 2) + "***" + local.substring(local.length() - 2) + domain;
+        } else if (local.length() >= 3) {
+            return local.charAt(0) + "***" + local.charAt(local.length() - 1) + domain;
+        } else {
+            return local.charAt(0) + "***" + domain;
+        }
     }
 }
