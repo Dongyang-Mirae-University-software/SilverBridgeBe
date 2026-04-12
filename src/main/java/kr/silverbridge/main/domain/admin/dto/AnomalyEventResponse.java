@@ -14,7 +14,7 @@ public record AnomalyEventResponse(
         @Schema(description = "이벤트 ID", example = "1")
         Long id,
 
-        @Schema(description = "피보호자 UUID", example = "uuid-ward-1234")
+        @Schema(description = "피보호자 UUID (탈퇴로 ward_id가 null이면 null)", example = "uuid-ward-1234", nullable = true)
         String wardId,
 
         @Schema(description = "피보호자 이름 (탈퇴 시 null)", example = "홍길동", nullable = true)

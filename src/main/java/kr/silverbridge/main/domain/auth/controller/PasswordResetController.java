@@ -71,7 +71,8 @@ public class PasswordResetController {
     )
     @ApiResponses({
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "요청 처리 완료 (일치하는 계정 없거나 카카오 계정이어도 동일하게 200 반환)"),
-            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "입력값 오류 또는 재발송 제한 중 (1분 이내 재발송 불가)"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "입력값 오류"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "429", description = "1분 이내 재발송 불가 (재발송 제한)"),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "500", description = "SMS 발송 실패")
     })
     @PostMapping("/sms/send")
