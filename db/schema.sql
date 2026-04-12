@@ -23,7 +23,6 @@ CREATE TABLE users (
     provider       VARCHAR(20)   NOT NULL DEFAULT 'LOCAL',
     provider_id    VARCHAR(100)  NULL,
     profile_image  VARCHAR(500)  NULL,
-    email_verified BOOLEAN       NOT NULL DEFAULT FALSE,
     prev_password1 VARCHAR(255)  NULL,
     prev_password2 VARCHAR(255)  NULL,
     last_login_at  TIMESTAMPTZ   NULL,
