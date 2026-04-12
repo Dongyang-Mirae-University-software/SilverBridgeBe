@@ -11,10 +11,7 @@ import kr.silverbridge.main.domain.connection.repository.ConnectionRepository;
 import kr.silverbridge.main.domain.game.repository.GameResultRepository;
 import kr.silverbridge.main.domain.user.entity.User;
 import kr.silverbridge.main.domain.user.repository.UserRepository;
-import kr.silverbridge.main.global.enums.ConnectionStatus;
-import kr.silverbridge.main.global.enums.GameType;
-import kr.silverbridge.main.global.enums.Role;
-import kr.silverbridge.main.global.enums.Status;
+import kr.silverbridge.main.global.enums.*;
 import kr.silverbridge.main.global.exception.CustomException;
 import kr.silverbridge.main.global.exception.ErrorCode;
 import lombok.RequiredArgsConstructor;
@@ -36,13 +33,13 @@ public class AdminService {
     private final AnomalyEventRepository anomalyEventRepository;
     private final GameResultRepository gameResultRepository;
     private final AnnouncementRepository announcementRepository;
+    private final AdminAuditLogService auditLogService;
 
     // =============================================
     // 사용자 관리
     // =============================================
 
     // 사용자 목록 조회 (페이징, role 필터링)
-    // role 미입력 시 WARD + GUARDIAN 전체 조회, ADMIN 제외
     @Transactional(readOnly = true)
     public Page<UserSummaryResponse> getUsers(Role role, Pageable pageable) {
         List<Role> roles = (role != null) ? List.of(role) : List.of(Role.WARD, Role.GUARDIAN);
@@ -60,21 +57,26 @@ public class AdminService {
 
     // 피보호자/보호자 계정 상태 변경 (활성화 / 비활성화)
     @Transactional
-    public void updateUserStatus(String userId, UserStatusUpdateRequest request) {
+    public void updateUserStatus(String userId, UserStatusUpdateRequest request, String adminId) {
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new CustomException(ErrorCode.USER_NOT_FOUND));
         validateNotAdmin(user);
 
+        String oldStatus = user.getStatus().name();
         switch (request.getStatus()) {
             case ACTIVE   -> user.activate();
             case INACTIVE -> user.deactivate();
             default       -> throw new CustomException(ErrorCode.INVALID_STATUS);
         }
+
+        auditLogService.log(adminId, AdminAuditAction.USER_STATUS_CHANGE, userId,
+                String.format("상태 변경: %s → %s", oldStatus, request.getStatus().name()));
     }
 
     // 사용자 역할 변경 (WARD ↔ GUARDIAN)
+    // 역할 변경 시 기존 ACTIVE/PENDING 연결 자동 CANCELLED 처리 (데이터 정합성)
     @Transactional
-    public void updateUserRole(String userId, UserRoleUpdateRequest request) {
+    public void updateUserRole(String userId, UserRoleUpdateRequest request, String adminId) {
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new CustomException(ErrorCode.USER_NOT_FOUND));
         validateNotAdmin(user);
@@ -83,17 +85,31 @@ public class AdminService {
             throw new CustomException(ErrorCode.INVALID_ROLE);
         }
 
+        String oldRole = user.getRole().name();
         user.updateRole(request.getRole());
+
+        // 역할 변경 시 기존 연결 관계 정리 (보호자/피보호자로서의 연결 모두 해제)
+        List<Connection> activeConnections = connectionRepository.findActiveByUserId(
+                userId, List.of(ConnectionStatus.PENDING, ConnectionStatus.ACTIVE)
+        );
+        activeConnections.forEach(Connection::cancel);
+
+        auditLogService.log(adminId, AdminAuditAction.USER_ROLE_CHANGE, userId,
+                String.format("역할 변경: %s → %s (연결 %d건 해제)", oldRole, request.getRole().name(), activeConnections.size()));
     }
 
     // 사용자 강제 탈퇴 (계정 영구 삭제)
     @Transactional
-    public void forceDeleteUser(String userId) {
+    public void forceDeleteUser(String userId, String adminId) {
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new CustomException(ErrorCode.USER_NOT_FOUND));
         validateNotAdmin(user);
 
+        String email = user.getEmail();
         userRepository.delete(user);
+
+        auditLogService.log(adminId, AdminAuditAction.USER_FORCE_DELETE, userId,
+                String.format("강제 탈퇴: %s", email));
     }
 
     // =============================================
@@ -150,23 +166,30 @@ public class AdminService {
                 .build();
         connection.activate();
 
-        return ConnectionResponse.of(connectionRepository.save(connection), guardian, ward);
+        Connection saved = connectionRepository.save(connection);
+
+        auditLogService.log(adminId, AdminAuditAction.FORCE_CONNECT, String.valueOf(saved.getId()),
+                String.format("강제 연결: guardian=%s, ward=%s", request.getGuardianId(), request.getWardId()));
+
+        return ConnectionResponse.of(saved, guardian, ward);
     }
 
     // 관리자 강제 연결 해제
     @Transactional
-    public void forceDisconnect(Long connectionId) {
+    public void forceDisconnect(Long connectionId, String adminId) {
         Connection connection = connectionRepository.findById(connectionId)
                 .orElseThrow(() -> new CustomException(ErrorCode.CONNECTION_NOT_FOUND));
 
         connection.cancel();
+
+        auditLogService.log(adminId, AdminAuditAction.FORCE_DISCONNECT, String.valueOf(connectionId),
+                String.format("강제 연결 해제: guardian=%s, ward=%s", connection.getGuardianId(), connection.getWardId()));
     }
 
     // =============================================
     // 이상감지 이벤트 조회
     // =============================================
 
-    // guardianId 미입력 시 전체 조회, 입력 시 해당 보호자의 피보호자 이벤트만 조회
     @Transactional(readOnly = true)
     public Page<AnomalyEventResponse> getAnomalyEvents(
             String guardianId,
@@ -263,29 +286,47 @@ public class AdminService {
                 .build();
 
         Announcement saved = announcementRepository.save(announcement);
+
+        auditLogService.log(adminId, AdminAuditAction.ANNOUNCEMENT_CREATE, String.valueOf(saved.getId()),
+                String.format("공지 생성: %s", saved.getTitle()));
+
         return AnnouncementResponse.of(saved, findAuthor(adminId));
     }
 
     // 공지 수정 (제목 + 내용)
     @Transactional
-    public AnnouncementResponse updateAnnouncement(Long id, AnnouncementUpdateRequest request) {
+    public AnnouncementResponse updateAnnouncement(Long id, AnnouncementUpdateRequest request, String adminId) {
         Announcement announcement = findAnnouncement(id);
         announcement.update(request.getTitle(), request.getContent());
+
+        auditLogService.log(adminId, AdminAuditAction.ANNOUNCEMENT_UPDATE, String.valueOf(id),
+                String.format("공지 수정: %s", request.getTitle()));
+
         return AnnouncementResponse.of(announcement, findAuthor(announcement.getAuthorId()));
     }
 
     // 공지 발행 토글 (미발행 → 발행, 발행 → 취소)
     @Transactional
-    public AnnouncementResponse togglePublish(Long id) {
+    public AnnouncementResponse togglePublish(Long id, String adminId) {
         Announcement announcement = findAnnouncement(id);
+        boolean before = announcement.isPublished();
         announcement.togglePublish();
+
+        auditLogService.log(adminId, AdminAuditAction.ANNOUNCEMENT_PUBLISH, String.valueOf(id),
+                String.format("발행 상태 변경: %s → %s", before ? "발행" : "미발행", before ? "미발행" : "발행"));
+
         return AnnouncementResponse.of(announcement, findAuthor(announcement.getAuthorId()));
     }
 
     // 공지 삭제
     @Transactional
-    public void deleteAnnouncement(Long id) {
-        announcementRepository.delete(findAnnouncement(id));
+    public void deleteAnnouncement(Long id, String adminId) {
+        Announcement announcement = findAnnouncement(id);
+        String title = announcement.getTitle();
+        announcementRepository.delete(announcement);
+
+        auditLogService.log(adminId, AdminAuditAction.ANNOUNCEMENT_DELETE, String.valueOf(id),
+                String.format("공지 삭제: %s", title));
     }
 
     // =============================================
