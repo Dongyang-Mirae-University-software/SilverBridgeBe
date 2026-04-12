@@ -53,3 +53,7 @@ solapi:
   api-key: ${SOLAPI_API_KEY}
   api-secret: ${SOLAPI_API_SECRET}
   sender-phone: ${SOLAPI_SENDER_PHONE}
+
+
+file-server:
+  base-url: https://v1api.brtech.gosky.kr

@@ -6,6 +6,7 @@ import kr.silverbridge.main.domain.user.dto.UserProfileResponse;
 import kr.silverbridge.main.domain.user.dto.UserUpdateRequest;
 import kr.silverbridge.main.domain.user.entity.User;
 import kr.silverbridge.main.domain.user.repository.UserRepository;
+import kr.silverbridge.main.global.client.FileServerClient;
 import kr.silverbridge.main.global.exception.CustomException;
 import kr.silverbridge.main.global.exception.ErrorCode;
 import kr.silverbridge.main.global.util.RedisKeys;
@@ -14,6 +15,7 @@ import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.multipart.MultipartFile;
 
 @Service
 @RequiredArgsConstructor
@@ -23,6 +25,7 @@ public class UserService {
     private final RefreshTokenRepository refreshTokenRepository;
     private final PasswordEncoder passwordEncoder;
     private final StringRedisTemplate redisTemplate;
+    private final FileServerClient fileServerClient;
 
     // 내 정보 조회
     @Transactional(readOnly = true)
@@ -86,6 +89,17 @@ public class UserService {
         user.updatePassword(passwordEncoder.encode(newPassword));
         // 비밀번호 변경 후 모든 기기에서 강제 로그아웃 처리
         refreshTokenRepository.deleteByUserId(userId);
+    }
+
+    // 프로필 이미지 변경
+    // 파일 서버에 업로드 후 반환된 URL을 DB에 저장
+    @Transactional
+    public UserProfileResponse updateProfileImage(String userId, MultipartFile file) {
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new CustomException(ErrorCode.USER_NOT_FOUND));
+        String imageUrl = fileServerClient.upload(file);
+        user.updateProfileImage(imageUrl);
+        return UserProfileResponse.from(user);
     }
 
     // 회원 탈퇴

@@ -97,6 +97,11 @@ public class User extends BaseTimeEntity {
         this.phone = phone;
     }
 
+    // 프로필 이미지 변경
+    public void updateProfileImage(String profileImageUrl) {
+        this.profileImage = profileImageUrl;
+    }
+
     // 역할 변경 (WARD ↔ GUARDIAN, ADMIN 전환 불가)
     public void updateRole(Role role) {
         this.role = role;
