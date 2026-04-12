@@ -2,6 +2,7 @@ HELP.md
 CLAUDE.md
 .env.*
 docs/
+db/seed.sql
 .gradle
 build/
 !gradle/wrapper/gradle-wrapper.jar
