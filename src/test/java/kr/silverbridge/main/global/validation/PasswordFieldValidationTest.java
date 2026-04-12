@@ -44,10 +44,16 @@ class PasswordFieldValidationTest {
     }
 
     @Test
-    void passwordWithKoreanPasses() {
+    void passwordWithKoreanFails() {
         PasswordFixture fixture = new PasswordFixture("Abcd1234!한");
 
-        assertEquals(0, validator.validate(fixture).size());
+        var violations = validator.validate(fixture);
+
+        assertEquals(1, violations.size());
+        assertEquals(
+                "비밀번호는 영문·숫자·특수문자를 포함하고, 공백 없이 8글자 이상이어야 합니다.",
+                violations.iterator().next().getMessage()
+        );
     }
 
     @Test
@@ -58,7 +64,7 @@ class PasswordFieldValidationTest {
 
         assertEquals(1, violations.size());
         assertEquals(
-                "비밀번호는 영어, 한글, 숫자, 특수문자를 각각 하나 이상 포함해야 하며, 띄어쓰기는 사용할 수 없습니다.",
+                "비밀번호는 영문·숫자·특수문자를 포함하고, 공백 없이 8글자 이상이어야 합니다.",
                 violations.iterator().next().getMessage()
         );
     }
@@ -66,8 +72,8 @@ class PasswordFieldValidationTest {
     private record PasswordFixture(
             @Size(min = 8, max = 24, message = "비밀번호는 8자 이상 24자 이하여야 합니다.")
             @Pattern(
-                    regexp = "^(?=.*[A-Za-z가-힣])(?=.*[0-9])(?=.*[!@#$%^&*()_+\\-=\\[\\]{};':\"\\\\|,.<>/?`~])[A-Za-z0-9가-힣!@#$%^&*()_+\\-=\\[\\]{};':\"\\\\|,.<>/?`~]+$",
-                    message = "비밀번호는 영어, 한글, 숫자, 특수문자를 각각 하나 이상 포함해야 하며, 띄어쓰기는 사용할 수 없습니다."
+                    regexp = "^(?=.*[A-Za-z])(?=.*[0-9])(?=.*[!@#$%^&*()_+\\-=\\[\\]{};':\"\\\\|,.<>/?`~])[A-Za-z0-9!@#$%^&*()_+\\-=\\[\\]{};':\"\\\\|,.<>/?`~]+$",
+                    message = "비밀번호는 영문·숫자·특수문자를 포함하고, 공백 없이 8글자 이상이어야 합니다."
             )
             String password
     ) {
