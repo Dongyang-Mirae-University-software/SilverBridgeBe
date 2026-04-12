@@ -25,7 +25,6 @@ import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.time.OffsetDateTime;
 import java.util.UUID;
 import java.util.concurrent.TimeUnit;
 
@@ -65,12 +64,8 @@ public class KakaoAuthService {
                     String refreshToken = jwtTokenProvider.generateRefreshToken(user.getId());
 
                     refreshTokenRepository.deleteByUserId(user.getId());
-                    refreshTokenRepository.save(RefreshToken.builder()
-                            .userId(user.getId())
-                            .token(refreshToken)
-                            .expiresAt(OffsetDateTime.now().plusSeconds(
-                                    jwtTokenProvider.getRemainingExpiration(refreshToken) / 1000))
-                            .build());
+                    refreshTokenRepository.save(RefreshToken.of(user.getId(), refreshToken,
+                            jwtTokenProvider.getRemainingExpiration(refreshToken)));
 
                     user.updateLastLoginAt();
                     accessLogService.log(user.getId(), AccessAction.KAKAO_LOGIN, ipAddress, userAgent);
@@ -159,12 +154,8 @@ public class KakaoAuthService {
         String accessToken  = jwtTokenProvider.generateAccessToken(user.getId(), email, user.getRole().name());
         String refreshToken = jwtTokenProvider.generateRefreshToken(user.getId());
 
-        refreshTokenRepository.save(RefreshToken.builder()
-                .userId(user.getId())
-                .token(refreshToken)
-                .expiresAt(OffsetDateTime.now().plusSeconds(
-                        jwtTokenProvider.getRemainingExpiration(refreshToken) / 1000))
-                .build());
+        refreshTokenRepository.save(RefreshToken.of(user.getId(), refreshToken,
+                jwtTokenProvider.getRemainingExpiration(refreshToken)));
 
         user.updateLastLoginAt();
         accessLogService.log(user.getId(), AccessAction.KAKAO_LOGIN, ipAddress, userAgent);

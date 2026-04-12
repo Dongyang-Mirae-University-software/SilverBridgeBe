@@ -1,11 +1,5 @@
 package kr.silverbridge.main.domain.auth.service;
 
-import com.solapi.sdk.SolapiClient;
-import com.solapi.sdk.message.exception.SolapiEmptyResponseException;
-import com.solapi.sdk.message.exception.SolapiMessageNotReceivedException;
-import com.solapi.sdk.message.exception.SolapiUnknownException;
-import com.solapi.sdk.message.model.Message;
-import com.solapi.sdk.message.service.DefaultMessageService;
 import kr.silverbridge.main.domain.auth.dto.PasswordResetConfirmRequest;
 import kr.silverbridge.main.domain.auth.dto.PasswordResetRequest;
 import kr.silverbridge.main.domain.auth.dto.PasswordResetSmsSendRequest;
@@ -28,7 +22,6 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.security.SecureRandom;
 import java.util.UUID;
 import java.util.concurrent.TimeUnit;
 
@@ -43,15 +36,7 @@ public class PasswordResetService {
     private final JavaMailSender mailSender;
     private final PasswordEncoder passwordEncoder;
     private final StringRedisTemplate redisTemplate;
-
-    @Value("${solapi.api-key}")
-    private String apiKey;
-
-    @Value("${solapi.api-secret}")
-    private String apiSecret;
-
-    @Value("${solapi.sender-phone}")
-    private String senderPhone;
+    private final SmsService smsService;
 
     private static final long RESET_TOKEN_TTL  = 30L; // 재설정 코드 유효 시간 (분)
     private static final long SMS_CODE_TTL     = 5L;  // 인증코드 유효 시간 (분)
@@ -99,25 +84,9 @@ public class PasswordResetService {
             throw new CustomException(ErrorCode.SMS_SEND_TOO_FREQUENT);
         }
 
-        String code = generateCode();
+        String code = smsService.generateCode();
 
-        DefaultMessageService messageService =
-                SolapiClient.INSTANCE.createInstance(apiKey, apiSecret);
-
-        Message message = new Message();
-        message.setFrom(senderPhone);
-        message.setTo(phone);
-        message.setText("[SilverBridge] 비밀번호 재설정 인증번호: " + code + "\n유효 시간: 5분");
-
-        try {
-            messageService.send(message);
-        } catch (SolapiMessageNotReceivedException e) {
-            log.error("SMS 발송 실패: {}", e.getFailedMessageList());
-            throw new CustomException(ErrorCode.SMS_SEND_FAILED);
-        } catch (SolapiEmptyResponseException | SolapiUnknownException e) {
-            log.error("SMS 오류: {}", e.getMessage());
-            throw new CustomException(ErrorCode.SMS_SEND_FAILED);
-        }
+        smsService.sendSms(phone, "[SilverBridge] 비밀번호 재설정 인증번호: " + code + "\n유효 시간: 5분");
 
         // 인증코드 저장 (재발송 시 기존 코드 및 오류 횟수 초기화)
         redisTemplate.opsForValue().set(RedisKeys.PW_SMS_VERIFY + phone, code, SMS_CODE_TTL, TimeUnit.MINUTES);
@@ -224,7 +193,4 @@ public class PasswordResetService {
         mailSender.send(message);
     }
 
-    private String generateCode() {
-        return String.format("%06d", new SecureRandom().nextInt(1_000_000));
-    }
 }

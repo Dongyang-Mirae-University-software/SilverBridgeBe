@@ -6,6 +6,7 @@ import org.springframework.data.annotation.CreatedDate;
 import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 
 import java.time.OffsetDateTime;
+import java.util.concurrent.TimeUnit;
 
 @Entity
 @Table(name = "refresh_tokens")
@@ -36,5 +37,11 @@ public class RefreshToken {
         this.userId = userId;
         this.token = token;
         this.expiresAt = expiresAt;
+    }
+
+    // 남은 만료 시간(ms)으로 RefreshToken 생성
+    public static RefreshToken of(String userId, String token, long remainingMs) {
+        return new RefreshToken(userId, token,
+                OffsetDateTime.now().plusSeconds(TimeUnit.MILLISECONDS.toSeconds(remainingMs)));
     }
 }
