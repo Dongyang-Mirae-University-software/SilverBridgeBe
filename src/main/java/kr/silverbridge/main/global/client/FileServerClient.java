@@ -12,6 +12,8 @@ import org.springframework.util.MultiValueMap;
 import org.springframework.web.client.RestClient;
 import org.springframework.web.multipart.MultipartFile;
 
+import org.springframework.web.client.RestClientException;
+
 import java.io.IOException;
 import java.util.Map;
 
@@ -53,14 +55,20 @@ public class FileServerClient {
             }
 
             Map<String, Object> data = (Map<String, Object>) response.get("data");
-            String url = (String) data.get("url");
+            if (data == null) {
+                throw new CustomException(ErrorCode.FILE_UPLOAD_FAILED);
+            }
 
+            String url = (String) data.get("url");
             if (url == null || url.isBlank()) {
                 throw new CustomException(ErrorCode.FILE_UPLOAD_FAILED);
             }
 
             return url;
 
+        } catch (RestClientException e) {
+            log.error("파일 서버 통신 실패: {}", e.getMessage());
+            throw new CustomException(ErrorCode.FILE_UPLOAD_FAILED);
         } catch (IOException e) {
             log.error("파일 읽기 실패: {}", e.getMessage());
             throw new CustomException(ErrorCode.FILE_UPLOAD_FAILED);

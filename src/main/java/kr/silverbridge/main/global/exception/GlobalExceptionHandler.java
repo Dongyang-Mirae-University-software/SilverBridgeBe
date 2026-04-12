@@ -2,6 +2,8 @@ package kr.silverbridge.main.global.exception;
 
 import kr.silverbridge.main.global.response.ApiResponse;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.validation.FieldError;
 import org.springframework.web.bind.MethodArgumentNotValidException;
@@ -31,6 +33,15 @@ public class GlobalExceptionHandler {
         return ResponseEntity
                 .badRequest()
                 .body(ApiResponse.fail(message));
+    }
+
+    // DB 유니크 제약 조건 위반 (동시 요청으로 인한 이메일/전화번호 중복 등)
+    @ExceptionHandler(DataIntegrityViolationException.class)
+    public ResponseEntity<ApiResponse<Void>> handleDataIntegrityViolation(DataIntegrityViolationException e) {
+        log.warn("DataIntegrityViolationException: {}", e.getMessage());
+        return ResponseEntity
+                .status(HttpStatus.CONFLICT)
+                .body(ApiResponse.fail("이미 사용 중인 값입니다."));
     }
 
     // 예상치 못한 서버 오류
