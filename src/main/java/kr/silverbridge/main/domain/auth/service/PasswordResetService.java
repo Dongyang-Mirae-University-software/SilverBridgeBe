@@ -16,6 +16,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.redis.core.StringRedisTemplate;
+import org.springframework.mail.MailException;
 import org.springframework.mail.SimpleMailMessage;
 import org.springframework.mail.javamail.JavaMailSender;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -190,7 +191,14 @@ public class PasswordResetService {
                 "유효 시간: 30분\n\n" +
                 "본인이 요청하지 않은 경우 이 메일을 무시하세요."
         );
-        mailSender.send(message);
+        try {
+            mailSender.send(message);
+        } catch (MailException e) {
+            log.error("이메일 발송 실패: {}", e.getMessage());
+            // 발송 실패 시 저장된 토큰 즉시 삭제 (미사용 토큰 누적 방지)
+            redisTemplate.delete(RedisKeys.PW_RESET + token);
+            throw new CustomException(ErrorCode.INTERNAL_SERVER_ERROR);
+        }
     }
 
 }
