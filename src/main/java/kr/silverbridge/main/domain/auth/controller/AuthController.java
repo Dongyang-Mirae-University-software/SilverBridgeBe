@@ -124,12 +124,13 @@ public class AuthController {
     @Operation(
             summary = "Access Token 재발급",
             description = """
-                    Access Token이 만료(30분)된 경우 Refresh Token으로 새 Access Token을 발급받습니다.
-                    Refresh Token은 로그인 시 발급된 refreshToken 값을 사용합니다.
+                    Access Token이 만료(30분)된 경우 Refresh Token으로 새 토큰을 발급받습니다.
+                    Refresh Token Rotation 적용 — accessToken과 refreshToken이 모두 새로 발급됩니다.
 
                     [주의사항]
-                    - Refresh Token도 만료(14일)된 경우 401이 반환되며, 재로그인이 필요합니다.
-                    - 새로 발급된 accessToken으로 이후 요청의 Authorization 헤더를 업데이트하세요.
+                    - 기존 refreshToken은 즉시 무효화됩니다. 응답의 새 refreshToken으로 반드시 교체 저장하세요.
+                    - Refresh Token도 만료(7일)된 경우 401이 반환되며, 재로그인이 필요합니다.
+                    - 새로 발급된 accessToken으로 Authorization 헤더를 업데이트하세요.
                     """
     )
     @ApiResponses({

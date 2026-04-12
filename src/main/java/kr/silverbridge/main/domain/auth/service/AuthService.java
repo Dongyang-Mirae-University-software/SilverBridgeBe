@@ -162,7 +162,8 @@ public class AuthService {
     }
 
     // Access Token 재발급
-    // DB에서 Refresh Token 검증 → 만료 확인 → 새 Access Token 발급
+    // DB에서 Refresh Token 검증 → 만료 확인 → 새 Access Token + Refresh Token 발급 (Rotation)
+    // 기존 Refresh Token은 즉시 무효화 → 탈취된 토큰 재사용 차단
     @Transactional
     public TokenRefreshResponse refresh(TokenRefreshRequest request) {
         RefreshToken savedToken = refreshTokenRepository.findByToken(request.getRefreshToken())
@@ -176,12 +177,21 @@ public class AuthService {
         User user = userRepository.findById(savedToken.getUserId())
                 .orElseThrow(() -> new CustomException(ErrorCode.USER_NOT_FOUND));
 
-        String newAccessToken = jwtTokenProvider.generateAccessToken(
-                user.getId(), user.getEmail(), user.getRole().name());
+        String newAccessToken  = jwtTokenProvider.generateAccessToken(user.getId(), user.getEmail(), user.getRole().name());
+        String newRefreshToken = jwtTokenProvider.generateRefreshToken(user.getId());
+
+        // 기존 Refresh Token 무효화 후 새 토큰 저장 (Rotation)
+        refreshTokenRepository.delete(savedToken);
+        refreshTokenRepository.save(RefreshToken.builder()
+                .userId(user.getId())
+                .token(newRefreshToken)
+                .expiresAt(OffsetDateTime.now().plusSeconds(
+                        jwtTokenProvider.getRemainingExpiration(newRefreshToken) / 1000))
+                .build());
 
         accessLogService.log(user.getId(), AccessAction.TOKEN_ISSUE);
 
-        return new TokenRefreshResponse(newAccessToken);
+        return new TokenRefreshResponse(newAccessToken, newRefreshToken);
     }
 
     // 아이디(이메일) 찾기
