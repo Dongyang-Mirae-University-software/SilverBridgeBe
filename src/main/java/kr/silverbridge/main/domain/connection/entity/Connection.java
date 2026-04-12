@@ -31,7 +31,7 @@ public class Connection extends BaseTimeEntity {
     @Column(nullable = false, length = 20)
     private ConnectionStatus status;
 
-    @Column(name = "initiated_by", nullable = false, length = 36)
+    @Column(name = "initiated_by", length = 36)
     private String initiatedBy;
 
     @Column(name = "connected_at")

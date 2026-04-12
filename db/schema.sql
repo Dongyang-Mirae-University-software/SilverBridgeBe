@@ -83,7 +83,7 @@ CREATE TABLE connections (
     guardian_id  VARCHAR(36) NOT NULL,
     ward_id      VARCHAR(36) NOT NULL,
     status       VARCHAR(20) NOT NULL DEFAULT 'PENDING', -- PENDING, ACTIVE, CANCELLED
-    initiated_by VARCHAR(36) NOT NULL,                   -- 요청한 사용자 ID
+    initiated_by VARCHAR(36) NULL,                        -- 요청한 사용자 ID (탈퇴 시 NULL)
     connected_at TIMESTAMPTZ NULL,                       -- ACTIVE 전환 시각
     created_at   TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at   TIMESTAMPTZ NOT NULL DEFAULT NOW(),
@@ -91,7 +91,7 @@ CREATE TABLE connections (
     CONSTRAINT pk_connections          PRIMARY KEY (id),
     CONSTRAINT fk_connections_guardian FOREIGN KEY (guardian_id)  REFERENCES users(id) ON DELETE CASCADE,
     CONSTRAINT fk_connections_ward     FOREIGN KEY (ward_id)      REFERENCES users(id) ON DELETE CASCADE,
-    CONSTRAINT fk_connections_init     FOREIGN KEY (initiated_by) REFERENCES users(id) ON DELETE CASCADE,
+    CONSTRAINT fk_connections_init     FOREIGN KEY (initiated_by) REFERENCES users(id) ON DELETE SET NULL,
     CONSTRAINT chk_connections_status  CHECK (status IN ('PENDING', 'ACTIVE', 'CANCELLED'))
 );
 
@@ -203,7 +203,7 @@ CREATE TABLE admin_audit_logs (
 -- 인덱스
 -- =============================================
 CREATE INDEX idx_users_email                          ON users(email);
-CREATE INDEX idx_users_phone                          ON users(phone);
+CREATE UNIQUE INDEX uq_users_phone                    ON users(phone) WHERE phone IS NOT NULL;
 CREATE INDEX idx_users_provider_id                    ON users(provider, provider_id);
 CREATE INDEX idx_refresh_tokens_user_id               ON refresh_tokens(user_id);
 CREATE INDEX idx_access_logs_user_id                  ON access_logs(user_id);
@@ -217,27 +217,36 @@ CREATE INDEX idx_connections_status                   ON connections(status);
 
 CREATE INDEX idx_anomaly_events_ward_id               ON anomaly_events(ward_id);
 CREATE INDEX idx_anomaly_events_detected_at           ON anomaly_events(detected_at);
+CREATE INDEX idx_anomaly_events_ward_detected         ON anomaly_events(ward_id, detected_at);
 CREATE INDEX idx_game_results_user_id                 ON game_results(user_id);
 CREATE INDEX idx_game_results_played_at               ON game_results(played_at);
+CREATE INDEX idx_game_results_user_type               ON game_results(user_id, game_type);
 CREATE INDEX idx_hospital_reservations_user_id        ON hospital_reservations(user_id);
 CREATE INDEX idx_hospital_reservations_appointment_at ON hospital_reservations(appointment_at);
 CREATE INDEX idx_announcements_is_published           ON announcements(is_published);
 CREATE INDEX idx_admin_audit_logs_admin_created       ON admin_audit_logs(admin_id, created_at);
 
 -- =============================================
--- Redis 키 구조 (참고용)
+-- Redis 키 구조 (참고용, RedisKeys.java 기준)
 -- =============================================
--- 이메일 인증코드:
---   key:   email:verify:{email}
---   value: "123456"
---   TTL:   300초 (5분)
+-- 회원가입 SMS 인증:
+--   sms:verify:{phone}    → 인증코드 (TTL 5분)
+--   sms:verified:{phone}  → 인증 완료 상태 (TTL 10분)
+--   sms:cooldown:{phone}  → 재발송 쿨다운 (TTL 1분)
+--   sms:attempt:{phone}   → 오류 횟수 (TTL 5분)
 --
 -- 비밀번호 재설정:
---   key:   password:reset:{token}
---   value: "{userId}"
---   TTL:   1800초 (30분)
+--   password:reset:{token}        → userId (TTL 30분)
+--   password:sms:verify:{phone}   → 인증코드 (TTL 5분)
+--   password:sms:cooldown:{phone} → 재발송 쿨다운 (TTL 1분)
+--   password:sms:attempt:{phone}  → 오류 횟수 (TTL 5분)
 --
--- 로그아웃된 토큰:
---   key:   logout:{accessToken}
---   value: "true"
---   TTL:   토큰 남은 만료시간
+-- 카카오 신규 가입:
+--   kakao:pending:{kakaoId} → 이메일 (TTL 10분)
+--
+-- 로그인 보안:
+--   login:fail:{email} → 실패 횟수 (TTL 30분)
+--   login:lock:{email} → 잠금 상태 (TTL 30분)
+--
+-- 로그아웃 블랙리스트:
+--   logout:{accessToken} → "true" (TTL 토큰 남은 만료시간)
