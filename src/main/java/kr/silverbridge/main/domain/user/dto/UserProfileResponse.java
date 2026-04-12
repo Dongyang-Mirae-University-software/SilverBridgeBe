@@ -30,6 +30,9 @@ public class UserProfileResponse {
     @Schema(description = "역할. WARD: 피보호자, GUARDIAN: 보호자, ADMIN: 관리자", allowableValues = {"WARD", "GUARDIAN", "ADMIN"}, example = "WARD")
     private String role;
 
+    @Schema(description = "프로필 이미지 URL (없으면 null)", example = "https://file.silverbridge.kr/profiles/uuid.jpg", nullable = true)
+    private String profileImage;
+
     @Schema(description = "마지막 로그인 일시 (없으면 null)", example = "2025-01-01T09:00:00+09:00", nullable = true)
     private OffsetDateTime lastLoginAt;
 
@@ -44,6 +47,7 @@ public class UserProfileResponse {
                 .phone(user.getPhone())
                 .provider(user.getProvider().name())
                 .role(user.getRole().name())
+                .profileImage(user.getProfileImage())
                 .lastLoginAt(user.getLastLoginAt())
                 .createdAt(user.getCreatedAt())
                 .build();

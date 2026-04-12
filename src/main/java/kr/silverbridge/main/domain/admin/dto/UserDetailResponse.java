@@ -33,10 +33,10 @@ public class UserDetailResponse {
     @Schema(description = "가입 경로", allowableValues = {"LOCAL", "KAKAO"}, example = "LOCAL")
     private String provider;
 
-    @Schema(description = "카카오 provider ID (카카오 가입자만 존재, 없으면 null)", nullable = true)
+    @Schema(description = "카카오 provider ID (카카오 가입자만 존재, 없으면 null)", example = "3456789012", nullable = true)
     private String providerId;
 
-    @Schema(description = "프로필 이미지 URL (없으면 null)", nullable = true)
+    @Schema(description = "프로필 이미지 URL (없으면 null)", example = "https://file.silverbridge.kr/profiles/uuid.jpg", nullable = true)
     private String profileImage;
 
     @Schema(description = "마지막 로그인 일시 (없으면 null)", example = "2025-01-01T09:00:00+09:00", nullable = true)
