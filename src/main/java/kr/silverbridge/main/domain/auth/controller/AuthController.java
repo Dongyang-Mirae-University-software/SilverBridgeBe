@@ -101,7 +101,7 @@ public class AuthController {
                     - accessToken: 이후 모든 API 요청 시 헤더에 포함
                       → Header: Authorization: Bearer {accessToken}
                     - refreshToken: accessToken 만료(30분) 시 POST /api/auth/refresh 로 재발급
-                      → refreshToken 유효 시간: 14일
+                      → refreshToken 유효 시간: 7일
                     """
     )
     @ApiResponses({
