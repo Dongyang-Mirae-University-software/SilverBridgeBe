@@ -21,8 +21,8 @@ public interface UserRepository extends JpaRepository<User, String> {
     // 전화번호 존재 여부 (회원가입·정보 수정 중복 검사)
     boolean existsByPhone(String phone);
 
-    // 이름 + 전화번호로 사용자 조회 (아이디 찾기)
-    Optional<User> findByNameAndPhone(String name, String phone);
+    // 이름 + 전화번호로 사용자 전체 조회 (아이디 찾기 — LOCAL/KAKAO 복수 계정 지원)
+    List<User> findAllByNameAndPhone(String name, String phone);
 
     // 전화번호로 사용자 조회 (SMS 비밀번호 재설정)
     Optional<User> findByPhone(String phone);
