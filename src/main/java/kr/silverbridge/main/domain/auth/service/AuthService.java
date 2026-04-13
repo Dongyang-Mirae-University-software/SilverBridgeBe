@@ -27,6 +27,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.OffsetDateTime;
+import java.util.List;
 import java.util.UUID;
 import java.util.concurrent.TimeUnit;
 
@@ -193,13 +194,27 @@ public class AuthService {
     }
 
     // 아이디(이메일) 찾기
-    // 이름 + 전화번호로 사용자 조회 → 이메일 앞부분 마스킹 후 반환
+    // 이름 + 전화번호로 계정 전체 조회
+    // - LOCAL 계정: 마스킹된 이메일 반환
+    // - KAKAO 계정: hasKakaoAccount=true 반환
+    // - 둘 다 존재하면 둘 다 반환, 아무것도 없으면 USER_NOT_FOUND
     @Transactional(readOnly = true)
     public FindEmailResponse findEmail(FindEmailRequest request) {
-        User user = userRepository.findByNameAndPhone(request.getName(), request.getPhone())
-                .orElseThrow(() -> new CustomException(ErrorCode.USER_NOT_FOUND));
+        List<User> users = userRepository.findAllByNameAndPhone(request.getName(), request.getPhone());
 
-        return new FindEmailResponse(maskEmail(user.getEmail()));
+        if (users.isEmpty()) {
+            throw new CustomException(ErrorCode.USER_NOT_FOUND);
+        }
+
+        String maskedEmail = users.stream()
+                .filter(User::isLocalProvider)
+                .findFirst()
+                .map(u -> maskEmail(u.getEmail()))
+                .orElse(null);
+
+        boolean hasKakaoAccount = users.stream().anyMatch(User::isSocialProvider);
+
+        return new FindEmailResponse(maskedEmail, hasKakaoAccount);
     }
 
     // 이메일 마스킹 처리

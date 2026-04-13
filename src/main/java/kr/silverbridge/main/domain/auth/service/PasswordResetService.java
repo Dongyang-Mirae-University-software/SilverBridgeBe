@@ -73,10 +73,13 @@ public class PasswordResetService {
     public void requestResetBySms(PasswordResetSmsSendRequest request) {
         String phone = request.getPhone();
 
-        User user = userRepository.findByNameAndPhone(request.getName(), phone).orElse(null);
+        User user = userRepository.findAllByNameAndPhone(request.getName(), phone).stream()
+                .filter(User::isLocalProvider)
+                .findFirst()
+                .orElse(null);
 
-        // 사용자가 없거나 카카오 사용자면 조용히 종료 (가입 여부 노출 방지)
-        if (user == null || user.isSocialProvider()) {
+        // 사용자가 없으면 조용히 종료 (가입 여부 노출 방지)
+        if (user == null) {
             return;
         }
 
