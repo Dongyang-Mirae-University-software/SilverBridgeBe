@@ -167,11 +167,6 @@ public class PasswordResetService {
             throw new CustomException(ErrorCode.SAME_AS_CURRENT_PASSWORD);
         }
 
-        // 최근 사용한 비밀번호 2개와 중복 검사
-        if (user.isPasswordRecentlyUsed(request.getNewPassword(), passwordEncoder)) {
-            throw new CustomException(ErrorCode.PASSWORD_RECENTLY_USED);
-        }
-
         // 비밀번호 변경
         user.updatePassword(passwordEncoder.encode(request.getNewPassword()));
 

@@ -35,8 +35,6 @@ EMAIL_ALREADY_EXISTS(HttpStatus.CONFLICT, "이미 사용 중인 이메일입니�
     EXPIRED_VERIFY_CODE(HttpStatus.BAD_REQUEST, "인증번호가 만료되었습니다. 다시 요청해주세요."),
     EMAIL_ALREADY_VERIFIED(HttpStatus.CONFLICT, "이미 인증된 이메일입니다."),
     INVALID_RESET_TOKEN(HttpStatus.BAD_REQUEST, "비밀번호 재설정 링크가 만료되었거나 유효하지 않습니다."),
-    PASSWORD_RECENTLY_USED(HttpStatus.BAD_REQUEST, "최근에 사용한 비밀번호는 다시 사용할 수 없습니다."),
-
     // SMS 인증
     SMS_SEND_FAILED(HttpStatus.INTERNAL_SERVER_ERROR, "인증번호 발송에 실패했습니다. 잠시 후 다시 시도해주세요."),
     INVALID_SMS_CODE(HttpStatus.BAD_REQUEST, "인증번호가 올바르지 않습니다."),
