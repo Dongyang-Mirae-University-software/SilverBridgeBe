@@ -97,8 +97,14 @@ public class UserService {
     public UserProfileResponse updateProfileImage(String userId, MultipartFile file) {
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new CustomException(ErrorCode.USER_NOT_FOUND));
-        String imageUrl = fileServerClient.upload(file);
-        user.updateProfileImage(imageUrl);
+
+        String oldImageUrl = user.getProfileImage();
+        String newImageUrl = fileServerClient.upload(file);
+        user.updateProfileImage(newImageUrl);
+
+        // 업로드 성공 후 기존 이미지 삭제 (실패해도 주 기능에 영향 없음)
+        fileServerClient.delete(oldImageUrl);
+
         return UserProfileResponse.from(user);
     }
 
