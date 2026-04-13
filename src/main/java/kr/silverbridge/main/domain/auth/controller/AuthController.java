@@ -185,13 +185,22 @@ public class AuthController {
     @Operation(
             summary = "아이디(이메일) 찾기",
             description = """
-                    이름과 전화번호로 가입된 이메일을 조회합니다.
-                    보안을 위해 이메일 앞 2자리만 노출하고 나머지는 **로 마스킹합니다.
-                    예: us**@example.com
+                    이름과 전화번호로 가입된 계정을 조회합니다.
+
+                    [응답 구조]
+                    - maskedEmail: 일반(LOCAL) 계정이 있으면 마스킹된 이메일 반환, 없으면 null
+                      예: us**@example.com
+                    - hasKakaoAccount: 카카오(KAKAO) 계정이 있으면 true → "카카오 계정이 존재합니다" 표시
+
+                    [케이스별 동작]
+                    - 일반 계정만 있는 경우: maskedEmail=값, hasKakaoAccount=false
+                    - 카카오 계정만 있는 경우: maskedEmail=null, hasKakaoAccount=true
+                    - 둘 다 있는 경우: maskedEmail=값, hasKakaoAccount=true
+                    - 계정 없음: 404 반환
                     """
     )
     @ApiResponses({
-            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "이메일 조회 성공. maskedEmail 반환"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "계정 조회 성공. maskedEmail 또는 hasKakaoAccount(또는 둘 다) 반환"),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "입력값 오류", content = @Content),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "이름과 전화번호가 일치하는 계정 없음", content = @Content),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "500", description = "서버 오류", content = @Content)
