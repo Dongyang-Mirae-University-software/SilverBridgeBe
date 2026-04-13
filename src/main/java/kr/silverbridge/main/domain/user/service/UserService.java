@@ -17,9 +17,15 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
 
+import java.util.List;
+
 @Service
 @RequiredArgsConstructor
 public class UserService {
+
+    private static final long MAX_FILE_SIZE = 5 * 1024 * 1024L; // 5MB
+    private static final List<String> ALLOWED_CONTENT_TYPES =
+            List.of("image/jpeg", "image/png", "image/webp", "image/gif");
 
     private final UserRepository userRepository;
     private final RefreshTokenRepository refreshTokenRepository;
@@ -97,6 +103,17 @@ public class UserService {
     public UserProfileResponse updateProfileImage(String userId, MultipartFile file) {
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new CustomException(ErrorCode.USER_NOT_FOUND));
+
+        // 파일 크기 제한 (5MB)
+        if (file.getSize() > MAX_FILE_SIZE) {
+            throw new CustomException(ErrorCode.FILE_TOO_LARGE);
+        }
+
+        // 이미지 파일 형식 제한
+        String contentType = file.getContentType();
+        if (contentType == null || !ALLOWED_CONTENT_TYPES.contains(contentType)) {
+            throw new CustomException(ErrorCode.INVALID_FILE_TYPE);
+        }
 
         String oldImageUrl = user.getProfileImage();
         String newImageUrl = fileServerClient.upload(file);

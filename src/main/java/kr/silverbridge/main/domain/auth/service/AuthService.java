@@ -173,6 +173,12 @@ public class AuthService {
         User user = userRepository.findById(savedToken.getUserId())
                 .orElseThrow(() -> new CustomException(ErrorCode.USER_NOT_FOUND));
 
+        // 비활성화된 계정은 토큰 재발급 차단 (탈퇴 또는 관리자 제한 계정)
+        if (user.getStatus() == Status.INACTIVE) {
+            refreshTokenRepository.delete(savedToken);
+            throw new CustomException(ErrorCode.INACTIVE_USER);
+        }
+
         String newAccessToken  = jwtTokenProvider.generateAccessToken(user.getId(), user.getEmail(), user.getRole().name());
         String newRefreshToken = jwtTokenProvider.generateRefreshToken(user.getId());
 

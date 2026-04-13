@@ -29,4 +29,7 @@ public final class RedisKeys {
 
     // ── 로그아웃 토큰 블랙리스트 ────────────────────────
     public static final String LOGOUT_TOKEN = "logout:";
+
+    // ── API 요청 속도 제한 ─────────────────────────────
+    public static final String RATE_LIMIT = "rate:";
 }
