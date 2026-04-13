@@ -29,6 +29,23 @@ public class FileServerClient {
                 .build();
     }
 
+    // 파일 삭제 — 업로드 URL에서 파일명 추출 후 DELETE 요청
+    // 실패 시 예외를 던지지 않고 경고 로그만 남김 (파일 삭제 실패가 주 기능에 영향 주지 않도록)
+    public void delete(String fileUrl) {
+        if (fileUrl == null || fileUrl.isBlank()) {
+            return;
+        }
+        try {
+            String filename = fileUrl.substring(fileUrl.lastIndexOf('/') + 1);
+            restClient.delete()
+                    .uri("/file/files/{filename}", filename)
+                    .retrieve()
+                    .toBodilessEntity();
+        } catch (Exception e) {
+            log.warn("파일 서버 삭제 실패 (url={}): {}", fileUrl, e.getMessage());
+        }
+    }
+
     // 파일 업로드 후 URL 반환
     @SuppressWarnings("unchecked")
     public String upload(MultipartFile file) {
