@@ -6,8 +6,6 @@ import kr.silverbridge.main.global.enums.Provider;
 import kr.silverbridge.main.global.enums.Role;
 import kr.silverbridge.main.global.enums.Status;
 import lombok.*;
-import org.springframework.security.crypto.password.PasswordEncoder;
-
 import java.time.OffsetDateTime;
 
 @Entity
@@ -52,13 +50,6 @@ public class User extends BaseTimeEntity {
     @Column(name = "profile_image", length = 500)
     private String profileImage;
 
-
-    @Column(name = "prev_password1", length = 255)
-    private String prevPassword1;
-
-    @Column(name = "prev_password2", length = 255)
-    private String prevPassword2;
-
     @Column(name = "last_login_at")
     private OffsetDateTime lastLoginAt;
 
@@ -67,11 +58,8 @@ public class User extends BaseTimeEntity {
         this.lastLoginAt = OffsetDateTime.now();
     }
 
-    // 비밀번호 변경 (이력 보관: 최근 2개)
-    // 변경 전 현재 비밀번호를 prev_password2 → prev_password1 순으로 밀어냄
+    // 비밀번호 변경
     public void updatePassword(String encodedPassword) {
-        this.prevPassword2 = this.prevPassword1;
-        this.prevPassword1 = this.password;
         this.password = encodedPassword;
     }
 
@@ -117,9 +105,4 @@ public class User extends BaseTimeEntity {
         return provider != Provider.LOCAL;
     }
 
-    // 최근 사용한 비밀번호 2개와 중복 여부 확인
-    public boolean isPasswordRecentlyUsed(String rawPassword, PasswordEncoder encoder) {
-        return (prevPassword1 != null && encoder.matches(rawPassword, prevPassword1))
-            || (prevPassword2 != null && encoder.matches(rawPassword, prevPassword2));
-    }
 }
