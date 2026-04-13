@@ -5,6 +5,7 @@ import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
+import kr.silverbridge.main.global.exception.CustomException;
 import kr.silverbridge.main.global.util.RedisKeys;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.redis.core.StringRedisTemplate;
@@ -43,18 +44,24 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
             // 토큰 유효성 검증 후 SecurityContext에 인증 정보 등록
             // DB 조회 없이 토큰 클레임만으로 인증 처리 (성능 최적화)
-            if (jwtTokenProvider.validateToken(token)) {
-                String userId = jwtTokenProvider.getUserId(token);
-                String role   = jwtTokenProvider.getRole(token);
+            // validateToken()은 만료/변조 시 CustomException을 던지므로 필터 내부에서 직접 처리
+            try {
+                if (jwtTokenProvider.validateToken(token)) {
+                    String userId = jwtTokenProvider.getUserId(token);
+                    String role   = jwtTokenProvider.getRole(token);
 
-                UsernamePasswordAuthenticationToken authentication =
-                        new UsernamePasswordAuthenticationToken(
-                                userId,
-                                null,
-                                List.of(new SimpleGrantedAuthority("ROLE_" + role))
-                        );
+                    UsernamePasswordAuthenticationToken authentication =
+                            new UsernamePasswordAuthenticationToken(
+                                    userId,
+                                    null,
+                                    List.of(new SimpleGrantedAuthority("ROLE_" + role))
+                            );
 
-                SecurityContextHolder.getContext().setAuthentication(authentication);
+                    SecurityContextHolder.getContext().setAuthentication(authentication);
+                }
+            } catch (CustomException e) {
+                sendError(response, e.getErrorCode().getStatus().value(), e.getErrorCode().getMessage());
+                return;
             }
         }
 
@@ -77,7 +84,13 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
     // 블랙리스트 토큰 요청에 401 JSON 응답 직접 반환
     private void sendUnauthorized(HttpServletResponse response, String message) throws IOException {
-        response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
+        sendError(response, HttpServletResponse.SC_UNAUTHORIZED, message);
+    }
+
+    // 필터 내부에서 발생한 오류를 JSON 형식으로 직접 응답
+    // GlobalExceptionHandler는 필터 밖에서 동작하므로 필터 내 예외는 여기서 처리
+    private void sendError(HttpServletResponse response, int status, String message) throws IOException {
+        response.setStatus(status);
         response.setContentType(MediaType.APPLICATION_JSON_VALUE);
         response.setCharacterEncoding("UTF-8");
         response.getWriter().write(
