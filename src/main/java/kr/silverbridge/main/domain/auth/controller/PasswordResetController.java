@@ -4,6 +4,7 @@ import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import kr.silverbridge.main.domain.auth.dto.PasswordResetConfirmRequest;
 import kr.silverbridge.main.domain.auth.dto.PasswordResetRequest;
@@ -12,6 +13,8 @@ import kr.silverbridge.main.domain.auth.dto.PasswordResetSmsVerifyRequest;
 import kr.silverbridge.main.domain.auth.dto.PasswordResetTokenResponse;
 import kr.silverbridge.main.domain.auth.service.PasswordResetService;
 import kr.silverbridge.main.global.response.ApiResponse;
+import kr.silverbridge.main.global.security.RateLimitService;
+import kr.silverbridge.main.global.util.RedisKeys;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -25,6 +28,7 @@ import org.springframework.web.bind.annotation.RestController;
 public class PasswordResetController {
 
     private final PasswordResetService passwordResetService;
+    private final RateLimitService rateLimitService;
 
     @Operation(
             summary = "[이메일 방식 1단계] 비밀번호 재설정 이메일 발송",
@@ -48,7 +52,9 @@ public class PasswordResetController {
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "500", description = "서버 오류", content = @Content)
     })
     @PostMapping("/reset-request")
-    public ApiResponse<Void> requestReset(@Valid @RequestBody PasswordResetRequest request) {
+    public ApiResponse<Void> requestReset(@Valid @RequestBody PasswordResetRequest request,
+                                          HttpServletRequest httpRequest) {
+        rateLimitService.check(RedisKeys.RATE_LIMIT + "pw-reset:" + httpRequest.getRemoteAddr());
         passwordResetService.requestReset(request);
         return ApiResponse.ok("비밀번호 재설정 이메일이 발송되었습니다.");
     }
