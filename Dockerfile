@@ -3,7 +3,12 @@ FROM gradle:8.14-jdk21 AS builder
 
 WORKDIR /app
 
-# 의존성 캐싱 — 소스 변경 시 의존성 재다운로드 방지
+# Gradle 전역 메모리 설정
+ENV GRADLE_OPTS="-Dorg.gradle.daemon=false \
+                 -Dorg.gradle.jvmargs=-Xmx512m \
+                 -Dorg.gradle.workers.max=1"
+
+# 의존성 캐싱
 COPY build.gradle settings.gradle ./
 COPY gradle ./gradle
 RUN gradle dependencies --no-daemon || true
@@ -16,7 +21,6 @@ FROM eclipse-temurin:21-jre
 
 WORKDIR /app
 
-# 타임존 설정
 ENV TZ=Asia/Seoul
 
 COPY --from=builder /app/build/libs/*.jar app.jar
