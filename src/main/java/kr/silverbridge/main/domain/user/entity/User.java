@@ -17,7 +17,7 @@ import java.time.OffsetDateTime;
 public class User extends BaseTimeEntity {
 
     @Id
-    @Column(length = 36)
+    @Column(length = 6)
     private String id;
 
     @Column(nullable = false, unique = true, length = 100)

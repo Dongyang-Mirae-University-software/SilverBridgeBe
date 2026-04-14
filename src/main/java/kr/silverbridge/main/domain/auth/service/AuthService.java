@@ -26,9 +26,9 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.security.SecureRandom;
 import java.time.OffsetDateTime;
 import java.util.List;
-import java.util.UUID;
 import java.util.concurrent.TimeUnit;
 
 @Service
@@ -42,6 +42,23 @@ public class AuthService {
     private final PasswordEncoder passwordEncoder;
     private final StringRedisTemplate redisTemplate;
 
+    private static final String ID_CHARS = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
+    private static final int    ID_LENGTH = 6;
+    private static final SecureRandom RANDOM = new SecureRandom();
+
+    // 중복 없는 6자리 사용자 ID 생성 (A-Z, 0-9)
+    private String generateUserId() {
+        String id;
+        do {
+            StringBuilder sb = new StringBuilder(ID_LENGTH);
+            for (int i = 0; i < ID_LENGTH; i++) {
+                sb.append(ID_CHARS.charAt(RANDOM.nextInt(ID_CHARS.length())));
+            }
+            id = sb.toString();
+        } while (userRepository.existsById(id));
+        return id;
+    }
+
     // 이메일 중복 확인 (회원가입 전 단계)
     @Transactional(readOnly = true)
     public void checkEmail(EmailCheckRequest request) {
@@ -51,7 +68,7 @@ public class AuthService {
     }
 
     // 회원가입
-    // 이메일/전화번호 중복 확인 → SMS 인증 완료 여부 확인 → 비밀번호 암호화 → UUID로 사용자 생성
+    // 이메일/전화번호 중복 확인 → SMS 인증 완료 여부 확인 → 비밀번호 암호화 → 6자리 ID로 사용자 생성
     @Transactional
     public void register(RegisterRequest request) {
         if (userRepository.existsByEmail(request.getEmail())) {
@@ -74,7 +91,7 @@ public class AuthService {
         }
 
         User user = User.builder()
-                .id(UUID.randomUUID().toString())
+                .id(generateUserId())
                 .email(request.getEmail())
                 .password(passwordEncoder.encode(request.getPassword()))
                 .name(request.getName())

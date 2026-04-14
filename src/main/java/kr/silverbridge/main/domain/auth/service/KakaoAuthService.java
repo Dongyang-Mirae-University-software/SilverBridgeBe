@@ -25,7 +25,7 @@ import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.util.UUID;
+import java.security.SecureRandom;
 import java.util.concurrent.TimeUnit;
 
 @Service
@@ -42,7 +42,23 @@ public class KakaoAuthService {
     @Value("${kakao.redirect-uri}")
     private String redirectUri;
 
-    private static final long KAKAO_PENDING_TTL = 10L;
+    private static final long   KAKAO_PENDING_TTL = 10L;
+    private static final String ID_CHARS          = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
+    private static final int    ID_LENGTH          = 6;
+    private static final SecureRandom RANDOM       = new SecureRandom();
+
+    // 중복 없는 6자리 사용자 ID 생성 (A-Z, 0-9)
+    private String generateUserId() {
+        String id;
+        do {
+            StringBuilder sb = new StringBuilder(ID_LENGTH);
+            for (int i = 0; i < ID_LENGTH; i++) {
+                sb.append(ID_CHARS.charAt(RANDOM.nextInt(ID_CHARS.length())));
+            }
+            id = sb.toString();
+        } while (userRepository.existsById(id));
+        return id;
+    }
 
     // 카카오 로그인
     // 기존 사용자 → 바로 로그인
@@ -132,7 +148,7 @@ public class KakaoAuthService {
 
         // 카카오 사용자 DB 저장
         User user = User.builder()
-                .id(UUID.randomUUID().toString())
+                .id(generateUserId())
                 .email(email)
                 .password(null)
                 .name(request.getName())
