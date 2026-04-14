@@ -51,10 +51,10 @@ public class AuthController {
                     사용 가능하면 200, 이미 존재하면 409를 반환합니다.
 
                     [일반 회원가입 전체 흐름]
-                    1. POST /api/auth/email/check     → 이메일 중복 확인
-                    2. POST /api/auth/sms/send        → SMS 인증코드 발송
-                    3. POST /api/auth/sms/verify      → SMS 인증코드 확인
-                    4. POST /api/auth/register        → 회원가입 완료
+                    1. POST /api/auth/signup/email/check     → 이메일 중복 확인
+                    2. POST /api/auth/signup/sms/send        → SMS 인증코드 발송
+                    3. POST /api/auth/signup/sms/verify      → SMS 인증코드 확인
+                    4. POST /api/auth/signup                 → 회원가입 완료
                     """
     )
     @ApiResponses({
@@ -63,7 +63,7 @@ public class AuthController {
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "409", description = "이미 사용 중인 이메일", content = @Content),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "500", description = "서버 오류", content = @Content)
     })
-    @PostMapping("/email/check")
+    @PostMapping("/signup/email/check")
     public ApiResponse<Void> checkEmail(@Valid @RequestBody EmailCheckRequest request,
                                         HttpServletRequest httpRequest) {
         rateLimitService.check(RedisKeys.RATE_LIMIT + "email-check:" + httpRequest.getRemoteAddr());
@@ -75,7 +75,7 @@ public class AuthController {
             summary = "회원가입",
             description = """
                     이메일·비밀번호로 새 계정을 생성합니다.
-                    반드시 SMS 인증(POST /api/auth/sms/verify) 완료 후 호출해야 합니다.
+                    반드시 SMS 인증(POST /api/auth/signup/sms/verify) 완료 후 호출해야 합니다.
 
                     [주의사항]
                     - SMS 인증 완료 후 10분 이내에 호출해야 합니다.
@@ -89,7 +89,7 @@ public class AuthController {
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "409", description = "이미 사용 중인 이메일 (전화번호 중복은 SMS 발송 단계에서 먼저 반환됨, content = @Content)"),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "500", description = "서버 오류", content = @Content)
     })
-    @PostMapping("/register")
+    @PostMapping("/signup")
     @ResponseStatus(HttpStatus.CREATED)
     public ApiResponse<Void> register(@Valid @RequestBody RegisterRequest request) {
         authService.register(request);
@@ -118,7 +118,7 @@ public class AuthController {
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "429", description = "비밀번호 5회 이상 틀려 30분 잠금 상태", content = @Content),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "500", description = "서버 오류", content = @Content)
     })
-    @PostMapping("/login")
+    @PostMapping("/signin")
     public ApiResponse<LoginResponse> login(@Valid @RequestBody LoginRequest request,
                                             HttpServletRequest httpRequest) {
         return ApiResponse.ok(authService.login(

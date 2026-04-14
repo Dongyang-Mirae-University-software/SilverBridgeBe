@@ -7,6 +7,7 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import kr.silverbridge.main.domain.auth.dto.PasswordResetConfirmRequest;
+import kr.silverbridge.main.domain.auth.dto.PasswordResetEmailVerifyRequest;
 import kr.silverbridge.main.domain.auth.dto.PasswordResetRequest;
 import kr.silverbridge.main.domain.auth.dto.PasswordResetSmsSendRequest;
 import kr.silverbridge.main.domain.auth.dto.PasswordResetSmsVerifyRequest;
@@ -23,41 +24,92 @@ import org.springframework.web.bind.annotation.RestController;
 
 @Tag(name = "인증")
 @RestController
-@RequestMapping("/api/auth/password")
+@RequestMapping("/api/auth")
 @RequiredArgsConstructor
 public class PasswordResetController {
 
     private final PasswordResetService passwordResetService;
     private final RateLimitService rateLimitService;
 
+    // ── 이메일 방식 ─────────────────────────────────────────────────────────
+
     @Operation(
-            summary = "[이메일 방식 1단계] 비밀번호 재설정 이메일 발송",
+            summary = "[이메일 방식 1단계] 비밀번호 재설정 인증코드 이메일 발송",
             description = """
-                    가입된 이메일로 비밀번호 재설정 코드(token)를 메일로 발송합니다.
+                    가입된 이메일로 6자리 비밀번호 재설정 인증코드를 발송합니다.
 
                     [이메일 방식 전체 흐름]
-                    1. POST /api/auth/password/reset-request    → 재설정 이메일 발송
-                    2. 이메일에서 token 값 확인
-                    3. POST /api/auth/password/reset            → token + 새 비밀번호로 변경
+                    1. POST /api/auth/find-password/email/send      → 인증코드 이메일 발송
+                    2. POST /api/auth/find-password/email/verify    → 인증코드 확인 → token 반환
+                    3. POST /api/auth/password/reset                → token + 새 비밀번호로 변경
 
                     [주의사항]
                     - 보안상 이유로 해당 이메일이 존재하지 않아도 200을 반환합니다. (이메일 존재 여부 노출 방지)
                     - 카카오로 가입한 계정은 이메일이 있어도 발송되지 않습니다.
-                    - token 유효 시간: 30분
+                    - 인증코드 유효 시간: 5분 / 재발송 가능 시간: 1분 후
                     """
     )
     @ApiResponses({
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "요청 처리 완료 (이메일 미존재 또는 카카오 계정이어도 동일하게 200 반환)"),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "이메일 형식 오류", content = @Content),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "429", description = "1분 이내 재발송 불가 또는 API 요청 속도 제한", content = @Content),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "500", description = "서버 오류", content = @Content)
     })
-    @PostMapping("/reset-request")
-    public ApiResponse<Void> requestReset(@Valid @RequestBody PasswordResetRequest request,
-                                          HttpServletRequest httpRequest) {
+    @PostMapping("/find-password/email/send")
+    public ApiResponse<Void> sendEmailCode(@Valid @RequestBody PasswordResetRequest request,
+                                           HttpServletRequest httpRequest) {
         rateLimitService.check(RedisKeys.RATE_LIMIT + "pw-reset:" + httpRequest.getRemoteAddr());
-        passwordResetService.requestReset(request);
-        return ApiResponse.ok("비밀번호 재설정 이메일이 발송되었습니다.");
+        passwordResetService.sendEmailCode(request);
+        return ApiResponse.ok("비밀번호 재설정 인증코드가 이메일로 발송되었습니다.");
     }
+
+    @Operation(
+            summary = "[이메일 방식 2단계] 인증코드 확인 및 재설정 token 발급",
+            description = """
+                    이메일로 받은 인증코드를 확인합니다.
+                    인증 성공 시 비밀번호 변경에 필요한 token이 반환됩니다.
+                    반환된 token을 POST /api/auth/password/reset 의 token 필드에 전달하세요.
+
+                    [제한사항]
+                    - token 유효 시간: 30분
+                    - 5회 이상 오류 시 인증코드 초기화 → 인증코드 재발송 필요
+                    """
+    )
+    @ApiResponses({
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "인증 성공. 응답의 token 값을 POST /api/auth/password/reset 에 전달하세요."),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "인증코드 불일치 / 인증코드 만료 / 5회 이상 오류로 인증코드 초기화됨", content = @Content),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "사용자를 찾을 수 없음", content = @Content)
+    })
+    @PostMapping("/find-password/email/verify")
+    public ApiResponse<PasswordResetTokenResponse> verifyEmailCode(
+            @Valid @RequestBody PasswordResetEmailVerifyRequest request) {
+        return ApiResponse.ok(passwordResetService.verifyEmailCodeAndIssueToken(request));
+    }
+
+    @Operation(
+            summary = "[이메일 방식] 인증코드 재발송",
+            description = """
+                    비밀번호 재설정 인증코드를 이메일로 재발송합니다.
+                    재발송 시 기존 인증코드는 즉시 무효화됩니다.
+
+                    [제한사항]
+                    - 재발송 가능 시간: 1분 후
+                    - 보안상 이유로 해당 이메일이 존재하지 않아도 200을 반환합니다.
+                    """
+    )
+    @ApiResponses({
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "요청 처리 완료"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "이메일 형식 오류", content = @Content),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "429", description = "1분 이내 재발송 불가", content = @Content),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "500", description = "서버 오류", content = @Content)
+    })
+    @PostMapping("/find-password/email/resend")
+    public ApiResponse<Void> resendEmailCode(@Valid @RequestBody PasswordResetRequest request) {
+        passwordResetService.sendEmailCode(request);
+        return ApiResponse.ok("비밀번호 재설정 인증코드가 재발송되었습니다.");
+    }
+
+    // ── SMS 방식 ─────────────────────────────────────────────────────────────
 
     @Operation(
             summary = "[SMS 방식 1단계] 비밀번호 재설정 인증코드 발송",
@@ -65,9 +117,9 @@ public class PasswordResetController {
                     이름과 전화번호로 가입 여부를 확인 후 인증코드를 SMS로 발송합니다.
 
                     [SMS 방식 전체 흐름]
-                    1. POST /api/auth/password/sms/send      → 인증코드 SMS 발송
-                    2. POST /api/auth/password/sms/verify    → 인증코드 확인 → token 반환
-                    3. POST /api/auth/password/reset         → token + 새 비밀번호로 변경
+                    1. POST /api/auth/find-password/sms/send      → 인증코드 SMS 발송
+                    2. POST /api/auth/find-password/sms/verify    → 인증코드 확인 → token 반환
+                    3. POST /api/auth/password/reset              → token + 새 비밀번호로 변경
 
                     [주의사항]
                     - 보안상 이유로 일치하는 계정이 없어도 200을 반환합니다. (가입 여부 노출 방지)
@@ -79,10 +131,10 @@ public class PasswordResetController {
     @ApiResponses({
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "요청 처리 완료 (일치하는 계정 없거나 카카오 계정이어도 동일하게 200 반환)"),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "입력값 오류", content = @Content),
-            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "429", description = "1분 이내 재발송 불가 (재발송 제한, content = @Content)"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "429", description = "1분 이내 재발송 불가", content = @Content),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "500", description = "SMS 발송 실패", content = @Content)
     })
-    @PostMapping("/sms/send")
+    @PostMapping("/find-password/sms/send")
     public ApiResponse<Void> sendSms(@Valid @RequestBody PasswordResetSmsSendRequest request) {
         passwordResetService.requestResetBySms(request);
         return ApiResponse.ok("비밀번호 재설정 인증코드가 발송되었습니다.");
@@ -105,11 +157,36 @@ public class PasswordResetController {
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "인증코드 불일치 / 인증코드 만료 / 5회 이상 오류로 인증코드 초기화됨", content = @Content),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "사용자를 찾을 수 없음", content = @Content)
     })
-    @PostMapping("/sms/verify")
-    public ApiResponse<PasswordResetTokenResponse> verifySms(@Valid @RequestBody PasswordResetSmsVerifyRequest request) {
-        PasswordResetTokenResponse response = passwordResetService.verifySmsAndIssueToken(request);
-        return ApiResponse.ok(response);
+    @PostMapping("/find-password/sms/verify")
+    public ApiResponse<PasswordResetTokenResponse> verifySms(
+            @Valid @RequestBody PasswordResetSmsVerifyRequest request) {
+        return ApiResponse.ok(passwordResetService.verifySmsAndIssueToken(request));
     }
+
+    @Operation(
+            summary = "[SMS 방식] 인증코드 재발송",
+            description = """
+                    비밀번호 재설정 인증코드를 SMS로 재발송합니다.
+                    재발송 시 기존 인증코드는 즉시 무효화됩니다.
+
+                    [제한사항]
+                    - 재발송 가능 시간: 1분 후
+                    - 보안상 이유로 일치하는 계정이 없어도 200을 반환합니다.
+                    """
+    )
+    @ApiResponses({
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "요청 처리 완료"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "입력값 오류", content = @Content),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "429", description = "1분 이내 재발송 불가", content = @Content),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "500", description = "SMS 발송 실패", content = @Content)
+    })
+    @PostMapping("/find-password/sms/resend")
+    public ApiResponse<Void> resendSms(@Valid @RequestBody PasswordResetSmsSendRequest request) {
+        passwordResetService.requestResetBySms(request);
+        return ApiResponse.ok("비밀번호 재설정 인증코드가 재발송되었습니다.");
+    }
+
+    // ── 공통 ──────────────────────────────────────────────────────────────────
 
     @Operation(
             summary = "[공통 마지막 단계] 새 비밀번호 설정",
@@ -118,22 +195,21 @@ public class PasswordResetController {
                     변경 성공 시 모든 기기에서 자동 로그아웃됩니다. (재로그인 필요)
 
                     [token 출처]
-                    - 이메일 방식: 메일 본문의 token 값
-                    - SMS 방식: POST /api/auth/password/sms/verify 응답의 token 값
+                    - 이메일 방식: POST /api/auth/find-password/email/verify 응답의 token 값
+                    - SMS 방식: POST /api/auth/find-password/sms/verify 응답의 token 값
 
                     [비밀번호 조건]
                     - 숫자·특수문자 포함, 공백 없이 8자 이상
                     - 현재 비밀번호와 동일 불가
-                    - 최근 사용한 비밀번호 2개와 동일 불가
                     """
     )
     @ApiResponses({
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "비밀번호 변경 성공. 모든 기기에서 로그아웃됨 → 재로그인 필요"),
-            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "token 만료 또는 유효하지 않음 / 현재 또는 최근 사용한 비밀번호와 동일 / 비밀번호 형식 오류", content = @Content),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "token 만료 또는 유효하지 않음 / 현재 비밀번호와 동일 / 비밀번호 형식 오류", content = @Content),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "사용자를 찾을 수 없음", content = @Content),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "500", description = "서버 오류", content = @Content)
     })
-    @PostMapping("/reset")
+    @PostMapping("/password/reset")
     public ApiResponse<Void> confirmReset(@Valid @RequestBody PasswordResetConfirmRequest request) {
         passwordResetService.confirmReset(request);
         return ApiResponse.ok("비밀번호가 변경되었습니다.");
