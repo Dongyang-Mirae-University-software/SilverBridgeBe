@@ -3,12 +3,12 @@ FROM gradle:8.14-jdk21 AS builder
 
 WORKDIR /app
 
-# Gradle 전역 메모리 설정
+# Gradle JVM 메모리 설정 (컨테이너 OOM 방지)
 ENV GRADLE_OPTS="-Dorg.gradle.daemon=false \
-                 -Dorg.gradle.jvmargs=-Xmx512m \
+                 -Dorg.gradle.jvmargs=-Xmx1g \
                  -Dorg.gradle.workers.max=1"
 
-# 의존성 캐싱
+# 의존성 캐싱 — 소스 변경 시 의존성 재다운로드 방지
 COPY build.gradle settings.gradle ./
 COPY gradle ./gradle
 RUN gradle dependencies --no-daemon || true
