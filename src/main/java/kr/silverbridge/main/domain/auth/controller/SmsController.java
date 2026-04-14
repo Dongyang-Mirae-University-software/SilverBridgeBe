@@ -17,14 +17,14 @@ import org.springframework.web.bind.annotation.RestController;
 
 @Tag(name = "인증")
 @RestController
-@RequestMapping("/api/auth/sms")
+@RequestMapping("/api/auth/signup/sms")
 @RequiredArgsConstructor
 public class SmsController {
 
     private final SmsService smsService;
 
     @Operation(
-            summary = "SMS 인증코드 발송",
+            summary = "회원가입 SMS 인증코드 발송",
             description = """
                     입력한 전화번호로 6자리 인증코드를 발송합니다.
                     회원가입 및 전화번호 변경 시 공통으로 사용합니다.
@@ -42,8 +42,8 @@ public class SmsController {
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "SMS 발송 성공"),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "전화번호 형식 오류", content = @Content),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "409", description = "이미 가입된 전화번호", content = @Content),
-            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "429", description = "1분 이내 재발송 불가 (재발송 제한, content = @Content)"),
-            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "500", description = "SMS 발송 실패 (통신사 오류, content = @Content)")
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "429", description = "1분 이내 재발송 불가", content = @Content),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "500", description = "SMS 발송 실패 (통신사 오류)", content = @Content)
     })
     @PostMapping("/send")
     public ApiResponse<Void> send(@Valid @RequestBody SmsSendRequest request) {
@@ -52,10 +52,10 @@ public class SmsController {
     }
 
     @Operation(
-            summary = "SMS 인증코드 확인",
+            summary = "회원가입 SMS 인증코드 확인",
             description = """
                     발송된 인증코드를 입력하여 전화번호를 인증합니다.
-                    인증 완료 후 10분 이내에 회원가입(POST /api/auth/register 또는 POST /api/auth/kakao/register)을 진행해야 합니다.
+                    인증 완료 후 10분 이내에 회원가입(POST /api/auth/signup 또는 POST /api/auth/signup/kakao)을 진행해야 합니다.
 
                     [제한사항]
                     - 5회 이상 오류 시 인증코드가 초기화됩니다. → 인증코드 재발송 필요
@@ -70,5 +70,28 @@ public class SmsController {
     public ApiResponse<Void> verify(@Valid @RequestBody SmsVerifyRequest request) {
         smsService.verifyCode(request);
         return ApiResponse.ok("SMS 인증이 완료되었습니다.");
+    }
+
+    @Operation(
+            summary = "회원가입 SMS 인증코드 재발송",
+            description = """
+                    인증코드를 재발송합니다.
+                    재발송 시 기존 인증코드는 즉시 무효화됩니다.
+
+                    [제한사항]
+                    - 재발송 가능 시간: 1분 후
+                    """
+    )
+    @ApiResponses({
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "SMS 재발송 성공"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "전화번호 형식 오류", content = @Content),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "409", description = "이미 가입된 전화번호", content = @Content),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "429", description = "1분 이내 재발송 불가", content = @Content),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "500", description = "SMS 발송 실패 (통신사 오류)", content = @Content)
+    })
+    @PostMapping("/resend")
+    public ApiResponse<Void> resend(@Valid @RequestBody SmsSendRequest request) {
+        smsService.sendVerificationCode(request);
+        return ApiResponse.ok("인증코드가 재발송되었습니다.");
     }
 }
