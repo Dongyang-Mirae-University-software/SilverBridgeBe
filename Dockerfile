@@ -5,6 +5,10 @@ FROM eclipse-temurin:21-jdk AS builder
 
 WORKDIR /app
 
+# gradle.properties의 org.gradle.jvmargs와 일치시켜 fork 방지
+# fork가 발생하더라도 자식 프로세스가 환경변수를 상속받아 동일한 메모리로 뜸
+ENV JAVA_TOOL_OPTIONS="-Xmx2g -XX:MaxMetaspaceSize=512m -Dfile.encoding=UTF-8"
+
 # [캐시 최적화 전략]
 # --mount=type=cache,target=/root/.gradle
 #   → Gradle 배포판(wrapper/dists) + 의존성(caches) 빌드 간 영구 보존
