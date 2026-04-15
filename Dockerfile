@@ -11,7 +11,7 @@ WORKDIR /app
 #   → 첫 빌드 이후 Gradle 재다운로드 없음
 # build.gradle을 src보다 먼저 복사
 #   → 소스만 변경된 경우 의존성 레이어 캐시 HIT
-COPY build.gradle settings.gradle ./
+COPY build.gradle settings.gradle gradle.properties ./
 COPY gradle ./gradle
 COPY gradlew ./
 RUN --mount=type=cache,target=/root/.gradle \
