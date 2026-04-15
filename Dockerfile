@@ -1,29 +1,15 @@
 # ─── 1단계: 빌드 ───────────────────────────────────────────
-# 공식 gradle 이미지는 applyInstrumentationAgent=true로 인해 daemon fork → crash 발생
-# eclipse-temurin + ./gradlew 방식 사용 (instrumentation agent 미적용)
-FROM eclipse-temurin:21-jdk AS builder
+FROM gradle:9.4.1-jdk21 AS builder
 
 WORKDIR /app
 
-# gradle.properties의 org.gradle.jvmargs와 일치시켜 fork 방지
-# fork가 발생하더라도 자식 프로세스가 환경변수를 상속받아 동일한 메모리로 뜸
-ENV JAVA_TOOL_OPTIONS="-Xmx2g -XX:MaxMetaspaceSize=512m -Dfile.encoding=UTF-8"
-
-# [캐시 최적화 전략]
-# --mount=type=cache,target=/root/.gradle
-#   → Gradle 배포판(wrapper/dists) + 의존성(caches) 빌드 간 영구 보존
-#   → 첫 빌드 이후 Gradle 재다운로드 없음
-# build.gradle을 src보다 먼저 복사
-#   → 소스만 변경된 경우 의존성 레이어 캐시 HIT
+# 의존성 캐싱 — 소스 변경 시 의존성 재다운로드 방지
 COPY build.gradle settings.gradle gradle.properties ./
 COPY gradle ./gradle
-COPY gradlew ./
-RUN --mount=type=cache,target=/root/.gradle \
-    ./gradlew dependencies --no-daemon || true
+RUN gradle dependencies --no-daemon || true
 
 COPY src ./src
-RUN --mount=type=cache,target=/root/.gradle \
-    ./gradlew bootJar --no-daemon -x test
+RUN gradle bootJar --no-daemon -x test
 
 # ─── 2단계: 실행 ───────────────────────────────────────────
 FROM eclipse-temurin:21-jre
