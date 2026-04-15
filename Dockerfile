@@ -1,15 +1,16 @@
 # ─── 1단계: 빌드 ───────────────────────────────────────────
-FROM gradle:8.11-jdk21 AS builder
+FROM eclipse-temurin:21-jdk AS builder
 
 WORKDIR /app
 
 # 의존성 캐싱 — 소스 변경 시 의존성 재다운로드 방지
 COPY build.gradle settings.gradle ./
 COPY gradle ./gradle
-RUN gradle dependencies --no-daemon || true
+COPY gradlew ./
+RUN ./gradlew dependencies --no-daemon || true
 
 COPY src ./src
-RUN gradle bootJar --no-daemon -x test
+RUN ./gradlew bootJar --no-daemon -x test
 
 # ─── 2단계: 실행 ───────────────────────────────────────────
 FROM eclipse-temurin:21-jre
