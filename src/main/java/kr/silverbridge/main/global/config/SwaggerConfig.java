@@ -59,23 +59,29 @@ public class SwaggerConfig {
             // 프론트엔드가 구현해야 하는 순서
             List<String> desiredOrder = List.of(
                     // 1. 로그인/인증 핵심
-                    "/api/auth/login",
+                    "/api/auth/signin",
+                    "/api/auth/signin/kakao",
                     "/api/auth/refresh",
                     "/api/auth/logout",
                     // 2. 일반 회원가입 플로우
-                    "/api/auth/email/check",
-                    "/api/auth/sms/send",
-                    "/api/auth/sms/verify",
-                    "/api/auth/register",
+                    "/api/auth/signup/email/check",
+                    "/api/auth/signup/sms/send",
+                    "/api/auth/signup/sms/verify",
+                    "/api/auth/signup/sms/resend",
+                    "/api/auth/signup",
                     // 3. 카카오 회원가입 플로우
-                    "/api/auth/kakao",
-                    "/api/auth/kakao/register",
+                    "/api/auth/signup/kakao",
                     // 4. 이메일 찾기
                     "/api/auth/find-email",
-                    // 5. 비밀번호 재설정 플로우
-                    "/api/auth/password/reset-request",
-                    "/api/auth/password/sms/send",
-                    "/api/auth/password/sms/verify",
+                    // 5. 비밀번호 찾기 - 이메일 방식
+                    "/api/auth/find-password/email/send",
+                    "/api/auth/find-password/email/verify",
+                    "/api/auth/find-password/email/resend",
+                    // 6. 비밀번호 찾기 - SMS 방식
+                    "/api/auth/find-password/sms/send",
+                    "/api/auth/find-password/sms/verify",
+                    "/api/auth/find-password/sms/resend",
+                    // 7. 비밀번호 재설정 (공통)
                     "/api/auth/password/reset"
             );
 
