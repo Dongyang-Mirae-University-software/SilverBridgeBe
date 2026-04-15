@@ -1,6 +1,7 @@
 package kr.silverbridge.main.domain.auth.service;
 
 import kr.silverbridge.main.domain.auth.dto.PasswordResetConfirmRequest;
+import kr.silverbridge.main.domain.auth.dto.PasswordResetEmailVerifyRequest;
 import kr.silverbridge.main.domain.auth.dto.PasswordResetRequest;
 import kr.silverbridge.main.domain.auth.dto.PasswordResetSmsSendRequest;
 import kr.silverbridge.main.domain.auth.dto.PasswordResetSmsVerifyRequest;
@@ -64,6 +65,19 @@ public class PasswordResetService {
 
         sendResetEmail(user.getEmail(), token);
         log.info("비밀번호 재설정 이메일 발송 완료: {}", user.getEmail());
+    }
+
+    // [이메일 방식] 비밀번호 재설정 토큰 검증
+    // 이메일로 수신한 token이 유효한지 확인 후 동일 token 반환 (비밀번호 재설정 화면 진입 용도)
+    public PasswordResetTokenResponse verifyEmailToken(PasswordResetEmailVerifyRequest request) {
+        String key = RedisKeys.PW_RESET + request.getToken();
+        String userId = redisTemplate.opsForValue().get(key);
+
+        if (userId == null) {
+            throw new CustomException(ErrorCode.INVALID_RESET_TOKEN);
+        }
+
+        return new PasswordResetTokenResponse(request.getToken());
     }
 
     // [SMS 방식] 비밀번호 재설정 인증코드 발송
