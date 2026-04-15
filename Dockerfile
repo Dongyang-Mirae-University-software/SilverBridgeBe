@@ -4,7 +4,7 @@ FROM gradle:9.4.1-jdk21 AS builder
 WORKDIR /app
 
 # 의존성 캐싱 — 소스 변경 시 의존성 재다운로드 방지
-COPY build.gradle settings.gradle gradle.properties ./
+COPY build.gradle settings.gradle ./
 COPY gradle ./gradle
 RUN gradle dependencies --no-daemon || true
 
