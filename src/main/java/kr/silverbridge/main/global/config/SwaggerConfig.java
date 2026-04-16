@@ -32,12 +32,12 @@ public class SwaggerConfig {
                         new Tag().name("인증")
                                 .description("회원가입 / 로그인 / 로그아웃 / 이메일·카카오 인증 / SMS 인증 / 비밀번호 찾기 및 재설정\n" +
                                         "※ 로그인·회원가입 관련 API는 토큰 없이 호출 가능. 로그아웃은 토큰 필요."),
-                        new Tag().name("사용자")
-                                .description("내 정보 조회 및 수정 / 비밀번호 변경 / 회원 탈퇴\n" +
-                                        "※ 모든 API에 Authorization: Bearer {accessToken} 헤더 필수."),
                         new Tag().name("관리자")
                                 .description("사용자 관리 및 접속 로그 조회\n" +
-                                        "※ 모든 API에 Authorization: Bearer {accessToken} 헤더 필수. ADMIN 권한 계정만 호출 가능.")
+                                        "※ 모든 API에 Authorization: Bearer {accessToken} 헤더 필수. ADMIN 권한 계정만 호출 가능."),
+                        new Tag().name("사용자")
+                                .description("내 정보 조회 및 수정 / 비밀번호 변경 / 회원 탈퇴\n" +
+                                        "※ 모든 API에 Authorization: Bearer {accessToken} 헤더 필수.")
                 ))
                 // 전역 JWT Bearer 인증 적용
                 .addSecurityItem(new SecurityRequirement().addList(SECURITY_SCHEME_NAME))
@@ -50,7 +50,7 @@ public class SwaggerConfig {
                                         .bearerFormat("JWT")));
     }
 
-    // 인증 태그 API 표시 순서 제어 (프론트엔드 구현 순서 기준)
+    // 전체 API 표시 순서 제어 (프론트엔드 구현 순서 기준)
     @Bean
     public OpenApiCustomizer operationOrderCustomizer() {
         return openApi -> {
@@ -58,31 +58,50 @@ public class SwaggerConfig {
 
             // 프론트엔드가 구현해야 하는 순서
             List<String> desiredOrder = List.of(
-                    // 1. 로그인/인증 핵심
+                    // ── [인증] ──────────────────────────────────────
                     "/api/auth/signin",
                     "/api/auth/signin/kakao",
-                    "/api/auth/refresh",
-                    "/api/auth/logout",
-                    // 2. 일반 회원가입 플로우
+                    "/api/auth/signup",
+                    "/api/auth/signup/kakao",
                     "/api/auth/signup/email/check",
                     "/api/auth/signup/sms/send",
                     "/api/auth/signup/sms/verify",
                     "/api/auth/signup/sms/resend",
-                    "/api/auth/signup",
-                    // 3. 카카오 회원가입 플로우
-                    "/api/auth/signup/kakao",
-                    // 4. 이메일 찾기
-                    "/api/auth/find-email",
-                    // 5. 비밀번호 찾기 - 이메일 방식
                     "/api/auth/find-password/email/send",
                     "/api/auth/find-password/email/verify",
                     "/api/auth/find-password/email/resend",
-                    // 6. 비밀번호 찾기 - SMS 방식
                     "/api/auth/find-password/sms/send",
                     "/api/auth/find-password/sms/verify",
                     "/api/auth/find-password/sms/resend",
-                    // 7. 비밀번호 재설정 (공통)
-                    "/api/auth/password/reset"
+                    "/api/auth/password/reset",
+                    "/api/auth/logout",
+                    "/api/auth/refresh",
+                    "/api/auth/find-email",
+                    // ── [관리자] ─────────────────────────────────────
+                    "/api/admin/announcement/select",
+                    "/api/admin/announcement/select/detail/{id}",
+                    "/api/admin/announcement/create",
+                    "/api/admin/announcement/update/{id}",
+                    "/api/admin/announcement/delete/{id}",
+                    "/api/admin/user/select",
+                    "/api/admin/user/select/detail/{userId}",
+                    "/api/admin/user/delete/{userId}",
+                    "/api/admin/accesslog/select",
+                    "/api/admin/user/status-change/{userId}",
+                    "/api/admin/user/role-change/{userId}",
+                    "/api/admin/user/connection/select",
+                    "/api/admin/user/connection/force",
+                    "/api/admin/user/disconnection/force",
+                    "/api/admin/user/connection/guardian/{guardianId}",
+                    "/api/admin/game/result/select",
+                    "/api/admin/audit/select",
+                    "/api/admin/event/abnormal",
+                    // ── [사용자] ─────────────────────────────────────
+                    "/api/user/me/select",
+                    "/api/user/me/update",
+                    "/api/user/me/update/password-change",
+                    "/api/user/me/update/image-change",
+                    "/api/user/me/delete"
             );
 
             Map<String, PathItem> original = new LinkedHashMap<>(openApi.getPaths());
