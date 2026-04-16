@@ -38,7 +38,7 @@ public class KakaoLoginResponse {
     @Schema(description = "[기존 회원 전용] Access Token 만료 시 재발급에 사용하는 토큰. POST /api/auth/refresh 에 전달. 유효 시간: 14일", example = "eyJhbGciOiJIUzI1NiJ9...")
     private String refreshToken;
 
-    @Schema(description = "[기존 회원 전용] 사용자 고유 ID (UUID)", example = "a1b2c3d4-e5f6-7890-abcd-ef1234567890")
+    @Schema(description = "[기존 회원 전용] 사용자 고유 ID (6자 영숫자)", example = "aB3x9Z")
     private String userId;
 
     @Schema(description = "[기존 회원 전용] 사용자 역할. WARD: 피보호자, GUARDIAN: 보호자", example = "GUARDIAN", allowableValues = {"WARD", "GUARDIAN"})
