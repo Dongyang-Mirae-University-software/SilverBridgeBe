@@ -11,7 +11,9 @@ import kr.silverbridge.main.domain.auth.dto.SmsVerifyRequest;
 import kr.silverbridge.main.domain.user.repository.UserRepository;
 import kr.silverbridge.main.global.exception.CustomException;
 import kr.silverbridge.main.global.exception.ErrorCode;
+import kr.silverbridge.main.global.util.MaskingUtil;
 import kr.silverbridge.main.global.util.RedisKeys;
+import kr.silverbridge.main.global.util.VerificationCodeValidator;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
@@ -28,6 +30,7 @@ public class SmsService {
 
     private final UserRepository userRepository;
     private final StringRedisTemplate redisTemplate;
+    private final VerificationCodeValidator verificationCodeValidator;
 
     @Value("${solapi.api-key}")
     private String apiKey;
@@ -69,45 +72,27 @@ public class SmsService {
         // 재발송 대기 설정 (1분)
         redisTemplate.opsForValue().set(RedisKeys.SMS_COOLDOWN + phone, "1", COOLDOWN_TTL, TimeUnit.MINUTES);
 
-        log.info("SMS 인증코드 발송 완료: {}", phone);
+        log.info("SMS 인증코드 발송 완료: {}", MaskingUtil.maskPhone(phone));
     }
 
     // 인증코드 확인
     // 코드 만료 확인 → 오류 횟수 확인 → 코드 일치 확인 → 인증 완료 처리
     public void verifyCode(SmsVerifyRequest request) {
-        String phone      = request.getPhone();
-        String verifyKey  = RedisKeys.SMS_VERIFY + phone;
-        String attemptKey = RedisKeys.SMS_ATTEMPT + phone;
+        String phone = request.getPhone();
 
-        String savedCode = redisTemplate.opsForValue().get(verifyKey);
+        verificationCodeValidator.verify(
+                RedisKeys.SMS_VERIFY + phone,
+                RedisKeys.SMS_ATTEMPT + phone,
+                request.getCode(),
+                CODE_TTL,
+                MAX_ATTEMPTS
+        );
 
-        if (savedCode == null) {
-            throw new CustomException(ErrorCode.EXPIRED_SMS_CODE);
-        }
-
-        if (!savedCode.equals(request.getCode())) {
-            // 오류 횟수 증가
-            Long attempts = redisTemplate.opsForValue().increment(attemptKey);
-            // 오류 횟수 만료 시간을 인증코드와 동일하게 설정
-            redisTemplate.expire(attemptKey, CODE_TTL, TimeUnit.MINUTES);
-
-            // 5회 이상 오류 시 인증코드 즉시 무효화
-            if (attempts != null && attempts >= MAX_ATTEMPTS) {
-                redisTemplate.delete(verifyKey);
-                redisTemplate.delete(attemptKey);
-                throw new CustomException(ErrorCode.SMS_TOO_MANY_ATTEMPTS);
-            }
-
-            throw new CustomException(ErrorCode.INVALID_SMS_CODE);
-        }
-
-        // 인증 완료 — 인증코드 및 오류 횟수 삭제, 인증 완료 상태 저장 (10분 유효)
-        redisTemplate.delete(verifyKey);
-        redisTemplate.delete(attemptKey);
+        // 인증 완료 상태 저장 (10분 유효)
         redisTemplate.opsForValue()
                 .set(RedisKeys.SMS_VERIFIED + phone, "true", VERIFIED_TTL, TimeUnit.MINUTES);
 
-        log.info("SMS 인증 완료: {}", phone);
+        log.info("SMS 인증 완료: {}", MaskingUtil.maskPhone(phone));
     }
 
     // Solapi를 통해 SMS 발송 (공통 발송 처리)

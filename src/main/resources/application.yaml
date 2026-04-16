@@ -63,3 +63,9 @@ solapi:
 
 file-server:
   base-url: https://v1api.brtech.gosky.kr
+
+springdoc:
+  api-docs:
+    enabled: ${SWAGGER_ENABLED:true}
+  swagger-ui:
+    enabled: ${SWAGGER_ENABLED:true}
