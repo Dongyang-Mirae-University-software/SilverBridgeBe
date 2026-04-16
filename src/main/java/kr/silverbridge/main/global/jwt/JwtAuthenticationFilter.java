@@ -93,8 +93,12 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
         response.setStatus(status);
         response.setContentType(MediaType.APPLICATION_JSON_VALUE);
         response.setCharacterEncoding("UTF-8");
-        response.getWriter().write(
-                OBJECT_MAPPER.writeValueAsString(Map.of("success", false, "message", message))
-        );
+        try {
+            response.getWriter().write(
+                    OBJECT_MAPPER.writeValueAsString(Map.of("success", false, "message", message))
+            );
+        } catch (Exception e) {
+            response.getWriter().write("{\"success\":false,\"message\":\"서버 오류가 발생했습니다.\"}");
+        }
     }
 }

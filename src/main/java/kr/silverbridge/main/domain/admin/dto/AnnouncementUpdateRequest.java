@@ -16,5 +16,6 @@ public class AnnouncementUpdateRequest {
 
     @Schema(description = "수정할 내용", example = "점검 시간이 변경되었습니다. 오전 3시부터 5시까지입니다.")
     @NotBlank(message = "내용을 입력해주세요.")
+    @Size(max = 5000, message = "내용은 5000자 이내로 입력해주세요.")
     private String content;
 }

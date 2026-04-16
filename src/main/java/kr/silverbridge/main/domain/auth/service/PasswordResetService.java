@@ -12,7 +12,9 @@ import kr.silverbridge.main.domain.user.repository.UserRepository;
 import kr.silverbridge.main.global.enums.AccessAction;
 import kr.silverbridge.main.global.exception.CustomException;
 import kr.silverbridge.main.global.exception.ErrorCode;
+import kr.silverbridge.main.global.util.MaskingUtil;
 import kr.silverbridge.main.global.util.RedisKeys;
+import kr.silverbridge.main.global.util.VerificationCodeValidator;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
@@ -39,6 +41,7 @@ public class PasswordResetService {
     private final PasswordEncoder passwordEncoder;
     private final StringRedisTemplate redisTemplate;
     private final SmsService smsService;
+    private final VerificationCodeValidator verificationCodeValidator;
 
     private static final long RESET_TOKEN_TTL  = 30L; // 재설정 코드 유효 시간 (분)
     private static final long SMS_CODE_TTL     = 5L;  // 인증코드 유효 시간 (분)
@@ -64,7 +67,7 @@ public class PasswordResetService {
                 .set(RedisKeys.PW_RESET + token, user.getId(), RESET_TOKEN_TTL, TimeUnit.MINUTES);
 
         sendResetEmail(user.getEmail(), token);
-        log.info("비밀번호 재설정 이메일 발송 완료: {}", user.getEmail());
+        log.info("비밀번호 재설정 이메일 발송 완료: {}", MaskingUtil.maskEmail(user.getEmail()));
     }
 
     // [이메일 방식] 비밀번호 재설정 토큰 검증
@@ -113,41 +116,21 @@ public class PasswordResetService {
         // 재발송 대기 설정 (1분)
         redisTemplate.opsForValue().set(RedisKeys.PW_SMS_COOLDOWN + phone, "1", SMS_COOLDOWN_TTL, TimeUnit.MINUTES);
 
-        log.info("비밀번호 재설정 SMS 발송 완료: {}", phone);
+        log.info("비밀번호 재설정 SMS 발송 완료: {}", MaskingUtil.maskPhone(phone));
     }
 
     // [SMS 방식] 인증코드 확인 후 재설정 코드 발급
     // 코드 만료 확인 → 오류 횟수 확인 → 코드 일치 확인 → 재설정 코드 발급
     public PasswordResetTokenResponse verifySmsAndIssueToken(PasswordResetSmsVerifyRequest request) {
-        String phone      = request.getPhone();
-        String verifyKey  = RedisKeys.PW_SMS_VERIFY + phone;
-        String attemptKey = RedisKeys.PW_SMS_ATTEMPT + phone;
+        String phone = request.getPhone();
 
-        String savedCode = redisTemplate.opsForValue().get(verifyKey);
-
-        if (savedCode == null) {
-            throw new CustomException(ErrorCode.EXPIRED_SMS_CODE);
-        }
-
-        if (!savedCode.equals(request.getCode())) {
-            // 오류 횟수 증가
-            Long attempts = redisTemplate.opsForValue().increment(attemptKey);
-            // 오류 횟수 만료 시간을 인증코드와 동일하게 설정
-            redisTemplate.expire(attemptKey, SMS_CODE_TTL, TimeUnit.MINUTES);
-
-            // 5회 이상 오류 시 인증코드 즉시 무효화
-            if (attempts != null && attempts >= SMS_MAX_ATTEMPTS) {
-                redisTemplate.delete(verifyKey);
-                redisTemplate.delete(attemptKey);
-                throw new CustomException(ErrorCode.SMS_TOO_MANY_ATTEMPTS);
-            }
-
-            throw new CustomException(ErrorCode.INVALID_SMS_CODE);
-        }
-
-        // 인증 완료 — 인증코드 및 오류 횟수 삭제
-        redisTemplate.delete(verifyKey);
-        redisTemplate.delete(attemptKey);
+        verificationCodeValidator.verify(
+                RedisKeys.PW_SMS_VERIFY + phone,
+                RedisKeys.PW_SMS_ATTEMPT + phone,
+                request.getCode(),
+                SMS_CODE_TTL,
+                SMS_MAX_ATTEMPTS
+        );
 
         // 전화번호로 사용자 조회 후 재설정 코드 발급 (30분 유효)
         User user = userRepository.findByPhone(phone)
@@ -157,7 +140,7 @@ public class PasswordResetService {
         redisTemplate.opsForValue()
                 .set(RedisKeys.PW_RESET + token, user.getId(), RESET_TOKEN_TTL, TimeUnit.MINUTES);
 
-        log.info("비밀번호 재설정 코드 발급 완료: {}", phone);
+        log.info("비밀번호 재설정 토큰 발급 완료: {}", MaskingUtil.maskPhone(phone));
         return new PasswordResetTokenResponse(token);
     }
 
