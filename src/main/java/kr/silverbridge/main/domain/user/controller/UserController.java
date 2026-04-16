@@ -22,7 +22,7 @@ import org.springframework.web.multipart.MultipartFile;
         모든 요청에 Authorization 헤더가 필요합니다: Authorization: Bearer {accessToken}
         """)
 @RestController
-@RequestMapping("/api/users")
+@RequestMapping("/api/user")
 @RequiredArgsConstructor
 @SecurityRequirement(name = "Bearer Authentication")
 public class UserController {
@@ -44,8 +44,7 @@ public class UserController {
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "인증 토큰 없음 또는 만료", content = @Content),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "사용자를 찾을 수 없음", content = @Content),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "500", description = "서버 내부 오류", content = @Content)
-    })
-    @GetMapping("/me")
+    }) @GetMapping("/me/select")
     public ApiResponse<UserProfileResponse> getMyProfile(@AuthenticationPrincipal String userId) {
         return ApiResponse.ok(userService.getMyProfile(userId));
     }
@@ -59,9 +58,9 @@ public class UserController {
                     전화번호는 실제 본인 소유 번호인지 검증하기 위해 SMS 인증이 필요합니다.
                     변경할 번호로 SMS 인증을 먼저 완료한 후 이 API를 호출하세요.
 
-                    1. POST /api/auth/sms/send    → 새 전화번호로 SMS 인증코드 발송
-                    2. POST /api/auth/sms/verify  → 인증코드 확인 (10분 유효)
-                    3. PUT  /api/users/me         → 인증된 새 번호로 정보 수정
+                    1. POST /api/auth/signup/sms/send    → 새 전화번호로 SMS 인증코드 발송
+                    2. POST /api/auth/signup/sms/verify  → 인증코드 확인 (10분 유효)
+                    3. PUT  /api/user/me/update          → 인증된 새 번호로 정보 수정
 
                     전화번호를 변경하지 않는 경우 phone 필드를 생략하거나 기존 번호를 그대로 전달하면 됩니다.
 
@@ -77,7 +76,7 @@ public class UserController {
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "409", description = "이미 사용 중인 전화번호 (SMS 발송 단계에서 먼저 반환되나, safety net으로 동일 응답, content = @Content)"),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "500", description = "서버 오류", content = @Content)
     })
-    @PutMapping("/me")
+    @PutMapping("/me/update")
     public ApiResponse<UserProfileResponse> updateProfile(@AuthenticationPrincipal String userId,
                                                           @Valid @RequestBody UserUpdateRequest request) {
         return ApiResponse.ok(userService.updateProfile(userId, request));
@@ -104,7 +103,7 @@ public class UserController {
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "사용자를 찾을 수 없음", content = @Content),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "500", description = "파일 업로드 실패 또는 서버 오류", content = @Content)
     })
-    @PatchMapping(value = "/me/profile-image", consumes = "multipart/form-data")
+    @PatchMapping(value = "/me/update/image-change", consumes = "multipart/form-data")
     public ApiResponse<UserProfileResponse> updateProfileImage(@AuthenticationPrincipal String userId,
                                                                @RequestParam("file") MultipartFile file) {
         return ApiResponse.ok(userService.updateProfileImage(userId, file));
@@ -129,7 +128,7 @@ public class UserController {
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "사용자를 찾을 수 없음", content = @Content),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "500", description = "서버 내부 오류", content = @Content)
     })
-    @PutMapping("/me/password")
+    @PutMapping("/me/update/password-change")
     public ApiResponse<Void> changePassword(@AuthenticationPrincipal String userId,
                                             @Valid @RequestBody PasswordChangeRequest request) {
         userService.changePassword(userId, request.getCurrentPassword(), request.getNewPassword());
@@ -157,7 +156,7 @@ public class UserController {
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "사용자를 찾을 수 없음", content = @Content),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "500", description = "서버 내부 오류", content = @Content)
     })
-    @DeleteMapping("/me")
+    @DeleteMapping("/me/delete")
     public ApiResponse<Void> withdraw(@AuthenticationPrincipal String userId,
                                       @Valid @RequestBody WithdrawRequest request) {
         userService.withdraw(userId, request.getPassword());
