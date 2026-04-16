@@ -24,7 +24,7 @@ public class AnomalyEvent {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @Column(name = "ward_id", length = 36)
+    @Column(name = "ward_id", length = 6)
     private String wardId;
 
     @Enumerated(EnumType.STRING)

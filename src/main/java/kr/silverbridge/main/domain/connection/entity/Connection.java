@@ -21,17 +21,17 @@ public class Connection extends BaseTimeEntity {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @Column(name = "guardian_id", nullable = false, length = 36)
+    @Column(name = "guardian_id", nullable = false, length = 6)
     private String guardianId;
 
-    @Column(name = "ward_id", nullable = false, length = 36)
+    @Column(name = "ward_id", nullable = false, length = 6)
     private String wardId;
 
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 20)
     private ConnectionStatus status;
 
-    @Column(name = "initiated_by", length = 36)
+    @Column(name = "initiated_by", length = 6)
     private String initiatedBy;
 
     @Column(name = "connected_at")

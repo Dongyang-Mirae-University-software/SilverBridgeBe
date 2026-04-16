@@ -13,7 +13,7 @@ public record AdminAuditLogResponse(
         @Schema(description = "로그 ID", example = "1")
         Long id,
 
-        @Schema(description = "행동한 관리자 UUID", example = "a1b2c3d4-e5f6-7890-abcd-ef1234567890")
+        @Schema(description = "행동한 관리자 ID", example = "aB3x9Z")
         String adminId,
 
         @Schema(description = "관리자 이름 (탈퇴 시 null)", example = "관리자", nullable = true)
@@ -28,7 +28,7 @@ public record AdminAuditLogResponse(
                 example = "USER_STATUS_CHANGE")
         AdminAuditAction action,
 
-        @Schema(description = "대상 ID (userId / connectionId / announcementId)", example = "a1b2c3d4-e5f6-7890-abcd-ef1234567890", nullable = true)
+        @Schema(description = "대상 ID (userId / connectionId / announcementId)", example = "aB3x9Z", nullable = true)
         String targetId,
 
         @Schema(description = "변경 내용 요약", example = "상태 변경: ACTIVE → INACTIVE", nullable = true)

@@ -13,7 +13,7 @@ public record GameResultResponse(
         @Schema(description = "게임 결과 ID", example = "1")
         Long id,
 
-        @Schema(description = "피보호자 UUID", example = "uuid-ward-1234")
+        @Schema(description = "피보호자 UUID", example = "cD4y0W")
         String userId,
 
         @Schema(description = "피보호자 이름", example = "홍길동")
