@@ -15,7 +15,7 @@ public class AccessLogResponse {
     @Schema(description = "로그 ID", example = "1")
     private Long id;
 
-    @Schema(description = "사용자 UUID (탈퇴 시 null)", example = "a1b2c3d4-e5f6-7890-abcd-ef1234567890", nullable = true)
+    @Schema(description = "사용자 ID (탈퇴 시 null)", example = "aB3x9Z", nullable = true)
     private String userId;
 
     @Schema(description = "액션 종류", allowableValues = {"LOGIN", "LOGOUT", "KAKAO_LOGIN", "TOKEN_ISSUE", "PASSWORD_RESET"}, example = "LOGIN")

@@ -19,13 +19,13 @@ import kr.silverbridge.main.global.exception.CustomException;
 import kr.silverbridge.main.global.exception.ErrorCode;
 import kr.silverbridge.main.global.jwt.JwtTokenProvider;
 import kr.silverbridge.main.global.util.RedisKeys;
+import kr.silverbridge.main.global.util.UserIdGenerator;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.util.UUID;
 import java.util.concurrent.TimeUnit;
 
 @Service
@@ -38,6 +38,7 @@ public class KakaoAuthService {
     private final JwtTokenProvider jwtTokenProvider;
     private final AccessLogService accessLogService;
     private final StringRedisTemplate redisTemplate;
+    private final UserIdGenerator userIdGenerator;
 
     @Value("${kakao.redirect-uri}")
     private String redirectUri;
@@ -132,7 +133,7 @@ public class KakaoAuthService {
 
         // 카카오 사용자 DB 저장
         User user = User.builder()
-                .id(UUID.randomUUID().toString())
+                .id(userIdGenerator.generate())
                 .email(email)
                 .password(null)
                 .name(request.getName())

@@ -91,7 +91,7 @@ public class AdminController {
     })
     @GetMapping("/users/{userId}")
     public ApiResponse<UserDetailResponse> getUser(
-            @Parameter(description = "사용자 UUID") @PathVariable String userId) {
+            @Parameter(description = "사용자 ID") @PathVariable String userId) {
         return ApiResponse.ok(adminService.getUser(userId));
     }
 
@@ -115,7 +115,7 @@ public class AdminController {
     })
     @PatchMapping("/users/{userId}/status")
     public ApiResponse<Void> updateUserStatus(
-            @Parameter(description = "사용자 UUID") @PathVariable String userId,
+            @Parameter(description = "사용자 ID") @PathVariable String userId,
             @Valid @RequestBody UserStatusUpdateRequest request,
             @AuthenticationPrincipal String adminId) {
         adminService.updateUserStatus(userId, request, adminId);
@@ -143,7 +143,7 @@ public class AdminController {
     })
     @PatchMapping("/users/{userId}/role")
     public ApiResponse<Void> updateUserRole(
-            @Parameter(description = "사용자 UUID") @PathVariable String userId,
+            @Parameter(description = "사용자 ID") @PathVariable String userId,
             @Valid @RequestBody UserRoleUpdateRequest request,
             @AuthenticationPrincipal String adminId) {
         adminService.updateUserRole(userId, request, adminId);
@@ -170,7 +170,7 @@ public class AdminController {
     })
     @DeleteMapping("/users/{userId}")
     public ApiResponse<Void> forceDeleteUser(
-            @Parameter(description = "사용자 UUID") @PathVariable String userId,
+            @Parameter(description = "사용자 ID") @PathVariable String userId,
             @AuthenticationPrincipal String adminId) {
         adminService.forceDeleteUser(userId, adminId);
         return ApiResponse.ok("사용자가 강제 탈퇴 처리되었습니다.");
@@ -244,7 +244,7 @@ public class AdminController {
     })
     @GetMapping("/connections/guardian/{guardianId}")
     public ApiResponse<Page<ConnectionResponse>> getConnectionsByGuardian(
-            @Parameter(description = "보호자 UUID (GUARDIAN 역할만 가능)") @PathVariable String guardianId,
+            @Parameter(description = "보호자 ID (GUARDIAN 역할만 가능)") @PathVariable String guardianId,
             @PageableDefault(size = 20, sort = "createdAt", direction = Sort.Direction.DESC) Pageable pageable) {
         return ApiResponse.ok(adminService.getConnectionsByGuardian(guardianId, pageable));
     }
@@ -341,7 +341,7 @@ public class AdminController {
     })
     @GetMapping("/anomaly-events")
     public ApiResponse<Page<AnomalyEventResponse>> getAnomalyEvents(
-            @Parameter(description = "보호자 UUID (미입력 시 전체 조회, GUARDIAN 역할만 허용)")
+            @Parameter(description = "보호자 ID (미입력 시 전체 조회, GUARDIAN 역할만 허용)")
             @RequestParam(required = false) String guardianId,
             @Parameter(description = "조회 시작 일시 (ISO 8601, 예: 2025-01-01T00:00:00+09:00)")
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) OffsetDateTime startDate,
@@ -393,7 +393,7 @@ public class AdminController {
     })
     @GetMapping("/game-results")
     public ApiResponse<Page<GameResultResponse>> getGameResults(
-            @Parameter(description = "피보호자 UUID (미입력 시 전체 조회, WARD 역할만 허용)")
+            @Parameter(description = "피보호자 ID (미입력 시 전체 조회, WARD 역할만 허용)")
             @RequestParam(required = false) String userId,
             @Parameter(description = "게임 유형 (MATCHING / WORD_QUIZ / ADDITION / SUBTRACTION, 미입력 시 전체)")
             @RequestParam(required = false) GameType gameType,
