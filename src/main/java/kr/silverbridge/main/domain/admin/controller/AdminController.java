@@ -68,7 +68,7 @@ public class AdminController {
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "인증 토큰 없음 또는 만료", content = @Content),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "500", description = "서버 내부 오류", content = @Content)
     })
-    @GetMapping("/users")
+    @GetMapping("/user/select")
     public ApiResponse<Page<UserSummaryResponse>> getUsers(
             @Parameter(description = "역할 필터 (WARD / GUARDIAN / 미입력: 전체)")
             @RequestParam(required = false) Role role,
@@ -89,7 +89,7 @@ public class AdminController {
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "존재하지 않는 사용자", content = @Content),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "500", description = "서버 내부 오류", content = @Content)
     })
-    @GetMapping("/users/{userId}")
+    @GetMapping("/user/select/detail/{userId}")
     public ApiResponse<UserDetailResponse> getUser(
             @Parameter(description = "사용자 ID") @PathVariable String userId) {
         return ApiResponse.ok(adminService.getUser(userId));
@@ -113,7 +113,7 @@ public class AdminController {
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "존재하지 않는 사용자", content = @Content),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "500", description = "서버 내부 오류", content = @Content)
     })
-    @PatchMapping("/users/{userId}/status")
+    @PatchMapping("/user/status-change/{userId}")
     public ApiResponse<Void> updateUserStatus(
             @Parameter(description = "사용자 ID") @PathVariable String userId,
             @Valid @RequestBody UserStatusUpdateRequest request,
@@ -141,7 +141,7 @@ public class AdminController {
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "존재하지 않는 사용자", content = @Content),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "500", description = "서버 내부 오류", content = @Content)
     })
-    @PatchMapping("/users/{userId}/role")
+    @PatchMapping("/user/role-change/{userId}")
     public ApiResponse<Void> updateUserRole(
             @Parameter(description = "사용자 ID") @PathVariable String userId,
             @Valid @RequestBody UserRoleUpdateRequest request,
@@ -157,7 +157,7 @@ public class AdminController {
 
                     [주의사항]
                     - 삭제된 계정은 복구할 수 없습니다.
-                    - 해당 사용자의 연결 관계(connections), 게임 결과(game_results), 병원 예약도 함께 삭제됩니다.
+                    - 해당 사용자의 연결 관계(connections), 게임 결과(game_results)도 함께 삭제됩니다.
                     - ADMIN 계정은 삭제 불가합니다.
                     """
     )
@@ -168,7 +168,7 @@ public class AdminController {
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "존재하지 않는 사용자", content = @Content),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "500", description = "서버 내부 오류", content = @Content)
     })
-    @DeleteMapping("/users/{userId}")
+    @DeleteMapping("/user/delete/{userId}")
     public ApiResponse<Void> forceDeleteUser(
             @Parameter(description = "사용자 ID") @PathVariable String userId,
             @AuthenticationPrincipal String adminId) {
@@ -207,7 +207,7 @@ public class AdminController {
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "인증 토큰 없음 또는 만료", content = @Content),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "500", description = "서버 내부 오류", content = @Content)
     })
-    @GetMapping("/connections")
+    @GetMapping("/user/connection/select")
     public ApiResponse<Page<ConnectionResponse>> getConnections(
             @PageableDefault(size = 20, sort = "createdAt", direction = Sort.Direction.DESC) Pageable pageable) {
         return ApiResponse.ok(adminService.getConnections(pageable));
@@ -220,7 +220,7 @@ public class AdminController {
                     PENDING / ACTIVE / CANCELLED 상태 모두 포함됩니다.
 
                     [주의사항]
-                    - guardianId는 반드시 GUARDIAN 역할 사용자여야 합니다. WARD UUID 입력 시 400 반환.
+                    - guardianId는 반드시 GUARDIAN 역할 사용자여야 합니다. WARD ID 입력 시 400 반환.
 
                     [페이지네이션 쿼리 파라미터]
                     - page: 페이지 번호 (0부터 시작, 기본값 0)
@@ -242,7 +242,7 @@ public class AdminController {
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "존재하지 않는 사용자", content = @Content),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "500", description = "서버 내부 오류", content = @Content)
     })
-    @GetMapping("/connections/guardian/{guardianId}")
+    @GetMapping("/user/connection/guardian/{guardianId}")
     public ApiResponse<Page<ConnectionResponse>> getConnectionsByGuardian(
             @Parameter(description = "보호자 ID (GUARDIAN 역할만 가능)") @PathVariable String guardianId,
             @PageableDefault(size = 20, sort = "createdAt", direction = Sort.Direction.DESC) Pageable pageable) {
@@ -264,13 +264,13 @@ public class AdminController {
     )
     @ApiResponses({
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "강제 연결 성공. 생성된 연결 정보 반환"),
-            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "역할 불일치 (guardianId가 GUARDIAN이 아니거나 wardId가 WARD가 아님, content = @Content) / 비활성화 계정"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "역할 불일치 / 비활성화 계정", content = @Content),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "인증 토큰 없음 또는 만료", content = @Content),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "존재하지 않는 사용자", content = @Content),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "409", description = "이미 PENDING 또는 ACTIVE 연결이 존재함", content = @Content),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "500", description = "서버 내부 오류", content = @Content)
     })
-    @PostMapping("/connections")
+    @PostMapping("/user/connection/force")
     public ApiResponse<ConnectionResponse> forceConnect(
             @Valid @RequestBody AdminForceConnectRequest request,
             @AuthenticationPrincipal String adminId) {
@@ -281,18 +281,21 @@ public class AdminController {
             summary = "보호자-피보호자 강제 연결 해제",
             description = """
                     관리자가 보호자-피보호자 연결을 강제로 해제(CANCELLED)합니다.
-                    해제 후 동일 쌍의 재연결은 POST /api/admin/connections 로 가능합니다.
+                    해제 후 동일 쌍의 재연결은 POST /api/admin/user/connection/force 로 가능합니다.
+
+                    [요청 파라미터]
+                    - connectionId: 해제할 연결 ID (ConnectionResponse.id 값)
                     """
     )
     @ApiResponses({
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "연결 해제 성공"),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "인증 토큰 없음 또는 만료", content = @Content),
-            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "존재하지 않는 연결 관계 (connectionId 확인 필요, content = @Content)"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "존재하지 않는 연결 관계", content = @Content),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "500", description = "서버 내부 오류", content = @Content)
     })
-    @DeleteMapping("/connections/{connectionId}")
+    @DeleteMapping("/user/disconnection/force")
     public ApiResponse<Void> forceDisconnect(
-            @Parameter(description = "연결 ID (ConnectionResponse.id)") @PathVariable Long connectionId,
+            @Parameter(description = "연결 ID (ConnectionResponse.id)") @RequestParam Long connectionId,
             @AuthenticationPrincipal String adminId) {
         adminService.forceDisconnect(connectionId, adminId);
         return ApiResponse.ok("연결이 해제되었습니다.");
@@ -336,10 +339,10 @@ public class AdminController {
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "이상감지 이벤트 목록 반환"),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "guardianId가 GUARDIAN 역할이 아님", content = @Content),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "인증 토큰 없음 또는 만료", content = @Content),
-            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "존재하지 않는 사용자 (guardianId 입력 시, content = @Content)"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "존재하지 않는 사용자 (guardianId 입력 시)", content = @Content),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "500", description = "서버 내부 오류", content = @Content)
     })
-    @GetMapping("/anomaly-events")
+    @GetMapping("/event/abnormal")
     public ApiResponse<Page<AnomalyEventResponse>> getAnomalyEvents(
             @Parameter(description = "보호자 ID (미입력 시 전체 조회, GUARDIAN 역할만 허용)")
             @RequestParam(required = false) String guardianId,
@@ -388,10 +391,10 @@ public class AdminController {
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "게임 결과 목록 반환"),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "userId가 WARD 역할이 아님", content = @Content),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "인증 토큰 없음 또는 만료", content = @Content),
-            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "존재하지 않는 사용자 (userId 입력 시, content = @Content)"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "존재하지 않는 사용자 (userId 입력 시)", content = @Content),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "500", description = "서버 내부 오류", content = @Content)
     })
-    @GetMapping("/game-results")
+    @GetMapping("/game/result/select")
     public ApiResponse<Page<GameResultResponse>> getGameResults(
             @Parameter(description = "피보호자 ID (미입력 시 전체 조회, WARD 역할만 허용)")
             @RequestParam(required = false) String userId,
@@ -435,7 +438,7 @@ public class AdminController {
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "인증 토큰 없음 또는 만료", content = @Content),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "500", description = "서버 내부 오류", content = @Content)
     })
-    @GetMapping("/announcements")
+    @GetMapping("/announcement/select")
     public ApiResponse<Page<AnnouncementResponse>> getAnnouncements(
             @PageableDefault(size = 20, sort = "createdAt", direction = Sort.Direction.DESC) Pageable pageable) {
         return ApiResponse.ok(adminService.getAnnouncements(pageable));
@@ -451,23 +454,23 @@ public class AdminController {
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "존재하지 않는 공지", content = @Content),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "500", description = "서버 내부 오류", content = @Content)
     })
-    @GetMapping("/announcements/{id}")
+    @GetMapping("/announcement/select/detail/{id}")
     public ApiResponse<AnnouncementResponse> getAnnouncement(
             @Parameter(description = "공지 ID") @PathVariable Long id) {
         return ApiResponse.ok(adminService.getAnnouncement(id));
     }
 
     @Operation(
-            summary = "공지 작성",
-            description = "새 공지를 작성합니다. 작성 즉시 게시됩니다."
+            summary = "공지 등록",
+            description = "새 공지를 등록합니다. 등록 즉시 게시됩니다."
     )
     @ApiResponses({
-            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "작성된 공지 반환"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "등록된 공지 반환"),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "title 또는 content 누락 / title 200자 초과", content = @Content),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "인증 토큰 없음 또는 만료", content = @Content),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "500", description = "서버 내부 오류", content = @Content)
     })
-    @PostMapping("/announcements")
+    @PostMapping("/announcement/create")
     public ApiResponse<AnnouncementResponse> createAnnouncement(
             @Valid @RequestBody AnnouncementCreateRequest request,
             @AuthenticationPrincipal String adminId) {
@@ -485,7 +488,7 @@ public class AdminController {
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "존재하지 않는 공지", content = @Content),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "500", description = "서버 내부 오류", content = @Content)
     })
-    @PutMapping("/announcements/{id}")
+    @PutMapping("/announcement/update/{id}")
     public ApiResponse<AnnouncementResponse> updateAnnouncement(
             @Parameter(description = "공지 ID") @PathVariable Long id,
             @Valid @RequestBody AnnouncementUpdateRequest request,
@@ -500,7 +503,6 @@ public class AdminController {
 
                     [주의사항]
                     - 삭제된 공지는 복구할 수 없습니다.
-                    - 게시된 공지도 삭제 가능합니다.
                     """
     )
     @ApiResponses({
@@ -509,7 +511,7 @@ public class AdminController {
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "존재하지 않는 공지", content = @Content),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "500", description = "서버 내부 오류", content = @Content)
     })
-    @DeleteMapping("/announcements/{id}")
+    @DeleteMapping("/announcement/delete/{id}")
     public ApiResponse<Void> deleteAnnouncement(
             @Parameter(description = "공지 ID") @PathVariable Long id,
             @AuthenticationPrincipal String adminId) {
@@ -518,11 +520,11 @@ public class AdminController {
     }
 
     // =============================================
-    // 접속 로그 조회
+    // 사용자 접근 로그 조회
     // =============================================
 
     @Operation(
-            summary = "접속 로그 조회",
+            summary = "사용자 접근 로그 조회",
             description = """
                     전체 접속 로그를 페이징하여 조회합니다.
 
@@ -554,7 +556,7 @@ public class AdminController {
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "인증 토큰 없음 또는 만료", content = @Content),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "500", description = "서버 내부 오류", content = @Content)
     })
-    @GetMapping("/access-logs")
+    @GetMapping("/accesslog/select")
     public ApiResponse<Page<AccessLogResponse>> getAccessLogs(
             @PageableDefault(size = 50, sort = "createdAt", direction = Sort.Direction.DESC) Pageable pageable) {
         return ApiResponse.ok(adminService.getAccessLogs(pageable));
@@ -576,7 +578,7 @@ public class AdminController {
                     - USER_FORCE_DELETE: 사용자 강제 탈퇴
                     - FORCE_CONNECT: 보호자-피보호자 강제 연결
                     - FORCE_DISCONNECT: 보호자-피보호자 강제 연결 해제
-                    - ANNOUNCEMENT_CREATE: 공지 생성
+                    - ANNOUNCEMENT_CREATE: 공지 등록
                     - ANNOUNCEMENT_UPDATE: 공지 수정
                     - ANNOUNCEMENT_DELETE: 공지 삭제
 
@@ -598,7 +600,7 @@ public class AdminController {
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "인증 토큰 없음 또는 만료", content = @Content),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "500", description = "서버 내부 오류", content = @Content)
     })
-    @GetMapping("/audit-logs")
+    @GetMapping("/audit/select")
     public ApiResponse<Page<AdminAuditLogResponse>> getAuditLogs(
             @PageableDefault(size = 50, sort = "createdAt", direction = Sort.Direction.DESC) Pageable pageable) {
         return ApiResponse.ok(auditLogService.getLogs(pageable));
