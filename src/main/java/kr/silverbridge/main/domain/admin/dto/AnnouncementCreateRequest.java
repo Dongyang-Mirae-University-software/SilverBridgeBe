@@ -16,5 +16,6 @@ public class AnnouncementCreateRequest {
 
     @Schema(description = "공지 내용", example = "2025년 5월 1일 오전 2시부터 4시까지 서버 점검이 예정되어 있습니다.")
     @NotBlank(message = "내용을 입력해주세요.")
+    @Size(max = 5000, message = "내용은 5000자 이내로 입력해주세요.")
     private String content;
 }

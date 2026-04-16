@@ -1,0 +1,59 @@
+package kr.silverbridge.main.global.util;
+
+import kr.silverbridge.main.global.exception.CustomException;
+import kr.silverbridge.main.global.exception.ErrorCode;
+import lombok.RequiredArgsConstructor;
+import org.springframework.data.redis.core.StringRedisTemplate;
+import org.springframework.stereotype.Component;
+
+import java.util.concurrent.TimeUnit;
+
+/**
+ * SMS/이메일 인증코드 검증 공통 유틸리티
+ * 코드 만료 확인 → 일치 확인 → 오류 횟수 관리 → 성공 시 키 삭제
+ */
+@Component
+@RequiredArgsConstructor
+public class VerificationCodeValidator {
+
+    private final StringRedisTemplate redisTemplate;
+
+    /**
+     * 인증코드를 검증하고, 성공 시 관련 Redis 키를 삭제한다.
+     *
+     * @param verifyKey      인증코드가 저장된 Redis 키
+     * @param attemptKey     오류 횟수가 저장된 Redis 키
+     * @param inputCode      사용자가 입력한 인증코드
+     * @param codeTtlMinutes 오류 횟수 만료 시간 (분, 인증코드 TTL과 동일하게 설정)
+     * @param maxAttempts    최대 오류 허용 횟수 (초과 시 인증코드 즉시 무효화)
+     */
+    public void verify(String verifyKey, String attemptKey, String inputCode,
+                       long codeTtlMinutes, int maxAttempts) {
+        String savedCode = redisTemplate.opsForValue().get(verifyKey);
+
+        // 인증코드가 없으면 만료된 것
+        if (savedCode == null) {
+            throw new CustomException(ErrorCode.EXPIRED_SMS_CODE);
+        }
+
+        if (!savedCode.equals(inputCode)) {
+            // 오류 횟수 증가
+            Long attempts = redisTemplate.opsForValue().increment(attemptKey);
+            // 오류 횟수 만료 시간을 인증코드와 동일하게 설정
+            redisTemplate.expire(attemptKey, codeTtlMinutes, TimeUnit.MINUTES);
+
+            // 최대 오류 횟수 초과 시 인증코드 즉시 무효화
+            if (attempts != null && attempts >= maxAttempts) {
+                redisTemplate.delete(verifyKey);
+                redisTemplate.delete(attemptKey);
+                throw new CustomException(ErrorCode.SMS_TOO_MANY_ATTEMPTS);
+            }
+
+            throw new CustomException(ErrorCode.INVALID_SMS_CODE);
+        }
+
+        // 인증 성공 — 인증코드 및 오류 횟수 삭제
+        redisTemplate.delete(verifyKey);
+        redisTemplate.delete(attemptKey);
+    }
+}

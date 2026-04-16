@@ -19,6 +19,7 @@ import kr.silverbridge.main.global.enums.Status;
 import kr.silverbridge.main.global.exception.CustomException;
 import kr.silverbridge.main.global.exception.ErrorCode;
 import kr.silverbridge.main.global.jwt.JwtTokenProvider;
+import kr.silverbridge.main.global.util.MaskingUtil;
 import kr.silverbridge.main.global.util.RedisKeys;
 import kr.silverbridge.main.global.util.UserIdGenerator;
 import lombok.RequiredArgsConstructor;
@@ -218,21 +219,8 @@ public class AuthService {
         return new FindEmailResponse(maskedEmail, hasKakaoAccount);
     }
 
-    // 이메일 마스킹 처리
-    // 예: username@example.com → us***me@example.com  (5자 이상: 앞 2자 + *** + 뒤 2자)
-    //     user@example.com    → u***r@example.com     (3~4자: 앞 1자 + *** + 뒤 1자)
-    //     ab@example.com      → a***@example.com      (2자 이하: 앞 1자 + ***)
+    // 이메일 마스킹 처리 (MaskingUtil 위임)
     private String maskEmail(String email) {
-        int atIndex = email.indexOf('@');
-        String local = email.substring(0, atIndex);   // @ 앞부분
-        String domain = email.substring(atIndex);      // @ 포함 뒷부분
-
-        if (local.length() >= 5) {
-            return local.substring(0, 2) + "***" + local.substring(local.length() - 2) + domain;
-        } else if (local.length() >= 3) {
-            return local.charAt(0) + "***" + local.charAt(local.length() - 1) + domain;
-        } else {
-            return local.charAt(0) + "***" + domain;
-        }
+        return MaskingUtil.maskEmail(email);
     }
 }
