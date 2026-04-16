@@ -12,8 +12,23 @@ import java.util.List;
 
 public interface ConnectionRepository extends JpaRepository<Connection, Long> {
 
-    // 특정 보호자의 연결 목록 조회
+    // 보호자 기준 전체 연결 목록 조회 (관리자용)
     Page<Connection> findByGuardianId(String guardianId, Pageable pageable);
+
+    // 보호자 기준 상태별 연결 목록 조회
+    Page<Connection> findByGuardianIdAndStatus(String guardianId, ConnectionStatus status, Pageable pageable);
+
+    // 피보호자 기준 상태별 연결 목록 조회 (우선순위 정렬)
+    Page<Connection> findByWardIdAndStatusOrderByPriorityAsc(String wardId, ConnectionStatus status, Pageable pageable);
+
+    // 피보호자 기준 상태별 연결 목록 조회
+    Page<Connection> findByWardIdAndStatus(String wardId, ConnectionStatus status, Pageable pageable);
+
+    // 피보호자의 ACTIVE 보호자 목록 (우선순위 정렬, 긴급통화 알림용)
+    List<Connection> findByWardIdAndStatusOrderByPriorityAsc(String wardId, ConnectionStatus status);
+
+    // 보호자의 ACTIVE 피보호자 목록 (List)
+    List<Connection> findByGuardianIdAndStatus(String guardianId, ConnectionStatus status);
 
     // 동일한 guardian-ward 쌍의 활성 연결 존재 여부 확인
     boolean existsByGuardianIdAndWardIdAndStatusNot(String guardianId, String wardId, ConnectionStatus status);
