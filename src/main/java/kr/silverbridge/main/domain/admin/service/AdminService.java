@@ -258,14 +258,11 @@ public class AdminService {
     // 공지 관리
     // =============================================
 
-    // 공지 목록 조회 (isPublished 필터, 미입력 시 전체)
+    // 공지 목록 조회 (페이징)
     @Transactional(readOnly = true)
-    public Page<AnnouncementResponse> getAnnouncements(Boolean isPublished, Pageable pageable) {
-        Page<Announcement> announcements = (isPublished != null)
-                ? announcementRepository.findByIsPublished(isPublished, pageable)
-                : announcementRepository.findAll(pageable);
-
-        return announcements.map(a -> AnnouncementResponse.of(a, findAuthor(a.getAuthorId())));
+    public Page<AnnouncementResponse> getAnnouncements(Pageable pageable) {
+        return announcementRepository.findAll(pageable)
+                .map(a -> AnnouncementResponse.of(a, findAuthor(a.getAuthorId())));
     }
 
     // 공지 상세 조회
@@ -275,14 +272,13 @@ public class AdminService {
         return AnnouncementResponse.of(announcement, findAuthor(announcement.getAuthorId()));
     }
 
-    // 공지 생성 (작성자 = 현재 로그인한 관리자)
+    // 공지 생성 (작성 즉시 게시)
     @Transactional
     public AnnouncementResponse createAnnouncement(AnnouncementCreateRequest request, String adminId) {
         Announcement announcement = Announcement.builder()
                 .authorId(adminId)
                 .title(request.getTitle())
                 .content(request.getContent())
-                .isPublished(false)
                 .build();
 
         Announcement saved = announcementRepository.save(announcement);
@@ -301,19 +297,6 @@ public class AdminService {
 
         auditLogService.log(adminId, AdminAuditAction.ANNOUNCEMENT_UPDATE, String.valueOf(id),
                 String.format("공지 수정: %s", request.getTitle()));
-
-        return AnnouncementResponse.of(announcement, findAuthor(announcement.getAuthorId()));
-    }
-
-    // 공지 발행 토글 (미발행 → 발행, 발행 → 취소)
-    @Transactional
-    public AnnouncementResponse togglePublish(Long id, String adminId) {
-        Announcement announcement = findAnnouncement(id);
-        boolean before = announcement.isPublished();
-        announcement.togglePublish();
-
-        auditLogService.log(adminId, AdminAuditAction.ANNOUNCEMENT_PUBLISH, String.valueOf(id),
-                String.format("발행 상태 변경: %s → %s", before ? "발행" : "미발행", before ? "미발행" : "발행"));
 
         return AnnouncementResponse.of(announcement, findAuthor(announcement.getAuthorId()));
     }

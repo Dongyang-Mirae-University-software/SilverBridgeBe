@@ -414,16 +414,8 @@ public class AdminController {
             description = """
                     공지 목록을 페이징하여 조회합니다.
 
-                    [필터 조건]
-                    - isPublished: true(게시된 공지만) / false(임시저장 공지만) / 미입력(전체 조회)
-
                     [작성자 탈퇴 시]
                     authorName 은 null 로 반환됩니다.
-
-                    [공지 관리 흐름]
-                    1. POST /api/admin/announcements           → 공지 작성 (기본 임시저장)
-                    2. PUT  /api/admin/announcements/{id}      → 내용 수정
-                    3. PATCH /api/admin/announcements/{id}/publish → 게시 처리
 
                     [페이지네이션 쿼리 파라미터]
                     - page: 페이지 번호 (0부터 시작, 기본값 0)
@@ -445,15 +437,13 @@ public class AdminController {
     })
     @GetMapping("/announcements")
     public ApiResponse<Page<AnnouncementResponse>> getAnnouncements(
-            @Parameter(description = "게시 여부 필터 (true: 게시됨, false: 임시저장, 미입력: 전체)")
-            @RequestParam(required = false) Boolean isPublished,
             @PageableDefault(size = 20, sort = "createdAt", direction = Sort.Direction.DESC) Pageable pageable) {
-        return ApiResponse.ok(adminService.getAnnouncements(isPublished, pageable));
+        return ApiResponse.ok(adminService.getAnnouncements(pageable));
     }
 
     @Operation(
             summary = "공지 상세 조회",
-            description = "공지 ID로 단건 상세 조회합니다. 임시저장 공지도 조회 가능합니다."
+            description = "공지 ID로 단건 상세 조회합니다."
     )
     @ApiResponses({
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "공지 상세 반환"),
@@ -469,14 +459,10 @@ public class AdminController {
 
     @Operation(
             summary = "공지 작성",
-            description = """
-                    새 공지를 작성합니다.
-                    작성 직후 isPublished=false(임시저장) 상태입니다.
-                    게시하려면 PATCH /api/admin/announcements/{id}/publish 를 호출하세요.
-                    """
+            description = "새 공지를 작성합니다. 작성 즉시 게시됩니다."
     )
     @ApiResponses({
-            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "작성된 공지 반환 (isPublished=false, 임시저장 상태)"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "작성된 공지 반환"),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "title 또는 content 누락 / title 200자 초과", content = @Content),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "인증 토큰 없음 또는 만료", content = @Content),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "500", description = "서버 내부 오류", content = @Content)
@@ -490,11 +476,7 @@ public class AdminController {
 
     @Operation(
             summary = "공지 수정",
-            description = """
-                    공지의 제목과 내용을 수정합니다.
-                    발행 상태(isPublished)는 변경되지 않습니다.
-                    발행된 공지도 수정 가능합니다.
-                    """
+            description = "공지의 제목과 내용을 수정합니다."
     )
     @ApiResponses({
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "수정된 공지 반환"),
@@ -509,27 +491,6 @@ public class AdminController {
             @Valid @RequestBody AnnouncementUpdateRequest request,
             @AuthenticationPrincipal String adminId) {
         return ApiResponse.ok(adminService.updateAnnouncement(id, request, adminId));
-    }
-
-    @Operation(
-            summary = "공지 게시 / 게시 취소",
-            description = """
-                    공지의 게시 상태를 토글합니다.
-                    - 임시저장(false) → 게시(true): publishedAt이 현재 시각으로 설정됩니다.
-                    - 게시(true) → 게시 취소(false): publishedAt이 null로 초기화됩니다.
-                    """
-    )
-    @ApiResponses({
-            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "변경된 공지 반환 (isPublished 값 확인)"),
-            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "인증 토큰 없음 또는 만료", content = @Content),
-            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "존재하지 않는 공지", content = @Content),
-            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "500", description = "서버 내부 오류", content = @Content)
-    })
-    @PatchMapping("/announcements/{id}/publish")
-    public ApiResponse<AnnouncementResponse> togglePublish(
-            @Parameter(description = "공지 ID") @PathVariable Long id,
-            @AuthenticationPrincipal String adminId) {
-        return ApiResponse.ok(adminService.togglePublish(id, adminId));
     }
 
     @Operation(
@@ -617,7 +578,6 @@ public class AdminController {
                     - FORCE_DISCONNECT: 보호자-피보호자 강제 연결 해제
                     - ANNOUNCEMENT_CREATE: 공지 생성
                     - ANNOUNCEMENT_UPDATE: 공지 수정
-                    - ANNOUNCEMENT_PUBLISH: 공지 게시 / 게시 취소
                     - ANNOUNCEMENT_DELETE: 공지 삭제
 
                     [페이지네이션 쿼리 파라미터]
