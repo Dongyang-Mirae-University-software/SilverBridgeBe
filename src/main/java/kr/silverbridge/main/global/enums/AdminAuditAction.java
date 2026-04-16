@@ -8,6 +8,5 @@ public enum AdminAuditAction {
     FORCE_DISCONNECT,       // 보호자-피보호자 강제 연결 해제
     ANNOUNCEMENT_CREATE,    // 공지 생성
     ANNOUNCEMENT_UPDATE,    // 공지 수정
-    ANNOUNCEMENT_PUBLISH,   // 공지 발행/취소 토글
     ANNOUNCEMENT_DELETE     // 공지 삭제
 }
