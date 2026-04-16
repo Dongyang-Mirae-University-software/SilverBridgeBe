@@ -37,6 +37,15 @@ public class SwaggerConfig {
                                         "※ 모든 API에 Authorization: Bearer {accessToken} 헤더 필수. ADMIN 권한 계정만 호출 가능."),
                         new Tag().name("사용자")
                                 .description("내 정보 조회 및 수정 / 비밀번호 변경 / 회원 탈퇴\n" +
+                                        "※ 모든 API에 Authorization: Bearer {accessToken} 헤더 필수."),
+                        new Tag().name("보호자")
+                                .description("보호자 전용 API — 피보호자 연결 관리 / 게임 기록 조회 / 통화 시그널링\n" +
+                                        "※ GUARDIAN 역할 계정만 호출 가능. Authorization: Bearer {accessToken} 헤더 필수."),
+                        new Tag().name("피보호자")
+                                .description("피보호자 전용 API — 보호자 연결 관리 / 게임 결과 저장 및 랭킹 / SOS 긴급통화\n" +
+                                        "※ WARD 역할 계정만 호출 가능. Authorization: Bearer {accessToken} 헤더 필수."),
+                        new Tag().name("알림")
+                                .description("FCM 푸시 알림 토큰 등록 및 삭제\n" +
                                         "※ 모든 API에 Authorization: Bearer {accessToken} 헤더 필수.")
                 ))
                 // 전역 JWT Bearer 인증 적용

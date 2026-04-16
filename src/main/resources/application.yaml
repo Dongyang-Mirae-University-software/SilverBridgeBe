@@ -69,3 +69,6 @@ springdoc:
     enabled: ${SWAGGER_ENABLED:true}
   swagger-ui:
     enabled: ${SWAGGER_ENABLED:true}
+
+firebase:
+  service-account-path: ${FIREBASE_SERVICE_ACCOUNT_PATH:firebase-service-account.json}
