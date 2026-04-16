@@ -113,7 +113,7 @@ public class UserController {
             summary = "비밀번호 변경 (로그인 상태)",
             description = """
                     현재 비밀번호를 알고 있는 로그인된 사용자가 새 비밀번호로 변경합니다.
-                    비밀번호를 잊어버린 경우에는 이 API가 아닌 POST /api/auth/password/reset-request 또는 POST /api/auth/password/sms/send 를 사용하세요.
+                    비밀번호를 잊어버린 경우에는 이 API가 아닌 POST /api/auth/find-password/email/send 또는 POST /api/auth/find-password/sms/send 를 사용하세요.
 
                     변경 성공 시 모든 기기에서 자동 로그아웃됩니다. (재로그인 필요)
 
