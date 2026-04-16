@@ -34,6 +34,10 @@ public class Connection extends BaseTimeEntity {
     @Column(name = "initiated_by", length = 6)
     private String initiatedBy;
 
+    // 피보호자 기준 보호자 통화 우선순위 (1=1순위, 숫자가 낮을수록 우선)
+    @Column(nullable = false)
+    private int priority;
+
     @Column(name = "connected_at")
     private OffsetDateTime connectedAt;
 
@@ -46,5 +50,10 @@ public class Connection extends BaseTimeEntity {
     // 연결 해제 (CANCELLED 전환)
     public void cancel() {
         this.status = ConnectionStatus.CANCELLED;
+    }
+
+    // 통화 우선순위 변경
+    public void updatePriority(int priority) {
+        this.priority = priority;
     }
 }
