@@ -16,7 +16,7 @@ public class ConnectionResponse {
     @Schema(description = "연결 ID", example = "1")
     private Long id;
 
-    @Schema(description = "보호자 UUID", example = "a1b2c3d4-e5f6-7890-abcd-ef1234567890")
+    @Schema(description = "보호자 ID", example = "aB3x9Z")
     private String guardianId;
 
     @Schema(description = "보호자 이름", example = "김보호")
@@ -25,7 +25,7 @@ public class ConnectionResponse {
     @Schema(description = "보호자 이메일", example = "guardian@example.com")
     private String guardianEmail;
 
-    @Schema(description = "피보호자 UUID", example = "b2c3d4e5-f6a7-8901-bcde-f12345678901")
+    @Schema(description = "피보호자 ID", example = "cD4y0W")
     private String wardId;
 
     @Schema(description = "피보호자 이름", example = "홍길동")
