@@ -21,7 +21,12 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.OffsetDateTime;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
+import java.util.Objects;
+import java.util.Set;
+import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -116,14 +121,20 @@ public class AdminService {
     // 연결 관계 관리
     // =============================================
 
-    // 전체 연결 관계 조회 (페이징)
+    // 전체 연결 관계 조회 (페이징, 배치 사용자 조회)
     @Transactional(readOnly = true)
     public Page<ConnectionResponse> getConnections(Pageable pageable) {
-        return connectionRepository.findAll(pageable)
-                .map(this::mapToConnectionResponse);
+        Page<Connection> connections = connectionRepository.findAll(pageable);
+        Map<String, User> userMap = fetchUsersFromConnections(connections.getContent());
+
+        return connections.map(conn -> ConnectionResponse.of(
+                conn,
+                requireUser(userMap, conn.getGuardianId()),
+                requireUser(userMap, conn.getWardId())
+        ));
     }
 
-    // 특정 보호자의 피보호자 목록 조회
+    // 특정 보호자의 피보호자 목록 조회 (배치 사용자 조회)
     @Transactional(readOnly = true)
     public Page<ConnectionResponse> getConnectionsByGuardian(String guardianId, Pageable pageable) {
         User guardian = userRepository.findById(guardianId)
@@ -133,8 +144,14 @@ public class AdminService {
             throw new CustomException(ErrorCode.INVALID_CONNECTION_ROLE);
         }
 
-        return connectionRepository.findByGuardianId(guardianId, pageable)
-                .map(this::mapToConnectionResponse);
+        Page<Connection> connections = connectionRepository.findByGuardianId(guardianId, pageable);
+        Map<String, User> userMap = fetchUsersFromConnections(connections.getContent());
+
+        return connections.map(conn -> ConnectionResponse.of(
+                conn,
+                userMap.getOrDefault(conn.getGuardianId(), guardian),
+                requireUser(userMap, conn.getWardId())
+        ));
     }
 
     // 관리자 강제 연결 (바로 ACTIVE)
@@ -215,11 +232,19 @@ public class AdminService {
             events = anomalyEventRepository.findByDateRange(startDate, endDate, pageable);
         }
 
+        // 배치 사용자 조회 (N+1 방지)
+        Set<String> wardIds = events.getContent().stream()
+                .map(AnomalyEvent::getWardId)
+                .filter(Objects::nonNull)
+                .collect(Collectors.toSet());
+        Map<String, User> wardMap = userRepository.findAllById(wardIds).stream()
+                .collect(Collectors.toMap(User::getId, u -> u));
+
         return events.map(event -> {
             if (event.getWardId() == null) {
                 return AnomalyEventResponse.ofDeleted(event);
             }
-            User ward = userRepository.findById(event.getWardId()).orElse(null);
+            User ward = wardMap.get(event.getWardId());
             return ward != null
                     ? AnomalyEventResponse.of(event, ward)
                     : AnomalyEventResponse.ofDeleted(event);
@@ -246,23 +271,38 @@ public class AdminService {
             }
         }
 
-        return gameResultRepository.findByFilters(userId, gameType, startDate, endDate, pageable)
-                .map(result -> {
-                    User user = userRepository.findById(result.getUserId())
-                            .orElseThrow(() -> new CustomException(ErrorCode.USER_NOT_FOUND));
-                    return GameResultResponse.of(result, user);
-                });
+        // 배치 사용자 조회 (N+1 방지)
+        var results = gameResultRepository.findByFilters(userId, gameType, startDate, endDate, pageable);
+        Set<String> userIds = results.getContent().stream()
+                .map(r -> r.getUserId())
+                .collect(Collectors.toSet());
+        Map<String, User> userMap = userRepository.findAllById(userIds).stream()
+                .collect(Collectors.toMap(User::getId, u -> u));
+
+        return results.map(result -> {
+            User user = userMap.get(result.getUserId());
+            if (user == null) throw new CustomException(ErrorCode.USER_NOT_FOUND);
+            return GameResultResponse.of(result, user);
+        });
     }
 
     // =============================================
     // 공지 관리
     // =============================================
 
-    // 공지 목록 조회 (페이징)
+    // 공지 목록 조회 (페이징, 배치 작성자 조회)
     @Transactional(readOnly = true)
     public Page<AnnouncementResponse> getAnnouncements(Pageable pageable) {
-        return announcementRepository.findAll(pageable)
-                .map(a -> AnnouncementResponse.of(a, findAuthor(a.getAuthorId())));
+        Page<Announcement> announcements = announcementRepository.findAll(pageable);
+
+        Set<String> authorIds = announcements.getContent().stream()
+                .map(Announcement::getAuthorId)
+                .filter(Objects::nonNull)
+                .collect(Collectors.toSet());
+        Map<String, User> authorMap = userRepository.findAllById(authorIds).stream()
+                .collect(Collectors.toMap(User::getId, u -> u));
+
+        return announcements.map(a -> AnnouncementResponse.of(a, authorMap.get(a.getAuthorId())));
     }
 
     // 공지 상세 조회
@@ -333,13 +373,22 @@ public class AdminService {
         }
     }
 
-    // Connection → ConnectionResponse 변환 (guardian/ward 조회 포함)
-    private ConnectionResponse mapToConnectionResponse(Connection conn) {
-        User g = userRepository.findById(conn.getGuardianId())
-                .orElseThrow(() -> new CustomException(ErrorCode.USER_NOT_FOUND));
-        User w = userRepository.findById(conn.getWardId())
-                .orElseThrow(() -> new CustomException(ErrorCode.USER_NOT_FOUND));
-        return ConnectionResponse.of(conn, g, w);
+    // Connection 목록에서 모든 사용자 ID를 배치 조회
+    private Map<String, User> fetchUsersFromConnections(List<Connection> connections) {
+        Set<String> userIds = new HashSet<>();
+        connections.forEach(c -> {
+            userIds.add(c.getGuardianId());
+            userIds.add(c.getWardId());
+        });
+        return userRepository.findAllById(userIds).stream()
+                .collect(Collectors.toMap(User::getId, u -> u));
+    }
+
+    // 배치 조회 결과에서 사용자 조회 (없으면 예외)
+    private User requireUser(Map<String, User> userMap, String userId) {
+        User user = userMap.get(userId);
+        if (user == null) throw new CustomException(ErrorCode.USER_NOT_FOUND);
+        return user;
     }
 
     // 공지 조회 (없으면 예외)
