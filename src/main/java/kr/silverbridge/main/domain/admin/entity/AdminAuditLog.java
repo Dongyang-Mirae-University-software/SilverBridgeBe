@@ -24,7 +24,7 @@ public class AdminAuditLog {
     private Long id;
 
     // 행동한 관리자 ID (탈퇴 시에도 이력 보존을 위해 FK 없이 저장)
-    @Column(name = "admin_id", nullable = false, length = 36)
+    @Column(name = "admin_id", nullable = false, length = 6)
     private String adminId;
 
     @Enumerated(EnumType.STRING)

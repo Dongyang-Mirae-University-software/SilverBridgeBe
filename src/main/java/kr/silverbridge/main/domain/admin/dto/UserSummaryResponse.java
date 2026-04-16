@@ -12,7 +12,7 @@ import java.time.OffsetDateTime;
 @Schema(description = "사용자 목록 항목")
 public class UserSummaryResponse {
 
-    @Schema(description = "사용자 UUID", example = "a1b2c3d4-e5f6-7890-abcd-ef1234567890")
+    @Schema(description = "사용자 ID", example = "aB3x9Z")
     private String userId;
 
     @Schema(description = "이메일", example = "user@example.com")

@@ -16,7 +16,7 @@ public class Announcement extends BaseTimeEntity {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @Column(name = "author_id", length = 36)
+    @Column(name = "author_id", length = 6)
     private String authorId;
 
     @Column(nullable = false, length = 200)
