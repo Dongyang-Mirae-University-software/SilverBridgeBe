@@ -1,0 +1,11 @@
+-- 사용자 ID를 UUID(36자) → 영숫자 6자로 변경
+ALTER TABLE users               ALTER COLUMN id          TYPE VARCHAR(6);
+ALTER TABLE refresh_tokens      ALTER COLUMN user_id     TYPE VARCHAR(6);
+ALTER TABLE access_logs         ALTER COLUMN user_id     TYPE VARCHAR(6);
+ALTER TABLE connections         ALTER COLUMN guardian_id TYPE VARCHAR(6);
+ALTER TABLE connections         ALTER COLUMN ward_id     TYPE VARCHAR(6);
+ALTER TABLE connections         ALTER COLUMN initiated_by TYPE VARCHAR(6);
+ALTER TABLE anomaly_events      ALTER COLUMN ward_id     TYPE VARCHAR(6);
+ALTER TABLE game_results        ALTER COLUMN user_id     TYPE VARCHAR(6);
+ALTER TABLE announcements       ALTER COLUMN author_id   TYPE VARCHAR(6);
+ALTER TABLE admin_audit_logs    ALTER COLUMN admin_id    TYPE VARCHAR(6);

@@ -19,7 +19,7 @@ public class AccessLog {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @Column(name = "user_id", length = 36)
+    @Column(name = "user_id", length = 6)
     private String userId;
 
     @Enumerated(EnumType.STRING)

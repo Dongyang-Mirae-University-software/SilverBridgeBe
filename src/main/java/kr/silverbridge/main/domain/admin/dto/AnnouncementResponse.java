@@ -12,7 +12,7 @@ public record AnnouncementResponse(
         @Schema(description = "공지 ID", example = "1")
         Long id,
 
-        @Schema(description = "작성자 UUID (탈퇴 시 null)", example = "uuid-admin-1234", nullable = true)
+        @Schema(description = "작성자 ID (탈퇴 시 null)", example = "aB3x9Z", nullable = true)
         String authorId,
 
         @Schema(description = "작성자 이름 (탈퇴 시 null)", example = "관리자", nullable = true)
