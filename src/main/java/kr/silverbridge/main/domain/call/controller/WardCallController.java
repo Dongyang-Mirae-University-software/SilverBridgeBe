@@ -15,7 +15,6 @@ import org.springframework.web.bind.annotation.*;
 
 @Tag(name = "피보호자")
 @RestController
-@RequestMapping("/api/ward/call")
 @RequiredArgsConstructor
 @PreAuthorize("hasRole('WARD')")
 public class WardCallController {
@@ -28,9 +27,8 @@ public class WardCallController {
                     Authorization: Bearer {accessToken}
 
                     [SOS 긴급통화 흐름]
-                    1. POST /api/ward/call/sos
+                    1. POST /api/ward/sos
                        → 연결된 전체 보호자에게 동시 FCM 알림 + WebSocket(/topic/{guardianId}/sos-call) 전송
-                       → 응답에 보호자 목록(priority 순) 포함
 
                     2. 프론트가 priority=1 보호자에게 WebRTC offer 전송
                        POST /api/ward/call/signal  (type=offer, targetId=보호자ID)
@@ -46,7 +44,7 @@ public class WardCallController {
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "전체 보호자에게 알림 전송 완료"),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "연결된 보호자 없음")
     })
-    @PostMapping("/sos")
+    @PostMapping("/api/ward/sos")
     public ResponseEntity<ApiResponse<Void>> triggerSos(
             @AuthenticationPrincipal String wardId) {
         callService.triggerSos(wardId);
@@ -65,7 +63,7 @@ public class WardCallController {
                     - offer: WebRTC 연결 시작 시
                     - ice-candidate: ICE 후보 교환 시
                     """)
-    @PostMapping("/signal")
+    @PostMapping("/api/ward/call/signal")
     public ResponseEntity<ApiResponse<Void>> sendSignal(
             @AuthenticationPrincipal String wardId,
             @Valid @RequestBody WebRtcSignalRequest request) {
@@ -80,7 +78,7 @@ public class WardCallController {
 
                     통화를 종료하고 보호자에게 종료 알림을 전송합니다.
                     """)
-    @PostMapping("/end")
+    @PostMapping("/api/ward/call/end")
     public ResponseEntity<ApiResponse<Void>> endCall(
             @AuthenticationPrincipal String wardId,
             @RequestParam String targetId) {
