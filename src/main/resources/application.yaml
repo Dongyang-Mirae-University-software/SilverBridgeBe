@@ -71,7 +71,7 @@ springdoc:
     enabled: ${SWAGGER_ENABLED:true}
 
 firebase:
-  credentials-base64: ${FIREBASE_CREDENTIALS_BASE64}
+  service-account-path: ${FIREBASE_SERVICE_ACCOUNT_PATH:firebase-service-account.json}
 
 ai:
   server:
