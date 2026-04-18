@@ -46,7 +46,10 @@ public class SwaggerConfig {
                                         "※ WARD 역할 계정만 호출 가능. Authorization: Bearer {accessToken} 헤더 필수."),
                         new Tag().name("알림")
                                 .description("FCM 푸시 알림 토큰 등록 및 삭제\n" +
-                                        "※ 모든 API에 Authorization: Bearer {accessToken} 헤더 필수.")
+                                        "※ 모든 API에 Authorization: Bearer {accessToken} 헤더 필수."),
+                        new Tag().name("AI 서버 연동")
+                                .description("AI 서버 전용 이벤트 수신 API — 캐릭터 표정 / 이상감지 결과\n" +
+                                        "※ JWT 불필요. X-AI-Server-Key 헤더 인증.")
                 ))
                 // 전역 JWT Bearer 인증 적용
                 .addSecurityItem(new SecurityRequirement().addList(SECURITY_SCHEME_NAME))

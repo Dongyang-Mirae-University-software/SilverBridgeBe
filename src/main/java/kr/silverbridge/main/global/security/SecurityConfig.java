@@ -42,6 +42,7 @@ public class SecurityConfig {
                         // 인증 없이 접근 가능한 경로
                         .requestMatchers(
                                 "/api/auth/**",
+                                "/api/ai/**",      // AI 서버 전용 (API 키 인증, JWT 불필요)
                                 "/ws/**",          // WebSocket 핸드셰이크 (JWT는 핸드셰이크 인터셉터에서 검증)
                                 "/swagger-ui/**",
                                 "/swagger-ui.html",
