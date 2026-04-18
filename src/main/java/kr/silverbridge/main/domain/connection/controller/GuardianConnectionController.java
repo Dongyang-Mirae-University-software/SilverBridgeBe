@@ -33,13 +33,16 @@ public class GuardianConnectionController {
                     [요청 헤더]
                     Authorization: Bearer {accessToken}
 
+                    ACTIVE(연결됨) + PENDING(수락 대기) 상태 연결 목록을 반환합니다.
+                    status 필드로 상태를 구분하여 UI에서 "수락 대기 중" 표시에 활용하세요.
+
                     [페이지네이션 쿼리 파라미터]
                     - page: 페이지 번호 (0부터 시작, 기본값 0)
                     - size: 페이지당 항목 수 (최대 100)
                     - sort: 정렬 기준 (기본값: createdAt,desc)
                     """)
     @ApiResponses({
-            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "ACTIVE 상태 연결 목록 반환"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "ACTIVE + PENDING 상태 연결 목록 반환"),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "인증 필요"),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "보호자 권한 필요")
     })

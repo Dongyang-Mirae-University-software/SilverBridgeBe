@@ -18,6 +18,9 @@ public interface ConnectionRepository extends JpaRepository<Connection, Long> {
     // 보호자 기준 상태별 연결 목록 조회
     Page<Connection> findByGuardianIdAndStatus(String guardianId, ConnectionStatus status, Pageable pageable);
 
+    // 보호자 기준 복수 상태 연결 목록 조회 (ACTIVE + PENDING)
+    Page<Connection> findByGuardianIdAndStatusIn(String guardianId, List<ConnectionStatus> statuses, Pageable pageable);
+
     // 피보호자 기준 상태별 연결 목록 조회 (우선순위 정렬)
     Page<Connection> findByWardIdAndStatusOrderByPriorityAsc(String wardId, ConnectionStatus status, Pageable pageable);
 
