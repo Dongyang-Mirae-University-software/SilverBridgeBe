@@ -69,24 +69,31 @@ public class ConnectionService {
                 Map.of("type", "CONNECTION_REQUEST", "connectionId", String.valueOf(connection.getId())));
     }
 
-    // 보호자: 페어링 요청 거절 또는 연결 해제
+    // 보호자: 페어링 요청 취소 (PENDING만)
     @Transactional
-    public void cancelConnectionAsGuardian(String guardianId, Long connectionId) {
+    public void cancelPendingAsGuardian(String guardianId, Long connectionId) {
         Connection connection = getConnectionForGuardian(guardianId, connectionId);
-        if (connection.getStatus() == ConnectionStatus.CANCELLED) {
+        if (connection.getStatus() != ConnectionStatus.PENDING) {
+            throw new CustomException(ErrorCode.CONNECTION_NOT_PENDING);
+        }
+        connection.cancel();
+    }
+
+    // 보호자: 연결 해제 (ACTIVE만)
+    @Transactional
+    public void disconnectAsGuardian(String guardianId, Long connectionId) {
+        Connection connection = getConnectionForGuardian(guardianId, connectionId);
+        if (connection.getStatus() != ConnectionStatus.ACTIVE) {
             throw new CustomException(ErrorCode.CONNECTION_NOT_ACTIVE);
         }
         String wardId = connection.getWardId();
-        boolean wasActive = connection.getStatus() == ConnectionStatus.ACTIVE;
         connection.cancel();
 
         webSocketEventPublisher.sendToUser(wardId, "connection-cancelled",
                 Map.of("connectionId", connectionId));
-        if (wasActive) {
-            fcmService.sendToUser(wardId, "연결 해제",
-                    "보호자가 연결을 해제했습니다.",
-                    Map.of("type", "CONNECTION_CANCELLED", "connectionId", String.valueOf(connectionId)));
-        }
+        fcmService.sendToUser(wardId, "연결 해제",
+                "보호자가 연결을 해제했습니다.",
+                Map.of("type", "CONNECTION_CANCELLED", "connectionId", String.valueOf(connectionId)));
     }
 
     // ─── 피보호자 API ─────────────────────────────────────────────
@@ -118,24 +125,31 @@ public class ConnectionService {
                 Map.of("type", "CONNECTION_ACCEPTED", "connectionId", String.valueOf(connectionId)));
     }
 
-    // 피보호자: 요청 거절 또는 연결 해제
+    // 피보호자: 보호자 요청 거절 (PENDING만)
     @Transactional
-    public void cancelConnectionAsWard(String wardId, Long connectionId) {
+    public void refuseConnectionAsWard(String wardId, Long connectionId) {
         Connection connection = getConnectionForWard(wardId, connectionId);
-        if (connection.getStatus() == ConnectionStatus.CANCELLED) {
+        if (connection.getStatus() != ConnectionStatus.PENDING) {
+            throw new CustomException(ErrorCode.CONNECTION_NOT_PENDING);
+        }
+        connection.cancel();
+    }
+
+    // 피보호자: 연결 해제 (ACTIVE만)
+    @Transactional
+    public void disconnectAsWard(String wardId, Long connectionId) {
+        Connection connection = getConnectionForWard(wardId, connectionId);
+        if (connection.getStatus() != ConnectionStatus.ACTIVE) {
             throw new CustomException(ErrorCode.CONNECTION_NOT_ACTIVE);
         }
         String guardianId = connection.getGuardianId();
-        boolean wasActive = connection.getStatus() == ConnectionStatus.ACTIVE;
         connection.cancel();
 
         webSocketEventPublisher.sendToUser(guardianId, "connection-cancelled",
                 Map.of("connectionId", connectionId));
-        if (wasActive) {
-            fcmService.sendToUser(guardianId, "연결 해제",
-                    "피보호자가 연결을 해제했습니다.",
-                    Map.of("type", "CONNECTION_CANCELLED", "connectionId", String.valueOf(connectionId)));
-        }
+        fcmService.sendToUser(guardianId, "연결 해제",
+                "피보호자가 연결을 해제했습니다.",
+                Map.of("type", "CONNECTION_CANCELLED", "connectionId", String.valueOf(connectionId)));
     }
 
     // 피보호자: 보호자 통화 우선순위 변경
