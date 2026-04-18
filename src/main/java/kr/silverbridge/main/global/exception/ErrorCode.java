@@ -47,6 +47,7 @@ EMAIL_ALREADY_EXISTS(HttpStatus.CONFLICT, "이미 사용 중인 이메일입니�
     CONNECTION_NOT_FOUND(HttpStatus.NOT_FOUND, "연결 관계를 찾을 수 없습니다."),
     CONNECTION_ALREADY_EXISTS(HttpStatus.CONFLICT, "이미 연결되어 있거나 요청 중인 관계입니다."),
     CONNECTION_NOT_ACTIVE(HttpStatus.BAD_REQUEST, "활성화된 연결 관계가 아닙니다."),
+    CONNECTION_NOT_PENDING(HttpStatus.BAD_REQUEST, "수락 대기 중인 연결 관계가 아닙니다."),
     INVALID_CONNECTION_ROLE(HttpStatus.BAD_REQUEST, "보호자와 피보호자 역할이 맞지 않습니다."),
     CONNECTION_NOT_AUTHORIZED(HttpStatus.FORBIDDEN, "해당 연결에 대한 권한이 없습니다."),
     CANNOT_CONNECT_SELF(HttpStatus.BAD_REQUEST, "자기 자신과 연결할 수 없습니다."),
