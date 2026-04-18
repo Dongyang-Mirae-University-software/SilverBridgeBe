@@ -19,7 +19,7 @@ import org.springframework.web.bind.annotation.*;
 
 @Tag(name = "보호자")
 @RestController
-@RequestMapping("/api/guardian/game")
+@RequestMapping("/api/guardian")
 @RequiredArgsConstructor
 @PreAuthorize("hasRole('GUARDIAN')")
 public class GuardianGameController {
@@ -37,7 +37,7 @@ public class GuardianGameController {
                     - page: 페이지 번호 (0부터 시작)
                     - size: 페이지당 항목 수 (최대 100)
                     """)
-    @GetMapping("/results/{wardId}")
+    @GetMapping("/game-results/{wardId}")
     public ResponseEntity<ApiResponse<Page<GameResultResponse>>> getWardResults(
             @AuthenticationPrincipal String guardianId,
             @PathVariable String wardId,
@@ -55,7 +55,7 @@ public class GuardianGameController {
                     [쿼리 파라미터]
                     - gameType: MATCHING, WORD_QUIZ, ADDITION, SUBTRACTION
                     """)
-    @GetMapping("/ranking")
+    @GetMapping("/game/ranking")
     public ResponseEntity<ApiResponse<Page<GameRankingResponse>>> getRanking(
             @RequestParam GameType gameType,
             @PageableDefault(size = 20) Pageable pageable) {
