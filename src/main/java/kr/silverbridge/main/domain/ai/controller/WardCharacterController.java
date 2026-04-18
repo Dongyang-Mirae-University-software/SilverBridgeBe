@@ -3,13 +3,14 @@ package kr.silverbridge.main.domain.ai.controller;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import kr.silverbridge.main.domain.ai.service.AiEventService;
-import kr.silverbridge.main.global.enums.CharacterExpression;
 import kr.silverbridge.main.global.response.ApiResponse;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
-import org.springframework.web.bind.annotation.*;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RestController;
 
 import java.util.Map;
 
@@ -28,14 +29,14 @@ public class WardCharacterController {
                     Authorization: Bearer {accessToken}
 
                     앱 시작 시 또는 재연결 시 마지막으로 AI가 감지한 표정을 조회합니다.
-                    AI 서버가 10분 이상 데이터를 전송하지 않으면 NEUTRAL을 반환합니다.
+                    데이터가 없으면 NEUTRAL을 반환합니다.
 
                     실시간 표정은 WebSocket(/topic/{userId}/character-expression)을 구독하세요.
                     """)
     @GetMapping("/expression")
     public ResponseEntity<ApiResponse<Map<String, String>>> getCurrentExpression(
             @AuthenticationPrincipal String wardId) {
-        CharacterExpression expression = aiEventService.getCurrentExpression(wardId);
-        return ResponseEntity.ok(ApiResponse.ok(Map.of("expression", expression.name())));
+        String expression = aiEventService.getCurrentExpression(wardId);
+        return ResponseEntity.ok(ApiResponse.ok(Map.of("expression", expression)));
     }
 }
