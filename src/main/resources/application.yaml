@@ -72,3 +72,7 @@ springdoc:
 
 firebase:
   service-account-path: ${FIREBASE_SERVICE_ACCOUNT_PATH:firebase-service-account.json}
+
+ai:
+  server:
+    api-key: ${AI_SERVER_API_KEY:change-me-in-production}
