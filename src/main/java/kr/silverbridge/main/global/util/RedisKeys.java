@@ -32,4 +32,7 @@ public final class RedisKeys {
 
     // ── API 요청 속도 제한 ─────────────────────────────
     public static final String RATE_LIMIT = "rate:";
+
+    // ── 캐릭터 표정 (AI 서버 전달, 현재 상태 유지) ──────
+    public static final String CHARACTER_EXPRESSION = "character:expression:";
 }
