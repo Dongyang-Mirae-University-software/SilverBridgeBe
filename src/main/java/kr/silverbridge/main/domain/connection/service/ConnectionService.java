@@ -34,11 +34,12 @@ public class ConnectionService {
 
     // ─── 보호자 API ──────────────────────────────────────────────
 
-    // 보호자: 내 피보호자 목록 조회 (ACTIVE만)
+    // 보호자: 내 피보호자 목록 조회 (ACTIVE + PENDING)
     @Transactional(readOnly = true)
     public Page<ConnectionResponse> getMyWards(String guardianId, Pageable pageable) {
         Page<Connection> connections = connectionRepository
-                .findByGuardianIdAndStatus(guardianId, ConnectionStatus.ACTIVE, pageable);
+                .findByGuardianIdAndStatusIn(guardianId,
+                        List.of(ConnectionStatus.ACTIVE, ConnectionStatus.PENDING), pageable);
         return buildResponseFromGuardianView(connections);
     }
 
