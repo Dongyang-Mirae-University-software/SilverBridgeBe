@@ -35,11 +35,17 @@ public class AiEventController {
 
                     [처리 흐름]
                     1. AI 서버 → POST /api/ai/character-expression
-                    2. 백엔드 → Redis에 현재 표정 저장 (10분 TTL)
-                    3. 백엔드 → WebSocket(/topic/{wardId}/character-expression)으로 앱에 실시간 전달
+                    2. 백엔드 → DB(character_expressions)에 이력 저장
+                    3. 백엔드 → Redis에 최신 표정 캐시
+                    4. 백엔드 → WebSocket(/topic/{wardId}/character-expression)으로 앱에 실시간 전달
+                    5. needsAlert=true + 피보호자 앱 미접속 시 → 보호자 전체 FCM 발송
 
-                    [표정 값]
-                    HAPPY, NEUTRAL, SAD, ANGRY, FEARFUL, SURPRISED
+                    [expression]
+                    자유 문자열 (AI팀이 정의, 예: HAPPY, SAD, PAIN, CONFUSED 등)
+
+                    [needsAlert]
+                    AI팀이 이상 표정 여부를 판단하여 true/false 전달
+                    true + 피보호자 미접속 시 보호자에게 FCM 알림 발송
                     """)
     @ApiResponses({
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "표정 처리 완료"),
