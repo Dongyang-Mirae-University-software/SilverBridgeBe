@@ -8,25 +8,23 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.core.io.ClassPathResource;
 
-import java.io.ByteArrayInputStream;
 import java.io.IOException;
-import java.util.Base64;
 
 @Slf4j
 @Configuration
 public class FcmConfig {
 
-    // Base64 인코딩된 Firebase 서비스 계정 JSON (.env.dev의 FIREBASE_CREDENTIALS_BASE64)
-    @Value("${firebase.credentials-base64}")
-    private String credentialsBase64;
+    @Value("${firebase.service-account-path:firebase-service-account.json}")
+    private String serviceAccountPath;
 
     @Bean
     public FirebaseMessaging firebaseMessaging() throws IOException {
         if (FirebaseApp.getApps().isEmpty()) {
-            byte[] decoded = Base64.getDecoder().decode(credentialsBase64);
+            ClassPathResource resource = new ClassPathResource(serviceAccountPath);
             FirebaseOptions options = FirebaseOptions.builder()
-                    .setCredentials(GoogleCredentials.fromStream(new ByteArrayInputStream(decoded)))
+                    .setCredentials(GoogleCredentials.fromStream(resource.getInputStream()))
                     .build();
             FirebaseApp.initializeApp(options);
             log.info("Firebase 초기화 완료");
