@@ -18,6 +18,7 @@ import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 
+
 @Tag(name = "보호자")
 @RestController
 @RequestMapping("/api/guardian/connections")
@@ -49,21 +50,6 @@ public class GuardianConnectionController {
         return ResponseEntity.ok(ApiResponse.ok(connectionService.getMyWards(guardianId, pageable)));
     }
 
-    @Operation(summary = "받은 페어링 요청 목록",
-            description = """
-                    [요청 헤더]
-                    Authorization: Bearer {accessToken}
-
-                    피보호자가 보호자에게 보낸 PENDING 상태 요청 목록입니다.
-                    """)
-    @GetMapping("/pending")
-    public ResponseEntity<ApiResponse<Page<ConnectionResponse>>> getPendingRequests(
-            @AuthenticationPrincipal String guardianId,
-            @PageableDefault(sort = "createdAt", direction = Sort.Direction.DESC) Pageable pageable) {
-        return ResponseEntity.ok(ApiResponse.ok(
-                connectionService.getPendingRequestsForGuardian(guardianId, pageable)));
-    }
-
     @Operation(summary = "피보호자에게 페어링 요청",
             description = """
                     [요청 헤더]
@@ -85,22 +71,6 @@ public class GuardianConnectionController {
             @Valid @RequestBody ConnectionRequestDto request) {
         connectionService.requestConnectionAsGuardian(guardianId, request);
         return ResponseEntity.ok(ApiResponse.ok("페어링 요청을 전송했습니다."));
-    }
-
-    @Operation(summary = "페어링 요청 수락 (피보호자가 보낸 요청)",
-            description = """
-                    [요청 헤더]
-                    Authorization: Bearer {accessToken}
-
-                    피보호자가 보낸 요청만 수락 가능합니다.
-                    수락 시 피보호자에게 WebSocket + FCM 알림이 전송됩니다.
-                    """)
-    @PostMapping("/{connectionId}/accept")
-    public ResponseEntity<ApiResponse<Void>> acceptConnection(
-            @AuthenticationPrincipal String guardianId,
-            @PathVariable Long connectionId) {
-        connectionService.acceptConnectionAsGuardian(guardianId, connectionId);
-        return ResponseEntity.ok(ApiResponse.ok("연결 요청을 수락했습니다."));
     }
 
     @Operation(summary = "페어링 요청 거절 또는 연결 해제",
