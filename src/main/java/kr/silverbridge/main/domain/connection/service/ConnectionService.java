@@ -42,14 +42,6 @@ public class ConnectionService {
         return buildResponseFromGuardianView(connections);
     }
 
-    // 보호자: 받은 페어링 요청 목록 (PENDING)
-    @Transactional(readOnly = true)
-    public Page<ConnectionResponse> getPendingRequestsForGuardian(String guardianId, Pageable pageable) {
-        Page<Connection> connections = connectionRepository
-                .findByGuardianIdAndStatus(guardianId, ConnectionStatus.PENDING, pageable);
-        return buildResponseFromGuardianView(connections);
-    }
-
     // 보호자: 피보호자에게 페어링 요청 (보호자 → 피보호자)
     @Transactional
     public void requestConnectionAsGuardian(String guardianId, ConnectionRequestDto request) {
@@ -74,27 +66,6 @@ public class ConnectionService {
         fcmService.sendToUser(wardId, "연결 요청",
                 guardian.getName() + " 보호자가 연결을 요청했습니다.",
                 Map.of("type", "CONNECTION_REQUEST", "connectionId", String.valueOf(connection.getId())));
-    }
-
-    // 보호자: 페어링 요청 수락 (피보호자가 보낸 요청)
-    @Transactional
-    public void acceptConnectionAsGuardian(String guardianId, Long connectionId) {
-        Connection connection = getConnectionForGuardian(guardianId, connectionId);
-        if (connection.getStatus() != ConnectionStatus.PENDING) {
-            throw new CustomException(ErrorCode.CONNECTION_NOT_ACTIVE);
-        }
-        // 보호자는 자신이 받은 요청(피보호자가 initiatedBy)만 수락 가능
-        if (guardianId.equals(connection.getInitiatedBy())) {
-            throw new CustomException(ErrorCode.CONNECTION_NOT_AUTHORIZED);
-        }
-        connection.activate();
-
-        // 피보호자에게 수락 알림
-        webSocketEventPublisher.sendToUser(connection.getWardId(), "connection-accepted",
-                Map.of("connectionId", connectionId));
-        fcmService.sendToUser(connection.getWardId(), "연결 수락",
-                "보호자가 연결 요청을 수락했습니다.",
-                Map.of("type", "CONNECTION_ACCEPTED", "connectionId", String.valueOf(connectionId)));
     }
 
     // 보호자: 페어링 요청 거절 또는 연결 해제
@@ -125,38 +96,6 @@ public class ConnectionService {
         Page<Connection> connections = connectionRepository
                 .findByWardIdAndStatusOrderByPriorityAsc(wardId, ConnectionStatus.ACTIVE, pageable);
         return buildResponseFromWardView(connections);
-    }
-
-    // 피보호자: 받은 페어링 요청 목록 (PENDING)
-    @Transactional(readOnly = true)
-    public Page<ConnectionResponse> getPendingRequestsForWard(String wardId, Pageable pageable) {
-        Page<Connection> connections = connectionRepository
-                .findByWardIdAndStatus(wardId, ConnectionStatus.PENDING, pageable);
-        return buildResponseFromWardView(connections);
-    }
-
-    // 피보호자: 보호자에게 페어링 요청 (피보호자 → 보호자)
-    @Transactional
-    public void requestConnectionAsWard(String wardId, ConnectionRequestDto request) {
-        String guardianId = request.getTargetId();
-        validateConnectionRequest(wardId, guardianId, Role.WARD, Role.GUARDIAN);
-
-        Connection connection = Connection.builder()
-                .guardianId(guardianId)
-                .wardId(wardId)
-                .status(ConnectionStatus.PENDING)
-                .initiatedBy(wardId)
-                .priority(1)
-                .build();
-        connectionRepository.save(connection);
-
-        webSocketEventPublisher.sendToUser(guardianId, "connection-request",
-                Map.of("connectionId", connection.getId(), "from", wardId));
-
-        User ward = requireUser(wardId);
-        fcmService.sendToUser(guardianId, "연결 요청",
-                ward.getName() + " 피보호자가 연결을 요청했습니다.",
-                Map.of("type", "CONNECTION_REQUEST", "connectionId", String.valueOf(connection.getId())));
     }
 
     // 피보호자: 페어링 요청 수락 (보호자가 보낸 요청)
