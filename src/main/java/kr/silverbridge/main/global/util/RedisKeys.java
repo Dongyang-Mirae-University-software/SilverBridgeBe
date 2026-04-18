@@ -35,4 +35,7 @@ public final class RedisKeys {
 
     // ── 캐릭터 표정 (AI 서버 전달, 현재 상태 유지) ──────
     public static final String CHARACTER_EXPRESSION = "character:expression:";
+
+    // ── WebSocket 접속 상태 ───────────────────────────
+    public static final String WS_CONNECTED = "ws:connected:";
 }

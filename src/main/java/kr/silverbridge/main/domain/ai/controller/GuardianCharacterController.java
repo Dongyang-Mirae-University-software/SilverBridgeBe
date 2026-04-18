@@ -5,7 +5,6 @@ import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import kr.silverbridge.main.domain.ai.service.AiEventService;
 import kr.silverbridge.main.domain.connection.repository.ConnectionRepository;
-import kr.silverbridge.main.global.enums.CharacterExpression;
 import kr.silverbridge.main.global.enums.ConnectionStatus;
 import kr.silverbridge.main.global.exception.CustomException;
 import kr.silverbridge.main.global.exception.ErrorCode;
@@ -19,7 +18,6 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
-import java.util.List;
 import java.util.Map;
 
 @Tag(name = "보호자")
@@ -38,10 +36,7 @@ public class GuardianCharacterController {
                     Authorization: Bearer {accessToken}
 
                     연결된 피보호자의 마지막 AI 감지 표정을 조회합니다.
-                    AI 서버가 10분 이상 데이터를 전송하지 않으면 NEUTRAL을 반환합니다.
-
-                    [표정 값]
-                    HAPPY(행복), NEUTRAL(무표정), SAD(슬픔), ANGRY(화남), FEARFUL(두려움), SURPRISED(놀람)
+                    데이터가 없으면 NEUTRAL을 반환합니다.
 
                     실시간 표정은 WebSocket(/topic/{guardianId}/character-expression)을 구독하세요.
                     """)
@@ -53,14 +48,13 @@ public class GuardianCharacterController {
     public ResponseEntity<ApiResponse<Map<String, String>>> getWardExpression(
             @AuthenticationPrincipal String guardianId,
             @PathVariable String wardId) {
-        // 연결된 피보호자만 조회 가능
         boolean connected = connectionRepository.existsByGuardianIdAndWardIdAndStatusNot(
                 guardianId, wardId, ConnectionStatus.CANCELLED);
         if (!connected) {
             throw new CustomException(ErrorCode.CONNECTION_NOT_AUTHORIZED);
         }
 
-        CharacterExpression expression = aiEventService.getCurrentExpression(wardId);
-        return ResponseEntity.ok(ApiResponse.ok(Map.of("expression", expression.name())));
+        String expression = aiEventService.getCurrentExpression(wardId);
+        return ResponseEntity.ok(ApiResponse.ok(Map.of("expression", expression)));
     }
 }
