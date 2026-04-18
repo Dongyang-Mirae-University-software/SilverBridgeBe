@@ -5,7 +5,6 @@ import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import kr.silverbridge.main.domain.connection.dto.ConnectionPriorityUpdateRequest;
-import kr.silverbridge.main.domain.connection.dto.ConnectionRequestDto;
 import kr.silverbridge.main.domain.connection.dto.ConnectionResponse;
 import kr.silverbridge.main.domain.connection.service.ConnectionService;
 import kr.silverbridge.main.global.response.ApiResponse;
@@ -21,7 +20,6 @@ import org.springframework.web.bind.annotation.*;
 
 @Tag(name = "피보호자")
 @RestController
-@RequestMapping("/api/ward/connections")
 @RequiredArgsConstructor
 @PreAuthorize("hasRole('WARD')")
 public class WardConnectionController {
@@ -35,56 +33,35 @@ public class WardConnectionController {
 
                     ACTIVE 상태 연결 목록을 우선순위(priority) 오름차순으로 반환합니다.
                     긴급통화 시 1순위 보호자에게 먼저 연결 시도합니다.
+
+                    [페이지네이션 쿼리 파라미터]
+                    - page: 페이지 번호 (0부터 시작, 기본값 0)
+                    - size: 페이지당 항목 수 (최대 100)
                     """)
-    @GetMapping
+    @GetMapping("/api/ward/connection/select")
     public ResponseEntity<ApiResponse<Page<ConnectionResponse>>> getMyGuardians(
             @AuthenticationPrincipal String wardId,
             @PageableDefault(sort = "priority", direction = Sort.Direction.ASC) Pageable pageable) {
         return ResponseEntity.ok(ApiResponse.ok(connectionService.getMyGuardians(wardId, pageable)));
     }
 
-    @Operation(summary = "받은 페어링 요청 목록",
-            description = """
-                    [요청 헤더]
-                    Authorization: Bearer {accessToken}
-
-                    보호자가 피보호자에게 보낸 PENDING 상태 요청 목록입니다.
-                    """)
-    @GetMapping("/pending")
-    public ResponseEntity<ApiResponse<Page<ConnectionResponse>>> getPendingRequests(
-            @AuthenticationPrincipal String wardId,
-            @PageableDefault(sort = "createdAt", direction = Sort.Direction.DESC) Pageable pageable) {
-        return ResponseEntity.ok(ApiResponse.ok(
-                connectionService.getPendingRequestsForWard(wardId, pageable)));
-    }
-
-    @Operation(summary = "보호자에게 페어링 요청",
+    @Operation(summary = "보호자 요청 수락",
             description = """
                     [요청 헤더]
                     Authorization: Bearer {accessToken}
 
                     [페어링 전체 흐름]
-                    1. POST /api/ward/connections              → 피보호자가 보호자에게 요청
-                    2. 보호자 앱에 WebSocket(/topic/{guardianId}/connection-request) + FCM 알림 전송
-                    3. POST /api/guardian/connections/{id}/accept → 보호자가 수락
-                    """)
-    @PostMapping
-    public ResponseEntity<ApiResponse<Void>> requestConnection(
-            @AuthenticationPrincipal String wardId,
-            @Valid @RequestBody ConnectionRequestDto request) {
-        connectionService.requestConnectionAsWard(wardId, request);
-        return ResponseEntity.ok(ApiResponse.ok("페어링 요청을 전송했습니다."));
-    }
-
-    @Operation(summary = "페어링 요청 수락 (보호자가 보낸 요청)",
-            description = """
-                    [요청 헤더]
-                    Authorization: Bearer {accessToken}
-
-                    보호자가 보낸 요청만 수락 가능합니다.
+                    1. POST /api/guardian/connection/request      → 보호자가 피보호자 ID 입력 후 요청
+                    2. 피보호자 앱에 WebSocket(/topic/{wardId}/connection-request) + FCM 알림 전송
+                    3. POST /api/ward/connection/{id}/accept      → 피보호자가 수락 (현재 API)
                     수락 시 보호자에게 WebSocket + FCM 알림이 전송됩니다.
                     """)
-    @PostMapping("/{connectionId}/accept")
+    @ApiResponses({
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "수락 완료"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "PENDING 상태가 아닌 연결"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "해당 연결의 피보호자가 아님")
+    })
+    @PostMapping("/api/ward/connection/{connectionId}/accept")
     public ResponseEntity<ApiResponse<Void>> acceptConnection(
             @AuthenticationPrincipal String wardId,
             @PathVariable Long connectionId) {
@@ -92,16 +69,45 @@ public class WardConnectionController {
         return ResponseEntity.ok(ApiResponse.ok("연결 요청을 수락했습니다."));
     }
 
-    @Operation(summary = "페어링 요청 거절 또는 연결 해제",
+    @Operation(summary = "보호자 요청 거절 (PENDING 상태)",
             description = """
                     [요청 헤더]
                     Authorization: Bearer {accessToken}
+
+                    PENDING 상태인 보호자 요청을 거절합니다.
+                    이미 ACTIVE인 연결은 이 API로 해제할 수 없습니다.
                     """)
-    @DeleteMapping("/{connectionId}")
-    public ResponseEntity<ApiResponse<Void>> cancelConnection(
+    @ApiResponses({
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "거절 완료"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "PENDING 상태가 아닌 연결"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "해당 연결의 피보호자가 아님")
+    })
+    @DeleteMapping("/api/ward/connection/request/{connectionId}/refusal")
+    public ResponseEntity<ApiResponse<Void>> refuseConnection(
             @AuthenticationPrincipal String wardId,
             @PathVariable Long connectionId) {
-        connectionService.cancelConnectionAsWard(wardId, connectionId);
+        connectionService.refuseConnectionAsWard(wardId, connectionId);
+        return ResponseEntity.ok(ApiResponse.ok("연결 요청을 거절했습니다."));
+    }
+
+    @Operation(summary = "연결 해제 (ACTIVE 상태)",
+            description = """
+                    [요청 헤더]
+                    Authorization: Bearer {accessToken}
+
+                    ACTIVE 상태인 연결을 해제합니다.
+                    해제 시 보호자에게 WebSocket + FCM 알림이 전송됩니다.
+                    """)
+    @ApiResponses({
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "연결 해제 완료"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "ACTIVE 상태가 아닌 연결"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "해당 연결의 피보호자가 아님")
+    })
+    @DeleteMapping("/api/ward/disconnection/{connectionId}")
+    public ResponseEntity<ApiResponse<Void>> disconnect(
+            @AuthenticationPrincipal String wardId,
+            @PathVariable Long connectionId) {
+        connectionService.disconnectAsWard(wardId, connectionId);
         return ResponseEntity.ok(ApiResponse.ok("연결을 해제했습니다."));
     }
 
@@ -118,7 +124,7 @@ public class WardConnectionController {
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "ACTIVE 상태가 아닌 연결"),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "해당 연결의 피보호자가 아님")
     })
-    @PatchMapping("/{connectionId}/priority")
+    @PatchMapping("/api/ward/call/priority/{connectionId}")
     public ResponseEntity<ApiResponse<Void>> updatePriority(
             @AuthenticationPrincipal String wardId,
             @PathVariable Long connectionId,
