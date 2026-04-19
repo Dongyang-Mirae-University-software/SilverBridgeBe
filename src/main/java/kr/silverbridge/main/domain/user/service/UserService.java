@@ -64,8 +64,8 @@ public class UserService {
         user.updateProfile(
                 request.getName(),
                 newPhone != null ? newPhone : user.getPhone(),
-                request.getAddress() != null ? request.getAddress() : user.getAddress(),
-                request.getAddressDetail() != null ? request.getAddressDetail() : user.getAddressDetail()
+                request.getAddress(),
+                request.getAddressDetail()
         );
         return UserProfileResponse.from(user);
     }
