@@ -1,0 +1,3 @@
+ALTER TABLE users
+    ADD COLUMN address        VARCHAR(200) NOT NULL DEFAULT '',
+    ADD COLUMN address_detail VARCHAR(100) NOT NULL DEFAULT '';
