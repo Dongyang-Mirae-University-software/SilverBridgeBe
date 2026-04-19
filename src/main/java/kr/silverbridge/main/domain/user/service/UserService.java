@@ -61,7 +61,12 @@ public class UserService {
             redisTemplate.delete(RedisKeys.SMS_VERIFIED + newPhone);
         }
 
-        user.updateProfile(request.getName(), newPhone != null ? newPhone : user.getPhone());
+        user.updateProfile(
+                request.getName(),
+                newPhone != null ? newPhone : user.getPhone(),
+                request.getAddress(),
+                request.getAddressDetail()
+        );
         return UserProfileResponse.from(user);
     }
 

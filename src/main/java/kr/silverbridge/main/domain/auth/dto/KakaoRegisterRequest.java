@@ -4,6 +4,7 @@ import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Pattern;
+import jakarta.validation.constraints.Size;
 import kr.silverbridge.main.global.enums.Role;
 import lombok.Getter;
 
@@ -30,4 +31,14 @@ public class KakaoRegisterRequest {
 
     @Schema(description = "프로필 이미지 URL (선택값. 카카오 응답의 profileImageUrl 전달 또는 null)", example = "https://k.kakaocdn.net/dn/...", nullable = true)
     private String profileImageUrl;
+
+    @Schema(description = "도로명 주소 또는 지번 주소 (카카오 주소 API 결과값)", example = "서울특별시 강남구 테헤란로 123")
+    @NotBlank(message = "주소를 입력해주세요.")
+    @Size(max = 200, message = "주소는 200자 이하여야 합니다.")
+    private String address;
+
+    @Schema(description = "상세 주소 (동/호수 등)", example = "101동 202호")
+    @NotBlank(message = "상세 주소를 입력해주세요.")
+    @Size(max = 100, message = "상세 주소는 100자 이하여야 합니다.")
+    private String addressDetail;
 }
