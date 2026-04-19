@@ -33,6 +33,12 @@ public class UserProfileResponse {
     @Schema(description = "프로필 이미지 URL (없으면 null)", example = "https://file.silverbridge.kr/profiles/uuid.jpg", nullable = true)
     private String profileImage;
 
+    @Schema(description = "도로명 주소 또는 지번 주소", example = "서울특별시 강남구 테헤란로 123")
+    private String address;
+
+    @Schema(description = "상세 주소", example = "101동 202호")
+    private String addressDetail;
+
     @Schema(description = "마지막 로그인 일시 (없으면 null)", example = "2025-01-01T09:00:00+09:00", nullable = true)
     private OffsetDateTime lastLoginAt;
 
@@ -48,6 +54,8 @@ public class UserProfileResponse {
                 .provider(user.getProvider().name())
                 .role(user.getRole().name())
                 .profileImage(user.getProfileImage())
+                .address(user.getAddress())
+                .addressDetail(user.getAddressDetail())
                 .lastLoginAt(user.getLastLoginAt())
                 .createdAt(user.getCreatedAt())
                 .build();
