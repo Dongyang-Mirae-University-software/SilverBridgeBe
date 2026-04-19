@@ -143,6 +143,8 @@ public class KakaoAuthService {
                 .provider(Provider.KAKAO)
                 .providerId(kakaoId)
                 .profileImage(request.getProfileImageUrl())
+                .address(request.getAddress())
+                .addressDetail(request.getAddressDetail())
                 .build();
 
         userRepository.save(user);
