@@ -84,6 +84,8 @@ public class AuthService {
                 .role(request.getRole())
                 .status(Status.ACTIVE)
                 .provider(Provider.LOCAL)
+                .address(request.getAddress())
+                .addressDetail(request.getAddressDetail())
                 .build();
 
         userRepository.save(user);

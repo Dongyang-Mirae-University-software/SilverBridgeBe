@@ -50,6 +50,12 @@ public class User extends BaseTimeEntity {
     @Column(name = "profile_image", length = 500)
     private String profileImage;
 
+    @Column(nullable = false, length = 200)
+    private String address;
+
+    @Column(name = "address_detail", nullable = false, length = 100)
+    private String addressDetail;
+
     @Column(name = "last_login_at")
     private OffsetDateTime lastLoginAt;
 
@@ -79,10 +85,12 @@ public class User extends BaseTimeEntity {
         this.status = Status.INACTIVE;
     }
 
-    // 프로필 정보 수정 (이름, 전화번호)
-    public void updateProfile(String name, String phone) {
+    // 프로필 정보 수정 (이름, 전화번호, 주소)
+    public void updateProfile(String name, String phone, String address, String addressDetail) {
         this.name = name;
         this.phone = phone;
+        this.address = address;
+        this.addressDetail = addressDetail;
     }
 
     // 프로필 이미지 변경
