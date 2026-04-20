@@ -1,6 +1,7 @@
 package kr.silverbridge.main.domain.notification.controller;
 
 import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import kr.silverbridge.main.domain.notification.dto.FcmTokenRegisterRequest;
@@ -27,6 +28,14 @@ public class NotificationController {
                     앱 시작 시 또는 FCM 토큰 갱신 시 호출합니다.
                     이미 등록된 토큰이면 무시합니다.
                     """)
+    @ApiResponses({
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200",
+                    description = "FCM 토큰 등록 완료 (이미 등록된 토큰이어도 200 반환)"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400",
+                    description = "잘못된 요청 — token 또는 platform 필드 누락"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401",
+                    description = "인증 실패 — accessToken 누락 또는 만료")
+    })
     @PostMapping("/fcm-token")
     public ResponseEntity<ApiResponse<Void>> registerFcmToken(
             @AuthenticationPrincipal String userId,
@@ -43,6 +52,14 @@ public class NotificationController {
                     로그아웃 시 해당 디바이스의 FCM 토큰을 삭제합니다.
                     이후 해당 디바이스로 푸시 알림이 전송되지 않습니다.
                     """)
+    @ApiResponses({
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200",
+                    description = "FCM 토큰 삭제 완료 (존재하지 않는 토큰이어도 200 반환)"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400",
+                    description = "잘못된 요청 — token 쿼리 파라미터 누락"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401",
+                    description = "인증 실패 — accessToken 누락 또는 만료")
+    })
     @DeleteMapping("/fcm-token")
     public ResponseEntity<ApiResponse<Void>> deleteFcmToken(
             @AuthenticationPrincipal String userId,
