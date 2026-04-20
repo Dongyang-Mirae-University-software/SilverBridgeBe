@@ -63,6 +63,14 @@ public class WardCallController {
                     - offer: WebRTC 연결 시작 시
                     - ice-candidate: ICE 후보 교환 시
                     """)
+    @ApiResponses({
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200",
+                    description = "시그널 전송 완료"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400",
+                    description = "잘못된 요청 — targetId, type, data 필드 누락 또는 형식 오류"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401",
+                    description = "인증 실패 — accessToken 누락 또는 만료")
+    })
     @PostMapping("/api/ward/call/signal")
     public ResponseEntity<ApiResponse<Void>> sendSignal(
             @AuthenticationPrincipal String wardId,
@@ -78,6 +86,14 @@ public class WardCallController {
 
                     통화를 종료하고 보호자에게 종료 알림을 전송합니다.
                     """)
+    @ApiResponses({
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200",
+                    description = "통화 종료 완료"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400",
+                    description = "잘못된 요청 — targetId 쿼리 파라미터 누락"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401",
+                    description = "인증 실패 — accessToken 누락 또는 만료")
+    })
     @PostMapping("/api/ward/call/end")
     public ResponseEntity<ApiResponse<Void>> endCall(
             @AuthenticationPrincipal String wardId,

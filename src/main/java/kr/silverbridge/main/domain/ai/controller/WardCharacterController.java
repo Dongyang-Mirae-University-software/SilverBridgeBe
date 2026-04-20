@@ -1,6 +1,7 @@
 package kr.silverbridge.main.domain.ai.controller;
 
 import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import kr.silverbridge.main.domain.ai.service.AiEventService;
 import kr.silverbridge.main.global.response.ApiResponse;
@@ -33,6 +34,14 @@ public class WardCharacterController {
 
                     실시간 표정은 WebSocket(/topic/{userId}/character-expression)을 구독하세요.
                     """)
+    @ApiResponses({
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200",
+                    description = "성공 — expression 필드에 현재 표정 반환 (NEUTRAL / HAPPY / SAD / ANGRY / SURPRISED / FEARFUL / DISGUSTED)"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401",
+                    description = "인증 실패 — accessToken 누락 또는 만료"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403",
+                    description = "권한 없음 — WARD 역할이 아닌 경우")
+    })
     @GetMapping("/expression")
     public ResponseEntity<ApiResponse<Map<String, String>>> getCurrentExpression(
             @AuthenticationPrincipal String wardId) {
