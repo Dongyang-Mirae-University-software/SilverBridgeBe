@@ -2,6 +2,7 @@ package kr.silverbridge.main.global.config;
 
 import kr.silverbridge.main.global.jwt.JwtTokenProvider;
 import kr.silverbridge.main.global.websocket.JwtHandshakeInterceptor;
+import kr.silverbridge.main.global.websocket.StompSubscriptionAuthorizationInterceptor;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.messaging.simp.config.ChannelRegistration;
@@ -16,6 +17,7 @@ import org.springframework.web.socket.config.annotation.WebSocketMessageBrokerCo
 public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
 
     private final JwtTokenProvider jwtTokenProvider;
+    private final StompSubscriptionAuthorizationInterceptor subscriptionAuthInterceptor;
 
     @Override
     public void configureMessageBroker(MessageBrokerRegistry registry) {
@@ -32,5 +34,11 @@ public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
                 .addInterceptors(new JwtHandshakeInterceptor(jwtTokenProvider))
                 .setAllowedOriginPatterns("*")
                 .withSockJS();
+    }
+
+    @Override
+    public void configureClientInboundChannel(ChannelRegistration registration) {
+        // SUBSCRIBE 시 /topic/{userId}/... 의 userId가 세션 userId와 일치하는지 검증
+        registration.interceptors(subscriptionAuthInterceptor);
     }
 }
