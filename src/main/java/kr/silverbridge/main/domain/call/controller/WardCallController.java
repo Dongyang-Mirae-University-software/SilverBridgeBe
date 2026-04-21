@@ -8,6 +8,7 @@ import jakarta.validation.Valid;
 import kr.silverbridge.main.domain.call.dto.WebRtcSignalRequest;
 import kr.silverbridge.main.domain.call.service.CallService;
 import kr.silverbridge.main.global.response.ApiResponse;
+import kr.silverbridge.main.global.security.RateLimitService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -21,6 +22,7 @@ import org.springframework.web.bind.annotation.*;
 public class WardCallController {
 
     private final CallService callService;
+    private final RateLimitService rateLimitService;
 
     @Operation(summary = "SOS 긴급통화 발신",
             description = """
@@ -48,6 +50,8 @@ public class WardCallController {
     @PostMapping("/api/ward/sos")
     public ResponseEntity<ApiResponse<Void>> triggerSos(
             @AuthenticationPrincipal String wardId) {
+        // 동일 피보호자의 SOS 연속 트리거 제한 (보호자 FCM 스팸 방지)
+        rateLimitService.check("sos-trigger", wardId);
         callService.triggerSos(wardId);
         return ResponseEntity.ok(ApiResponse.ok("긴급 통화 요청을 전송했습니다."));
     }
