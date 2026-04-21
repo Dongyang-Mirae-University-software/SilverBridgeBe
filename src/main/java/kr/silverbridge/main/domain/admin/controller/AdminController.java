@@ -8,8 +8,11 @@ import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import kr.silverbridge.main.domain.admin.dto.*;
+import kr.silverbridge.main.domain.admin.service.AdminAnnouncementService;
 import kr.silverbridge.main.domain.admin.service.AdminAuditLogService;
+import kr.silverbridge.main.domain.admin.service.AdminConnectionService;
 import kr.silverbridge.main.domain.admin.service.AdminService;
+import kr.silverbridge.main.domain.admin.service.AdminUserService;
 import kr.silverbridge.main.global.enums.GameType;
 import kr.silverbridge.main.global.enums.Role;
 import kr.silverbridge.main.global.response.ApiResponse;
@@ -32,6 +35,9 @@ import java.time.OffsetDateTime;
 public class AdminController {
 
     private final AdminService adminService;
+    private final AdminUserService adminUserService;
+    private final AdminConnectionService adminConnectionService;
+    private final AdminAnnouncementService adminAnnouncementService;
     private final AdminAuditLogService auditLogService;
 
     // =============================================
@@ -73,7 +79,7 @@ public class AdminController {
             @Parameter(description = "역할 필터 (WARD / GUARDIAN / 미입력: 전체)")
             @RequestParam(required = false) Role role,
             @PageableDefault(size = 20, sort = "createdAt", direction = Sort.Direction.DESC) Pageable pageable) {
-        return ApiResponse.ok(adminService.getUsers(role, pageable));
+        return ApiResponse.ok(adminUserService.getUsers(role, pageable));
     }
 
     @Operation(
@@ -92,7 +98,7 @@ public class AdminController {
     @GetMapping("/user/select/detail/{userId}")
     public ApiResponse<UserDetailResponse> getUser(
             @Parameter(description = "사용자 ID") @PathVariable String userId) {
-        return ApiResponse.ok(adminService.getUser(userId));
+        return ApiResponse.ok(adminUserService.getUser(userId));
     }
 
     @Operation(
@@ -118,7 +124,7 @@ public class AdminController {
             @Parameter(description = "사용자 ID") @PathVariable String userId,
             @Valid @RequestBody UserStatusUpdateRequest request,
             @AuthenticationPrincipal String adminId) {
-        adminService.updateUserStatus(userId, request, adminId);
+        adminUserService.updateUserStatus(userId, request, adminId);
         return ApiResponse.ok("사용자 상태가 변경되었습니다.");
     }
 
@@ -146,7 +152,7 @@ public class AdminController {
             @Parameter(description = "사용자 ID") @PathVariable String userId,
             @Valid @RequestBody UserRoleUpdateRequest request,
             @AuthenticationPrincipal String adminId) {
-        adminService.updateUserRole(userId, request, adminId);
+        adminUserService.updateUserRole(userId, request, adminId);
         return ApiResponse.ok("사용자 역할이 변경되었습니다.");
     }
 
@@ -172,7 +178,7 @@ public class AdminController {
     public ApiResponse<Void> forceDeleteUser(
             @Parameter(description = "사용자 ID") @PathVariable String userId,
             @AuthenticationPrincipal String adminId) {
-        adminService.forceDeleteUser(userId, adminId);
+        adminUserService.forceDeleteUser(userId, adminId);
         return ApiResponse.ok("사용자가 강제 탈퇴 처리되었습니다.");
     }
 
@@ -210,7 +216,7 @@ public class AdminController {
     @GetMapping("/user/connection/select")
     public ApiResponse<Page<ConnectionResponse>> getConnections(
             @PageableDefault(size = 20, sort = "createdAt", direction = Sort.Direction.DESC) Pageable pageable) {
-        return ApiResponse.ok(adminService.getConnections(pageable));
+        return ApiResponse.ok(adminConnectionService.getConnections(pageable));
     }
 
     @Operation(
@@ -246,7 +252,7 @@ public class AdminController {
     public ApiResponse<Page<ConnectionResponse>> getConnectionsByGuardian(
             @Parameter(description = "보호자 ID (GUARDIAN 역할만 가능)") @PathVariable String guardianId,
             @PageableDefault(size = 20, sort = "createdAt", direction = Sort.Direction.DESC) Pageable pageable) {
-        return ApiResponse.ok(adminService.getConnectionsByGuardian(guardianId, pageable));
+        return ApiResponse.ok(adminConnectionService.getConnectionsByGuardian(guardianId, pageable));
     }
 
     @Operation(
@@ -274,7 +280,7 @@ public class AdminController {
     public ApiResponse<ConnectionResponse> forceConnect(
             @Valid @RequestBody AdminForceConnectRequest request,
             @AuthenticationPrincipal String adminId) {
-        return ApiResponse.ok(adminService.forceConnect(request, adminId));
+        return ApiResponse.ok(adminConnectionService.forceConnect(request, adminId));
     }
 
     @Operation(
@@ -297,7 +303,7 @@ public class AdminController {
     public ApiResponse<Void> forceDisconnect(
             @Parameter(description = "연결 ID (ConnectionResponse.id)") @RequestParam Long connectionId,
             @AuthenticationPrincipal String adminId) {
-        adminService.forceDisconnect(connectionId, adminId);
+        adminConnectionService.forceDisconnect(connectionId, adminId);
         return ApiResponse.ok("연결이 해제되었습니다.");
     }
 
@@ -441,7 +447,7 @@ public class AdminController {
     @GetMapping("/announcement/select")
     public ApiResponse<Page<AnnouncementResponse>> getAnnouncements(
             @PageableDefault(size = 20, sort = "createdAt", direction = Sort.Direction.DESC) Pageable pageable) {
-        return ApiResponse.ok(adminService.getAnnouncements(pageable));
+        return ApiResponse.ok(adminAnnouncementService.getAnnouncements(pageable));
     }
 
     @Operation(
@@ -457,7 +463,7 @@ public class AdminController {
     @GetMapping("/announcement/select/detail/{id}")
     public ApiResponse<AnnouncementResponse> getAnnouncement(
             @Parameter(description = "공지 ID") @PathVariable Long id) {
-        return ApiResponse.ok(adminService.getAnnouncement(id));
+        return ApiResponse.ok(adminAnnouncementService.getAnnouncement(id));
     }
 
     @Operation(
@@ -474,7 +480,7 @@ public class AdminController {
     public ApiResponse<AnnouncementResponse> createAnnouncement(
             @Valid @RequestBody AnnouncementCreateRequest request,
             @AuthenticationPrincipal String adminId) {
-        return ApiResponse.ok(adminService.createAnnouncement(request, adminId));
+        return ApiResponse.ok(adminAnnouncementService.createAnnouncement(request, adminId));
     }
 
     @Operation(
@@ -493,7 +499,7 @@ public class AdminController {
             @Parameter(description = "공지 ID") @PathVariable Long id,
             @Valid @RequestBody AnnouncementUpdateRequest request,
             @AuthenticationPrincipal String adminId) {
-        return ApiResponse.ok(adminService.updateAnnouncement(id, request, adminId));
+        return ApiResponse.ok(adminAnnouncementService.updateAnnouncement(id, request, adminId));
     }
 
     @Operation(
@@ -515,7 +521,7 @@ public class AdminController {
     public ApiResponse<Void> deleteAnnouncement(
             @Parameter(description = "공지 ID") @PathVariable Long id,
             @AuthenticationPrincipal String adminId) {
-        adminService.deleteAnnouncement(id, adminId);
+        adminAnnouncementService.deleteAnnouncement(id, adminId);
         return ApiResponse.ok("공지가 삭제되었습니다.");
     }
 
