@@ -4,11 +4,13 @@ import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import kr.silverbridge.main.domain.auth.dto.SmsSendRequest;
 import kr.silverbridge.main.domain.auth.dto.SmsVerifyRequest;
 import kr.silverbridge.main.domain.auth.service.SmsService;
 import kr.silverbridge.main.global.response.ApiResponse;
+import kr.silverbridge.main.global.security.RateLimitService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -22,6 +24,7 @@ import org.springframework.web.bind.annotation.RestController;
 public class SmsController {
 
     private final SmsService smsService;
+    private final RateLimitService rateLimitService;
 
     @Operation(
             summary = "SMS 인증코드 발송",
@@ -47,7 +50,9 @@ public class SmsController {
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "500", description = "SMS 발송 실패 (통신사 오류, content = @Content)")
     })
     @PostMapping("/send")
-    public ApiResponse<Void> send(@Valid @RequestBody SmsSendRequest request) {
+    public ApiResponse<Void> send(@Valid @RequestBody SmsSendRequest request,
+                                  HttpServletRequest httpRequest) {
+        rateLimitService.check("signup-sms", httpRequest.getRemoteAddr());
         smsService.sendVerificationCode(request);
         return ApiResponse.ok("인증코드가 발송되었습니다.");
     }
@@ -92,7 +97,9 @@ public class SmsController {
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "500", description = "SMS 발송 실패", content = @Content)
     })
     @PostMapping("/resend")
-    public ApiResponse<Void> resend(@Valid @RequestBody SmsSendRequest request) {
+    public ApiResponse<Void> resend(@Valid @RequestBody SmsSendRequest request,
+                                    HttpServletRequest httpRequest) {
+        rateLimitService.check("signup-sms", httpRequest.getRemoteAddr());
         smsService.sendVerificationCode(request);
         return ApiResponse.ok("인증코드가 재발송되었습니다.");
     }
