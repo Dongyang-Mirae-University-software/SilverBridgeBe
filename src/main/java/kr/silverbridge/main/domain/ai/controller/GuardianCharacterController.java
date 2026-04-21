@@ -1,6 +1,7 @@
 package kr.silverbridge.main.domain.ai.controller;
 
 import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import kr.silverbridge.main.domain.ai.service.AiEventService;
@@ -42,7 +43,7 @@ public class GuardianCharacterController {
                     """)
     @ApiResponses({
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "표정 정보 반환"),
-            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "연결되지 않은 피보호자")
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "연결되지 않은 피보호자", content = @Content)
     })
     @GetMapping("/character-expression/{wardId}")
     public ResponseEntity<ApiResponse<Map<String, String>>> getWardExpression(
