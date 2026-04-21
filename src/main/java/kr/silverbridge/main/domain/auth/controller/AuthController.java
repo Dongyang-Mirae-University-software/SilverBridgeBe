@@ -18,7 +18,6 @@ import kr.silverbridge.main.domain.auth.dto.TokenRefreshResponse;
 import kr.silverbridge.main.domain.auth.service.AuthService;
 import kr.silverbridge.main.global.response.ApiResponse;
 import kr.silverbridge.main.global.security.RateLimitService;
-import kr.silverbridge.main.global.util.RedisKeys;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
@@ -66,7 +65,7 @@ public class AuthController {
     @PostMapping("/signup/email/check")
     public ApiResponse<Void> checkEmail(@Valid @RequestBody EmailCheckRequest request,
                                         HttpServletRequest httpRequest) {
-        rateLimitService.check(RedisKeys.RATE_LIMIT + "email-check:" + httpRequest.getRemoteAddr());
+        rateLimitService.check("email-check", httpRequest.getRemoteAddr());
         authService.checkEmail(request);
         return ApiResponse.ok("사용 가능한 이메일입니다.");
     }
@@ -208,7 +207,7 @@ public class AuthController {
     @PostMapping("/find-email")
     public ApiResponse<FindEmailResponse> findEmail(@Valid @RequestBody FindEmailRequest request,
                                                     HttpServletRequest httpRequest) {
-        rateLimitService.check(RedisKeys.RATE_LIMIT + "find-email:" + httpRequest.getRemoteAddr());
+        rateLimitService.check("find-email", httpRequest.getRemoteAddr());
         return ApiResponse.ok(authService.findEmail(request));
     }
 }
