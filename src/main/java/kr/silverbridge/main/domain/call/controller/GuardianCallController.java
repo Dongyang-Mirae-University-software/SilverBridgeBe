@@ -1,6 +1,7 @@
 package kr.silverbridge.main.domain.call.controller;
 
 import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
@@ -38,11 +39,11 @@ public class GuardianCallController {
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200",
                     description = "시그널 전송 완료"),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400",
-                    description = "잘못된 요청 — targetId, type, data 필드 누락 또는 형식 오류"),
+                    description = "targetId, type, data 필드 누락 또는 형식 오류", content = @Content),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401",
-                    description = "인증 실패 — accessToken 누락 또는 만료"),
+                    description = "인증 토큰 없음 또는 만료", content = @Content),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403",
-                    description = "권한 없음 — GUARDIAN 역할이 아닌 경우")
+                    description = "보호자 권한 필요", content = @Content)
     })
     @PostMapping("/signal")
     public ResponseEntity<ApiResponse<Void>> sendSignal(
@@ -63,11 +64,11 @@ public class GuardianCallController {
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200",
                     description = "통화 종료 완료"),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400",
-                    description = "잘못된 요청 — targetId 쿼리 파라미터 누락"),
+                    description = "targetId 쿼리 파라미터 누락", content = @Content),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401",
-                    description = "인증 실패 — accessToken 누락 또는 만료"),
+                    description = "인증 토큰 없음 또는 만료", content = @Content),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403",
-                    description = "권한 없음 — GUARDIAN 역할이 아닌 경우")
+                    description = "보호자 권한 필요", content = @Content)
     })
     @PostMapping("/end")
     public ResponseEntity<ApiResponse<Void>> endCall(

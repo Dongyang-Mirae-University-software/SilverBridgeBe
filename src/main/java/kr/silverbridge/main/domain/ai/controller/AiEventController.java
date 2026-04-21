@@ -1,6 +1,7 @@
 package kr.silverbridge.main.domain.ai.controller;
 
 import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
@@ -27,29 +28,25 @@ public class AiEventController {
 
     @Operation(summary = "캐릭터 표정 전달 (AI 서버 전용)",
             description = """
-                    AI 서버가 카메라로 피보호자 표정을 분석한 결과를 전달합니다.
+                    AI 서버가 카메라로 분석한 피보호자 표정을 전달합니다.
 
                     [인증]
                     헤더: X-AI-Server-Key: {api-key}
                     JWT 토큰 불필요 (AI 서버 전용 키 인증)
 
-                    [처리 흐름]
-                    1. AI 서버 → POST /api/ai/character-expression
-                    2. 백엔드 → DB(character_expressions)에 이력 저장
-                    3. 백엔드 → Redis에 최신 표정 캐시
-                    4. 백엔드 → WebSocket(/topic/{wardId}/character-expression)으로 앱에 실시간 전달
-                    5. needsAlert=true + 피보호자 앱 미접속 시 → 보호자 전체 FCM 발송
+                    [처리 결과]
+                    - 피보호자 앱에 WebSocket(/topic/{wardId}/character-expression) 으로 실시간 전달
+                    - needsAlert=true 이면서 피보호자 앱이 미접속 상태면 → 보호자 전체에게 FCM 알림 발송
 
                     [expression]
                     자유 문자열 (AI팀이 정의, 예: HAPPY, SAD, PAIN, CONFUSED 등)
 
                     [needsAlert]
                     AI팀이 이상 표정 여부를 판단하여 true/false 전달
-                    true + 피보호자 미접속 시 보호자에게 FCM 알림 발송
                     """)
     @ApiResponses({
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "표정 처리 완료"),
-            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "API 키 불일치")
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "API 키 불일치", content = @Content)
     })
     @PostMapping("/character-expression")
     public ResponseEntity<ApiResponse<Void>> receiveCharacterExpression(
