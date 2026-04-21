@@ -14,7 +14,6 @@ import kr.silverbridge.main.domain.auth.dto.PasswordResetTokenResponse;
 import kr.silverbridge.main.domain.auth.service.PasswordResetService;
 import kr.silverbridge.main.global.response.ApiResponse;
 import kr.silverbridge.main.global.security.RateLimitService;
-import kr.silverbridge.main.global.util.RedisKeys;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -56,7 +55,7 @@ public class FindPasswordController {
     @PostMapping("/email/send")
     public ApiResponse<Void> sendEmail(@Valid @RequestBody PasswordResetRequest request,
                                        HttpServletRequest httpRequest) {
-        rateLimitService.check(RedisKeys.RATE_LIMIT + "pw-reset:" + httpRequest.getRemoteAddr());
+        rateLimitService.check("pw-reset-email", httpRequest.getRemoteAddr());
         passwordResetService.requestReset(request);
         return ApiResponse.ok("비밀번호 재설정 이메일이 발송되었습니다.");
     }
@@ -99,7 +98,7 @@ public class FindPasswordController {
     @PostMapping("/email/resend")
     public ApiResponse<Void> resendEmail(@Valid @RequestBody PasswordResetRequest request,
                                          HttpServletRequest httpRequest) {
-        rateLimitService.check(RedisKeys.RATE_LIMIT + "pw-reset:" + httpRequest.getRemoteAddr());
+        rateLimitService.check("pw-reset-email", httpRequest.getRemoteAddr());
         passwordResetService.requestReset(request);
         return ApiResponse.ok("비밀번호 재설정 이메일이 재발송되었습니다.");
     }
@@ -130,7 +129,9 @@ public class FindPasswordController {
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "500", description = "SMS 발송 실패", content = @Content)
     })
     @PostMapping("/sms/send")
-    public ApiResponse<Void> sendSms(@Valid @RequestBody PasswordResetSmsSendRequest request) {
+    public ApiResponse<Void> sendSms(@Valid @RequestBody PasswordResetSmsSendRequest request,
+                                     HttpServletRequest httpRequest) {
+        rateLimitService.check("pw-reset-sms", httpRequest.getRemoteAddr());
         passwordResetService.requestResetBySms(request);
         return ApiResponse.ok("비밀번호 재설정 인증코드가 발송되었습니다.");
     }
@@ -174,7 +175,9 @@ public class FindPasswordController {
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "500", description = "SMS 발송 실패", content = @Content)
     })
     @PostMapping("/sms/resend")
-    public ApiResponse<Void> resendSms(@Valid @RequestBody PasswordResetSmsSendRequest request) {
+    public ApiResponse<Void> resendSms(@Valid @RequestBody PasswordResetSmsSendRequest request,
+                                       HttpServletRequest httpRequest) {
+        rateLimitService.check("pw-reset-sms", httpRequest.getRemoteAddr());
         passwordResetService.requestResetBySms(request);
         return ApiResponse.ok("비밀번호 재설정 인증코드가 재발송되었습니다.");
     }
