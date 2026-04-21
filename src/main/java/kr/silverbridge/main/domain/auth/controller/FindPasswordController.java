@@ -33,7 +33,7 @@ public class FindPasswordController {
     // ─── 이메일 방식 ───────────────────────────────────────────
 
     @Operation(
-            summary = "[이메일 방식 1단계] 비밀번호 재설정 이메일 발송",
+            summary = "[이메일] 1단계 · 재설정 이메일 발송",
             description = """
                     가입된 이메일로 비밀번호 재설정 token을 메일로 발송합니다.
 
@@ -62,7 +62,7 @@ public class FindPasswordController {
     }
 
     @Operation(
-            summary = "[이메일 방식 2단계] 비밀번호 재설정 token 검증",
+            summary = "[이메일] 2단계 · token 검증",
             description = """
                     이메일로 수신한 token이 유효한지 검증합니다.
                     검증 성공 시 token을 반환합니다. 반환된 token을 POST /api/auth/password/reset 에 전달하세요.
@@ -81,7 +81,7 @@ public class FindPasswordController {
     }
 
     @Operation(
-            summary = "[이메일 방식] 비밀번호 재설정 이메일 재발송",
+            summary = "[이메일] 재발송",
             description = """
                     비밀번호 재설정 이메일을 재발송합니다.
                     기존 token은 즉시 무효화되고 새 token이 발송됩니다.
@@ -107,7 +107,7 @@ public class FindPasswordController {
     // ─── SMS 방식 ────────────────────────────────────────────
 
     @Operation(
-            summary = "[SMS 방식 1단계] 비밀번호 재설정 인증코드 발송",
+            summary = "[SMS] 1단계 · 인증코드 발송",
             description = """
                     이름과 전화번호로 가입 여부를 확인 후 인증코드를 SMS로 발송합니다.
 
@@ -136,7 +136,7 @@ public class FindPasswordController {
     }
 
     @Operation(
-            summary = "[SMS 방식 2단계] 인증코드 확인 및 재설정 token 발급",
+            summary = "[SMS] 2단계 · 인증코드 확인 및 token 발급",
             description = """
                     SMS로 받은 인증코드를 확인합니다.
                     인증 성공 시 비밀번호 변경에 필요한 token이 반환됩니다.
@@ -158,7 +158,7 @@ public class FindPasswordController {
     }
 
     @Operation(
-            summary = "[SMS 방식] 비밀번호 재설정 인증코드 재발송",
+            summary = "[SMS] 재발송",
             description = """
                     비밀번호 재설정 SMS 인증코드를 재발송합니다.
                     기존 인증코드는 즉시 무효화되고 새 코드가 발송됩니다.
