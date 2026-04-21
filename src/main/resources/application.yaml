@@ -31,6 +31,14 @@ spring:
       pageable:
         max-page-size: 100    # ?size=999999 같은 과도한 요청 방지
 
+  servlet:
+    multipart:
+      max-file-size: 5MB      # 프로필 이미지 업로드 제한 (기본 1MB → 5MB)
+      max-request-size: 5MB
+
+  mvc:
+    throw-exception-if-no-handler-found: true   # 존재하지 않는 경로 → NoHandlerFoundException 발생 (Swagger UI 정적 리소스는 영향 없음)
+
   mail:
     host: ${MAIL_HOST:smtp.gmail.com}
     port: ${MAIL_PORT:587}
