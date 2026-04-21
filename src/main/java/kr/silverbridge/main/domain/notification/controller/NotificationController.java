@@ -8,6 +8,7 @@ import jakarta.validation.Valid;
 import kr.silverbridge.main.domain.notification.dto.FcmTokenRegisterRequest;
 import kr.silverbridge.main.domain.notification.service.FcmService;
 import kr.silverbridge.main.global.response.ApiResponse;
+import kr.silverbridge.main.global.security.RateLimitService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
@@ -20,6 +21,7 @@ import org.springframework.web.bind.annotation.*;
 public class NotificationController {
 
     private final FcmService fcmService;
+    private final RateLimitService rateLimitService;
 
     @Operation(summary = "FCM 토큰 등록",
             description = """
@@ -41,6 +43,8 @@ public class NotificationController {
     public ResponseEntity<ApiResponse<Void>> registerFcmToken(
             @AuthenticationPrincipal String userId,
             @Valid @RequestBody FcmTokenRegisterRequest request) {
+        // 동일 사용자의 FCM 토큰 등록 스팸 방지
+        rateLimitService.check("fcm-register", userId);
         fcmService.registerToken(userId, request.getToken(), request.getPlatform());
         return ResponseEntity.ok(ApiResponse.ok("FCM 토큰이 등록되었습니다."));
     }

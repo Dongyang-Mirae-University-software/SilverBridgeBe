@@ -39,7 +39,9 @@ public class GuardianCharacterController {
                     연결된 피보호자의 마지막 AI 감지 표정을 조회합니다.
                     데이터가 없으면 NEUTRAL을 반환합니다.
 
-                    실시간 표정은 WebSocket(/topic/{guardianId}/character-expression)을 구독하세요.
+                    실시간 표정은 보호자 본인의 토픽으로는 전달되지 않습니다.
+                    이상 표정(needsAlert=true)이 감지되면 FCM 푸시 알림으로 전달되며,
+                    보호자가 피보호자의 현재 표정이 필요할 때는 이 API를 호출해주세요.
                     """)
     @ApiResponses({
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "표정 정보 반환"),
