@@ -23,7 +23,7 @@ public class PasswordResetController {
     private final PasswordResetService passwordResetService;
 
     @Operation(
-            summary = "[공통 마지막 단계] 새 비밀번호 설정",
+            summary = "[공통] 3단계 · 새 비밀번호 설정",
             description = """
                     이메일 또는 SMS 방식으로 발급된 token과 새 비밀번호를 입력하여 비밀번호를 변경합니다.
                     변경 성공 시 모든 기기에서 자동 로그아웃됩니다. (재로그인 필요)
