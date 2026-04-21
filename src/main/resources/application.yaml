@@ -55,7 +55,8 @@ server:
   port: 6511
 
 jwt:
-  secret: ${JWT_SECRET:main-backend-secret-key-must-be-at-least-256bit-long-for-hs256}
+  # 반드시 .env.dev 또는 운영 환경변수로 지정 (256bit 이상 랜덤 값)
+  secret: ${JWT_SECRET}
   access-token-expiration: 1800000    # 30분 (ms)
   refresh-token-expiration: 604800000 # 7일 (ms)
 
@@ -83,4 +84,5 @@ firebase:
 
 ai:
   server:
-    api-key: ${AI_SERVER_API_KEY:change-me-in-production}
+    # 반드시 .env.dev 또는 운영 환경변수로 지정 (32자 이상 랜덤 값)
+    api-key: ${AI_SERVER_API_KEY}
