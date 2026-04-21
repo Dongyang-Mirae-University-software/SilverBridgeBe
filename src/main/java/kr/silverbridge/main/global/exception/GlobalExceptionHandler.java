@@ -9,11 +9,15 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.validation.FieldError;
+import org.springframework.web.HttpMediaTypeNotSupportedException;
+import org.springframework.web.HttpRequestMethodNotSupportedException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.MissingServletRequestParameterException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
+import org.springframework.web.multipart.MaxUploadSizeExceededException;
+import org.springframework.web.servlet.NoHandlerFoundException;
 
 import java.util.stream.Collectors;
 
@@ -31,13 +35,13 @@ public class GlobalExceptionHandler {
                 .body(ApiResponse.fail(errorCode.getMessage()));
     }
 
-    // @Valid @RequestBody DTO 검증 실패 — 모든 필드 오류를 합쳐서 반환
+    // @Valid @RequestBody DTO 검증 실패 — 각 필드 오류를 줄바꿈으로 구분해 반환
     @ExceptionHandler(MethodArgumentNotValidException.class)
     public ResponseEntity<ApiResponse<Void>> handleValidException(MethodArgumentNotValidException e) {
         String message = e.getBindingResult().getFieldErrors().stream()
                 .map(FieldError::getDefaultMessage)
                 .distinct()
-                .collect(Collectors.joining(" "));
+                .collect(Collectors.joining("\n"));
         if (message.isBlank()) {
             message = ErrorCode.INVALID_INPUT.getMessage();
         }
@@ -51,7 +55,7 @@ public class GlobalExceptionHandler {
         String message = e.getConstraintViolations().stream()
                 .map(v -> v.getMessage())
                 .distinct()
-                .collect(Collectors.joining(" "));
+                .collect(Collectors.joining("\n"));
         if (message.isBlank()) {
             message = ErrorCode.INVALID_INPUT.getMessage();
         }
@@ -109,6 +113,51 @@ public class GlobalExceptionHandler {
         return ResponseEntity
                 .status(HttpStatus.CONFLICT)
                 .body(ApiResponse.fail("이미 사용 중이거나 중복된 값입니다. 입력값을 확인해주세요."));
+    }
+
+    // 허용되지 않은 HTTP 메서드 (예: POST만 지원하는 API에 GET 요청)
+    @ExceptionHandler(HttpRequestMethodNotSupportedException.class)
+    public ResponseEntity<ApiResponse<Void>> handleMethodNotSupported(HttpRequestMethodNotSupportedException e) {
+        log.warn("HttpRequestMethodNotSupportedException: {}", e.getMessage());
+        String allowed = e.getSupportedHttpMethods() == null
+                ? ""
+                : e.getSupportedHttpMethods().stream()
+                        .map(m -> m.name())
+                        .collect(Collectors.joining(", "));
+        String message = allowed.isBlank()
+                ? ErrorCode.METHOD_NOT_ALLOWED.getMessage()
+                : String.format("%s (허용 방식: %s)", ErrorCode.METHOD_NOT_ALLOWED.getMessage(), allowed);
+        return ResponseEntity
+                .status(HttpStatus.METHOD_NOT_ALLOWED)
+                .body(ApiResponse.fail(message));
+    }
+
+    // 지원하지 않는 Content-Type (예: application/xml로 요청)
+    @ExceptionHandler(HttpMediaTypeNotSupportedException.class)
+    public ResponseEntity<ApiResponse<Void>> handleMediaTypeNotSupported(HttpMediaTypeNotSupportedException e) {
+        log.warn("HttpMediaTypeNotSupportedException: {}", e.getMessage());
+        return ResponseEntity
+                .status(HttpStatus.UNSUPPORTED_MEDIA_TYPE)
+                .body(ApiResponse.fail(ErrorCode.UNSUPPORTED_MEDIA_TYPE.getMessage()));
+    }
+
+    // 존재하지 않는 API 경로
+    // (활성화 조건: spring.mvc.throw-exception-if-no-handler-found=true, spring.web.resources.add-mappings=false)
+    @ExceptionHandler(NoHandlerFoundException.class)
+    public ResponseEntity<ApiResponse<Void>> handleNoHandlerFound(NoHandlerFoundException e) {
+        log.warn("NoHandlerFoundException: {} {}", e.getHttpMethod(), e.getRequestURL());
+        return ResponseEntity
+                .status(HttpStatus.NOT_FOUND)
+                .body(ApiResponse.fail(ErrorCode.API_NOT_FOUND.getMessage()));
+    }
+
+    // 파일 업로드 크기 초과 (서블릿 레벨에서 잡힘 — 서비스 레벨 체크보다 먼저 발생)
+    @ExceptionHandler(MaxUploadSizeExceededException.class)
+    public ResponseEntity<ApiResponse<Void>> handleMaxUploadSizeExceeded(MaxUploadSizeExceededException e) {
+        log.warn("MaxUploadSizeExceededException: {}", e.getMessage());
+        return ResponseEntity
+                .badRequest()
+                .body(ApiResponse.fail(ErrorCode.FILE_SIZE_EXCEEDED.getMessage()));
     }
 
     // 예상치 못한 서버 오류 (최종 안전망)
