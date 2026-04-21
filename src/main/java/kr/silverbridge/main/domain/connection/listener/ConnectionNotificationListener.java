@@ -1,0 +1,65 @@
+package kr.silverbridge.main.domain.connection.listener;
+
+import kr.silverbridge.main.domain.connection.event.ConnectionAcceptedEvent;
+import kr.silverbridge.main.domain.connection.event.ConnectionDisconnectedEvent;
+import kr.silverbridge.main.domain.connection.event.ConnectionRequestedEvent;
+import kr.silverbridge.main.domain.notification.service.FcmService;
+import kr.silverbridge.main.global.websocket.WebSocketEventPublisher;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.stereotype.Component;
+import org.springframework.transaction.event.TransactionPhase;
+import org.springframework.transaction.event.TransactionalEventListener;
+
+import java.util.Map;
+
+/**
+ * 연결 상태 변경 이벤트 수신 후 WebSocket + FCM 알림을 발송하는 리스너.
+ *
+ * {@link TransactionPhase#AFTER_COMMIT} 시점에 처리되어 DB 롤백이 발생하면 알림이 나가지 않는다.
+ * 이로써 ConnectionService의 비즈니스 로직과 알림 전달을 완전히 분리한다.
+ */
+@Slf4j
+@Component
+@RequiredArgsConstructor
+public class ConnectionNotificationListener {
+
+    private final WebSocketEventPublisher webSocketEventPublisher;
+    private final FcmService fcmService;
+
+    @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
+    public void handleRequested(ConnectionRequestedEvent event) {
+        webSocketEventPublisher.sendToUser(event.wardId(), "connection-request",
+                Map.of("connectionId", event.connectionId(), "from", event.guardianId()));
+
+        fcmService.sendToUser(event.wardId(), "연결 요청",
+                event.guardianName() + " 보호자가 연결을 요청했습니다.",
+                Map.of("type", "CONNECTION_REQUEST",
+                        "connectionId", String.valueOf(event.connectionId())));
+    }
+
+    @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
+    public void handleAccepted(ConnectionAcceptedEvent event) {
+        webSocketEventPublisher.sendToUser(event.guardianId(), "connection-accepted",
+                Map.of("connectionId", event.connectionId()));
+
+        fcmService.sendToUser(event.guardianId(), "연결 수락",
+                "피보호자가 연결 요청을 수락했습니다.",
+                Map.of("type", "CONNECTION_ACCEPTED",
+                        "connectionId", String.valueOf(event.connectionId())));
+    }
+
+    @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
+    public void handleDisconnected(ConnectionDisconnectedEvent event) {
+        String body = (event.disconnectedBy() == ConnectionDisconnectedEvent.DisconnectedBy.GUARDIAN)
+                ? "보호자가 연결을 해제했습니다."
+                : "피보호자가 연결을 해제했습니다.";
+
+        webSocketEventPublisher.sendToUser(event.notifyTargetId(), "connection-cancelled",
+                Map.of("connectionId", event.connectionId()));
+
+        fcmService.sendToUser(event.notifyTargetId(), "연결 해제", body,
+                Map.of("type", "CONNECTION_CANCELLED",
+                        "connectionId", String.valueOf(event.connectionId())));
+    }
+}

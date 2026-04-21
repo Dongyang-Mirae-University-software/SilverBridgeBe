@@ -3,17 +3,19 @@ package kr.silverbridge.main.domain.connection.service;
 import kr.silverbridge.main.domain.connection.dto.ConnectionRequestDto;
 import kr.silverbridge.main.domain.connection.dto.ConnectionResponse;
 import kr.silverbridge.main.domain.connection.entity.Connection;
+import kr.silverbridge.main.domain.connection.event.ConnectionAcceptedEvent;
+import kr.silverbridge.main.domain.connection.event.ConnectionDisconnectedEvent;
+import kr.silverbridge.main.domain.connection.event.ConnectionRequestedEvent;
 import kr.silverbridge.main.domain.connection.repository.ConnectionRepository;
-import kr.silverbridge.main.domain.notification.service.FcmService;
 import kr.silverbridge.main.domain.user.entity.User;
 import kr.silverbridge.main.domain.user.repository.UserRepository;
 import kr.silverbridge.main.global.enums.ConnectionStatus;
 import kr.silverbridge.main.global.enums.Role;
 import kr.silverbridge.main.global.exception.CustomException;
 import kr.silverbridge.main.global.exception.ErrorCode;
-import kr.silverbridge.main.global.websocket.WebSocketEventPublisher;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
@@ -29,8 +31,7 @@ public class ConnectionService {
 
     private final ConnectionRepository connectionRepository;
     private final UserRepository userRepository;
-    private final FcmService fcmService;
-    private final WebSocketEventPublisher webSocketEventPublisher;
+    private final ApplicationEventPublisher eventPublisher;
 
     // ─── 보호자 API ──────────────────────────────────────────────
 
@@ -44,6 +45,7 @@ public class ConnectionService {
     }
 
     // 보호자: 피보호자에게 페어링 요청 (보호자 → 피보호자)
+    // 알림은 ConnectionNotificationListener가 커밋 후 발송
     @Transactional
     public void requestConnectionAsGuardian(String guardianId, ConnectionRequestDto request) {
         String wardId = request.getTargetId();
@@ -58,15 +60,10 @@ public class ConnectionService {
                 .build();
         connectionRepository.save(connection);
 
-        // 피보호자에게 실시간 알림 (WebSocket)
-        webSocketEventPublisher.sendToUser(wardId, "connection-request",
-                Map.of("connectionId", connection.getId(), "from", guardianId));
-
-        // 피보호자에게 FCM 푸시 알림
         User guardian = requireUser(guardianId);
-        fcmService.sendToUser(wardId, "연결 요청",
-                guardian.getName() + " 보호자가 연결을 요청했습니다.",
-                Map.of("type", "CONNECTION_REQUEST", "connectionId", String.valueOf(connection.getId())));
+        eventPublisher.publishEvent(new ConnectionRequestedEvent(
+                connection.getId(), guardianId, wardId, guardian.getName()
+        ));
     }
 
     // 보호자: 페어링 요청 취소 (PENDING만)
@@ -80,6 +77,7 @@ public class ConnectionService {
     }
 
     // 보호자: 연결 해제 (ACTIVE만)
+    // 알림은 ConnectionNotificationListener가 커밋 후 발송
     @Transactional
     public void disconnectAsGuardian(String guardianId, Long connectionId) {
         Connection connection = getConnectionForGuardian(guardianId, connectionId);
@@ -89,11 +87,9 @@ public class ConnectionService {
         String wardId = connection.getWardId();
         connection.cancel();
 
-        webSocketEventPublisher.sendToUser(wardId, "connection-cancelled",
-                Map.of("connectionId", connectionId));
-        fcmService.sendToUser(wardId, "연결 해제",
-                "보호자가 연결을 해제했습니다.",
-                Map.of("type", "CONNECTION_CANCELLED", "connectionId", String.valueOf(connectionId)));
+        eventPublisher.publishEvent(new ConnectionDisconnectedEvent(
+                connectionId, wardId, ConnectionDisconnectedEvent.DisconnectedBy.GUARDIAN
+        ));
     }
 
     // ─── 피보호자 API ─────────────────────────────────────────────
@@ -107,6 +103,7 @@ public class ConnectionService {
     }
 
     // 피보호자: 페어링 요청 수락 (보호자가 보낸 요청)
+    // 알림은 ConnectionNotificationListener가 커밋 후 발송
     @Transactional
     public void acceptConnectionAsWard(String wardId, Long connectionId) {
         Connection connection = getConnectionForWard(wardId, connectionId);
@@ -118,11 +115,9 @@ public class ConnectionService {
         }
         connection.activate();
 
-        webSocketEventPublisher.sendToUser(connection.getGuardianId(), "connection-accepted",
-                Map.of("connectionId", connectionId));
-        fcmService.sendToUser(connection.getGuardianId(), "연결 수락",
-                "피보호자가 연결 요청을 수락했습니다.",
-                Map.of("type", "CONNECTION_ACCEPTED", "connectionId", String.valueOf(connectionId)));
+        eventPublisher.publishEvent(new ConnectionAcceptedEvent(
+                connectionId, connection.getGuardianId()
+        ));
     }
 
     // 피보호자: 보호자 요청 거절 (PENDING만)
@@ -136,6 +131,7 @@ public class ConnectionService {
     }
 
     // 피보호자: 연결 해제 (ACTIVE만)
+    // 알림은 ConnectionNotificationListener가 커밋 후 발송
     @Transactional
     public void disconnectAsWard(String wardId, Long connectionId) {
         Connection connection = getConnectionForWard(wardId, connectionId);
@@ -145,11 +141,9 @@ public class ConnectionService {
         String guardianId = connection.getGuardianId();
         connection.cancel();
 
-        webSocketEventPublisher.sendToUser(guardianId, "connection-cancelled",
-                Map.of("connectionId", connectionId));
-        fcmService.sendToUser(guardianId, "연결 해제",
-                "피보호자가 연결을 해제했습니다.",
-                Map.of("type", "CONNECTION_CANCELLED", "connectionId", String.valueOf(connectionId)));
+        eventPublisher.publishEvent(new ConnectionDisconnectedEvent(
+                connectionId, guardianId, ConnectionDisconnectedEvent.DisconnectedBy.WARD
+        ));
     }
 
     // 피보호자: 보호자 통화 우선순위 변경
