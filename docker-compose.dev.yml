@@ -17,6 +17,13 @@ services:
         condition: service_healthy
     networks:
       - app-net
+    # /actuator/health 기반 상태 체크
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:6511/actuator/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 60s
     # 컨테이너 로그 무한 증가 방지 (10MB × 5개 rotation)
     logging:
       driver: json-file
