@@ -1,12 +1,14 @@
 package kr.silverbridge.main.domain.user.service;
 
 import kr.silverbridge.main.domain.auth.repository.RefreshTokenRepository;
+import kr.silverbridge.main.domain.auth.service.AccessLogService;
 import kr.silverbridge.main.domain.user.dto.PasswordChangeRequest;
 import kr.silverbridge.main.domain.user.dto.UserProfileResponse;
 import kr.silverbridge.main.domain.user.dto.UserUpdateRequest;
 import kr.silverbridge.main.domain.user.entity.User;
 import kr.silverbridge.main.domain.user.repository.UserRepository;
 import kr.silverbridge.main.global.client.FileServerClient;
+import kr.silverbridge.main.global.enums.AccessAction;
 import kr.silverbridge.main.global.exception.CustomException;
 import kr.silverbridge.main.global.exception.ErrorCode;
 import kr.silverbridge.main.global.util.RedisKeys;
@@ -32,6 +34,7 @@ public class UserService {
     private final PasswordEncoder passwordEncoder;
     private final StringRedisTemplate redisTemplate;
     private final FileServerClient fileServerClient;
+    private final AccessLogService accessLogService;
 
     // 내 정보 조회
     @Transactional(readOnly = true)
@@ -128,7 +131,7 @@ public class UserService {
     // 회원 탈퇴
     // 일반 사용자: 비밀번호 확인 후 비활성화 / 소셜 사용자: 비밀번호 없이 비활성화
     @Transactional
-    public void withdraw(String userId, String password) {
+    public void withdraw(String userId, String password, String ipAddress, String userAgent) {
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new CustomException(ErrorCode.USER_NOT_FOUND));
 
@@ -140,5 +143,6 @@ public class UserService {
 
         user.deactivate();
         refreshTokenRepository.deleteByUserId(userId);
+        accessLogService.log(userId, AccessAction.WITHDRAW, ipAddress, userAgent);
     }
 }
