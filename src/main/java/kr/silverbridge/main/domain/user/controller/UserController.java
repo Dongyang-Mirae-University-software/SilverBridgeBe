@@ -5,6 +5,7 @@ import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import kr.silverbridge.main.domain.user.dto.PasswordChangeRequest;
 import kr.silverbridge.main.domain.user.dto.UserProfileResponse;
@@ -158,8 +159,14 @@ public class UserController {
     })
     @DeleteMapping("/me/delete")
     public ApiResponse<Void> withdraw(@AuthenticationPrincipal String userId,
-                                      @Valid @RequestBody WithdrawRequest request) {
-        userService.withdraw(userId, request.getPassword());
+                                      @Valid @RequestBody WithdrawRequest request,
+                                      HttpServletRequest httpRequest) {
+        userService.withdraw(
+                userId,
+                request.getPassword(),
+                httpRequest.getRemoteAddr(),
+                httpRequest.getHeader("User-Agent")
+        );
         return ApiResponse.ok("회원 탈퇴가 완료되었습니다.");
     }
 }
