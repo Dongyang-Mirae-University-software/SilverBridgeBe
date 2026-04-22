@@ -19,6 +19,10 @@ WORKDIR /app
 # 타임존 설정
 ENV TZ=Asia/Seoul
 
+# Docker healthcheck용 curl 설치 (/actuator/health 호출)
+RUN apt-get update && apt-get install -y --no-install-recommends curl \
+    && rm -rf /var/lib/apt/lists/*
+
 COPY --from=builder /app/build/libs/*.jar app.jar
 
 ENTRYPOINT ["java", "-jar", "app.jar"]
