@@ -1,6 +1,7 @@
 package kr.silverbridge.main.domain.user.service;
 
 import kr.silverbridge.main.domain.auth.repository.RefreshTokenRepository;
+import kr.silverbridge.main.domain.auth.service.AccessLogService;
 import kr.silverbridge.main.domain.user.entity.User;
 import kr.silverbridge.main.domain.user.repository.UserRepository;
 import kr.silverbridge.main.global.client.FileServerClient;
@@ -32,6 +33,7 @@ class UserServiceTest {
     @Mock private PasswordEncoder passwordEncoder;
     @Mock private StringRedisTemplate redisTemplate;
     @Mock private FileServerClient fileServerClient;
+    @Mock private AccessLogService accessLogService;
 
     @InjectMocks private UserService userService;
 
@@ -88,7 +90,7 @@ class UserServiceTest {
         when(passwordEncoder.matches("wrongPassword", "encodedPassword")).thenReturn(false);
 
         CustomException ex = assertThrows(CustomException.class,
-                () -> userService.withdraw(USER_ID, "wrongPassword"));
+                () -> userService.withdraw(USER_ID, "wrongPassword", "127.0.0.1", "test-agent"));
 
         assertThat(ex.getErrorCode()).isEqualTo(ErrorCode.INVALID_PASSWORD);
     }
@@ -100,7 +102,7 @@ class UserServiceTest {
         when(userRepository.findById(USER_ID)).thenReturn(Optional.of(kakaoUser));
 
         // 예외 없이 정상 처리되어야 함
-        userService.withdraw(USER_ID, null);
+        userService.withdraw(USER_ID, null, "127.0.0.1", "test-agent");
 
         assertThat(kakaoUser.getStatus()).isEqualTo(Status.INACTIVE);
     }
