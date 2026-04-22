@@ -2,6 +2,8 @@ plugins {
     id 'java'
     id 'org.springframework.boot' version '4.0.5'
     id 'io.spring.dependency-management' version '1.1.7'
+    // OWASP 의존성 취약점 스캔 (`./gradlew dependencyCheckAnalyze`)
+    id 'org.owasp.dependencycheck' version '10.0.4'
 }
 
 group = 'kr.silverbridge'
@@ -48,4 +50,28 @@ runtimeOnly 'org.postgresql:postgresql'
 
 tasks.named('test') {
     useJUnitPlatform()
+}
+
+// =============================================
+// OWASP Dependency Check 설정
+// 실행: ./gradlew dependencyCheckAnalyze --info
+// 결과: build/reports/dependency-check-report.html
+//
+// NVD API 처음 동기화는 수십 분 소요될 수 있음.
+// NVD_API_KEY 환경변수 설정 권장 (https://nvd.nist.gov/developers/request-an-api-key 에서 무료 발급).
+// =============================================
+dependencyCheck {
+    formats = ['HTML', 'JSON']
+    // CVSS 7.0(High) 이상 발견 시 빌드 실패 — 로컬 실행 기준, CI에선 조정 가능
+    failBuildOnCVSS = 7.0f
+    // 테스트 전용 의존성은 런타임 위험 적어 스캔 대상에서 제외
+    skipConfigurations = ['testCompileClasspath', 'testRuntimeClasspath']
+    // NVD API key가 있으면 동기화 속도 크게 향상 (optional)
+    nvd {
+        apiKey = System.getenv('NVD_API_KEY') ?: ''
+    }
+    // false positive 발생 시 프로젝트 루트의 dependency-check-suppressions.xml 로 억제
+    suppressionFile = file('dependency-check-suppressions.xml').exists()
+            ? 'dependency-check-suppressions.xml'
+            : null
 }
