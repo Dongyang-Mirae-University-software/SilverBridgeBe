@@ -17,6 +17,17 @@ services:
         condition: service_healthy
     networks:
       - app-net
+    # 컨테이너 로그 무한 증가 방지 (10MB × 5개 rotation)
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "5"
+    # dev 환경 기본 리소스 ceiling
+    deploy:
+      resources:
+        limits:
+          memory: 1g
 
   db:
     image: postgres:17
@@ -38,11 +49,32 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "5"
+    deploy:
+      resources:
+        limits:
+          memory: 512m
 
   redis:
     image: redis:7.2
     container_name: dmu-dev-redis
     restart: unless-stopped
+    # AOF 활성화로 재시작 시 SMS 인증코드·rate limit·토큰 블랙리스트 보존
+    # maxmemory 256MB 초과 시 LRU 정책으로 오래된 키 퇴출
+    command:
+      - redis-server
+      - --appendonly
+      - "yes"
+      - --appendfsync
+      - everysec
+      - --maxmemory
+      - 256mb
+      - --maxmemory-policy
+      - allkeys-lru
     ports:
       - "6514:6379"
     volumes:
@@ -54,6 +86,15 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "5"
+    deploy:
+      resources:
+        limits:
+          memory: 320m
 
 networks:
   app-net:
