@@ -77,7 +77,7 @@ CREATE TABLE access_logs (
     CONSTRAINT fk_access_logs_user FOREIGN KEY (user_id)
         REFERENCES users(id) ON DELETE SET NULL,
     CONSTRAINT chk_access_logs_action CHECK (
-        action IN ('LOGIN', 'LOGOUT', 'KAKAO_LOGIN', 'TOKEN_ISSUE', 'PASSWORD_RESET')
+        action IN ('LOGIN', 'LOGOUT', 'KAKAO_LOGIN', 'TOKEN_ISSUE', 'PASSWORD_RESET', 'WITHDRAW')
     )
 );
 
