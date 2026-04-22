@@ -85,6 +85,19 @@ springdoc:
   swagger-ui:
     enabled: ${SWAGGER_ENABLED:true}
 
+# Actuator — 외부 노출은 health/info만 (민감 정보 유출 방지)
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+  endpoint:
+    health:
+      # 외부에 DB/Redis 세부 상태 노출 방지
+      show-details: never
+      probes:
+        enabled: true
+
 firebase:
   service-account-path: ${FIREBASE_SERVICE_ACCOUNT_PATH:firebase-service-account.json}
 
