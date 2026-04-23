@@ -11,6 +11,7 @@ import org.springframework.context.annotation.Configuration;
 import org.springframework.core.io.ClassPathResource;
 
 import java.io.IOException;
+import java.io.InputStream;
 
 @Slf4j
 @Configuration
@@ -21,13 +22,19 @@ public class FcmConfig {
 
     @Bean
     public FirebaseMessaging firebaseMessaging() throws IOException {
+        ClassPathResource resource = new ClassPathResource(serviceAccountPath);
+        if (!resource.exists()) {
+            log.warn("Firebase 서비스 계정 파일이 없어 FCM을 비활성화합니다: {}", serviceAccountPath);
+            return null;
+        }
         if (FirebaseApp.getApps().isEmpty()) {
-            ClassPathResource resource = new ClassPathResource(serviceAccountPath);
-            FirebaseOptions options = FirebaseOptions.builder()
-                    .setCredentials(GoogleCredentials.fromStream(resource.getInputStream()))
-                    .build();
-            FirebaseApp.initializeApp(options);
-            log.info("Firebase 초기화 완료");
+            try (InputStream inputStream = resource.getInputStream()) {
+                FirebaseOptions options = FirebaseOptions.builder()
+                        .setCredentials(GoogleCredentials.fromStream(inputStream))
+                        .build();
+                FirebaseApp.initializeApp(options);
+                log.info("Firebase 초기화 완료");
+            }
         }
         return FirebaseMessaging.getInstance();
     }
