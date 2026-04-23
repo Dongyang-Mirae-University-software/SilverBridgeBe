@@ -7,7 +7,6 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import org.springframework.beans.factory.ObjectProvider;
 
 import java.util.List;
 import java.util.Map;
@@ -21,7 +20,7 @@ import java.util.Map;
 @RequiredArgsConstructor
 public class FcmService {
 
-    private final ObjectProvider<FirebaseMessaging> firebaseMessagingProvider;
+    private final FirebaseMessaging firebaseMessaging;
     private final FcmTokenRepository fcmTokenRepository;
 
     // FCM 토큰 등록 (이미 존재하면 무시)
@@ -67,12 +66,6 @@ public class FcmService {
 
     // MulticastMessage로 최대 500개 토큰에 동시 발송
     private void sendMulticast(List<String> tokens, String title, String body, Map<String, String> data) {
-        FirebaseMessaging firebaseMessaging = firebaseMessagingProvider.getIfAvailable();
-        if (firebaseMessaging == null) {
-            log.debug("FCM 초기화가 없어 알림 발송을 건너뜁니다.");
-            return;
-        }
-
         MulticastMessage.Builder builder = MulticastMessage.builder()
                 .setNotification(Notification.builder()
                         .setTitle(title)
