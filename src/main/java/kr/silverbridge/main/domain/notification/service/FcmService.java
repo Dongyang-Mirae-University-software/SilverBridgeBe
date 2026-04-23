@@ -51,11 +51,6 @@ public class FcmService {
         sendMulticast(tokenStrings, title, body, data);
     }
 
-    // 단일 FCM 토큰으로 직접 발송 (개발/디버깅용 — DB 거치지 않음)
-    public void sendToToken(String token, String title, String body, Map<String, String> data) {
-        sendMulticast(List.of(token), title, body, data);
-    }
-
     // 여러 사용자에게 동시 발송
     public void sendToUsers(List<String> userIds, String title, String body, Map<String, String> data) {
         List<String> tokens = userIds.stream()
