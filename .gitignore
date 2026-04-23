@@ -46,3 +46,6 @@ out/
 ### Firebase 서비스 계정 키 (절대 git에 올리지 않음) ###
 *firebase-adminsdk*.json
 src/main/resources/firebase-service-account.json
+
+### Windows에서 다운로드한 파일에 자동으로 붙는 메타데이터 ###
+*:Zone.Identifier
