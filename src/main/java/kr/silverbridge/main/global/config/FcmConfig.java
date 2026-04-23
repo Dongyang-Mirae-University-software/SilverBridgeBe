@@ -24,8 +24,11 @@ public class FcmConfig {
     public FirebaseMessaging firebaseMessaging() throws IOException {
         ClassPathResource resource = new ClassPathResource(serviceAccountPath);
         if (!resource.exists()) {
-            log.warn("Firebase 서비스 계정 파일이 없어 FCM을 비활성화합니다: {}", serviceAccountPath);
-            return null;
+            throw new IllegalStateException(
+                    "Firebase 서비스 계정 파일을 찾을 수 없습니다: src/main/resources/" + serviceAccountPath
+                            + "\n"
+                            + "해당 파일을 프로젝트에 추가한 뒤 다시 실행하세요. "
+                            + "(FCM 푸시 알림 기능은 이 파일 없이 동작할 수 없습니다.)");
         }
         if (FirebaseApp.getApps().isEmpty()) {
             try (InputStream inputStream = resource.getInputStream()) {
