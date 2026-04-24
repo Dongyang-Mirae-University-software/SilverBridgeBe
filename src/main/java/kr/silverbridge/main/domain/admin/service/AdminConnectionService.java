@@ -13,8 +13,7 @@ import kr.silverbridge.main.global.enums.Status;
 import kr.silverbridge.main.global.exception.CustomException;
 import kr.silverbridge.main.global.exception.ErrorCode;
 import lombok.RequiredArgsConstructor;
-import org.springframework.data.domain.Page;
-import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -36,22 +35,25 @@ public class AdminConnectionService {
     private final ConnectionRepository connectionRepository;
     private final AdminAuditLogService auditLogService;
 
-    // 전체 연결 관계 조회 (페이징, 배치 사용자 조회)
+    // 전체 연결 관계 조회 (최신 요청순 + 배치 사용자 조회)
     @Transactional(readOnly = true)
-    public Page<ConnectionResponse> getConnections(Pageable pageable) {
-        Page<Connection> connections = connectionRepository.findAll(pageable);
-        Map<String, User> userMap = fetchUsersFromConnections(connections.getContent());
+    public List<ConnectionResponse> getConnections() {
+        List<Connection> connections = connectionRepository.findAll(
+                Sort.by(Sort.Direction.DESC, "createdAt"));
+        Map<String, User> userMap = fetchUsersFromConnections(connections);
 
-        return connections.map(conn -> ConnectionResponse.of(
-                conn,
-                requireUser(userMap, conn.getGuardianId()),
-                requireUser(userMap, conn.getWardId())
-        ));
+        return connections.stream()
+                .map(conn -> ConnectionResponse.of(
+                        conn,
+                        requireUser(userMap, conn.getGuardianId()),
+                        requireUser(userMap, conn.getWardId())
+                ))
+                .toList();
     }
 
-    // 특정 보호자의 피보호자 목록 조회 (배치 사용자 조회)
+    // 특정 보호자의 피보호자 목록 조회 (최신 요청순 + 배치 사용자 조회)
     @Transactional(readOnly = true)
-    public Page<ConnectionResponse> getConnectionsByGuardian(String guardianId, Pageable pageable) {
+    public List<ConnectionResponse> getConnectionsByGuardian(String guardianId) {
         User guardian = userRepository.findById(guardianId)
                 .orElseThrow(() -> new CustomException(ErrorCode.USER_NOT_FOUND));
 
@@ -59,14 +61,16 @@ public class AdminConnectionService {
             throw new CustomException(ErrorCode.INVALID_CONNECTION_ROLE);
         }
 
-        Page<Connection> connections = connectionRepository.findByGuardianId(guardianId, pageable);
-        Map<String, User> userMap = fetchUsersFromConnections(connections.getContent());
+        List<Connection> connections = connectionRepository.findByGuardianIdOrderByCreatedAtDesc(guardianId);
+        Map<String, User> userMap = fetchUsersFromConnections(connections);
 
-        return connections.map(conn -> ConnectionResponse.of(
-                conn,
-                userMap.getOrDefault(conn.getGuardianId(), guardian),
-                requireUser(userMap, conn.getWardId())
-        ));
+        return connections.stream()
+                .map(conn -> ConnectionResponse.of(
+                        conn,
+                        userMap.getOrDefault(conn.getGuardianId(), guardian),
+                        requireUser(userMap, conn.getWardId())
+                ))
+                .toList();
     }
 
     // 관리자 강제 연결 (바로 ACTIVE)

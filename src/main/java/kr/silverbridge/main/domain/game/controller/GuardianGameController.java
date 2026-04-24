@@ -8,14 +8,12 @@ import kr.silverbridge.main.domain.game.service.GameService;
 import kr.silverbridge.main.global.enums.GameType;
 import kr.silverbridge.main.global.response.ApiResponse;
 import lombok.RequiredArgsConstructor;
-import org.springframework.data.domain.Page;
-import org.springframework.data.domain.Pageable;
-import org.springframework.data.domain.Sort;
-import org.springframework.data.web.PageableDefault;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
+
+import java.util.List;
 
 @Tag(name = "보호자")
 @RestController
@@ -32,17 +30,13 @@ public class GuardianGameController {
                     Authorization: Bearer {accessToken}
 
                     연결된 피보호자의 게임 기록만 조회 가능합니다.
-
-                    [페이지네이션 쿼리 파라미터]
-                    - page: 페이지 번호 (0부터 시작)
-                    - size: 페이지당 항목 수 (최대 100)
+                    플레이 일시 내림차순으로 반환됩니다.
                     """)
     @GetMapping("/game-results/{wardId}")
-    public ResponseEntity<ApiResponse<Page<GameResultResponse>>> getWardResults(
+    public ResponseEntity<ApiResponse<List<GameResultResponse>>> getWardResults(
             @AuthenticationPrincipal String guardianId,
-            @PathVariable String wardId,
-            @PageableDefault(sort = "playedAt", direction = Sort.Direction.DESC) Pageable pageable) {
-        return ResponseEntity.ok(ApiResponse.ok(gameService.getWardResults(guardianId, wardId, pageable)));
+            @PathVariable String wardId) {
+        return ResponseEntity.ok(ApiResponse.ok(gameService.getWardResults(guardianId, wardId)));
     }
 
     @Operation(summary = "전체 랭킹 조회",
@@ -51,14 +45,14 @@ public class GuardianGameController {
                     Authorization: Bearer {accessToken}
 
                     피보호자 전체를 대상으로 한 게임 유형별 랭킹입니다.
+                    평균 점수 내림차순으로 정렬됩니다.
 
                     [쿼리 파라미터]
                     - gameType: MATCHING, WORD_QUIZ, ADDITION, SUBTRACTION
                     """)
     @GetMapping("/game/ranking")
-    public ResponseEntity<ApiResponse<Page<GameRankingResponse>>> getRanking(
-            @RequestParam GameType gameType,
-            @PageableDefault(size = 20) Pageable pageable) {
-        return ResponseEntity.ok(ApiResponse.ok(gameService.getRanking(gameType, pageable)));
+    public ResponseEntity<ApiResponse<List<GameRankingResponse>>> getRanking(
+            @RequestParam GameType gameType) {
+        return ResponseEntity.ok(ApiResponse.ok(gameService.getRanking(gameType)));
     }
 }
