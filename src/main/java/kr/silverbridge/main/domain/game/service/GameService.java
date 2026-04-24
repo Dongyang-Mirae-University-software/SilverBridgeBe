@@ -16,10 +16,6 @@ import kr.silverbridge.main.global.exception.CustomException;
 import kr.silverbridge.main.global.exception.ErrorCode;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.data.domain.Page;
-import org.springframework.data.domain.PageImpl;
-import org.springframework.data.domain.PageRequest;
-import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -36,6 +32,8 @@ public class GameService {
     // 성능 저하 감지 기준 (치매 예방 관점)
     // 최근 5회 평균 난이도 - 이전 5회 평균 난이도 <= -1.0 (난이도가 하락)
     // AND 최근 5회 클리어율 < 40%
+    // 주의: 비교 대상 총 개수(PERFORMANCE_CHECK_COUNT * 2 = 10)는
+    //       GameResultRepository.findTop10ByUserIdOrderByPlayedAtDesc 와 맞춰야 함
     private static final int    PERFORMANCE_CHECK_COUNT = 5;
     private static final double DIFFICULTY_DROP_THRESHOLD = 1.0;  // 난이도 하락 기준
     private static final double CLEAR_RATE_THRESHOLD      = 0.40; // 클리어율 기준 (40%)
@@ -69,26 +67,28 @@ public class GameService {
     // ─── 피보호자: 내 게임 기록 조회 ─────────────────────────────
 
     @Transactional(readOnly = true)
-    public Page<GameResultResponse> getMyResults(String wardId, Pageable pageable) {
-        return gameResultRepository.findByUserIdOrderByPlayedAtDesc(wardId, pageable)
-                .map(GameResultResponse::from);
+    public List<GameResultResponse> getMyResults(String wardId) {
+        return gameResultRepository.findByUserIdOrderByPlayedAtDesc(wardId).stream()
+                .map(GameResultResponse::from)
+                .toList();
     }
 
     // ─── 보호자: 피보호자 게임 기록 조회 ─────────────────────────
 
     @Transactional(readOnly = true)
-    public Page<GameResultResponse> getWardResults(String guardianId, String wardId, Pageable pageable) {
+    public List<GameResultResponse> getWardResults(String guardianId, String wardId) {
         // 연결 관계 검증
         validateGuardianWardRelation(guardianId, wardId);
-        return gameResultRepository.findByUserIdOrderByPlayedAtDesc(wardId, pageable)
-                .map(GameResultResponse::from);
+        return gameResultRepository.findByUserIdOrderByPlayedAtDesc(wardId).stream()
+                .map(GameResultResponse::from)
+                .toList();
     }
 
     // ─── 게임 랭킹 (피보호자 전체) ───────────────────────────────
 
     @Transactional(readOnly = true)
-    public Page<GameRankingResponse> getRanking(GameType gameType, Pageable pageable) {
-        Page<Object[]> raw = gameResultRepository.findRankingByGameType(gameType, pageable);
+    public List<GameRankingResponse> getRanking(GameType gameType) {
+        List<Object[]> raw = gameResultRepository.findRankingByGameType(gameType);
 
         // userId → 사용자 이름 일괄 조회 (N+1 방지)
         List<String> userIds = raw.stream()
@@ -97,13 +97,12 @@ public class GameService {
         Map<String, String> nameMap = userRepository.findAllById(userIds).stream()
                 .collect(Collectors.toMap(User::getId, User::getName));
 
-        int offset = (int) pageable.getOffset();
         List<GameRankingResponse> content = new ArrayList<>();
-        for (int i = 0; i < raw.getContent().size(); i++) {
-            Object[] row = raw.getContent().get(i);
+        for (int i = 0; i < raw.size(); i++) {
+            Object[] row = raw.get(i);
             String userId = (String) row[0];
             content.add(new GameRankingResponse(
-                    offset + i + 1,
+                    i + 1,
                     userId,
                     nameMap.getOrDefault(userId, "알 수 없음"),
                     ((Number) row[1]).longValue(),
@@ -111,7 +110,7 @@ public class GameService {
                     ((Number) row[3]).doubleValue()
             ));
         }
-        return new PageImpl<>(content, pageable, raw.getTotalElements());
+        return content;
     }
 
     // ─── 성능 저하 감지 → 보호자 알림 ───────────────────────────
@@ -119,8 +118,7 @@ public class GameService {
     // 최근 5회 vs 이전 5회 비교:
     // 난이도 평균이 1.0 이상 떨어지고 최근 5회 클리어율이 40% 미만이면 경고
     private void checkPerformanceDecline(String wardId) {
-        List<GameResult> recent = gameResultRepository.findRecentByUserId(
-                wardId, PageRequest.of(0, PERFORMANCE_CHECK_COUNT * 2));
+        List<GameResult> recent = gameResultRepository.findTop10ByUserIdOrderByPlayedAtDesc(wardId);
 
         if (recent.size() < PERFORMANCE_CHECK_COUNT * 2) {
             return; // 데이터 부족 — 감지 불가

@@ -10,14 +10,12 @@ import kr.silverbridge.main.domain.connection.dto.ConnectionResponse;
 import kr.silverbridge.main.domain.connection.service.ConnectionService;
 import kr.silverbridge.main.global.response.ApiResponse;
 import lombok.RequiredArgsConstructor;
-import org.springframework.data.domain.Page;
-import org.springframework.data.domain.Pageable;
-import org.springframework.data.domain.Sort;
-import org.springframework.data.web.PageableDefault;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
+
+import java.util.List;
 
 @Tag(name = "피보호자")
 @RestController
@@ -34,16 +32,11 @@ public class WardConnectionController {
 
                     ACTIVE 상태 연결 목록을 우선순위(priority) 오름차순으로 반환합니다.
                     긴급통화 시 1순위 보호자에게 먼저 연결 시도합니다.
-
-                    [페이지네이션 쿼리 파라미터]
-                    - page: 페이지 번호 (0부터 시작, 기본값 0)
-                    - size: 페이지당 항목 수 (최대 100)
                     """)
     @GetMapping("/api/ward/connection/select")
-    public ResponseEntity<ApiResponse<Page<ConnectionResponse>>> getMyGuardians(
-            @AuthenticationPrincipal String wardId,
-            @PageableDefault(sort = "priority", direction = Sort.Direction.ASC) Pageable pageable) {
-        return ResponseEntity.ok(ApiResponse.ok(connectionService.getMyGuardians(wardId, pageable)));
+    public ResponseEntity<ApiResponse<List<ConnectionResponse>>> getMyGuardians(
+            @AuthenticationPrincipal String wardId) {
+        return ResponseEntity.ok(ApiResponse.ok(connectionService.getMyGuardians(wardId)));
     }
 
     @Operation(summary = "보호자 요청 수락",
