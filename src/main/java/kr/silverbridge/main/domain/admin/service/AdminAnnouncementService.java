@@ -11,11 +11,11 @@ import kr.silverbridge.main.global.enums.AdminAuditAction;
 import kr.silverbridge.main.global.exception.CustomException;
 import kr.silverbridge.main.global.exception.ErrorCode;
 import lombok.RequiredArgsConstructor;
-import org.springframework.data.domain.Page;
-import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
@@ -33,19 +33,22 @@ public class AdminAnnouncementService {
     private final AnnouncementRepository announcementRepository;
     private final AdminAuditLogService auditLogService;
 
-    // 공지 목록 조회 (페이징, 배치 작성자 조회)
+    // 공지 목록 조회 (최신순 + 배치 작성자 조회)
     @Transactional(readOnly = true)
-    public Page<AnnouncementResponse> getAnnouncements(Pageable pageable) {
-        Page<Announcement> announcements = announcementRepository.findAll(pageable);
+    public List<AnnouncementResponse> getAnnouncements() {
+        List<Announcement> announcements = announcementRepository.findAll(
+                Sort.by(Sort.Direction.DESC, "createdAt"));
 
-        Set<String> authorIds = announcements.getContent().stream()
+        Set<String> authorIds = announcements.stream()
                 .map(Announcement::getAuthorId)
                 .filter(Objects::nonNull)
                 .collect(Collectors.toSet());
         Map<String, User> authorMap = userRepository.findAllById(authorIds).stream()
                 .collect(Collectors.toMap(User::getId, u -> u));
 
-        return announcements.map(a -> AnnouncementResponse.of(a, authorMap.get(a.getAuthorId())));
+        return announcements.stream()
+                .map(a -> AnnouncementResponse.of(a, authorMap.get(a.getAuthorId())))
+                .toList();
     }
 
     // 공지 상세 조회
