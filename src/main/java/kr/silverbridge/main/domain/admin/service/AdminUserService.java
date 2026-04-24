@@ -14,8 +14,6 @@ import kr.silverbridge.main.global.enums.Role;
 import kr.silverbridge.main.global.exception.CustomException;
 import kr.silverbridge.main.global.exception.ErrorCode;
 import lombok.RequiredArgsConstructor;
-import org.springframework.data.domain.Page;
-import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -34,12 +32,13 @@ public class AdminUserService {
     private final ConnectionRepository connectionRepository;
     private final AdminAuditLogService auditLogService;
 
-    // 사용자 목록 조회 (페이징, role 필터링)
+    // 사용자 목록 조회 (role 필터링, 최신 가입순)
     @Transactional(readOnly = true)
-    public Page<UserSummaryResponse> getUsers(Role role, Pageable pageable) {
+    public List<UserSummaryResponse> getUsers(Role role) {
         List<Role> roles = (role != null) ? List.of(role) : List.of(Role.WARD, Role.GUARDIAN);
-        return userRepository.findByRoleIn(roles, pageable)
-                .map(UserSummaryResponse::from);
+        return userRepository.findByRoleInOrderByCreatedAtDesc(roles).stream()
+                .map(UserSummaryResponse::from)
+                .toList();
     }
 
     // 사용자 상세 조회

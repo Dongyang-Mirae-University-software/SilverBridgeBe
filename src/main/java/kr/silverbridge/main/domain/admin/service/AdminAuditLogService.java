@@ -7,10 +7,11 @@ import kr.silverbridge.main.domain.user.entity.User;
 import kr.silverbridge.main.domain.user.repository.UserRepository;
 import kr.silverbridge.main.global.enums.AdminAuditAction;
 import lombok.RequiredArgsConstructor;
-import org.springframework.data.domain.Page;
-import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+
+import java.util.List;
 
 @Service
 @RequiredArgsConstructor
@@ -30,13 +31,15 @@ public class AdminAuditLogService {
                 .build());
     }
 
-    // 전체 감사 로그 조회 (페이징)
+    // 전체 감사 로그 조회 (최신순)
     @Transactional(readOnly = true)
-    public Page<AdminAuditLogResponse> getLogs(Pageable pageable) {
-        return auditLogRepository.findAll(pageable)
+    public List<AdminAuditLogResponse> getLogs() {
+        return auditLogRepository.findAll(Sort.by(Sort.Direction.DESC, "createdAt"))
+                .stream()
                 .map(log -> {
                     User admin = userRepository.findById(log.getAdminId()).orElse(null);
                     return AdminAuditLogResponse.of(log, admin);
-                });
+                })
+                .toList();
     }
 }
