@@ -10,14 +10,12 @@ import kr.silverbridge.main.domain.announcement.dto.AnnouncementResponse;
 import kr.silverbridge.main.domain.announcement.service.AnnouncementService;
 import kr.silverbridge.main.global.response.ApiResponse;
 import lombok.RequiredArgsConstructor;
-import org.springframework.data.domain.Page;
-import org.springframework.data.domain.Pageable;
-import org.springframework.data.domain.Sort;
-import org.springframework.data.web.PageableDefault;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
+
+import java.util.List;
 
 @Tag(name = "공지사항 (사용자)", description = """
         로그인한 사용자(WARD/GUARDIAN/ADMIN 모두)가 열람하는 공지사항 API.
@@ -34,22 +32,10 @@ public class AnnouncementController {
     @Operation(
             summary = "공지 목록 조회",
             description = """
-                    공지 목록을 페이지 단위로 반환합니다. 최신 공지가 먼저 반환됩니다.
+                    공지 목록을 전체 반환합니다. 최신 공지가 먼저 반환됩니다.
 
                     [요청 헤더]
                     Authorization: Bearer {accessToken}
-
-                    [페이지네이션 쿼리 파라미터]
-                    - page: 페이지 번호 (0부터 시작, 기본값 0)
-                    - size: 페이지당 항목 수 (기본값 20, 최대 100)
-                    - sort: 정렬 기준 (기본값: createdAt,desc)
-
-                    [페이지네이션 응답 구조]
-                    data.content       → 실제 공지 배열
-                    data.totalElements → 전체 공지 수
-                    data.totalPages    → 전체 페이지 수
-                    data.number        → 현재 페이지 (0부터)
-                    data.size          → 페이지당 항목 수
                     """
     )
     @ApiResponses({
@@ -58,9 +44,8 @@ public class AnnouncementController {
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "500", description = "서버 내부 오류", content = @Content)
     })
     @GetMapping("/select")
-    public ApiResponse<Page<AnnouncementResponse>> getAnnouncements(
-            @PageableDefault(size = 20, sort = "createdAt", direction = Sort.Direction.DESC) Pageable pageable) {
-        return ApiResponse.ok(announcementService.getAnnouncements(pageable));
+    public ApiResponse<List<AnnouncementResponse>> getAnnouncements() {
+        return ApiResponse.ok(announcementService.getAnnouncements());
     }
 
     @Operation(

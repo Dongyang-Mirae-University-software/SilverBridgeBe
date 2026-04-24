@@ -16,8 +16,6 @@ import kr.silverbridge.main.global.exception.ErrorCode;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.ApplicationEventPublisher;
-import org.springframework.data.domain.Page;
-import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -35,12 +33,12 @@ public class ConnectionService {
 
     // ─── 보호자 API ──────────────────────────────────────────────
 
-    // 보호자: 내 피보호자 목록 조회 (ACTIVE + PENDING)
+    // 보호자: 내 피보호자 목록 조회 (ACTIVE + PENDING, 최신 요청순)
     @Transactional(readOnly = true)
-    public Page<ConnectionResponse> getMyWards(String guardianId, Pageable pageable) {
-        Page<Connection> connections = connectionRepository
-                .findByGuardianIdAndStatusIn(guardianId,
-                        List.of(ConnectionStatus.ACTIVE, ConnectionStatus.PENDING), pageable);
+    public List<ConnectionResponse> getMyWards(String guardianId) {
+        List<Connection> connections = connectionRepository
+                .findByGuardianIdAndStatusInOrderByCreatedAtDesc(guardianId,
+                        List.of(ConnectionStatus.ACTIVE, ConnectionStatus.PENDING));
         return buildResponseFromGuardianView(connections);
     }
 
@@ -96,9 +94,9 @@ public class ConnectionService {
 
     // 피보호자: 내 보호자 목록 조회 (ACTIVE만, 우선순위 순)
     @Transactional(readOnly = true)
-    public Page<ConnectionResponse> getMyGuardians(String wardId, Pageable pageable) {
-        Page<Connection> connections = connectionRepository
-                .findByWardIdAndStatusOrderByPriorityAsc(wardId, ConnectionStatus.ACTIVE, pageable);
+    public List<ConnectionResponse> getMyGuardians(String wardId) {
+        List<Connection> connections = connectionRepository
+                .findByWardIdAndStatusOrderByPriorityAsc(wardId, ConnectionStatus.ACTIVE);
         return buildResponseFromWardView(connections);
     }
 
@@ -220,18 +218,22 @@ public class ConnectionService {
         return connection;
     }
 
-    private Page<ConnectionResponse> buildResponseFromGuardianView(Page<Connection> connections) {
-        List<String> wardIds = connections.map(Connection::getWardId).toList();
+    private List<ConnectionResponse> buildResponseFromGuardianView(List<Connection> connections) {
+        List<String> wardIds = connections.stream().map(Connection::getWardId).toList();
         Map<String, User> wardMap = userRepository.findAllById(wardIds).stream()
                 .collect(java.util.stream.Collectors.toMap(User::getId, u -> u));
-        return connections.map(c -> ConnectionResponse.fromGuardianView(c, wardMap.get(c.getWardId())));
+        return connections.stream()
+                .map(c -> ConnectionResponse.fromGuardianView(c, wardMap.get(c.getWardId())))
+                .toList();
     }
 
-    private Page<ConnectionResponse> buildResponseFromWardView(Page<Connection> connections) {
-        List<String> guardianIds = connections.map(Connection::getGuardianId).toList();
+    private List<ConnectionResponse> buildResponseFromWardView(List<Connection> connections) {
+        List<String> guardianIds = connections.stream().map(Connection::getGuardianId).toList();
         Map<String, User> guardianMap = userRepository.findAllById(guardianIds).stream()
                 .collect(java.util.stream.Collectors.toMap(User::getId, u -> u));
-        return connections.map(c -> ConnectionResponse.fromWardView(c, guardianMap.get(c.getGuardianId())));
+        return connections.stream()
+                .map(c -> ConnectionResponse.fromWardView(c, guardianMap.get(c.getGuardianId())))
+                .toList();
     }
 
     private User requireUser(String userId) {
