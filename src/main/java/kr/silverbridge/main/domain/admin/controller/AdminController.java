@@ -17,15 +17,12 @@ import kr.silverbridge.main.global.enums.GameType;
 import kr.silverbridge.main.global.enums.Role;
 import kr.silverbridge.main.global.response.ApiResponse;
 import lombok.RequiredArgsConstructor;
-import org.springframework.data.domain.Page;
-import org.springframework.data.domain.Pageable;
-import org.springframework.data.domain.Sort;
-import org.springframework.data.web.PageableDefault;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 
 import java.time.OffsetDateTime;
+import java.util.List;
 
 @Tag(name = "관리자", description = "관리자 전용 API. 모든 요청에 관리자 계정 토큰 필요: Authorization: Bearer {accessToken}")
 @RestController
@@ -47,26 +44,14 @@ public class AdminController {
     @Operation(
             summary = "사용자 목록 조회",
             description = """
-                    피보호자(WARD) / 보호자(GUARDIAN) 목록을 페이징하여 조회합니다.
+                    피보호자(WARD) / 보호자(GUARDIAN) 목록을 조회합니다.
                     ADMIN 계정은 목록에서 제외됩니다.
 
                     [필터]
                     - role: WARD(피보호자만) / GUARDIAN(보호자만) / 미입력(전체)
 
-                    [기본 정렬]
-                    - 가입일 내림차순, 페이지 크기 20
-
-                    [페이지네이션 쿼리 파라미터]
-                    - page: 페이지 번호 (0부터 시작, 기본값 0)
-                    - size: 페이지당 항목 수 (기본값 20)
-                    - sort: 정렬 기준 (예: sort=createdAt,desc / sort=name,asc)
-
-                    [페이지네이션 응답 구조]
-                    data.content       → 실제 목록 배열
-                    data.totalElements → 전체 항목 수
-                    data.totalPages    → 전체 페이지 수
-                    data.number        → 현재 페이지 번호 (0부터)
-                    data.size          → 페이지당 크기
+                    [정렬]
+                    - 가입일 내림차순
                     """
     )
     @ApiResponses({
@@ -75,11 +60,10 @@ public class AdminController {
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "500", description = "서버 내부 오류", content = @Content)
     })
     @GetMapping("/user/select")
-    public ApiResponse<Page<UserSummaryResponse>> getUsers(
+    public ApiResponse<List<UserSummaryResponse>> getUsers(
             @Parameter(description = "역할 필터 (WARD / GUARDIAN / 미입력: 전체)")
-            @RequestParam(required = false) Role role,
-            @PageableDefault(size = 20, sort = "createdAt", direction = Sort.Direction.DESC) Pageable pageable) {
-        return ApiResponse.ok(adminUserService.getUsers(role, pageable));
+            @RequestParam(required = false) Role role) {
+        return ApiResponse.ok(adminUserService.getUsers(role));
     }
 
     @Operation(
@@ -189,23 +173,11 @@ public class AdminController {
     @Operation(
             summary = "전체 연결 관계 조회",
             description = """
-                    보호자-피보호자 전체 연결 관계를 페이징하여 조회합니다.
+                    보호자-피보호자 전체 연결 관계를 조회합니다.
                     PENDING(수락 대기) / ACTIVE(연결됨) / CANCELLED(해제됨) 상태 모두 포함됩니다.
 
-                    [기본 정렬]
-                    - 연결 요청일 내림차순, 페이지 크기 20
-
-                    [페이지네이션 쿼리 파라미터]
-                    - page: 페이지 번호 (0부터 시작, 기본값 0)
-                    - size: 페이지당 항목 수 (기본값 20)
-                    - sort: 정렬 기준 (예: sort=createdAt,desc)
-
-                    [페이지네이션 응답 구조]
-                    data.content       → 실제 목록 배열
-                    data.totalElements → 전체 항목 수
-                    data.totalPages    → 전체 페이지 수
-                    data.number        → 현재 페이지 번호 (0부터)
-                    data.size          → 페이지당 크기
+                    [정렬]
+                    - 연결 요청일 내림차순
                     """
     )
     @ApiResponses({
@@ -214,9 +186,8 @@ public class AdminController {
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "500", description = "서버 내부 오류", content = @Content)
     })
     @GetMapping("/user/connection/select")
-    public ApiResponse<Page<ConnectionResponse>> getConnections(
-            @PageableDefault(size = 20, sort = "createdAt", direction = Sort.Direction.DESC) Pageable pageable) {
-        return ApiResponse.ok(adminConnectionService.getConnections(pageable));
+    public ApiResponse<List<ConnectionResponse>> getConnections() {
+        return ApiResponse.ok(adminConnectionService.getConnections());
     }
 
     @Operation(
@@ -228,17 +199,8 @@ public class AdminController {
                     [주의사항]
                     - guardianId는 반드시 GUARDIAN 역할 사용자여야 합니다. WARD ID 입력 시 400 반환.
 
-                    [페이지네이션 쿼리 파라미터]
-                    - page: 페이지 번호 (0부터 시작, 기본값 0)
-                    - size: 페이지당 항목 수 (기본값 20)
-                    - sort: 정렬 기준 (예: sort=createdAt,desc)
-
-                    [페이지네이션 응답 구조]
-                    data.content       → 실제 목록 배열
-                    data.totalElements → 전체 항목 수
-                    data.totalPages    → 전체 페이지 수
-                    data.number        → 현재 페이지 번호 (0부터)
-                    data.size          → 페이지당 크기
+                    [정렬]
+                    - 연결 요청일 내림차순
                     """
     )
     @ApiResponses({
@@ -249,10 +211,9 @@ public class AdminController {
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "500", description = "서버 내부 오류", content = @Content)
     })
     @GetMapping("/user/connection/guardian/{guardianId}")
-    public ApiResponse<Page<ConnectionResponse>> getConnectionsByGuardian(
-            @Parameter(description = "보호자 ID (GUARDIAN 역할만 가능)") @PathVariable String guardianId,
-            @PageableDefault(size = 20, sort = "createdAt", direction = Sort.Direction.DESC) Pageable pageable) {
-        return ApiResponse.ok(adminConnectionService.getConnectionsByGuardian(guardianId, pageable));
+    public ApiResponse<List<ConnectionResponse>> getConnectionsByGuardian(
+            @Parameter(description = "보호자 ID (GUARDIAN 역할만 가능)") @PathVariable String guardianId) {
+        return ApiResponse.ok(adminConnectionService.getConnectionsByGuardian(guardianId));
     }
 
     @Operation(
@@ -328,17 +289,8 @@ public class AdminController {
                     [피보호자 탈퇴 시]
                     wardName, wardEmail 은 null 로 반환됩니다.
 
-                    [페이지네이션 쿼리 파라미터]
-                    - page: 페이지 번호 (0부터 시작, 기본값 0)
-                    - size: 페이지당 항목 수 (기본값 20)
-                    - sort: 정렬 기준 (기본값: detectedAt,desc)
-
-                    [페이지네이션 응답 구조]
-                    data.content       → 실제 목록 배열
-                    data.totalElements → 전체 항목 수
-                    data.totalPages    → 전체 페이지 수
-                    data.number        → 현재 페이지 번호 (0부터)
-                    data.size          → 페이지당 크기
+                    [정렬]
+                    - 감지 일시 내림차순
                     """
     )
     @ApiResponses({
@@ -349,15 +301,14 @@ public class AdminController {
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "500", description = "서버 내부 오류", content = @Content)
     })
     @GetMapping("/event/abnormal")
-    public ApiResponse<Page<AnomalyEventResponse>> getAnomalyEvents(
+    public ApiResponse<List<AnomalyEventResponse>> getAnomalyEvents(
             @Parameter(description = "보호자 ID (미입력 시 전체 조회, GUARDIAN 역할만 허용)")
             @RequestParam(required = false) String guardianId,
             @Parameter(description = "조회 시작 일시 (ISO 8601, 예: 2025-01-01T00:00:00+09:00)")
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) OffsetDateTime startDate,
             @Parameter(description = "조회 종료 일시 (ISO 8601, 예: 2025-12-31T23:59:59+09:00)")
-            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) OffsetDateTime endDate,
-            @PageableDefault(size = 20, sort = "detectedAt", direction = Sort.Direction.DESC) Pageable pageable) {
-        return ApiResponse.ok(adminService.getAnomalyEvents(guardianId, startDate, endDate, pageable));
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) OffsetDateTime endDate) {
+        return ApiResponse.ok(adminService.getAnomalyEvents(guardianId, startDate, endDate));
     }
 
     // =============================================
@@ -380,17 +331,8 @@ public class AdminController {
                     - gameType: 게임 유형 필터. 미입력 시 전체 유형 조회.
                     - startDate / endDate: 플레이 일시(playedAt) 범위. ISO 8601 형식 (예: 2025-01-01T00:00:00+09:00)
 
-                    [페이지네이션 쿼리 파라미터]
-                    - page: 페이지 번호 (0부터 시작, 기본값 0)
-                    - size: 페이지당 항목 수 (기본값 20)
-                    - sort: 정렬 기준 (기본값: playedAt,desc)
-
-                    [페이지네이션 응답 구조]
-                    data.content       → 실제 목록 배열
-                    data.totalElements → 전체 항목 수
-                    data.totalPages    → 전체 페이지 수
-                    data.number        → 현재 페이지 번호 (0부터)
-                    data.size          → 페이지당 크기
+                    [정렬]
+                    - 플레이 일시 내림차순
                     """
     )
     @ApiResponses({
@@ -401,7 +343,7 @@ public class AdminController {
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "500", description = "서버 내부 오류", content = @Content)
     })
     @GetMapping("/game/result/select")
-    public ApiResponse<Page<GameResultResponse>> getGameResults(
+    public ApiResponse<List<GameResultResponse>> getGameResults(
             @Parameter(description = "피보호자 ID (미입력 시 전체 조회, WARD 역할만 허용)")
             @RequestParam(required = false) String userId,
             @Parameter(description = "게임 유형 (MATCHING / WORD_QUIZ / ADDITION / SUBTRACTION, 미입력 시 전체)")
@@ -409,9 +351,8 @@ public class AdminController {
             @Parameter(description = "조회 시작 일시 (ISO 8601, 예: 2025-01-01T00:00:00+09:00)")
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) OffsetDateTime startDate,
             @Parameter(description = "조회 종료 일시 (ISO 8601, 예: 2025-12-31T23:59:59+09:00)")
-            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) OffsetDateTime endDate,
-            @PageableDefault(size = 20, sort = "playedAt", direction = Sort.Direction.DESC) Pageable pageable) {
-        return ApiResponse.ok(adminService.getGameResults(userId, gameType, startDate, endDate, pageable));
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) OffsetDateTime endDate) {
+        return ApiResponse.ok(adminService.getGameResults(userId, gameType, startDate, endDate));
     }
 
     // =============================================
@@ -421,22 +362,13 @@ public class AdminController {
     @Operation(
             summary = "공지 목록 조회",
             description = """
-                    공지 목록을 페이징하여 조회합니다.
+                    공지 목록을 조회합니다.
 
                     [작성자 탈퇴 시]
                     authorName 은 null 로 반환됩니다.
 
-                    [페이지네이션 쿼리 파라미터]
-                    - page: 페이지 번호 (0부터 시작, 기본값 0)
-                    - size: 페이지당 항목 수 (기본값 20)
-                    - sort: 정렬 기준 (기본값: createdAt,desc)
-
-                    [페이지네이션 응답 구조]
-                    data.content       → 실제 목록 배열
-                    data.totalElements → 전체 항목 수
-                    data.totalPages    → 전체 페이지 수
-                    data.number        → 현재 페이지 번호 (0부터)
-                    data.size          → 페이지당 크기
+                    [정렬]
+                    - 작성 일시 내림차순
                     """
     )
     @ApiResponses({
@@ -445,9 +377,8 @@ public class AdminController {
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "500", description = "서버 내부 오류", content = @Content)
     })
     @GetMapping("/announcement/select")
-    public ApiResponse<Page<AnnouncementResponse>> getAnnouncements(
-            @PageableDefault(size = 20, sort = "createdAt", direction = Sort.Direction.DESC) Pageable pageable) {
-        return ApiResponse.ok(adminAnnouncementService.getAnnouncements(pageable));
+    public ApiResponse<List<AnnouncementResponse>> getAnnouncements() {
+        return ApiResponse.ok(adminAnnouncementService.getAnnouncements());
     }
 
     @Operation(
@@ -532,7 +463,7 @@ public class AdminController {
     @Operation(
             summary = "사용자 접근 로그 조회",
             description = """
-                    전체 접속 로그를 페이징하여 조회합니다.
+                    전체 접속 로그를 조회합니다.
 
                     [포함 이력]
                     - LOGIN: 일반 로그인
@@ -541,20 +472,8 @@ public class AdminController {
                     - TOKEN_ISSUE: Access Token 재발급
                     - PASSWORD_RESET: 비밀번호 재설정
 
-                    [기본 정렬]
-                    - 발생일 내림차순, 페이지 크기 50
-
-                    [페이지네이션 쿼리 파라미터]
-                    - page: 페이지 번호 (0부터 시작, 기본값 0)
-                    - size: 페이지당 항목 수 (기본값 50)
-                    - sort: 정렬 기준 (기본값: createdAt,desc)
-
-                    [페이지네이션 응답 구조]
-                    data.content       → 실제 목록 배열
-                    data.totalElements → 전체 항목 수
-                    data.totalPages    → 전체 페이지 수
-                    data.number        → 현재 페이지 번호 (0부터)
-                    data.size          → 페이지당 크기
+                    [정렬]
+                    - 발생 일시 내림차순
                     """
     )
     @ApiResponses({
@@ -563,9 +482,8 @@ public class AdminController {
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "500", description = "서버 내부 오류", content = @Content)
     })
     @GetMapping("/accesslog/select")
-    public ApiResponse<Page<AccessLogResponse>> getAccessLogs(
-            @PageableDefault(size = 50, sort = "createdAt", direction = Sort.Direction.DESC) Pageable pageable) {
-        return ApiResponse.ok(adminService.getAccessLogs(pageable));
+    public ApiResponse<List<AccessLogResponse>> getAccessLogs() {
+        return ApiResponse.ok(adminService.getAccessLogs());
     }
 
     // =============================================
@@ -588,17 +506,8 @@ public class AdminController {
                     - ANNOUNCEMENT_UPDATE: 공지 수정
                     - ANNOUNCEMENT_DELETE: 공지 삭제
 
-                    [페이지네이션 쿼리 파라미터]
-                    - page: 페이지 번호 (0부터 시작, 기본값 0)
-                    - size: 페이지당 항목 수 (기본값 50)
-                    - sort: 정렬 기준 (기본값: createdAt,desc)
-
-                    [페이지네이션 응답 구조]
-                    data.content       → 실제 목록 배열
-                    data.totalElements → 전체 항목 수
-                    data.totalPages    → 전체 페이지 수
-                    data.number        → 현재 페이지 번호 (0부터)
-                    data.size          → 페이지당 크기
+                    [정렬]
+                    - 발생 일시 내림차순
                     """
     )
     @ApiResponses({
@@ -607,8 +516,7 @@ public class AdminController {
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "500", description = "서버 내부 오류", content = @Content)
     })
     @GetMapping("/audit/select")
-    public ApiResponse<Page<AdminAuditLogResponse>> getAuditLogs(
-            @PageableDefault(size = 50, sort = "createdAt", direction = Sort.Direction.DESC) Pageable pageable) {
-        return ApiResponse.ok(auditLogService.getLogs(pageable));
+    public ApiResponse<List<AdminAuditLogResponse>> getAuditLogs() {
+        return ApiResponse.ok(auditLogService.getLogs());
     }
 }

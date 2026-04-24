@@ -14,12 +14,12 @@ import kr.silverbridge.main.global.enums.Role;
 import kr.silverbridge.main.global.exception.CustomException;
 import kr.silverbridge.main.global.exception.ErrorCode;
 import lombok.RequiredArgsConstructor;
-import org.springframework.data.domain.Page;
-import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.OffsetDateTime;
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -44,15 +44,14 @@ public class AdminService {
     private final AnomalyEventRepository anomalyEventRepository;
     private final GameResultRepository gameResultRepository;
 
-    // 이상감지 이벤트 조회 (보호자 필터 + 기간 필터)
+    // 이상감지 이벤트 조회 (보호자 필터 + 기간 필터, 최신 감지순)
     @Transactional(readOnly = true)
-    public Page<AnomalyEventResponse> getAnomalyEvents(
+    public List<AnomalyEventResponse> getAnomalyEvents(
             String guardianId,
             OffsetDateTime startDate,
-            OffsetDateTime endDate,
-            Pageable pageable
+            OffsetDateTime endDate
     ) {
-        Page<AnomalyEvent> events;
+        List<AnomalyEvent> events;
 
         if (guardianId != null) {
             User guardian = userRepository.findById(guardianId)
@@ -63,22 +62,22 @@ public class AdminService {
 
             List<String> wardIds = anomalyEventRepository.findActiveWardIdsByGuardianId(guardianId);
             if (wardIds.isEmpty()) {
-                return Page.empty(pageable);
+                return Collections.emptyList();
             }
-            events = anomalyEventRepository.findByWardIdsAndDateRange(wardIds, startDate, endDate, pageable);
+            events = anomalyEventRepository.findByWardIdsAndDateRange(wardIds, startDate, endDate);
         } else {
-            events = anomalyEventRepository.findByDateRange(startDate, endDate, pageable);
+            events = anomalyEventRepository.findByDateRange(startDate, endDate);
         }
 
         // 배치 사용자 조회 (N+1 방지)
-        Set<String> wardIds = events.getContent().stream()
+        Set<String> wardIds = events.stream()
                 .map(AnomalyEvent::getWardId)
                 .filter(Objects::nonNull)
                 .collect(Collectors.toSet());
         Map<String, User> wardMap = userRepository.findAllById(wardIds).stream()
                 .collect(Collectors.toMap(User::getId, u -> u));
 
-        return events.map(event -> {
+        return events.stream().map(event -> {
             if (event.getWardId() == null) {
                 return AnomalyEventResponse.ofDeleted(event);
             }
@@ -86,17 +85,16 @@ public class AdminService {
             return ward != null
                     ? AnomalyEventResponse.of(event, ward)
                     : AnomalyEventResponse.ofDeleted(event);
-        });
+        }).toList();
     }
 
-    // 게임 결과 조회 (사용자 + 게임 유형 + 기간 필터)
+    // 게임 결과 조회 (사용자 + 게임 유형 + 기간 필터, 최신 플레이순)
     @Transactional(readOnly = true)
-    public Page<GameResultResponse> getGameResults(
+    public List<GameResultResponse> getGameResults(
             String userId,
             GameType gameType,
             OffsetDateTime startDate,
-            OffsetDateTime endDate,
-            Pageable pageable
+            OffsetDateTime endDate
     ) {
         if (userId != null) {
             User user = userRepository.findById(userId)
@@ -107,24 +105,26 @@ public class AdminService {
         }
 
         // 배치 사용자 조회 (N+1 방지)
-        var results = gameResultRepository.findByFilters(userId, gameType, startDate, endDate, pageable);
-        Set<String> userIds = results.getContent().stream()
+        var results = gameResultRepository.findByFilters(userId, gameType, startDate, endDate);
+        Set<String> userIds = results.stream()
                 .map(r -> r.getUserId())
                 .collect(Collectors.toSet());
         Map<String, User> userMap = userRepository.findAllById(userIds).stream()
                 .collect(Collectors.toMap(User::getId, u -> u));
 
-        return results.map(result -> {
+        return results.stream().map(result -> {
             User user = userMap.get(result.getUserId());
             if (user == null) throw new CustomException(ErrorCode.USER_NOT_FOUND);
             return GameResultResponse.of(result, user);
-        });
+        }).toList();
     }
 
-    // 접속 로그 조회
+    // 접속 로그 조회 (최신 발생순)
     @Transactional(readOnly = true)
-    public Page<AccessLogResponse> getAccessLogs(Pageable pageable) {
-        return accessLogRepository.findAll(pageable)
-                .map(AccessLogResponse::from);
+    public List<AccessLogResponse> getAccessLogs() {
+        return accessLogRepository.findAll(Sort.by(Sort.Direction.DESC, "createdAt"))
+                .stream()
+                .map(AccessLogResponse::from)
+                .toList();
     }
 }
