@@ -3,6 +3,8 @@ name: CD
 on:
   push:
     branches: [ dev ]
+  # GitHub Actions UI / gh workflow run 으로 수동 실행 가능 — 비상 재배포·롤백 후 재배포용
+  workflow_dispatch:
 
 jobs:
   deploy:
