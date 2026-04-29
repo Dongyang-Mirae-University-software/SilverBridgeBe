@@ -6,10 +6,13 @@ on:
 
 jobs:
   deploy:
-    runs-on: self-hosted
+    # dev 라벨 붙은 self-hosted runner만 실행 — prod 서버에 runner 등록되더라도 영향 없음
+    runs-on: [self-hosted, dev]
     steps:
       - name: 배포
         run: |
+          set -e
           cd ~/SilverBridgeBe
           git pull origin dev
           docker compose -f docker-compose.dev.yml up -d --build api
+          docker image prune -f
