@@ -50,6 +50,9 @@ spring:
 
 server:
   port: 6511
+  # nginx가 HTTPS 종료 후 HTTP로 프록시 → X-Forwarded-Proto 헤더 신뢰
+  # Swagger UI 등에서 요청 URL 생성 시 https 스킴 유지 (Mixed-Content 방지)
+  forward-headers-strategy: framework
 
 app:
   cors:
