@@ -87,6 +87,7 @@ claude-code-java의 [DESIGN_PRINCIPLES](../claude-code-java/docs/DESIGN_PRINCIPL
 **규칙**:
 - push 전 `git pull origin dev` 로 feat 최신화
 - MR base = `dev`, 머지 후 source 삭제
+- **PR 머지 직후 로컬·원격 feat 브랜치를 모두 삭제** (`git branch -d <branch>` + `git push origin --delete <branch>`), 머지 커밋이 dev에 반영되었는지 확인 후 진행
 
 ### 커밋 메시지 규칙
 
