@@ -1,7 +1,6 @@
 HELP.md
-CLAUDE.md
 .env.*
-docs/
+/docs/
 db/seed.sql
 .gradle
 build/
