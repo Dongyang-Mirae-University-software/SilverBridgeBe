@@ -14,28 +14,6 @@ for your project. It is generated from a template and tailored for each project.
 npx @modelcontextprotocol/server-filesystem --path "/home/skarndaudwls/SilverBridgeBe"
 ```
 
-## 2. GitHub MCP (optional)
-- **Purpose**: Efficient issue management, pull request creation, and repository analysis
-- **Repository**: https://github.com/Dongyang-Mirae-University-software/SilverBridgeBe.git
-- **Required**: GITHUB_TOKEN environment variable
-
-```bash
-export GITHUB_TOKEN=<your-token>
-```
-- **Add MCP server command**:
-```
-claude mcp add github --transport http "https://github.com/Dongyang-Mirae-University-software/SilverBridgeBe.git"
-```
-⚠️ If `GITHUB_TOKEN` is not set, GitHub MCP will not work.
-
-## 3. Local Git MCP (optional)
-- **Purpose**: Analyze commit history, blame, logs.
-- **Root directory**: /home/skarndaudwls/SilverBridgeBe
-- **Server command**:
-```bash
-npx @modelcontextprotocol/server-git --path "/home/skarndaudwls/SilverBridgeBe"
-```
-
 ## Best Practices
 1. Load skills once per session - avoids unnecessary token usage
 2. Batch operations - process multiple files/issues together
@@ -44,7 +22,5 @@ npx @modelcontextprotocol/server-git --path "/home/skarndaudwls/SilverBridgeBe"
 
 **Notes**:
 
-- Replace `<your-token>` with a valid GitHub Personal Access Token (PAT).
-- For more info on creating a PAT and setting up MCP, see:
-  - [GitHub Docs: Personal Access Tokens](https://docs.github.com/en/authentication/keeping-your-account-and-data-secure/managing-your-personal-access-tokens)
+- For more info on MCP, see:
   - [Model Context Protocol Docs](https://modelcontextprotocol.io/docs/getting-started/intro)
