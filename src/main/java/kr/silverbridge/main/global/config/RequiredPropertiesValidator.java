@@ -5,7 +5,11 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 import java.util.ArrayList;
+import java.util.HexFormat;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -32,7 +36,8 @@ public class RequiredPropertiesValidator {
             @Value("${kakao.redirect-uri:}") String kakaoRedirectUri,
             @Value("${solapi.api-key:}") String solapiApiKey,
             @Value("${solapi.api-secret:}") String solapiApiSecret,
-            @Value("${solapi.sender-phone:}") String solapiSenderPhone
+            @Value("${solapi.sender-phone:}") String solapiSenderPhone,
+            @Value("${firebase.service-account-json:}") String firebaseServiceAccountJson
     ) {
         Map<String, String> map = new LinkedHashMap<>();
         map.put("MAIL_USERNAME", mailUsername);
@@ -42,6 +47,7 @@ public class RequiredPropertiesValidator {
         map.put("SOLAPI_API_KEY", solapiApiKey);
         map.put("SOLAPI_API_SECRET", solapiApiSecret);
         map.put("SOLAPI_SENDER_PHONE", solapiSenderPhone);
+        map.put("FIREBASE_SERVICE_ACCOUNT_JSON", firebaseServiceAccountJson);
         this.requiredProperties = map;
     }
 
@@ -59,6 +65,25 @@ public class RequiredPropertiesValidator {
                             + String.join(", ", missing)
                             + "\n해당 키를 채운 뒤 컨테이너를 다시 시작하세요.");
         }
-        log.info("필수 환경변수 검증 통과: {}개 키 정상", requiredProperties.size());
+        // 검증 통과 시 fingerprint를 함께 로그 — 배포 간 env 변경 여부를 운영자가 비교할 수 있게 한다.
+        // 단방향 해시 12자 prefix만 노출하므로 값 자체는 복원 불가.
+        log.info("필수 환경변수 검증 통과: {}개 키 정상 (fingerprint={})",
+                requiredProperties.size(), computeFingerprint());
+    }
+
+    private String computeFingerprint() {
+        try {
+            MessageDigest digest = MessageDigest.getInstance("SHA-256");
+            for (Map.Entry<String, String> e : requiredProperties.entrySet()) {
+                // 키 이름과 값을 NUL로 구분해 직렬화 — 값 길이만 같고 다른 키에 들어간 경우도 구분.
+                digest.update(e.getKey().getBytes(StandardCharsets.UTF_8));
+                digest.update((byte) 0);
+                digest.update(e.getValue().getBytes(StandardCharsets.UTF_8));
+                digest.update((byte) 0);
+            }
+            return HexFormat.of().formatHex(digest.digest()).substring(0, 12);
+        } catch (NoSuchAlgorithmException ex) {
+            return "unavailable";
+        }
     }
 }
