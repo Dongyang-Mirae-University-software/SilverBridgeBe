@@ -99,7 +99,9 @@ management:
         enabled: true
 
 firebase:
-  service-account-path: ${FIREBASE_SERVICE_ACCOUNT_PATH:firebase-service-account.json}
+  # 서비스 계정 JSON 전체를 환경변수로 주입 — .env.dev에 단일 라인 JSON으로 보관.
+  # 파일 마운트/classpath 패키징은 호스트 파일 누락·이미지 시크릿 굽기 함정이 있어 사용하지 않는다.
+  service-account-json: ${FIREBASE_SERVICE_ACCOUNT_JSON:}
 
 ai:
   server:
