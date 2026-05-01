@@ -5,19 +5,6 @@
       "type": "filesystem",
       "root": "/home/skarndaudwls/SilverBridgeBe",
       "read_only": false
-    },
-    {
-      "name": "github-mcp",
-      "type": "github",
-      "repo": "https://github.com/Dongyang-Mirae-University-software/SilverBridgeBe.git",
-      "token_env": "GITHUB_TOKEN",
-      "read_only": true
-    },
-    {
-      "name": "git-local",
-      "type": "git",
-      "root": "/home/skarndaudwls/SilverBridgeBe",
-      "read_only": true
     }
   ]
 }

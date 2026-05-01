@@ -211,10 +211,8 @@ feat: 사용자 로그인 기능 추가
 | 서버 | 용도 |
 |------|------|
 | Filesystem MCP | 프로젝트 트리 효율적 탐색 |
-| GitHub MCP (선택) | 이슈·PR 관리 (`GITHUB_TOKEN` 필요) |
-| Local Git MCP (선택) | 커밋 히스토리·blame 분석 |
 
-가능한 한 MCP를 우선 사용 — bash보다 토큰 효율적.
+> Git/GitHub MCP는 사용하지 않는다 — `gh` CLI와 `git` Bash로 충분하며, 의존성 부담 없이 워크플로우가 잘 돌아간다. 향후 PR 리뷰 코멘트 작업이 잦아지면 그때 GitHub MCP만 추가 고려.
 
 ---
 
