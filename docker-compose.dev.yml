@@ -8,6 +8,11 @@ services:
     restart: unless-stopped
     env_file:
       - .env.dev
+    # FCM 사용에 필수 — 호스트의 키 파일을 컨테이너에 read-only로 마운트.
+    # 호스트에 파일이 없으면 docker compose up 단계에서 즉시 실패하므로 누락을 빠르게 감지한다.
+    # FIREBASE_SERVICE_ACCOUNT_PATH 기본값(firebase-service-account.json)이 /app(WORKDIR) 기준으로 해석되도록 같은 경로에 둠.
+    volumes:
+      - ./firebase-service-account.json:/app/firebase-service-account.json:ro
     ports:
       - "6511:6511"
     depends_on:
