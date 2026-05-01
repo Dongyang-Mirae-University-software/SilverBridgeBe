@@ -204,19 +204,7 @@ feat: 사용자 로그인 기능 추가
 
 ---
 
-## 7. MCP 서버
-
-상세 설정은 [MCP_CONFIG.md](./MCP_CONFIG.md) 참조.
-
-| 서버 | 용도 |
-|------|------|
-| Filesystem MCP | 프로젝트 트리 효율적 탐색 |
-
-> Git/GitHub MCP는 사용하지 않는다 — `gh` CLI와 `git` Bash로 충분하며, 의존성 부담 없이 워크플로우가 잘 돌아간다. 향후 PR 리뷰 코멘트 작업이 잦아지면 그때 GitHub MCP만 추가 고려.
-
----
-
-## 8. 일상 워크플로우 예시
+## 7. 일상 워크플로우 예시
 
 ### 새 기능 개발
 
@@ -267,7 +255,7 @@ gh pr create --base dev
 
 ---
 
-## 9. 피해야 할 패턴
+## 8. 피해야 할 패턴
 
 1. **`dev` 직접 커밋·푸시** — 반드시 PR 경유
 2. **AI 출력 그대로 적용** — 항상 diff 검토 후 적용
@@ -278,10 +266,9 @@ gh pr create --base dev
 
 ---
 
-## 10. 리소스
+## 9. 리소스
 
 ### 내부
-- [MCP_CONFIG.md](./MCP_CONFIG.md) — MCP 서버 설정
 - `.claude/skills/README.md` — 스킬 목록 인덱스
 - `프로젝트_설명.txt` — 도메인·요구사항 설명
 
