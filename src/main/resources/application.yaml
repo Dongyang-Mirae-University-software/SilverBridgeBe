@@ -99,9 +99,10 @@ management:
         enabled: true
 
 firebase:
-  # 서비스 계정 JSON 전체를 환경변수로 주입 — .env.dev에 단일 라인 JSON으로 보관.
-  # 파일 마운트/classpath 패키징은 호스트 파일 누락·이미지 시크릿 굽기 함정이 있어 사용하지 않는다.
-  service-account-json: ${FIREBASE_SERVICE_ACCOUNT_JSON:}
+  # 서비스 계정 JSON을 base64로 인코딩해 환경변수에 보관.
+  # 원본 JSON을 그대로 .env에 넣으면 docker compose env_file 파서가 \n을 실제 newline으로
+  # 변환해 깨지는 문제가 있어 base64로 우회한다.
+  service-account-base64: ${FIREBASE_SERVICE_ACCOUNT_BASE64:}
 
 ai:
   server:
