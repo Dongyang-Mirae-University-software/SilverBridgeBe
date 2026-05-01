@@ -1,0 +1,33 @@
+# 빌드 컨텍스트 차단 — 시크릿/로컬 산출물이 이미지 레이어에 굽히지 않도록.
+# 특히 Firebase 키와 .env*는 절대 이미지에 포함되어선 안 됨.
+
+# Firebase 서비스 계정 키 (이제 환경변수로 주입하므로 파일은 빌드에서 제외)
+**/firebase-service-account.json
+**/firebase-adminsdk*.json
+
+# 환경변수 파일 (env_file로만 런타임에 주입)
+.env
+.env.*
+
+# 로컬 데이터·빌드 산출물
+.data/
+build/
+.gradle/
+out/
+target/
+
+# IDE / OS
+.idea/
+.vscode/
+*.iml
+.DS_Store
+
+# Git 메타데이터
+.git/
+.gitignore
+.gitattributes
+
+# Claude / 문서 작업물 (런타임 무관)
+.claude/
+*.md
+docs/

@@ -16,5 +16,13 @@ jobs:
           set -e
           cd ~/SilverBridgeBe
           git pull origin dev
+
+          # .env.dev 자체가 없으면 docker compose의 원시 에러보다 친화적인 메시지로 즉시 종료.
+          # 키 누락은 Spring 시작 시 RequiredPropertiesValidator가 잡으므로 여기서는 파일 존재만 확인.
+          if [ ! -f .env.dev ]; then
+            echo "::error::.env.dev 파일이 호스트에 없습니다 (~/SilverBridgeBe/.env.dev). 배포 중단."
+            exit 1
+          fi
+
           docker compose -f docker-compose.dev.yml up -d --build api
           docker image prune -f
