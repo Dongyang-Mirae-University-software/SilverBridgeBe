@@ -37,7 +37,7 @@ public class RequiredPropertiesValidator {
             @Value("${solapi.api-key:}") String solapiApiKey,
             @Value("${solapi.api-secret:}") String solapiApiSecret,
             @Value("${solapi.sender-phone:}") String solapiSenderPhone,
-            @Value("${firebase.service-account-json:}") String firebaseServiceAccountJson
+            @Value("${firebase.service-account-base64:}") String firebaseServiceAccountBase64
     ) {
         Map<String, String> map = new LinkedHashMap<>();
         map.put("MAIL_USERNAME", mailUsername);
@@ -47,7 +47,7 @@ public class RequiredPropertiesValidator {
         map.put("SOLAPI_API_KEY", solapiApiKey);
         map.put("SOLAPI_API_SECRET", solapiApiSecret);
         map.put("SOLAPI_SENDER_PHONE", solapiSenderPhone);
-        map.put("FIREBASE_SERVICE_ACCOUNT_JSON", firebaseServiceAccountJson);
+        map.put("FIREBASE_SERVICE_ACCOUNT_BASE64", firebaseServiceAccountBase64);
         this.requiredProperties = map;
     }
 
