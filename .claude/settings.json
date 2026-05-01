@@ -24,6 +24,5 @@
       "Bash(git push --force*)",
       "Bash(git commit*)"
     ]
-  },
-  "enableAllProjectMcpServers": true
+  }
 }
