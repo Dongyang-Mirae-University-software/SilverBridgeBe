@@ -8,7 +8,7 @@ import kr.silverbridge.main.global.enums.GameType;
 import java.time.OffsetDateTime;
 
 @Schema(description = "게임 결과 응답")
-public record GameResultResponse(
+public record AdminGameResultResponse(
 
         @Schema(description = "게임 결과 ID", example = "1")
         Long id,
@@ -41,8 +41,8 @@ public record GameResultResponse(
         OffsetDateTime playedAt
 ) {
 
-    public static GameResultResponse of(GameResult result, User user) {
-        return new GameResultResponse(
+    public static AdminGameResultResponse of(GameResult result, User user) {
+        return new AdminGameResultResponse(
                 result.getId(),
                 user.getId(),
                 user.getName(),
