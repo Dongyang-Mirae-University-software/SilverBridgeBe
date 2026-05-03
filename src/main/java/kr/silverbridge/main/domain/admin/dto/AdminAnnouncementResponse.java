@@ -7,7 +7,7 @@ import kr.silverbridge.main.domain.user.entity.User;
 import java.time.OffsetDateTime;
 
 @Schema(description = "공지 응답")
-public record AnnouncementResponse(
+public record AdminAnnouncementResponse(
 
         @Schema(description = "공지 ID", example = "1")
         Long id,
@@ -31,8 +31,8 @@ public record AnnouncementResponse(
         OffsetDateTime updatedAt
 ) {
 
-    public static AnnouncementResponse of(Announcement announcement, User author) {
-        return new AnnouncementResponse(
+    public static AdminAnnouncementResponse of(Announcement announcement, User author) {
+        return new AdminAnnouncementResponse(
                 announcement.getId(),
                 author != null ? author.getId() : announcement.getAuthorId(),
                 author != null ? author.getName() : null,

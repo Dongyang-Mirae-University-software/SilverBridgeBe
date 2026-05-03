@@ -156,6 +156,13 @@ public class ConnectionService {
 
     // ─── 공통 조회 API ────────────────────────────────────────────
 
+    // 보호자-피보호자 간 활성 또는 대기 중 연결 존재 여부 (취소 제외)
+    @Transactional(readOnly = true)
+    public boolean isConnected(String guardianId, String wardId) {
+        return connectionRepository.existsByGuardianIdAndWardIdAndStatusNot(
+                guardianId, wardId, ConnectionStatus.CANCELLED);
+    }
+
     // 연결 단건 조회 (보호자/피보호자 모두 조회 가능)
     @Transactional(readOnly = true)
     public ConnectionResponse getConnection(String userId, Long connectionId) {
