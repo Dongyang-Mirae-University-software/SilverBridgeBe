@@ -1,7 +1,7 @@
 package kr.silverbridge.main.domain.admin.service;
 
 import kr.silverbridge.main.domain.admin.dto.AnnouncementCreateRequest;
-import kr.silverbridge.main.domain.admin.dto.AnnouncementResponse;
+import kr.silverbridge.main.domain.admin.dto.AdminAnnouncementResponse;
 import kr.silverbridge.main.domain.admin.dto.AnnouncementUpdateRequest;
 import kr.silverbridge.main.domain.announcement.entity.Announcement;
 import kr.silverbridge.main.domain.announcement.repository.AnnouncementRepository;
@@ -35,7 +35,7 @@ public class AdminAnnouncementService {
 
     // 공지 목록 조회 (최신순 + 배치 작성자 조회)
     @Transactional(readOnly = true)
-    public List<AnnouncementResponse> getAnnouncements() {
+    public List<AdminAnnouncementResponse> getAnnouncements() {
         List<Announcement> announcements = announcementRepository.findAll(
                 Sort.by(Sort.Direction.DESC, "createdAt"));
 
@@ -47,20 +47,20 @@ public class AdminAnnouncementService {
                 .collect(Collectors.toMap(User::getId, u -> u));
 
         return announcements.stream()
-                .map(a -> AnnouncementResponse.of(a, authorMap.get(a.getAuthorId())))
+                .map(a -> AdminAnnouncementResponse.of(a, authorMap.get(a.getAuthorId())))
                 .toList();
     }
 
     // 공지 상세 조회
     @Transactional(readOnly = true)
-    public AnnouncementResponse getAnnouncement(Long id) {
+    public AdminAnnouncementResponse getAnnouncement(Long id) {
         Announcement announcement = findAnnouncement(id);
-        return AnnouncementResponse.of(announcement, findAuthor(announcement.getAuthorId()));
+        return AdminAnnouncementResponse.of(announcement, findAuthor(announcement.getAuthorId()));
     }
 
     // 공지 생성 (작성 즉시 게시)
     @Transactional
-    public AnnouncementResponse createAnnouncement(AnnouncementCreateRequest request, String adminId) {
+    public AdminAnnouncementResponse createAnnouncement(AnnouncementCreateRequest request, String adminId) {
         Announcement announcement = Announcement.builder()
                 .authorId(adminId)
                 .title(request.getTitle())
@@ -72,19 +72,19 @@ public class AdminAnnouncementService {
         auditLogService.log(adminId, AdminAuditAction.ANNOUNCEMENT_CREATE, String.valueOf(saved.getId()),
                 String.format("공지 생성: %s", saved.getTitle()));
 
-        return AnnouncementResponse.of(saved, findAuthor(adminId));
+        return AdminAnnouncementResponse.of(saved, findAuthor(adminId));
     }
 
     // 공지 수정 (제목 + 내용)
     @Transactional
-    public AnnouncementResponse updateAnnouncement(Long id, AnnouncementUpdateRequest request, String adminId) {
+    public AdminAnnouncementResponse updateAnnouncement(Long id, AnnouncementUpdateRequest request, String adminId) {
         Announcement announcement = findAnnouncement(id);
         announcement.update(request.getTitle(), request.getContent());
 
         auditLogService.log(adminId, AdminAuditAction.ANNOUNCEMENT_UPDATE, String.valueOf(id),
                 String.format("공지 수정: %s", request.getTitle()));
 
-        return AnnouncementResponse.of(announcement, findAuthor(announcement.getAuthorId()));
+        return AdminAnnouncementResponse.of(announcement, findAuthor(announcement.getAuthorId()));
     }
 
     // 공지 삭제

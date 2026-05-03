@@ -1,10 +1,10 @@
 package kr.silverbridge.main.domain.admin.service;
 
 import kr.silverbridge.main.domain.admin.dto.AccessLogResponse;
+import kr.silverbridge.main.domain.admin.dto.AdminGameResultResponse;
 import kr.silverbridge.main.domain.admin.dto.AnomalyEventResponse;
-import kr.silverbridge.main.domain.admin.dto.GameResultResponse;
 import kr.silverbridge.main.domain.anomaly.entity.AnomalyEvent;
-import kr.silverbridge.main.domain.anomaly.repository.AnomalyEventRepository;
+import kr.silverbridge.main.domain.anomaly.service.AnomalyEventQueryService;
 import kr.silverbridge.main.domain.auth.repository.AccessLogRepository;
 import kr.silverbridge.main.domain.game.repository.GameResultRepository;
 import kr.silverbridge.main.domain.user.entity.User;
@@ -19,7 +19,6 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.OffsetDateTime;
-import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -41,7 +40,7 @@ public class AdminService {
 
     private final UserRepository userRepository;
     private final AccessLogRepository accessLogRepository;
-    private final AnomalyEventRepository anomalyEventRepository;
+    private final AnomalyEventQueryService anomalyEventQueryService;
     private final GameResultRepository gameResultRepository;
 
     // 이상감지 이벤트 조회 (보호자 필터 + 기간 필터, 최신 감지순)
@@ -59,14 +58,9 @@ public class AdminService {
             if (guardian.getRole() != Role.GUARDIAN) {
                 throw new CustomException(ErrorCode.INVALID_CONNECTION_ROLE);
             }
-
-            List<String> wardIds = anomalyEventRepository.findActiveWardIdsByGuardianId(guardianId);
-            if (wardIds.isEmpty()) {
-                return Collections.emptyList();
-            }
-            events = anomalyEventRepository.findByWardIdsAndDateRange(wardIds, startDate, endDate);
+            events = anomalyEventQueryService.findEventsByGuardian(guardianId, startDate, endDate);
         } else {
-            events = anomalyEventRepository.findByDateRange(startDate, endDate);
+            events = anomalyEventQueryService.findEvents(startDate, endDate);
         }
 
         // 배치 사용자 조회 (N+1 방지)
@@ -90,7 +84,7 @@ public class AdminService {
 
     // 게임 결과 조회 (사용자 + 게임 유형 + 기간 필터, 최신 플레이순)
     @Transactional(readOnly = true)
-    public List<GameResultResponse> getGameResults(
+    public List<AdminGameResultResponse> getGameResults(
             String userId,
             GameType gameType,
             OffsetDateTime startDate,
@@ -115,7 +109,7 @@ public class AdminService {
         return results.stream().map(result -> {
             User user = userMap.get(result.getUserId());
             if (user == null) throw new CustomException(ErrorCode.USER_NOT_FOUND);
-            return GameResultResponse.of(result, user);
+            return AdminGameResultResponse.of(result, user);
         }).toList();
     }
 

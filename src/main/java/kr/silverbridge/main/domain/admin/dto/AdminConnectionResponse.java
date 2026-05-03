@@ -11,7 +11,7 @@ import java.time.OffsetDateTime;
 @Getter
 @Builder
 @Schema(description = "연결 관계 응답")
-public class ConnectionResponse {
+public class AdminConnectionResponse {
 
     @Schema(description = "연결 ID", example = "1")
     private Long id;
@@ -43,8 +43,8 @@ public class ConnectionResponse {
     @Schema(description = "연결 요청 생성 일시", example = "2025-01-15T10:00:00+09:00")
     private OffsetDateTime createdAt;
 
-    public static ConnectionResponse of(Connection connection, User guardian, User ward) {
-        return ConnectionResponse.builder()
+    public static AdminConnectionResponse of(Connection connection, User guardian, User ward) {
+        return AdminConnectionResponse.builder()
                 .id(connection.getId())
                 .guardianId(guardian.getId())
                 .guardianName(guardian.getName())
