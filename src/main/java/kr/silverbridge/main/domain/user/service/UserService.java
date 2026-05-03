@@ -1,18 +1,18 @@
 package kr.silverbridge.main.domain.user.service;
 
-import kr.silverbridge.main.domain.auth.repository.RefreshTokenRepository;
-import kr.silverbridge.main.domain.auth.service.AccessLogService;
 import kr.silverbridge.main.domain.user.dto.PasswordChangeRequest;
 import kr.silverbridge.main.domain.user.dto.UserProfileResponse;
 import kr.silverbridge.main.domain.user.dto.UserUpdateRequest;
 import kr.silverbridge.main.domain.user.entity.User;
+import kr.silverbridge.main.domain.user.event.PasswordChangedEvent;
+import kr.silverbridge.main.domain.user.event.UserWithdrawnEvent;
 import kr.silverbridge.main.domain.user.repository.UserRepository;
 import kr.silverbridge.main.global.client.FileServerClient;
-import kr.silverbridge.main.global.enums.AccessAction;
 import kr.silverbridge.main.global.exception.CustomException;
 import kr.silverbridge.main.global.exception.ErrorCode;
 import kr.silverbridge.main.global.util.RedisKeys;
 import lombok.RequiredArgsConstructor;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
@@ -30,11 +30,10 @@ public class UserService {
             List.of("image/jpeg", "image/png", "image/webp", "image/gif");
 
     private final UserRepository userRepository;
-    private final RefreshTokenRepository refreshTokenRepository;
     private final PasswordEncoder passwordEncoder;
     private final StringRedisTemplate redisTemplate;
     private final FileServerClient fileServerClient;
-    private final AccessLogService accessLogService;
+    private final ApplicationEventPublisher eventPublisher;
 
     // 내 정보 조회
     @Transactional(readOnly = true)
@@ -74,7 +73,7 @@ public class UserService {
     }
 
     // 비밀번호 변경
-    // 현재 비밀번호 확인 후 새 비밀번호로 교체, 기존 Refresh Token 모두 삭제
+    // 현재 비밀번호 확인 후 새 비밀번호로 교체, 기존 Refresh Token은 이벤트로 정리
     @Transactional
     public void changePassword(String userId, String currentPassword, String newPassword) {
         User user = userRepository.findById(userId)
@@ -94,10 +93,8 @@ public class UserService {
             throw new CustomException(ErrorCode.SAME_AS_CURRENT_PASSWORD);
         }
 
-        // 비밀번호 변경
         user.updatePassword(passwordEncoder.encode(newPassword));
-        // 비밀번호 변경 후 모든 기기에서 강제 로그아웃 처리
-        refreshTokenRepository.deleteByUserId(userId);
+        eventPublisher.publishEvent(new PasswordChangedEvent(userId));
     }
 
     // 프로필 이미지 변경
@@ -130,6 +127,7 @@ public class UserService {
 
     // 회원 탈퇴
     // 일반 사용자: 비밀번호 확인 후 비활성화 / 소셜 사용자: 비밀번호 없이 비활성화
+    // 토큰 정리·접속 로그는 UserWithdrawnEvent를 통해 auth 도메인에서 처리
     @Transactional
     public void withdraw(String userId, String password, String ipAddress, String userAgent) {
         User user = userRepository.findById(userId)
@@ -142,7 +140,6 @@ public class UserService {
         }
 
         user.deactivate();
-        refreshTokenRepository.deleteByUserId(userId);
-        accessLogService.log(userId, AccessAction.WITHDRAW, ipAddress, userAgent);
+        eventPublisher.publishEvent(new UserWithdrawnEvent(userId, ipAddress, userAgent));
     }
 }
