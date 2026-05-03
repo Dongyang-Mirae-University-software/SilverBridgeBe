@@ -1,7 +1,7 @@
 package kr.silverbridge.main.domain.admin.service;
 
 import kr.silverbridge.main.domain.admin.dto.AdminForceConnectRequest;
-import kr.silverbridge.main.domain.admin.dto.ConnectionResponse;
+import kr.silverbridge.main.domain.admin.dto.AdminConnectionResponse;
 import kr.silverbridge.main.domain.connection.entity.Connection;
 import kr.silverbridge.main.domain.connection.repository.ConnectionRepository;
 import kr.silverbridge.main.domain.user.entity.User;
@@ -37,13 +37,13 @@ public class AdminConnectionService {
 
     // 전체 연결 관계 조회 (최신 요청순 + 배치 사용자 조회)
     @Transactional(readOnly = true)
-    public List<ConnectionResponse> getConnections() {
+    public List<AdminConnectionResponse> getConnections() {
         List<Connection> connections = connectionRepository.findAll(
                 Sort.by(Sort.Direction.DESC, "createdAt"));
         Map<String, User> userMap = fetchUsersFromConnections(connections);
 
         return connections.stream()
-                .map(conn -> ConnectionResponse.of(
+                .map(conn -> AdminConnectionResponse.of(
                         conn,
                         requireUser(userMap, conn.getGuardianId()),
                         requireUser(userMap, conn.getWardId())
@@ -53,7 +53,7 @@ public class AdminConnectionService {
 
     // 특정 보호자의 피보호자 목록 조회 (최신 요청순 + 배치 사용자 조회)
     @Transactional(readOnly = true)
-    public List<ConnectionResponse> getConnectionsByGuardian(String guardianId) {
+    public List<AdminConnectionResponse> getConnectionsByGuardian(String guardianId) {
         User guardian = userRepository.findById(guardianId)
                 .orElseThrow(() -> new CustomException(ErrorCode.USER_NOT_FOUND));
 
@@ -65,7 +65,7 @@ public class AdminConnectionService {
         Map<String, User> userMap = fetchUsersFromConnections(connections);
 
         return connections.stream()
-                .map(conn -> ConnectionResponse.of(
+                .map(conn -> AdminConnectionResponse.of(
                         conn,
                         userMap.getOrDefault(conn.getGuardianId(), guardian),
                         requireUser(userMap, conn.getWardId())
@@ -75,7 +75,7 @@ public class AdminConnectionService {
 
     // 관리자 강제 연결 (바로 ACTIVE)
     @Transactional
-    public ConnectionResponse forceConnect(AdminForceConnectRequest request, String adminId) {
+    public AdminConnectionResponse forceConnect(AdminForceConnectRequest request, String adminId) {
         User guardian = userRepository.findById(request.getGuardianId())
                 .orElseThrow(() -> new CustomException(ErrorCode.USER_NOT_FOUND));
         User ward = userRepository.findById(request.getWardId())
@@ -107,7 +107,7 @@ public class AdminConnectionService {
         auditLogService.log(adminId, AdminAuditAction.FORCE_CONNECT, String.valueOf(saved.getId()),
                 String.format("강제 연결: guardian=%s, ward=%s", request.getGuardianId(), request.getWardId()));
 
-        return ConnectionResponse.of(saved, guardian, ward);
+        return AdminConnectionResponse.of(saved, guardian, ward);
     }
 
     // 관리자 강제 연결 해제

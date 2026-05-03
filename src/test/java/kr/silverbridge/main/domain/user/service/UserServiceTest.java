@@ -1,8 +1,7 @@
 package kr.silverbridge.main.domain.user.service;
 
-import kr.silverbridge.main.domain.auth.repository.RefreshTokenRepository;
-import kr.silverbridge.main.domain.auth.service.AccessLogService;
 import kr.silverbridge.main.domain.user.entity.User;
+import kr.silverbridge.main.domain.user.event.UserWithdrawnEvent;
 import kr.silverbridge.main.domain.user.repository.UserRepository;
 import kr.silverbridge.main.global.client.FileServerClient;
 import kr.silverbridge.main.global.enums.Provider;
@@ -13,9 +12,11 @@ import kr.silverbridge.main.global.exception.ErrorCode;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.security.crypto.password.PasswordEncoder;
 
@@ -23,17 +24,17 @@ import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
 class UserServiceTest {
 
     @Mock private UserRepository userRepository;
-    @Mock private RefreshTokenRepository refreshTokenRepository;
     @Mock private PasswordEncoder passwordEncoder;
     @Mock private StringRedisTemplate redisTemplate;
     @Mock private FileServerClient fileServerClient;
-    @Mock private AccessLogService accessLogService;
+    @Mock private ApplicationEventPublisher eventPublisher;
 
     @InjectMocks private UserService userService;
 
@@ -96,15 +97,20 @@ class UserServiceTest {
     }
 
     @Test
-    @DisplayName("카카오 계정은 비밀번호 없이 탈퇴 가능")
+    @DisplayName("카카오 계정은 비밀번호 없이 탈퇴 가능 + UserWithdrawnEvent 발행")
     void withdraw_카카오계정_비밀번호없이탈퇴() {
         User kakaoUser = kakaoUser();
         when(userRepository.findById(USER_ID)).thenReturn(Optional.of(kakaoUser));
 
-        // 예외 없이 정상 처리되어야 함
         userService.withdraw(USER_ID, null, "127.0.0.1", "test-agent");
 
         assertThat(kakaoUser.getStatus()).isEqualTo(Status.INACTIVE);
+
+        ArgumentCaptor<UserWithdrawnEvent> captor = ArgumentCaptor.forClass(UserWithdrawnEvent.class);
+        verify(eventPublisher).publishEvent(captor.capture());
+        assertThat(captor.getValue().userId()).isEqualTo(USER_ID);
+        assertThat(captor.getValue().ipAddress()).isEqualTo("127.0.0.1");
+        assertThat(captor.getValue().userAgent()).isEqualTo("test-agent");
     }
 
     // ─── 헬퍼 메서드 ────────────────────────────────────────────────────────

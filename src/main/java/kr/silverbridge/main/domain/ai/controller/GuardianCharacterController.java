@@ -5,8 +5,7 @@ import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import kr.silverbridge.main.domain.ai.service.AiEventService;
-import kr.silverbridge.main.domain.connection.repository.ConnectionRepository;
-import kr.silverbridge.main.global.enums.ConnectionStatus;
+import kr.silverbridge.main.domain.connection.service.ConnectionService;
 import kr.silverbridge.main.global.exception.CustomException;
 import kr.silverbridge.main.global.exception.ErrorCode;
 import kr.silverbridge.main.global.response.ApiResponse;
@@ -29,7 +28,7 @@ import java.util.Map;
 public class GuardianCharacterController {
 
     private final AiEventService aiEventService;
-    private final ConnectionRepository connectionRepository;
+    private final ConnectionService connectionService;
 
     @Operation(summary = "피보호자 현재 표정 조회",
             description = """
@@ -51,9 +50,7 @@ public class GuardianCharacterController {
     public ResponseEntity<ApiResponse<Map<String, String>>> getWardExpression(
             @AuthenticationPrincipal String guardianId,
             @PathVariable String wardId) {
-        boolean connected = connectionRepository.existsByGuardianIdAndWardIdAndStatusNot(
-                guardianId, wardId, ConnectionStatus.CANCELLED);
-        if (!connected) {
+        if (!connectionService.isConnected(guardianId, wardId)) {
             throw new CustomException(ErrorCode.CONNECTION_NOT_AUTHORIZED);
         }
 
