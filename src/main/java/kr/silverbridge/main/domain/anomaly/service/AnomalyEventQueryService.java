@@ -7,7 +7,6 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.OffsetDateTime;
-import java.util.Collections;
 import java.util.List;
 
 /**
@@ -36,7 +35,7 @@ public class AnomalyEventQueryService {
                                                    OffsetDateTime endDate) {
         List<String> wardIds = anomalyEventRepository.findActiveWardIdsByGuardianId(guardianId);
         if (wardIds.isEmpty()) {
-            return Collections.emptyList();
+            return List.of();
         }
         return anomalyEventRepository.findByWardIdsAndDateRange(wardIds, startDate, endDate);
     }
