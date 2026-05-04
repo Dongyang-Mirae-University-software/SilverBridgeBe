@@ -77,7 +77,7 @@ solapi:
 
 
 file-server:
-  base-url: https://v1api.brtech.gosky.kr
+  base-url: ${FILE_SERVER_BASE_URL:https://v1api.gosky.kr}
 
 springdoc:
   api-docs:
