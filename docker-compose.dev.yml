@@ -84,8 +84,13 @@ services:
       - allkeys-lru
     ports:
       - "6514:6379"
+    # postgres와 동일하게 프로젝트 경로(ext4)에 bind mount.
+    # named volume 위치(/var/lib/docker/volumes/...)에서 외부 권한 문제로 RDB 저장이 막혀
+    # MISCONF로 모든 쓰기가 거부됐던 사고 재발 방지 — 권한 관리·백업·삭제가 단순.
+    # 디렉터리가 없으면 docker가 자동 생성하고, redis 공식 이미지 entrypoint가
+    # /data를 redis user(uid 999)로 chown 처리하므로 별도 chown 불필요.
     volumes:
-      - dmu-dev-redis-data:/data
+      - ./.data/redis:/data
     networks:
       - app-net
     healthcheck:
@@ -108,7 +113,3 @@ networks:
     name: dmu-dev-net
     # AI 서버 등 외부 서비스 연동 시 해당 컨테이너를 app-net에 추가하거나
     # 이 네트워크를 external: true로 선언하여 공유 가능
-
-volumes:
-  dmu-dev-redis-data:
-    name: dmu-dev-redis-data
