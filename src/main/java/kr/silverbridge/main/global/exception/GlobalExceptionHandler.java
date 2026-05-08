@@ -18,6 +18,7 @@ import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 import org.springframework.web.multipart.MaxUploadSizeExceededException;
 import org.springframework.web.servlet.NoHandlerFoundException;
+import org.springframework.web.servlet.resource.NoResourceFoundException;
 
 import java.util.stream.Collectors;
 
@@ -146,6 +147,16 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(NoHandlerFoundException.class)
     public ResponseEntity<ApiResponse<Void>> handleNoHandlerFound(NoHandlerFoundException e) {
         log.warn("NoHandlerFoundException: {} {}", e.getHttpMethod(), e.getRequestURL());
+        return ResponseEntity
+                .status(HttpStatus.NOT_FOUND)
+                .body(ApiResponse.fail(ErrorCode.API_NOT_FOUND.getMessage()));
+    }
+
+    // Spring 6+ 정적 리소스 핸들러가 매핑 미스 요청을 받았을 때 던지는 예외
+    // add-mappings=true(기본값) 환경에서 잘못된 경로 호출이 여기로 흘러옴 → 404로 정규화
+    @ExceptionHandler(NoResourceFoundException.class)
+    public ResponseEntity<ApiResponse<Void>> handleNoResourceFound(NoResourceFoundException e) {
+        log.warn("NoResourceFoundException: {} {}", e.getHttpMethod(), e.getResourcePath());
         return ResponseEntity
                 .status(HttpStatus.NOT_FOUND)
                 .body(ApiResponse.fail(ErrorCode.API_NOT_FOUND.getMessage()));
