@@ -84,7 +84,7 @@ document.getElementById('getToken').onclick = async () => {
 
     if (currentToken) {
       $token.textContent = currentToken;
-      $status.innerHTML = '<span class="ok">발급 완료. POST /api/notifications/fcm-token 에 platform="web" 으로 등록하세요.</span>';
+      $status.innerHTML = '<span class="ok">발급 완료. POST /api/notifications/fcm-token 에 platform="WEB" 으로 등록하세요.</span>';
       $copyBtn.disabled = false;
     } else {
       $status.innerHTML = '<span class="err">토큰을 받지 못했습니다. 권한 또는 VAPID 키를 확인하세요.</span>';
