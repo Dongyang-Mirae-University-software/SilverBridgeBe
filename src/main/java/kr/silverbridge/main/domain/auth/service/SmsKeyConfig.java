@@ -3,24 +3,25 @@ package kr.silverbridge.main.domain.auth.service;
 import kr.silverbridge.main.global.util.RedisKeys;
 
 /**
- * SMS 인증 흐름별 Redis 키 prefix 묶음
- * 회원가입과 비밀번호 재설정은 동일한 인증 플로우지만 키 네임스페이스가 분리되어 있음
+ * 인증 흐름별 Redis 키 prefix 묶음
+ * 회원가입 SMS / 비밀번호 재설정 SMS / 비밀번호 재설정 이메일 등 동일 인증 플로우의 키 네임스페이스를 분리한다.
+ * 식별자(phone 또는 email) 는 호출 시 전달.
  */
 public record SmsKeyConfig(
         String verifyPrefix,
         String cooldownPrefix,
         String attemptPrefix
 ) {
-    public String verifyKey(String phone) {
-        return verifyPrefix + phone;
+    public String verifyKey(String identifier) {
+        return verifyPrefix + identifier;
     }
 
-    public String cooldownKey(String phone) {
-        return cooldownPrefix + phone;
+    public String cooldownKey(String identifier) {
+        return cooldownPrefix + identifier;
     }
 
-    public String attemptKey(String phone) {
-        return attemptPrefix + phone;
+    public String attemptKey(String identifier) {
+        return attemptPrefix + identifier;
     }
 
     /** 회원가입 SMS 인증 */
@@ -35,5 +36,12 @@ public record SmsKeyConfig(
             RedisKeys.PW_SMS_VERIFY,
             RedisKeys.PW_SMS_COOLDOWN,
             RedisKeys.PW_SMS_ATTEMPT
+    );
+
+    /** 비밀번호 재설정 이메일 인증 */
+    public static final SmsKeyConfig PASSWORD_RESET_EMAIL = new SmsKeyConfig(
+            RedisKeys.PW_EMAIL_VERIFY,
+            RedisKeys.PW_EMAIL_COOLDOWN,
+            RedisKeys.PW_EMAIL_ATTEMPT
     );
 }
