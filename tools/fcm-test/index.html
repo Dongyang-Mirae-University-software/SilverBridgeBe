@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<title>FCM 토큰 발급 / 푸시 수신 테스터</title>
+<style>
+  body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; max-width: 760px; margin: 32px auto; padding: 0 20px; color: #222; }
+  h1 { font-size: 20px; }
+  h3 { margin-top: 24px; }
+  button { padding: 10px 16px; font-size: 14px; cursor: pointer; margin-right: 8px; }
+  pre { background: #f4f4f4; padding: 12px; border-radius: 4px; word-break: break-all; white-space: pre-wrap; font-size: 13px; }
+  .ok { color: #1a7f37; }
+  .err { color: #b00020; }
+  .msg { background: #fffae6; padding: 12px; border-left: 4px solid #ffc107; margin: 8px 0; border-radius: 4px; }
+  ol li { margin: 6px 0; }
+  code { background: #eee; padding: 2px 6px; border-radius: 3px; }
+</style>
+</head>
+<body>
+<h1>FCM 토큰 발급 / 푸시 수신 테스터</h1>
+
+<ol>
+  <li>아래 script 안의 <code>firebaseConfig</code>와 <code>vapidKey</code>를 Firebase Console에서 받은 값으로 교체</li>
+  <li>같은 값을 <code>firebase-messaging-sw.js</code> 에도 동일하게 입력</li>
+  <li>로컬 HTTPS 또는 <code>localhost</code> 로 서빙 (서비스 워커 필수). 예: 이 폴더에서 <code>npx http-server -p 8080</code></li>
+  <li>브라우저로 <code>http://localhost:8080</code> 접속 → 토큰 발급 → 백엔드 <code>POST /api/notifications/fcm-token</code> 에 등록</li>
+</ol>
+
+<button id="getToken">FCM 토큰 발급</button>
+<button id="copyToken" disabled>토큰 복사</button>
+
+<h3>토큰</h3>
+<pre id="token">(아직 발급 안 됨)</pre>
+
+<h3>상태</h3>
+<pre id="status">대기 중</pre>
+
+<h3>수신된 포그라운드 메시지</h3>
+<div id="messages"><em>아직 없음</em></div>
+
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.13.2/firebase-app.js";
+import { getMessaging, getToken, onMessage } from "https://www.gstatic.com/firebasejs/10.13.2/firebase-messaging.js";
+
+// Firebase Console → 프로젝트 설정 → 일반 → 웹 앱 → SDK 설정/구성
+const firebaseConfig = {
+  apiKey: "YOUR_API_KEY",
+  authDomain: "YOUR_PROJECT.firebaseapp.com",
+  projectId: "YOUR_PROJECT_ID",
+  storageBucket: "YOUR_PROJECT.firebasestorage.app",
+  messagingSenderId: "YOUR_SENDER_ID",
+  appId: "YOUR_APP_ID"
+};
+
+// Firebase Console → 프로젝트 설정 → Cloud Messaging → 웹 푸시 인증서 (없으면 발급)
+const vapidKey = "YOUR_VAPID_KEY";
+
+const app = initializeApp(firebaseConfig);
+const messaging = getMessaging(app);
+
+const $token = document.getElementById('token');
+const $status = document.getElementById('status');
+const $copyBtn = document.getElementById('copyToken');
+const $messages = document.getElementById('messages');
+
+document.getElementById('getToken').onclick = async () => {
+  $status.textContent = '알림 권한 요청 중...';
+  try {
+    const permission = await Notification.requestPermission();
+    if (permission !== 'granted') {
+      $status.innerHTML = '<span class="err">알림 권한이 거부되었습니다.</span>';
+      return;
+    }
+
+    $status.textContent = '서비스 워커 등록 중...';
+    const swReg = await navigator.serviceWorker.register('./firebase-messaging-sw.js');
+    await navigator.serviceWorker.ready;
+
+    $status.textContent = '토큰 발급 중...';
+    const currentToken = await getToken(messaging, {
+      vapidKey: vapidKey,
+      serviceWorkerRegistration: swReg
+    });
+
+    if (currentToken) {
+      $token.textContent = currentToken;
+      $status.innerHTML = '<span class="ok">발급 완료. POST /api/notifications/fcm-token 에 platform="web" 으로 등록하세요.</span>';
+      $copyBtn.disabled = false;
+    } else {
+      $status.innerHTML = '<span class="err">토큰을 받지 못했습니다. 권한 또는 VAPID 키를 확인하세요.</span>';
+    }
+  } catch (e) {
+    $status.innerHTML = '<span class="err">오류: ' + e.message + '</span>';
+    console.error(e);
+  }
+};
+
+$copyBtn.onclick = async () => {
+  await navigator.clipboard.writeText($token.textContent);
+  $copyBtn.textContent = '복사됨';
+  setTimeout(() => $copyBtn.textContent = '토큰 복사', 1500);
+};
+
+// 페이지가 포그라운드일 때 도착하는 메시지 (background 메시지는 서비스 워커가 처리)
+onMessage(messaging, (payload) => {
+  if ($messages.querySelector('em')) $messages.innerHTML = '';
+  const div = document.createElement('div');
+  div.className = 'msg';
+  const title = (payload.notification && payload.notification.title) || '(no title)';
+  const body = (payload.notification && payload.notification.body) || '';
+  div.innerHTML = '<strong>' + title + '</strong><br>' + body +
+    '<pre style="margin-top:8px">' + JSON.stringify(payload.data || {}, null, 2) + '</pre>';
+  $messages.prepend(div);
+});
+</script>
+</body>
+</html>
