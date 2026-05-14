@@ -14,6 +14,7 @@ import kr.silverbridge.main.global.exception.CustomException;
 import kr.silverbridge.main.global.exception.ErrorCode;
 import kr.silverbridge.main.global.util.MaskingUtil;
 import kr.silverbridge.main.global.util.RedisKeys;
+import kr.silverbridge.main.global.util.VerificationCodeValidator;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.redis.core.StringRedisTemplate;
@@ -24,6 +25,7 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.security.SecureRandom;
 import java.util.UUID;
 import java.util.concurrent.TimeUnit;
 
@@ -39,16 +41,19 @@ public class PasswordResetService {
     private final PasswordEncoder passwordEncoder;
     private final StringRedisTemplate redisTemplate;
     private final SmsVerificationService smsVerificationService;
+    private final VerificationCodeValidator verificationCodeValidator;
 
-    /** 재설정 토큰 유효 시간 (분) */
+    /** 재설정 토큰 유효 시간 (분) — 인증 통과 후 새 비밀번호 입력까지의 여유 시간 */
     private static final long RESET_TOKEN_TTL_MINUTES = 30L;
+
+    private static final SecureRandom RANDOM = new SecureRandom();
 
     private static final String PASSWORD_RESET_SMS_TEMPLATE =
             "[SilverBridge] 비밀번호 재설정 인증번호: %s\n유효 시간: 5분";
 
-    // [이메일 방식] 비밀번호 재설정 이메일 발송
-    // 이메일로 사용자 조회 → 재설정 코드 생성 → 저장(30분 유효) → 이메일 발송
-    // 보안을 위해 이메일이 없거나 카카오 사용자여도 동일하게 200 반환 (가입 여부 노출 방지)
+    // [이메일 방식] 비밀번호 재설정 인증코드 이메일 발송
+    // 이메일로 사용자 조회 → 쿨다운 확인 → 6자리 코드 생성 → 메일 발송 → Redis 저장(5분) → 오류 횟수 초기화 → 쿨다운 설정(1분)
+    // 보안을 위해 사용자가 없거나 카카오 사용자여도 동일하게 200 반환 (가입 여부 노출 방지)
     @Transactional(readOnly = true)
     public void requestReset(PasswordResetRequest request) {
         User user = userRepository.findByEmail(request.getEmail()).orElse(null);
@@ -58,27 +63,53 @@ public class PasswordResetService {
             return;
         }
 
-        String token = UUID.randomUUID().toString();
+        String email = user.getEmail();
+        SmsKeyConfig config = SmsKeyConfig.PASSWORD_RESET_EMAIL;
 
-        // 재설정 코드 임시 저장 (30분 유효)
+        // 1분 이내 재발송 차단
+        if (Boolean.TRUE.equals(redisTemplate.hasKey(config.cooldownKey(email)))) {
+            throw new CustomException(ErrorCode.SMS_SEND_TOO_FREQUENT);
+        }
+
+        String code = generateCode();
+        sendResetEmail(email, code);
+
+        // 인증코드 저장 + 기존 오류 횟수 초기화
+        redisTemplate.opsForValue()
+                .set(config.verifyKey(email), code, SmsVerificationService.CODE_TTL_MINUTES, TimeUnit.MINUTES);
+        redisTemplate.delete(config.attemptKey(email));
+
+        // 재발송 대기 설정
+        redisTemplate.opsForValue()
+                .set(config.cooldownKey(email), "1", SmsVerificationService.COOLDOWN_TTL_MINUTES, TimeUnit.MINUTES);
+
+        log.info("비밀번호 재설정 이메일 발송 완료: {}", MaskingUtil.maskEmail(email));
+    }
+
+    // [이메일 방식] 인증코드 확인 후 재설정 토큰 발급
+    // 공통 검증 → 이메일로 사용자 조회 → UUID 재설정 토큰 발급(30분 유효)
+    public PasswordResetTokenResponse verifyEmailToken(PasswordResetEmailVerifyRequest request) {
+        String email = request.getEmail();
+        SmsKeyConfig config = SmsKeyConfig.PASSWORD_RESET_EMAIL;
+
+        verificationCodeValidator.verify(
+                config.verifyKey(email),
+                config.attemptKey(email),
+                request.getCode(),
+                SmsVerificationService.CODE_TTL_MINUTES,
+                SmsVerificationService.MAX_ATTEMPTS
+        );
+
+        // 이메일로 사용자 조회 후 재설정 토큰 발급
+        User user = userRepository.findByEmail(email)
+                .orElseThrow(() -> new CustomException(ErrorCode.USER_NOT_FOUND));
+
+        String token = UUID.randomUUID().toString();
         redisTemplate.opsForValue()
                 .set(RedisKeys.PW_RESET + token, user.getId(), RESET_TOKEN_TTL_MINUTES, TimeUnit.MINUTES);
 
-        sendResetEmail(user.getEmail(), token);
-        log.info("비밀번호 재설정 이메일 발송 완료: {}", MaskingUtil.maskEmail(user.getEmail()));
-    }
-
-    // [이메일 방식] 비밀번호 재설정 토큰 검증
-    // 이메일로 수신한 token이 유효한지 확인 후 동일 token 반환 (비밀번호 재설정 화면 진입 용도)
-    public PasswordResetTokenResponse verifyEmailToken(PasswordResetEmailVerifyRequest request) {
-        String key = RedisKeys.PW_RESET + request.getToken();
-        String userId = redisTemplate.opsForValue().get(key);
-
-        if (userId == null) {
-            throw new CustomException(ErrorCode.INVALID_RESET_TOKEN);
-        }
-
-        return new PasswordResetTokenResponse(request.getToken());
+        log.info("비밀번호 재설정 토큰 발급 완료: {}", MaskingUtil.maskEmail(email));
+        return new PasswordResetTokenResponse(token);
     }
 
     // [SMS 방식] 비밀번호 재설정 인증코드 발송
@@ -154,21 +185,24 @@ public class PasswordResetService {
         accessLogService.log(userId, AccessAction.PASSWORD_RESET);
     }
 
-    private void sendResetEmail(String to, String token) {
+    private String generateCode() {
+        return String.format("%06d", RANDOM.nextInt(1_000_000));
+    }
+
+    private void sendResetEmail(String to, String code) {
         SimpleMailMessage message = new SimpleMailMessage();
         message.setTo(to);
-        message.setSubject("[SilverBridge] 비밀번호 재설정 안내");
+        message.setSubject("[SilverBridge] 비밀번호 재설정 인증번호");
         message.setText(
-                "비밀번호 재설정 코드: " + token + "\n\n" +
-                "유효 시간: 30분\n\n" +
+                "비밀번호 재설정 인증번호: " + code + "\n\n" +
+                "유효 시간: 5분\n\n" +
                 "본인이 요청하지 않은 경우 이 메일을 무시하세요."
         );
         try {
             mailSender.send(message);
         } catch (MailException e) {
             log.error("이메일 발송 실패: {}", e.getMessage());
-            // 발송 실패 시 저장된 토큰 즉시 삭제 (미사용 토큰 누적 방지)
-            redisTemplate.delete(RedisKeys.PW_RESET + token);
+            // 호출자(requestReset)는 send 성공 후에야 Redis 에 저장하므로 정리할 키 없음
             throw new CustomException(ErrorCode.INTERNAL_SERVER_ERROR);
         }
     }
