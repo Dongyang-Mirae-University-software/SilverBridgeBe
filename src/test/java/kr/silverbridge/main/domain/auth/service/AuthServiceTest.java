@@ -68,15 +68,16 @@ class AuthServiceTest {
     // ─── login ─────────────────────────────────────────────────────────────
 
     @Test
-    @DisplayName("존재하지 않는 이메일로 로그인 → USER_NOT_FOUND (잠금 검사 미수행)")
-    void login_존재하지않는이메일_USER_NOT_FOUND() {
+    @DisplayName("존재하지 않는 이메일로 로그인 → INVALID_CREDENTIALS (enumeration 차단, 잠금 검사 미수행)")
+    void login_존재하지않는이메일_INVALID_CREDENTIALS() {
         LoginRequest req = loginRequest(TEST_EMAIL, "Password1!");
         when(userRepository.findByEmail(TEST_EMAIL)).thenReturn(Optional.empty());
 
         CustomException ex = assertThrows(CustomException.class,
                 () -> authService.login(req, TEST_IP, TEST_AGENT));
 
-        assertThat(ex.getErrorCode()).isEqualTo(ErrorCode.USER_NOT_FOUND);
+        // 가입 안 된 이메일과 비밀번호 불일치는 동일 응답으로 통합
+        assertThat(ex.getErrorCode()).isEqualTo(ErrorCode.INVALID_CREDENTIALS);
         // 가입 안 된 이메일은 잠금 키 자체에 접근하지 않음 (DoS 방지)
         verify(redisTemplate, never()).hasKey(anyString());
     }
@@ -95,8 +96,8 @@ class AuthServiceTest {
     }
 
     @Test
-    @DisplayName("비활성화 계정으로 로그인 → INACTIVE_USER")
-    void login_비활성계정_INACTIVE_USER() {
+    @DisplayName("비활성화 계정이라도 비밀번호 검증 통과 후에만 INACTIVE_USER 노출 (enumeration 차단)")
+    void login_비활성계정_비밀번호통과후_INACTIVE_USER() {
         LoginRequest req = loginRequest(TEST_EMAIL, "Password1!");
         User inactiveUser = User.builder()
                 .id(TEST_USER_ID)
@@ -110,6 +111,7 @@ class AuthServiceTest {
 
         when(userRepository.findByEmail(TEST_EMAIL)).thenReturn(Optional.of(inactiveUser));
         when(redisTemplate.hasKey(RedisKeys.LOGIN_LOCK + TEST_USER_ID)).thenReturn(false);
+        when(passwordEncoder.matches("Password1!", "encodedPassword")).thenReturn(true);
 
         CustomException ex = assertThrows(CustomException.class,
                 () -> authService.login(req, TEST_IP, TEST_AGENT));
@@ -118,8 +120,34 @@ class AuthServiceTest {
     }
 
     @Test
-    @DisplayName("비밀번호 불일치 → INVALID_PASSWORD, 실패 횟수 증가 (user.id 기반)")
-    void login_비밀번호불일치_INVALID_PASSWORD_실패횟수증가() {
+    @DisplayName("비활성 계정 + 비밀번호 틀림 → INVALID_CREDENTIALS (정지 사실 노출 안 됨)")
+    void login_비활성계정_비밀번호틀림_INVALID_CREDENTIALS() {
+        LoginRequest req = loginRequest(TEST_EMAIL, "WrongPass1!");
+        User inactiveUser = User.builder()
+                .id(TEST_USER_ID)
+                .email(TEST_EMAIL)
+                .password("encodedPassword")
+                .name("테스트")
+                .role(Role.WARD)
+                .status(Status.INACTIVE)
+                .provider(Provider.LOCAL)
+                .build();
+
+        when(userRepository.findByEmail(TEST_EMAIL)).thenReturn(Optional.of(inactiveUser));
+        when(redisTemplate.hasKey(RedisKeys.LOGIN_LOCK + TEST_USER_ID)).thenReturn(false);
+        when(passwordEncoder.matches("WrongPass1!", "encodedPassword")).thenReturn(false);
+        when(valueOperations.increment(RedisKeys.LOGIN_FAIL + TEST_USER_ID)).thenReturn(1L);
+
+        CustomException ex = assertThrows(CustomException.class,
+                () -> authService.login(req, TEST_IP, TEST_AGENT));
+
+        // 비밀번호가 틀린 단계에서 차단되므로 INACTIVE 사실이 새지 않음
+        assertThat(ex.getErrorCode()).isEqualTo(ErrorCode.INVALID_CREDENTIALS);
+    }
+
+    @Test
+    @DisplayName("비밀번호 불일치 → INVALID_CREDENTIALS, 실패 횟수 증가 (user.id 기반)")
+    void login_비밀번호불일치_INVALID_CREDENTIALS_실패횟수증가() {
         LoginRequest req = loginRequest(TEST_EMAIL, "WrongPass1!");
         when(userRepository.findByEmail(TEST_EMAIL)).thenReturn(Optional.of(activeUser()));
         when(redisTemplate.hasKey(RedisKeys.LOGIN_LOCK + TEST_USER_ID)).thenReturn(false);
@@ -129,7 +157,7 @@ class AuthServiceTest {
         CustomException ex = assertThrows(CustomException.class,
                 () -> authService.login(req, TEST_IP, TEST_AGENT));
 
-        assertThat(ex.getErrorCode()).isEqualTo(ErrorCode.INVALID_PASSWORD);
+        assertThat(ex.getErrorCode()).isEqualTo(ErrorCode.INVALID_CREDENTIALS);
         verify(valueOperations).increment(RedisKeys.LOGIN_FAIL + TEST_USER_ID);
     }
 
