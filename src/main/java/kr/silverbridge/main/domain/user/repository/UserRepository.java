@@ -10,7 +10,6 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
-import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.Optional;
 
@@ -37,32 +36,21 @@ public interface UserRepository extends JpaRepository<User, String> {
     // 소셜 로그인 사용자 존재 여부 (신규 가입 여부 판별)
     boolean existsByProviderAndProviderId(Provider provider, String providerId);
 
-    // 역할 목록으로 사용자 조회 (피보호자/보호자 필터링, 최신 가입순)
-    List<User> findByRoleInOrderByCreatedAtDesc(List<Role> roles);
-
-    // 관리자 대시보드 — 가입자 통계 (현재 시점 vs baseline 시점) 단일 쿼리로 집계
-    // baseline 은 비교 기준 시각 (예: 한 달 전 동일 시점)
-    @Query(value = """
-            SELECT
-                COUNT(*) FILTER (WHERE status = 'ACTIVE' AND role <> 'ADMIN')                            AS currentTotal,
-                COUNT(*) FILTER (WHERE role <> 'ADMIN' AND created_at < :baseline)                       AS baselineTotal,
-                COUNT(*) FILTER (WHERE status = 'ACTIVE' AND role = 'WARD')                              AS currentActiveWard,
-                COUNT(*) FILTER (WHERE role = 'WARD' AND created_at < :baseline)                         AS baselineActiveWard
-            FROM users
-            """, nativeQuery = true)
-    UserStatsProjection countUserStats(@Param("baseline") OffsetDateTime baseline);
+    // 역할 목록으로 사용자 조회 (피보호자/보호자 필터링, 최신 가입순, 페이징)
+    Page<User> findByRoleInOrderByCreatedAtDesc(List<Role> roles, Pageable pageable);
 
     // 최근 가입 회원 조회 (ADMIN 제외, Pageable 로 limit 지정, 가입 일시 내림차순)
     List<User> findByRoleNotOrderByCreatedAtDesc(Role role, Pageable pageable);
 
-    // 관리자 회원관리 화면 — 키워드(email/name/phone LIKE) + role + status 통합 검색 (페이징)
+    // 관리자 회원관리 화면 — 키워드(name/phone LIKE) + role + status 통합 검색 (페이징)
     // 모든 필터는 null 허용 (null 이면 해당 조건 무시)
+    // 이메일은 검색 대상에서 제외 (관리자는 이름/전화번호로 식별)
+    // LIKE 메타문자(%, _)는 서비스 레이어에서 이스케이프 처리 → ESCAPE '\\' 명시
     @Query("""
             SELECT u FROM User u
             WHERE (:keyword IS NULL
-                   OR LOWER(u.email) LIKE LOWER(CONCAT('%', :keyword, '%'))
-                   OR u.name LIKE CONCAT('%', :keyword, '%')
-                   OR u.phone LIKE CONCAT('%', :keyword, '%'))
+                   OR u.name LIKE CONCAT('%', :keyword, '%') ESCAPE '\\'
+                   OR u.phone LIKE CONCAT('%', :keyword, '%') ESCAPE '\\')
               AND (:role IS NULL OR u.role = :role)
               AND (:status IS NULL OR u.status = :status)
             """)
@@ -71,29 +59,4 @@ public interface UserRepository extends JpaRepository<User, String> {
             @Param("role") Role role,
             @Param("status") Status status,
             Pageable pageable);
-
-    // 관리자 회원관리 탭별 건수 (전체/WARD/GUARDIAN/ADMIN) 단일 쿼리 집계
-    @Query(value = """
-            SELECT
-                COUNT(*)                                     AS total,
-                COUNT(*) FILTER (WHERE role = 'WARD')        AS ward,
-                COUNT(*) FILTER (WHERE role = 'GUARDIAN')    AS guardian,
-                COUNT(*) FILTER (WHERE role = 'ADMIN')       AS admin
-            FROM users
-            """, nativeQuery = true)
-    UserRoleCountProjection countByRole();
-
-    interface UserStatsProjection {
-        long getCurrentTotal();
-        long getBaselineTotal();
-        long getCurrentActiveWard();
-        long getBaselineActiveWard();
-    }
-
-    interface UserRoleCountProjection {
-        long getTotal();
-        long getWard();
-        long getGuardian();
-        long getAdmin();
-    }
 }

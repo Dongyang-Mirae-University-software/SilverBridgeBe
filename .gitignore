@@ -1,6 +1,5 @@
 HELP.md
 .env.*
-/docs/
 db/seed.sql
 .gradle
 build/
