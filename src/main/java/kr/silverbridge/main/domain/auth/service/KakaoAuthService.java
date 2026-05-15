@@ -59,6 +59,8 @@ public class KakaoAuthService {
         return userRepository.findByProviderAndProviderId(Provider.KAKAO, kakaoId)
                 .map(user -> {
                     if (user.getStatus() == Status.INACTIVE) {
+                        // 정지 계정 차단 시 남아있는 refresh token 정리 (AuthService.refresh와 일관성 유지)
+                        refreshTokenRepository.deleteByUserId(user.getId());
                         throw new CustomException(ErrorCode.INACTIVE_USER);
                     }
                     String accessToken  = jwtTokenProvider.generateAccessToken(user.getId(), user.getEmail(), user.getRole().name());
