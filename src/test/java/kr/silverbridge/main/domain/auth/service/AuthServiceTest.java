@@ -220,15 +220,37 @@ class AuthServiceTest {
     // ─── refresh ───────────────────────────────────────────────────────────
 
     @Test
-    @DisplayName("DB에 없는 Refresh Token으로 재발급 → INVALID_TOKEN")
+    @DisplayName("DB에 없는 Refresh Token으로 재발급 → INVALID_TOKEN (변조/만료된 토큰은 재사용 감지 미적용)")
     void refresh_존재하지않는토큰_INVALID_TOKEN() {
         TokenRefreshRequest req = tokenRefreshRequest("unknown-token");
         when(refreshTokenRepository.findByToken("unknown-token")).thenReturn(Optional.empty());
+        // JWT 자체가 변조/만료된 경우 재사용 감지 대상이 아님
+        when(jwtTokenProvider.validateToken("unknown-token"))
+                .thenThrow(new CustomException(ErrorCode.INVALID_TOKEN));
 
         CustomException ex = assertThrows(CustomException.class,
                 () -> authService.refresh(req));
 
         assertThat(ex.getErrorCode()).isEqualTo(ErrorCode.INVALID_TOKEN);
+        verify(refreshTokenRepository, never()).deleteByUserId(anyString());
+        verify(accessLogService, never()).log(anyString(), eq(kr.silverbridge.main.global.enums.AccessAction.TOKEN_REUSE_DETECTED));
+    }
+
+    @Test
+    @DisplayName("DB에 없는 Refresh Token이지만 JWT 자체는 유효하고 같은 userId의 다른 token이 남아있으면 재사용 감지 → 모든 token 폐기")
+    void refresh_재사용감지_사용자모든토큰폐기() {
+        TokenRefreshRequest req = tokenRefreshRequest("stolen-old-token");
+        when(refreshTokenRepository.findByToken("stolen-old-token")).thenReturn(Optional.empty());
+        when(jwtTokenProvider.validateToken("stolen-old-token")).thenReturn(true);
+        when(jwtTokenProvider.getUserId("stolen-old-token")).thenReturn(TEST_USER_ID);
+        when(refreshTokenRepository.existsByUserId(TEST_USER_ID)).thenReturn(true);
+
+        CustomException ex = assertThrows(CustomException.class,
+                () -> authService.refresh(req));
+
+        assertThat(ex.getErrorCode()).isEqualTo(ErrorCode.INVALID_TOKEN);
+        verify(refreshTokenRepository).deleteByUserId(TEST_USER_ID);
+        verify(accessLogService).log(TEST_USER_ID, kr.silverbridge.main.global.enums.AccessAction.TOKEN_REUSE_DETECTED);
     }
 
     @Test
