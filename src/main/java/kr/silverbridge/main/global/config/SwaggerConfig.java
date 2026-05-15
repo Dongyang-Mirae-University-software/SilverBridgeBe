@@ -32,9 +32,6 @@ public class SwaggerConfig {
                         new Tag().name("인증")
                                 .description("회원가입 / 로그인 / 로그아웃 / 이메일·카카오 인증 / SMS 인증 / 비밀번호 찾기 및 재설정\n" +
                                         "※ 로그인·회원가입 관련 API는 토큰 없이 호출 가능. 로그아웃은 토큰 필요."),
-                        new Tag().name("관리자")
-                                .description("사용자 관리 및 접속 로그 조회\n" +
-                                        "※ 모든 API에 Authorization: Bearer {accessToken} 헤더 필수. ADMIN 권한 계정만 호출 가능."),
                         new Tag().name("사용자")
                                 .description("내 정보 조회 및 수정 / 비밀번호 변경 / 회원 탈퇴\n" +
                                         "※ 모든 API에 Authorization: Bearer {accessToken} 헤더 필수."),
@@ -47,9 +44,34 @@ public class SwaggerConfig {
                         new Tag().name("알림")
                                 .description("FCM 푸시 알림 토큰 등록 및 삭제\n" +
                                         "※ 모든 API에 Authorization: Bearer {accessToken} 헤더 필수."),
+                        new Tag().name("공지사항 (사용자)")
+                                .description("로그인한 사용자가 열람하는 공지사항 API.\n" +
+                                        "※ Authorization: Bearer {accessToken} 헤더 필수."),
                         new Tag().name("AI 서버 연동")
                                 .description("AI 서버 전용 이벤트 수신 API — 캐릭터 표정 / 이상감지 결과\n" +
-                                        "※ JWT 불필요. X-AI-Server-Key 헤더 인증.")
+                                        "※ JWT 불필요. X-AI-Server-Key 헤더 인증."),
+                        // ── 관리자 카테고리 (ADMIN 권한 필요) ──
+                        new Tag().name("관리자 - 대시보드")
+                                .description("관리자 대시보드 통계 및 요약 지표 (예정).\n" +
+                                        "※ ADMIN 권한 계정만 호출 가능. Authorization: Bearer {accessToken} 헤더 필수."),
+                        new Tag().name("관리자 - 회원관리")
+                                .description("사용자/연결 관리 — 회원 목록/상세, 상태·역할 변경, 강제 탈퇴, 강제 연결/해제, 접속 로그, 게임 결과.\n" +
+                                        "※ ADMIN 권한 계정만 호출 가능. Authorization: Bearer {accessToken} 헤더 필수."),
+                        new Tag().name("관리자 - 이상감지 로그")
+                                .description("AI 서버가 감지한 이상행위 이벤트 이력 조회 (화재/흉기/낙상).\n" +
+                                        "※ ADMIN 권한 계정만 호출 가능. Authorization: Bearer {accessToken} 헤더 필수."),
+                        new Tag().name("관리자 - 제휴 병원")
+                                .description("제휴 병원 등록/수정/삭제 (예정).\n" +
+                                        "※ ADMIN 권한 계정만 호출 가능. Authorization: Bearer {accessToken} 헤더 필수."),
+                        new Tag().name("관리자 - 공지사항")
+                                .description("공지 CRUD 및 임시저장 — 게시된 공지 관리와 작성 중 공지(임시저장) 보관/게시 전환.\n" +
+                                        "※ ADMIN 권한 계정만 호출 가능. Authorization: Bearer {accessToken} 헤더 필수."),
+                        new Tag().name("관리자 - 고객센터")
+                                .description("고객 문의/답변 관리 (예정).\n" +
+                                        "※ ADMIN 권한 계정만 호출 가능. Authorization: Bearer {accessToken} 헤더 필수."),
+                        new Tag().name("관리자 - 설정")
+                                .description("관리자 행동 감사 로그 등 시스템 설정 관련 API.\n" +
+                                        "※ ADMIN 권한 계정만 호출 가능. Authorization: Bearer {accessToken} 헤더 필수.")
                 ))
                 // 전역 JWT Bearer 인증 적용
                 .addSecurityItem(new SecurityRequirement().addList(SECURITY_SCHEME_NAME))
@@ -89,25 +111,34 @@ public class SwaggerConfig {
                     "/api/auth/logout",
                     "/api/auth/refresh",
                     "/api/auth/find-email",
-                    // ── [관리자] ─────────────────────────────────────
-                    "/api/admin/announcement/select",
-                    "/api/admin/announcement/select/detail/{id}",
-                    "/api/admin/announcement/create",
-                    "/api/admin/announcement/update/{id}",
-                    "/api/admin/announcement/delete/{id}",
+                    // ── [관리자 - 회원관리] ──────────────────────────
                     "/api/admin/user/select",
                     "/api/admin/user/select/detail/{userId}",
                     "/api/admin/user/delete/{userId}",
-                    "/api/admin/accesslog/select",
                     "/api/admin/user/status-change/{userId}",
                     "/api/admin/user/role-change/{userId}",
                     "/api/admin/user/connection/select",
                     "/api/admin/user/connection/force",
                     "/api/admin/user/disconnection/force",
                     "/api/admin/user/connection/guardian/{guardianId}",
+                    "/api/admin/accesslog/select",
                     "/api/admin/game/result/select",
-                    "/api/admin/audit/select",
+                    // ── [관리자 - 이상감지 로그] ─────────────────────
                     "/api/admin/event/abnormal",
+                    // ── [관리자 - 공지사항] ──────────────────────────
+                    "/api/admin/announcement/select",
+                    "/api/admin/announcement/select/detail/{id}",
+                    "/api/admin/announcement/create",
+                    "/api/admin/announcement/update/{id}",
+                    "/api/admin/announcement/delete/{id}",
+                    "/api/admin/announcement/draft/select",
+                    "/api/admin/announcement/draft/select/detail/{id}",
+                    "/api/admin/announcement/draft/create",
+                    "/api/admin/announcement/draft/update/{id}",
+                    "/api/admin/announcement/draft/delete/{id}",
+                    "/api/admin/announcement/draft/publish/{id}",
+                    // ── [관리자 - 설정] ──────────────────────────────
+                    "/api/admin/audit/select",
                     // ── [사용자] ─────────────────────────────────────
                     "/api/user/me/select",
                     "/api/user/me/update",
