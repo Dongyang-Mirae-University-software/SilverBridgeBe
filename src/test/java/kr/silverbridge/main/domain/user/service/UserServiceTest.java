@@ -91,18 +91,18 @@ class UserServiceTest {
         when(passwordEncoder.matches("wrongPassword", "encodedPassword")).thenReturn(false);
 
         CustomException ex = assertThrows(CustomException.class,
-                () -> userService.withdraw(USER_ID, "wrongPassword", "127.0.0.1", "test-agent"));
+                () -> userService.withdraw(USER_ID, "wrongPassword", null, "127.0.0.1", "test-agent"));
 
         assertThat(ex.getErrorCode()).isEqualTo(ErrorCode.INVALID_PASSWORD);
     }
 
     @Test
-    @DisplayName("카카오 계정은 비밀번호 없이 탈퇴 가능 + UserWithdrawnEvent 발행")
-    void withdraw_카카오계정_비밀번호없이탈퇴() {
+    @DisplayName("카카오 계정은 confirmation \"탈퇴\" 일치 시 탈퇴 + UserWithdrawnEvent 발행")
+    void withdraw_카카오계정_confirmation일치_탈퇴() {
         User kakaoUser = kakaoUser();
         when(userRepository.findById(USER_ID)).thenReturn(Optional.of(kakaoUser));
 
-        userService.withdraw(USER_ID, null, "127.0.0.1", "test-agent");
+        userService.withdraw(USER_ID, null, "탈퇴", "127.0.0.1", "test-agent");
 
         assertThat(kakaoUser.getStatus()).isEqualTo(Status.INACTIVE);
 
@@ -111,6 +111,31 @@ class UserServiceTest {
         assertThat(captor.getValue().userId()).isEqualTo(USER_ID);
         assertThat(captor.getValue().ipAddress()).isEqualTo("127.0.0.1");
         assertThat(captor.getValue().userAgent()).isEqualTo("test-agent");
+    }
+
+    @Test
+    @DisplayName("카카오 계정 탈퇴 시 confirmation 누락 → WITHDRAW_CONFIRMATION_MISMATCH")
+    void withdraw_카카오계정_confirmation누락_거부() {
+        User kakaoUser = kakaoUser();
+        when(userRepository.findById(USER_ID)).thenReturn(Optional.of(kakaoUser));
+
+        CustomException ex = assertThrows(CustomException.class,
+                () -> userService.withdraw(USER_ID, null, null, "127.0.0.1", "test-agent"));
+
+        assertThat(ex.getErrorCode()).isEqualTo(ErrorCode.WITHDRAW_CONFIRMATION_MISMATCH);
+        assertThat(kakaoUser.getStatus()).isNotEqualTo(Status.INACTIVE);
+    }
+
+    @Test
+    @DisplayName("카카오 계정 탈퇴 시 confirmation 불일치 → WITHDRAW_CONFIRMATION_MISMATCH")
+    void withdraw_카카오계정_confirmation불일치_거부() {
+        User kakaoUser = kakaoUser();
+        when(userRepository.findById(USER_ID)).thenReturn(Optional.of(kakaoUser));
+
+        CustomException ex = assertThrows(CustomException.class,
+                () -> userService.withdraw(USER_ID, null, "탈퇴하기", "127.0.0.1", "test-agent"));
+
+        assertThat(ex.getErrorCode()).isEqualTo(ErrorCode.WITHDRAW_CONFIRMATION_MISMATCH);
     }
 
     // ─── 헬퍼 메서드 ────────────────────────────────────────────────────────
