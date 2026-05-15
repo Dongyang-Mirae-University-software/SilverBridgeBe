@@ -39,6 +39,7 @@ public class KakaoAuthService {
     private final AccessLogService accessLogService;
     private final StringRedisTemplate redisTemplate;
     private final UserIdGenerator userIdGenerator;
+    private final SmsService smsService;
 
     @Value("${kakao.redirect-uri}")
     private String redirectUri;
@@ -106,10 +107,8 @@ public class KakaoAuthService {
     public LoginResponse kakaoRegister(KakaoRegisterRequest request, String ipAddress, String userAgent) {
         String kakaoId = request.getKakaoId();
 
-        // SMS 인증 완료 여부 확인
-        if (Boolean.FALSE.equals(redisTemplate.hasKey(RedisKeys.SMS_VERIFIED + request.getPhone()))) {
-            throw new CustomException(ErrorCode.SMS_NOT_VERIFIED);
-        }
+        // SMS 인증 nonce 일치 확인 + 키 소비 (H-5)
+        smsService.consumeVerification(request.getPhone(), request.getVerificationNonce());
 
         // 카카오 세션 확인 (이메일 위변조 방지)
         String pendingKey = RedisKeys.KAKAO_PENDING + kakaoId;
@@ -151,9 +150,8 @@ public class KakaoAuthService {
 
         userRepository.save(user);
 
-        // Redis 키 삭제
+        // Redis 키 삭제 (SMS 인증 키는 consumeVerification에서 이미 소비됨)
         redisTemplate.delete(pendingKey);
-        redisTemplate.delete(RedisKeys.SMS_VERIFIED + request.getPhone());
 
         // 토큰 발급
         String accessToken  = jwtTokenProvider.generateAccessToken(user.getId(), email, user.getRole().name());

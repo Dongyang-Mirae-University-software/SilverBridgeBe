@@ -12,6 +12,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
 
+import java.util.UUID;
 import java.util.concurrent.TimeUnit;
 
 /**
@@ -46,16 +47,38 @@ public class SmsService {
         log.info("SMS 인증코드 발송 완료: {}", MaskingUtil.maskPhone(phone));
     }
 
-    /** 회원가입 SMS 인증코드 확인 — 성공 시 후속 가입 단계에서 사용할 "인증 완료" 상태 저장 */
-    public void verifyCode(SmsVerifyRequest request) {
+    /**
+     * 회원가입 SMS 인증코드 확인 — 성공 시 nonce(UUID)를 발급해 Redis에 저장하고 반환한다.
+     * 회원가입·전화번호 변경 요청에서 동일 nonce를 함께 보내야 인증을 인정한다(H-5).
+     * 단순 phone 키만으로 인정하던 기존 정책은 같은 phone에 대해 다른 사용자가 인증 우회 가입할 여지가 있었다.
+     */
+    public String verifyCode(SmsVerifyRequest request) {
         String phone = request.getPhone();
 
         smsVerificationService.verifyCode(phone, SmsKeyConfig.SIGNUP, request.getCode());
 
-        // 인증 완료 상태 저장 (10분 유효) — 회원가입 요청에서 검증용
+        // 인증 세션 식별자 발급 (10분 유효) — 회원가입 요청에서 nonce 일치 검증용
+        String nonce = UUID.randomUUID().toString();
         redisTemplate.opsForValue()
-                .set(RedisKeys.SMS_VERIFIED + phone, "true", VERIFIED_TTL_MINUTES, TimeUnit.MINUTES);
+                .set(RedisKeys.SMS_VERIFIED + phone, nonce, VERIFIED_TTL_MINUTES, TimeUnit.MINUTES);
 
         log.info("SMS 인증 완료: {}", MaskingUtil.maskPhone(phone));
+        return nonce;
+    }
+
+    /**
+     * 후속 요청(회원가입·프로필 수정 등)에서 SMS 인증 nonce 일치를 검증하고 키를 소비한다.
+     * - 인증 미완료/만료/nonce 누락 → SMS_NOT_VERIFIED
+     * - 호출 성공 시 SMS_VERIFIED 키 즉시 삭제 — 동일 nonce 재사용 방지
+     */
+    public void consumeVerification(String phone, String providedNonce) {
+        if (providedNonce == null || providedNonce.isBlank()) {
+            throw new CustomException(ErrorCode.SMS_NOT_VERIFIED);
+        }
+        String savedNonce = redisTemplate.opsForValue().get(RedisKeys.SMS_VERIFIED + phone);
+        if (savedNonce == null || !savedNonce.equals(providedNonce)) {
+            throw new CustomException(ErrorCode.SMS_NOT_VERIFIED);
+        }
+        redisTemplate.delete(RedisKeys.SMS_VERIFIED + phone);
     }
 }
