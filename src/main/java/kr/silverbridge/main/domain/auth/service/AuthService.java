@@ -23,6 +23,7 @@ import kr.silverbridge.main.global.util.MaskingUtil;
 import kr.silverbridge.main.global.util.RedisKeys;
 import kr.silverbridge.main.global.util.UserIdGenerator;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
@@ -30,8 +31,10 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.OffsetDateTime;
 import java.util.List;
+import java.util.Optional;
 import java.util.concurrent.TimeUnit;
 
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class AuthService {
@@ -172,10 +175,15 @@ public class AuthService {
     // Access Token 재발급
     // DB에서 Refresh Token 검증 → 만료 확인 → 새 Access Token + Refresh Token 발급 (Rotation)
     // 기존 Refresh Token은 즉시 무효화 → 탈취된 토큰 재사용 차단
+    // 폐기된 옛 토큰이 다시 들어왔는데 같은 사용자에게 다른 token이 남아있다면 도난 신호로 간주 → 사용자의 모든 token 강제 폐기 (H-3)
     @Transactional
     public TokenRefreshResponse refresh(TokenRefreshRequest request) {
-        RefreshToken savedToken = refreshTokenRepository.findByToken(request.getRefreshToken())
-                .orElseThrow(() -> new CustomException(ErrorCode.INVALID_TOKEN));
+        Optional<RefreshToken> opt = refreshTokenRepository.findByToken(request.getRefreshToken());
+        if (opt.isEmpty()) {
+            detectAndHandleReuse(request.getRefreshToken());
+            throw new CustomException(ErrorCode.INVALID_TOKEN);
+        }
+        RefreshToken savedToken = opt.get();
 
         if (savedToken.getExpiresAt().isBefore(OffsetDateTime.now())) {
             refreshTokenRepository.delete(savedToken);
@@ -231,5 +239,24 @@ public class AuthService {
     // 이메일 마스킹 처리 (MaskingUtil 위임)
     private String maskEmail(String email) {
         return MaskingUtil.maskEmail(email);
+    }
+
+    // Refresh Token 재사용(도난) 감지
+    // - DB에 없는 token이 들어왔을 때 호출
+    // - JWT 자체는 유효하고(만료/변조 아님), 같은 userId의 다른 token이 DB에 남아 있다면
+    //   "누군가 이미 rotation을 가져가고 옛 token이 돌아온 상황"으로 보고 user의 모든 token 강제 폐기
+    private void detectAndHandleReuse(String suspectedToken) {
+        String userId;
+        try {
+            if (!jwtTokenProvider.validateToken(suspectedToken)) return;
+            userId = jwtTokenProvider.getUserId(suspectedToken);
+        } catch (CustomException ignored) {
+            return;
+        }
+        if (refreshTokenRepository.existsByUserId(userId)) {
+            refreshTokenRepository.deleteByUserId(userId);
+            accessLogService.log(userId, AccessAction.TOKEN_REUSE_DETECTED);
+            log.warn("Refresh token 재사용 감지: userId={} — 사용자의 모든 token 강제 폐기", userId);
+        }
     }
 }
