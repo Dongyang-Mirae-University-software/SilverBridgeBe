@@ -5,12 +5,17 @@ import kr.silverbridge.main.domain.auth.service.AccessLogService;
 import kr.silverbridge.main.domain.user.event.PasswordChangedEvent;
 import kr.silverbridge.main.domain.user.event.UserWithdrawnEvent;
 import kr.silverbridge.main.global.enums.AccessAction;
+import kr.silverbridge.main.global.jwt.JwtProperties;
+import kr.silverbridge.main.global.util.RedisKeys;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.event.TransactionPhase;
 import org.springframework.transaction.event.TransactionalEventListener;
+
+import java.util.concurrent.TimeUnit;
 
 /**
  * user 도메인 이벤트를 받아 토큰/접속로그 등 인증 관련 부수 효과를 처리한다.
@@ -25,6 +30,8 @@ public class UserAccountEventListener {
 
     private final RefreshTokenRepository refreshTokenRepository;
     private final AccessLogService accessLogService;
+    private final StringRedisTemplate redisTemplate;
+    private final JwtProperties jwtProperties;
 
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
     @Transactional(propagation = Propagation.REQUIRES_NEW)
@@ -37,5 +44,16 @@ public class UserAccountEventListener {
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public void handlePasswordChanged(PasswordChangedEvent event) {
         refreshTokenRepository.deleteByUserId(event.userId());
+        invalidatePreviousAccessTokens(event.userId());
+    }
+
+    // 비밀번호 변경 시각을 Redis에 저장 — 이 시각 이전 iat를 가진 access token은 401 처리.
+    // TTL은 access token 만료시간과 동일 — 자연 만료 후엔 메모도 자동 제거.
+    private void invalidatePreviousAccessTokens(String userId) {
+        redisTemplate.opsForValue().set(
+                RedisKeys.PASSWORD_INVALIDATE + userId,
+                String.valueOf(System.currentTimeMillis()),
+                jwtProperties.getAccessTokenExpiration(), TimeUnit.MILLISECONDS
+        );
     }
 }
