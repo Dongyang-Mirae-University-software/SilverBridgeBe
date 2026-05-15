@@ -57,6 +57,7 @@ public enum ErrorCode {
 
     // 공지
     ANNOUNCEMENT_NOT_FOUND(HttpStatus.NOT_FOUND, "공지를 찾을 수 없습니다."),
+    ANNOUNCEMENT_DRAFT_NOT_FOUND(HttpStatus.NOT_FOUND, "임시저장된 공지를 찾을 수 없습니다."),
 
     // 카카오 OAuth
     KAKAO_INVALID_CODE(HttpStatus.UNAUTHORIZED, "카카오 로그인 시간이 초과되었습니다. 다시 시도해주세요."),
