@@ -50,6 +50,12 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
                     String userId = jwtTokenProvider.getUserId(token);
                     String role   = jwtTokenProvider.getRole(token);
 
+                    // 비밀번호 변경 이전에 발급된 토큰은 차단 (Critical-1)
+                    if (isInvalidatedByPasswordChange(token, userId)) {
+                        sendUnauthorized(response, "로그인이 필요합니다.");
+                        return;
+                    }
+
                     UsernamePasswordAuthenticationToken authentication =
                             new UsernamePasswordAuthenticationToken(
                                     userId,
@@ -80,6 +86,19 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
     // 로그아웃된 토큰인지 확인
     private boolean isLoggedOut(String token) {
         return Boolean.TRUE.equals(redisTemplate.hasKey(RedisKeys.LOGOUT_TOKEN + token));
+    }
+
+    // 비밀번호 변경 시각보다 이전에 발급된 토큰이면 무효
+    // Redis에 저장된 invalidation timestamp(ms)와 토큰 iat(ms)를 비교
+    private boolean isInvalidatedByPasswordChange(String token, String userId) {
+        String invalidatedAtStr = redisTemplate.opsForValue().get(RedisKeys.PASSWORD_INVALIDATE + userId);
+        if (invalidatedAtStr == null) return false;
+        try {
+            long invalidatedAt = Long.parseLong(invalidatedAtStr);
+            return jwtTokenProvider.getIssuedAt(token) <= invalidatedAt;
+        } catch (NumberFormatException e) {
+            return false;
+        }
     }
 
     // 블랙리스트 토큰 요청에 401 JSON 응답 직접 반환
