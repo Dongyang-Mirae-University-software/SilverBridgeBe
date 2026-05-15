@@ -47,11 +47,12 @@ public class AnnouncementService {
                 .toList();
     }
 
-    // 공지 상세 조회
-    @Transactional(readOnly = true)
+    // 공지 상세 조회 (조회 시 조회수 +1)
+    @Transactional
     public AnnouncementResponse getAnnouncement(Long id) {
         Announcement announcement = announcementRepository.findById(id)
                 .orElseThrow(() -> new CustomException(ErrorCode.ANNOUNCEMENT_NOT_FOUND));
+        announcement.increaseViewCount();
         User author = announcement.getAuthorId() == null
                 ? null
                 : userRepository.findById(announcement.getAuthorId()).orElse(null);
