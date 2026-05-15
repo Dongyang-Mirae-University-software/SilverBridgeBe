@@ -10,16 +10,17 @@ import jakarta.validation.Valid;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
 import kr.silverbridge.main.domain.admin.dto.AdminUserCountsResponse;
+import kr.silverbridge.main.domain.admin.dto.AdminUserListPageResponse;
 import kr.silverbridge.main.domain.admin.dto.AdminUserSearchPageResponse;
 import kr.silverbridge.main.domain.admin.dto.UserDetailResponse;
 import kr.silverbridge.main.domain.admin.dto.UserRoleUpdateRequest;
 import kr.silverbridge.main.domain.admin.dto.UserStatusUpdateRequest;
-import kr.silverbridge.main.domain.admin.dto.UserSummaryResponse;
 import kr.silverbridge.main.domain.admin.service.AdminUserService;
 import kr.silverbridge.main.global.enums.Role;
 import kr.silverbridge.main.global.enums.Status;
 import kr.silverbridge.main.global.response.ApiResponse;
 import lombok.RequiredArgsConstructor;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.DeleteMapping;
@@ -31,13 +32,12 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
-import java.util.List;
-
 @Tag(name = "관리자 - 회원관리")
 @RestController
 @RequestMapping("/api/admin/user")
 @RequiredArgsConstructor
 @SecurityRequirement(name = "Bearer Authentication")
+@PreAuthorize("hasRole('ADMIN')")
 @Validated
 public class AdminUserController {
 
@@ -45,25 +45,39 @@ public class AdminUserController {
 
     @Operation(summary = "사용자 목록 조회",
             description = """
-                    피보호자(WARD) / 보호자(GUARDIAN) 목록을 조회합니다.
+                    피보호자(WARD) / 보호자(GUARDIAN) 목록을 페이지 단위로 조회합니다.
                     ADMIN 계정은 목록에서 제외됩니다.
 
                     [필터]
                     - role: WARD(피보호자만) / GUARDIAN(보호자만) / 미입력(전체)
 
+                    [페이징]
+                    - page: 0-based 페이지 번호 (기본 0)
+                    - size: 한 페이지 크기 (기본 10, 최대 100)
+
                     [정렬]
-                    - 가입일 내림차순
+                    - 가입일 내림차순 (고정)
+
+                    [응답]
+                    - content: 회원 목록 (userId, email, name, role, status, provider, lastLoginAt, createdAt)
+                    - page, size, totalElements, totalPages
                     """)
     @ApiResponses({
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "사용자 목록 반환"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "page/size 범위 위반", content = @Content),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "인증 토큰 없음 또는 만료", content = @Content),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "ADMIN 권한 아님", content = @Content),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "500", description = "서버 내부 오류", content = @Content)
     })
     @GetMapping("/select")
-    public ApiResponse<List<UserSummaryResponse>> getUsers(
+    public ApiResponse<AdminUserListPageResponse> getUsers(
             @Parameter(description = "역할 필터 (WARD / GUARDIAN / 미입력: 전체)")
-            @RequestParam(required = false) Role role) {
-        return ApiResponse.ok(adminUserService.getUsers(role));
+            @RequestParam(required = false) Role role,
+            @Parameter(description = "페이지 번호 (0-based)", example = "0")
+            @RequestParam(defaultValue = "0") @Min(0) int page,
+            @Parameter(description = "한 페이지 크기 (1~100)", example = "10")
+            @RequestParam(defaultValue = "10") @Min(1) @Max(100) int size) {
+        return ApiResponse.ok(adminUserService.getUsers(role, page, size));
     }
 
     @Operation(summary = "사용자 통합 검색 (회원관리 화면)",
@@ -71,7 +85,8 @@ public class AdminUserController {
                     회원관리 화면용 통합 검색 API. ADMIN 계정도 결과에 포함됩니다.
 
                     [검색 키워드]
-                    - keyword: email / name / phone 부분 일치 (LIKE)
+                    - keyword: name / phone 부분 일치 (LIKE)
+                    - 이메일은 검색 대상이 아닙니다 (관리자는 이름/전화번호로 식별)
                     - 미입력 시 키워드 조건 무시
 
                     [필터]
@@ -98,7 +113,7 @@ public class AdminUserController {
     })
     @GetMapping("/search")
     public ApiResponse<AdminUserSearchPageResponse> searchUsers(
-            @Parameter(description = "검색 키워드 (email/name/phone 부분 일치)")
+            @Parameter(description = "검색 키워드 (name/phone 부분 일치)")
             @RequestParam(required = false) String keyword,
             @Parameter(description = "역할 필터 (WARD / GUARDIAN / ADMIN / 미입력: 전체)")
             @RequestParam(required = false) Role role,
