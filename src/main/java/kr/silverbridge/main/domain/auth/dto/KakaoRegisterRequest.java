@@ -25,6 +25,11 @@ public class KakaoRegisterRequest {
     @Pattern(regexp = "^\\d{10,11}$", message = "전화번호는 숫자만 입력 가능합니다. (10~11자리)")
     private String phone;
 
+    @Schema(description = "SMS 인증 확인(POST /api/auth/signup/sms/verify) 응답에서 받은 verificationNonce 값을 그대로 전달",
+            example = "550e8400-e29b-41d4-a716-446655440000")
+    @NotBlank(message = "전화번호 인증 정보가 필요합니다. SMS 인증을 다시 진행해주세요.")
+    private String verificationNonce;
+
     @Schema(description = "역할 선택. WARD: 피보호자, GUARDIAN: 보호자", example = "WARD", allowableValues = {"WARD", "GUARDIAN"})
     @NotNull(message = "역할을 선택해주세요. (WARD: 피보호자, GUARDIAN: 보호자)")
     private Role role;

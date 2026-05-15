@@ -46,6 +46,7 @@ public class AuthService {
     private final PasswordEncoder passwordEncoder;
     private final StringRedisTemplate redisTemplate;
     private final UserIdGenerator userIdGenerator;
+    private final SmsService smsService;
 
     // 이메일 중복 확인 (회원가입 전 단계)
     @Transactional(readOnly = true)
@@ -73,10 +74,8 @@ public class AuthService {
             throw new CustomException(ErrorCode.INVALID_ROLE);
         }
 
-        // SMS 인증 완료 여부 확인
-        if (Boolean.FALSE.equals(redisTemplate.hasKey(RedisKeys.SMS_VERIFIED + request.getPhone()))) {
-            throw new CustomException(ErrorCode.SMS_NOT_VERIFIED);
-        }
+        // SMS 인증 nonce 일치 확인 + 키 소비 (H-5)
+        smsService.consumeVerification(request.getPhone(), request.getVerificationNonce());
 
         User user = User.builder()
                 .id(userIdGenerator.generate())
@@ -92,9 +91,6 @@ public class AuthService {
                 .build();
 
         userRepository.save(user);
-
-        // 회원가입 완료 후 인증 완료 키 삭제
-        redisTemplate.delete(RedisKeys.SMS_VERIFIED + request.getPhone());
     }
 
     private static final int  LOGIN_MAX_ATTEMPTS = 5;   // 최대 로그인 실패 횟수
