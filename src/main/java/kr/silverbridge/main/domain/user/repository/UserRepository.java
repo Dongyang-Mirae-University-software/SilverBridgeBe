@@ -3,6 +3,8 @@ package kr.silverbridge.main.domain.user.repository;
 import kr.silverbridge.main.domain.user.entity.User;
 import kr.silverbridge.main.global.enums.Provider;
 import kr.silverbridge.main.global.enums.Role;
+import kr.silverbridge.main.global.enums.Status;
+import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
@@ -53,10 +55,45 @@ public interface UserRepository extends JpaRepository<User, String> {
     // 최근 가입 회원 조회 (ADMIN 제외, Pageable 로 limit 지정, 가입 일시 내림차순)
     List<User> findByRoleNotOrderByCreatedAtDesc(Role role, Pageable pageable);
 
+    // 관리자 회원관리 화면 — 키워드(email/name/phone LIKE) + role + status 통합 검색 (페이징)
+    // 모든 필터는 null 허용 (null 이면 해당 조건 무시)
+    @Query("""
+            SELECT u FROM User u
+            WHERE (:keyword IS NULL
+                   OR LOWER(u.email) LIKE LOWER(CONCAT('%', :keyword, '%'))
+                   OR u.name LIKE CONCAT('%', :keyword, '%')
+                   OR u.phone LIKE CONCAT('%', :keyword, '%'))
+              AND (:role IS NULL OR u.role = :role)
+              AND (:status IS NULL OR u.status = :status)
+            """)
+    Page<User> searchByKeywordAndFilters(
+            @Param("keyword") String keyword,
+            @Param("role") Role role,
+            @Param("status") Status status,
+            Pageable pageable);
+
+    // 관리자 회원관리 탭별 건수 (전체/WARD/GUARDIAN/ADMIN) 단일 쿼리 집계
+    @Query(value = """
+            SELECT
+                COUNT(*)                                     AS total,
+                COUNT(*) FILTER (WHERE role = 'WARD')        AS ward,
+                COUNT(*) FILTER (WHERE role = 'GUARDIAN')    AS guardian,
+                COUNT(*) FILTER (WHERE role = 'ADMIN')       AS admin
+            FROM users
+            """, nativeQuery = true)
+    UserRoleCountProjection countByRole();
+
     interface UserStatsProjection {
         long getCurrentTotal();
         long getBaselineTotal();
         long getCurrentActiveWard();
         long getBaselineActiveWard();
+    }
+
+    interface UserRoleCountProjection {
+        long getTotal();
+        long getWard();
+        long getGuardian();
+        long getAdmin();
     }
 }
