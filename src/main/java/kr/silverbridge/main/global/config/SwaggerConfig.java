@@ -111,6 +111,10 @@ public class SwaggerConfig {
                     "/api/auth/logout",
                     "/api/auth/refresh",
                     "/api/auth/find-email",
+                    // ── [관리자 - 대시보드] ──────────────────────────
+                    "/api/admin/dashboard/summary",
+                    "/api/admin/dashboard/recent-users",
+                    "/api/admin/dashboard/pending",
                     // ── [관리자 - 회원관리] ──────────────────────────
                     "/api/admin/user/select",
                     "/api/admin/user/select/detail/{userId}",
