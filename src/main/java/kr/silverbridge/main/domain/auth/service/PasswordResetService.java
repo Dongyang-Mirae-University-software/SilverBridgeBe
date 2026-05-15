@@ -6,8 +6,8 @@ import kr.silverbridge.main.domain.auth.dto.PasswordResetRequest;
 import kr.silverbridge.main.domain.auth.dto.PasswordResetSmsSendRequest;
 import kr.silverbridge.main.domain.auth.dto.PasswordResetSmsVerifyRequest;
 import kr.silverbridge.main.domain.auth.dto.PasswordResetTokenResponse;
-import kr.silverbridge.main.domain.auth.repository.RefreshTokenRepository;
 import kr.silverbridge.main.domain.user.entity.User;
+import kr.silverbridge.main.domain.user.event.PasswordChangedEvent;
 import kr.silverbridge.main.domain.user.repository.UserRepository;
 import kr.silverbridge.main.global.enums.AccessAction;
 import kr.silverbridge.main.global.exception.CustomException;
@@ -17,6 +17,7 @@ import kr.silverbridge.main.global.util.RedisKeys;
 import kr.silverbridge.main.global.util.VerificationCodeValidator;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.mail.MailException;
 import org.springframework.mail.SimpleMailMessage;
@@ -35,13 +36,13 @@ import java.util.concurrent.TimeUnit;
 public class PasswordResetService {
 
     private final UserRepository userRepository;
-    private final RefreshTokenRepository refreshTokenRepository;
     private final AccessLogService accessLogService;
     private final JavaMailSender mailSender;
     private final PasswordEncoder passwordEncoder;
     private final StringRedisTemplate redisTemplate;
     private final SmsVerificationService smsVerificationService;
     private final VerificationCodeValidator verificationCodeValidator;
+    private final ApplicationEventPublisher eventPublisher;
 
     /** 재설정 토큰 유효 시간 (분) — 인증 통과 후 새 비밀번호 입력까지의 여유 시간 */
     private static final long RESET_TOKEN_TTL_MINUTES = 30L;
@@ -178,8 +179,9 @@ public class PasswordResetService {
         // 사용된 재설정 코드 즉시 삭제 (재사용 방지)
         redisTemplate.delete(key);
 
-        // 비밀번호 변경 후 모든 기기에서 자동 로그아웃
-        refreshTokenRepository.deleteByUserId(userId);
+        // 비밀번호 변경 후 모든 기기 로그아웃 + access token 무효화 (이벤트 통일)
+        // listener(AFTER_COMMIT)가 refresh delete + Redis invalidation 도장 처리
+        eventPublisher.publishEvent(new PasswordChangedEvent(userId));
 
         // 비밀번호 재설정 이력 기록
         accessLogService.log(userId, AccessAction.PASSWORD_RESET);
