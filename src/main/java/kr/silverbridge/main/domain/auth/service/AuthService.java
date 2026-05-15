@@ -98,20 +98,22 @@ public class AuthService {
     private static final long LOGIN_LOCK_TTL     = 30L; // 잠금 유지 시간 (분)
 
     // 로그인
-    // 잠금 확인 → 사용자 조회 → 계정 상태 검증 → 비밀번호 검증 → 토큰 발급 → Refresh Token 저장 → 로그 기록
+    // 사용자 조회 → 잠금 확인(user.id 기반) → 계정 상태 검증 → 비밀번호 검증 → 토큰 발급 → Refresh Token 저장 → 로그 기록
+    // 잠금 키를 user.id 기반으로 두어, 임의 이메일로 정상 사용자를 잠그는 DoS를 차단
     @Transactional
     public LoginResponse login(LoginRequest request, String ipAddress, String userAgent) {
-        String email    = request.getEmail();
-        String lockKey  = RedisKeys.LOGIN_LOCK + email;
-        String failKey  = RedisKeys.LOGIN_FAIL + email;
+        String email = request.getEmail();
+
+        User user = userRepository.findByEmail(email)
+                .orElseThrow(() -> new CustomException(ErrorCode.USER_NOT_FOUND));
+
+        String lockKey = RedisKeys.LOGIN_LOCK + user.getId();
+        String failKey = RedisKeys.LOGIN_FAIL + user.getId();
 
         // 잠금 상태 확인 (5회 실패 시 30분 잠금)
         if (Boolean.TRUE.equals(redisTemplate.hasKey(lockKey))) {
             throw new CustomException(ErrorCode.LOGIN_LOCKED);
         }
-
-        User user = userRepository.findByEmail(email)
-                .orElseThrow(() -> new CustomException(ErrorCode.USER_NOT_FOUND));
 
         if (user.getStatus() == Status.INACTIVE) {
             // 정지 계정 차단 시 남아있는 refresh token 정리 (refresh 메서드와 일관성 유지)
