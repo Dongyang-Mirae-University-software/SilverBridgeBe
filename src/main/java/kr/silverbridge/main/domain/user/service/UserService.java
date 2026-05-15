@@ -122,16 +122,24 @@ public class UserService {
     }
 
     // 회원 탈퇴
-    // 일반 사용자: 비밀번호 확인 후 비활성화 / 소셜 사용자: 비밀번호 없이 비활성화
+    // 일반 사용자: 비밀번호 확인 후 비활성화
+    // 카카오 사용자: confirmation 문자열("탈퇴") 일치 확인 후 비활성화 — access token 단독 탈취 시 영구 비활성화 차단(H-6)
     // 토큰 정리·접속 로그는 UserWithdrawnEvent를 통해 auth 도메인에서 처리
+    private static final String KAKAO_WITHDRAW_CONFIRMATION = "탈퇴";
+
     @Transactional
-    public void withdraw(String userId, String password, String ipAddress, String userAgent) {
+    public void withdraw(String userId, String password, String confirmation, String ipAddress, String userAgent) {
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new CustomException(ErrorCode.USER_NOT_FOUND));
 
         if (user.isLocalProvider()) {
             if (!passwordEncoder.matches(password, user.getPassword())) {
                 throw new CustomException(ErrorCode.INVALID_PASSWORD);
+            }
+        } else {
+            // 카카오 사용자 본인 확인 — confirmation 문자열 일치
+            if (confirmation == null || !KAKAO_WITHDRAW_CONFIRMATION.equals(confirmation.trim())) {
+                throw new CustomException(ErrorCode.WITHDRAW_CONFIRMATION_MISMATCH);
             }
         }
 
