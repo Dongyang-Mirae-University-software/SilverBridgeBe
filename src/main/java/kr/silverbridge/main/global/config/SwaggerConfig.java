@@ -116,6 +116,8 @@ public class SwaggerConfig {
                     "/api/admin/dashboard/recent-users",
                     "/api/admin/dashboard/pending",
                     // ── [관리자 - 회원관리] ──────────────────────────
+                    "/api/admin/user/search",
+                    "/api/admin/user/counts",
                     "/api/admin/user/select",
                     "/api/admin/user/select/detail/{userId}",
                     "/api/admin/user/delete/{userId}",
