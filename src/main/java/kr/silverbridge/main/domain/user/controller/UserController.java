@@ -139,12 +139,12 @@ public class UserController {
     @Operation(
             summary = "회원 탈퇴",
             description = """
-                    비밀번호를 확인한 후 계정을 비활성화합니다.
-                    탈퇴 후 해당 계정으로 로그인이 불가합니다.
+                    본인 확인 후 계정을 비활성화합니다. 탈퇴 후 해당 계정으로 로그인이 불가합니다.
 
-                    [비밀번호 입력 여부]
+                    [본인 확인 방식]
                     - 일반(LOCAL) 가입자: password 필수
-                    - 카카오(KAKAO) 가입자: password null 허용
+                    - 카카오(KAKAO) 가입자: confirmation 필수 — 사용자가 화면에서 정확히 "탈퇴"를 입력해 전달
+                      (access token 단독 탈취로 인한 영구 비활성화 위험 차단)
 
                     [요청 헤더]
                     Authorization: Bearer {accessToken}
@@ -152,7 +152,7 @@ public class UserController {
     )
     @ApiResponses({
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "회원 탈퇴 완료"),
-            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "입력값 유효성 검증 실패", content = @Content),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "입력값 유효성 검증 실패 또는 카카오 사용자 confirmation 불일치", content = @Content),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "비밀번호 불일치 또는 인증 토큰 만료", content = @Content),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "사용자를 찾을 수 없음", content = @Content),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "500", description = "서버 내부 오류", content = @Content)
@@ -164,6 +164,7 @@ public class UserController {
         userService.withdraw(
                 userId,
                 request.getPassword(),
+                request.getConfirmation(),
                 httpRequest.getRemoteAddr(),
                 httpRequest.getHeader("User-Agent")
         );
