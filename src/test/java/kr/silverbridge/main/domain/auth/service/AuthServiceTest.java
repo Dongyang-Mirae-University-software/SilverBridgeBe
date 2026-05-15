@@ -56,6 +56,7 @@ class AuthServiceTest {
     @InjectMocks private AuthService authService;
 
     private static final String TEST_EMAIL = "test@example.com";
+    private static final String TEST_USER_ID = "user-uuid-1234";
     private static final String TEST_IP    = "127.0.0.1";
     private static final String TEST_AGENT = "TestAgent/1.0";
 
@@ -67,29 +68,30 @@ class AuthServiceTest {
     // ─── login ─────────────────────────────────────────────────────────────
 
     @Test
-    @DisplayName("로그인 잠금 상태에서 로그인 시도 → LOGIN_LOCKED")
-    void login_잠금상태이면_LOGIN_LOCKED() {
-        LoginRequest req = loginRequest(TEST_EMAIL, "Password1!");
-        when(redisTemplate.hasKey(RedisKeys.LOGIN_LOCK + TEST_EMAIL)).thenReturn(true);
-
-        CustomException ex = assertThrows(CustomException.class,
-                () -> authService.login(req, TEST_IP, TEST_AGENT));
-
-        assertThat(ex.getErrorCode()).isEqualTo(ErrorCode.LOGIN_LOCKED);
-        verify(userRepository, never()).findByEmail(anyString());
-    }
-
-    @Test
-    @DisplayName("존재하지 않는 이메일로 로그인 → USER_NOT_FOUND")
+    @DisplayName("존재하지 않는 이메일로 로그인 → USER_NOT_FOUND (잠금 검사 미수행)")
     void login_존재하지않는이메일_USER_NOT_FOUND() {
         LoginRequest req = loginRequest(TEST_EMAIL, "Password1!");
-        when(redisTemplate.hasKey(RedisKeys.LOGIN_LOCK + TEST_EMAIL)).thenReturn(false);
         when(userRepository.findByEmail(TEST_EMAIL)).thenReturn(Optional.empty());
 
         CustomException ex = assertThrows(CustomException.class,
                 () -> authService.login(req, TEST_IP, TEST_AGENT));
 
         assertThat(ex.getErrorCode()).isEqualTo(ErrorCode.USER_NOT_FOUND);
+        // 가입 안 된 이메일은 잠금 키 자체에 접근하지 않음 (DoS 방지)
+        verify(redisTemplate, never()).hasKey(anyString());
+    }
+
+    @Test
+    @DisplayName("로그인 잠금 상태(user.id 기반)에서 로그인 시도 → LOGIN_LOCKED")
+    void login_잠금상태이면_LOGIN_LOCKED() {
+        LoginRequest req = loginRequest(TEST_EMAIL, "Password1!");
+        when(userRepository.findByEmail(TEST_EMAIL)).thenReturn(Optional.of(activeUser()));
+        when(redisTemplate.hasKey(RedisKeys.LOGIN_LOCK + TEST_USER_ID)).thenReturn(true);
+
+        CustomException ex = assertThrows(CustomException.class,
+                () -> authService.login(req, TEST_IP, TEST_AGENT));
+
+        assertThat(ex.getErrorCode()).isEqualTo(ErrorCode.LOGIN_LOCKED);
     }
 
     @Test
@@ -97,7 +99,7 @@ class AuthServiceTest {
     void login_비활성계정_INACTIVE_USER() {
         LoginRequest req = loginRequest(TEST_EMAIL, "Password1!");
         User inactiveUser = User.builder()
-                .id("user-uuid-1234")
+                .id(TEST_USER_ID)
                 .email(TEST_EMAIL)
                 .password("encodedPassword")
                 .name("테스트")
@@ -106,8 +108,8 @@ class AuthServiceTest {
                 .provider(Provider.LOCAL)
                 .build();
 
-        when(redisTemplate.hasKey(RedisKeys.LOGIN_LOCK + TEST_EMAIL)).thenReturn(false);
         when(userRepository.findByEmail(TEST_EMAIL)).thenReturn(Optional.of(inactiveUser));
+        when(redisTemplate.hasKey(RedisKeys.LOGIN_LOCK + TEST_USER_ID)).thenReturn(false);
 
         CustomException ex = assertThrows(CustomException.class,
                 () -> authService.login(req, TEST_IP, TEST_AGENT));
@@ -116,34 +118,34 @@ class AuthServiceTest {
     }
 
     @Test
-    @DisplayName("비밀번호 불일치 → INVALID_PASSWORD, 실패 횟수 증가")
+    @DisplayName("비밀번호 불일치 → INVALID_PASSWORD, 실패 횟수 증가 (user.id 기반)")
     void login_비밀번호불일치_INVALID_PASSWORD_실패횟수증가() {
         LoginRequest req = loginRequest(TEST_EMAIL, "WrongPass1!");
-        when(redisTemplate.hasKey(RedisKeys.LOGIN_LOCK + TEST_EMAIL)).thenReturn(false);
         when(userRepository.findByEmail(TEST_EMAIL)).thenReturn(Optional.of(activeUser()));
+        when(redisTemplate.hasKey(RedisKeys.LOGIN_LOCK + TEST_USER_ID)).thenReturn(false);
         when(passwordEncoder.matches("WrongPass1!", "encodedPassword")).thenReturn(false);
-        when(valueOperations.increment(RedisKeys.LOGIN_FAIL + TEST_EMAIL)).thenReturn(1L);
+        when(valueOperations.increment(RedisKeys.LOGIN_FAIL + TEST_USER_ID)).thenReturn(1L);
 
         CustomException ex = assertThrows(CustomException.class,
                 () -> authService.login(req, TEST_IP, TEST_AGENT));
 
         assertThat(ex.getErrorCode()).isEqualTo(ErrorCode.INVALID_PASSWORD);
-        verify(valueOperations).increment(RedisKeys.LOGIN_FAIL + TEST_EMAIL);
+        verify(valueOperations).increment(RedisKeys.LOGIN_FAIL + TEST_USER_ID);
     }
 
     @Test
-    @DisplayName("비밀번호 5회 실패 → 로그인 잠금 설정")
+    @DisplayName("비밀번호 5회 실패 → 로그인 잠금 설정 (user.id 기반)")
     void login_5회실패시_잠금설정() {
         LoginRequest req = loginRequest(TEST_EMAIL, "WrongPass1!");
-        when(redisTemplate.hasKey(RedisKeys.LOGIN_LOCK + TEST_EMAIL)).thenReturn(false);
         when(userRepository.findByEmail(TEST_EMAIL)).thenReturn(Optional.of(activeUser()));
+        when(redisTemplate.hasKey(RedisKeys.LOGIN_LOCK + TEST_USER_ID)).thenReturn(false);
         when(passwordEncoder.matches(anyString(), anyString())).thenReturn(false);
-        when(valueOperations.increment(RedisKeys.LOGIN_FAIL + TEST_EMAIL)).thenReturn(5L);
+        when(valueOperations.increment(RedisKeys.LOGIN_FAIL + TEST_USER_ID)).thenReturn(5L);
 
         assertThrows(CustomException.class, () -> authService.login(req, TEST_IP, TEST_AGENT));
 
-        verify(valueOperations).set(eq(RedisKeys.LOGIN_LOCK + TEST_EMAIL), eq("1"), anyLong(), any());
-        verify(redisTemplate).delete(RedisKeys.LOGIN_FAIL + TEST_EMAIL);
+        verify(valueOperations).set(eq(RedisKeys.LOGIN_LOCK + TEST_USER_ID), eq("1"), anyLong(), any());
+        verify(redisTemplate).delete(RedisKeys.LOGIN_FAIL + TEST_USER_ID);
     }
 
     // ─── register ──────────────────────────────────────────────────────────
@@ -240,7 +242,7 @@ class AuthServiceTest {
 
     private User activeUser() {
         return User.builder()
-                .id("user-uuid-1234")
+                .id(TEST_USER_ID)
                 .email(TEST_EMAIL)
                 .password("encodedPassword")
                 .name("테스트")
@@ -252,7 +254,7 @@ class AuthServiceTest {
 
     private RefreshToken expiredRefreshToken(String token) {
         return RefreshToken.builder()
-                .userId("user-uuid-1234")
+                .userId(TEST_USER_ID)
                 .token(token)
                 .expiresAt(OffsetDateTime.now().minusDays(1))
                 .build();
