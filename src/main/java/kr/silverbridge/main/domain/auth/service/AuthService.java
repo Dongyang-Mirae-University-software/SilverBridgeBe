@@ -114,6 +114,8 @@ public class AuthService {
                 .orElseThrow(() -> new CustomException(ErrorCode.USER_NOT_FOUND));
 
         if (user.getStatus() == Status.INACTIVE) {
+            // 정지 계정 차단 시 남아있는 refresh token 정리 (refresh 메서드와 일관성 유지)
+            refreshTokenRepository.deleteByUserId(user.getId());
             throw new CustomException(ErrorCode.INACTIVE_USER);
         }
 
