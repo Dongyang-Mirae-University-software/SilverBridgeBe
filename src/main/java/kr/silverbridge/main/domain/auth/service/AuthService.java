@@ -98,14 +98,16 @@ public class AuthService {
     private static final long LOGIN_LOCK_TTL     = 30L; // 잠금 유지 시간 (분)
 
     // 로그인
-    // 사용자 조회 → 잠금 확인(user.id 기반) → 계정 상태 검증 → 비밀번호 검증 → 토큰 발급 → Refresh Token 저장 → 로그 기록
-    // 잠금 키를 user.id 기반으로 두어, 임의 이메일로 정상 사용자를 잠그는 DoS를 차단
+    // 사용자 조회 → 잠금 확인(user.id 기반) → 비밀번호 검증 → 계정 상태 검증 → 토큰 발급 → Refresh Token 저장 → 로그 기록
+    // - 잠금 키는 user.id 기반(H-2): 임의 이메일로 정상 사용자를 잠그는 DoS 차단
+    // - 가입 안 된 이메일과 비밀번호 불일치는 모두 INVALID_CREDENTIALS로 통합(H-1): 계정 enumeration 차단
+    // - INACTIVE 안내는 비밀번호 검증 통과 이후에만 노출 — 본인만 정지 사실을 확인
     @Transactional
     public LoginResponse login(LoginRequest request, String ipAddress, String userAgent) {
         String email = request.getEmail();
 
         User user = userRepository.findByEmail(email)
-                .orElseThrow(() -> new CustomException(ErrorCode.USER_NOT_FOUND));
+                .orElseThrow(() -> new CustomException(ErrorCode.INVALID_CREDENTIALS));
 
         String lockKey = RedisKeys.LOGIN_LOCK + user.getId();
         String failKey = RedisKeys.LOGIN_FAIL + user.getId();
@@ -113,12 +115,6 @@ public class AuthService {
         // 잠금 상태 확인 (5회 실패 시 30분 잠금)
         if (Boolean.TRUE.equals(redisTemplate.hasKey(lockKey))) {
             throw new CustomException(ErrorCode.LOGIN_LOCKED);
-        }
-
-        if (user.getStatus() == Status.INACTIVE) {
-            // 정지 계정 차단 시 남아있는 refresh token 정리 (refresh 메서드와 일관성 유지)
-            refreshTokenRepository.deleteByUserId(user.getId());
-            throw new CustomException(ErrorCode.INACTIVE_USER);
         }
 
         if (!passwordEncoder.matches(request.getPassword(), user.getPassword())) {
@@ -132,7 +128,14 @@ public class AuthService {
                 redisTemplate.opsForValue().set(lockKey, "1", LOGIN_LOCK_TTL, TimeUnit.MINUTES);
             }
 
-            throw new CustomException(ErrorCode.INVALID_PASSWORD);
+            throw new CustomException(ErrorCode.INVALID_CREDENTIALS);
+        }
+
+        // 비밀번호 검증 통과 후 계정 상태 확인 (본인에게만 정지 사실 노출)
+        if (user.getStatus() == Status.INACTIVE) {
+            // 정지 계정 차단 시 남아있는 refresh token 정리 (refresh 메서드와 일관성 유지)
+            refreshTokenRepository.deleteByUserId(user.getId());
+            throw new CustomException(ErrorCode.INACTIVE_USER);
         }
 
         // 로그인 성공 시 실패 횟수 초기화
