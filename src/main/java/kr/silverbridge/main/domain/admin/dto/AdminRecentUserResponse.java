@@ -22,7 +22,7 @@ public record AdminRecentUserResponse(
         OffsetDateTime createdAt
 ) {
 
-    public static AdminRecentUserResponse of(User user) {
+    public static AdminRecentUserResponse from(User user) {
         return new AdminRecentUserResponse(
                 user.getId(),
                 user.getName(),

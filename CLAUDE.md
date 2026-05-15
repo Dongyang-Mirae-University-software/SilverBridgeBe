@@ -271,6 +271,7 @@ gh pr create --base dev
 ### 내부
 - `.claude/skills/README.md` — 스킬 목록 인덱스
 - `프로젝트_설명.txt` — 도메인·요구사항 설명
+- `docs/progress.md` — 점검·리뷰 진행 기록 (누적)
 
 ### 외부
 - [claude-code-java](https://github.com/decebals/claude-code-java) — 스킬 저장소 원본

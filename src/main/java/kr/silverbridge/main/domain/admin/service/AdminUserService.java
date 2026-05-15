@@ -1,16 +1,18 @@
 package kr.silverbridge.main.domain.admin.service;
 
 import kr.silverbridge.main.domain.admin.dto.AdminUserCountsResponse;
+import kr.silverbridge.main.domain.admin.dto.AdminUserListPageResponse;
 import kr.silverbridge.main.domain.admin.dto.AdminUserSearchPageResponse;
 import kr.silverbridge.main.domain.admin.dto.UserDetailResponse;
 import kr.silverbridge.main.domain.admin.dto.UserRoleUpdateRequest;
 import kr.silverbridge.main.domain.admin.dto.UserStatusUpdateRequest;
 import kr.silverbridge.main.domain.admin.dto.UserSummaryResponse;
+import kr.silverbridge.main.domain.admin.repository.AdminUserStatsRepository;
+import kr.silverbridge.main.domain.admin.repository.AdminUserStatsRepository.UserRoleCountProjection;
 import kr.silverbridge.main.domain.connection.entity.Connection;
 import kr.silverbridge.main.domain.connection.repository.ConnectionRepository;
 import kr.silverbridge.main.domain.user.entity.User;
 import kr.silverbridge.main.domain.user.repository.UserRepository;
-import kr.silverbridge.main.domain.user.repository.UserRepository.UserRoleCountProjection;
 import kr.silverbridge.main.global.enums.AdminAuditAction;
 import kr.silverbridge.main.global.enums.ConnectionStatus;
 import kr.silverbridge.main.global.enums.Role;
@@ -35,16 +37,16 @@ import java.util.List;
 public class AdminUserService {
 
     private final UserRepository userRepository;
+    private final AdminUserStatsRepository adminUserStatsRepository;
     private final ConnectionRepository connectionRepository;
     private final AdminAuditLogService auditLogService;
 
-    // 사용자 목록 조회 (role 필터링, 최신 가입순)
+    // 사용자 목록 조회 (role 필터링, 최신 가입순, 페이징)
     @Transactional(readOnly = true)
-    public List<UserSummaryResponse> getUsers(Role role) {
+    public AdminUserListPageResponse getUsers(Role role, int page, int size) {
         List<Role> roles = (role != null) ? List.of(role) : List.of(Role.WARD, Role.GUARDIAN);
-        return userRepository.findByRoleInOrderByCreatedAtDesc(roles).stream()
-                .map(UserSummaryResponse::from)
-                .toList();
+        return AdminUserListPageResponse.from(
+                userRepository.findByRoleInOrderByCreatedAtDesc(roles, PageRequest.of(page, size)));
     }
 
     // 사용자 상세 조회
@@ -114,22 +116,32 @@ public class AdminUserService {
     }
 
     // 회원관리 화면 — 키워드/역할/상태 통합 검색 (페이징, 가입일 내림차순)
-    // keyword: email/name/phone 부분 일치 (null 이면 무시)
+    // keyword: name/phone 부분 일치 (null 이면 무시 — 이메일은 검색 대상 아님)
     // role: WARD/GUARDIAN/ADMIN (null 이면 전체)
     // status: ACTIVE/INACTIVE (null 이면 전체)
     @Transactional(readOnly = true)
     public AdminUserSearchPageResponse searchUsers(String keyword, Role role, Status status, int page, int size) {
-        String normalized = (keyword == null || keyword.isBlank()) ? null : keyword.trim();
+        String normalized = (keyword == null || keyword.isBlank())
+                ? null
+                : escapeLikeMetaChars(keyword.trim());
         return AdminUserSearchPageResponse.from(
                 userRepository.searchByKeywordAndFilters(
                         normalized, role, status,
                         PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "createdAt"))));
     }
 
+    // LIKE 메타문자(\\, %, _) 이스케이프 — 사용자가 입력한 %·_ 가 와일드카드로 동작하지 않도록 처리
+    // JPQL 쿼리의 ESCAPE '\\' 절과 짝을 이룸
+    private static String escapeLikeMetaChars(String input) {
+        return input.replace("\\", "\\\\")
+                .replace("%", "\\%")
+                .replace("_", "\\_");
+    }
+
     // 회원관리 화면 — 탭별 건수 (전체/피보호자/보호자/관리자)
     @Transactional(readOnly = true)
     public AdminUserCountsResponse getUserCounts() {
-        UserRoleCountProjection counts = userRepository.countByRole();
+        UserRoleCountProjection counts = adminUserStatsRepository.countByRole();
         return new AdminUserCountsResponse(
                 counts.getTotal(),
                 counts.getWard(),

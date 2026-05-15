@@ -14,6 +14,7 @@ import kr.silverbridge.main.domain.admin.dto.AdminRecentUserResponse;
 import kr.silverbridge.main.domain.admin.service.AdminDashboardService;
 import kr.silverbridge.main.global.response.ApiResponse;
 import lombok.RequiredArgsConstructor;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -27,6 +28,7 @@ import java.util.List;
 @RequestMapping("/api/admin/dashboard")
 @RequiredArgsConstructor
 @SecurityRequirement(name = "Bearer Authentication")
+@PreAuthorize("hasRole('ADMIN')")
 @Validated
 public class AdminDashboardController {
 
