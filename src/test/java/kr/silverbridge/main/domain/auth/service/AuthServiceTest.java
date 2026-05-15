@@ -52,6 +52,7 @@ class AuthServiceTest {
     @Mock private PasswordEncoder passwordEncoder;
     @Mock private StringRedisTemplate redisTemplate;
     @Mock private ValueOperations<String, String> valueOperations;
+    @Mock private SmsService smsService;
 
     @InjectMocks private AuthService authService;
 
@@ -204,12 +205,13 @@ class AuthServiceTest {
     }
 
     @Test
-    @DisplayName("SMS 인증 미완료 상태에서 회원가입 → SMS_NOT_VERIFIED")
+    @DisplayName("SMS 인증 nonce 불일치 상태에서 회원가입 → SMS_NOT_VERIFIED")
     void register_SMS미인증_SMS_NOT_VERIFIED() {
         RegisterRequest req = registerRequest(TEST_EMAIL, "01012345678", Role.WARD);
         when(userRepository.existsByEmail(TEST_EMAIL)).thenReturn(false);
         when(userRepository.existsByPhone("01012345678")).thenReturn(false);
-        when(redisTemplate.hasKey(RedisKeys.SMS_VERIFIED + "01012345678")).thenReturn(false);
+        org.mockito.Mockito.doThrow(new CustomException(ErrorCode.SMS_NOT_VERIFIED))
+                .when(smsService).consumeVerification(eq("01012345678"), anyString());
 
         CustomException ex = assertThrows(CustomException.class,
                 () -> authService.register(req));
@@ -281,6 +283,7 @@ class AuthServiceTest {
         when(req.getEmail()).thenReturn(email);
         when(req.getPhone()).thenReturn(phone);
         when(req.getRole()).thenReturn(role);
+        when(req.getVerificationNonce()).thenReturn("test-nonce");
         return req;
     }
 
