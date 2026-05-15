@@ -21,6 +21,11 @@ public class UserUpdateRequest {
     @Pattern(regexp = "^\\d{10,11}$", message = "전화번호는 숫자 10~11자리여야 합니다.")
     private String phone;
 
+    @Schema(description = "SMS 인증 확인 응답의 verificationNonce. 전화번호를 변경하지 않는 경우 생략 가능. 변경 시 SMS 인증을 다시 진행해 받은 값을 전달.",
+            example = "550e8400-e29b-41d4-a716-446655440000",
+            nullable = true)
+    private String verificationNonce;
+
     @Schema(description = "도로명 주소 또는 지번 주소 (카카오 주소 API 결과값)", example = "서울특별시 강남구 테헤란로 123")
     @NotBlank(message = "주소는 필수입니다.")
     @Size(max = 200, message = "주소는 200자 이하여야 합니다.")

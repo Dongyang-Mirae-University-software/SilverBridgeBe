@@ -1,5 +1,6 @@
 package kr.silverbridge.main.domain.user.service;
 
+import kr.silverbridge.main.domain.auth.service.SmsService;
 import kr.silverbridge.main.domain.user.entity.User;
 import kr.silverbridge.main.domain.user.event.UserWithdrawnEvent;
 import kr.silverbridge.main.domain.user.repository.UserRepository;
@@ -17,7 +18,6 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.context.ApplicationEventPublisher;
-import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.security.crypto.password.PasswordEncoder;
 
 import java.util.Optional;
@@ -32,9 +32,9 @@ class UserServiceTest {
 
     @Mock private UserRepository userRepository;
     @Mock private PasswordEncoder passwordEncoder;
-    @Mock private StringRedisTemplate redisTemplate;
     @Mock private FileServerClient fileServerClient;
     @Mock private ApplicationEventPublisher eventPublisher;
+    @Mock private SmsService smsService;
 
     @InjectMocks private UserService userService;
 
