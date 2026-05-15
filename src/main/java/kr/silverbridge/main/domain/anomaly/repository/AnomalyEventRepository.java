@@ -43,4 +43,23 @@ public interface AnomalyEventRepository extends JpaRepository<AnomalyEvent, Long
             AND c.status = kr.silverbridge.main.global.enums.ConnectionStatus.ACTIVE
             """)
     List<String> findActiveWardIdsByGuardianId(@Param("guardianId") String guardianId);
+
+    // 관리자 대시보드 — 오늘/어제/누적 이상감지 건수 단일 쿼리로 집계
+    @Query(value = """
+            SELECT
+                COUNT(*) FILTER (WHERE detected_at >= :todayStart AND detected_at < :tomorrowStart)  AS todayCount,
+                COUNT(*) FILTER (WHERE detected_at >= :yesterdayStart AND detected_at < :todayStart) AS yesterdayCount,
+                COUNT(*)                                                                              AS totalCount
+            FROM anomaly_events
+            """, nativeQuery = true)
+    AnomalyStatsProjection countAnomalyStats(
+            @Param("todayStart") OffsetDateTime todayStart,
+            @Param("tomorrowStart") OffsetDateTime tomorrowStart,
+            @Param("yesterdayStart") OffsetDateTime yesterdayStart);
+
+    interface AnomalyStatsProjection {
+        long getTodayCount();
+        long getYesterdayCount();
+        long getTotalCount();
+    }
 }
