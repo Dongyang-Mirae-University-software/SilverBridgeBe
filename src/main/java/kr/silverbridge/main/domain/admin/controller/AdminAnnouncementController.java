@@ -25,7 +25,7 @@ import org.springframework.web.bind.annotation.RestController;
 
 import java.util.List;
 
-@Tag(name = "관리자 - 공지")
+@Tag(name = "관리자 - 공지사항")
 @RestController
 @RequestMapping("/api/admin/announcement")
 @RequiredArgsConstructor
