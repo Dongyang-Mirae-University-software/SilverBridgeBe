@@ -23,6 +23,8 @@ public enum ErrorCode {
     EMAIL_ALREADY_EXISTS(HttpStatus.CONFLICT, "이미 사용 중인 이메일입니다."),
     PHONE_ALREADY_EXISTS(HttpStatus.CONFLICT, "이미 사용 중인 전화번호입니다."),
     INVALID_PASSWORD(HttpStatus.UNAUTHORIZED, "비밀번호가 올바르지 않습니다."),
+    // 로그인 응답 통합용 — 가입 안 된 이메일/비밀번호 불일치 모두 동일 메시지로 enumeration 차단
+    INVALID_CREDENTIALS(HttpStatus.UNAUTHORIZED, "이메일 또는 비밀번호가 올바르지 않습니다."),
     INACTIVE_USER(HttpStatus.FORBIDDEN, "사용이 제한된 계정입니다. 고객센터에 문의해주세요."),
     SOCIAL_USER_NO_PASSWORD(HttpStatus.BAD_REQUEST, "카카오로 가입한 계정은 비밀번호 재설정을 사용할 수 없습니다."),
     SAME_AS_CURRENT_PASSWORD(HttpStatus.BAD_REQUEST, "현재 비밀번호와 동일한 비밀번호는 사용할 수 없습니다."),
