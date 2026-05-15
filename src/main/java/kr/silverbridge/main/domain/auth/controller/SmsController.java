@@ -8,6 +8,7 @@ import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import kr.silverbridge.main.domain.auth.dto.SmsSendRequest;
 import kr.silverbridge.main.domain.auth.dto.SmsVerifyRequest;
+import kr.silverbridge.main.domain.auth.dto.SmsVerifyResponse;
 import kr.silverbridge.main.domain.auth.service.SmsService;
 import kr.silverbridge.main.global.response.ApiResponse;
 import kr.silverbridge.main.global.security.RateLimitService;
@@ -61,21 +62,23 @@ public class SmsController {
             summary = "SMS 인증코드 확인",
             description = """
                     발송된 인증코드를 입력하여 전화번호를 인증합니다.
-                    인증 완료 후 10분 이내에 회원가입(POST /api/auth/signup 또는 POST /api/auth/signup/kakao)을 진행해야 합니다.
+                    인증 성공 시 verificationNonce(UUID)가 반환됩니다.
+                    회원가입(POST /api/auth/signup 또는 POST /api/auth/signup/kakao) 또는 전화번호 변경(PUT /api/user/me/update) 요청 시 동일 값을 verificationNonce 필드에 그대로 전달해야 합니다.
 
                     [제한사항]
+                    - 인증 완료 후 10분 이내에 후속 API를 호출해야 nonce가 유효합니다.
                     - 5회 이상 오류 시 인증코드가 초기화됩니다. → 인증코드 재발송 필요
                     - 인증코드 유효 시간(5분) 초과 시 만료 오류가 반환됩니다.
                     """
     )
     @ApiResponses({
-            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "인증 성공. 10분 이내에 회원가입 API를 호출하세요."),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "인증 성공. 응답의 verificationNonce를 회원가입/프로필 수정 요청에 전달하세요."),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "인증코드 불일치 / 인증코드 만료 / 5회 이상 오류로 인증코드 초기화됨", content = @Content)
     })
     @PostMapping("/verify")
-    public ApiResponse<Void> verify(@Valid @RequestBody SmsVerifyRequest request) {
-        smsService.verifyCode(request);
-        return ApiResponse.ok("SMS 인증이 완료되었습니다.");
+    public ApiResponse<SmsVerifyResponse> verify(@Valid @RequestBody SmsVerifyRequest request) {
+        String nonce = smsService.verifyCode(request);
+        return ApiResponse.ok(new SmsVerifyResponse(nonce));
     }
 
     @Operation(
