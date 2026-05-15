@@ -1,5 +1,6 @@
 package kr.silverbridge.main.domain.user.service;
 
+import kr.silverbridge.main.domain.auth.service.SmsService;
 import kr.silverbridge.main.domain.user.dto.PasswordChangeRequest;
 import kr.silverbridge.main.domain.user.dto.UserProfileResponse;
 import kr.silverbridge.main.domain.user.dto.UserUpdateRequest;
@@ -10,10 +11,8 @@ import kr.silverbridge.main.domain.user.repository.UserRepository;
 import kr.silverbridge.main.global.client.FileServerClient;
 import kr.silverbridge.main.global.exception.CustomException;
 import kr.silverbridge.main.global.exception.ErrorCode;
-import kr.silverbridge.main.global.util.RedisKeys;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.ApplicationEventPublisher;
-import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -31,9 +30,9 @@ public class UserService {
 
     private final UserRepository userRepository;
     private final PasswordEncoder passwordEncoder;
-    private final StringRedisTemplate redisTemplate;
     private final FileServerClient fileServerClient;
     private final ApplicationEventPublisher eventPublisher;
+    private final SmsService smsService;
 
     // 내 정보 조회
     @Transactional(readOnly = true)
@@ -52,15 +51,12 @@ public class UserService {
 
         String newPhone = request.getPhone();
         if (newPhone != null && !newPhone.equals(user.getPhone())) {
-            if (Boolean.FALSE.equals(redisTemplate.hasKey(RedisKeys.SMS_VERIFIED + newPhone))) {
-                throw new CustomException(ErrorCode.SMS_NOT_VERIFIED);
-            }
+            // SMS 인증 nonce 일치 확인 + 키 소비 (H-5)
+            smsService.consumeVerification(newPhone, request.getVerificationNonce());
             // 다른 계정이 이미 사용 중인 전화번호인지 확인
             if (userRepository.existsByPhone(newPhone)) {
                 throw new CustomException(ErrorCode.PHONE_ALREADY_EXISTS);
             }
-            // 인증 완료 키 삭제
-            redisTemplate.delete(RedisKeys.SMS_VERIFIED + newPhone);
         }
 
         user.updateProfile(
