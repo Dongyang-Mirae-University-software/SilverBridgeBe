@@ -33,6 +33,11 @@ public final class RedisKeys {
     // ── 로그아웃 토큰 블랙리스트 ────────────────────────
     public static final String LOGOUT_TOKEN = "logout:";
 
+    // ── 비밀번호 변경 후 토큰 무효화 ────────────────────
+    // 값: 비밀번호 변경 시각(epoch ms). 토큰 iat가 이 값 이하이면 401 처리.
+    // TTL은 access token 만료시간과 동일하게 두어 자연 만료 시 자동 정리.
+    public static final String PASSWORD_INVALIDATE = "password:invalidate:";
+
     // ── API 요청 속도 제한 ─────────────────────────────
     public static final String RATE_LIMIT = "rate:";
 

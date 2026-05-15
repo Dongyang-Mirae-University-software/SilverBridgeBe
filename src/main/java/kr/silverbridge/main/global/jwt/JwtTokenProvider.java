@@ -30,6 +30,11 @@ public class JwtTokenProvider {
         return expiration.getTime() - System.currentTimeMillis();
     }
 
+    // 토큰 발급 시각(epoch ms) — 비밀번호 변경 후 무효화 비교에 사용
+    public long getIssuedAt(String token) {
+        return getClaims(token).getIssuedAt().getTime();
+    }
+
     // Access Token 생성
     // subject: userId, claims에 email과 role 포함
     public String generateAccessToken(String userId, String email, String role) {
