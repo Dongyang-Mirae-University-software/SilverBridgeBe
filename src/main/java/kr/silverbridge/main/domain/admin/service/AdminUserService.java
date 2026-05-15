@@ -1,5 +1,7 @@
 package kr.silverbridge.main.domain.admin.service;
 
+import kr.silverbridge.main.domain.admin.dto.AdminUserCountsResponse;
+import kr.silverbridge.main.domain.admin.dto.AdminUserSearchPageResponse;
 import kr.silverbridge.main.domain.admin.dto.UserDetailResponse;
 import kr.silverbridge.main.domain.admin.dto.UserRoleUpdateRequest;
 import kr.silverbridge.main.domain.admin.dto.UserStatusUpdateRequest;
@@ -8,12 +10,16 @@ import kr.silverbridge.main.domain.connection.entity.Connection;
 import kr.silverbridge.main.domain.connection.repository.ConnectionRepository;
 import kr.silverbridge.main.domain.user.entity.User;
 import kr.silverbridge.main.domain.user.repository.UserRepository;
+import kr.silverbridge.main.domain.user.repository.UserRepository.UserRoleCountProjection;
 import kr.silverbridge.main.global.enums.AdminAuditAction;
 import kr.silverbridge.main.global.enums.ConnectionStatus;
 import kr.silverbridge.main.global.enums.Role;
+import kr.silverbridge.main.global.enums.Status;
 import kr.silverbridge.main.global.exception.CustomException;
 import kr.silverbridge.main.global.exception.ErrorCode;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -105,6 +111,31 @@ public class AdminUserService {
 
         auditLogService.log(adminId, AdminAuditAction.USER_FORCE_DELETE, userId,
                 String.format("강제 탈퇴: %s", email));
+    }
+
+    // 회원관리 화면 — 키워드/역할/상태 통합 검색 (페이징, 가입일 내림차순)
+    // keyword: email/name/phone 부분 일치 (null 이면 무시)
+    // role: WARD/GUARDIAN/ADMIN (null 이면 전체)
+    // status: ACTIVE/INACTIVE (null 이면 전체)
+    @Transactional(readOnly = true)
+    public AdminUserSearchPageResponse searchUsers(String keyword, Role role, Status status, int page, int size) {
+        String normalized = (keyword == null || keyword.isBlank()) ? null : keyword.trim();
+        return AdminUserSearchPageResponse.from(
+                userRepository.searchByKeywordAndFilters(
+                        normalized, role, status,
+                        PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "createdAt"))));
+    }
+
+    // 회원관리 화면 — 탭별 건수 (전체/피보호자/보호자/관리자)
+    @Transactional(readOnly = true)
+    public AdminUserCountsResponse getUserCounts() {
+        UserRoleCountProjection counts = userRepository.countByRole();
+        return new AdminUserCountsResponse(
+                counts.getTotal(),
+                counts.getWard(),
+                counts.getGuardian(),
+                counts.getAdmin()
+        );
     }
 
     // ADMIN 계정 수정/삭제 차단
