@@ -29,4 +29,7 @@ public interface ConnectionRepository extends JpaRepository<Connection, Long> {
     // 역할 변경 시 해당 사용자(보호자 또는 피보호자)의 ACTIVE/PENDING 연결 일괄 조회
     @Query("SELECT c FROM Connection c WHERE (c.guardianId = :userId OR c.wardId = :userId) AND c.status IN :statuses")
     List<Connection> findActiveByUserId(@Param("userId") String userId, @Param("statuses") List<ConnectionStatus> statuses);
+
+    // 관리자 대시보드 — 특정 상태 연결 건수 (예: PENDING 처리 대기 건수)
+    long countByStatus(ConnectionStatus status);
 }
