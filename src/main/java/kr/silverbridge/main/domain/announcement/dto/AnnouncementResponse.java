@@ -25,6 +25,9 @@ public record AnnouncementResponse(
         @Schema(description = "내용", example = "2025년 5월 1일 오전 2시부터 4시까지 서버 점검이 예정되어 있습니다.")
         String content,
 
+        @Schema(description = "조회수 (상세 조회 시마다 1 증가)", example = "42")
+        Long viewCount,
+
         @Schema(description = "작성 일시", example = "2025-06-01T08:00:00+09:00")
         OffsetDateTime createdAt,
 
@@ -38,6 +41,7 @@ public record AnnouncementResponse(
                 author != null ? author.getName() : null,
                 announcement.getTitle(),
                 announcement.getContent(),
+                announcement.getViewCount(),
                 announcement.getCreatedAt(),
                 announcement.getUpdatedAt()
         );
