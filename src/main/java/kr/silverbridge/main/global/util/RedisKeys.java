@@ -41,4 +41,7 @@ public final class RedisKeys {
 
     // ── WebSocket 접속 상태 ───────────────────────────
     public static final String WS_CONNECTED = "ws:connected:";
+
+    // ── 관리자 대시보드 캐시 ───────────────────────────
+    public static final String ADMIN_DASHBOARD_SUMMARY = "admin:dashboard:summary";
 }
