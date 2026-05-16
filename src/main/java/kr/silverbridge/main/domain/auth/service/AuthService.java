@@ -8,6 +8,7 @@ import kr.silverbridge.main.domain.auth.dto.LoginResponse;
 import kr.silverbridge.main.domain.auth.dto.RegisterRequest;
 import kr.silverbridge.main.domain.auth.dto.TokenRefreshRequest;
 import kr.silverbridge.main.domain.auth.dto.TokenRefreshResponse;
+import kr.silverbridge.main.domain.auth.config.AuthLoginProperties;
 import kr.silverbridge.main.domain.auth.entity.RefreshToken;
 import kr.silverbridge.main.domain.auth.repository.RefreshTokenRepository;
 import kr.silverbridge.main.domain.user.entity.User;
@@ -47,6 +48,7 @@ public class AuthService {
     private final StringRedisTemplate redisTemplate;
     private final UserIdGenerator userIdGenerator;
     private final SmsService smsService;
+    private final AuthLoginProperties authLoginProperties;
 
     // 이메일 중복 확인 (회원가입 전 단계)
     @Transactional(readOnly = true)
@@ -93,9 +95,6 @@ public class AuthService {
         userRepository.save(user);
     }
 
-    private static final int  LOGIN_MAX_ATTEMPTS = 5;   // 최대 로그인 실패 횟수
-    private static final long LOGIN_LOCK_TTL     = 30L; // 잠금 유지 시간 (분)
-
     // 로그인
     // 사용자 조회 → 잠금 확인(user.id 기반) → 비밀번호 검증 → 계정 상태 검증 → 토큰 발급 → Refresh Token 저장 → 로그 기록
     // - 잠금 키는 user.id 기반(H-2): 임의 이메일로 정상 사용자를 잠그는 DoS 차단
@@ -117,14 +116,15 @@ public class AuthService {
         }
 
         if (!passwordEncoder.matches(request.getPassword(), user.getPassword())) {
+            long lockTtl = authLoginProperties.getLockTtlMinutes();
             // 실패 횟수 증가
             Long attempts = redisTemplate.opsForValue().increment(failKey);
-            redisTemplate.expire(failKey, LOGIN_LOCK_TTL, TimeUnit.MINUTES);
+            redisTemplate.expire(failKey, lockTtl, TimeUnit.MINUTES);
 
-            // 5회 이상 실패 시 잠금 설정
-            if (attempts != null && attempts >= LOGIN_MAX_ATTEMPTS) {
+            // 최대 실패 횟수 초과 시 잠금 설정
+            if (attempts != null && attempts >= authLoginProperties.getMaxAttempts()) {
                 redisTemplate.delete(failKey);
-                redisTemplate.opsForValue().set(lockKey, "1", LOGIN_LOCK_TTL, TimeUnit.MINUTES);
+                redisTemplate.opsForValue().set(lockKey, "1", lockTtl, TimeUnit.MINUTES);
             }
 
             throw new CustomException(ErrorCode.INVALID_CREDENTIALS);
@@ -226,17 +226,12 @@ public class AuthService {
         String maskedEmail = users.stream()
                 .filter(User::isLocalProvider)
                 .findFirst()
-                .map(u -> maskEmail(u.getEmail()))
+                .map(u -> MaskingUtil.maskEmail(u.getEmail()))
                 .orElse(null);
 
         boolean hasKakaoAccount = users.stream().anyMatch(User::isSocialProvider);
 
         return new FindEmailResponse(maskedEmail, hasKakaoAccount);
-    }
-
-    // 이메일 마스킹 처리 (MaskingUtil 위임)
-    private String maskEmail(String email) {
-        return MaskingUtil.maskEmail(email);
     }
 
     // Refresh Token 재사용(도난) 감지
