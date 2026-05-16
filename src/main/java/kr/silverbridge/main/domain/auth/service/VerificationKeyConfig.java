@@ -7,7 +7,7 @@ import kr.silverbridge.main.global.util.RedisKeys;
  * 회원가입 SMS / 비밀번호 재설정 SMS / 비밀번호 재설정 이메일 등 동일 인증 플로우의 키 네임스페이스를 분리한다.
  * 식별자(phone 또는 email) 는 호출 시 전달.
  */
-public record SmsKeyConfig(
+public record VerificationKeyConfig(
         String verifyPrefix,
         String cooldownPrefix,
         String attemptPrefix
@@ -25,21 +25,21 @@ public record SmsKeyConfig(
     }
 
     /** 회원가입 SMS 인증 */
-    public static final SmsKeyConfig SIGNUP = new SmsKeyConfig(
+    public static final VerificationKeyConfig SIGNUP = new VerificationKeyConfig(
             RedisKeys.SMS_VERIFY,
             RedisKeys.SMS_COOLDOWN,
             RedisKeys.SMS_ATTEMPT
     );
 
     /** 비밀번호 재설정 SMS 인증 */
-    public static final SmsKeyConfig PASSWORD_RESET = new SmsKeyConfig(
+    public static final VerificationKeyConfig PASSWORD_RESET = new VerificationKeyConfig(
             RedisKeys.PW_SMS_VERIFY,
             RedisKeys.PW_SMS_COOLDOWN,
             RedisKeys.PW_SMS_ATTEMPT
     );
 
     /** 비밀번호 재설정 이메일 인증 */
-    public static final SmsKeyConfig PASSWORD_RESET_EMAIL = new SmsKeyConfig(
+    public static final VerificationKeyConfig PASSWORD_RESET_EMAIL = new VerificationKeyConfig(
             RedisKeys.PW_EMAIL_VERIFY,
             RedisKeys.PW_EMAIL_COOLDOWN,
             RedisKeys.PW_EMAIL_ATTEMPT
