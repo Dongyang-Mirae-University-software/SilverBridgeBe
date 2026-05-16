@@ -4,10 +4,12 @@ import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import kr.silverbridge.main.domain.auth.dto.PasswordResetConfirmRequest;
 import kr.silverbridge.main.domain.auth.service.PasswordResetService;
 import kr.silverbridge.main.global.response.ApiResponse;
+import kr.silverbridge.main.global.security.RateLimitService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -21,6 +23,7 @@ import org.springframework.web.bind.annotation.RestController;
 public class PasswordResetController {
 
     private final PasswordResetService passwordResetService;
+    private final RateLimitService rateLimitService;
 
     @Operation(
             summary = "[공통] 3단계 · 새 비밀번호 설정",
@@ -44,7 +47,9 @@ public class PasswordResetController {
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "500", description = "서버 오류", content = @Content)
     })
     @PostMapping("/reset")
-    public ApiResponse<Void> confirmReset(@Valid @RequestBody PasswordResetConfirmRequest request) {
+    public ApiResponse<Void> confirmReset(@Valid @RequestBody PasswordResetConfirmRequest request,
+                                          HttpServletRequest httpRequest) {
+        rateLimitService.check("pw-reset-confirm", httpRequest.getRemoteAddr());
         passwordResetService.confirmReset(request);
         return ApiResponse.ok("비밀번호가 변경되었습니다.");
     }
