@@ -10,7 +10,10 @@ import org.springframework.stereotype.Component;
 
 import javax.crypto.SecretKey;
 import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 import java.util.Date;
+import java.util.HexFormat;
 
 @Slf4j
 @Component
@@ -28,6 +31,18 @@ public class JwtTokenProvider {
     public long getRemainingExpiration(String token) {
         Date expiration = getClaims(token).getExpiration();
         return expiration.getTime() - System.currentTimeMillis();
+    }
+
+    // 토큰의 SHA-256 해시(hex) — 로그아웃 블랙리스트 Redis 키로 사용
+    // 토큰 원문을 키로 쓰지 않아 Redis 메모리 절약 + 원문 비노출
+    public String hashToken(String token) {
+        try {
+            MessageDigest digest = MessageDigest.getInstance("SHA-256");
+            byte[] hash = digest.digest(token.getBytes(StandardCharsets.UTF_8));
+            return HexFormat.of().formatHex(hash);
+        } catch (NoSuchAlgorithmException e) {
+            throw new IllegalStateException("SHA-256 알고리즘을 사용할 수 없습니다.", e);
+        }
     }
 
     // 토큰 발급 시각(epoch ms) — 비밀번호 변경 후 무효화 비교에 사용

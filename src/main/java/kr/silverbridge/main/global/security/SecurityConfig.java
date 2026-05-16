@@ -1,5 +1,6 @@
 package kr.silverbridge.main.global.security;
 
+import jakarta.servlet.http.HttpServletResponse;
 import kr.silverbridge.main.global.jwt.JwtAuthenticationFilter;
 import kr.silverbridge.main.global.jwt.JwtTokenProvider;
 import lombok.RequiredArgsConstructor;
@@ -7,6 +8,8 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.data.redis.core.StringRedisTemplate;
+import org.springframework.http.HttpMethod;
+import org.springframework.http.MediaType;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.config.annotation.authentication.configuration.AuthenticationConfiguration;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
@@ -50,8 +53,19 @@ public class SecurityConfig {
                 .sessionManagement(session ->
                         session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
 
+                // 인증 실패(미인증 상태로 보호 자원 접근) 시 JSON 401 반환
+                // — JwtAuthenticationFilter.sendError와 동일 포맷으로 응답 일관성 유지
+                .exceptionHandling(ex -> ex.authenticationEntryPoint((request, response, authException) -> {
+                    response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
+                    response.setContentType(MediaType.APPLICATION_JSON_VALUE);
+                    response.setCharacterEncoding("UTF-8");
+                    response.getWriter().write("{\"success\":false,\"message\":\"로그인이 필요합니다.\"}");
+                }))
+
                 // 경로별 접근 권한 설정
                 .authorizeHttpRequests(auth -> auth
+                        // 로그아웃은 /api/auth 하위지만 인증 필요 — permitAll에서 명시적으로 분리 (L-3)
+                        .requestMatchers(HttpMethod.POST, "/api/auth/logout").authenticated()
                         // 인증 없이 접근 가능한 경로
                         .requestMatchers(
                                 "/api/auth/**",
@@ -105,10 +119,10 @@ public class SecurityConfig {
         return source;
     }
 
-    // 비밀번호 암호화 (BCrypt)
+    // 비밀번호 암호화 (BCrypt) — strength 12 (OWASP 2025 권장). 기존 strength 10 해시도 검증은 호환됨
     @Bean
     public PasswordEncoder passwordEncoder() {
-        return new BCryptPasswordEncoder();
+        return new BCryptPasswordEncoder(12);
     }
 
     // 로그인 처리에 사용되는 AuthenticationManager
