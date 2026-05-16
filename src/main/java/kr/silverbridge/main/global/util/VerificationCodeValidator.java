@@ -6,8 +6,6 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Component;
 
-import java.util.concurrent.TimeUnit;
-
 /**
  * SMS/이메일 인증코드 검증 공통 유틸리티
  * 코드 만료 확인 → 일치 확인 → 오류 횟수 관리 → 성공 시 키 삭제
@@ -17,6 +15,7 @@ import java.util.concurrent.TimeUnit;
 public class VerificationCodeValidator {
 
     private final StringRedisTemplate redisTemplate;
+    private final RedisCounter redisCounter;
 
     /**
      * 인증코드를 검증하고, 성공 시 관련 Redis 키를 삭제한다.
@@ -37,13 +36,11 @@ public class VerificationCodeValidator {
         }
 
         if (!savedCode.equals(inputCode)) {
-            // 오류 횟수 증가
-            Long attempts = redisTemplate.opsForValue().increment(attemptKey);
-            // 오류 횟수 만료 시간을 인증코드와 동일하게 설정
-            redisTemplate.expire(attemptKey, codeTtlMinutes, TimeUnit.MINUTES);
+            // 오류 횟수 증가 + 최초 증가 시 TTL(인증코드와 동일) 설정을 원자적으로 (L-2)
+            long attempts = redisCounter.incrementWithTtl(attemptKey, codeTtlMinutes * 60);
 
             // 최대 오류 횟수 초과 시 인증코드 즉시 무효화
-            if (attempts != null && attempts >= maxAttempts) {
+            if (attempts >= maxAttempts) {
                 redisTemplate.delete(verifyKey);
                 redisTemplate.delete(attemptKey);
                 throw new CustomException(ErrorCode.SMS_TOO_MANY_ATTEMPTS);
