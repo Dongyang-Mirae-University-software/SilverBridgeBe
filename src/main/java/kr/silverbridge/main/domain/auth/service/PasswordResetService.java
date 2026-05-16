@@ -55,7 +55,7 @@ public class PasswordResetService {
     // [이메일 방식] 비밀번호 재설정 인증코드 이메일 발송
     // 이메일로 사용자 조회 → 쿨다운 확인 → 6자리 코드 생성 → 메일 발송 → Redis 저장(5분) → 오류 횟수 초기화 → 쿨다운 설정(1분)
     // 보안을 위해 사용자가 없거나 카카오 사용자여도 동일하게 200 반환 (가입 여부 노출 방지)
-    @Transactional(readOnly = true)
+    // 단일 조회 + Redis + 외부 메일 발송이므로 트랜잭션 미사용 — SMTP 호출이 DB 커넥션을 점유하지 않게 함 (M-5)
     public void requestReset(PasswordResetRequest request) {
         User user = userRepository.findByEmail(request.getEmail()).orElse(null);
 
@@ -116,7 +116,7 @@ public class PasswordResetService {
     // [SMS 방식] 비밀번호 재설정 인증코드 발송
     // 이름+전화번호로 사용자 조회 → 공통 SMS 로직에 위임 (쿨다운·코드저장·발송)
     // 보안을 위해 사용자가 없거나 카카오 사용자여도 동일하게 200 반환 (가입 여부 노출 방지)
-    @Transactional(readOnly = true)
+    // 단일 조회 + 외부 SMS 발송이므로 트랜잭션 미사용 — 외부 호출이 DB 커넥션을 점유하지 않게 함 (M-5)
     public void requestResetBySms(PasswordResetSmsSendRequest request) {
         String phone = request.getPhone();
 
@@ -154,9 +154,9 @@ public class PasswordResetService {
     }
 
     // 새 비밀번호 설정 (이메일/SMS 방식 공통)
-    // 재설정 코드 확인 → 비밀번호 검증 → 변경 → 코드 삭제 → 모든 기기 로그아웃 → 로그 기록
+    // 재설정 코드 확인 → 비밀번호 검증 → 변경 → 코드 삭제 → 모든 기기 로그아웃 → 로그 기록(IP/UA 포함)
     @Transactional
-    public void confirmReset(PasswordResetConfirmRequest request) {
+    public void confirmReset(PasswordResetConfirmRequest request, String ipAddress, String userAgent) {
         String key    = RedisKeys.PW_RESET + request.getToken();
         String userId = redisTemplate.opsForValue().get(key);
 
@@ -183,8 +183,8 @@ public class PasswordResetService {
         // listener(AFTER_COMMIT)가 refresh delete + Redis invalidation 도장 처리
         eventPublisher.publishEvent(new PasswordChangedEvent(userId));
 
-        // 비밀번호 재설정 이력 기록
-        accessLogService.log(userId, AccessAction.PASSWORD_RESET);
+        // 비밀번호 재설정 이력 기록 (IP/UA 포함 — 침해 조사 추적성)
+        accessLogService.log(userId, AccessAction.PASSWORD_RESET, ipAddress, userAgent);
     }
 
     private String generateCode() {
