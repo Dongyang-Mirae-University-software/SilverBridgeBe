@@ -13,7 +13,7 @@ public class LoginResponse {
     @Schema(description = "API 호출 시 Authorization 헤더에 담을 토큰. 'Bearer {accessToken}' 형식으로 사용. 유효 시간: 30분", example = "eyJhbGciOiJIUzI1NiJ9...")
     private String accessToken;
 
-    @Schema(description = "Access Token 만료 시 재발급에 사용하는 토큰. POST /api/auth/refresh 에 전달. 유효 시간: 14일", example = "eyJhbGciOiJIUzI1NiJ9...")
+    @Schema(description = "Access Token 만료 시 재발급에 사용하는 토큰. POST /api/auth/refresh 에 전달. 유효 시간: 7일", example = "eyJhbGciOiJIUzI1NiJ9...")
     private String refreshToken;
 
     @Schema(description = "사용자 고유 ID (6자 영숫자)", example = "aB3x9Z")
