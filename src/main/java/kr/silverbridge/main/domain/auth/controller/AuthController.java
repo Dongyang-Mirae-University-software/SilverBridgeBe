@@ -16,6 +16,8 @@ import kr.silverbridge.main.domain.auth.dto.RegisterRequest;
 import kr.silverbridge.main.domain.auth.dto.TokenRefreshRequest;
 import kr.silverbridge.main.domain.auth.dto.TokenRefreshResponse;
 import kr.silverbridge.main.domain.auth.service.AuthService;
+import kr.silverbridge.main.global.exception.CustomException;
+import kr.silverbridge.main.global.exception.ErrorCode;
 import kr.silverbridge.main.global.response.ApiResponse;
 import kr.silverbridge.main.global.security.RateLimitService;
 import lombok.RequiredArgsConstructor;
@@ -146,7 +148,9 @@ public class AuthController {
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "500", description = "서버 오류", content = @Content)
     })
     @PostMapping("/refresh")
-    public ApiResponse<TokenRefreshResponse> refresh(@Valid @RequestBody TokenRefreshRequest request) {
+    public ApiResponse<TokenRefreshResponse> refresh(@Valid @RequestBody TokenRefreshRequest request,
+                                                     HttpServletRequest httpRequest) {
+        rateLimitService.check("token-refresh", httpRequest.getRemoteAddr());
         return ApiResponse.ok(authService.refresh(request));
     }
 
@@ -171,6 +175,10 @@ public class AuthController {
     public ApiResponse<Void> logout(@RequestHeader("Authorization") String bearerToken,
                                     @AuthenticationPrincipal String userId,
                                     HttpServletRequest httpRequest) {
+        // Bearer 접두사 형식 사전 검증 — 비정상 헤더로 인한 substring 오류(500) 방지 (M-7)
+        if (bearerToken == null || !bearerToken.startsWith("Bearer ")) {
+            throw new CustomException(ErrorCode.INVALID_TOKEN);
+        }
         authService.logout(
                 bearerToken.substring(7),
                 userId,
