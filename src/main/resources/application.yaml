@@ -66,6 +66,12 @@ jwt:
   access-token-expiration: 1800000    # 30분 (ms)
   refresh-token-expiration: 604800000 # 7일 (ms)
 
+# 로그인 잠금 정책 (env로 override 가능)
+auth:
+  login:
+    max-attempts: ${AUTH_LOGIN_MAX_ATTEMPTS:5}        # 잠금 전 최대 실패 횟수
+    lock-ttl-minutes: ${AUTH_LOGIN_LOCK_TTL_MINUTES:30} # 잠금 유지 시간(분)
+
 kakao:
   rest-api-key: ${KAKAO_REST_API_KEY}
   redirect-uri: ${KAKAO_REDIRECT_URI}

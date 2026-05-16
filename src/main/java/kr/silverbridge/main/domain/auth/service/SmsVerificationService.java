@@ -14,7 +14,7 @@ import java.util.concurrent.TimeUnit;
 /**
  * SMS 인증코드 공통 발송/검증 서비스
  * 회원가입, 비밀번호 재설정 등 모든 SMS 인증 흐름의 공통 로직을 담당한다.
- * 호출자는 {@link SmsKeyConfig}로 Redis 키 네임스페이스만 지정하면 된다.
+ * 호출자는 {@link VerificationKeyConfig}로 Redis 키 네임스페이스만 지정하면 된다.
  */
 @Slf4j
 @Service
@@ -40,7 +40,7 @@ public class SmsVerificationService {
      * @param config           Redis 키 설정 (흐름별 분리)
      * @param messageTemplate  SMS 본문 템플릿 ({@code %s} 위치에 인증코드 삽입)
      */
-    public void sendCode(String phone, SmsKeyConfig config, String messageTemplate) {
+    public void sendCode(String phone, VerificationKeyConfig config, String messageTemplate) {
         // 1분 이내 재발송 차단
         if (Boolean.TRUE.equals(redisTemplate.hasKey(config.cooldownKey(phone)))) {
             throw new CustomException(ErrorCode.SMS_SEND_TOO_FREQUENT);
@@ -63,7 +63,7 @@ public class SmsVerificationService {
      * 인증코드 검증 공통 로직
      * 성공 시 인증코드·오류 횟수 모두 삭제되고, 실패 시 오류 횟수 증가 및 최대치 초과 시 즉시 무효화
      */
-    public void verifyCode(String phone, SmsKeyConfig config, String inputCode) {
+    public void verifyCode(String phone, VerificationKeyConfig config, String inputCode) {
         verificationCodeValidator.verify(
                 config.verifyKey(phone),
                 config.attemptKey(phone),

@@ -53,6 +53,7 @@ class AuthServiceTest {
     @Mock private StringRedisTemplate redisTemplate;
     @Mock private ValueOperations<String, String> valueOperations;
     @Mock private SmsService smsService;
+    @Mock private kr.silverbridge.main.domain.auth.config.AuthLoginProperties authLoginProperties;
 
     @InjectMocks private AuthService authService;
 
@@ -64,6 +65,8 @@ class AuthServiceTest {
     @BeforeEach
     void setUp() {
         when(redisTemplate.opsForValue()).thenReturn(valueOperations);
+        when(authLoginProperties.getMaxAttempts()).thenReturn(5);
+        when(authLoginProperties.getLockTtlMinutes()).thenReturn(30L);
     }
 
     // ─── login ─────────────────────────────────────────────────────────────

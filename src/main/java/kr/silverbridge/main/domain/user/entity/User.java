@@ -110,7 +110,7 @@ public class User extends BaseTimeEntity {
 
     // 소셜(카카오) 회원 여부 확인
     public boolean isSocialProvider() {
-        return provider != Provider.LOCAL;
+        return provider == Provider.KAKAO;
     }
 
 }

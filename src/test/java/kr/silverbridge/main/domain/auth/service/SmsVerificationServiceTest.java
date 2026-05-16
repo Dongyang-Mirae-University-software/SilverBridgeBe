@@ -49,9 +49,9 @@ class SmsVerificationServiceTest {
     @Test
     @DisplayName("쿨다운 키가 있으면 SMS_SEND_TOO_FREQUENT 예외")
     void cooldownBlocksSend() {
-        when(redisTemplate.hasKey(SmsKeyConfig.SIGNUP.cooldownKey(PHONE))).thenReturn(true);
+        when(redisTemplate.hasKey(VerificationKeyConfig.SIGNUP.cooldownKey(PHONE))).thenReturn(true);
 
-        assertThatThrownBy(() -> smsVerificationService.sendCode(PHONE, SmsKeyConfig.SIGNUP, TEMPLATE))
+        assertThatThrownBy(() -> smsVerificationService.sendCode(PHONE, VerificationKeyConfig.SIGNUP, TEMPLATE))
                 .isInstanceOf(CustomException.class)
                 .extracting("errorCode")
                 .isEqualTo(ErrorCode.SMS_SEND_TOO_FREQUENT);
@@ -62,50 +62,50 @@ class SmsVerificationServiceTest {
     @Test
     @DisplayName("쿨다운이 없으면 SMS 발송 + 인증키/쿨다운키 저장 + 오류 카운터 삭제")
     void sendCodeStoresAllKeys() {
-        when(redisTemplate.hasKey(SmsKeyConfig.SIGNUP.cooldownKey(PHONE))).thenReturn(false);
+        when(redisTemplate.hasKey(VerificationKeyConfig.SIGNUP.cooldownKey(PHONE))).thenReturn(false);
         when(redisTemplate.opsForValue()).thenReturn(valueOperations);
 
-        smsVerificationService.sendCode(PHONE, SmsKeyConfig.SIGNUP, TEMPLATE);
+        smsVerificationService.sendCode(PHONE, VerificationKeyConfig.SIGNUP, TEMPLATE);
 
         // SMS 본문에 6자리 인증코드가 치환되어 발송됨
         verify(smsSender).send(eq(PHONE), matches("^\\[SilverBridge] 인증번호: \\d{6}\n유효 시간: 5분$"));
 
         // 인증코드 저장 (TTL 5분)
         verify(valueOperations).set(
-                eq(SmsKeyConfig.SIGNUP.verifyKey(PHONE)),
+                eq(VerificationKeyConfig.SIGNUP.verifyKey(PHONE)),
                 anyString(),
                 eq(SmsVerificationService.CODE_TTL_MINUTES),
                 eq(TimeUnit.MINUTES));
 
         // 쿨다운 설정 (TTL 1분)
         verify(valueOperations).set(
-                eq(SmsKeyConfig.SIGNUP.cooldownKey(PHONE)),
+                eq(VerificationKeyConfig.SIGNUP.cooldownKey(PHONE)),
                 eq("1"),
                 eq(SmsVerificationService.COOLDOWN_TTL_MINUTES),
                 eq(TimeUnit.MINUTES));
 
         // 기존 오류 카운터 초기화
-        verify(redisTemplate).delete(SmsKeyConfig.SIGNUP.attemptKey(PHONE));
+        verify(redisTemplate).delete(VerificationKeyConfig.SIGNUP.attemptKey(PHONE));
     }
 
     @Test
     @DisplayName("verifyCode는 VerificationCodeValidator에 위임")
     void verifyCodeDelegatesToValidator() {
-        smsVerificationService.verifyCode(PHONE, SmsKeyConfig.PASSWORD_RESET, "123456");
+        smsVerificationService.verifyCode(PHONE, VerificationKeyConfig.PASSWORD_RESET, "123456");
 
         verify(verificationCodeValidator).verify(
-                SmsKeyConfig.PASSWORD_RESET.verifyKey(PHONE),
-                SmsKeyConfig.PASSWORD_RESET.attemptKey(PHONE),
+                VerificationKeyConfig.PASSWORD_RESET.verifyKey(PHONE),
+                VerificationKeyConfig.PASSWORD_RESET.attemptKey(PHONE),
                 "123456",
                 SmsVerificationService.CODE_TTL_MINUTES,
                 SmsVerificationService.MAX_ATTEMPTS);
     }
 
     @Test
-    @DisplayName("SmsKeyConfig.SIGNUP과 PASSWORD_RESET은 서로 다른 Redis 키를 생성한다")
+    @DisplayName("VerificationKeyConfig.SIGNUP과 PASSWORD_RESET은 서로 다른 Redis 키를 생성한다")
     void keyConfigsAreIsolated() {
-        String signupVerify = SmsKeyConfig.SIGNUP.verifyKey(PHONE);
-        String resetVerify = SmsKeyConfig.PASSWORD_RESET.verifyKey(PHONE);
+        String signupVerify = VerificationKeyConfig.SIGNUP.verifyKey(PHONE);
+        String resetVerify = VerificationKeyConfig.PASSWORD_RESET.verifyKey(PHONE);
 
         org.assertj.core.api.Assertions.assertThat(signupVerify).isNotEqualTo(resetVerify);
         org.assertj.core.api.Assertions.assertThat(signupVerify).startsWith("sms:verify:");
