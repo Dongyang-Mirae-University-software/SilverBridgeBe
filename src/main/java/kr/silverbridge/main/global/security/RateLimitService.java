@@ -2,22 +2,20 @@ package kr.silverbridge.main.global.security;
 
 import kr.silverbridge.main.global.exception.CustomException;
 import kr.silverbridge.main.global.exception.ErrorCode;
+import kr.silverbridge.main.global.util.RedisCounter;
 import kr.silverbridge.main.global.util.RedisKeys;
 import lombok.RequiredArgsConstructor;
-import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
-
-import java.util.concurrent.TimeUnit;
 
 /**
  * Redis 기반 API 요청 속도 제한 서비스
- * 1분 슬라이딩 윈도우, 초과 시 TOO_MANY_REQUESTS(429) 반환
+ * 1분 고정 윈도우, 초과 시 TOO_MANY_REQUESTS(429) 반환
  */
 @Service
 @RequiredArgsConstructor
 public class RateLimitService {
 
-    private final StringRedisTemplate redisTemplate;
+    private final RedisCounter redisCounter;
 
     private static final long WINDOW_SECONDS = 60L;
     private static final int  MAX_REQUESTS   = 10;
@@ -32,11 +30,9 @@ public class RateLimitService {
     public void check(String endpoint, String identifier) {
         String key = RedisKeys.RATE_LIMIT + endpoint + ":" + identifier;
 
-        Long count = redisTemplate.opsForValue().increment(key);
-        if (count != null && count == 1) {
-            redisTemplate.expire(key, WINDOW_SECONDS, TimeUnit.SECONDS);
-        }
-        if (count != null && count > MAX_REQUESTS) {
+        // INCR + 최초 TTL 설정을 원자적으로 (M-4)
+        long count = redisCounter.incrementWithTtl(key, WINDOW_SECONDS);
+        if (count > MAX_REQUESTS) {
             throw new CustomException(ErrorCode.TOO_MANY_REQUESTS);
         }
     }
