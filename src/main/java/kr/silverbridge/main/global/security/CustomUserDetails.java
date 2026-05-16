@@ -1,6 +1,7 @@
 package kr.silverbridge.main.global.security;
 
 import kr.silverbridge.main.domain.user.entity.User;
+import kr.silverbridge.main.global.enums.Status;
 import lombok.Getter;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.core.GrantedAuthority;
@@ -36,6 +37,6 @@ public class CustomUserDetails implements UserDetails {
     // 계정 활성화 상태 반영
     @Override
     public boolean isEnabled() {
-        return user.getStatus().name().equals("ACTIVE");
+        return user.getStatus() == Status.ACTIVE;
     }
 }
