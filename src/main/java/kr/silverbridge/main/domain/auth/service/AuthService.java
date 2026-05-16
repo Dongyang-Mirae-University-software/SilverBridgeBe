@@ -161,8 +161,10 @@ public class AuthService {
     public void logout(String accessToken, String userId, String ipAddress, String userAgent) {
         long remaining = jwtTokenProvider.getRemainingExpiration(accessToken);
         if (remaining > 0) {
+            // 토큰 원문 대신 SHA-256 해시를 키로 사용 (Redis 메모리 절약 + 원문 비노출)
             redisTemplate.opsForValue()
-                    .set(RedisKeys.LOGOUT_TOKEN + accessToken, "true", remaining, TimeUnit.MILLISECONDS);
+                    .set(RedisKeys.LOGOUT_TOKEN + jwtTokenProvider.hashToken(accessToken),
+                            "true", remaining, TimeUnit.MILLISECONDS);
         }
         refreshTokenRepository.deleteByUserId(userId);
         accessLogService.log(userId, AccessAction.LOGOUT, ipAddress, userAgent);

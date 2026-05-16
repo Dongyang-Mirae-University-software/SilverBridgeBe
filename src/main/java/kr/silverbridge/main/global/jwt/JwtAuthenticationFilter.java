@@ -83,9 +83,10 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
         return null;
     }
 
-    // 로그아웃된 토큰인지 확인
+    // 로그아웃된 토큰인지 확인 (토큰 SHA-256 해시를 키로 사용)
     private boolean isLoggedOut(String token) {
-        return Boolean.TRUE.equals(redisTemplate.hasKey(RedisKeys.LOGOUT_TOKEN + token));
+        return Boolean.TRUE.equals(
+                redisTemplate.hasKey(RedisKeys.LOGOUT_TOKEN + jwtTokenProvider.hashToken(token)));
     }
 
     // 비밀번호 변경 시각보다 이전에 발급된 토큰이면 무효
