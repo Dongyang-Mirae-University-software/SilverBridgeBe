@@ -65,7 +65,7 @@ public class PasswordResetService {
         }
 
         String email = user.getEmail();
-        SmsKeyConfig config = SmsKeyConfig.PASSWORD_RESET_EMAIL;
+        VerificationKeyConfig config = VerificationKeyConfig.PASSWORD_RESET_EMAIL;
 
         // 1분 이내 재발송 차단
         if (Boolean.TRUE.equals(redisTemplate.hasKey(config.cooldownKey(email)))) {
@@ -91,7 +91,7 @@ public class PasswordResetService {
     // 공통 검증 → 이메일로 사용자 조회 → UUID 재설정 토큰 발급(30분 유효)
     public PasswordResetTokenResponse verifyEmailToken(PasswordResetEmailVerifyRequest request) {
         String email = request.getEmail();
-        SmsKeyConfig config = SmsKeyConfig.PASSWORD_RESET_EMAIL;
+        VerificationKeyConfig config = VerificationKeyConfig.PASSWORD_RESET_EMAIL;
 
         verificationCodeValidator.verify(
                 config.verifyKey(email),
@@ -130,7 +130,7 @@ public class PasswordResetService {
             return;
         }
 
-        smsVerificationService.sendCode(phone, SmsKeyConfig.PASSWORD_RESET, PASSWORD_RESET_SMS_TEMPLATE);
+        smsVerificationService.sendCode(phone, VerificationKeyConfig.PASSWORD_RESET, PASSWORD_RESET_SMS_TEMPLATE);
         log.info("비밀번호 재설정 SMS 발송 완료: {}", MaskingUtil.maskPhone(phone));
     }
 
@@ -139,7 +139,7 @@ public class PasswordResetService {
     public PasswordResetTokenResponse verifySmsAndIssueToken(PasswordResetSmsVerifyRequest request) {
         String phone = request.getPhone();
 
-        smsVerificationService.verifyCode(phone, SmsKeyConfig.PASSWORD_RESET, request.getCode());
+        smsVerificationService.verifyCode(phone, VerificationKeyConfig.PASSWORD_RESET, request.getCode());
 
         // 전화번호로 사용자 조회 후 재설정 코드 발급 (30분 유효)
         User user = userRepository.findByPhone(phone)

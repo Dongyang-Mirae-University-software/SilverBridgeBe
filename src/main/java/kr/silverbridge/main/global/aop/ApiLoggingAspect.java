@@ -1,6 +1,7 @@
 package kr.silverbridge.main.global.aop;
 
 import jakarta.servlet.http.HttpServletRequest;
+import kr.silverbridge.main.global.security.CustomUserDetails;
 import lombok.extern.slf4j.Slf4j;
 import org.aspectj.lang.ProceedingJoinPoint;
 import org.aspectj.lang.annotation.Around;
@@ -60,11 +61,15 @@ public class ApiLoggingAspect {
         }
     }
 
-    // 현재 인증된 사용자 ID 추출 (JwtAuthenticationFilter 가 principal 로 userId 문자열을 셋팅)
+    // 현재 인증된 사용자 ID 추출
+    // 기본 경로: JwtAuthenticationFilter 가 principal 로 userId 문자열을 셋팅
+    // 보조 경로: UserDetailsService 기반 인증 시 CustomUserDetails 가 principal 일 수 있어 함께 지원
     private String currentUserId() {
         Authentication auth = SecurityContextHolder.getContext().getAuthentication();
         if (auth == null || !auth.isAuthenticated()) return null;
         Object principal = auth.getPrincipal();
-        return principal instanceof String s ? s : null;
+        if (principal instanceof String s) return s;
+        if (principal instanceof CustomUserDetails cud) return cud.getUser().getId();
+        return null;
     }
 }
