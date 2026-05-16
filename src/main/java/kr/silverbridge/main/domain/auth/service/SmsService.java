@@ -43,7 +43,7 @@ public class SmsService {
             throw new CustomException(ErrorCode.PHONE_ALREADY_EXISTS);
         }
 
-        smsVerificationService.sendCode(phone, SmsKeyConfig.SIGNUP, SIGNUP_MESSAGE_TEMPLATE);
+        smsVerificationService.sendCode(phone, VerificationKeyConfig.SIGNUP, SIGNUP_MESSAGE_TEMPLATE);
         log.info("SMS 인증코드 발송 완료: {}", MaskingUtil.maskPhone(phone));
     }
 
@@ -55,7 +55,7 @@ public class SmsService {
     public String verifyCode(SmsVerifyRequest request) {
         String phone = request.getPhone();
 
-        smsVerificationService.verifyCode(phone, SmsKeyConfig.SIGNUP, request.getCode());
+        smsVerificationService.verifyCode(phone, VerificationKeyConfig.SIGNUP, request.getCode());
 
         // 인증 세션 식별자 발급 (10분 유효) — 회원가입 요청에서 nonce 일치 검증용
         String nonce = UUID.randomUUID().toString();
