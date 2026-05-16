@@ -50,7 +50,11 @@ public class PasswordResetController {
     public ApiResponse<Void> confirmReset(@Valid @RequestBody PasswordResetConfirmRequest request,
                                           HttpServletRequest httpRequest) {
         rateLimitService.check("pw-reset-confirm", httpRequest.getRemoteAddr());
-        passwordResetService.confirmReset(request);
+        passwordResetService.confirmReset(
+                request,
+                httpRequest.getRemoteAddr(),
+                httpRequest.getHeader("User-Agent")
+        );
         return ApiResponse.ok("비밀번호가 변경되었습니다.");
     }
 }
