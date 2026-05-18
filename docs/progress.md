@@ -4,6 +4,36 @@
 
 ---
 
+## 2026-05-16 — auth / user 점검 결함 조치 완료
+
+audit-report-auth.md 발견 28건에 대한 조치를 결함 단위 PR로 분리·머지 완료. 상세 상태는 audit-report-auth.md "적용 현황" 절 참조.
+
+### Phase A (Critical 1 + High 7) — PR #124~#132
+
+- 빨강: 비밀번호 변경·재설정 후 access token 즉시 무효화 (Redis sliding invalidation)
+- High 7건: 로그인 enumeration 통합, 잠금 키 user.id 기반, refresh 재사용 감지, INACTIVE refresh 정리, SMS nonce 결합, 카카오 탈퇴 confirmation, dead code 정리
+- 프론트 후속 작업 3건(H-1 로그인 응답 / H-5 SMS nonce / H-6 카카오 탈퇴)은 각 PR 본문에 마이그레이션 가이드 명시
+
+### Medium/Low — PR #133~#137 (성격별 5묶음)
+
+- #133 문서/Swagger 정합 (M-2)
+- #134 보안 강화 (M-6 토큰 해시, M-7 헤더 검증, M-8 rate limit 확대, M-11 BCrypt 12, L-3 permitAll 분리 + 401 entry point)
+- #135 Redis 카운터 원자화 (M-4, L-2 — RedisCounter Lua)
+- #136 코드 품질·네이밍 (M-9 VerificationKeyConfig 리네임, M-12 AuthLoginProperties 외부화, M-13, L-1/L-4/L-5/L-7)
+- #137 비밀번호 재설정 트랜잭션·로깅 (M-3 IP/UA 기록, M-5 readOnly 트랜잭션 분리)
+
+### 제외/보류 (근거는 audit-report-auth.md 기록)
+
+- 제외: L-6(ID 재시도가 단일 호출보다 안전), M-10(2곳 중복 추출은 발송 추상화로 더 복잡)
+- 보류: M-1(프론트 state 검증 선확인 필요 — 협의 사항 문서화), KAKAO/SOLAPI 키 회전(운영 결정)
+
+### 호환성
+
+- Medium/Low 전 항목 응답 포맷 변경 없음
+- application.yaml에 auth.login.* 추가 (기본값이 기존 동작과 동일)
+
+---
+
 ## 2026-05-15 — auth / user 도메인 점검 (보안 정밀)
 
 스킬 기반 7 PHASE 점검(security-audit / concurrency-review / architecture-review / spring-boot-patterns / clean-code / api-contract-review / jpa-patterns / performance-smell-detection / logging-patterns / test-quality) 완료. 보안 핵심 도메인 정밀 모드.
