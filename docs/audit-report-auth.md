@@ -23,6 +23,42 @@ Critical 1건 = 비밀번호 변경/재설정 후 기존 Access Token이 30분�
 
 ---
 
+## 적용 현황 (2026-05-16 갱신)
+
+발견 28건 중 24건 적용, 2건 엔지니어링 판단 제외, 2건(M-1, 키 회전) 운영/프론트 협의 보류. 모두 결함 단위 PR로 분리해 dev 머지 완료.
+
+### 적용 완료
+
+| 항목 | PR | 비고 |
+|------|-----|------|
+| A-Critical-1 | #125 | Redis sliding invalidation 방식 |
+| A-High-7 | #126 | dead code 제거 |
+| A-High-4 | #127 | INACTIVE 시 refresh 삭제 |
+| A-High-2 | #128 | 잠금 키 user.id 기반 |
+| A-High-1 | #129 | 로그인 응답 통합 (프론트 마이그레이션 안내 포함) |
+| A-High-3 | #130 | 재사용 감지 — family_id 컬럼 없이 existsByUserId 신호 방식으로 적용 (스키마 변경 회피) |
+| A-High-5 | #131 | SMS 인증 nonce 결합 (프론트 마이그레이션 안내 포함) |
+| A-High-6 | #132 | 카카오 탈퇴 confirmation (프론트 마이그레이션 안내 포함) |
+| M-2 | #133 | Swagger 만료 표기 7일 정정 |
+| M-6, M-7, M-8, M-11, L-3 | #134 | 보안 강화 묶음 |
+| M-4, L-2 | #135 | Redis 카운터 원자화 |
+| M-9, M-12, M-13, L-1, L-4, L-5, L-7 | #136 | 코드 품질·네이밍 |
+| M-3, M-5 | #137 | 비밀번호 재설정 트랜잭션·로깅 |
+
+점검 리포트 자체는 PR #124로 머지.
+
+### 엔지니어링 판단 제외 (현행 유지)
+
+- L-6 UserIdGenerator 단순화 — 현재의 do/while 재시도가 단일 호출보다 안전. 단일 호출로 바꾸면 6자리 ID 우연 충돌 시 회원가입이 실패함. 충돌 재시도는 유지가 맞다.
+- M-10 이메일/SMS 인증 발송 중복 추출 — 중복 지점이 2곳뿐이고, 추출하려면 발송 수단(SMS/메일)을 추상화해야 해 오히려 복잡도가 증가. 약 15줄 중복을 위해 추상화 레이어를 더하는 것은 가독성 손해.
+
+### 보류 (운영/프론트 협의 필요)
+
+- M-1 카카오 OAuth state 검증 — 프론트가 state 값을 생성·전달해야 백엔드가 검증 가능. 백엔드 단독 적용 불가. 아래 "M-1 협의 사항" 참조.
+- KAKAO/SOLAPI 키 회전 — 운영 결정 사항. 사용자 판단으로 .env.dev 미변경 결정(현 사이클).
+
+---
+
 ## Phase A. 보안 (security-audit + concurrency-review)
 
 ### 🔴 A-Critical-1. 비밀번호 변경/재설정 후 Access Token 무효화 누락
@@ -412,14 +448,33 @@ JUnit5 + Mockito + AssertJ + 한글 `@DisplayName` 컨벤션 유지 (progress.md
 
 ---
 
+## M-1 협의 사항 (카카오 OAuth state 검증)
+
+state 파라미터는 OAuth 2.0의 CSRF 방어 장치다. "로그인 시작 시 임의 난수(state)를 만들어 두고, 카카오가 돌려준 응답의 state가 그 값과 같은지" 확인해 위조 요청을 막는다. 핵심은 state를 만들고 보관하는 주체가 로그인을 시작하는 프론트라는 점이다. 백엔드는 인가 코드만 받으므로 단독으로는 검증할 수 없다.
+
+프론트와 합의해야 할 항목:
+
+1. state 생성·보관 위치 — 프론트가 카카오 인가 요청 URL을 만들 때 난수 state를 생성해 인가 URL 쿼리에 싣고, 동시에 브라우저(sessionStorage 등)에 보관하는지. 카카오 로그인 SDK를 쓰는 경우 SDK가 state를 자동 처리하는지(자동이면 백엔드 검증 불필요).
+2. 콜백 검증 주체 — 카카오가 redirect_uri로 돌아올 때 붙는 state를, 프론트가 보관값과 비교한 뒤 백엔드(/api/auth/signin/kakao)에는 코드만 넘기는 "프론트 검증" 모델인지, 아니면 프론트가 state까지 백엔드로 넘겨 백엔드가 검증하는 "백엔드 검증" 모델인지.
+3. 백엔드 검증 모델로 갈 경우의 계약 변경 — KakaoLoginRequest에 state 필드 추가, 로그인 시작 시 백엔드가 state를 발급·Redis 보관(짧은 TTL)하는 엔드포인트 또는 흐름 신설, 콜백에서 일치 검증. 응답·요청 포맷 변경이 동반되므로 프론트 일정과 함께 잡아야 함.
+4. 현 위험 수준 합의 — 카카오 인가 코드는 1회성·짧은 만료라 state 부재의 실제 위협은 제한적. 프론트 검증이 이미 동작 중이면 백엔드 작업 불필요. "프론트가 이미 검증하는가?"를 먼저 확인하는 것이 1순위.
+
+권장 진행: 먼저 프론트에 "카카오 로그인 시 state를 생성·검증하고 있는지" 확인 → 하고 있으면 M-1 종결(추가 작업 없음), 안 하고 있으면 위 2번 모델 중 택1 후 계약 변경을 별도 사이클로 진행.
+
+---
+
 ## 미해결 TODO (다음 사이클 이월)
 
-- A-High-3 family invalidation 적용 시 `refresh_tokens` 스키마 변경 필요 — Flyway V16 마이그레이션 별도 PR
-- M-1 카카오 OAuth state 검증 — 카카오 측 SDK가 프론트에서 state 검증을 하는지 확인 후 결정
-- A-High-6 카카오 탈퇴 본인 확인 — UX 설계 협의 후 진행
-- 동시성 테스트 추가(JUnit 5 `@RepeatedTest` + Awaitility 또는 별도 통합 테스트)
-- OWASP DependencyCheck CI 결과 점검(`./gradlew dependencyCheckAnalyze` 직접 실행 → 별도 보고서)
-- KAKAO/SOLAPI 키 회전 운영 결정
+- M-1 카카오 OAuth state 검증 — 위 "M-1 협의 사항"대로 프론트 확인 선행 후 결정
+- 동시성 테스트 추가(JUnit 5 `@RepeatedTest` + Awaitility 또는 별도 통합 테스트) — refresh rotation 재사용, 동일 이메일 동시 가입
+- KakaoAuthService / PasswordResetService 단위 테스트 보강 (Phase F 커버리지 갭)
+- OWASP DependencyCheck 실행(`./gradlew dependencyCheckAnalyze`) → 별도 보고서
+- KAKAO/SOLAPI 키 회전 — 운영 결정 (현 사이클은 사용자 판단으로 미변경)
+
+### 해소 완료 (이전 TODO 항목)
+
+- A-High-3 family invalidation — 스키마 변경 없이 existsByUserId 신호 방식으로 PR #130 적용 완료
+- A-High-6 카카오 탈퇴 본인 확인 — confirmation 입력 방식으로 PR #132 적용 완료
 
 ---
 
