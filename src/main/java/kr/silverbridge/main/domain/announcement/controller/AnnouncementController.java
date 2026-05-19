@@ -17,7 +17,7 @@ import org.springframework.web.bind.annotation.RestController;
 
 import java.util.List;
 
-@Tag(name = "공지사항 (사용자)", description = """
+@Tag(name = "피보호자/보호자 - 공지사항", description = """
         로그인한 사용자(WARD/GUARDIAN/ADMIN 모두)가 열람하는 공지사항 API.
         관리자 CRUD는 /api/admin/announcement/* 참고.
         """)
