@@ -3,12 +3,10 @@ name: CD
 on:
   push:
     branches: [ dev ]
-  # GitHub Actions UI / gh workflow run 으로 수동 실행 가능 — 비상 재배포·롤백 후 재배포용
   workflow_dispatch:
 
 jobs:
   deploy:
-    # dev 라벨 붙은 self-hosted runner만 실행 — prod 서버에 runner 등록되더라도 영향 없음
     runs-on: [self-hosted, dev]
     steps:
       - name: 배포
@@ -17,12 +15,14 @@ jobs:
           cd ~/SilverBridgeBe
           git pull origin dev
 
-          # .env.dev 자체가 없으면 docker compose의 원시 에러보다 친화적인 메시지로 즉시 종료.
-          # 키 누락은 Spring 시작 시 RequiredPropertiesValidator가 잡으므로 여기서는 파일 존재만 확인.
           if [ ! -f .env.dev ]; then
             echo "::error::.env.dev 파일이 호스트에 없습니다 (~/SilverBridgeBe/.env.dev). 배포 중단."
             exit 1
           fi
 
-          docker compose -f docker-compose.dev.yml up -d --build api
+          docker compose -f docker-compose.dev.yml build \
+            --build-arg BUILDKIT_INLINE_CACHE=1 \
+            api
+
+          docker compose -f docker-compose.dev.yml up -d api
           docker image prune -f
