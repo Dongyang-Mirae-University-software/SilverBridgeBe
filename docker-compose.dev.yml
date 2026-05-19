@@ -46,9 +46,10 @@ services:
       - "6513:5432"
     # Docker 루트가 NTFS/FUSE 등인 경우 named volume에서 initdb chmod 실패함.
     # 프로젝트 경로(ext4)에 바인드 마운트하여 PostgreSQL 데이터 디렉터리 권한 문제 회피.
+    # 스키마는 Flyway가 단일 관리(앱 부팅 시 V1~ 순차 적용).
+    # schema.sql 초기 시딩은 Flyway baseline과 충돌해 제거됨.
     volumes:
       - ./.data/postgres:/var/lib/postgresql/data
-      - ./db/schema.sql:/docker-entrypoint-initdb.d/schema.sql:ro
     networks:
       - app-net
     healthcheck:
