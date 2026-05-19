@@ -1,7 +1,5 @@
 package kr.silverbridge.main.domain.auth.service;
 
-import kr.silverbridge.main.global.exception.CustomException;
-import kr.silverbridge.main.global.exception.ErrorCode;
 import kr.silverbridge.main.global.util.VerificationCodeValidator;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -27,36 +25,30 @@ public class SmsVerificationService {
 
     /** 인증코드 유효 시간 (분) */
     public static final long CODE_TTL_MINUTES = 5L;
-    /** 재발송 대기 시간 (분) */
-    public static final long COOLDOWN_TTL_MINUTES = 1L;
+    /** 인증코드 유효 시간 (초) — 프론트 카운트다운(CodeSentResponse) 노출용 */
+    public static final long CODE_TTL_SECONDS = CODE_TTL_MINUTES * 60;
     /** 최대 오류 허용 횟수 */
     public static final int MAX_ATTEMPTS = 5;
 
     /**
      * 인증코드 발송 공통 로직
-     * 쿨다운 확인 → 코드 생성 → SMS 발송 → 저장(5분) → 오류 횟수 초기화 → 쿨다운 설정(1분)
+     * 코드 생성 → SMS 발송 → 저장(5분) → 오류 횟수 초기화
+     * <p>
+     * 재발송 쿨다운은 두지 않는다. 인증요청을 잘못 눌렀을 때 즉시 다시 받을 수 있어야 하므로
+     * 발송 빈도 방어는 컨트롤러단 IP RateLimit({@code RateLimitService})에만 의존한다.
      *
      * @param phone            수신 전화번호
      * @param config           Redis 키 설정 (흐름별 분리)
      * @param messageTemplate  SMS 본문 템플릿 ({@code %s} 위치에 인증코드 삽입)
      */
     public void sendCode(String phone, VerificationKeyConfig config, String messageTemplate) {
-        // 1분 이내 재발송 차단
-        if (Boolean.TRUE.equals(redisTemplate.hasKey(config.cooldownKey(phone)))) {
-            throw new CustomException(ErrorCode.SMS_SEND_TOO_FREQUENT);
-        }
-
         String code = generateCode();
         smsSender.send(phone, String.format(messageTemplate, code));
 
-        // 인증코드 저장 + 기존 오류 횟수 초기화
+        // 인증코드 저장 + 기존 오류 횟수 초기화 (기존 코드가 있으면 새 코드로 교체)
         redisTemplate.opsForValue()
                 .set(config.verifyKey(phone), code, CODE_TTL_MINUTES, TimeUnit.MINUTES);
         redisTemplate.delete(config.attemptKey(phone));
-
-        // 재발송 대기 설정
-        redisTemplate.opsForValue()
-                .set(config.cooldownKey(phone), "1", COOLDOWN_TTL_MINUTES, TimeUnit.MINUTES);
     }
 
     /**
