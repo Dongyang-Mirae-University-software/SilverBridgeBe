@@ -27,16 +27,13 @@
 ```
 kr.silverbridge.main
 ├── domain
-│   ├── admin           ── 관리자 기능
-│   ├── ai              ── AI 통합
+│   ├── admin           ── 관리자 공지사항 (감사로그 쓰기 포함)
 │   ├── announcement    ── 공지/알림
-│   ├── anomaly         ── 이상 행위 탐지
 │   ├── auth            ── 인증/인가
-│   ├── call            ── 통화
 │   ├── connection      ── 연결 관리
-│   ├── game            ── 게임 도메인
 │   ├── notification    ── 푸시/알림 발송
 │   └── user            ── 사용자
+(2026-05-19 미검증 API 정리로 ai·anomaly·call·game 도메인 제거)
 └── global
     ├── aop / client / config / entity / enums
     ├── exception / jwt / response
@@ -284,5 +281,5 @@ gh pr create --base dev
 
 ---
 
-**최종 업데이트**: 2026-05-01
+**최종 업데이트**: 2026-05-19
 **Spring Boot**: 4.0.5 / **Java**: 21 / **빌드**: Gradle
