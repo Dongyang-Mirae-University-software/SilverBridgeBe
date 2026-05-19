@@ -1,8 +1,11 @@
-# V17 DROP TABLE 제안서 (미적용 — 별도 PR + 승인 필요)
+# V17 DROP TABLE 제안서 (적용 완료)
 
 작성일: 2026-05-19
 관련 작업: 미검증 API 정리 (docs/progress.md 2026-05-19 항목)
-상태: 제안만 함. 실제 마이그레이션 파일 미생성. 사용자 승인 후 별도 PR로 진행.
+상태: 적용 완료. 사용자 승인 후 PR #143 으로 dev 머지(머지 커밋 cae178a),
+마이그레이션 파일 `src/main/resources/db/migration/V17__drop_unused_feature_tables.sql` 생성.
+dev 머지 시 CD 자동 배포로 Flyway 실행 — dev DB 적용 결과는 배포 로그에서 확인 필요.
+아래 내용은 작성 당시 제안 기록으로 보존.
 
 ## 배경
 
