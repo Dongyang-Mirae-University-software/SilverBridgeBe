@@ -2,10 +2,12 @@ package kr.silverbridge.main.domain.user.entity;
 
 import jakarta.persistence.*;
 import kr.silverbridge.main.global.entity.BaseTimeEntity;
+import kr.silverbridge.main.global.enums.Gender;
 import kr.silverbridge.main.global.enums.Provider;
 import kr.silverbridge.main.global.enums.Role;
 import kr.silverbridge.main.global.enums.Status;
 import lombok.*;
+import java.time.LocalDate;
 import java.time.OffsetDateTime;
 
 @Entity
@@ -26,7 +28,7 @@ public class User extends BaseTimeEntity {
     @Column(length = 255)
     private String password;
 
-    @Column(nullable = false, length = 50)
+    @Column(nullable = false, length = 20)
     private String name;
 
     @Column(length = 20)
@@ -49,6 +51,19 @@ public class User extends BaseTimeEntity {
 
     @Column(name = "profile_image", length = 500)
     private String profileImage;
+
+    // 성별 (여성/남성). 기존 사용자는 NULL(미입력) — V18에서 NULL 허용으로 추가.
+    @Enumerated(EnumType.STRING)
+    @Column(length = 10)
+    private Gender gender;
+
+    // 생년월일. 기존 사용자는 NULL(미입력).
+    @Column(name = "birth_date")
+    private LocalDate birthDate;
+
+    // 우편번호 (카카오 주소 API zonecode). 기존 사용자는 NULL(미입력).
+    @Column(length = 10)
+    private String postcode;
 
     @Column(nullable = false, length = 200)
     private String address;
@@ -85,10 +100,15 @@ public class User extends BaseTimeEntity {
         this.status = Status.INACTIVE;
     }
 
-    // 프로필 정보 수정 (이름, 전화번호, 주소)
-    public void updateProfile(String name, String phone, String address, String addressDetail) {
+    // 프로필 정보 수정 (이름, 전화번호, 성별, 생년월일, 우편번호, 주소)
+    // 기존 사용자도 프로필 수정 시 성별·생년월일·우편번호를 함께 보완 입력한다.
+    public void updateProfile(String name, String phone, Gender gender, LocalDate birthDate,
+                              String postcode, String address, String addressDetail) {
         this.name = name;
         this.phone = phone;
+        this.gender = gender;
+        this.birthDate = birthDate;
+        this.postcode = postcode;
         this.address = address;
         this.addressDetail = addressDetail;
     }

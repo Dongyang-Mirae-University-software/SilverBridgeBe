@@ -88,6 +88,9 @@ public class AuthService {
                 .role(request.getRole())
                 .status(Status.ACTIVE)
                 .provider(Provider.LOCAL)
+                .gender(request.getGender())
+                .birthDate(request.getBirthDate())
+                .postcode(request.getPostcode())
                 .address(request.getAddress())
                 .addressDetail(request.getAddressDetail())
                 .build();
@@ -223,15 +226,22 @@ public class AuthService {
             throw new CustomException(ErrorCode.USER_NOT_FOUND);
         }
 
-        String maskedEmail = users.stream()
+        // LOCAL 계정 1건을 잡아 마스킹 이메일과 가입일(yyyy-MM-dd)을 함께 산출
+        Optional<User> localUser = users.stream()
                 .filter(User::isLocalProvider)
-                .findFirst()
+                .findFirst();
+
+        String maskedEmail = localUser
                 .map(u -> MaskingUtil.maskEmail(u.getEmail()))
+                .orElse(null);
+
+        java.time.LocalDate joinedAt = localUser
+                .map(u -> u.getCreatedAt().toLocalDate())
                 .orElse(null);
 
         boolean hasKakaoAccount = users.stream().anyMatch(User::isSocialProvider);
 
-        return new FindEmailResponse(maskedEmail, hasKakaoAccount);
+        return new FindEmailResponse(maskedEmail, hasKakaoAccount, joinedAt);
     }
 
     // Refresh Token 재사용(도난) 감지

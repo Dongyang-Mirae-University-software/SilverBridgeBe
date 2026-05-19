@@ -9,18 +9,16 @@ public final class RedisKeys {
     private RedisKeys() {}
 
     // ── 회원가입 SMS 인증 ──────────────────────────────
+    // 재발송 쿨다운 폐지(2026-05): cooldown 키 없음. 빈도 방어는 IP RateLimit에 의존.
     public static final String SMS_VERIFY    = "sms:verify:";
     public static final String SMS_VERIFIED  = "sms:verified:";
-    public static final String SMS_COOLDOWN  = "sms:cooldown:";
     public static final String SMS_ATTEMPT   = "sms:attempt:";
 
     // ── 비밀번호 재설정 ────────────────────────────────
-    public static final String PW_RESET          = "password:reset:";
+    // UUID 토큰 폐지(2026-05): 6자리 코드로 통일. PW_RESET(토큰→userId) 키 제거됨.
     public static final String PW_SMS_VERIFY     = "password:sms:verify:";
-    public static final String PW_SMS_COOLDOWN   = "password:sms:cooldown:";
     public static final String PW_SMS_ATTEMPT    = "password:sms:attempt:";
     public static final String PW_EMAIL_VERIFY   = "password:email:verify:";
-    public static final String PW_EMAIL_COOLDOWN = "password:email:cooldown:";
     public static final String PW_EMAIL_ATTEMPT  = "password:email:attempt:";
 
     // ── 카카오 OAuth ───────────────────────────────────
