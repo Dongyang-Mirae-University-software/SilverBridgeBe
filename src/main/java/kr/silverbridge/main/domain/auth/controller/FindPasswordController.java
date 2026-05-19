@@ -48,7 +48,7 @@ public class FindPasswordController {
 
                     [이메일 방식 전체 흐름] — UUID 토큰 없음, 6자리 코드 하나로 통일
                     1. POST /api/auth/find-password/email/send   → 인증코드 이메일 발송 (이 API)
-                    2. POST /api/auth/find-password/email/verify → 6자리 코드 확인 (pre-check, 코드 미소비)
+                    2. POST /api/auth/find-password/email/verify → 6자리 코드 사전 확인 (코드 소비 안 함)
                     3. POST /api/auth/password/reset             → 같은 email + 같은 6자리 code + 새 비밀번호
 
                     [보안·동작]
@@ -73,9 +73,10 @@ public class FindPasswordController {
     }
 
     @Operation(
-            summary = "[이메일] 2단계 · 인증코드 확인 (pre-check)",
+            summary = "[이메일] 2단계 · 인증코드 사전 확인",
             description = """
-                    이메일로 받은 6자리 숫자 인증코드가 맞는지 확인합니다. (Image 5 "확인" 버튼)
+                    인증코드 입력 화면에서 사용자가 '확인'을 눌렀을 때 호출합니다.
+                    이메일로 받은 6자리 숫자 인증코드가 맞는지 검사만 합니다.
 
                     [중요] 토큰을 발급하지 않습니다. 이 단계는 코드를 소비하지 않는 사전 확인이며,
                     성공하면 다음 화면(새 비밀번호)으로 진행한 뒤
@@ -133,7 +134,7 @@ public class FindPasswordController {
 
                     [SMS 방식 전체 흐름] — UUID 토큰 없음, 6자리 코드 하나로 통일
                     1. POST /api/auth/find-password/sms/send   → 인증코드 SMS 발송 (이 API)
-                    2. POST /api/auth/find-password/sms/verify → 6자리 코드 확인 (pre-check, 코드 미소비)
+                    2. POST /api/auth/find-password/sms/verify → 6자리 코드 사전 확인 (코드 소비 안 함)
                     3. POST /api/auth/password/reset           → 같은 phone + 같은 6자리 code + 새 비밀번호
 
                     [보안·동작]
@@ -157,9 +158,10 @@ public class FindPasswordController {
     }
 
     @Operation(
-            summary = "[SMS] 2단계 · 인증코드 확인 (pre-check)",
+            summary = "[SMS] 2단계 · 인증코드 사전 확인",
             description = """
-                    SMS로 받은 6자리 숫자 인증코드가 맞는지 확인합니다. (Image 5 "확인" 버튼)
+                    인증코드 입력 화면에서 사용자가 '확인'을 눌렀을 때 호출합니다.
+                    SMS로 받은 6자리 숫자 인증코드가 맞는지 검사만 합니다.
 
                     [중요] 토큰을 발급하지 않습니다. 코드를 소비하지 않는 사전 확인이며,
                     성공하면 다음 화면으로 진행한 뒤
