@@ -4,8 +4,6 @@ import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.tags.Tag;
-import jakarta.validation.Valid;
-import kr.silverbridge.main.domain.connection.dto.ConnectionPriorityUpdateRequest;
 import kr.silverbridge.main.domain.connection.dto.ConnectionResponse;
 import kr.silverbridge.main.domain.connection.service.ConnectionService;
 import kr.silverbridge.main.global.response.ApiResponse;
@@ -31,7 +29,6 @@ public class WardConnectionController {
                     Authorization: Bearer {accessToken}
 
                     ACTIVE 상태 연결 목록을 우선순위(priority) 오름차순으로 반환합니다.
-                    긴급통화 시 1순위 보호자에게 먼저 연결 시도합니다.
                     """)
     @GetMapping("/api/ward/connection/select")
     public ResponseEntity<ApiResponse<List<ConnectionResponse>>> getMyGuardians(
@@ -103,27 +100,5 @@ public class WardConnectionController {
             @PathVariable Long connectionId) {
         connectionService.disconnectAsWard(wardId, connectionId);
         return ResponseEntity.ok(ApiResponse.ok("연결을 해제했습니다."));
-    }
-
-    @Operation(summary = "보호자 통화 우선순위 변경",
-            description = """
-                    [요청 헤더]
-                    Authorization: Bearer {accessToken}
-
-                    긴급통화(SOS) 시 연결된 보호자 중 priority가 낮은 순서대로 WebRTC 연결을 시도합니다.
-                    priority=1 이 1순위입니다.
-                    """)
-    @ApiResponses({
-            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "우선순위 변경 완료"),
-            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "ACTIVE 상태가 아닌 연결", content = @Content),
-            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "해당 연결의 피보호자가 아님", content = @Content)
-    })
-    @PatchMapping("/api/ward/call/priority/{connectionId}")
-    public ResponseEntity<ApiResponse<Void>> updatePriority(
-            @AuthenticationPrincipal String wardId,
-            @PathVariable Long connectionId,
-            @Valid @RequestBody ConnectionPriorityUpdateRequest request) {
-        connectionService.updatePriority(wardId, connectionId, request.getPriority());
-        return ResponseEntity.ok(ApiResponse.ok("우선순위를 변경했습니다."));
     }
 }
