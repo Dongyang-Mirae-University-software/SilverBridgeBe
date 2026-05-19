@@ -28,21 +28,23 @@ public class PasswordResetController {
     @Operation(
             summary = "[공통] 3단계 · 새 비밀번호 설정",
             description = """
-                    이메일 또는 SMS 방식으로 발급된 token과 새 비밀번호를 입력하여 비밀번호를 변경합니다.
+                    Image 5에서 확인한 6자리 인증코드를 그대로 다시 전달하여 비밀번호를 변경합니다. (UUID 토큰 없음)
                     변경 성공 시 모든 기기에서 자동 로그아웃됩니다. (재로그인 필요)
 
-                    [token 출처]
-                    - 이메일 방식: POST /api/auth/find-password/email/verify 응답의 token 값
-                    - SMS 방식: POST /api/auth/find-password/sms/verify 응답의 token 값
+                    [요청 필드]
+                    - 이메일 방식: email + code(6자리) + newPassword   (phone은 비움)
+                    - SMS 방식:   phone + code(6자리) + newPassword   (email은 비움)
+                    - email/phone 은 정확히 하나만 채워야 합니다.
+                    - code: 1·2단계에서 받은/확인한 그 6자리 숫자 (유효 5분, 5회 오류 시 무효화)
 
                     [비밀번호 조건]
-                    - 숫자·특수문자 포함, 공백 없이 8자 이상
+                    - 영문·숫자·특수문자 모두 포함, 공백 없이 8자 이상
                     - 현재 비밀번호와 동일 불가
                     """
     )
     @ApiResponses({
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "비밀번호 변경 성공. 모든 기기에서 로그아웃됨 → 재로그인 필요"),
-            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "token 만료 또는 유효하지 않음 / 현재 비밀번호와 동일 / 비밀번호 형식 오류", content = @Content),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "email/phone 동시 지정 또는 둘 다 누락 / 코드 만료·불일치·5회초과 / 현재 비밀번호와 동일 / 입력 형식 오류 / 카카오 계정", content = @Content),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "사용자를 찾을 수 없음", content = @Content),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "500", description = "서버 오류", content = @Content)
     })

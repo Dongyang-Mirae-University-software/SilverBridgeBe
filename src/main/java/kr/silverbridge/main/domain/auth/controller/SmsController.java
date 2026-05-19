@@ -6,10 +6,12 @@ import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
+import kr.silverbridge.main.domain.auth.dto.CodeSentResponse;
 import kr.silverbridge.main.domain.auth.dto.SmsSendRequest;
 import kr.silverbridge.main.domain.auth.dto.SmsVerifyRequest;
 import kr.silverbridge.main.domain.auth.dto.SmsVerifyResponse;
 import kr.silverbridge.main.domain.auth.service.SmsService;
+import kr.silverbridge.main.domain.auth.service.SmsVerificationService;
 import kr.silverbridge.main.global.response.ApiResponse;
 import kr.silverbridge.main.global.security.RateLimitService;
 import lombok.RequiredArgsConstructor;
@@ -27,53 +29,67 @@ public class SmsController {
     private final SmsService smsService;
     private final RateLimitService rateLimitService;
 
+    /** 인증코드 발송/재발송 응답에 내려줄 값 (프론트 카운트다운용). 코드 = 숫자 6자리. */
+    private CodeSentResponse codeSent() {
+        return new CodeSentResponse((int) SmsVerificationService.CODE_TTL_SECONDS, 6);
+    }
+
     @Operation(
-            summary = "SMS 인증코드 발송",
+            summary = "SMS 인증코드 발송 (회원가입·전화번호 변경 공통)",
             description = """
-                    입력한 전화번호로 6자리 인증코드를 발송합니다.
-                    회원가입 및 전화번호 변경 시 공통으로 사용합니다.
+                    입력한 전화번호로 6자리 숫자 인증코드를 SMS로 발송합니다.
 
-                    이미 가입된 전화번호이면 SMS 발송 전에 409를 반환합니다.
-                    → 회원가입 흐름에서 전화번호 중복은 이 단계에서 먼저 확인됩니다.
-                    → 재발송이 필요한 경우 POST /api/auth/signup/sms/resend 를 사용하세요.
+                    [응답 data]
+                    - expiresInSeconds: 인증코드 유효 시간(초). 이 값으로 화면 카운트다운을 시작하세요. (현재 300초 = 5분)
+                    - codeLength: 입력해야 할 코드 자릿수 (항상 6)
 
-                    [제한사항]
-                    - 인증코드 유효 시간: 5분
-                    - 재발송 가능 시간: 1분 후
-                    - 재발송 시 기존 인증코드는 즉시 무효화됩니다.
+                    [동작]
+                    - 이미 가입된 전화번호이면 SMS 발송 없이 409를 반환합니다.
+                      (회원가입 흐름에서 전화번호 중복은 이 단계에서 먼저 걸러집니다.)
+                    - 재발송 쿨다운이 없습니다. 잘못 눌렀거나 SMS를 못 받았으면 즉시 다시 호출해도 됩니다.
+                      (호출 시마다 기존 코드는 폐기되고 새 코드로 교체됩니다.)
+                    - 재발송 전용 엔드포인트 POST /api/auth/signup/sms/resend 도 동작은 동일합니다.
+
+                    [회원가입 SMS 인증 흐름]
+                    1. POST /api/auth/signup/sms/send   → 코드 발송 (이 API)
+                    2. POST /api/auth/signup/sms/verify → 코드 확인 → verificationNonce 수령
+                    3. POST /api/auth/signup            → verificationNonce 동봉하여 가입 완료
                     """
     )
     @ApiResponses({
-            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "SMS 발송 성공"),
-            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "전화번호 형식 오류", content = @Content),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "SMS 발송 성공. data.expiresInSeconds로 카운트다운 시작"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "전화번호 형식 오류 (숫자 10~11자리만 허용)", content = @Content),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "409", description = "이미 가입된 전화번호", content = @Content),
-            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "429", description = "1분 이내 재발송 불가", content = @Content),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "429", description = "동일 IP의 과도한 요청 (IP RateLimit). 잠시 후 재시도", content = @Content),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "500", description = "SMS 발송 실패 (통신사 오류)", content = @Content)
     })
     @PostMapping("/send")
-    public ApiResponse<Void> send(@Valid @RequestBody SmsSendRequest request,
-                                  HttpServletRequest httpRequest) {
+    public ApiResponse<CodeSentResponse> send(@Valid @RequestBody SmsSendRequest request,
+                                              HttpServletRequest httpRequest) {
         rateLimitService.check("signup-sms", httpRequest.getRemoteAddr());
         smsService.sendVerificationCode(request);
-        return ApiResponse.ok("인증코드가 발송되었습니다.");
+        return ApiResponse.ok(codeSent());
     }
 
     @Operation(
             summary = "SMS 인증코드 확인",
             description = """
-                    발송된 인증코드를 입력하여 전화번호를 인증합니다.
+                    발송된 6자리 숫자 인증코드를 확인하여 전화번호 소유를 검증합니다.
                     인증 성공 시 verificationNonce(UUID)가 반환됩니다.
-                    회원가입(POST /api/auth/signup 또는 POST /api/auth/signup/kakao) 또는 전화번호 변경(PUT /api/user/me/update) 요청 시 동일 값을 verificationNonce 필드에 그대로 전달해야 합니다.
+
+                    [verificationNonce 사용처]
+                    회원가입(POST /api/auth/signup, POST /api/auth/signup/kakao) 또는
+                    전화번호 변경(PUT /api/user/me/update) 요청의 verificationNonce 필드에 이 값을 그대로 전달하세요.
 
                     [제한사항]
                     - 인증 완료 후 10분 이내에 후속 API를 호출해야 nonce가 유효합니다.
-                    - 5회 이상 오류 시 인증코드가 초기화됩니다. → 인증코드 재발송 필요
-                    - 인증코드 유효 시간(5분) 초과 시 만료 오류가 반환됩니다.
+                    - 코드를 5회 잘못 입력하면 코드가 무효화됩니다. → 코드 재발송 필요
+                    - 코드 유효 시간(5분) 초과 시 만료 오류가 반환됩니다.
                     """
     )
     @ApiResponses({
-            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "인증 성공. 응답의 verificationNonce를 회원가입/프로필 수정 요청에 전달하세요."),
-            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "인증코드 불일치 / 인증코드 만료 / 5회 이상 오류로 인증코드 초기화됨", content = @Content)
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "인증 성공. data.verificationNonce를 회원가입/전화번호 변경 요청에 전달"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "코드 형식 오류(숫자 6자리 아님) / 코드 불일치 / 코드 만료 / 5회 초과로 코드 무효화됨", content = @Content)
     })
     @PostMapping("/verify")
     public ApiResponse<SmsVerifyResponse> verify(@Valid @RequestBody SmsVerifyRequest request) {
@@ -84,26 +100,25 @@ public class SmsController {
     @Operation(
             summary = "SMS 인증코드 재발송",
             description = """
-                    이전에 발송된 인증코드를 재발송합니다.
-                    기존 인증코드는 즉시 무효화되고 새 코드가 발송됩니다.
+                    인증코드를 재발송합니다. 동작은 POST /api/auth/signup/sms/send 와 동일하며,
+                    기존 코드는 폐기되고 새 코드로 교체됩니다.
+                    재발송 쿨다운은 없습니다(즉시 재요청 가능).
 
-                    [제한사항]
-                    - 재발송 가능 시간: 1분 후
-                    - 재발송 시 기존 인증코드는 즉시 무효화됩니다.
+                    [응답 data] expiresInSeconds(초), codeLength(6)
                     """
     )
     @ApiResponses({
-            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "SMS 재발송 성공"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "SMS 재발송 성공. data.expiresInSeconds로 카운트다운 재시작"),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "전화번호 형식 오류", content = @Content),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "409", description = "이미 가입된 전화번호", content = @Content),
-            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "429", description = "1분 이내 재발송 불가", content = @Content),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "429", description = "동일 IP의 과도한 요청 (IP RateLimit)", content = @Content),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "500", description = "SMS 발송 실패", content = @Content)
     })
     @PostMapping("/resend")
-    public ApiResponse<Void> resend(@Valid @RequestBody SmsSendRequest request,
-                                    HttpServletRequest httpRequest) {
+    public ApiResponse<CodeSentResponse> resend(@Valid @RequestBody SmsSendRequest request,
+                                                HttpServletRequest httpRequest) {
         rateLimitService.check("signup-sms", httpRequest.getRemoteAddr());
         smsService.sendVerificationCode(request);
-        return ApiResponse.ok("인증코드가 재발송되었습니다.");
+        return ApiResponse.ok(codeSent());
     }
 }

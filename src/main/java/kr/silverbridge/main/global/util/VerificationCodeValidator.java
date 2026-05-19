@@ -53,4 +53,31 @@ public class VerificationCodeValidator {
         redisTemplate.delete(verifyKey);
         redisTemplate.delete(attemptKey);
     }
+
+    /**
+     * 인증코드를 검증하되 <b>성공해도 코드를 소비(삭제)하지 않는다.</b>
+     * 비밀번호 재설정처럼 "확인(pre-check) → 이후 같은 6자리 코드로 최종 처리" 흐름의
+     * pre-check 단계에서 사용한다. 실패 시 오류 횟수 증가·최대치 초과 무효화는 동일하게 동작한다.
+     *
+     * @see #verify(String, String, String, long, int)
+     */
+    public void verifyWithoutConsume(String verifyKey, String attemptKey, String inputCode,
+                                     long codeTtlMinutes, int maxAttempts) {
+        String savedCode = redisTemplate.opsForValue().get(verifyKey);
+
+        if (savedCode == null) {
+            throw new CustomException(ErrorCode.EXPIRED_SMS_CODE);
+        }
+
+        if (!savedCode.equals(inputCode)) {
+            long attempts = redisCounter.incrementWithTtl(attemptKey, codeTtlMinutes * 60);
+            if (attempts >= maxAttempts) {
+                redisTemplate.delete(verifyKey);
+                redisTemplate.delete(attemptKey);
+                throw new CustomException(ErrorCode.SMS_TOO_MANY_ATTEMPTS);
+            }
+            throw new CustomException(ErrorCode.INVALID_SMS_CODE);
+        }
+        // 성공 — 코드 유지(최종 reset 단계에서 같은 코드로 재검증·소비)
+    }
 }
