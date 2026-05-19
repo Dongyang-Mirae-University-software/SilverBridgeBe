@@ -4,6 +4,50 @@
 
 ---
 
+## 2026-05-19 — 미검증 API 정리 (call/game/ai/anomaly 제거)
+
+무계획적으로 추가됐던 미검증 엔드포인트를 제거하고 검증된 부분만 남기는 정리 작업. 사전 점검 후 사용자 승인 받아 도메인 단위로 끊어 진행, 각 단계 빌드 통과 확인.
+
+### 제거 분류
+
+완전 제거 도메인 (디렉터리 통째)
+- domain/call (4) — Ward/GuardianCallController, CallService, WebRtcSignalRequest. SOS(POST /api/ward/sos)·WebRTC 시그널·통화 종료 포함
+- domain/game (8) — Ward/GuardianGameController, GameService, GameResult(엔티티/리포), Game DTO 3종. game 결과 저장·조회·랭킹
+- domain/ai (7) — AiEventController(AI 적재 엔드포인트 포함), Ward/GuardianCharacterController, AiEventService, CharacterExpressionRecord(엔티티/리포/요청 DTO). 캐릭터 표정 전체
+- domain/anomaly (3) — AnomalyEvent(엔티티/리포), AnomalyEventQueryService
+
+admin 부분 제거 (29) — 컨트롤러 7(User/Connection/Dashboard/AccessLog/AnomalyEvent/GameResult/AuditLog)·DTO 17·서비스 4(User/Connection/Dashboard/Admin)·리포 1(AdminUserStats)
+
+enum 제거 (2) — GameType, AnomalyEventType
+
+테스트 제거 (2) — AdminUserServiceTest, AdminDashboardServiceTest
+
+부분 정리 (수정)
+- connection: priority 변경 경로만 제거(WardConnectionController.updatePriority, ConnectionService.updatePriority, Connection.updatePriority setter, ConnectionPriorityUpdateRequest). priority 필드·기본값·정렬 조회·ConnectionResponse 매핑은 유지
+- announcement: AnnouncementController @Tag name을 "피보호자/보호자 - 공지사항"으로 변경(경로·@Operation·description 유지)
+
+### 공유 의존으로 살린 것
+
+- AdminAuditLogService / AdminAuditLogRepository / AdminAuditLog 엔티티 / AdminAuditAction enum — AdminAnnouncementService·AdminAnnouncementDraftService가 감사로그 기록에 사용 중. 단 조회용 getLogs()와 AdminAuditLogController는 제거(쓰기 경로만 잔존)
+- domain/notification 전체(FCM) 무수정 — call/game/ai의 FCM 호출은 파일 삭제로 자연 소멸
+- ConnectionNotificationListener 무수정 — SOS/call 로직 없이 연결 요청/수락/해제 알림만(FCM 검증 경로)
+- AccessAction enum 유지 — auth 도메인 사용
+
+### 결과
+
+- 삭제 56파일 + 수정 5파일(소스). 3869줄 삭제
+- 단계별 `./gradlew build -x test --no-daemon` 전부 통과
+- 최종 `./gradlew build`(테스트 포함) BUILD SUCCESSFUL — 잔존 테스트 전부 통과
+- 자동 git commit/push 없음. 작업 브랜치 chore/remove-unverified-apis
+
+### 후속 / 주의
+
+- DB DROP TABLE은 별도 제안서 `docs/V17_drop_unused_tables_proposal.md` 로 분리 (마이그레이션 V16까지 존재 → 신규 번호는 V17). 사용자 승인 후 별도 PR
+- 2026-05-15 항목의 admin 대시보드/회원관리(AdminUserService·AdminDashboardService·AdminUserStatsRepository·V15 인덱스)는 이번 정리로 대부분 제거됨. V15 인덱스(users role/status/created_at)는 당장 사용처 없으나 V1~V16 수정 금지 원칙상 그대로 둠 — 향후 DROP INDEX는 V17 제안서에서 함께 검토
+- 기존 V1~V16 마이그레이션 파일은 미수정 (제거 도메인 테이블은 DB에 잔존)
+
+---
+
 ## 2026-05-18 — M-1 카카오 OAuth state 방향 확정
 
 프론트 확인 결과 카카오 로그인 미구현 상태. 모델 A(프론트 검증)로 결정.
