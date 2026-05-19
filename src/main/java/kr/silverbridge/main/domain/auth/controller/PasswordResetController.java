@@ -28,7 +28,7 @@ public class PasswordResetController {
     @Operation(
             summary = "[공통] 3단계 · 새 비밀번호 설정",
             description = """
-                    Image 5에서 확인한 6자리 인증코드를 그대로 다시 전달하여 비밀번호를 변경합니다. (UUID 토큰 없음)
+                    앞의 '인증코드 사전 확인' 단계에서 검증한 6자리 인증코드를 그대로 다시 전달하여 비밀번호를 변경합니다. (UUID 토큰 없음)
                     변경 성공 시 모든 기기에서 자동 로그아웃됩니다. (재로그인 필요)
 
                     [요청 필드]
@@ -36,6 +36,11 @@ public class PasswordResetController {
                     - SMS 방식:   phone + code(6자리) + newPassword   (email은 비움)
                     - email/phone 은 정확히 하나만 채워야 합니다.
                     - code: 1·2단계에서 받은/확인한 그 6자리 숫자 (유효 5분, 5회 오류 시 무효화)
+
+                    [왜 email|phone·code를 또 보내나요?]
+                    비로그인 흐름이라 인증 토큰이 없고, 사전 확인(/verify)은 서버에 상태를 남기지 않습니다.
+                    서버가 "누구의" 비밀번호인지 알고 인증 사실을 재확인하려면 이 단계에서 식별자(email|phone)와
+                    6자리 코드를 함께 받아 재검증해야 합니다. (code만/newPassword만으로는 대상 특정 불가)
 
                     [비밀번호 조건]
                     - 영문·숫자·특수문자 모두 포함, 공백 없이 8자 이상

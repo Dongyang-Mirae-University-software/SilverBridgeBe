@@ -33,7 +33,7 @@ import java.util.concurrent.TimeUnit;
  * <p>
  * 흐름은 6자리 인증코드 하나로 통일한다(UUID 토큰 없음).
  * 1) send  : 이메일/SMS로 6자리 코드 발송
- * 2) verify: 6자리 코드 pre-check (코드를 소비하지 않음 — Image 5 "확인" 버튼용)
+ * 2) verify: 6자리 코드 사전 확인 (코드를 소비하지 않음 — 인증코드 입력 화면의 '확인')
  * 3) reset : 같은 6자리 코드 + 새 비밀번호로 변경 (이때 코드 소비)
  */
 @Slf4j
@@ -82,7 +82,7 @@ public class PasswordResetService {
         log.info("비밀번호 재설정 이메일 발송 완료: {}", MaskingUtil.maskEmail(email));
     }
 
-    // [이메일 방식] 인증코드 pre-check (Image 5 "확인")
+    // [이메일 방식] 인증코드 사전 확인 (코드 미소비)
     // 6자리 코드만 검증하고 소비하지 않는다. 실제 변경은 confirmReset에서 같은 코드로 재검증.
     public void verifyEmailCode(PasswordResetEmailVerifyRequest request) {
         VerificationKeyConfig config = VerificationKeyConfig.PASSWORD_RESET_EMAIL;
@@ -116,7 +116,7 @@ public class PasswordResetService {
         log.info("비밀번호 재설정 SMS 발송 완료: {}", MaskingUtil.maskPhone(phone));
     }
 
-    // [SMS 방식] 인증코드 pre-check (Image 5 "확인")
+    // [SMS 방식] 인증코드 사전 확인 (코드 미소비)
     // 6자리 코드만 검증하고 소비하지 않는다.
     public void verifySmsCode(PasswordResetSmsVerifyRequest request) {
         VerificationKeyConfig config = VerificationKeyConfig.PASSWORD_RESET;
