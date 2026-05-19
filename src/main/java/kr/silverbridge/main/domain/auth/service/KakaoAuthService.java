@@ -88,16 +88,14 @@ public class KakaoAuthService {
                         throw new CustomException(ErrorCode.EMAIL_ALREADY_EXISTS);
                     }
 
-                    String name = kakaoUser.getNickname();
-                    if (name == null || name.isBlank()) {
-                        name = "카카오사용자";
-                    }
+                    // 카카오 닉네임은 사용하지 않는다. 회원가입 시 사용자가 본인 실명을 직접 입력하도록
+                    // name은 프리필하지 않고 null로 반환한다.
 
                     // Redis에 카카오 정보 임시 저장 (TTL 10분)
                     redisTemplate.opsForValue()
                             .set(RedisKeys.KAKAO_PENDING + kakaoId, email, KAKAO_PENDING_TTL, TimeUnit.MINUTES);
 
-                    return KakaoLoginResponse.ofNewUser(kakaoId, email, name, kakaoUser.getProfileImageUrl());
+                    return KakaoLoginResponse.ofNewUser(kakaoId, email, null, kakaoUser.getProfileImageUrl());
                 });
     }
 
@@ -144,6 +142,9 @@ public class KakaoAuthService {
                 .provider(Provider.KAKAO)
                 .providerId(kakaoId)
                 .profileImage(request.getProfileImageUrl())
+                .gender(request.getGender())
+                .birthDate(request.getBirthDate())
+                .postcode(request.getPostcode())
                 .address(request.getAddress())
                 .addressDetail(request.getAddressDetail())
                 .build();

@@ -62,6 +62,9 @@ public class UserService {
         user.updateProfile(
                 request.getName(),
                 newPhone != null ? newPhone : user.getPhone(),
+                request.getGender(),
+                request.getBirthDate(),
+                request.getPostcode(),
                 request.getAddress(),
                 request.getAddressDetail()
         );

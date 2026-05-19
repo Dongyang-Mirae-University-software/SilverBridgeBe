@@ -1,0 +1,13 @@
+화면번호,화면명,영역,항목,현재상태,요구사항,갭유형,심각도,권장조치
+Image8,회원가입 1단계,스키마/DTO,성별(gender),"RegisterRequest·KakaoRegisterRequest·User·users 테이블 모두 없음",성별(여성/남성) 필수 입력,누락,Critical,"V18에 users.gender VARCHAR(10) 추가 + CHECK(MALE/FEMALE) + Gender enum + 두 가입 DTO 필드 추가"
+Image8,회원가입 1단계,스키마/DTO,생년월일(birth_date),"DTO·엔티티·users 테이블 모두 없음",생년월일 필수 입력,누락,Critical,"V18에 users.birth_date DATE 추가 + 두 가입 DTO에 birthDate 필드(미래일/최소연령 검증)"
+Image8,회원가입 1단계,스키마/DTO,우편번호(postcode),"RegisterRequest는 address+addressDetail 2분할만 수용",우편번호+도로명+상세 3분할,누락(부분),High,"V18에 users.postcode VARCHAR(10) 추가 + 두 가입 DTO에 postcode 필드"
+Image3,아이디 찾기 결과,DTO/API,가입일(joinedAt),"FindEmailResponse는 maskedEmail·hasKakaoAccount만 반환",가입일(2024-08-12) 표시,누락,High,"created_at 이미 존재(스키마 무변경) — FindEmailResponse + AuthService.findEmail에 가입일 추가"
+Image6,비밀번호 찾기 새 비번,정책,비밀번호 규칙,"백엔드: 영문+숫자+특수문자 공백없이 8자+",화면 안내: 8자 이상만 표기,불일치,Medium,"프론트 안내 문구를 실제 정책에 맞춰 정정(정책 유지 권장)"
+Image8,회원가입 1단계,정책,비밀번호 규칙,"동일 정책(영문+숫자+특수문자 8자+)",화면 안내: 8자 이상,불일치,Medium,"Image6과 동일 — 안내 문구 정정"
+Image5,비밀번호 찾기 코드입력,정책/API,인증코드 잔여시간,"send/verify 응답에 잔여시간·쿨다운 미포함(TTL 5분/쿨다운 1분 고정)","02:43 카운트다운·다시받기 타이밍",불일치(확인필요),Medium,"API 계약 문서화 또는 응답에 expiresInSeconds/resendAvailableInSeconds 추가"
+Image9,회원가입 2단계,정책/API,인증코드 잔여시간,"signup/sms 응답에 잔여시간 미포함(TTL 5분)",02:43 카운트다운,불일치(확인필요),Medium,"Image5와 동일 — 잔여시간 계약/응답 필드화"
+Image3,아이디 찾기 결과,API,이메일 마스킹 형식,"백엔드 고정 *** (3개): yo***ee@naver.com",프로토타입 **** (4개): yo****ee@naver.com,불일치(경미),Low,"마스킹 별표 개수 프론트/백 합의 후 한쪽 통일"
+Image5,비밀번호 찾기 코드입력,DTO,SMS 코드 형식검증,"PasswordResetSmsVerifyRequest.code @NotBlank만(이메일 경로는 @Pattern \d{6})",6자리 숫자 코드,일관성 부족,Low,"SMS/가입 SMS 코드 DTO에 @Pattern(^\d{6}$) 추가로 이메일 경로와 일관화"
+Image1,로그인,정책,로그인 유지,"토큰 만료 고정(access 30분/refresh 7일) 차등 없음",로그인 유지 체크박스,제외(사용자결정),제외,"프론트 처리 — 백엔드 변경 없음"
+Image9,회원가입 2단계,스키마/정책,약관 동의,"DTO·엔티티·스키마 어디에도 저장 경로 없음",이용약관·개인정보 동의 체크박스,제외(사용자결정),제외,"이번 분석/스키마 제안 범위 외"

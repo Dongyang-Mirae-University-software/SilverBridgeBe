@@ -34,7 +34,15 @@ public class UserController {
             summary = "내 정보 조회",
             description = """
                     로그인한 사용자의 프로필 정보를 반환합니다.
-                    이름, 이메일, 전화번호, 역할, 가입 경로 등을 포함합니다.
+
+                    [응답 data 필드]
+                    id, email, name, phone, provider(LOCAL/KAKAO), role(WARD/GUARDIAN/ADMIN),
+                    profileImage, gender(FEMALE/MALE), birthDate(yyyy-MM-dd), postcode,
+                    address, addressDetail, lastLoginAt, createdAt(가입일시)
+
+                    [기존 사용자 주의]
+                    프로필 필드가 추가되기 전 가입한 사용자는 gender/birthDate/postcode가 null일 수 있습니다.
+                    null이면 프로필 수정 화면에서 보완 입력을 유도하세요. (PUT /api/user/me/update 에서 필수)
 
                     [요청 헤더]
                     Authorization: Bearer {accessToken}
@@ -53,25 +61,33 @@ public class UserController {
     @Operation(
             summary = "내 정보 수정",
             description = """
-                    이름과 전화번호를 수정합니다.
+                    프로필을 수정합니다. 응답으로 수정된 전체 프로필을 반환합니다.
 
-                    [전화번호 변경 시 필수 절차]
-                    전화번호는 실제 본인 소유 번호인지 검증하기 위해 SMS 인증이 필요합니다.
-                    변경할 번호로 SMS 인증을 먼저 완료한 후 이 API를 호출하세요.
+                    [요청 body — 모두 필수, 변경 없는 값도 현재 값 그대로 전송]
+                    - name        : 본인 실명, 최대 20자
+                    - phone       : 숫자 10~11자리 (변경 안 해도 현재 번호를 그대로 전송 — 생략 불가)
+                    - gender      : FEMALE / MALE
+                    - birthDate   : yyyy-MM-dd, 미래 불가·만 14세 이상
+                    - postcode    : 우편번호 5자리 (카카오 주소 검색)
+                    - address     : 도로명/지번 주소
+                    - addressDetail: 상세 주소
+                    - verificationNonce : 전화번호를 "변경할 때만" 필수 (아래 절차), 그대로면 생략/null
 
-                    1. POST /api/auth/signup/sms/send    → 새 전화번호로 SMS 인증코드 발송
-                    2. POST /api/auth/signup/sms/verify  → 인증코드 확인 (10분 유효)
-                    3. PUT  /api/user/me/update          → 인증된 새 번호로 정보 수정
+                    ※ 기존 사용자(gender/birthDate/postcode가 null이던 계정)는 이 API에서 해당 값을 반드시 채워야 합니다.
 
-                    전화번호를 변경하지 않는 경우 phone 필드를 생략하거나 기존 번호를 그대로 전달하면 됩니다.
+                    [전화번호를 변경하는 경우에만]
+                    새 번호 소유 검증을 위해 SMS 인증 후 호출해야 합니다.
+                    1. POST /api/auth/signup/sms/send    → 새 전화번호로 인증코드 발송
+                    2. POST /api/auth/signup/sms/verify  → 코드 확인 → verificationNonce 수령 (10분 유효)
+                    3. PUT  /api/user/me/update          → 새 phone + 위 verificationNonce 포함하여 호출
+                    (번호를 바꾸지 않으면 현재 번호를 phone에 그대로 넣고 verificationNonce는 생략)
 
-                    [요청 헤더]
-                    Authorization: Bearer {accessToken}
+                    [요청 헤더] Authorization: Bearer {accessToken}
                     """
     )
     @ApiResponses({
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "수정된 프로필 정보 반환"),
-            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "입력값 오류 또는 전화번호 변경 시 SMS 인증 미완료", content = @Content),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "입력값 오류(필수 누락, 생년월일 미래/14세 미만, 우편번호 형식 등) 또는 전화번호 변경 시 SMS 인증 미완료/만료", content = @Content),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "인증 토큰 없음 또는 만료", content = @Content),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "사용자를 찾을 수 없음", content = @Content),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "409", description = "이미 사용 중인 전화번호", content = @Content),
@@ -116,15 +132,17 @@ public class UserController {
                     현재 비밀번호를 알고 있는 로그인된 사용자가 새 비밀번호로 변경합니다.
                     비밀번호를 잊어버린 경우에는 이 API가 아닌 POST /api/auth/find-password/email/send 또는 POST /api/auth/find-password/sms/send 를 사용하세요.
 
-                    변경 성공 시 모든 기기에서 자동 로그아웃됩니다. (재로그인 필요)
+                    - newPassword 규칙: 영문·숫자·특수문자 모두 포함, 공백 없이 8자 이상. 현재 비밀번호와 동일 불가.
+                    - 카카오(KAKAO) 가입 계정은 비밀번호가 없어 이 API를 사용할 수 없습니다(400).
+                    - 변경 성공 시 모든 기기에서 자동 로그아웃됩니다. (재로그인 필요)
 
                     [요청 헤더]
                     Authorization: Bearer {accessToken}
                     """
     )
     @ApiResponses({
-            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "비밀번호 변경 성공"),
-            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "입력값 유효성 검증 실패 (새 비밀번호 8자 미만 등)", content = @Content),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "비밀번호 변경 성공 → 재로그인 필요"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "비밀번호 형식 위반(영문+숫자+특수문자 8자+ 아님) / 현재 비밀번호와 동일 / 카카오 계정", content = @Content),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "현재 비밀번호 불일치 또는 인증 토큰 만료", content = @Content),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "사용자를 찾을 수 없음", content = @Content),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "500", description = "서버 내부 오류", content = @Content)
