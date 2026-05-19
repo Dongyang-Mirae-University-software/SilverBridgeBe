@@ -51,9 +51,4 @@ public class Connection extends BaseTimeEntity {
     public void cancel() {
         this.status = ConnectionStatus.CANCELLED;
     }
-
-    // 통화 우선순위 변경
-    public void updatePriority(int priority) {
-        this.priority = priority;
-    }
 }

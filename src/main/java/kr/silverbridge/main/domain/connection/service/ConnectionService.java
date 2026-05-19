@@ -144,16 +144,6 @@ public class ConnectionService {
         ));
     }
 
-    // 피보호자: 보호자 통화 우선순위 변경
-    @Transactional
-    public void updatePriority(String wardId, Long connectionId, int priority) {
-        Connection connection = getConnectionForWard(wardId, connectionId);
-        if (connection.getStatus() != ConnectionStatus.ACTIVE) {
-            throw new CustomException(ErrorCode.CONNECTION_NOT_ACTIVE);
-        }
-        connection.updatePriority(priority);
-    }
-
     // ─── 공통 조회 API ────────────────────────────────────────────
 
     // 보호자-피보호자 간 활성 또는 대기 중 연결 존재 여부 (취소 제외)
