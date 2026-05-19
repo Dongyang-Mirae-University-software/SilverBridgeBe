@@ -198,6 +198,8 @@ feat: 사용자 로그인 기능 추가
 ## 6. 데이터베이스 & 마이그레이션
 
 - 마이그레이션 파일: `src/main/resources/db/migration/V*.sql` (Flyway 규칙)
+- 스키마는 Flyway가 단일 관리 — 빈 DB에 V1부터 순차 적용. 별도 schema.sql 시딩 없음 (drift·baseline 충돌 방지)
+- Spring Boot 4는 Flyway 자동설정이 분리됨 — `spring-boot-starter-flyway` 의존성이 반드시 있어야 마이그레이션이 실행됨 (없으면 조용히 건너뜀)
 - 로컬 개발: `docker compose -f docker-compose.dev.yml up -d`
 - 환경 설정: `.env.dev`
 - **운영 DB 마이그레이션은 항상 PR 단위로 검토** — 비가역적 DDL은 별도 표시

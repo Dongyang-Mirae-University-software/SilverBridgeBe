@@ -20,8 +20,8 @@ spring:
   flyway:
     enabled: true
     locations: classpath:db/migration
-    baseline-on-migrate: true   # schema.sql로 초기화된 DB에 flyway_schema_history 없어도 베이스라인 처리
-    baseline-version: 10
+    # Flyway가 스키마의 단일 진실. 빈 DB에 V1부터 순서대로 적용한다.
+    # (schema.sql 시딩 제거됨 — baseline 설정 불필요)
 
   data:
     redis:
