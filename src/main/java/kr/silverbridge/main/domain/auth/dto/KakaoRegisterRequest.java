@@ -1,12 +1,17 @@
 package kr.silverbridge.main.domain.auth.dto;
 
+import com.fasterxml.jackson.annotation.JsonFormat;
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
+import kr.silverbridge.main.global.enums.Gender;
 import kr.silverbridge.main.global.enums.Role;
+import kr.silverbridge.main.global.validation.ValidBirthDate;
 import lombok.Getter;
+
+import java.time.LocalDate;
 
 @Getter
 @Schema(description = "카카오 신규 회원가입 완료 요청 (SMS 인증 완료 후 호출)")
@@ -16,8 +21,9 @@ public class KakaoRegisterRequest {
     @NotBlank(message = "카카오 ID를 입력해주세요.")
     private String kakaoId;
 
-    @Schema(description = "사용자 이름 (카카오 닉네임 또는 직접 입력)", example = "홍길동")
+    @Schema(description = "본인 실명 (카카오 닉네임 사용 불가, 사용자가 직접 입력, 최대 20자)", example = "홍길동")
     @NotBlank(message = "이름을 입력해주세요.")
+    @Size(max = 20, message = "이름은 20자 이하여야 합니다.")
     private String name;
 
     @Schema(description = "SMS 인증을 완료한 전화번호 (숫자만, 하이픈 없이 10~11자리)", example = "01012345678")
@@ -46,4 +52,19 @@ public class KakaoRegisterRequest {
     @NotBlank(message = "상세 주소를 입력해주세요.")
     @Size(max = 100, message = "상세 주소는 100자 이하여야 합니다.")
     private String addressDetail;
+
+    @Schema(description = "성별. FEMALE: 여성, MALE: 남성", example = "FEMALE", allowableValues = {"FEMALE", "MALE"})
+    @NotNull(message = "성별을 선택해주세요. (FEMALE: 여성, MALE: 남성)")
+    private Gender gender;
+
+    @Schema(description = "생년월일 (yyyy-MM-dd). 미래 날짜 불가, 만 14세 이상만 가입 가능", example = "1990-03-15", format = "date")
+    @NotNull(message = "생년월일을 입력해주세요.")
+    @ValidBirthDate
+    @JsonFormat(shape = JsonFormat.Shape.STRING, pattern = "yyyy-MM-dd")
+    private LocalDate birthDate;
+
+    @Schema(description = "우편번호 (카카오 주소 검색 결과의 5자리 zonecode)", example = "06236")
+    @NotBlank(message = "우편번호를 입력해주세요. (주소 검색을 이용해주세요)")
+    @Pattern(regexp = "^\\d{5}$", message = "우편번호는 숫자 5자리여야 합니다.")
+    private String postcode;
 }

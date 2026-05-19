@@ -9,15 +9,10 @@ import kr.silverbridge.main.global.util.RedisKeys;
  */
 public record VerificationKeyConfig(
         String verifyPrefix,
-        String cooldownPrefix,
         String attemptPrefix
 ) {
     public String verifyKey(String identifier) {
         return verifyPrefix + identifier;
-    }
-
-    public String cooldownKey(String identifier) {
-        return cooldownPrefix + identifier;
     }
 
     public String attemptKey(String identifier) {
@@ -27,21 +22,18 @@ public record VerificationKeyConfig(
     /** 회원가입 SMS 인증 */
     public static final VerificationKeyConfig SIGNUP = new VerificationKeyConfig(
             RedisKeys.SMS_VERIFY,
-            RedisKeys.SMS_COOLDOWN,
             RedisKeys.SMS_ATTEMPT
     );
 
     /** 비밀번호 재설정 SMS 인증 */
     public static final VerificationKeyConfig PASSWORD_RESET = new VerificationKeyConfig(
             RedisKeys.PW_SMS_VERIFY,
-            RedisKeys.PW_SMS_COOLDOWN,
             RedisKeys.PW_SMS_ATTEMPT
     );
 
     /** 비밀번호 재설정 이메일 인증 */
     public static final VerificationKeyConfig PASSWORD_RESET_EMAIL = new VerificationKeyConfig(
             RedisKeys.PW_EMAIL_VERIFY,
-            RedisKeys.PW_EMAIL_COOLDOWN,
             RedisKeys.PW_EMAIL_ATTEMPT
     );
 }

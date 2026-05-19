@@ -11,7 +11,7 @@ import lombok.Getter;
         카카오 로그인 응답.
         isNewUser 값에 따라 응답 구조가 달라집니다.
         - isNewUser=false (기존 회원): accessToken, refreshToken, userId, email, name, role 사용
-        - isNewUser=true  (신규 회원): kakaoId, email, name, profileImageUrl 사용 → SMS 인증 후 POST /api/auth/signup/kakao 호출
+        - isNewUser=true  (신규 회원): kakaoId, email, profileImageUrl 사용. name은 항상 null(카카오 닉네임 미사용 — 가입 시 본인 실명 직접 입력) → SMS 인증 후 POST /api/auth/signup/kakao 호출
         """)
 public class KakaoLoginResponse {
 
@@ -25,7 +25,8 @@ public class KakaoLoginResponse {
     @Schema(description = "[신규 회원 전용] 카카오 계정 이메일. 회원가입 폼에 자동 입력용", example = "kakao_user@kakao.com")
     private String email;
 
-    @Schema(description = "[신규 회원 전용] 카카오 닉네임. 회원가입 폼에 자동 입력용", example = "홍길동")
+    @Schema(description = "[신규 회원 전용] 항상 null. 카카오 닉네임은 사용하지 않으며, 회원가입 시 사용자가 본인 실명을 직접 입력해야 한다.",
+            example = "null", nullable = true)
     private String name;
 
     @Schema(description = "[신규 회원 전용] 카카오 프로필 이미지 URL", example = "https://k.kakaocdn.net/dn/...")
