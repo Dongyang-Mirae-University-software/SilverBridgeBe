@@ -34,11 +34,21 @@ public class ConnectionService {
     // ─── 보호자 API ──────────────────────────────────────────────
 
     // 보호자: 내 피보호자 목록 조회 (ACTIVE + PENDING, 최신 요청순)
+    // — 사이드바 "피보호자 리스트" 화면에서 활용
     @Transactional(readOnly = true)
     public List<ConnectionResponse> getMyWards(String guardianId) {
         List<Connection> connections = connectionRepository
                 .findByGuardianIdAndStatusInOrderByCreatedAtDesc(guardianId,
                         List.of(ConnectionStatus.ACTIVE, ConnectionStatus.PENDING));
+        return buildResponseFromGuardianView(connections);
+    }
+
+    // 보호자: 본인이 보낸 모든 연결 요청 이력 (PENDING + ACTIVE + CANCELLED, 최신 요청순)
+    // — "피보호자 등록" 화면의 "요청 내역" 테이블에서 거절·취소된 이력까지 함께 노출
+    @Transactional(readOnly = true)
+    public List<ConnectionResponse> getMyConnectionRequests(String guardianId) {
+        List<Connection> connections = connectionRepository
+                .findByGuardianIdOrderByCreatedAtDesc(guardianId);
         return buildResponseFromGuardianView(connections);
     }
 
@@ -55,12 +65,13 @@ public class ConnectionService {
                 .status(ConnectionStatus.PENDING)
                 .initiatedBy(guardianId)
                 .priority(1)
+                .relation(request.getRelation())
                 .build();
         connectionRepository.save(connection);
 
         User guardian = requireUser(guardianId);
         eventPublisher.publishEvent(new ConnectionRequestedEvent(
-                connection.getId(), guardianId, wardId, guardian.getName()
+                connection.getId(), guardianId, wardId, guardian.getName(), request.getRelation()
         ));
     }
 
