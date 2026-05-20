@@ -1,0 +1,26 @@
+Phase,스킬,항목,파일,심각도,발견사항,권장조치,수정여부
+A,security-audit,A1 토큰 폐기 - INACTIVE login,domain/auth/service/AuthService.java:138-143,Critical,deleteByUserId 직후 throw로 트랜잭션 롤백 - H-4 fix 무효,RefreshTokenRevocationService.revokeAll() REQUIRES_NEW,Fixed(2e91381)
+A,security-audit,A1 토큰 폐기 - refresh EXPIRED,domain/auth/service/AuthService.java:189-193,Critical,delete(savedToken) 직후 throw로 롤백,revokeOne() REQUIRES_NEW,Fixed(2e91381)
+A,security-audit,A1 토큰 폐기 - refresh INACTIVE,domain/auth/service/AuthService.java:199-203,Critical,동일 패턴 롤백,revokeOne() REQUIRES_NEW,Fixed(2e91381)
+A,security-audit,A7 도난 감지 토큰 회수,domain/auth/service/AuthService.java:259-265,Critical,detectAndHandleReuse의 deleteByUserId가 caller throw로 롤백 - H-3 fix 무효,revokeAll() REQUIRES_NEW,Fixed(2e91381)
+A,security-audit,A1 카카오 INACTIVE 토큰 폐기,domain/auth/service/KakaoAuthService.java:62-66,Critical,동일 패턴 롤백,revokeAll() REQUIRES_NEW,Fixed(2e91381)
+A,concurrency-review,A1 로그인 fail counter atomic,domain/auth/service/AuthService.java:122-136,High,increment+expire 분리 - 두 명령 사이 장애 시 TTL 누락,redisCounter.incrementWithTtl 적용 - 첫 실패 기준 고정 윈도우,Fixed(2차)
+A,security-audit,A8 카카오 OAuth 타임아웃,domain/auth/oauth/KakaoOAuthClient.java,High,RestClient.create() 타임아웃 미설정 - 카카오 서버 지연 시 Tomcat thread 고갈,SimpleClientHttpRequestFactory + connectTimeout=3s readTimeout=5s,Fixed(2차)
+A,security-audit,A5 ObjectMapper 빈 미사용,domain/auth/oauth/KakaoOAuthClient.java,Medium,new ObjectMapper() - JacksonConfig 안전 설정 미적용,Spring 빈 주입 (생성자),Fixed(2차)
+A,security-audit,A5 ObjectMapper 빈 미사용,global/jwt/JwtAuthenticationFilter.java,Medium,static final 직접 생성,@RequiredArgsConstructor로 빈 주입 + SecurityConfig에서 전달,Fixed(2차)
+A,security-audit,A3 입력 길이 정책 정비,인증 DTO 10건 전반,Medium,password/email/verificationNonce/kakaoId 등 상한 누락/과대 (BCrypt cutoff 미반영),email max=50 / password max=64 / verificationNonce max=36 / kakaoId max=20 일관 적용,Fixed(2차)
+E,logging-patterns,E PII 응답 body 노출,domain/auth/oauth/KakaoOAuthClient.java,Medium,카카오 토큰 발급 실패 시 body 통째로 log - 토큰 포함 가능,extractTokenErrorCode 헬퍼로 errorCode만 추출 후 logging,Fixed(2차)
+B,architecture-review,B 도메인 경계 역방향,domain/user/service/UserService.java:3,Medium,user 도메인이 auth.SmsService에 의존(consumeVerification),Port 추출 또는 Controller 인터셉터로 분리,Pending(협의)
+F,test-quality,F 카카오 테스트 부재,test/domain/auth/service/KakaoAuthServiceTest.java,Medium,파일 자체 부재,신규 단위 테스트,Pending
+F,test-quality,F 비밀번호 재설정 테스트 부재,test/domain/auth/service/PasswordResetServiceTest.java,Medium,파일 자체 부재,신규 단위 테스트,Pending
+F,test-quality,F BirthDate 검증 테스트 부재,test/global/validation/BirthDateValidatorTest.java,Medium,V18 신규 필드 검증 미테스트,신규 단위 테스트,Pending
+F,test-quality,F Revocation 서비스 테스트 부재,test/domain/auth/service/RefreshTokenRevocationServiceTest.java,Medium,신규 서비스 REQUIRES_NEW 통합 검증 필요,@SpringBootTest 또는 @DataJpaTest,Pending
+F,test-quality,F JWT 필터 테스트 부재,test/global/jwt/JwtAuthenticationFilterTest.java,Medium,로그아웃·invalidation·Bearer 형식 미테스트,@WebMvcTest 또는 MockMvc,Pending
+A,security-audit,A5 보안 헤더 미설정,global/security/SecurityConfig.java,Low,HSTS X-Frame-Options X-Content-Type-Options CSP 미설정,http.headers(...) 추가,Pending
+C,api-contract-review,C RESTful 경로 위배,domain/user/controller/UserController.java,Low,/me/select /me/update 등 동사 경로,RESTful 정리 - 프론트 마이그레이션 필요,Pending(협의)
+A,security-audit,A4 가입일 응답 노출,domain/auth/dto/FindEmailResponse.java:33,Low,joinedAt 노출로 PII reconnaissance 가능,사용자 정책상 허용 - 변경 없음,N/A
+A,security-audit,A3 TOCTOU race,domain/auth/service/AuthService.java register,Low,existsBy 후 save - DataIntegrityViolation으로 보호됨,변경 없음 - 이미 안전,N/A
+A,security-audit,A6 constant-time 비교,global/util/VerificationCodeValidator.java:38,Low,String.equals 사용 - MAX_ATTEMPTS 5회로 차단됨,영향 제한적 - 선택 사항,Pending
+G,security-audit,G DB credential 기본값,application.yaml,Low,DB_USERNAME/PASSWORD 기본값 'dev' - 운영 env 누락 시 사용 가능,:CHANGE-ME placeholder로 변경,Pending
+D,jpa-patterns,D V18 컬럼 인덱스,V18__add_user_profile_fields.sql,Low,gender/birth_date/postcode 인덱스 없음 - 현재 검색 미사용,향후 관리자 통계 도입 시 검토,N/A
+F,test-quality,F 비밀번호 재설정 통합 테스트,test/domain/auth/controller/PasswordResetControllerTest.java,Low,MockMvc 통합 테스트 부재,후속,Pending

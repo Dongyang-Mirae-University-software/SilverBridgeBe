@@ -4,15 +4,17 @@ import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Pattern;
+import jakarta.validation.constraints.Size;
 import lombok.Getter;
 
 @Getter
 @Schema(description = "[이메일 방식] 비밀번호 재설정 인증코드 확인 요청")
 public class PasswordResetEmailVerifyRequest {
 
-    @Schema(description = "인증코드를 받은 이메일", example = "user@example.com")
+    @Schema(description = "인증코드를 받은 이메일 (최대 50자)", example = "user@example.com")
     @NotBlank(message = "이메일을 입력해주세요.")
     @Email(message = "이메일 형식이 올바르지 않습니다.")
+    @Size(max = 50, message = "이메일은 50자 이내여야 합니다.")
     private String email;
 
     @Schema(description = "이메일로 받은 6자리 인증코드", example = "123456")

@@ -27,9 +27,10 @@ public class UserUpdateRequest {
     @Pattern(regexp = "^\\d{10,11}$", message = "전화번호는 숫자 10~11자리여야 합니다.")
     private String phone;
 
-    @Schema(description = "SMS 인증 확인(POST /api/auth/signup/sms/verify) 응답의 verificationNonce. 전화번호를 변경하지 않는 경우 생략 가능. 변경 시 새 번호로 SMS 인증을 다시 진행해 받은 값을 전달.",
+    @Schema(description = "SMS 인증 확인(POST /api/auth/signup/sms/verify) 응답의 verificationNonce (UUID 36자). 전화번호를 변경하지 않는 경우 생략 가능. 변경 시 새 번호로 SMS 인증을 다시 진행해 받은 값을 전달.",
             example = "550e8400-e29b-41d4-a716-446655440000",
             nullable = true)
+    @Size(max = 36, message = "전화번호 인증 정보가 올바르지 않습니다.")
     private String verificationNonce;
 
     @Schema(description = "성별. FEMALE: 여성, MALE: 남성", example = "FEMALE", allowableValues = {"FEMALE", "MALE"})

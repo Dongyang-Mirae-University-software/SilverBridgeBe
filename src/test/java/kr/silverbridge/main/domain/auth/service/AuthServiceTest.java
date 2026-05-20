@@ -13,6 +13,7 @@ import kr.silverbridge.main.global.enums.Status;
 import kr.silverbridge.main.global.exception.CustomException;
 import kr.silverbridge.main.global.exception.ErrorCode;
 import kr.silverbridge.main.global.jwt.JwtTokenProvider;
+import kr.silverbridge.main.global.util.RedisCounter;
 import kr.silverbridge.main.global.util.RedisKeys;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -47,11 +48,13 @@ class AuthServiceTest {
 
     @Mock private UserRepository userRepository;
     @Mock private RefreshTokenRepository refreshTokenRepository;
+    @Mock private RefreshTokenRevocationService refreshTokenRevocationService;
     @Mock private AccessLogService accessLogService;
     @Mock private JwtTokenProvider jwtTokenProvider;
     @Mock private PasswordEncoder passwordEncoder;
     @Mock private StringRedisTemplate redisTemplate;
     @Mock private ValueOperations<String, String> valueOperations;
+    @Mock private RedisCounter redisCounter;
     @Mock private SmsService smsService;
     @Mock private kr.silverbridge.main.domain.auth.config.AuthLoginProperties authLoginProperties;
 
@@ -140,7 +143,7 @@ class AuthServiceTest {
         when(userRepository.findByEmail(TEST_EMAIL)).thenReturn(Optional.of(inactiveUser));
         when(redisTemplate.hasKey(RedisKeys.LOGIN_LOCK + TEST_USER_ID)).thenReturn(false);
         when(passwordEncoder.matches("WrongPass1!", "encodedPassword")).thenReturn(false);
-        when(valueOperations.increment(RedisKeys.LOGIN_FAIL + TEST_USER_ID)).thenReturn(1L);
+        when(redisCounter.incrementWithTtl(eq(RedisKeys.LOGIN_FAIL + TEST_USER_ID), anyLong())).thenReturn(1L);
 
         CustomException ex = assertThrows(CustomException.class,
                 () -> authService.login(req, TEST_IP, TEST_AGENT));
@@ -156,13 +159,14 @@ class AuthServiceTest {
         when(userRepository.findByEmail(TEST_EMAIL)).thenReturn(Optional.of(activeUser()));
         when(redisTemplate.hasKey(RedisKeys.LOGIN_LOCK + TEST_USER_ID)).thenReturn(false);
         when(passwordEncoder.matches("WrongPass1!", "encodedPassword")).thenReturn(false);
-        when(valueOperations.increment(RedisKeys.LOGIN_FAIL + TEST_USER_ID)).thenReturn(1L);
+        when(redisCounter.incrementWithTtl(eq(RedisKeys.LOGIN_FAIL + TEST_USER_ID), anyLong())).thenReturn(1L);
 
         CustomException ex = assertThrows(CustomException.class,
                 () -> authService.login(req, TEST_IP, TEST_AGENT));
 
         assertThat(ex.getErrorCode()).isEqualTo(ErrorCode.INVALID_CREDENTIALS);
-        verify(valueOperations).increment(RedisKeys.LOGIN_FAIL + TEST_USER_ID);
+        // INCR/EXPIRE 원자 처리로 RedisCounter 경유 (M-4 패턴 일관)
+        verify(redisCounter).incrementWithTtl(eq(RedisKeys.LOGIN_FAIL + TEST_USER_ID), anyLong());
     }
 
     @Test
@@ -172,7 +176,7 @@ class AuthServiceTest {
         when(userRepository.findByEmail(TEST_EMAIL)).thenReturn(Optional.of(activeUser()));
         when(redisTemplate.hasKey(RedisKeys.LOGIN_LOCK + TEST_USER_ID)).thenReturn(false);
         when(passwordEncoder.matches(anyString(), anyString())).thenReturn(false);
-        when(valueOperations.increment(RedisKeys.LOGIN_FAIL + TEST_USER_ID)).thenReturn(5L);
+        when(redisCounter.incrementWithTtl(eq(RedisKeys.LOGIN_FAIL + TEST_USER_ID), anyLong())).thenReturn(5L);
 
         assertThrows(CustomException.class, () -> authService.login(req, TEST_IP, TEST_AGENT));
 
@@ -237,7 +241,7 @@ class AuthServiceTest {
                 () -> authService.refresh(req));
 
         assertThat(ex.getErrorCode()).isEqualTo(ErrorCode.INVALID_TOKEN);
-        verify(refreshTokenRepository, never()).deleteByUserId(anyString());
+        verify(refreshTokenRevocationService, never()).revokeAll(anyString());
         verify(accessLogService, never()).log(anyString(), eq(kr.silverbridge.main.global.enums.AccessAction.TOKEN_REUSE_DETECTED));
     }
 
@@ -254,7 +258,8 @@ class AuthServiceTest {
                 () -> authService.refresh(req));
 
         assertThat(ex.getErrorCode()).isEqualTo(ErrorCode.INVALID_TOKEN);
-        verify(refreshTokenRepository).deleteByUserId(TEST_USER_ID);
+        // REQUIRES_NEW 분리로 caller throw에도 폐기는 유지된다 — revocation 호출 자체를 검증
+        verify(refreshTokenRevocationService).revokeAll(TEST_USER_ID);
         verify(accessLogService).log(TEST_USER_ID, kr.silverbridge.main.global.enums.AccessAction.TOKEN_REUSE_DETECTED);
     }
 
@@ -269,7 +274,8 @@ class AuthServiceTest {
                 () -> authService.refresh(req));
 
         assertThat(ex.getErrorCode()).isEqualTo(ErrorCode.EXPIRED_TOKEN);
-        verify(refreshTokenRepository).delete(expiredToken);
+        // REQUIRES_NEW 분리로 caller throw에도 폐기는 유지된다
+        verify(refreshTokenRevocationService).revokeOne(expiredToken);
     }
 
     // ─── 헬퍼 메서드 ────────────────────────────────────────────────────────
