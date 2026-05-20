@@ -38,6 +38,10 @@ public class Connection extends BaseTimeEntity {
     @Column(nullable = false)
     private int priority;
 
+    // 보호자가 입력한 피보호자와의 관계 (예: 아들, 딸, 며느리). 신규 요청은 필수, 기존 데이터는 NULL.
+    @Column(length = 10)
+    private String relation;
+
     @Column(name = "connected_at")
     private OffsetDateTime connectedAt;
 

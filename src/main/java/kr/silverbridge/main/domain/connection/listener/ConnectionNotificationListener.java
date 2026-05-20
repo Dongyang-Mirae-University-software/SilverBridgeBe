@@ -32,8 +32,12 @@ public class ConnectionNotificationListener {
         webSocketEventPublisher.sendToUser(event.wardId(), "connection-request",
                 Map.of("connectionId", event.connectionId(), "from", event.guardianId()));
 
-        fcmService.sendToUser(event.wardId(), "연결 요청",
-                event.guardianName() + " 보호자가 연결을 요청했습니다.",
+        // 관계가 있으면 "아들 박민수님이 연결을 요청했어요" / 없으면 기존 fallback 문구
+        String body = (event.relation() != null && !event.relation().isBlank())
+                ? event.relation() + " " + event.guardianName() + "님이 연결을 요청했어요."
+                : event.guardianName() + " 보호자가 연결을 요청했습니다.";
+
+        fcmService.sendToUser(event.wardId(), "연결 요청", body,
                 Map.of("type", "CONNECTION_REQUEST",
                         "connectionId", String.valueOf(event.connectionId())));
     }
