@@ -18,14 +18,15 @@ import java.time.LocalDate;
 @Schema(description = "일반 회원가입 요청 (SMS 인증 완료 후 호출)")
 public class RegisterRequest {
 
-    @Schema(description = "이메일 주소", example = "user@example.com")
+    @Schema(description = "이메일 주소 (최대 50자)", example = "user@example.com")
     @NotBlank(message = "이메일을 입력해주세요.")
     @Email(message = "이메일 형식이 올바르지 않습니다.")
+    @Size(max = 50, message = "이메일은 50자 이내여야 합니다.")
     private String email;
 
-    @Schema(description = "비밀번호 (영문·숫자·특수문자 포함, 공백 없이 8자 이상)", example = "Password1!")
+    @Schema(description = "비밀번호 (영문·숫자·특수문자 포함, 공백 없이 8~64자)", example = "Password1!")
     @NotBlank(message = "비밀번호를 입력해주세요.")
-    @Size(min = 8, message = "비밀번호는 영문·숫자·특수문자를 포함하고, 공백 없이 8글자 이상이어야 합니다.")
+    @Size(min = 8, max = 64, message = "비밀번호는 영문·숫자·특수문자를 포함하고, 공백 없이 8~64자여야 합니다.")
     @Pattern(
             regexp = "^(?=.*[A-Za-z])(?=.*[0-9])(?=.*[!@#$%^&*()_+\\-=\\[\\]{};':\"\\\\|,.<>/?`~])[A-Za-z0-9!@#$%^&*()_+\\-=\\[\\]{};':\"\\\\|,.<>/?`~]+$",
             message = "비밀번호는 영문·숫자·특수문자를 포함하고, 공백 없이 8글자 이상이어야 합니다."
@@ -45,9 +46,10 @@ public class RegisterRequest {
     )
     private String phone;
 
-    @Schema(description = "SMS 인증 확인(POST /api/auth/signup/sms/verify) 응답에서 받은 verificationNonce 값을 그대로 전달",
+    @Schema(description = "SMS 인증 확인(POST /api/auth/signup/sms/verify) 응답에서 받은 verificationNonce 값을 그대로 전달 (UUID 36자)",
             example = "550e8400-e29b-41d4-a716-446655440000")
     @NotBlank(message = "전화번호 인증 정보가 필요합니다. SMS 인증을 다시 진행해주세요.")
+    @Size(max = 36, message = "전화번호 인증 정보가 올바르지 않습니다.")
     private String verificationNonce;
 
     @Schema(description = "역할 선택. WARD: 피보호자, GUARDIAN: 보호자", example = "WARD", allowableValues = {"WARD", "GUARDIAN"})
