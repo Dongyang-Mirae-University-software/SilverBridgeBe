@@ -29,11 +29,10 @@ public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
 
     @Override
     public void registerStompEndpoints(StompEndpointRegistry registry) {
-        // WebSocket 연결 엔드포인트 (SockJS fallback 포함)
+        // WebSocket 연결 엔드포인트. 웹 전용 운영으로 SockJS 폴백 제거 — 클라이언트는 wss://.../ws 직접 연결.
         registry.addEndpoint("/ws")
                 .addInterceptors(new JwtHandshakeInterceptor(jwtTokenProvider))
-                .setAllowedOriginPatterns("*")
-                .withSockJS();
+                .setAllowedOriginPatterns("*");
     }
 
     @Override
