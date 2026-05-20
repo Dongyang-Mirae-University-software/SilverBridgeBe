@@ -34,6 +34,9 @@ public class GuardianConnectionController {
 
                     ACTIVE(연결됨) + PENDING(수락 대기) 상태 연결 목록을 최신 요청순으로 반환합니다.
                     status 필드로 상태를 구분하여 UI에서 "수락 대기 중" 표시에 활용하세요.
+                    거절·취소된 이력까지 함께 보려면 /api/guardian/connection/requests 를 사용하세요.
+
+                    상대방 전화번호·주소는 ACTIVE 상태에서만 채워지고, PENDING/CANCELLED에서는 null로 반환됩니다.
                     """)
     @ApiResponses({
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "ACTIVE + PENDING 상태 연결 목록 반환"),
@@ -44,6 +47,27 @@ public class GuardianConnectionController {
     public ResponseEntity<ApiResponse<List<ConnectionResponse>>> getMyWards(
             @AuthenticationPrincipal String guardianId) {
         return ResponseEntity.ok(ApiResponse.ok(connectionService.getMyWards(guardianId)));
+    }
+
+    @Operation(summary = "내가 보낸 연결 요청 이력 조회",
+            description = """
+                    [요청 헤더]
+                    Authorization: Bearer {accessToken}
+
+                    보호자가 보낸 모든 연결 요청을 PENDING + ACTIVE + CANCELLED 전부 포함하여 최신 요청순으로 반환합니다.
+                    "피보호자 등록" 화면의 "요청 내역" 테이블(거절·취소된 이력까지 표시)에 사용합니다.
+
+                    상대방 전화번호·주소는 ACTIVE 상태에서만 채워지고, PENDING/CANCELLED에서는 null로 반환됩니다.
+                    """)
+    @ApiResponses({
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "전체 상태 연결 요청 이력 반환"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "인증 토큰 없음 또는 만료", content = @Content),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "보호자 권한 필요", content = @Content)
+    })
+    @GetMapping("/api/guardian/connection/requests")
+    public ResponseEntity<ApiResponse<List<ConnectionResponse>>> getMyConnectionRequests(
+            @AuthenticationPrincipal String guardianId) {
+        return ResponseEntity.ok(ApiResponse.ok(connectionService.getMyConnectionRequests(guardianId)));
     }
 
     @Operation(summary = "피보호자에게 페어링 요청",
