@@ -17,8 +17,9 @@ import java.time.LocalDate;
 @Schema(description = "카카오 신규 회원가입 완료 요청 (SMS 인증 완료 후 호출)")
 public class KakaoRegisterRequest {
 
-    @Schema(description = "POST /api/auth/kakao 응답에서 받은 kakaoId 값을 그대로 전달", example = "3456789012")
+    @Schema(description = "POST /api/auth/kakao 응답에서 받은 kakaoId 값을 그대로 전달 (최대 20자)", example = "3456789012")
     @NotBlank(message = "카카오 ID를 입력해주세요.")
+    @Size(max = 20, message = "카카오 ID 입력값이 올바르지 않습니다.")
     private String kakaoId;
 
     @Schema(description = "본인 실명 (카카오 닉네임 사용 불가, 사용자가 직접 입력, 최대 20자)", example = "홍길동")
@@ -31,9 +32,10 @@ public class KakaoRegisterRequest {
     @Pattern(regexp = "^\\d{10,11}$", message = "전화번호는 숫자만 입력 가능합니다. (10~11자리)")
     private String phone;
 
-    @Schema(description = "SMS 인증 확인(POST /api/auth/signup/sms/verify) 응답에서 받은 verificationNonce 값을 그대로 전달",
+    @Schema(description = "SMS 인증 확인(POST /api/auth/signup/sms/verify) 응답에서 받은 verificationNonce 값을 그대로 전달 (UUID 36자)",
             example = "550e8400-e29b-41d4-a716-446655440000")
     @NotBlank(message = "전화번호 인증 정보가 필요합니다. SMS 인증을 다시 진행해주세요.")
+    @Size(max = 36, message = "전화번호 인증 정보가 올바르지 않습니다.")
     private String verificationNonce;
 
     @Schema(description = "역할 선택. WARD: 피보호자, GUARDIAN: 보호자", example = "WARD", allowableValues = {"WARD", "GUARDIAN"})
