@@ -35,6 +35,7 @@ public class KakaoAuthService {
     private final KakaoOAuthClient kakaoOAuthClient;
     private final UserRepository userRepository;
     private final RefreshTokenRepository refreshTokenRepository;
+    private final RefreshTokenRevocationService refreshTokenRevocationService;
     private final JwtTokenProvider jwtTokenProvider;
     private final AccessLogService accessLogService;
     private final StringRedisTemplate redisTemplate;
@@ -61,7 +62,8 @@ public class KakaoAuthService {
                 .map(user -> {
                     if (user.getStatus() == Status.INACTIVE) {
                         // 정지 계정 차단 시 남아있는 refresh token 정리 (AuthService.refresh와 일관성 유지)
-                        refreshTokenRepository.deleteByUserId(user.getId());
+                        // REQUIRES_NEW로 분리 — 아래 throw 시 본 트랜잭션 롤백돼도 폐기는 유지
+                        refreshTokenRevocationService.revokeAll(user.getId());
                         throw new CustomException(ErrorCode.INACTIVE_USER);
                     }
                     String accessToken  = jwtTokenProvider.generateAccessToken(user.getId(), user.getEmail(), user.getRole().name());

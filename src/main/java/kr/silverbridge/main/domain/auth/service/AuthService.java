@@ -21,6 +21,7 @@ import kr.silverbridge.main.global.exception.CustomException;
 import kr.silverbridge.main.global.exception.ErrorCode;
 import kr.silverbridge.main.global.jwt.JwtTokenProvider;
 import kr.silverbridge.main.global.util.MaskingUtil;
+import kr.silverbridge.main.global.util.RedisCounter;
 import kr.silverbridge.main.global.util.RedisKeys;
 import kr.silverbridge.main.global.util.UserIdGenerator;
 import lombok.RequiredArgsConstructor;
@@ -42,10 +43,12 @@ public class AuthService {
 
     private final UserRepository userRepository;
     private final RefreshTokenRepository refreshTokenRepository;
+    private final RefreshTokenRevocationService refreshTokenRevocationService;
     private final AccessLogService accessLogService;
     private final JwtTokenProvider jwtTokenProvider;
     private final PasswordEncoder passwordEncoder;
     private final StringRedisTemplate redisTemplate;
+    private final RedisCounter redisCounter;
     private final UserIdGenerator userIdGenerator;
     private final SmsService smsService;
     private final AuthLoginProperties authLoginProperties;
@@ -119,15 +122,17 @@ public class AuthService {
         }
 
         if (!passwordEncoder.matches(request.getPassword(), user.getPassword())) {
-            long lockTtl = authLoginProperties.getLockTtlMinutes();
-            // 실패 횟수 증가
-            Long attempts = redisTemplate.opsForValue().increment(failKey);
-            redisTemplate.expire(failKey, lockTtl, TimeUnit.MINUTES);
+            long lockTtlMinutes = authLoginProperties.getLockTtlMinutes();
+            // 실패 횟수 증가 + 최초 1회 TTL 설정을 원자적으로 (M-4 패턴, RateLimitService와 일관).
+            // 분리 호출 시 두 명령 사이 장애로 TTL 누락 우려가 있어 Lua 스크립트로 한 번에 처리.
+            // 윈도우는 첫 실패 시각 기준 고정(sliding 아님) — 정상 사용자 흐름엔 영향 없고
+            // 매 실패마다 TTL이 갱신되어 사실상 영구 잠금되던 잠재 위험도 제거.
+            long attempts = redisCounter.incrementWithTtl(failKey, lockTtlMinutes * 60);
 
             // 최대 실패 횟수 초과 시 잠금 설정
-            if (attempts != null && attempts >= authLoginProperties.getMaxAttempts()) {
+            if (attempts >= authLoginProperties.getMaxAttempts()) {
                 redisTemplate.delete(failKey);
-                redisTemplate.opsForValue().set(lockKey, "1", lockTtl, TimeUnit.MINUTES);
+                redisTemplate.opsForValue().set(lockKey, "1", lockTtlMinutes, TimeUnit.MINUTES);
             }
 
             throw new CustomException(ErrorCode.INVALID_CREDENTIALS);
@@ -136,7 +141,8 @@ public class AuthService {
         // 비밀번호 검증 통과 후 계정 상태 확인 (본인에게만 정지 사실 노출)
         if (user.getStatus() == Status.INACTIVE) {
             // 정지 계정 차단 시 남아있는 refresh token 정리 (refresh 메서드와 일관성 유지)
-            refreshTokenRepository.deleteByUserId(user.getId());
+            // REQUIRES_NEW로 분리 — 아래 throw 시 본 트랜잭션 롤백돼도 폐기는 유지
+            refreshTokenRevocationService.revokeAll(user.getId());
             throw new CustomException(ErrorCode.INACTIVE_USER);
         }
 
@@ -187,7 +193,8 @@ public class AuthService {
         RefreshToken savedToken = opt.get();
 
         if (savedToken.getExpiresAt().isBefore(OffsetDateTime.now())) {
-            refreshTokenRepository.delete(savedToken);
+            // REQUIRES_NEW로 분리 — 아래 throw 시 본 트랜잭션 롤백돼도 폐기는 유지
+            refreshTokenRevocationService.revokeOne(savedToken);
             throw new CustomException(ErrorCode.EXPIRED_TOKEN);
         }
 
@@ -196,7 +203,8 @@ public class AuthService {
 
         // 비활성화된 계정은 토큰 재발급 차단 (탈퇴 또는 관리자 제한 계정)
         if (user.getStatus() == Status.INACTIVE) {
-            refreshTokenRepository.delete(savedToken);
+            // REQUIRES_NEW로 분리 — 아래 throw 시 본 트랜잭션 롤백돼도 폐기는 유지
+            refreshTokenRevocationService.revokeOne(savedToken);
             throw new CustomException(ErrorCode.INACTIVE_USER);
         }
 
@@ -257,7 +265,8 @@ public class AuthService {
             return;
         }
         if (refreshTokenRepository.existsByUserId(userId)) {
-            refreshTokenRepository.deleteByUserId(userId);
+            // REQUIRES_NEW로 분리 — caller가 INVALID_TOKEN을 throw해 본 트랜잭션이 롤백돼도 폐기는 유지
+            refreshTokenRevocationService.revokeAll(userId);
             accessLogService.log(userId, AccessAction.TOKEN_REUSE_DETECTED);
             log.warn("Refresh token 재사용 감지: userId={} — 사용자의 모든 token 강제 폐기", userId);
         }

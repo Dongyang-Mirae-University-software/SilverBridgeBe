@@ -1,5 +1,6 @@
 package kr.silverbridge.main.global.security;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.servlet.http.HttpServletResponse;
 import kr.silverbridge.main.global.jwt.JwtAuthenticationFilter;
 import kr.silverbridge.main.global.jwt.JwtTokenProvider;
@@ -36,6 +37,7 @@ public class SecurityConfig {
 
     private final JwtTokenProvider jwtTokenProvider;
     private final StringRedisTemplate redisTemplate;
+    private final ObjectMapper objectMapper;
 
     @Value("${app.cors.allowed-origins}")
     private String allowedOrigins;
@@ -87,7 +89,7 @@ public class SecurityConfig {
 
                 // JWT 필터를 Spring Security 인증 필터 앞에 등록
                 .addFilterBefore(
-                        new JwtAuthenticationFilter(jwtTokenProvider, redisTemplate),
+                        new JwtAuthenticationFilter(jwtTokenProvider, redisTemplate, objectMapper),
                         UsernamePasswordAuthenticationFilter.class
                 );
 
