@@ -4,6 +4,78 @@
 
 ---
 
+## 2026-05-20 — connection 도메인 프로토타입 정렬 + WebSocket SockJS 제거
+
+보호자웹 신규 프로토타입(피보호자 등록·요청 내역·내 보호자 카드)에 맞춰 connection 도메인을 확장. 동시에 웹 전용 운영 결정에 따라 WebSocket SockJS를 제거해 네이티브 WebSocket(wss) 단순화.
+
+### connection 도메인 — PHASE 0 점검
+
+엔드포인트는 보호자 4 + 피보호자 4 = 8개 모두 정상 동작. 본인-본인 차단, 중복 ACTIVE/PENDING 차단(애플리케이션 + DB 유니크 인덱스 `uq_connections_active`), 존재하지 않는 ID에 대한 404는 이미 구현됨.
+
+### connection 도메인 — 갭
+
+- **관계(relation) 전면 부재**: DB 컬럼·엔티티 필드·요청 DTO·응답 DTO 어디에도 없음
+- **피보호자 측 "내 보호자" 카드에 phone/address/relation 누락**: User 엔티티엔 존재하나 `ConnectionResponse`에 미노출
+- **보호자 측 "요청 내역" 테이블에 CANCELLED 이력 표시 불가**: `/select`가 ACTIVE+PENDING만 반환
+
+### connection 도메인 — 결정 사항
+
+| 정책 | 결정 |
+|------|------|
+| `ConnectionRequestDto.relation` | 필수(`@NotBlank` + `@Size(max=10)`) — 한국어 관계 호칭 최대 4~5음절 |
+| 거절·취소된 요청 이력 노출 | 별도 엔드포인트로 CANCELLED 포함 전체 반환 |
+| PENDING 상태에서 상대 phone/address | 비공개(null), ACTIVE에서만 노출 — 어뷰징 방지 |
+
+### connection 도메인 — 변경 사항
+
+- **V19__add_connection_relation.sql** 신규 — `connections.relation VARCHAR(10) NULL` 추가 (기존 행 NULL 호환, 신규 요청은 DTO에서 필수화)
+- **Connection 엔티티** — `relation` 필드 (`@Column(length = 10)`) + Builder 포함
+- **ConnectionRequestDto** — `relation` 필드 추가 (`@NotBlank` + `@Size(max=10)`)
+- **ConnectionResponse** — `partnerPhone`, `partnerAddress`, `partnerAddressDetail`, `relation` 추가. `status == ACTIVE`일 때만 phone/address 채움, 그 외 null
+- **ConnectionService**
+  - `requestConnectionAsGuardian`: `relation`을 엔티티에 저장 + 이벤트 페이로드에 포함
+  - `getMyConnectionRequests(guardianId)` 신규 — PENDING+ACTIVE+CANCELLED 전체 최신순 반환 (기존 `findByGuardianIdOrderByCreatedAtDesc` 재사용)
+- **GuardianConnectionController**
+  - `GET /api/guardian/connection/requests` 신규 — "요청 내역" 테이블용
+  - 기존 `/api/guardian/connection/select`는 ACTIVE+PENDING만 유지 ("피보호자 리스트" 사이드바용)
+- **ConnectionRequestedEvent** — `relation` 필드 추가 (호환을 위해 null fallback 유지)
+- **ConnectionNotificationListener.handleRequested** — FCM 본문을 `"{relation} {guardianName}님이 연결을 요청했어요."`로 변경, relation null이면 기존 fallback 문구 유지
+
+### WebSocket SockJS 제거
+
+운영 환경이 모바일 앱 없이 **웹 전용**으로 확정됨에 따라 SockJS 폴백 계층을 제거. 모던 브라우저 네이티브 WebSocket(wss://) 단독으로 단순화.
+
+- **변경**: `WebSocketConfig.registerStompEndpoints` 의 `.withSockJS()` 호출 제거
+- **유지**: STOMP 메시지 브로커(`/topic`, `/app`), JWT 핸드셰이크 인터셉터, 구독 권한 인터셉터, `setAllowedOriginPatterns("*")` 모두 그대로
+- **프론트 영향**: 연결 URL을 `https://api.dmu.gosky.kr/ws` (SockJS) → `wss://api.dmu.gosky.kr/ws` (native WS)로 변경. `@stomp/stompjs`만 쓰고 `sockjs-client` 의존성 제거 가능
+- **별개 인프라 작업**: nginx의 WebSocket Upgrade proxy 설정(`proxy_set_header Upgrade $http_upgrade; proxy_set_header Connection "upgrade"; proxy_http_version 1.1; proxy_read_timeout 3600s`) 미적용 시 504 Gateway Timeout 지속 — 백엔드 코드 변경과 독립 이슈
+
+### 프론트 영향 (응답 구조 변경)
+
+`ConnectionResponse`에 4개 필드가 추가됨. 기존 필드 삭제·이름 변경 없음 — 기존 클라이언트는 그대로 동작.
+
+| 추가 필드 | 타입 | 노출 조건 |
+|-----------|------|-----------|
+| `partnerPhone` | String? | ACTIVE에서만 |
+| `partnerAddress` | String? | ACTIVE에서만 |
+| `partnerAddressDetail` | String? | ACTIVE에서만 |
+| `relation` | String? | 항상 (기존 행은 null) |
+
+### 검증
+
+- `./gradlew compileJava --no-daemon -q` 통과
+- `./gradlew compileTestJava --no-daemon -q` 통과 — 기존 테스트 영향 없음
+- 자동 git commit/push 없음(사용자 승인 후 PR 생성)
+
+### 후속
+
+- 스킬 기반 점검(spring-boot-patterns, api-contract-review, jpa-patterns, security-audit 등)은 다음 세션에서 별도 진행
+- 프론트에서 `relation` 누락 시 400 에러 메시지 처리 필요 (`"피보호자와의 관계를 선택해주세요."`)
+- nginx WebSocket proxy 설정 확인 (504 Gateway Timeout 원인)
+- 프론트는 `sockjs-client` 의존성 제거 및 `brokerURL: 'wss://api.dmu.gosky.kr/ws'`로 직접 STOMP 연결
+
+---
+
 ## 2026-05-19 — 미검증 API 정리 (call/game/ai/anomaly 제거)
 
 무계획적으로 추가됐던 미검증 엔드포인트를 제거하고 검증된 부분만 남기는 정리 작업. 사전 점검 후 사용자 승인 받아 도메인 단위로 끊어 진행, 각 단계 빌드 통과 확인.
