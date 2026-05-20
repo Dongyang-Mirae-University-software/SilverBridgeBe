@@ -42,6 +42,7 @@ public class AuthService {
 
     private final UserRepository userRepository;
     private final RefreshTokenRepository refreshTokenRepository;
+    private final RefreshTokenRevocationService refreshTokenRevocationService;
     private final AccessLogService accessLogService;
     private final JwtTokenProvider jwtTokenProvider;
     private final PasswordEncoder passwordEncoder;
@@ -136,7 +137,8 @@ public class AuthService {
         // 비밀번호 검증 통과 후 계정 상태 확인 (본인에게만 정지 사실 노출)
         if (user.getStatus() == Status.INACTIVE) {
             // 정지 계정 차단 시 남아있는 refresh token 정리 (refresh 메서드와 일관성 유지)
-            refreshTokenRepository.deleteByUserId(user.getId());
+            // REQUIRES_NEW로 분리 — 아래 throw 시 본 트랜잭션 롤백돼도 폐기는 유지
+            refreshTokenRevocationService.revokeAll(user.getId());
             throw new CustomException(ErrorCode.INACTIVE_USER);
         }
 
@@ -187,7 +189,8 @@ public class AuthService {
         RefreshToken savedToken = opt.get();
 
         if (savedToken.getExpiresAt().isBefore(OffsetDateTime.now())) {
-            refreshTokenRepository.delete(savedToken);
+            // REQUIRES_NEW로 분리 — 아래 throw 시 본 트랜잭션 롤백돼도 폐기는 유지
+            refreshTokenRevocationService.revokeOne(savedToken);
             throw new CustomException(ErrorCode.EXPIRED_TOKEN);
         }
 
@@ -196,7 +199,8 @@ public class AuthService {
 
         // 비활성화된 계정은 토큰 재발급 차단 (탈퇴 또는 관리자 제한 계정)
         if (user.getStatus() == Status.INACTIVE) {
-            refreshTokenRepository.delete(savedToken);
+            // REQUIRES_NEW로 분리 — 아래 throw 시 본 트랜잭션 롤백돼도 폐기는 유지
+            refreshTokenRevocationService.revokeOne(savedToken);
             throw new CustomException(ErrorCode.INACTIVE_USER);
         }
 
@@ -257,7 +261,8 @@ public class AuthService {
             return;
         }
         if (refreshTokenRepository.existsByUserId(userId)) {
-            refreshTokenRepository.deleteByUserId(userId);
+            // REQUIRES_NEW로 분리 — caller가 INVALID_TOKEN을 throw해 본 트랜잭션이 롤백돼도 폐기는 유지
+            refreshTokenRevocationService.revokeAll(userId);
             accessLogService.log(userId, AccessAction.TOKEN_REUSE_DETECTED);
             log.warn("Refresh token 재사용 감지: userId={} — 사용자의 모든 token 강제 폐기", userId);
         }
