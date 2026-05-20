@@ -13,6 +13,7 @@ import kr.silverbridge.main.global.enums.Status;
 import kr.silverbridge.main.global.exception.CustomException;
 import kr.silverbridge.main.global.exception.ErrorCode;
 import kr.silverbridge.main.global.jwt.JwtTokenProvider;
+import kr.silverbridge.main.global.util.RedisCounter;
 import kr.silverbridge.main.global.util.RedisKeys;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -53,6 +54,7 @@ class AuthServiceTest {
     @Mock private PasswordEncoder passwordEncoder;
     @Mock private StringRedisTemplate redisTemplate;
     @Mock private ValueOperations<String, String> valueOperations;
+    @Mock private RedisCounter redisCounter;
     @Mock private SmsService smsService;
     @Mock private kr.silverbridge.main.domain.auth.config.AuthLoginProperties authLoginProperties;
 
@@ -141,7 +143,7 @@ class AuthServiceTest {
         when(userRepository.findByEmail(TEST_EMAIL)).thenReturn(Optional.of(inactiveUser));
         when(redisTemplate.hasKey(RedisKeys.LOGIN_LOCK + TEST_USER_ID)).thenReturn(false);
         when(passwordEncoder.matches("WrongPass1!", "encodedPassword")).thenReturn(false);
-        when(valueOperations.increment(RedisKeys.LOGIN_FAIL + TEST_USER_ID)).thenReturn(1L);
+        when(redisCounter.incrementWithTtl(eq(RedisKeys.LOGIN_FAIL + TEST_USER_ID), anyLong())).thenReturn(1L);
 
         CustomException ex = assertThrows(CustomException.class,
                 () -> authService.login(req, TEST_IP, TEST_AGENT));
@@ -157,13 +159,14 @@ class AuthServiceTest {
         when(userRepository.findByEmail(TEST_EMAIL)).thenReturn(Optional.of(activeUser()));
         when(redisTemplate.hasKey(RedisKeys.LOGIN_LOCK + TEST_USER_ID)).thenReturn(false);
         when(passwordEncoder.matches("WrongPass1!", "encodedPassword")).thenReturn(false);
-        when(valueOperations.increment(RedisKeys.LOGIN_FAIL + TEST_USER_ID)).thenReturn(1L);
+        when(redisCounter.incrementWithTtl(eq(RedisKeys.LOGIN_FAIL + TEST_USER_ID), anyLong())).thenReturn(1L);
 
         CustomException ex = assertThrows(CustomException.class,
                 () -> authService.login(req, TEST_IP, TEST_AGENT));
 
         assertThat(ex.getErrorCode()).isEqualTo(ErrorCode.INVALID_CREDENTIALS);
-        verify(valueOperations).increment(RedisKeys.LOGIN_FAIL + TEST_USER_ID);
+        // INCR/EXPIRE 원자 처리로 RedisCounter 경유 (M-4 패턴 일관)
+        verify(redisCounter).incrementWithTtl(eq(RedisKeys.LOGIN_FAIL + TEST_USER_ID), anyLong());
     }
 
     @Test
@@ -173,7 +176,7 @@ class AuthServiceTest {
         when(userRepository.findByEmail(TEST_EMAIL)).thenReturn(Optional.of(activeUser()));
         when(redisTemplate.hasKey(RedisKeys.LOGIN_LOCK + TEST_USER_ID)).thenReturn(false);
         when(passwordEncoder.matches(anyString(), anyString())).thenReturn(false);
-        when(valueOperations.increment(RedisKeys.LOGIN_FAIL + TEST_USER_ID)).thenReturn(5L);
+        when(redisCounter.incrementWithTtl(eq(RedisKeys.LOGIN_FAIL + TEST_USER_ID), anyLong())).thenReturn(5L);
 
         assertThrows(CustomException.class, () -> authService.login(req, TEST_IP, TEST_AGENT));
 

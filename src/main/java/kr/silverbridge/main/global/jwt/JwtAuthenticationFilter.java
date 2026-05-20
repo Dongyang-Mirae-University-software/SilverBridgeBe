@@ -25,8 +25,8 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
     private final JwtTokenProvider jwtTokenProvider;
     private final StringRedisTemplate redisTemplate;
-
-    private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
+    // JacksonConfig가 제공하는 빈 — 안전 설정 + 모듈 자동 등록을 공유 (M-M1)
+    private final ObjectMapper objectMapper;
 
     @Override
     protected void doFilterInternal(HttpServletRequest request,
@@ -115,7 +115,7 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
         response.setCharacterEncoding("UTF-8");
         try {
             response.getWriter().write(
-                    OBJECT_MAPPER.writeValueAsString(Map.of("success", false, "message", message))
+                    objectMapper.writeValueAsString(Map.of("success", false, "message", message))
             );
         } catch (Exception e) {
             response.getWriter().write("{\"success\":false,\"message\":\"서버 오류가 발생했습니다.\"}");
