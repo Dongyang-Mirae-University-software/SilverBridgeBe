@@ -263,3 +263,51 @@ audit-report-auth.md 발견 28건에 대한 조치를 결함 단위 PR로 분리
 - `src/main/java/.../domain/user/repository/UserRepository.java`
 - `src/main/java/.../global/aop/ApiLoggingAspect.java`
 - `src/main/resources/application.yaml`
+
+---
+
+## 2026-05-20 — auth/user 도메인 2차 보안·구조 종합 점검
+
+2026-05-20 프로토타입 정합(`cb6c211` — 성별/생년월일/우편번호 필드 추가, 비번 재설정 6자리 통일) 이후 스킬 기반 점검 미수행 상태였음. 보안 핵심 도메인이라 강도 높여 PHASE 0~G 진행.
+
+### 점검 범위
+- 1차(52): `domain/auth/**`, `domain/user/**`
+- 2차(10): `global/jwt/**`, `global/security/**`, `global/util/VerificationCodeValidator·MaskingUtil·RedisKeys·RedisCounter`, `global/config/SecurityConfigValidator·RequiredPropertiesValidator`
+- 3차: Flyway V16/V18, `ErrorCode` 인증 관련
+
+### 적용 스킬
+architecture-review / spring-boot-patterns / jpa-patterns / security-audit (+ concurrency-review / api-contract-review / performance-smell-detection / logging-patterns / test-quality 발견 항목 매핑)
+
+### 핵심 발견 — Critical 5건 (트랜잭션 롤백으로 refresh token 폐기 무효화)
+
+`AuthService` 4개소 + `KakaoAuthService` 1개소에서 `refreshTokenRepository.delete*` 직후 `throw CustomException` 시 본 트랜잭션 롤백으로 폐기가 실제 DB에 적용되지 않던 결함. 특히 **H-3(도난 감지) / H-4(INACTIVE 차단 시 token 즉시 삭제) 보안 fix가 사실상 무효**였음. access_logs는 `AccessLogService.REQUIRES_NEW`로 살아남아 도난 흔적은 남지만 사용자 token은 회수되지 않는 상태.
+
+**근거**: `CustomException extends RuntimeException` + `@Transactional` default rollback rule + `rollbackFor`/`noRollbackFor` 미지정.
+
+### 1차 커밋 — `2e91381 fix(auth): refresh token 폐기를 별도 트랜잭션으로 분리`
+- 신규 `RefreshTokenRevocationService` (`@Transactional(REQUIRES_NEW)`) — `AccessLogService` 패턴과 동일
+- `AuthService` 4개소 + `KakaoAuthService` 1개소가 `revokeAll/revokeOne` 경유
+- `AuthServiceTest` verify 3건 정정
+- 정상 흐름(로그인 단일 디바이스 정책, refresh rotation)은 throw가 없어 원본 호출 유지
+- 응답 포맷·API 시그니처 변경 없음 → 프론트 호환성 영향 0
+
+### 2차 누적 커밋 — High 2 + Medium 5 일괄 반영
+- **H-A1** `AuthService.login` fail counter `RedisCounter.incrementWithTtl` 통일 (M-4 라운드 누락분, fixed window)
+- **H-A8** `KakaoOAuthClient` connect 3s / read 5s 타임아웃 명시 (Tomcat thread 행 방지)
+- **M-M1** `ObjectMapper` 빈 주입 — `KakaoOAuthClient` 생성자, `JwtAuthenticationFilter` `@RequiredArgsConstructor`, `SecurityConfig` 에서 필터 생성 시 전달
+- **M-M2** 입력 길이 정책 정비 — 10개 DTO에 email max=50 / password max=64 / verificationNonce max=36 / kakaoId max=20 일관 적용 (BCrypt 72byte cutoff, RFC 5321, UUID 표준 반영)
+- **M-M3** `KakaoOAuthClient` 응답 body 로깅 마스킹 — `extractTokenErrorCode/extractApiErrorCode` 헬퍼로 errorCode만 출력
+- 전체 `./gradlew test` BUILD SUCCESSFUL
+- 응답 포맷 변경 없음 / DB 스키마 변경 없음 / 프론트 호환성 영향 0
+
+### 이월 (다음 스프린트)
+- **M-F1~F5**: 테스트 갭 5건 (`KakaoAuthServiceTest`, `PasswordResetServiceTest`, `BirthDateValidatorTest`, `RefreshTokenRevocationServiceTest`, `JwtAuthenticationFilterTest`)
+- **L-A5**: `SecurityConfig` 보안 헤더 (HSTS/CSP/X-Frame-Options 등)
+- **L-G1**: `application.yaml` DB credential placeholder
+- **L-C1**: `UserController` RESTful 경로 정리 — 프론트 마이그레이션 동반 협의
+- **M-B1**: `UserService → SmsService` 역방향 의존 — 별도 협의
+
+### 산출물
+- `docs/audit-report-auth-2026-05-20.md` — 본 점검 종합 보고서 (신규)
+- `docs/audit-report-auth.md` — 2026-05-15 1차 점검 보고서 (그대로 보존)
+- `docs/audit-summary-auth.csv` — Phase/스킬/심각도/권장조치/수정여부 표 (신규)

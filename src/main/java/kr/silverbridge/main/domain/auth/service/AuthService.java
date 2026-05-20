@@ -21,6 +21,7 @@ import kr.silverbridge.main.global.exception.CustomException;
 import kr.silverbridge.main.global.exception.ErrorCode;
 import kr.silverbridge.main.global.jwt.JwtTokenProvider;
 import kr.silverbridge.main.global.util.MaskingUtil;
+import kr.silverbridge.main.global.util.RedisCounter;
 import kr.silverbridge.main.global.util.RedisKeys;
 import kr.silverbridge.main.global.util.UserIdGenerator;
 import lombok.RequiredArgsConstructor;
@@ -47,6 +48,7 @@ public class AuthService {
     private final JwtTokenProvider jwtTokenProvider;
     private final PasswordEncoder passwordEncoder;
     private final StringRedisTemplate redisTemplate;
+    private final RedisCounter redisCounter;
     private final UserIdGenerator userIdGenerator;
     private final SmsService smsService;
     private final AuthLoginProperties authLoginProperties;
@@ -120,15 +122,17 @@ public class AuthService {
         }
 
         if (!passwordEncoder.matches(request.getPassword(), user.getPassword())) {
-            long lockTtl = authLoginProperties.getLockTtlMinutes();
-            // 실패 횟수 증가
-            Long attempts = redisTemplate.opsForValue().increment(failKey);
-            redisTemplate.expire(failKey, lockTtl, TimeUnit.MINUTES);
+            long lockTtlMinutes = authLoginProperties.getLockTtlMinutes();
+            // 실패 횟수 증가 + 최초 1회 TTL 설정을 원자적으로 (M-4 패턴, RateLimitService와 일관).
+            // 분리 호출 시 두 명령 사이 장애로 TTL 누락 우려가 있어 Lua 스크립트로 한 번에 처리.
+            // 윈도우는 첫 실패 시각 기준 고정(sliding 아님) — 정상 사용자 흐름엔 영향 없고
+            // 매 실패마다 TTL이 갱신되어 사실상 영구 잠금되던 잠재 위험도 제거.
+            long attempts = redisCounter.incrementWithTtl(failKey, lockTtlMinutes * 60);
 
             // 최대 실패 횟수 초과 시 잠금 설정
-            if (attempts != null && attempts >= authLoginProperties.getMaxAttempts()) {
+            if (attempts >= authLoginProperties.getMaxAttempts()) {
                 redisTemplate.delete(failKey);
-                redisTemplate.opsForValue().set(lockKey, "1", lockTtl, TimeUnit.MINUTES);
+                redisTemplate.opsForValue().set(lockKey, "1", lockTtlMinutes, TimeUnit.MINUTES);
             }
 
             throw new CustomException(ErrorCode.INVALID_CREDENTIALS);
