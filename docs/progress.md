@@ -410,3 +410,44 @@ architecture-review / spring-boot-patterns / jpa-patterns / concurrency-review /
 ### 산출물
 - `docs/audit-report-connection-2026-05-21.md` — 종합 보고서 (신규, 수정완료 반영)
 - `docs/audit-summary-connection-2026-05-21.csv` — Phase/스킬/심각도/권장조치/수정여부 표 (신규)
+
+---
+
+## 2026-05-22 — auth/user 도메인 3차 보안·구조 종합 점검 (스킬 기반)
+
+1·2차(2026-05-15/20) 종료 후 보안 핵심 도메인 재점검. PHASE -1~G 진행, 발견 즉시 수정(High/Medium/Low 전부 + 테스트 갭 전부 작성).
+
+### PHASE -1 흔적 처리
+- 점검 작업 자체는 정상(1·2차 완료·머지·문서화). 유일한 흔적: `.claude/settings.json`(커밋 안 됨)에서 git push/commit deny 안전장치가 allow로 이동된 상태.
+- 사용자 결정: **그대로 두고 진행**. 본 라운드 변경에 settings.json 미포함, 자동 git 미수행.
+
+### 핵심 발견 — Critical 0 / High 2
+- **A-H1 (High)**: JWT 토큰 타입 미구분 — refresh token을 Bearer로 제시 시 authenticated 엔드포인트 통과·로그아웃 우회. → `typ` 클레임 + 필터 access-only.
+- **A-H2 (High)**: `/signin` IP RateLimit 부재 — 계정 분산 credential stuffing 무제한. → `RateLimitService.check(signin)`.
+
+### 수정 완료 (본 라운드)
+- High 2 (A-H1, A-H2)
+- Medium 2: A-M1(비번재설정 confirm enumeration — 코드검증 선행), C-1(`isNewUser` @JsonProperty 고정)
+- Low 6: C-2(카카오 가입 201), A-L1(constant-time 비교), A-L2(보안 헤더, CSP 제외 부분), A-L4(데드코드 AuthenticationManager/CustomUserDetailsService 제거), A-L5(AI·game 잔재+미사용 ErrorCode 5개 제거), A-L6(생년월일 만120세 상한), D-3(SecretKey 캐싱), B-2(매직 문자열 상수화), E-2(traceId MDC), E-3(잠금 WARN 로그)
+
+### 이월 (다음 사이클)
+- A-M2(XFF/프록시 trusted-proxy — 인프라 토폴로지 확인), A-L3/G-2(DB credential 기본값 dev — .env/CD 확인), A-L2 CSP(Swagger 호환 정책), B-1(auth↔user 결합 — 모놀리식 보류), L-C1(UserController RESTful 경로 — 프론트 마이그레이션, 2차 이월), E-4(약관 동의 기록 — 약관 백엔드 미구현 시 N/A)
+
+### 검토 후 미구현 확인 (결정)
+- 로그인 유지(프론트 책임), 약관 동의(백엔드 미구현) — 발견사항으로만 기록.
+
+### 양호 재검증
+- 1·2차 보안 fix 전부 현행 코드에 살아있음(access token 무효화·refresh 폐기 REQUIRES_NEW·rotation+재사용감지·로그인 응답 통합·SMS nonce·BCrypt12·JWT secret 검증·IDOR 없음·동시가입 409).
+
+### 테스트 (PHASE F — 갭 전부 작성)
+- 신규 5: JwtAuthenticationFilterTest(A-H1 회귀), KakaoAuthServiceTest, PasswordResetServiceTest(A-M1 회귀), RefreshTokenRevocationServiceTest, BirthDateValidatorTest
+- 보강 2: JwtTokenProviderTest(typ), SmsVerificationServiceTest(per-phone 캡)
+- `./gradlew test` 대상 74건 통과 + `./gradlew build -x test` BUILD SUCCESSFUL
+
+### 프론트 호환성
+- 응답 필드 삭제·이름변경 없음. A-H1 배포 시 기존 access token 1회 401→refresh 자동복구. C-1/C-2는 카카오 프론트 미구현이라 영향 없음.
+
+### 산출물
+- `docs/audit-report-auth-2026-05-22.md` — 3차 종합 보고서 (신규)
+- `docs/audit-summary-auth-2026-05-22.csv` — Phase/스킬/심각도/수정여부 표 (신규)
+- 작업 브랜치 `fix/auth-audit-2026-05-22` (커밋·푸시 미수행 — 사용자 검토 대기)

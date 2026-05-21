@@ -13,6 +13,8 @@ public final class RedisKeys {
     public static final String SMS_VERIFY    = "sms:verify:";
     public static final String SMS_VERIFIED  = "sms:verified:";
     public static final String SMS_ATTEMPT   = "sms:attempt:";
+    // per-phone 발송 건수 카운터 (A-M3) — IP 우회 SMS 폭탄/비용 남용 방어용 시간당 상한
+    public static final String SMS_SEND_COUNT = "sms:sendcount:";
 
     // ── 비밀번호 재설정 ────────────────────────────────
     // UUID 토큰 폐지(2026-05): 6자리 코드로 통일. PW_RESET(토큰→userId) 키 제거됨.
