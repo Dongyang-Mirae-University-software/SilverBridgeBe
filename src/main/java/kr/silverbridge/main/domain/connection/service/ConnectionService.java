@@ -97,7 +97,7 @@ public class ConnectionService {
             throw new CustomException(ErrorCode.CONNECTION_NOT_ACTIVE);
         }
         String wardId = connection.getWardId();
-        connection.cancel();
+        connection.disconnect();
 
         eventPublisher.publishEvent(new ConnectionDisconnectedEvent(
                 connectionId, wardId, ConnectionDisconnectedEvent.DisconnectedBy.GUARDIAN
@@ -158,7 +158,7 @@ public class ConnectionService {
         if (connection.getStatus() != ConnectionStatus.PENDING) {
             throw new CustomException(ErrorCode.CONNECTION_NOT_PENDING);
         }
-        connection.cancel();
+        connection.refuse();
         log.info("연결 거절(피보호자): connectionId={}, wardId={}", connectionId, wardId);
     }
 
@@ -171,7 +171,7 @@ public class ConnectionService {
             throw new CustomException(ErrorCode.CONNECTION_NOT_ACTIVE);
         }
         String guardianId = connection.getGuardianId();
-        connection.cancel();
+        connection.disconnect();
 
         eventPublisher.publishEvent(new ConnectionDisconnectedEvent(
                 connectionId, guardianId, ConnectionDisconnectedEvent.DisconnectedBy.WARD
@@ -201,8 +201,9 @@ public class ConnectionService {
         String guardianId = (requesterRole == Role.GUARDIAN) ? requesterId : targetId;
         String wardId     = (requesterRole == Role.WARD)     ? requesterId : targetId;
 
-        if (connectionRepository.existsByGuardianIdAndWardIdAndStatusNot(
-                guardianId, wardId, ConnectionStatus.CANCELLED)) {
+        // 진행 중(PENDING)·활성(ACTIVE) 연결만 중복으로 차단. CANCELLED/REFUSED/DISCONNECTED는 재요청 허용.
+        if (connectionRepository.existsByGuardianIdAndWardIdAndStatusIn(
+                guardianId, wardId, List.of(ConnectionStatus.PENDING, ConnectionStatus.ACTIVE))) {
             throw new CustomException(ErrorCode.CONNECTION_ALREADY_EXISTS);
         }
     }
