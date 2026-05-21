@@ -2,6 +2,7 @@ package kr.silverbridge.main.domain.connection.service;
 
 import kr.silverbridge.main.domain.connection.dto.ConnectionRequestDto;
 import kr.silverbridge.main.domain.connection.dto.ConnectionResponse;
+import kr.silverbridge.main.domain.connection.dto.PendingConnectionResponse;
 import kr.silverbridge.main.domain.connection.entity.Connection;
 import kr.silverbridge.main.domain.connection.event.ConnectionAcceptedEvent;
 import kr.silverbridge.main.domain.connection.event.ConnectionDisconnectedEvent;
@@ -104,11 +105,26 @@ public class ConnectionService {
     // ─── 피보호자 API ─────────────────────────────────────────────
 
     // 피보호자: 내 보호자 목록 조회 (ACTIVE만, 우선순위 순)
+    // — 피보호자웹 "내 보호자 리스트" 카드
     @Transactional(readOnly = true)
-    public List<ConnectionResponse> getMyGuardians(String wardId) {
+    public List<ConnectionResponse> getActiveGuardians(String wardId) {
         List<Connection> connections = connectionRepository
                 .findByWardIdAndStatusOrderByPriorityAsc(wardId, ConnectionStatus.ACTIVE);
         return buildResponseFromWardView(connections);
+    }
+
+    // 피보호자: 보호자가 보낸 PENDING 요청 목록 조회 (요청일 최신순)
+    // — 피보호자웹 "요청온 목록" 카드. 전화번호는 마스킹, 주소는 미노출.
+    @Transactional(readOnly = true)
+    public List<PendingConnectionResponse> getPendingRequests(String wardId) {
+        List<Connection> connections = connectionRepository
+                .findByWardIdAndStatusOrderByCreatedAtDesc(wardId, ConnectionStatus.PENDING);
+        List<String> guardianIds = connections.stream().map(Connection::getGuardianId).toList();
+        Map<String, User> guardianMap = userRepository.findAllById(guardianIds).stream()
+                .collect(java.util.stream.Collectors.toMap(User::getId, u -> u));
+        return connections.stream()
+                .map(c -> PendingConnectionResponse.from(c, guardianMap.get(c.getGuardianId())))
+                .toList();
     }
 
     // 피보호자: 페어링 요청 수락 (보호자가 보낸 요청)

@@ -102,6 +102,17 @@ feat: 사용자 로그인 기능 추가
 
 > ⚠️ 브랜치는 `feature/...`, 커밋은 `feat: ...` — 헷갈리지 말 것.
 
+### 작업 순서 (Standard Workflow)
+
+> 모든 코드 변경은 **항상** 아래 순서를 따른다. (서로 무관한 변경은 별도 브랜치·PR로 분리)
+
+1. `git pull origin dev` — dev 최신화
+2. `git checkout -b type/short-description` — dev에서 작업 브랜치 분기
+3. 작업 및 커밋 (conventional commit, 한 커밋 = 한 작업)
+4. **push 전 검증**: `./gradlew build -x test --no-daemon`
+5. `git push origin type/short-description`
+6. PR 생성 → `dev`로 머지 → 브랜치 자동 삭제 → 서버 자동 배포(CD)
+
 ### 자동 배포 (CD)
 
 - 트리거: `dev` 브랜치 push 또는 수동 `workflow_dispatch`
