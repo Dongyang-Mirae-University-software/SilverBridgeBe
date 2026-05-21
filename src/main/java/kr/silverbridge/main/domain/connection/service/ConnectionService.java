@@ -65,7 +65,6 @@ public class ConnectionService {
                 .wardId(wardId)
                 .status(ConnectionStatus.PENDING)
                 .initiatedBy(guardianId)
-                .priority(1)
                 .relation(request.getRelation())
                 .build();
         connectionRepository.save(connection);
@@ -104,12 +103,12 @@ public class ConnectionService {
 
     // ─── 피보호자 API ─────────────────────────────────────────────
 
-    // 피보호자: 내 보호자 목록 조회 (ACTIVE만, 우선순위 순)
+    // 피보호자: 내 보호자 목록 조회 (ACTIVE만, 연결 오래된 순)
     // — 피보호자웹 "내 보호자 리스트" 카드
     @Transactional(readOnly = true)
     public List<ConnectionResponse> getActiveGuardians(String wardId) {
         List<Connection> connections = connectionRepository
-                .findByWardIdAndStatusOrderByPriorityAsc(wardId, ConnectionStatus.ACTIVE);
+                .findByWardIdAndStatusOrderByCreatedAtAsc(wardId, ConnectionStatus.ACTIVE);
         return buildResponseFromWardView(connections);
     }
 
