@@ -1,12 +1,12 @@
 package kr.silverbridge.main.domain.user.service;
 
-import kr.silverbridge.main.domain.auth.service.SmsService;
 import kr.silverbridge.main.domain.user.dto.PasswordChangeRequest;
 import kr.silverbridge.main.domain.user.dto.UserProfileResponse;
 import kr.silverbridge.main.domain.user.dto.UserUpdateRequest;
 import kr.silverbridge.main.domain.user.entity.User;
 import kr.silverbridge.main.domain.user.event.PasswordChangedEvent;
 import kr.silverbridge.main.domain.user.event.UserWithdrawnEvent;
+import kr.silverbridge.main.domain.user.port.PhoneVerificationPort;
 import kr.silverbridge.main.domain.user.repository.UserRepository;
 import kr.silverbridge.main.global.client.FileServerClient;
 import kr.silverbridge.main.global.exception.CustomException;
@@ -32,7 +32,7 @@ public class UserService {
     private final PasswordEncoder passwordEncoder;
     private final FileServerClient fileServerClient;
     private final ApplicationEventPublisher eventPublisher;
-    private final SmsService smsService;
+    private final PhoneVerificationPort phoneVerificationPort;
 
     // 내 정보 조회
     @Transactional(readOnly = true)
@@ -51,8 +51,8 @@ public class UserService {
 
         String newPhone = request.getPhone();
         if (newPhone != null && !newPhone.equals(user.getPhone())) {
-            // SMS 인증 nonce 일치 확인 + 키 소비 (H-5)
-            smsService.consumeVerification(newPhone, request.getVerificationNonce());
+            // SMS 인증 nonce 일치 확인 + 키 소비 (H-5). user→auth 직접 의존 대신 포트 경유 (B-1)
+            phoneVerificationPort.consumeVerification(newPhone, request.getVerificationNonce());
             // 다른 계정이 이미 사용 중인 전화번호인지 확인
             if (userRepository.existsByPhone(newPhone)) {
                 throw new CustomException(ErrorCode.PHONE_ALREADY_EXISTS);
