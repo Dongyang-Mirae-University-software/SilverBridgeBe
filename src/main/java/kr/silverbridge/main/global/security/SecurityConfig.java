@@ -11,13 +11,13 @@ import org.springframework.context.annotation.Configuration;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.http.HttpMethod;
 import org.springframework.http.MediaType;
-import org.springframework.security.authentication.AuthenticationManager;
-import org.springframework.security.config.annotation.authentication.configuration.AuthenticationConfiguration;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
+import org.springframework.security.config.Customizer;
 import org.springframework.security.config.annotation.web.configurers.AbstractHttpConfigurer;
 import org.springframework.security.config.http.SessionCreationPolicy;
+import org.springframework.security.web.header.writers.ReferrerPolicyHeaderWriter;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.web.SecurityFilterChain;
@@ -51,6 +51,19 @@ public class SecurityConfig {
                 // REST API는 CSRF 불필요
                 .csrf(AbstractHttpConfigurer::disable)
 
+                // 보안 응답 헤더 명시 (A-L2)
+                // - HSTS: nginx HTTPS 종료 후에도 X-Forwarded-Proto=https 로 보안 요청으로 인식되어 적용
+                // - X-Frame-Options DENY / X-Content-Type-Options nosniff / Referrer-Policy
+                // - CSP(default-src)는 동일 체인의 Swagger UI 정적 리소스를 깨뜨릴 수 있어 별도 검토로 분리
+                .headers(headers -> headers
+                        .frameOptions(frame -> frame.deny())
+                        .contentTypeOptions(Customizer.withDefaults())
+                        .httpStrictTransportSecurity(hsts -> hsts
+                                .includeSubDomains(true)
+                                .maxAgeInSeconds(31_536_000))
+                        .referrerPolicy(ref -> ref.policy(
+                                ReferrerPolicyHeaderWriter.ReferrerPolicy.SAME_ORIGIN)))
+
                 // JWT 방식 — 서버에 세션 미사용
                 .sessionManagement(session ->
                         session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
@@ -71,7 +84,6 @@ public class SecurityConfig {
                         // 인증 없이 접근 가능한 경로
                         .requestMatchers(
                                 "/api/auth/**",
-                                "/api/ai/**",      // AI 서버 전용 (API 키 인증, JWT 불필요)
                                 "/ws/**",          // WebSocket 핸드셰이크 (JWT는 핸드셰이크 인터셉터에서 검증)
                                 "/swagger-ui/**",
                                 "/swagger-ui.html",
@@ -125,11 +137,5 @@ public class SecurityConfig {
     @Bean
     public PasswordEncoder passwordEncoder() {
         return new BCryptPasswordEncoder(12);
-    }
-
-    // 로그인 처리에 사용되는 AuthenticationManager
-    @Bean
-    public AuthenticationManager authenticationManager(AuthenticationConfiguration config) throws Exception {
-        return config.getAuthenticationManager();
     }
 }
