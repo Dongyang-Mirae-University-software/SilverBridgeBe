@@ -39,9 +39,6 @@ public class ConnectionResponse {
     @Schema(description = "연결 상태", allowableValues = {"PENDING", "ACTIVE", "CANCELLED"})
     private final String status;
 
-    @Schema(description = "통화 우선순위 (1=1순위)")
-    private final int priority;
-
     @Schema(description = "요청자 여부 (true = 내가 요청한 연결)")
     private final boolean isRequester;
 
@@ -54,7 +51,7 @@ public class ConnectionResponse {
     private ConnectionResponse(Long id, String partnerUserId, String partnerName,
                                String partnerProfileImage, String partnerPhone,
                                String partnerAddress, String partnerAddressDetail,
-                               String relation, String status, int priority,
+                               String relation, String status,
                                boolean isRequester, OffsetDateTime connectedAt,
                                OffsetDateTime createdAt) {
         this.id = id;
@@ -66,7 +63,6 @@ public class ConnectionResponse {
         this.partnerAddressDetail = partnerAddressDetail;
         this.relation = relation;
         this.status = status;
-        this.priority = priority;
         this.isRequester = isRequester;
         this.connectedAt = connectedAt;
         this.createdAt = createdAt;
@@ -85,7 +81,6 @@ public class ConnectionResponse {
                 revealContact ? ward.getAddressDetail() : null,
                 connection.getRelation(),
                 connection.getStatus().name(),
-                connection.getPriority(),
                 connection.getGuardianId().equals(connection.getInitiatedBy()),
                 connection.getConnectedAt(),
                 connection.getCreatedAt()
@@ -105,7 +100,6 @@ public class ConnectionResponse {
                 revealContact ? guardian.getAddressDetail() : null,
                 connection.getRelation(),
                 connection.getStatus().name(),
-                connection.getPriority(),
                 connection.getWardId().equals(connection.getInitiatedBy()),
                 connection.getConnectedAt(),
                 connection.getCreatedAt()
