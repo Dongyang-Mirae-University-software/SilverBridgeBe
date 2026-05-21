@@ -41,6 +41,11 @@ public class Connection extends BaseTimeEntity {
     @Column(name = "connected_at")
     private OffsetDateTime connectedAt;
 
+    // 동시 상태 전이(수락/거절/취소/해제) 시 lost update 방지용 낙관적 락
+    @Version
+    @Column(nullable = false)
+    private Long version;
+
     // 연결 활성화 (ACTIVE 전환)
     public void activate() {
         this.status = ConnectionStatus.ACTIVE;

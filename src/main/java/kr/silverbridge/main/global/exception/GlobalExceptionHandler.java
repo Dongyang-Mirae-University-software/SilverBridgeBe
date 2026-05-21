@@ -7,6 +7,7 @@ import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
+import org.springframework.orm.ObjectOptimisticLockingFailureException;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.validation.FieldError;
 import org.springframework.web.HttpMediaTypeNotSupportedException;
@@ -114,6 +115,15 @@ public class GlobalExceptionHandler {
         return ResponseEntity
                 .status(HttpStatus.CONFLICT)
                 .body(ApiResponse.fail("이미 사용 중이거나 중복된 값입니다. 입력값을 확인해주세요."));
+    }
+
+    // 동시 상태 전이로 인한 낙관적 락(@Version) 충돌 — 다른 요청이 먼저 커밋됨
+    @ExceptionHandler(ObjectOptimisticLockingFailureException.class)
+    public ResponseEntity<ApiResponse<Void>> handleOptimisticLock(ObjectOptimisticLockingFailureException e) {
+        log.warn("OptimisticLockingFailure: {}", e.getMessage());
+        return ResponseEntity
+                .status(HttpStatus.CONFLICT)
+                .body(ApiResponse.fail("다른 요청이 먼저 처리되었습니다. 새로고침 후 다시 시도해주세요."));
     }
 
     // 허용되지 않은 HTTP 메서드 (예: POST만 지원하는 API에 GET 요청)
