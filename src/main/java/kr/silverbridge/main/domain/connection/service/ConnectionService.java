@@ -132,7 +132,7 @@ public class ConnectionService {
     public void acceptConnectionAsWard(String wardId, Long connectionId) {
         Connection connection = getConnectionForWard(wardId, connectionId);
         if (connection.getStatus() != ConnectionStatus.PENDING) {
-            throw new CustomException(ErrorCode.CONNECTION_NOT_ACTIVE);
+            throw new CustomException(ErrorCode.CONNECTION_NOT_PENDING);
         }
         if (wardId.equals(connection.getInitiatedBy())) {
             throw new CustomException(ErrorCode.CONNECTION_NOT_AUTHORIZED);
