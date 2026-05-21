@@ -34,10 +34,6 @@ public class Connection extends BaseTimeEntity {
     @Column(name = "initiated_by", length = 6)
     private String initiatedBy;
 
-    // 피보호자 기준 보호자 통화 우선순위 (1=1순위, 숫자가 낮을수록 우선)
-    @Column(nullable = false)
-    private int priority;
-
     // 보호자가 입력한 피보호자와의 관계 (예: 아들, 딸, 며느리). 신규 요청은 필수, 기존 데이터는 NULL.
     @Column(length = 10)
     private String relation;
