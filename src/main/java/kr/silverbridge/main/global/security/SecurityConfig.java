@@ -54,7 +54,8 @@ public class SecurityConfig {
                 // 보안 응답 헤더 명시 (A-L2)
                 // - HSTS: nginx HTTPS 종료 후에도 X-Forwarded-Proto=https 로 보안 요청으로 인식되어 적용
                 // - X-Frame-Options DENY / X-Content-Type-Options nosniff / Referrer-Policy
-                // - CSP(default-src)는 동일 체인의 Swagger UI 정적 리소스를 깨뜨릴 수 있어 별도 검토로 분리
+                // - CSP: 동일 체인의 Swagger UI(인라인 script/style 사용)와 호환되도록 unsafe-inline 허용.
+                //   JSON API라 CSP의 XSS 차단 가치는 제한적이나 frame-ancestors/object-src/base-uri 하드닝은 유효.
                 .headers(headers -> headers
                         .frameOptions(frame -> frame.deny())
                         .contentTypeOptions(Customizer.withDefaults())
@@ -62,7 +63,16 @@ public class SecurityConfig {
                                 .includeSubDomains(true)
                                 .maxAgeInSeconds(31_536_000))
                         .referrerPolicy(ref -> ref.policy(
-                                ReferrerPolicyHeaderWriter.ReferrerPolicy.SAME_ORIGIN)))
+                                ReferrerPolicyHeaderWriter.ReferrerPolicy.SAME_ORIGIN))
+                        .contentSecurityPolicy(csp -> csp.policyDirectives(
+                                "default-src 'self'; "
+                                        + "script-src 'self' 'unsafe-inline'; "
+                                        + "style-src 'self' 'unsafe-inline'; "
+                                        + "img-src 'self' data:; "
+                                        + "font-src 'self' data:; "
+                                        + "frame-ancestors 'none'; "
+                                        + "object-src 'none'; "
+                                        + "base-uri 'self'")))
 
                 // JWT 방식 — 서버에 세션 미사용
                 .sessionManagement(session ->
