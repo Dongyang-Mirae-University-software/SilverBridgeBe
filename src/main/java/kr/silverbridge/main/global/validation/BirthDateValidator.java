@@ -9,10 +9,12 @@ import java.time.Period;
 public class BirthDateValidator implements ConstraintValidator<ValidBirthDate, LocalDate> {
 
     private int minAge;
+    private int maxAge;
 
     @Override
     public void initialize(ValidBirthDate constraint) {
         this.minAge = constraint.minAge();
+        this.maxAge = constraint.maxAge();
     }
 
     @Override
@@ -26,7 +28,8 @@ public class BirthDateValidator implements ConstraintValidator<ValidBirthDate, L
         if (!value.isBefore(today)) {
             return false;
         }
-        // 만 나이 minAge 이상
-        return Period.between(value, today).getYears() >= minAge;
+        // 만 나이 [minAge, maxAge] 범위 — 상한으로 비현실적으로 과거인 날짜 차단 (A-L6)
+        int age = Period.between(value, today).getYears();
+        return age >= minAge && age <= maxAge;
     }
 }

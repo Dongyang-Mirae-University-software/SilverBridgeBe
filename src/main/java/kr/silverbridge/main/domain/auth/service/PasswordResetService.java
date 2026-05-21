@@ -142,28 +142,15 @@ public class PasswordResetService {
             throw new CustomException(ErrorCode.INVALID_INPUT);
         }
 
-        VerificationKeyConfig config;
-        String identifier;
-        User user;
+        VerificationKeyConfig config = byEmail
+                ? VerificationKeyConfig.PASSWORD_RESET_EMAIL
+                : VerificationKeyConfig.PASSWORD_RESET;
+        String identifier = byEmail ? request.getEmail() : request.getPhone();
 
-        if (byEmail) {
-            config = VerificationKeyConfig.PASSWORD_RESET_EMAIL;
-            identifier = request.getEmail();
-            user = userRepository.findByEmail(identifier)
-                    .orElseThrow(() -> new CustomException(ErrorCode.USER_NOT_FOUND));
-        } else {
-            config = VerificationKeyConfig.PASSWORD_RESET;
-            identifier = request.getPhone();
-            user = userRepository.findByPhone(identifier)
-                    .orElseThrow(() -> new CustomException(ErrorCode.USER_NOT_FOUND));
-        }
-
-        // 카카오 가입 계정은 비밀번호가 없음 (방어적 차단 — 정상 흐름에선 코드도 발급 안 됨)
-        if (user.isSocialProvider()) {
-            throw new CustomException(ErrorCode.SOCIAL_USER_NO_PASSWORD);
-        }
-
-        // 6자리 코드 재검증 + 소비 (성공 시 코드/오류횟수 삭제 — 재사용 방지)
+        // 6자리 코드를 사용자 조회보다 "먼저" 재검증·소비한다 (A-M1, 계정 enumeration 차단).
+        // 미가입/카카오 계정에는 애초에 코드가 발급되지 않으므로(requestReset 가 조용히 종료) 여기서
+        // EXPIRED_SMS_CODE 로 동일하게 막혀, 가입 여부·provider 가 응답으로 새지 않는다.
+        // (성공 시 코드/오류횟수 삭제 — 재사용 방지)
         verificationCodeValidator.verify(
                 config.verifyKey(identifier),
                 config.attemptKey(identifier),
@@ -171,6 +158,17 @@ public class PasswordResetService {
                 SmsVerificationService.CODE_TTL_MINUTES,
                 SmsVerificationService.MAX_ATTEMPTS
         );
+
+        // 유효한 코드 보유자만 도달 — 코드는 가입된 LOCAL 사용자에게만 발급되므로 아래 분기는 정상 흐름에서 항상 통과.
+        User user = (byEmail
+                ? userRepository.findByEmail(identifier)
+                : userRepository.findByPhone(identifier))
+                .orElseThrow(() -> new CustomException(ErrorCode.USER_NOT_FOUND));
+
+        // 카카오 가입 계정은 비밀번호가 없음 (방어적 차단 — 정상 흐름에선 코드도 발급 안 됨)
+        if (user.isSocialProvider()) {
+            throw new CustomException(ErrorCode.SOCIAL_USER_NO_PASSWORD);
+        }
 
         // 현재 비밀번호와 동일한 경우 차단
         if (passwordEncoder.matches(request.getNewPassword(), user.getPassword())) {
