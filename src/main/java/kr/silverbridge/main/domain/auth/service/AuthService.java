@@ -133,6 +133,9 @@ public class AuthService {
             if (attempts >= authLoginProperties.getMaxAttempts()) {
                 redisTemplate.delete(failKey);
                 redisTemplate.opsForValue().set(lockKey, "1", lockTtlMinutes, TimeUnit.MINUTES);
+                // 보안 이벤트 기록 — 모니터링용. PII 없이 userId·시도횟수만 (E-3)
+                log.warn("로그인 연속 실패로 계정 잠금: userId={}, 실패 {}회 → {}분 잠금",
+                        user.getId(), attempts, lockTtlMinutes);
             }
 
             throw new CustomException(ErrorCode.INVALID_CREDENTIALS);
