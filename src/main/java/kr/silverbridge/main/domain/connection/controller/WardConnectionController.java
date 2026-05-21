@@ -69,7 +69,7 @@ public class WardConnectionController {
                     """)
     @ApiResponses({
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "수락 완료"),
-            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "PENDING 상태가 아닌 연결", content = @Content),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "409", description = "PENDING 상태가 아닌 연결(이미 처리됨)", content = @Content),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "해당 연결의 피보호자가 아님", content = @Content)
     })
     @PostMapping("/api/ward/connection/{connectionId}/accept")
@@ -90,7 +90,7 @@ public class WardConnectionController {
                     """)
     @ApiResponses({
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "거절 완료"),
-            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "PENDING 상태가 아닌 연결", content = @Content),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "409", description = "PENDING 상태가 아닌 연결(이미 처리됨)", content = @Content),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "해당 연결의 피보호자가 아님", content = @Content)
     })
     @DeleteMapping("/api/ward/connection/request/{connectionId}/refusal")
@@ -111,10 +111,10 @@ public class WardConnectionController {
                     """)
     @ApiResponses({
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "연결 해제 완료"),
-            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "ACTIVE 상태가 아닌 연결", content = @Content),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "409", description = "ACTIVE 상태가 아닌 연결(이미 처리됨)", content = @Content),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "해당 연결의 피보호자가 아님", content = @Content)
     })
-    @DeleteMapping("/api/ward/disconnection/{connectionId}")
+    @DeleteMapping("/api/ward/connection/disconnection/{connectionId}")
     public ResponseEntity<ApiResponse<Void>> disconnect(
             @AuthenticationPrincipal String wardId,
             @PathVariable Long connectionId) {
