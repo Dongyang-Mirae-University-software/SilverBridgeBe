@@ -47,6 +47,14 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
             // validateToken()은 만료/변조 시 CustomException을 던지므로 필터 내부에서 직접 처리
             try {
                 if (jwtTokenProvider.validateToken(token)) {
+                    // refresh token을 Authorization: Bearer로 제시한 경우 차단 (A-H1)
+                    // 정상 클라이언트는 access token만 헤더에 담으므로 영향 없음.
+                    // typ 클레임이 없는 과거 토큰도 거부 → 클라이언트가 refresh로 재발급하면 typ 포함 토큰 수신.
+                    if (!jwtTokenProvider.isAccessToken(token)) {
+                        sendUnauthorized(response, "로그인이 필요합니다.");
+                        return;
+                    }
+
                     String userId = jwtTokenProvider.getUserId(token);
                     String role   = jwtTokenProvider.getRole(token);
 
