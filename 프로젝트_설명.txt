@@ -131,7 +131,8 @@ SilverBridge는 노인(피보호자)과 그 가족(보호자)을 연결하는 �
 
   2단계) SMS 인증코드 발송
     → POST /api/auth/signup/sms/send
-    → 입력한 전화번호로 6자리 숫자 문자 발송 (5분 유효, 1분 이내 재발송 불가)
+    → 입력한 전화번호로 6자리 숫자 문자 발송 (5분 유효)
+    → 재발송 쿨다운 없음 — 즉시 재요청 가능. 단 한 번호당 발송 상한(1시간 10회, A-M3)
     → 재발송: POST /api/auth/signup/sms/resend
 
   3단계) SMS 인증코드 확인
@@ -142,8 +143,10 @@ SilverBridge는 노인(피보호자)과 그 가족(보호자)을 연결하는 �
 
   4단계) 회원가입 완료
     → POST /api/auth/signup
-    → 이름, 이메일, 비밀번호, 전화번호, 역할(WARD/GUARDIAN), 주소, 상세주소, verificationNonce 입력
-    → 모든 필드 필수 (주소는 카카오 주소 API로 받은 값 권장)
+    → 이름, 이메일, 비밀번호, 전화번호, 역할(WARD/GUARDIAN), 성별(FEMALE/MALE),
+      생년월일(yyyy-MM-dd · 미래 불가 · 만 14세 이상~120세 이하), 우편번호(숫자 5자리),
+      주소, 상세주소, verificationNonce 입력
+    → 모든 필드 필수 (우편번호·주소는 카카오 주소 API 결과값 권장)
     → verificationNonce 누락/불일치 시 SMS_NOT_VERIFIED 400
       (phone 단일 식별만으로 인증 우회 가입하던 결함 차단 — H-5)
 
@@ -188,6 +191,11 @@ SilverBridge는 노인(피보호자)과 그 가족(보호자)을 연결하는 �
       ※ 5회/30분 값은 application.yaml auth.login.* 로 외부화 (M-12)
     - INACTIVE 계정은 로그인 차단 + Refresh Token 즉시 삭제
       (login·kakaoLogin·refresh 세 경로 모두 일관 적용, H-4)
+    - 로그인(/signin)도 IP 기준 1분 10회 rate limit 적용 — 계정 분산
+      credential stuffing/password spraying 차단 (A-H2)
+    - JWT에 typ(access/refresh) 클레임 부여 → refreshToken을 Authorization
+      헤더(Bearer)로 제시해 보호 자원에 접근하는 토큰 혼용을 필터가 차단 (A-H1)
+      ※ 배포 시점에 발급돼 있던 옛 accessToken(typ 없음)은 1회 401 후 refresh로 자동 재발급
 
 
   [ 3-3. 카카오 로그인/회원가입 ]
@@ -199,12 +207,13 @@ SilverBridge는 노인(피보호자)과 그 가족(보호자)을 연결하는 �
     → isNewUser=false, accessToken + refreshToken 반환
 
   신규 회원 가입 (4단계):
-    1) POST /api/auth/signin/kakao       → isNewUser=true, kakaoId/이름/이메일 반환
+    1) POST /api/auth/signin/kakao       → isNewUser=true, kakaoId/이메일 반환
+                                            (이름은 항상 null — 카카오 닉네임 미사용, 본인 실명 직접 입력)
     2) POST /api/auth/signup/sms/send    → 전화번호 SMS 발송
     3) POST /api/auth/signup/sms/verify  → SMS 인증 확인 → verificationNonce 반환
-    4) POST /api/auth/signup/kakao       → 역할(WARD/GUARDIAN) + 전화번호 + 주소 +
-                                            상세주소 + verificationNonce 입력 후 최종 가입
-                                            (모든 필드 필수)
+    4) POST /api/auth/signup/kakao       → 역할(WARD/GUARDIAN) + 전화번호 + 성별 + 생년월일 +
+                                            우편번호 + 주소 + 상세주소 + verificationNonce 입력 후
+                                            최종 가입 (모든 필드 필수, 성공 시 201 Created)
 
   ※ 엔드포인트 정정: 로그인은 /api/auth/signin/kakao, 가입 완료는
     /api/auth/signup/kakao (과거 메모의 /api/auth/kakao·/kakao/register는 오기).
@@ -221,26 +230,29 @@ SilverBridge는 노인(피보호자)과 그 가족(보호자)을 연결하는 �
 
   [ 3-4. 비밀번호 재설정 (3단계) ]
   ─────────────────────────────
-  이메일 또는 SMS 중 선택. 마지막 단계만 공통입니다.
+  이메일 또는 SMS 중 선택. 흐름은 6자리 인증코드 하나로 통일됩니다 (UUID 토큰 없음).
 
   ▶ 이메일 방식
     1단계) POST /api/auth/find-password/email/send
-           → 가입 이메일로 재설정 token 메일 발송 (30분 유효)
+           → 가입 이메일로 6자리 인증코드 발송 (5분 유효, 쿨다운 없음)
            → 재발송: /email/resend
     2단계) POST /api/auth/find-password/email/verify
-           → 메일의 token을 검증 → 유효하면 동일 token 반환
+           → 6자리 코드 사전 확인 (코드 소비 안 함 — 토큰 미발급)
     3단계) POST /api/auth/password/reset
-           → token + 새 비밀번호 입력 → 변경 완료
+           → email + 같은 6자리 code + 새 비밀번호 입력 → 변경 완료
 
   ▶ SMS 방식
     1단계) POST /api/auth/find-password/sms/send
-           → 이름+전화번호로 계정 조회 후 SMS 인증코드 발송 (5분 유효)
+           → 이름+전화번호로 계정 조회 후 6자리 인증코드 SMS 발송 (5분 유효, 쿨다운 없음)
            → 재발송: /sms/resend
     2단계) POST /api/auth/find-password/sms/verify
-           → 인증코드 확인 → 재설정 token 발급 (30분 유효)
+           → 6자리 코드 사전 확인 (코드 소비 안 함)
     3단계) POST /api/auth/password/reset
-           → token + 새 비밀번호 입력 → 변경 완료
+           → phone + 같은 6자리 code + 새 비밀번호 입력 → 변경 완료
 
+  ※ email / phone 은 정확히 하나만 채워 보냅니다. 코드 5회 오류 시 무효화 → 재발송 필요.
+  ※ confirm(reset) 은 코드 검증을 사용자 조회보다 먼저 수행해 가입 여부·provider 가
+    응답으로 새지 않게 합니다 (A-M1).
   ※ 비밀번호 변경 성공 시 모든 기기에서 자동 로그아웃됩니다.
     - refreshToken 전부 삭제 + 발급돼 있던 accessToken도 즉시 무효화
       (Redis password:invalidate:{userId} 에 변경 시각 기록 → JWT 필터가
@@ -261,7 +273,8 @@ SilverBridge는 노인(피보호자)과 그 가족(보호자)을 연결하는 �
 
   GET   /api/user/me/select                  → 내 프로필 조회
   PUT   /api/user/me/update                  → 내 프로필 수정
-    → 이름, 전화번호, 주소, 상세주소 전체 필수 (부분 수정 불가)
+    → 이름, 전화번호, 성별, 생년월일, 우편번호, 주소, 상세주소 전체 필수 (부분 수정 불가)
+    → 기존 사용자(성별/생년월일/우편번호 미입력 계정)는 이 API에서 해당 값 보완 입력 필수
     → 전화번호 변경 시 새 번호로 SMS 인증 완료(10분 이내) + 해당
       verificationNonce 첨부 필수 (전화번호 미변경 시 nonce 생략 가능, H-5)
 
@@ -461,11 +474,15 @@ SilverBridge는 노인(피보호자)과 그 가족(보호자)을 연결하는 �
   provider       : 가입 방식 — LOCAL(이메일) / KAKAO(카카오)
   provider_id    : 카카오 고유 ID (일반 가입자는 NULL)
   profile_image  : 프로필 이미지 파일명 (NULL 시 기본 이미지)
+  gender         : 성별 — FEMALE / MALE (V18 추가, 기존 사용자는 NULL)
+  birth_date     : 생년월일 (DATE, V18 추가, 기존 사용자는 NULL)
+  postcode       : 우편번호 5자리 (V18 추가, 기존 사용자는 NULL)
   last_login_at  : 마지막 로그인 일시
-  address        : 주소 (선택, 기본값 빈 문자열)
-  address_detail : 상세 주소 (선택, 기본값 빈 문자열)
+  address        : 주소 (DB 기본값 빈 문자열, 단 신규 가입·프로필 수정 시 필수)
+  address_detail : 상세 주소 (DB 기본값 빈 문자열, 단 신규 가입·프로필 수정 시 필수)
   created_at     : 가입 일시
   updated_at     : 마지막 수정 일시 (트리거로 자동 갱신)
+  ※ name 은 V18에서 VARCHAR(50)→VARCHAR(20) 축소. 신규 가입·프로필 수정 시 성별/생년월일/우편번호 필수입력.
 
 
   [ refresh_tokens — 로그인 재발급 토큰 ]
@@ -570,16 +587,17 @@ SilverBridge는 노인(피보호자)과 그 가족(보호자)을 연결하는 �
     sms:verify:{phone}           회원가입 SMS 인증코드 (5분)
     sms:verified:{phone}         회원가입 인증 완료 상태 (10분)
                                  값 = verificationNonce(UUID), 가입 요청과 대조 (H-5)
-    sms:cooldown:{phone}         재발송 쿨다운 (1분)
     sms:attempt:{phone}          오류 횟수 (5분)
+    sms:sendcount:{phone}        per-phone 발송 건수 — 1시간 10회 상한 (A-M3)
+                                 ※ 재발송 쿨다운(sms:cooldown) 키는 폐지됨
 
-  ▶ 비밀번호 재설정
-    password:reset:{token}       재설정 토큰 (30분)
-    password:sms:verify:{phone}  SMS 인증코드 (5분)
-    password:sms:cooldown:{phone} 재발송 쿨다운 (1분)
-    password:sms:attempt:{phone} 오류 횟수 (5분)
-    password:invalidate:{userId} 비밀번호 변경 시각 — 이전 발급 accessToken
-                                 무효화 기준 (TTL = accessToken 만료시간, Critical-1)
+  ▶ 비밀번호 재설정 (6자리 코드 — UUID 토큰/쿨다운 폐지)
+    password:email:verify:{email}  이메일 재설정 인증코드 (5분)
+    password:email:attempt:{email} 이메일 오류 횟수 (5분)
+    password:sms:verify:{phone}    SMS 재설정 인증코드 (5분)
+    password:sms:attempt:{phone}   SMS 오류 횟수 (5분)
+    password:invalidate:{userId}   비밀번호 변경 시각 — 이전 발급 accessToken
+                                   무효화 기준 (TTL = accessToken 만료시간, Critical-1)
 
   ▶ 카카오 OAuth
     kakao:pending:{kakaoId}      신규 가입 임시 이메일 (10분)
@@ -595,7 +613,7 @@ SilverBridge는 노인(피보호자)과 그 가족(보호자)을 연결하는 �
     rate:{endpoint}:{identifier} IP 또는 userId 기반 1분 고정 윈도우 (최대 10회)
                                  INCR+EXPIRE를 Lua로 원자 처리 (RedisCounter, M-4)
                                  적용 endpoint 확대: token-refresh, kakao-login,
-                                 pw-reset-confirm 추가 (M-8)
+                                 pw-reset-confirm (M-8), signin (A-H2)
 
   ▶ 기타
     character:expression:{wardId} 최근 표정 캐시 (조회 API용)
@@ -608,6 +626,8 @@ SilverBridge는 노인(피보호자)과 그 가족(보호자)을 연결하는 �
 
   [ 인증/인가 ]
   - JWT: accessToken 30분, refreshToken 7일 (Rotation 적용)
+  - JWT typ(access/refresh) 클레임으로 토큰 용도 구분 — refreshToken을 Bearer로
+    제시해 보호 자원에 접근하는 혼용을 필터가 차단 (A-H1)
   - 로그아웃 시 accessToken을 Redis 블랙리스트 등록 (키는 SHA-256 해시, M-6)
   - 비밀번호 변경/재설정 시 refreshToken 전부 삭제 + 발급된 accessToken도
     즉시 무효화 (password:invalidate + JWT 필터 iat 검증, Critical-1)
@@ -617,6 +637,11 @@ SilverBridge는 노인(피보호자)과 그 가족(보호자)을 연결하는 �
   - @PreAuthorize로 Role 기반 엔드포인트 제한
     예: /api/guardian/** → GUARDIAN, /api/ward/** → WARD, /api/admin/** → ADMIN
   - /api/auth/logout 은 permitAll에서 분리해 인증 필수, 미인증 401 JSON (L-3)
+
+  [ 응답 보안 헤더 (A-L2) ]
+  - HSTS / X-Frame-Options: DENY / X-Content-Type-Options: nosniff / Referrer-Policy: same-origin
+  - Content-Security-Policy: default-src 'self' (+ Swagger UI 호환 위해 script/style
+    'unsafe-inline') + frame-ancestors 'none' / object-src 'none' / base-uri 'self'
 
   [ 로그인 보호 ]
   - 로그인 실패 응답 통합: 미가입 이메일 / 비밀번호 불일치 모두
@@ -636,9 +661,11 @@ SilverBridge는 노인(피보호자)과 그 가족(보호자)을 연결하는 �
   - 미인증/nonce 불일치 시 SMS_NOT_VERIFIED 400 반환
 
   [ 요청 속도 제한 (Redis 기반, 1분 10회) ]
-  - IP 기반: email-check, find-email, signup-sms, pw-reset-email, pw-reset-sms,
-    token-refresh, kakao-login, pw-reset-confirm (뒤 3개 M-8에서 추가)
+  - IP 기반: signin, email-check, find-email, signup-sms, pw-reset-email, pw-reset-sms,
+    token-refresh, kakao-login, pw-reset-confirm
+    (signin은 A-H2에서 추가, token-refresh·kakao-login·pw-reset-confirm은 M-8에서 추가)
   - userId 기반: sos-trigger, connection-request, fcm-register
+  - per-phone: SMS 발송(sms:sendcount) 1시간 10회 상한 (A-M3)
   - INCR+EXPIRE는 Lua 스크립트로 원자 처리 (RedisCounter, M-4/L-2)
 
   [ WebSocket 구독 권한 ]
@@ -654,14 +681,16 @@ SilverBridge는 노인(피보호자)과 그 가족(보호자)을 연결하는 �
   - ?size= 최대값 100 (초과 시 자동 제한)
 
   [ 환경변수 무결성 검증 (시작 시) ]
-  - SecurityConfigValidator: JWT_SECRET, AI_SERVER_API_KEY 필수 + 최소 32자 + 공개된 약한 기본값 거부
-  - RequiredPropertiesValidator: MAIL_USERNAME, MAIL_PASSWORD,
+  - SecurityConfigValidator: JWT_SECRET 필수 + 최소 32자 + 공개된 약한 기본값 거부
+    (AI_SERVER_API_KEY 검증은 AI 도메인 제거에 따라 폐지, A-L5)
+  - RequiredPropertiesValidator: DB_USERNAME, DB_PASSWORD (약한 기본값 dev 제거, A-L3),
+    MAIL_USERNAME, MAIL_PASSWORD,
     KAKAO_REST_API_KEY, KAKAO_REDIRECT_URI,
     SOLAPI_API_KEY, SOLAPI_API_SECRET, SOLAPI_SENDER_PHONE,
-    FIREBASE_SERVICE_ACCOUNT_JSON
+    FIREBASE_SERVICE_ACCOUNT_BASE64
     누락 시 모든 누락 키를 모아 한 번에 IllegalStateException으로 시작 중단
   - 검증 통과 시 SHA-256 12자 fingerprint 로그 — 배포 간 env 변경 여부 비교용
-    (예: "필수 환경변수 검증 통과: 8개 키 정상 (fingerprint=a3f9c2d1ee04)")
+    (예: "필수 환경변수 검증 통과: 10개 키 정상 (fingerprint=a3f9c2d1ee04)")
 
   [ CORS 허용 도메인 ]
   - 환경변수 APP_CORS_ORIGINS (쉼표 구분)로 허용 origin 리스트 설정
@@ -756,8 +785,9 @@ SilverBridge는 노인(피보호자)과 그 가족(보호자)을 연결하는 �
 
   ▶ api (Spring Boot)
     container_name : dmu-dev-api
-    ports          : 6511:6511
-    env_file       : .env.dev (DB 비밀번호, JWT_SECRET, AI_SERVER_API_KEY 등)
+    ports          : 127.0.0.1:6511:6511 (호스트 루프백만 publish — 외부 직접 접근 차단, A-M2)
+                     ※ Swagger·API는 nginx 도메인 경유로 접근 (서버IP:6511 직접 접근 불가)
+    env_file       : .env.dev (DB_USERNAME/DB_PASSWORD, JWT_SECRET, KAKAO/SOLAPI/FIREBASE 등)
     depends_on     : db, redis (healthy 상태 대기)
     healthcheck    : /actuator/health 호출 (30초 간격, start_period 60초)
     resources      : 메모리 limit 1g
@@ -766,15 +796,16 @@ SilverBridge는 노인(피보호자)과 그 가족(보호자)을 연결하는 �
   ▶ db (PostgreSQL 17)
     container_name : dmu-dev-db
     ports          : 6513:5432
-    volumes        : ./.data/postgres(bind mount), ./db/schema.sql(초기화용)
+    volumes        : ./.data/postgres (bind mount)
                      ※ WSL/NTFS 환경에서 named volume initdb chmod 실패 회피 목적
+                     ※ 스키마는 Flyway가 단일 관리 — schema.sql 초기 시딩 제거됨
     healthcheck    : 10초마다 pg_isready
     resources      : 메모리 limit 512m
 
   ▶ redis (Redis 7.2)
     container_name : dmu-dev-redis
     ports          : 6514:6379
-    volumes        : dmu-dev-redis-data (named volume)
+    volumes        : ./.data/redis (bind mount)
     command        : --appendonly yes --appendfsync everysec
                      --maxmemory 256mb --maxmemory-policy allkeys-lru
                      ※ AOF로 재시작 시 SMS 인증코드·rate limit·블랙리스트 보존
@@ -825,12 +856,17 @@ SilverBridge는 노인(피보호자)과 그 가족(보호자)을 연결하는 �
   통합 테스트는 없으며, 빌드 속도를 우선해 Swagger로 수동 확인합니다.
 
   ▶ 테스트 대상 (보안·인증·공통 로직 위주)
-    global/jwt/JwtTokenProviderTest           JWT 발급/검증/만료/위조
+    global/jwt/JwtTokenProviderTest           JWT 발급/검증/만료/위조/typ 구분
+    global/jwt/JwtAuthenticationFilterTest    인증 필터 — 로그아웃·비번무효화·refresh→access 차단 (A-H1)
     global/security/RateLimitServiceTest      요청 속도 제한 Redis 로직
     global/util/VerificationCodeValidatorTest SMS 인증코드 검증·오류 누적
     global/validation/PasswordFieldValidation 비밀번호 규칙(@ValidPassword)
+    global/validation/BirthDateValidatorTest  생년월일 검증(미래·만14세·만120세 경계)
     domain/auth/AuthServiceTest               로그인·토큰·블랙리스트
-    domain/auth/SmsVerificationServiceTest    SMS 발송·쿨다운·오류 초기화
+    domain/auth/KakaoAuthServiceTest          카카오 로그인/가입 분기·INACTIVE·세션 만료
+    domain/auth/PasswordResetServiceTest      비번재설정 email/SMS 경로·enumeration 차단
+    domain/auth/SmsVerificationServiceTest    SMS 발송·per-phone 상한·오류 초기화
+    domain/auth/RefreshTokenRevocationServiceTest  refresh token 폐기 위임
     domain/auth/UserAccountEventListenerTest  탈퇴/비밀번호 변경 이벤트 수신 처리
     domain/user/UserServiceTest               프로필 수정·비밀번호 변경·탈퇴 이벤트
 
@@ -850,7 +886,8 @@ SilverBridge는 노인(피보호자)과 그 가족(보호자)을 연결하는 �
   │   ├── auth           로그인, 회원가입, 토큰, SMS 인증, 카카오 OAuth, 비밀번호 재설정
   │   │   └── listener   user 도메인 이벤트 수신 → 토큰 정리·접속 로그 (AFTER_COMMIT)
   │   ├── user           회원 프로필, 비밀번호 변경, 프로필 이미지
-  │   │   └── event      UserWithdrawnEvent, PasswordChangedEvent (auth로 부수 효과 위임)
+  │   │   ├── event      UserWithdrawnEvent, PasswordChangedEvent (auth로 부수 효과 위임)
+  │   │   └── port       PhoneVerificationPort (auth가 구현 — user→auth 직접 의존 제거, B-1)
   │   ├── admin          관리자 공지사항 — 컨트롤러 2 + 서비스 3
   │   │   ├── controller AdminAnnouncement / AdminAnnouncementDraft
   │   │   ├── service    AdminAnnouncement / AdminAnnouncementDraft / AdminAuditLog(쓰기)
@@ -871,6 +908,7 @@ SilverBridge는 노인(피보호자)과 그 가족(보호자)을 연결하는 �
       ├── exception      CustomException, GlobalExceptionHandler, ErrorCode
       ├── aop            공통 로그
       ├── util           RedisKeys, MaskingUtil, VerificationCodeValidator
+      ├── validation     ValidBirthDate/BirthDateValidator(생년월일), @ValidPassword(비밀번호)
       └── websocket      JwtHandshakeInterceptor, StompSubscriptionAuthorizationInterceptor,
                          WebSocketEventPublisher, presence 리스너
 
@@ -893,13 +931,14 @@ SilverBridge는 노인(피보호자)과 그 가족(보호자)을 연결하는 �
      ▶ PostgreSQL (DB 컨테이너 + Spring 양쪽에서 사용)
        POSTGRES_DB, POSTGRES_USER, POSTGRES_PASSWORD
        DB_HOST, DB_NAME, DB_USERNAME, DB_PASSWORD
+       ※ DB_USERNAME / DB_PASSWORD 는 약한 기본값(dev) 제거로 필수 — 미설정 시 시작 실패 (A-L3)
 
      ▶ Redis
        REDIS_HOST
 
-     ▶ JWT / AI
+     ▶ JWT
        JWT_SECRET           (32자 이상 랜덤, 약한 기본값은 거부됨)
-       AI_SERVER_API_KEY    (32자 이상 랜덤, 약한 기본값은 거부됨)
+       ※ AI_SERVER_API_KEY 는 AI 도메인 제거로 더 이상 필요/검증되지 않음 (A-L5)
 
      ▶ 메일 (Spring Mail)
        MAIL_USERNAME, MAIL_PASSWORD
@@ -912,11 +951,11 @@ SilverBridge는 노인(피보호자)과 그 가족(보호자)을 연결하는 �
        SOLAPI_API_KEY, SOLAPI_API_SECRET, SOLAPI_SENDER_PHONE
 
      ▶ Firebase (FCM)
-       FIREBASE_SERVICE_ACCOUNT_JSON
-         서비스 계정 JSON을 단일 라인으로 직접 인라인.
-         예) FIREBASE_SERVICE_ACCOUNT_JSON={"type":"service_account","project_id":"...","private_key":"-----BEGIN PRIVATE KEY-----\n...\n","client_email":"...",...}
-         원본 JSON 파일을 갖고 있다면 jq -c 또는 python3 -c "import json; print(json.dumps(json.load(open('파일')), separators=(',',':')))"
-         로 한 줄로 압축해서 넣으면 됩니다.
+       FIREBASE_SERVICE_ACCOUNT_BASE64
+         서비스 계정 JSON을 base64로 인코딩한 문자열을 단일 라인으로 넣습니다.
+         (원본 JSON을 그대로 .env에 넣으면 docker compose env_file 파서가 \n을
+          실제 newline으로 변환해 깨지므로 base64로 우회 — application.yaml에서 디코딩)
+         예) base64 -w0 service-account.json   → 출력된 문자열을 그대로 대입
          ※ 더 이상 src/main/resources/firebase-service-account.json 또는 docker volume mount 방식을 사용하지 않습니다.
 
      ▶ (선택) APP_CORS_ORIGINS — 미설정 시 기본값 사용
