@@ -73,6 +73,8 @@ public class ConnectionService {
         eventPublisher.publishEvent(new ConnectionRequestedEvent(
                 connection.getId(), guardianId, wardId, guardian.getName(), request.getRelation()
         ));
+        log.info("연결 요청 생성: connectionId={}, guardianId={}, wardId={}",
+                connection.getId(), guardianId, wardId);
     }
 
     // 보호자: 페어링 요청 취소 (PENDING만)
@@ -83,6 +85,7 @@ public class ConnectionService {
             throw new CustomException(ErrorCode.CONNECTION_NOT_PENDING);
         }
         connection.cancel();
+        log.info("연결 요청 취소(보호자): connectionId={}, guardianId={}", connectionId, guardianId);
     }
 
     // 보호자: 연결 해제 (ACTIVE만)
@@ -99,6 +102,8 @@ public class ConnectionService {
         eventPublisher.publishEvent(new ConnectionDisconnectedEvent(
                 connectionId, wardId, ConnectionDisconnectedEvent.DisconnectedBy.GUARDIAN
         ));
+        log.info("연결 해제(보호자): connectionId={}, guardianId={}, wardId={}",
+                connectionId, guardianId, wardId);
     }
 
     // ─── 피보호자 API ─────────────────────────────────────────────
@@ -142,6 +147,8 @@ public class ConnectionService {
         eventPublisher.publishEvent(new ConnectionAcceptedEvent(
                 connectionId, connection.getGuardianId()
         ));
+        log.info("연결 수락(피보호자): connectionId={}, wardId={}, guardianId={}",
+                connectionId, wardId, connection.getGuardianId());
     }
 
     // 피보호자: 보호자 요청 거절 (PENDING만)
@@ -152,6 +159,7 @@ public class ConnectionService {
             throw new CustomException(ErrorCode.CONNECTION_NOT_PENDING);
         }
         connection.cancel();
+        log.info("연결 거절(피보호자): connectionId={}, wardId={}", connectionId, wardId);
     }
 
     // 피보호자: 연결 해제 (ACTIVE만)
@@ -168,32 +176,8 @@ public class ConnectionService {
         eventPublisher.publishEvent(new ConnectionDisconnectedEvent(
                 connectionId, guardianId, ConnectionDisconnectedEvent.DisconnectedBy.WARD
         ));
-    }
-
-    // ─── 공통 조회 API ────────────────────────────────────────────
-
-    // 보호자-피보호자 간 활성 또는 대기 중 연결 존재 여부 (취소 제외)
-    @Transactional(readOnly = true)
-    public boolean isConnected(String guardianId, String wardId) {
-        return connectionRepository.existsByGuardianIdAndWardIdAndStatusNot(
-                guardianId, wardId, ConnectionStatus.CANCELLED);
-    }
-
-    // 연결 단건 조회 (보호자/피보호자 모두 조회 가능)
-    @Transactional(readOnly = true)
-    public ConnectionResponse getConnection(String userId, Long connectionId) {
-        Connection connection = connectionRepository.findById(connectionId)
-                .orElseThrow(() -> new CustomException(ErrorCode.CONNECTION_NOT_FOUND));
-
-        if (connection.getGuardianId().equals(userId)) {
-            User ward = requireUser(connection.getWardId());
-            return ConnectionResponse.fromGuardianView(connection, ward);
-        } else if (connection.getWardId().equals(userId)) {
-            User guardian = requireUser(connection.getGuardianId());
-            return ConnectionResponse.fromWardView(connection, guardian);
-        } else {
-            throw new CustomException(ErrorCode.CONNECTION_NOT_AUTHORIZED);
-        }
+        log.info("연결 해제(피보호자): connectionId={}, wardId={}, guardianId={}",
+                connectionId, wardId, guardianId);
     }
 
     // ─── 내부 헬퍼 ────────────────────────────────────────────────
