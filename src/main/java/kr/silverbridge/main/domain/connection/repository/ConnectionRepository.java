@@ -3,14 +3,12 @@ package kr.silverbridge.main.domain.connection.repository;
 import kr.silverbridge.main.domain.connection.entity.Connection;
 import kr.silverbridge.main.global.enums.ConnectionStatus;
 import org.springframework.data.jpa.repository.JpaRepository;
-import org.springframework.data.jpa.repository.Query;
-import org.springframework.data.repository.query.Param;
 
 import java.util.List;
 
 public interface ConnectionRepository extends JpaRepository<Connection, Long> {
 
-    // 보호자 기준 전체 연결 목록 조회 (관리자용, 최신 요청순)
+    // 보호자 기준 전체 연결 목록 조회 (요청 이력, 최신 요청순)
     List<Connection> findByGuardianIdOrderByCreatedAtDesc(String guardianId);
 
     // 보호자 기준 복수 상태 연결 목록 조회 (ACTIVE + PENDING, 최신 요청순)
@@ -23,16 +21,6 @@ public interface ConnectionRepository extends JpaRepository<Connection, Long> {
     // 피보호자의 상태별 보호자 목록 (요청일 최신순 / PENDING "요청온 목록")
     List<Connection> findByWardIdAndStatusOrderByCreatedAtDesc(String wardId, ConnectionStatus status);
 
-    // 보호자의 상태별 피보호자 목록
-    List<Connection> findByGuardianIdAndStatus(String guardianId, ConnectionStatus status);
-
-    // 동일한 guardian-ward 쌍의 활성 연결 존재 여부 확인
+    // 동일한 guardian-ward 쌍의 활성/대기 연결 존재 여부 확인 (취소 제외)
     boolean existsByGuardianIdAndWardIdAndStatusNot(String guardianId, String wardId, ConnectionStatus status);
-
-    // 역할 변경 시 해당 사용자(보호자 또는 피보호자)의 ACTIVE/PENDING 연결 일괄 조회
-    @Query("SELECT c FROM Connection c WHERE (c.guardianId = :userId OR c.wardId = :userId) AND c.status IN :statuses")
-    List<Connection> findActiveByUserId(@Param("userId") String userId, @Param("statuses") List<ConnectionStatus> statuses);
-
-    // 관리자 대시보드 — 특정 상태 연결 건수 (예: PENDING 처리 대기 건수)
-    long countByStatus(ConnectionStatus status);
 }
