@@ -106,7 +106,7 @@ public class GuardianConnectionController {
                     """)
     @ApiResponses({
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "요청 취소 완료"),
-            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "PENDING 상태가 아닌 연결", content = @Content),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "409", description = "PENDING 상태가 아닌 연결(이미 처리됨)", content = @Content),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "해당 연결의 보호자가 아님", content = @Content)
     })
     @DeleteMapping("/api/guardian/connection/cancel/{connectionId}")
@@ -127,10 +127,10 @@ public class GuardianConnectionController {
                     """)
     @ApiResponses({
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "연결 해제 완료"),
-            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "ACTIVE 상태가 아닌 연결", content = @Content),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "409", description = "ACTIVE 상태가 아닌 연결(이미 처리됨)", content = @Content),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "해당 연결의 보호자가 아님", content = @Content)
     })
-    @DeleteMapping("/api/guardian/disconnection/{connectionId}")
+    @DeleteMapping("/api/guardian/connection/disconnection/{connectionId}")
     public ResponseEntity<ApiResponse<Void>> disconnect(
             @AuthenticationPrincipal String guardianId,
             @PathVariable Long connectionId) {
