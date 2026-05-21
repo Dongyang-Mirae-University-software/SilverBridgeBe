@@ -9,7 +9,7 @@ import java.time.OffsetDateTime;
 
 @Entity
 @Table(name = "connections", indexes = {
-        @Index(name = "idx_connections_guardian_status", columnList = "guardian_id, status")
+        @Index(name = "idx_connections_guardian_status_created_at", columnList = "guardian_id, status, created_at")
 })
 @Getter
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
