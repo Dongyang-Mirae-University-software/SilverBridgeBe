@@ -354,3 +354,50 @@ architecture-review / spring-boot-patterns / jpa-patterns / security-audit (+ co
 - `docs/audit-report-auth-2026-05-20.md` — 본 점검 종합 보고서 (신규)
 - `docs/audit-report-auth.md` — 2026-05-15 1차 점검 보고서 (그대로 보존)
 - `docs/audit-summary-auth.csv` — Phase/스킬/심각도/권장조치/수정여부 표 (신규)
+
+---
+
+## 2026-05-21 — connection 도메인 종합 점검 (스킬 기반)
+
+connection 도메인은 구현 완료·기능 테스트 통과 상태였으나 스킬 기반 정적 점검은 미수행. 보호자-피보호자 양측 동시 액션 + FCM/WebSocket 이벤트가 트랜잭션과 얽혀 동시성·이벤트 일관성 위험이 높아 PHASE -1~G 진행.
+
+### 점검 범위
+- 1차: `domain/connection/**` (controller 2, dto 3, entity 1, event 3, listener 1, repository 1, service 1)
+- 2차: `domain/notification/FcmService`(호출 지점), `global/websocket/**`, `global/config/WebSocketConfig`
+- 3차: Flyway V1/V2/V8/V11/V19/V20/V21, `ErrorCode`/`GlobalExceptionHandler`, `RateLimitService`/`SecurityConfig`, `RedisKeys`, `ApiLoggingAspect`
+
+### 적용 스킬
+architecture-review / spring-boot-patterns / jpa-patterns / concurrency-review / security-audit / api-contract-review / performance-smell-detection / logging-patterns / test-quality / clean-code / solid-principles
+
+### 사전 정리 — `#152 refactor/remove-connection-priority`
+- priority(통화 우선순위) 변경 경로가 2026-05-19 제거되어 `1`로 고정된 죽은 필드/컬럼이 됨 → DB 컬럼·체크제약·정렬 인덱스(V20 DROP COLUMN, 자동 cascade), `ConnectionResponse` 응답 필드, 빌더 고정값 제거
+- ward ACTIVE 조회 정렬을 priority → `createdAt` 오름차순으로 대체, 대체 인덱스 `(ward_id, status, created_at)` 추가
+- 프론트 호환성: 응답에서 `priority` 필드 제거(계약 변경 — 프론트 조율 필요)
+
+### 핵심 발견 — Critical 1건 (A2 상태 전이 lost update)
+연결 상태 전이(수락/거절/취소/해제)가 `findById → status 검사 → dirty-checking UPDATE`(WHERE는 id만) 구조 + 락 부재로, 동시 요청(예: accept∥cancel) 시 두 트랜잭션이 가드를 모두 통과해 **lost update** 발생. 게다가 `ConnectionAcceptedEvent`는 발행됐는데 행은 CANCELLED로 끝날 수 있어 **상태와 알림이 불일치**.
+
+### Critical 수정 — `#153 fix/connection-optimistic-lock`
+- `Connection`에 `@Version` 추가(낙관적 락), V21 `version BIGINT NOT NULL DEFAULT 0`(가역적)
+- `GlobalExceptionHandler`: `ObjectOptimisticLockingFailureException` → 409 매핑
+- `acceptConnectionAsWard`: not-PENDING 시 ErrorCode 오인(`CONNECTION_NOT_ACTIVE` → `CONNECTION_NOT_PENDING`) 교정
+- A3(동시 해제 중복 이벤트)도 동일 근원으로 해소
+- 프론트 호환성: `version`은 내부 컬럼(응답 무변경), 동시 전이 시 409 신규 케이스만 추가
+
+### 양호 확인
+- 보안(인가·IDOR·WebSocket 구독 인가·PII 정책) 견고 — Critical/High 없음
+- 트랜잭션 경계 일관, 이벤트 AFTER_COMMIT 분리, 연관관계 없음(String FK)으로 N+1/lazy 원천 없음, 목록 `findAllById` 배치
+
+### 이월 (다음 스프린트)
+- **G-1 (High)**: connection 테스트 0건 → `ConnectionServiceTest` + 리스너 테스트(JUnit5+Mockito+AssertJ)
+- **B3/E-4 (Medium)**: 알림 비동기화(`@EnableAsync` + executor + 리스너 `@Async`)
+- **A5/C-DEAD1 (Medium)**: dead code 5개(`isConnected`·`getConnection`·`findByGuardianIdAndStatus`·`countByStatus`·`findActiveByUserId`) 제거 또는 역할변경 연동 배선
+- **C-ARCH1 (Medium)**: `ConnectionService → UserRepository` 직접 의존 분리 검토
+- **D-1 (Medium)**: 이미 처리된 요청 재처리 400→409 정렬 — 프론트 협의
+- **D-6 (Medium)**: `ConnectionStatus` 거절/취소/해제 평탄화 → 상태 세분화(설계+프론트 협의)
+- **F-1 (Medium)**: 상태 전이 INFO 로그 추가(PII 제외)
+- **Low**: B-C3a(열거 oracle), B-C4a(WS 토큰 쿼리), C-SOLID1, D-2(REST 경로), E-3(guardian 정렬 인덱스), F-2(MDC connectionId)
+
+### 산출물
+- `docs/audit-report-connection.md` — 종합 보고서 (신규)
+- `docs/audit-summary-connection.csv` — Phase/스킬/심각도/권장조치/수정여부 표 (신규)
