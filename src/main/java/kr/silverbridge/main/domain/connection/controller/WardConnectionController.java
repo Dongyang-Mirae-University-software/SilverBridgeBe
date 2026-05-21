@@ -5,6 +5,7 @@ import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import kr.silverbridge.main.domain.connection.dto.ConnectionResponse;
+import kr.silverbridge.main.domain.connection.dto.PendingConnectionResponse;
 import kr.silverbridge.main.domain.connection.service.ConnectionService;
 import kr.silverbridge.main.global.response.ApiResponse;
 import lombok.RequiredArgsConstructor;
@@ -23,17 +24,36 @@ public class WardConnectionController {
 
     private final ConnectionService connectionService;
 
-    @Operation(summary = "내 보호자 목록 조회 (우선순위 순)",
+    @Operation(summary = "내 보호자 리스트 조회 (ACTIVE, 우선순위 순)",
             description = """
                     [요청 헤더]
                     Authorization: Bearer {accessToken}
 
+                    피보호자웹 "내 보호자 리스트" 카드용.
                     ACTIVE 상태 연결 목록을 우선순위(priority) 오름차순으로 반환합니다.
+                    전화번호·주소는 ACTIVE이므로 노출됩니다.
                     """)
-    @GetMapping("/api/ward/connection/select")
-    public ResponseEntity<ApiResponse<List<ConnectionResponse>>> getMyGuardians(
+    @GetMapping("/api/ward/connection/active")
+    public ResponseEntity<ApiResponse<List<ConnectionResponse>>> getActiveGuardians(
             @AuthenticationPrincipal String wardId) {
-        return ResponseEntity.ok(ApiResponse.ok(connectionService.getMyGuardians(wardId)));
+        return ResponseEntity.ok(ApiResponse.ok(connectionService.getActiveGuardians(wardId)));
+    }
+
+    @Operation(summary = "요청온 목록 조회 (PENDING, 요청일 최신순)",
+            description = """
+                    [요청 헤더]
+                    Authorization: Bearer {accessToken}
+
+                    피보호자웹 "요청온 목록" 카드용.
+                    보호자가 보낸 PENDING 연결 요청을 요청일(createdAt) 내림차순으로 반환합니다.
+                    수락 전이므로 전화번호는 마스킹(010****5678)되고, 주소는 노출되지 않습니다.
+                    수락은 POST /api/ward/connection/{id}/accept,
+                    거절은 DELETE /api/ward/connection/request/{id}/refusal 을 사용합니다.
+                    """)
+    @GetMapping("/api/ward/connection/pending")
+    public ResponseEntity<ApiResponse<List<PendingConnectionResponse>>> getPendingRequests(
+            @AuthenticationPrincipal String wardId) {
+        return ResponseEntity.ok(ApiResponse.ok(connectionService.getPendingRequests(wardId)));
     }
 
     @Operation(summary = "보호자 요청 수락",

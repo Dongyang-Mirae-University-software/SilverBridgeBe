@@ -4,6 +4,49 @@
 
 ---
 
+## 2026-05-21 — connection 도메인: 피보호자 측 조회 API 분리 (active / pending)
+
+피보호자웹이 "내 보호자 리스트"(ACTIVE) + "요청온 목록"(PENDING) 두 카드로 분리됨에 따라, 단일 `/api/ward/connection/select`(ACTIVE only)를 UI 구조에 맞춰 두 엔드포인트로 분리. (점검은 다음 세션 예정 — 이번엔 구현만)
+
+### PHASE 0 — 현재 상태 분석
+
+- `GET /api/ward/connection/select` → `getMyGuardians` → `findByWardIdAndStatusOrderByPriorityAsc(wardId, ACTIVE)`. **ACTIVE only, priority 오름차순**, 응답 `ConnectionResponse`(피보호자 관점 `fromWardView`).
+- 피보호자 측 **PENDING 조회 API 없음** → 신규 필요.
+- Repository: ACTIVE용 `findByWardIdAndStatusOrderByPriorityAsc` 존재(재사용), PENDING 최신순 메서드 부재 → 추가.
+- `ConnectionResponse`는 이미 `status == ACTIVE`일 때만 phone/address를 채우고 PENDING은 자동 null 마스킹 — 정책 A·B의 기본값이 이미 "PENDING 미노출"이었음.
+- DTO 필드명이 보호자/피보호자 공용이라 `partner*`(요구사항의 `guardian*`과 상이).
+
+### PHASE 1 — 결정 사항
+
+| 항목 | 결정 | 근거 |
+|------|------|------|
+| 기존 `/api/ward/connection/select` | **즉시 제거** → `/active`로 대체 | 옵션 B, 사용자 결정 |
+| PENDING 응답 DTO | **신규 `PendingConnectionResponse`** | "요청온 목록" 카드 전용 슬림 계약 |
+| PENDING 전화번호 | **백엔드 마스킹** (`010****5678`) | 프론트 마스킹 시 전체 번호가 응답 본문에 실려 노출 → 서버에서 차단. 기존 `MaskingUtil.maskPhone` 재사용(형식 일관성) |
+| PENDING 주소 | **미노출** (DTO에 미포함) | 수락 후 ACTIVE 응답에서만 노출 (기존 정책과 일관) |
+
+### PHASE 2 — 변경 사항
+
+- **WardConnectionController**
+  - `GET /api/ward/connection/select` **제거**
+  - `GET /api/ward/connection/active` 신규 — ACTIVE 보호자, priority 오름차순, `ConnectionResponse` 재사용
+  - `GET /api/ward/connection/pending` 신규 — PENDING 요청, createdAt 내림차순, `PendingConnectionResponse`
+  - 수락/거절 API는 변경 없음 (`/{id}/accept`, `/request/{id}/refusal` 그대로)
+- **ConnectionService**
+  - `getMyGuardians` → `getActiveGuardians`로 **개명** (제거된 `/select` 전용이라 죽은 코드/중복 방지)
+  - `getPendingRequests(wardId)` 신규 — PENDING 최신순 + 보호자 User 일괄 조회 후 `PendingConnectionResponse` 매핑
+- **ConnectionRepository** — `findByWardIdAndStatusOrderByCreatedAtDesc(wardId, status)` 추가
+- **PendingConnectionResponse** 신규 DTO — `connectionId, guardianId, guardianName, guardianPhone(마스킹), relation, requestedAt(createdAt)`
+- 가정: 현재 ward-개시 요청 흐름이 없어 ward의 PENDING은 전부 보호자-개시 → "요청온 목록"과 일치. 향후 ward-개시 추가 시 `initiatedBy` 필터 필요.
+
+### 프론트 영향 (Breaking)
+
+- `GET /api/ward/connection/select` **제거됨** → `/active`로 교체 필요.
+- `/pending` 응답은 `partner*`가 아닌 `guardian*` 네이밍의 신규 스키마.
+- ⚠️ `프로젝트_설명.txt:301`의 ward `/select` 기술이 stale — 별도 후속 정리 필요.
+
+---
+
 ## 2026-05-20 — connection 도메인 프로토타입 정렬 + WebSocket SockJS 제거
 
 보호자웹 신규 프로토타입(피보호자 등록·요청 내역·내 보호자 카드)에 맞춰 connection 도메인을 확장. 동시에 웹 전용 운영 결정에 따라 WebSocket SockJS를 제거해 네이티브 WebSocket(wss) 단순화.
