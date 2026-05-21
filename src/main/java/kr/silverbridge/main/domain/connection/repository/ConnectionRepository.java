@@ -17,8 +17,8 @@ public interface ConnectionRepository extends JpaRepository<Connection, Long> {
     List<Connection> findByGuardianIdAndStatusInOrderByCreatedAtDesc(
             String guardianId, List<ConnectionStatus> statuses);
 
-    // 피보호자의 상태별 보호자 목록 (우선순위 정렬, 긴급통화 알림용 / ACTIVE 보호자 목록)
-    List<Connection> findByWardIdAndStatusOrderByPriorityAsc(String wardId, ConnectionStatus status);
+    // 피보호자의 상태별 보호자 목록 (연결 생성 오래된 순 / ACTIVE 보호자 목록)
+    List<Connection> findByWardIdAndStatusOrderByCreatedAtAsc(String wardId, ConnectionStatus status);
 
     // 피보호자의 상태별 보호자 목록 (요청일 최신순 / PENDING "요청온 목록")
     List<Connection> findByWardIdAndStatusOrderByCreatedAtDesc(String wardId, ConnectionStatus status);
