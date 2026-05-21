@@ -450,4 +450,13 @@ architecture-review / spring-boot-patterns / jpa-patterns / concurrency-review /
 ### 산출물
 - `docs/audit-report-auth-2026-05-22.md` — 3차 종합 보고서 (신규)
 - `docs/audit-summary-auth-2026-05-22.csv` — Phase/스킬/심각도/수정여부 표 (신규)
-- 작업 브랜치 `fix/auth-audit-2026-05-22` (커밋·푸시 미수행 — 사용자 검토 대기)
+- `fix/auth-audit-2026-05-22` → PR #159로 dev 머지 완료 (커밋 9개)
+
+### 후속 처리 (follow-up, PR 별도) — 이월 항목 4건 추가 해소
+2026-05-22 점검의 이월 항목 중 4건을 후속 브랜치에서 처리:
+- **A-M2** ✅ `docker-compose.dev.yml` api publish `6511:6511` → `127.0.0.1:6511:6511` (외부 직접 접근 차단, nginx 도메인 경유 유지)
+- **A-L3/G-2** ✅ DB 자격증명 약한 기본값(`dev`) 제거 + `RequiredPropertiesValidator`에 `DB_USERNAME`/`DB_PASSWORD` 편입(fail-fast) — `.env.dev` 명시 확인
+- **A-L2 CSP** ✅ Swagger 호환 CSP 추가
+- **B-1** ✅ `PhoneVerificationPort`(user) 추출 — user→auth 직접 의존 제거, auth→user 단방향 정렬
+- 잔여 이월: L-C1(RESTful 경로·프론트 조율), E-4(약관·미구현)
+- 검증: 대상 74건 통과 + `./gradlew build -x test` BUILD SUCCESSFUL

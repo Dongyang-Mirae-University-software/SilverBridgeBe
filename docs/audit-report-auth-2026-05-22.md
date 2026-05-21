@@ -116,14 +116,17 @@ fail counter·SMS attempt 원자적(Lua) ✅ · 동시 가입 unique→409 ✅ �
 
 ---
 
-## 6. 미해결 TODO (다음 사이클 이월)
+## 6. 미해결 TODO
 
-- **A-M2** XFF/프록시 trusted-proxy 설정 — 배포 토폴로지 확인 후
-- **A-L3 / G-2** DB credential 기본값 `dev/dev` — `.env.dev`·CD 확인 후 `:CHANGE-ME` 또는 RequiredPropertiesValidator 편입(현 변경 시 로컬·dev 배포 중단 위험으로 보류)
-- **A-L2 CSP** — 동일 필터체인 Swagger UI 호환 정책(또는 prod Swagger 비활성 + strict CSP) 확정 후
-- **B-1** auth↔user 양방향 결합(`UserService→SmsService`) — 모놀리식 실용 패턴, `PhoneVerification` 포트 추출은 후순위
-- **L-C1**(2차 이월) `UserController` RESTful 경로(`/me/select`·`/me/update` 등) — 프론트 마이그레이션 협의
-- **E-4** 약관 동의 시점 기록 — 약관 백엔드 구현 시 access_logs 또는 별도 테이블
+### 6.1 후속 처리 완료 (2026-05-22 follow-up, 별도 PR)
+- **A-M2** ✅ `docker-compose.dev.yml` api publish를 `127.0.0.1:6511`로 제한 — 외부 직접 접근 차단(Swagger·API는 nginx 도메인 경유). 배포 후 nginx의 `/swagger-ui` 프록시 동작 확인 권장
+- **A-L3 / G-2** ✅ `application.yaml` DB 자격증명 약한 기본값(`dev`) 제거 + `RequiredPropertiesValidator`에 `DB_USERNAME`/`DB_PASSWORD` 편입(fail-fast) — `.env.dev`가 명시 설정함을 확인
+- **A-L2 CSP** ✅ `SecurityConfig`에 Swagger 호환 CSP 추가(`default-src 'self'` + script/style `unsafe-inline` + `frame-ancestors 'none'`/`object-src 'none'`/`base-uri 'self'`)
+- **B-1** ✅ `PhoneVerificationPort`(user 도메인) 추출 — `UserService`가 포트 의존, `SmsService`가 구현. user→auth 직접 의존 제거(의존 방향 auth→user 단방향 정렬)
+
+### 6.2 잔여 이월 (다음 사이클)
+- **L-C1**(2차 이월) `UserController` RESTful 경로(`/me/select`·`/me/update` 등) — 통합된 프론트를 깨뜨려 프론트 마이그레이션 협의 필요
+- **E-4** 약관 동의 시점 기록 — 약관 백엔드 미구현(결정상 구현 안 함). 구현 시 access_logs 또는 별도 테이블
 
 ---
 
