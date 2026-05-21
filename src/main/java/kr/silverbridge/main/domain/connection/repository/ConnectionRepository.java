@@ -21,6 +21,6 @@ public interface ConnectionRepository extends JpaRepository<Connection, Long> {
     // 피보호자의 상태별 보호자 목록 (요청일 최신순 / PENDING "요청온 목록")
     List<Connection> findByWardIdAndStatusOrderByCreatedAtDesc(String wardId, ConnectionStatus status);
 
-    // 동일한 guardian-ward 쌍의 활성/대기 연결 존재 여부 확인 (취소 제외)
-    boolean existsByGuardianIdAndWardIdAndStatusNot(String guardianId, String wardId, ConnectionStatus status);
+    // 동일한 guardian-ward 쌍의 live(PENDING/ACTIVE) 연결 존재 여부 — 중복 요청·연결 차단용
+    boolean existsByGuardianIdAndWardIdAndStatusIn(String guardianId, String wardId, List<ConnectionStatus> statuses);
 }

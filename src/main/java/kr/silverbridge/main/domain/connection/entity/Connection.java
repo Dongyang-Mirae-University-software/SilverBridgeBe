@@ -52,8 +52,18 @@ public class Connection extends BaseTimeEntity {
         this.connectedAt = OffsetDateTime.now();
     }
 
-    // 연결 해제 (CANCELLED 전환)
+    // 보호자가 보낸 PENDING 요청 취소 (CANCELLED 전환)
     public void cancel() {
         this.status = ConnectionStatus.CANCELLED;
+    }
+
+    // 피보호자의 PENDING 요청 거절 (REFUSED 전환)
+    public void refuse() {
+        this.status = ConnectionStatus.REFUSED;
+    }
+
+    // ACTIVE 연결 해제 (DISCONNECTED 전환)
+    public void disconnect() {
+        this.status = ConnectionStatus.DISCONNECTED;
     }
 }
