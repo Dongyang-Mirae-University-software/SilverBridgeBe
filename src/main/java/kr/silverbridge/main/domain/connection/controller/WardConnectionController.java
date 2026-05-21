@@ -24,13 +24,13 @@ public class WardConnectionController {
 
     private final ConnectionService connectionService;
 
-    @Operation(summary = "내 보호자 리스트 조회 (ACTIVE, 우선순위 순)",
+    @Operation(summary = "내 보호자 리스트 조회 (ACTIVE, 연결 오래된 순)",
             description = """
                     [요청 헤더]
                     Authorization: Bearer {accessToken}
 
                     피보호자웹 "내 보호자 리스트" 카드용.
-                    ACTIVE 상태 연결 목록을 우선순위(priority) 오름차순으로 반환합니다.
+                    ACTIVE 상태 연결 목록을 연결 생성일(createdAt) 오름차순으로 반환합니다.
                     전화번호·주소는 ACTIVE이므로 노출됩니다.
                     """)
     @GetMapping("/api/ward/connection/active")
