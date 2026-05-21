@@ -388,16 +388,25 @@ architecture-review / spring-boot-patterns / jpa-patterns / concurrency-review /
 - 보안(인가·IDOR·WebSocket 구독 인가·PII 정책) 견고 — Critical/High 없음
 - 트랜잭션 경계 일관, 이벤트 AFTER_COMMIT 분리, 연관관계 없음(String FK)으로 N+1/lazy 원천 없음, 목록 `findAllById` 배치
 
-### 이월 (다음 스프린트)
-- **G-1 (High)**: connection 테스트 0건 → `ConnectionServiceTest` + 리스너 테스트(JUnit5+Mockito+AssertJ)
-- **B3/E-4 (Medium)**: 알림 비동기화(`@EnableAsync` + executor + 리스너 `@Async`)
-- **A5/C-DEAD1 (Medium)**: dead code 5개(`isConnected`·`getConnection`·`findByGuardianIdAndStatus`·`countByStatus`·`findActiveByUserId`) 제거 또는 역할변경 연동 배선
-- **C-ARCH1 (Medium)**: `ConnectionService → UserRepository` 직접 의존 분리 검토
-- **D-1 (Medium)**: 이미 처리된 요청 재처리 400→409 정렬 — 프론트 협의
-- **D-6 (Medium)**: `ConnectionStatus` 거절/취소/해제 평탄화 → 상태 세분화(설계+프론트 협의)
-- **F-1 (Medium)**: 상태 전이 INFO 로그 추가(PII 제외)
-- **Low**: B-C3a(열거 oracle), B-C4a(WS 토큰 쿼리), C-SOLID1, D-2(REST 경로), E-3(guardian 정렬 인덱스), F-2(MDC connectionId)
+### 이월 항목 후속 처리 (전부 본 사이클 반영)
+- **G-1 (High)**: ✅ `#154` — ConnectionService·리스너 테스트 26건
+- **C-DEAD1 / A5 (Medium)**: ✅ `#155` — dead code 5개 제거 (역할변경 연동은 트리거 부재로 N/A)
+- **F-1/F-2 (Medium/Low)**: ✅ `#155` — 상태 전이 INFO 로그(connectionId 포함)
+- **E-3 (Low)**: ✅ `#155` — `(guardian_id, status, created_at)` 인덱스 교체(V22)
+- **B3/E-4 (Medium)**: ✅ `#156` — 알림 `@Async` 비동기화
+- **D-1 (Medium) / D-2 (Low)**: ✅ `#157` — 재처리 400→409 + disconnection 경로 일관화 (프론트 통보 필요)
+- **D-6 (Medium)**: ✅ `#158` — ConnectionStatus 세분화 REFUSED/DISCONNECTED + 유니크 인덱스 의미 조정(V23) (프론트 통보 필요)
+
+### 의도적 보류 (다음 사이클)
+- **C-ARCH1 (Medium)**: `ConnectionService → UserRepository` 직접 의존 — 모놀리식 실용 패턴이라 보류
+- **C-SOLID1 (Low)**: ConnectionService 분리 — 규모상 불필요, 보류
+- **Low**: B-C3a(열거 oracle, 실질 무해), B-C4a(WS 토큰 쿼리, 인프라 공통 과제)
+
+### 프론트 통보 필요 (#157·#158 — 프론트 개발 중 시점에 선반영)
+- 해제 URL: `/api/{role}/disconnection/{id}` → `/api/{role}/connection/disconnection/{id}` (하위호환 불가)
+- 응답 `status`에 `REFUSED`/`DISCONNECTED` 신규 값 등장
+- 이미 처리된 요청 재처리 응답 400 → 409
 
 ### 산출물
-- `docs/audit-report-connection.md` — 종합 보고서 (신규)
-- `docs/audit-summary-connection.csv` — Phase/스킬/심각도/권장조치/수정여부 표 (신규)
+- `docs/audit-report-connection-2026-05-21.md` — 종합 보고서 (신규, 수정완료 반영)
+- `docs/audit-summary-connection-2026-05-21.csv` — Phase/스킬/심각도/권장조치/수정여부 표 (신규)
