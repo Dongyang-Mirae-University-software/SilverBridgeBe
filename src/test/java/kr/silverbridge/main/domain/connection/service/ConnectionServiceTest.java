@@ -77,8 +77,8 @@ class ConnectionServiceTest {
             ConnectionRequestDto dto = requestDto(WARD_ID, RELATION);
             when(userRepository.findById(GUARDIAN_ID)).thenReturn(java.util.Optional.of(guardian()));
             when(userRepository.findById(WARD_ID)).thenReturn(java.util.Optional.of(ward()));
-            when(connectionRepository.existsByGuardianIdAndWardIdAndStatusNot(
-                    GUARDIAN_ID, WARD_ID, ConnectionStatus.CANCELLED)).thenReturn(false);
+            when(connectionRepository.existsByGuardianIdAndWardIdAndStatusIn(
+                    GUARDIAN_ID, WARD_ID, List.of(ConnectionStatus.PENDING, ConnectionStatus.ACTIVE))).thenReturn(false);
 
             connectionService.requestConnectionAsGuardian(GUARDIAN_ID, dto);
 
@@ -159,8 +159,8 @@ class ConnectionServiceTest {
             ConnectionRequestDto dto = requestDto(WARD_ID, RELATION);
             when(userRepository.findById(GUARDIAN_ID)).thenReturn(java.util.Optional.of(guardian()));
             when(userRepository.findById(WARD_ID)).thenReturn(java.util.Optional.of(ward()));
-            when(connectionRepository.existsByGuardianIdAndWardIdAndStatusNot(
-                    GUARDIAN_ID, WARD_ID, ConnectionStatus.CANCELLED)).thenReturn(true);
+            when(connectionRepository.existsByGuardianIdAndWardIdAndStatusIn(
+                    GUARDIAN_ID, WARD_ID, List.of(ConnectionStatus.PENDING, ConnectionStatus.ACTIVE))).thenReturn(true);
 
             CustomException ex = assertThrows(CustomException.class,
                     () -> connectionService.requestConnectionAsGuardian(GUARDIAN_ID, dto));
@@ -239,14 +239,14 @@ class ConnectionServiceTest {
     class RefuseConnection {
 
         @Test
-        @DisplayName("PENDING 거절 → CANCELLED 전환, 이벤트 없음")
-        void 정상거절_CANCELLED_이벤트없음() {
+        @DisplayName("PENDING 거절 → REFUSED 전환, 이벤트 없음")
+        void 정상거절_REFUSED_이벤트없음() {
             Connection connection = connection(ConnectionStatus.PENDING);
             when(connectionRepository.findById(CONNECTION_ID)).thenReturn(java.util.Optional.of(connection));
 
             connectionService.refuseConnectionAsWard(WARD_ID, CONNECTION_ID);
 
-            assertThat(connection.getStatus()).isEqualTo(ConnectionStatus.CANCELLED);
+            assertThat(connection.getStatus()).isEqualTo(ConnectionStatus.REFUSED);
             verify(eventPublisher, never()).publishEvent(any());
         }
 
@@ -300,14 +300,14 @@ class ConnectionServiceTest {
     class Disconnect {
 
         @Test
-        @DisplayName("보호자 해제(ACTIVE) → CANCELLED + 피보호자에게 DisconnectedEvent(GUARDIAN)")
-        void 보호자해제_CANCELLED_및_이벤트() {
+        @DisplayName("보호자 해제(ACTIVE) → DISCONNECTED + 피보호자에게 DisconnectedEvent(GUARDIAN)")
+        void 보호자해제_DISCONNECTED_및_이벤트() {
             Connection connection = connection(ConnectionStatus.ACTIVE);
             when(connectionRepository.findById(CONNECTION_ID)).thenReturn(java.util.Optional.of(connection));
 
             connectionService.disconnectAsGuardian(GUARDIAN_ID, CONNECTION_ID);
 
-            assertThat(connection.getStatus()).isEqualTo(ConnectionStatus.CANCELLED);
+            assertThat(connection.getStatus()).isEqualTo(ConnectionStatus.DISCONNECTED);
             ArgumentCaptor<ConnectionDisconnectedEvent> captor =
                     ArgumentCaptor.forClass(ConnectionDisconnectedEvent.class);
             verify(eventPublisher).publishEvent(captor.capture());
@@ -330,14 +330,14 @@ class ConnectionServiceTest {
         }
 
         @Test
-        @DisplayName("피보호자 해제(ACTIVE) → CANCELLED + 보호자에게 DisconnectedEvent(WARD)")
-        void 피보호자해제_CANCELLED_및_이벤트() {
+        @DisplayName("피보호자 해제(ACTIVE) → DISCONNECTED + 보호자에게 DisconnectedEvent(WARD)")
+        void 피보호자해제_DISCONNECTED_및_이벤트() {
             Connection connection = connection(ConnectionStatus.ACTIVE);
             when(connectionRepository.findById(CONNECTION_ID)).thenReturn(java.util.Optional.of(connection));
 
             connectionService.disconnectAsWard(WARD_ID, CONNECTION_ID);
 
-            assertThat(connection.getStatus()).isEqualTo(ConnectionStatus.CANCELLED);
+            assertThat(connection.getStatus()).isEqualTo(ConnectionStatus.DISCONNECTED);
             ArgumentCaptor<ConnectionDisconnectedEvent> captor =
                     ArgumentCaptor.forClass(ConnectionDisconnectedEvent.class);
             verify(eventPublisher).publishEvent(captor.capture());

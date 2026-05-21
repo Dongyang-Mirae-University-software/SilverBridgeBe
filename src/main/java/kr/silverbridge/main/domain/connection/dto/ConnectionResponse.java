@@ -36,7 +36,8 @@ public class ConnectionResponse {
     @Schema(description = "보호자가 입력한 피보호자와의 관계 (예: 아들). 기존 데이터(NULL)는 응답에서도 null", nullable = true, example = "아들")
     private final String relation;
 
-    @Schema(description = "연결 상태", allowableValues = {"PENDING", "ACTIVE", "CANCELLED"})
+    @Schema(description = "연결 상태 (CANCELLED=보호자 취소, REFUSED=피보호자 거절, DISCONNECTED=연결 해제)",
+            allowableValues = {"PENDING", "ACTIVE", "CANCELLED", "REFUSED", "DISCONNECTED"})
     private final String status;
 
     @Schema(description = "요청자 여부 (true = 내가 요청한 연결)")
