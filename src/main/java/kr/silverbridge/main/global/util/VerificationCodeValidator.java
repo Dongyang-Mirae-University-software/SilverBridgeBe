@@ -6,6 +6,9 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Component;
 
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+
 /**
  * SMS/이메일 인증코드 검증 공통 유틸리티
  * 코드 만료 확인 → 일치 확인 → 오류 횟수 관리 → 성공 시 키 삭제
@@ -35,7 +38,7 @@ public class VerificationCodeValidator {
             throw new CustomException(ErrorCode.EXPIRED_SMS_CODE);
         }
 
-        if (!savedCode.equals(inputCode)) {
+        if (!codesMatch(savedCode, inputCode)) {
             // 오류 횟수 증가 + 최초 증가 시 TTL(인증코드와 동일) 설정을 원자적으로 (L-2)
             long attempts = redisCounter.incrementWithTtl(attemptKey, codeTtlMinutes * 60);
 
@@ -69,7 +72,7 @@ public class VerificationCodeValidator {
             throw new CustomException(ErrorCode.EXPIRED_SMS_CODE);
         }
 
-        if (!savedCode.equals(inputCode)) {
+        if (!codesMatch(savedCode, inputCode)) {
             long attempts = redisCounter.incrementWithTtl(attemptKey, codeTtlMinutes * 60);
             if (attempts >= maxAttempts) {
                 redisTemplate.delete(verifyKey);
@@ -79,5 +82,19 @@ public class VerificationCodeValidator {
             throw new CustomException(ErrorCode.INVALID_SMS_CODE);
         }
         // 성공 — 코드 유지(최종 reset 단계에서 같은 코드로 재검증·소비)
+    }
+
+    /**
+     * 인증코드 일치 여부를 상수 시간으로 비교한다 (A-L1).
+     * {@code String.equals}는 첫 불일치 문자에서 단락(short-circuit)되어 미세한 타이밍 차이를 만든다.
+     * 6자리 코드는 MAX_ATTEMPTS=5로 이미 제한적이지만, 비밀 비교는 일관되게 상수 시간으로 처리한다.
+     */
+    private boolean codesMatch(String savedCode, String inputCode) {
+        if (inputCode == null) {
+            return false;
+        }
+        return MessageDigest.isEqual(
+                savedCode.getBytes(StandardCharsets.UTF_8),
+                inputCode.getBytes(StandardCharsets.UTF_8));
     }
 }
