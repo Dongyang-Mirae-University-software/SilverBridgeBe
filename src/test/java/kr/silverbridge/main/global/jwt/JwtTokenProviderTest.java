@@ -76,12 +76,28 @@ class JwtTokenProviderTest {
     void wrongSignatureThrows() {
         String token = jwtTokenProvider.generateAccessToken("abc123", "user@example.com", "WARD");
 
-        // secret 교체 후 재검증 → 서명 불일치
-        properties.setSecret("different-secret-key-at-least-256-bits-long-for-hmac-sha256");
-        assertThatThrownBy(() -> jwtTokenProvider.validateToken(token))
+        // 다른 secret을 가진 별도 provider로 검증 → 서명 불일치.
+        // (signingKey는 provider별로 1회 캐싱되므로 동일 provider의 secret을 런타임 교체하지 않고 새 provider로 검증)
+        JwtProperties other = new JwtProperties();
+        other.setSecret("different-secret-key-at-least-256-bits-long-for-hmac-sha256");
+        other.setAccessTokenExpiration(properties.getAccessTokenExpiration());
+        other.setRefreshTokenExpiration(properties.getRefreshTokenExpiration());
+        JwtTokenProvider otherProvider = new JwtTokenProvider(other);
+
+        assertThatThrownBy(() -> otherProvider.validateToken(token))
                 .isInstanceOf(CustomException.class)
                 .extracting("errorCode")
                 .isEqualTo(ErrorCode.INVALID_TOKEN);
+    }
+
+    @Test
+    @DisplayName("Access Token은 isAccessToken=true, Refresh Token은 false — 토큰 타입 혼용 차단 (A-H1)")
+    void accessTokenAndRefreshTokenAreDistinguishedByType() {
+        String access = jwtTokenProvider.generateAccessToken("abc123", "user@example.com", "WARD");
+        String refresh = jwtTokenProvider.generateRefreshToken("abc123");
+
+        assertThat(jwtTokenProvider.isAccessToken(access)).isTrue();
+        assertThat(jwtTokenProvider.isAccessToken(refresh)).isFalse();
     }
 
     @Test
