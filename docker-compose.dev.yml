@@ -8,8 +8,11 @@ services:
     restart: unless-stopped
     env_file:
       - .env.dev
+    # 호스트 루프백에만 publish (A-M2): 외부에서 6511 직접 접근을 차단해 X-Forwarded-For 위조로
+    # RateLimit 우회·access_logs IP 오염을 막는다. nginx(같은 호스트)는 localhost:6511로 프록시하므로 영향 없음.
+    # ※ Swagger·API는 nginx 도메인으로 접근(서버IP:6511 직접 접근은 차단됨).
     ports:
-      - "6511:6511"
+      - "127.0.0.1:6511:6511"
     depends_on:
       db:
         condition: service_healthy
