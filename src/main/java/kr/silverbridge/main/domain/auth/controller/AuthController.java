@@ -135,6 +135,9 @@ public class AuthController {
     @PostMapping("/signin")
     public ApiResponse<LoginResponse> login(@Valid @RequestBody LoginRequest request,
                                             HttpServletRequest httpRequest) {
+        // IP 기준 속도 제한 — per-user 잠금(5회/30분)이 막지 못하는 계정 분산 credential stuffing/
+        // password spraying 차단 (A-H2). 다른 인증 엔드포인트와 동일 정책(1분 10회).
+        rateLimitService.check("signin", httpRequest.getRemoteAddr());
         return ApiResponse.ok(authService.login(
                 request,
                 httpRequest.getRemoteAddr(),
