@@ -1,5 +1,9 @@
 package kr.silverbridge.main.domain.auth.service;
 
+import kr.silverbridge.main.global.exception.CustomException;
+import kr.silverbridge.main.global.exception.ErrorCode;
+import kr.silverbridge.main.global.util.RedisCounter;
+import kr.silverbridge.main.global.util.RedisKeys;
 import kr.silverbridge.main.global.util.VerificationCodeValidator;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -22,6 +26,7 @@ public class SmsVerificationService {
     private final StringRedisTemplate redisTemplate;
     private final VerificationCodeValidator verificationCodeValidator;
     private final SmsSender smsSender;
+    private final RedisCounter redisCounter;
 
     /** 인증코드 유효 시간 (분) */
     public static final long CODE_TTL_MINUTES = 5L;
@@ -29,6 +34,11 @@ public class SmsVerificationService {
     public static final long CODE_TTL_SECONDS = CODE_TTL_MINUTES * 60;
     /** 최대 오류 허용 횟수 */
     public static final int MAX_ATTEMPTS = 5;
+
+    /** per-phone 발송 상한 윈도우 (초) — 1시간 */
+    private static final long SEND_CAP_WINDOW_SECONDS = 3600L;
+    /** per-phone 발송 상한 (윈도우당 최대 발송 건수) — IP 우회 SMS 폭탄·비용 남용 차단 (A-M3) */
+    private static final long MAX_SENDS_PER_WINDOW = 10L;
 
     /**
      * 인증코드 발송 공통 로직
@@ -42,6 +52,13 @@ public class SmsVerificationService {
      * @param messageTemplate  SMS 본문 템플릿 ({@code %s} 위치에 인증코드 삽입)
      */
     public void sendCode(String phone, VerificationKeyConfig config, String messageTemplate) {
+        // per-phone 발송 상한 — 컨트롤러 IP RateLimit을 IP 회전으로 우회해 특정 번호로 SMS를 폭탄·
+        // 비용 남용하는 것을 차단 (A-M3). 회원가입/비번재설정 모든 발송 흐름의 공통 길목에서 검사.
+        long sent = redisCounter.incrementWithTtl(RedisKeys.SMS_SEND_COUNT + phone, SEND_CAP_WINDOW_SECONDS);
+        if (sent > MAX_SENDS_PER_WINDOW) {
+            throw new CustomException(ErrorCode.TOO_MANY_REQUESTS);
+        }
+
         String code = generateCode();
         smsSender.send(phone, String.format(messageTemplate, code));
 
