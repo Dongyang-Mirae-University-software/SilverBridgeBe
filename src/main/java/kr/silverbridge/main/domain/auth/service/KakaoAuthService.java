@@ -46,6 +46,9 @@ public class KakaoAuthService {
     private String redirectUri;
 
     private static final long KAKAO_PENDING_TTL = 10L;
+    // 카카오가 이메일을 제공하지 않을 때 사용하는 대체 이메일 형식 (kakao_{id}@kakao.com)
+    private static final String FALLBACK_EMAIL_PREFIX = "kakao_";
+    private static final String FALLBACK_EMAIL_DOMAIN = "@kakao.com";
 
     // 카카오 로그인
     // 기존 사용자 → 바로 로그인
@@ -82,7 +85,7 @@ public class KakaoAuthService {
                     // 신규 사용자 → 이메일 처리
                     String email = kakaoUser.getEmail();
                     if (email == null || email.isBlank()) {
-                        email = "kakao_" + kakaoId + "@kakao.com";
+                        email = FALLBACK_EMAIL_PREFIX + kakaoId + FALLBACK_EMAIL_DOMAIN;
                     }
 
                     // 동일 이메일로 이미 LOCAL 가입된 계정이 있으면 예외
