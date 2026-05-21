@@ -4,8 +4,9 @@ spring:
 
   datasource:
     url: jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5432}/${DB_NAME:dev}
-    username: ${DB_USERNAME:dev}
-    password: ${DB_PASSWORD:dev}
+    # 자격증명은 약한 기본값(dev) 제거 — 미설정 시 시작 실패(fail-fast). 검증은 RequiredPropertiesValidator. (A-L3)
+    username: ${DB_USERNAME}
+    password: ${DB_PASSWORD}
     driver-class-name: org.postgresql.Driver
 
   jpa:
