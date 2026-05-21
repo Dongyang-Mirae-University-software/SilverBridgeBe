@@ -1,5 +1,6 @@
 package kr.silverbridge.main.domain.auth.dto;
 
+import com.fasterxml.jackson.annotation.JsonProperty;
 import io.swagger.v3.oas.annotations.media.Schema;
 import kr.silverbridge.main.domain.user.entity.User;
 import lombok.Builder;
@@ -15,6 +16,9 @@ import lombok.Getter;
         """)
 public class KakaoLoginResponse {
 
+    // boolean 필드명 isNewUser 는 Lombok getter(isNewUser())+Jackson 기본 규칙으로 "newUser"로 직렬화될 수 있어
+    // @JsonProperty 로 JSON 키를 isNewUser 로 고정한다 (Swagger 문서·프론트 계약과 일치) (C-1)
+    @JsonProperty("isNewUser")
     @Schema(description = "신규 회원 여부. true면 회원가입 절차 필요, false면 바로 로그인 처리", example = "false")
     private boolean isNewUser;
 

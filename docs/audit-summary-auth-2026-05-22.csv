@@ -1,0 +1,26 @@
+Phase,스킬,항목,파일,심각도,발견사항,권장조치,수정여부
+A,security-audit,A-H1 JWT 토큰 타입 미구분,global/jwt/JwtAuthenticationFilter.java,High,refresh token을 Bearer로 제시 시 authenticated 엔드포인트 통과·로그아웃 우회,typ 클레임 추가+필터는 access만 허용,Fixed
+A,security-audit,A-H2 signin IP RateLimit 부재,domain/auth/controller/AuthController.java,High,계정 분산 credential stuffing/password spraying 무제한,RateLimitService.check(signin) 추가,Fixed
+A,security-audit,A-M1 비번재설정 confirm enumeration,domain/auth/service/PasswordResetService.java,Medium,코드 검증 전 user 조회로 가입여부·provider 추론,코드 검증을 user 조회보다 선행,Fixed
+A,security-audit,A-M3 SMS 발송 per-phone 상한 부재,domain/auth/service/SmsVerificationService.java,Medium,IP 회전 시 임의 번호 SMS 폭탄·비용 남용,per-phone 시간당 10회 상한 추가,Fixed
+A,security-audit,A-M2 X-Forwarded-For 무조건 신뢰,application.yaml,Medium,직접 노출 시 XFF 위조로 RateLimit 우회+로그 IP 오염,프록시 단일 인입/trusted-proxy 설정,Deferred(인프라)
+C,api-contract-review,C-1 isNewUser 직렬화 명칭 불일치,domain/auth/dto/KakaoLoginResponse.java,Medium,Lombok/Jackson으로 newUser로 직렬화될 위험,@JsonProperty(isNewUser)로 키 고정,Fixed
+C,api-contract-review,C-2 회원가입 상태코드 불일치,domain/auth/controller/KakaoAuthController.java,Low,signup 201 vs signup/kakao 200,kakao 가입 201 정렬,Fixed
+A,security-audit,A-L1 인증코드 비교 constant-time,global/util/VerificationCodeValidator.java,Low,String.equals 단락 비교,MessageDigest.isEqual로 상수시간 비교,Fixed
+A,security-audit,A-L2 보안 헤더 미설정,global/security/SecurityConfig.java,Low,HSTS/X-Frame/X-Content/Referrer 미명시,헤더 명시(CSP는 Swagger 호환 검토로 이월),Fixed(부분)
+B,architecture-review,A-L4 데드코드 AuthenticationManager/UserDetailsService,global/security/*,Low,authenticate() 호출 0건 데드코드,제거,Fixed
+B,architecture-review,A-L5 제거 도메인 잔재,SecurityConfig/SecurityConfigValidator/ErrorCode/application.yaml,Low,AI permitAll·AI키검증·GAME_RESULT_NOT_FOUND·미사용 ErrorCode 5개,일괄 제거,Fixed
+A,security-audit,A-L6 생년월일 상한 부재,global/validation/BirthDateValidator.java,Low,비현실적 과거 날짜 통과,만 120세 상한 추가,Fixed
+D,performance-smell-detection,D-3 SecretKey 매 호출 재생성,global/jwt/JwtTokenProvider.java,Low,getSigningKey 매번 키 생성,SecretKey 1회 캐싱,Fixed
+B,clean-code,B-2 카카오 fallback email 매직 문자열,domain/auth/service/KakaoAuthService.java,Low,kakao_+id+@kakao.com 인라인,상수화,Fixed
+E,logging-patterns,E-2 요청 추적 traceId MDC 부재,global/aop/ApiLoggingAspect.java,Low,요청 단위 상관관계 추적 약함,traceId MDC + 로그 패턴 추가,Fixed
+E,logging-patterns,E-3 로그인 잠금 WARN 로그 부재,domain/auth/service/AuthService.java,Low,잠금 보안 이벤트 전용 로그 없음,잠금 설정 시 WARN(userId·시도횟수),Fixed
+A,security-audit,A-L3/G-2 DB credential 기본값 dev,application.yaml,Low,운영 env 누락 시 dev/dev 사용,CHANGE-ME 또는 필수검증 편입,Deferred(배포확인)
+B,architecture-review,B-1 auth-user 양방향 결합,domain/user/service/UserService.java,Medium,UserService->auth.SmsService 직접 의존,PhoneVerification 포트 추출,Deferred(이월유지)
+C,api-contract-review,L-C1 UserController RESTful 경로,domain/user/controller/UserController.java,Low,/me/select 등 동사 경로,RESTful 정리(프론트 마이그레이션),Deferred(2차이월)
+E,logging-patterns,E-4 약관 동의 시점 기록,(미구현),Info,약관 백엔드 미구현,구현 시 access_logs 또는 별도 테이블,N/A
+F,test-quality,JwtAuthenticationFilterTest 신규,test/global/jwt/JwtAuthenticationFilterTest.java,Medium,로그아웃·비번무효화·Bearer·A-H1 회귀 미테스트,신규 5건 작성,Fixed
+F,test-quality,KakaoAuthServiceTest 신규,test/domain/auth/service/KakaoAuthServiceTest.java,Medium,소셜 분기·INACTIVE·email충돌·4단계 미테스트,신규 8건 작성,Fixed
+F,test-quality,PasswordResetServiceTest 신규,test/domain/auth/service/PasswordResetServiceTest.java,Medium,email/SMS 경로·A-M1 enumeration 미테스트,신규 7건 작성,Fixed
+F,test-quality,RefreshTokenRevocationServiceTest 신규,test/domain/auth/service/RefreshTokenRevocationServiceTest.java,Medium,위임 검증 부재,신규 2건 작성,Fixed
+F,test-quality,BirthDateValidatorTest 신규,test/global/validation/BirthDateValidatorTest.java,Medium,V18 신규 필드 검증 미테스트,신규 7건 작성,Fixed

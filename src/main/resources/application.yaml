@@ -110,11 +110,6 @@ firebase:
   # 변환해 깨지는 문제가 있어 base64로 우회한다.
   service-account-base64: ${FIREBASE_SERVICE_ACCOUNT_BASE64:}
 
-ai:
-  server:
-    # 반드시 .env.dev 또는 운영 환경변수로 지정 (32자 이상 랜덤 값)
-    api-key: ${AI_SERVER_API_KEY}
-
 # ─── 로깅 ─────────────────────────────────────────────────────────────────
 # 평문 패턴에 MDC userId 포함 (ApiLoggingAspect 가 주입). 미인증 요청에는 'anonymous' 표시.
 # 구조적 JSON 로깅은 LOGGING_STRUCTURED_FORMAT 환경변수로 토글 (ecs / gelf / logstash 중 하나).
@@ -123,7 +118,7 @@ ai:
 # 운영 적용 전에 로그 수집기/파서 호환성 확인 필요.
 logging:
   pattern:
-    console: "%d{yyyy-MM-dd HH:mm:ss.SSS} %-5level [user=%X{userId:-anonymous}] %logger{36} - %msg%n"
+    console: "%d{yyyy-MM-dd HH:mm:ss.SSS} %-5level [trace=%X{traceId:-}] [user=%X{userId:-anonymous}] %logger{36} - %msg%n"
   structured:
     format:
       console: ${LOGGING_STRUCTURED_FORMAT:}

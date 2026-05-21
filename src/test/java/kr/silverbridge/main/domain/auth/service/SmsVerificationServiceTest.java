@@ -1,5 +1,9 @@
 package kr.silverbridge.main.domain.auth.service;
 
+import kr.silverbridge.main.global.exception.CustomException;
+import kr.silverbridge.main.global.exception.ErrorCode;
+import kr.silverbridge.main.global.util.RedisCounter;
+import kr.silverbridge.main.global.util.RedisKeys;
 import kr.silverbridge.main.global.util.VerificationCodeValidator;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -13,9 +17,12 @@ import org.springframework.data.redis.core.ValueOperations;
 import java.util.concurrent.TimeUnit;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.matches;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -33,6 +40,9 @@ class SmsVerificationServiceTest {
 
     @Mock
     private SmsSender smsSender;
+
+    @Mock
+    private RedisCounter redisCounter;
 
     @InjectMocks
     private SmsVerificationService smsVerificationService;
@@ -59,6 +69,23 @@ class SmsVerificationServiceTest {
 
         // 기존 오류 카운터 초기화
         verify(redisTemplate).delete(VerificationKeyConfig.SIGNUP.attemptKey(PHONE));
+    }
+
+    @Test
+    @DisplayName("per-phone 발송 상한 초과 시 TOO_MANY_REQUESTS — SMS 미발송 (A-M3)")
+    void sendCodeBlockedWhenPhoneSendCapExceeded() {
+        // 윈도우당 상한(10) 초과 → 11번째 발송 시도
+        when(redisCounter.incrementWithTtl(eq(RedisKeys.SMS_SEND_COUNT + PHONE), anyLong()))
+                .thenReturn(11L);
+
+        assertThatThrownBy(() ->
+                smsVerificationService.sendCode(PHONE, VerificationKeyConfig.SIGNUP, TEMPLATE))
+                .isInstanceOf(CustomException.class)
+                .extracting("errorCode")
+                .isEqualTo(ErrorCode.TOO_MANY_REQUESTS);
+
+        // 상한 초과 시 실제 SMS는 발송되지 않는다
+        verify(smsSender, never()).send(anyString(), anyString());
     }
 
     @Test
