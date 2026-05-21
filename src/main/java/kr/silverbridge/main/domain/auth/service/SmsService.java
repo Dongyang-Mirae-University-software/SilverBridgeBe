@@ -2,6 +2,7 @@ package kr.silverbridge.main.domain.auth.service;
 
 import kr.silverbridge.main.domain.auth.dto.SmsSendRequest;
 import kr.silverbridge.main.domain.auth.dto.SmsVerifyRequest;
+import kr.silverbridge.main.domain.user.port.PhoneVerificationPort;
 import kr.silverbridge.main.domain.user.repository.UserRepository;
 import kr.silverbridge.main.global.exception.CustomException;
 import kr.silverbridge.main.global.exception.ErrorCode;
@@ -22,7 +23,7 @@ import java.util.concurrent.TimeUnit;
 @Slf4j
 @Service
 @RequiredArgsConstructor
-public class SmsService {
+public class SmsService implements PhoneVerificationPort {
 
     private final UserRepository userRepository;
     private final StringRedisTemplate redisTemplate;
@@ -71,6 +72,7 @@ public class SmsService {
      * - 인증 미완료/만료/nonce 누락 → SMS_NOT_VERIFIED
      * - 호출 성공 시 SMS_VERIFIED 키 즉시 삭제 — 동일 nonce 재사용 방지
      */
+    @Override
     public void consumeVerification(String phone, String providedNonce) {
         if (providedNonce == null || providedNonce.isBlank()) {
             throw new CustomException(ErrorCode.SMS_NOT_VERIFIED);

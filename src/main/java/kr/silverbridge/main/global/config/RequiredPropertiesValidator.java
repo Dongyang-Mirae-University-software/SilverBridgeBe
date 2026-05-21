@@ -30,6 +30,8 @@ public class RequiredPropertiesValidator {
     private final Map<String, String> requiredProperties;
 
     public RequiredPropertiesValidator(
+            @Value("${DB_USERNAME:}") String dbUsername,
+            @Value("${DB_PASSWORD:}") String dbPassword,
             @Value("${spring.mail.username:}") String mailUsername,
             @Value("${spring.mail.password:}") String mailPassword,
             @Value("${kakao.rest-api-key:}") String kakaoRestApiKey,
@@ -40,6 +42,9 @@ public class RequiredPropertiesValidator {
             @Value("${firebase.service-account-base64:}") String firebaseServiceAccountBase64
     ) {
         Map<String, String> map = new LinkedHashMap<>();
+        // DB 자격증명 — 약한 기본값 제거(A-L3)에 따라 미설정 시 시작 단계에서 명확히 차단
+        map.put("DB_USERNAME", dbUsername);
+        map.put("DB_PASSWORD", dbPassword);
         map.put("MAIL_USERNAME", mailUsername);
         map.put("MAIL_PASSWORD", mailPassword);
         map.put("KAKAO_REST_API_KEY", kakaoRestApiKey);

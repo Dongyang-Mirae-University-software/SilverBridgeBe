@@ -1,7 +1,7 @@
 package kr.silverbridge.main.domain.user.service;
 
-import kr.silverbridge.main.domain.auth.service.SmsService;
 import kr.silverbridge.main.domain.user.entity.User;
+import kr.silverbridge.main.domain.user.port.PhoneVerificationPort;
 import kr.silverbridge.main.domain.user.event.UserWithdrawnEvent;
 import kr.silverbridge.main.domain.user.repository.UserRepository;
 import kr.silverbridge.main.global.client.FileServerClient;
@@ -34,7 +34,7 @@ class UserServiceTest {
     @Mock private PasswordEncoder passwordEncoder;
     @Mock private FileServerClient fileServerClient;
     @Mock private ApplicationEventPublisher eventPublisher;
-    @Mock private SmsService smsService;
+    @Mock private PhoneVerificationPort phoneVerificationPort;
 
     @InjectMocks private UserService userService;
 
