@@ -1,0 +1,30 @@
+Phase,스킬,항목,파일,심각도,발견사항,권장조치,수정여부
+A,concurrency-review,A2 상태전이 lost update,domain/connection/service/ConnectionService.java;entity/Connection.java,Critical,"락 부재 check-then-act로 동시 accept/cancel 시 lost update 및 상태-알림 불일치","@Version 낙관적 락 + 409 매핑",수정완료(#153)
+A,concurrency-review,A3 동시 해제 중복 이벤트,domain/connection/service/ConnectionService.java,High,"동시 disconnect 시 DisconnectedEvent 중복 발행","@Version으로 두번째 커밋 차단",수정완료(#153)
+A,concurrency-review,A4 우선순위 변경 동시성,domain/connection/**,N/A,"priority 변경 경로가 2026-05-19 제거됨, 대상 없음","priority 필드까지 제거",수정완료(#152)
+A,concurrency-review,A5 역할변경 자동CANCELLED 미배선,domain/connection/repository/ConnectionRepository.java,Medium,"findActiveByUserId 호출 0건 dead query, 역할변경 트리거 미배선","dead query 제거(연동은 트리거 부재로 N/A)",수정완료(#155)
+A,spring-boot-patterns,B1 트랜잭션 경계,domain/connection/service/ConnectionService.java,OK,"변경=@Transactional 조회=readOnly 일관, 이벤트 발행 tx 내부",유지,양호
+A,spring-boot-patterns,B2 이벤트 발행 시점,domain/connection/listener/ConnectionNotificationListener.java,OK,"AFTER_COMMIT 리스너, 이벤트는 불변 record(엔티티 미참조)",유지,양호
+A,spring-boot-patterns,B3 리스너 동기 실행,domain/connection/listener/ConnectionNotificationListener.java;global/config/AsyncConfig.java,Medium,"@Async 부재로 FCM 왕복이 응답 지연에 포함","@EnableAsync+executor+리스너 @Async",수정완료(#156)
+A,concurrency-review,A1 동시 중복요청,global/exception/GlobalExceptionHandler.java,Low,"부분유니크+DataIntegrityViolation→409로 안전하나 충돌 메시지 범용",connection 전용 메시지 검토(선택),무해(현행유지)
+B,security-audit,C1 인가,domain/connection/controller/*.java;global/security/SecurityConfig.java,OK,"클래스레벨 @PreAuthorize, deny-by-default, 목록은 principal 사용",유지,양호
+B,security-audit,C2 IDOR,domain/connection/service/ConnectionService.java,OK,"단건 액션 전부 소유권 검증 후 403",유지,양호
+B,security-audit,C3 어뷰징,domain/connection/controller/GuardianConnectionController.java;global/security/RateLimitService.java,OK,"Rate Limit 1분 10회, 본인연결·중복 차단",유지,양호
+B,security-audit,C4 WebSocket 인가,global/websocket/StompSubscriptionAuthorizationInterceptor.java;JwtHandshakeInterceptor.java,OK,"SUBSCRIBE 시 /topic/{userId}==세션 검증, 도청 IDOR 차단",유지,양호
+B,security-audit,C5 PII 노출,domain/connection/dto/ConnectionResponse.java;PendingConnectionResponse.java,OK,"ACTIVE만 전화·주소, PENDING은 전화 마스킹+주소 미노출",유지,양호
+B,security-audit,B-C3a ID 열거 oracle,domain/connection/service/ConnectionService.java,Low,"실패 응답이 404/400/409 구분, 단 ID공간+rate limit로 실질 불가",현행 유지 가능,보류(low)
+B,security-audit,B-C4a WS 토큰 쿼리파라미터,global/websocket/JwtHandshakeInterceptor.java,Low,"?token= 가 액세스 로그 유출 가능",짧은 TTL·로그 스크러빙,보류(low)
+C,architecture-review,C-ARCH1 도메인간 결합,domain/connection/service/ConnectionService.java,Medium,"ConnectionService가 UserRepository 직접 의존",user 조회용 포트/서비스 분리 검토,보류(의도적)
+C,clean-code,C-DEAD1 dead code,domain/connection/service/ConnectionService.java;repository/ConnectionRepository.java,Medium,"isConnected/getConnection/findByGuardianIdAndStatus/countByStatus/findActiveByUserId 호출 0건",제거,수정완료(#155)
+C,solid-principles,C-SOLID1 SRP 경계,domain/connection/service/ConnectionService.java,Low,"명령+조회 12개 메서드, 규모상 허용",필요 시 Command/Query 분리,보류(의도적)
+D,api-contract-review,D-1 재처리 상태코드,global/exception/ErrorCode.java,Medium,"이미 처리된 요청 재처리시 400(관례상 409)",409 정렬,수정완료(#157)
+D,api-contract-review,D-6 상태 평탄화,global/enums/ConnectionStatus.java,Medium,"거절/취소/해제 모두 CANCELLED, 이력 구분 불가",REFUSED/DISCONNECTED 세분화+유니크인덱스 의미 조정,수정완료(#158)
+D,api-contract-review,D-2 REST 경로 비일관,domain/connection/controller/*.java,Low,"/{role}/disconnection/{id}가 /connection/ prefix 밖",/connection 하위로 이동,수정완료(#157)
+D,api-contract-review,accept ErrorCode 오인,domain/connection/service/ConnectionService.java,Low,"not-PENDING시 CONNECTION_NOT_ACTIVE 던짐",CONNECTION_NOT_PENDING로 교정,수정완료(#153)
+E,jpa-patterns,E-4 FCM 동기 발송,domain/connection/listener/ConnectionNotificationListener.java,Medium,"커밋 후 동기 FCM 왕복이 응답 지연에 포함",비동기화(B3과 동일),수정완료(#156)
+E,jpa-patterns,E-3 guardian 정렬 인덱스,src/main/resources/db/migration/V22,Low,"guardian createdAt 정렬 인메모리",(guardian_id,status,created_at) 인덱스 교체,수정완료(#155)
+E,jpa-patterns,N+1·연관관계,domain/connection/service/ConnectionService.java,OK,"연관관계 없음(String FK), 목록 findAllById 배치, ward 쿼리 인덱스 커버",유지,양호
+F,logging-patterns,F-1 도메인 로그 부재,domain/connection/service/ConnectionService.java,Medium,"요청/수락/거절/해제 lifecycle INFO 로그 0건",상태전이 INFO 로그(PII 제외) 추가,수정완료(#155)
+F,logging-patterns,F-2 MDC connectionId,domain/connection/service/ConnectionService.java,Low,"MDC가 userId만, connectionId 미포함",로그에 connectionId 포함,수정완료(#155)
+F,logging-patterns,FCM/WS 실패 로깅·PII,domain/notification/service/FcmService.java;global/websocket/WebSocketEventPublisher.java,OK,"실패 error/warn 로깅, raw PII 미로깅(ID만, token 절단)",유지,양호
+G,test-quality,G-1 테스트 부재,src/test/**,High,"connection 테스트 0건, 핵심 비즈니스 로직 무검증(CLAUDE.md 8.6 위반)",ConnectionServiceTest+리스너 테스트 추가,수정완료(#154)
