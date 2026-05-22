@@ -3,6 +3,17 @@ name: CD
 on:
   push:
     branches: [ dev ]
+    # 배포 산출물(jar)에 영향 없는 문서·산출물 변경은 배포 스킵.
+    # push에 포함된 변경이 전부 아래 패턴에 해당할 때만 워크플로우 미실행.
+    paths-ignore:
+      - '**.md'
+      - 'docs/**'
+      - '프로젝트_설명.txt'
+      - '.claude/**'
+      - '.gitignore'
+      - '.gitattributes'
+      - 'tools/**'
+      - '.hypothesis/**'
   workflow_dispatch:
 
 jobs:
