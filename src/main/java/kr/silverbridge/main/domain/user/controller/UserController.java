@@ -42,7 +42,7 @@ public class UserController {
 
                     [기존 사용자 주의]
                     프로필 필드가 추가되기 전 가입한 사용자는 gender/birthDate/postcode가 null일 수 있습니다.
-                    null이면 프로필 수정 화면에서 보완 입력을 유도하세요. (PUT /api/user/me/update 에서 필수)
+                    null이면 프로필 수정 화면에서 보완 입력을 유도하세요. (PUT /api/user/me 에서 필수)
 
                     [요청 헤더]
                     Authorization: Bearer {accessToken}
@@ -53,7 +53,7 @@ public class UserController {
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "인증 토큰 없음 또는 만료", content = @Content),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "사용자를 찾을 수 없음", content = @Content),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "500", description = "서버 내부 오류", content = @Content)
-    }) @GetMapping("/me/select")
+    }) @GetMapping("/me")
     public ApiResponse<UserProfileResponse> getMyProfile(@AuthenticationPrincipal String userId) {
         return ApiResponse.ok(userService.getMyProfile(userId));
     }
@@ -79,7 +79,7 @@ public class UserController {
                     새 번호 소유 검증을 위해 SMS 인증 후 호출해야 합니다.
                     1. POST /api/auth/signup/sms/send    → 새 전화번호로 인증코드 발송
                     2. POST /api/auth/signup/sms/verify  → 코드 확인 → verificationNonce 수령 (10분 유효)
-                    3. PUT  /api/user/me/update          → 새 phone + 위 verificationNonce 포함하여 호출
+                    3. PUT  /api/user/me                 → 새 phone + 위 verificationNonce 포함하여 호출
                     (번호를 바꾸지 않으면 현재 번호를 phone에 그대로 넣고 verificationNonce는 생략)
 
                     [요청 헤더] Authorization: Bearer {accessToken}
@@ -93,7 +93,7 @@ public class UserController {
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "409", description = "이미 사용 중인 전화번호", content = @Content),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "500", description = "서버 오류", content = @Content)
     })
-    @PutMapping("/me/update")
+    @PutMapping("/me")
     public ApiResponse<UserProfileResponse> updateProfile(@AuthenticationPrincipal String userId,
                                                           @Valid @RequestBody UserUpdateRequest request) {
         return ApiResponse.ok(userService.updateProfile(userId, request));
@@ -120,7 +120,7 @@ public class UserController {
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "사용자를 찾을 수 없음", content = @Content),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "500", description = "파일 업로드 실패 또는 서버 오류", content = @Content)
     })
-    @PatchMapping(value = "/me/update/image-change", consumes = "multipart/form-data")
+    @PatchMapping(value = "/me/image", consumes = "multipart/form-data")
     public ApiResponse<UserProfileResponse> updateProfileImage(@AuthenticationPrincipal String userId,
                                                                @RequestParam("file") MultipartFile file) {
         return ApiResponse.ok(userService.updateProfileImage(userId, file));
@@ -147,7 +147,7 @@ public class UserController {
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "사용자를 찾을 수 없음", content = @Content),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "500", description = "서버 내부 오류", content = @Content)
     })
-    @PutMapping("/me/update/password-change")
+    @PutMapping("/me/password")
     public ApiResponse<Void> changePassword(@AuthenticationPrincipal String userId,
                                             @Valid @RequestBody PasswordChangeRequest request) {
         userService.changePassword(userId, request.getCurrentPassword(), request.getNewPassword());
@@ -175,7 +175,7 @@ public class UserController {
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "사용자를 찾을 수 없음", content = @Content),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "500", description = "서버 내부 오류", content = @Content)
     })
-    @DeleteMapping("/me/delete")
+    @DeleteMapping("/me")
     public ApiResponse<Void> withdraw(@AuthenticationPrincipal String userId,
                                       @Valid @RequestBody WithdrawRequest request,
                                       HttpServletRequest httpRequest) {
