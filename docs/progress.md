@@ -458,5 +458,13 @@ architecture-review / spring-boot-patterns / jpa-patterns / concurrency-review /
 - **A-L3/G-2** ✅ DB 자격증명 약한 기본값(`dev`) 제거 + `RequiredPropertiesValidator`에 `DB_USERNAME`/`DB_PASSWORD` 편입(fail-fast) — `.env.dev` 명시 확인
 - **A-L2 CSP** ✅ Swagger 호환 CSP 추가
 - **B-1** ✅ `PhoneVerificationPort`(user) 추출 — user→auth 직접 의존 제거, auth→user 단방향 정렬
-- 잔여 이월: L-C1(RESTful 경로·프론트 조율), E-4(약관·미구현)
+- 잔여 이월: L-C1(RESTful 경로·프론트 조율), E-4(약관·미구현) → **아래 추가 PR에서 해소(2026-05-22)**
 - 검증: 대상 74건 통과 + `./gradlew build -x test` BUILD SUCCESSFUL
+
+### 잔여 이월 해소 (follow-up 2 / PR `refactor/user-restful-paths`, 2026-05-22)
+- **L-C1** ✅ `UserController` RESTful 경로 **하드 전환** — `GET /me/select`→`GET /me`, `PUT /me/update`→`PUT /me`, `PATCH /me/update/image-change`→`PATCH /me/image`, `PUT /me/update/password-change`→`PUT /me/password`, `DELETE /me/delete`→`DELETE /me`
+  - 동기화: `SwaggerConfig`(표시 순서) · `SmsController`/`SmsVerifyResponse`(nonce 안내) · `프로젝트_설명.txt`(API 목록·SMS 절차)
+  - `SecurityConfig`는 `/api/user/**` authenticated → 수정 불필요, 컨트롤러 MockMvc 테스트 없음(회귀 영향 없음)
+  - ⚠️ 데드 경로 없음(하드 전환) → 배포 시 옛 경로 즉시 404. **프론트 새 경로 동시 교체 후 머지·배포 필수**
+- **E-4** ⛔ 약관 동의 시점 기록 — **결정상 구현 안 함(Won't-do)**. 프로토타입 프론트에서도 약관 동의 UI 제거. 향후 약관 기능 도입 시 재검토
+- 검증: `./gradlew build -x test --no-daemon` BUILD SUCCESSFUL
