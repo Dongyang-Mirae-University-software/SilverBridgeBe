@@ -124,9 +124,13 @@ fail counter·SMS attempt 원자적(Lua) ✅ · 동시 가입 unique→409 ✅ �
 - **A-L2 CSP** ✅ `SecurityConfig`에 Swagger 호환 CSP 추가(`default-src 'self'` + script/style `unsafe-inline` + `frame-ancestors 'none'`/`object-src 'none'`/`base-uri 'self'`)
 - **B-1** ✅ `PhoneVerificationPort`(user 도메인) 추출 — `UserService`가 포트 의존, `SmsService`가 구현. user→auth 직접 의존 제거(의존 방향 auth→user 단방향 정렬)
 
-### 6.2 잔여 이월 (다음 사이클)
-- **L-C1**(2차 이월) `UserController` RESTful 경로(`/me/select`·`/me/update` 등) — 통합된 프론트를 깨뜨려 프론트 마이그레이션 협의 필요
-- **E-4** 약관 동의 시점 기록 — 약관 백엔드 미구현(결정상 구현 안 함). 구현 시 access_logs 또는 별도 테이블
+### 6.2 잔여 이월 해소 (2026-05-22 추가 PR `refactor/user-restful-paths`)
+- **L-C1** ✅ `UserController` RESTful 경로 **하드 전환** 완료 (프론트 동시 교체 전제, 데드 경로 없음)
+  - `GET /me/select`→`GET /me` · `PUT /me/update`→`PUT /me` · `PATCH /me/update/image-change`→`PATCH /me/image` · `PUT /me/update/password-change`→`PUT /me/password` · `DELETE /me/delete`→`DELETE /me`
+  - 동기화: `SwaggerConfig`(표시 순서 목록) · `SmsController`/`SmsVerifyResponse`(nonce 사용처 안내) · `프로젝트_설명.txt`(API 목록·SMS 절차)
+  - `SecurityConfig`는 `/api/user/**`를 `anyRequest().authenticated()`로 처리 → 경로 변경에도 보안설정 수정 불필요. 컨트롤러 MockMvc 테스트 없음(회귀 영향 없음)
+  - ⚠️ **배포 시 프론트 호환성 끊김**: 옛 경로 호출은 즉시 404. 프론트가 새 경로로 동시 교체된 뒤 머지·배포할 것
+- **E-4** ⛔ 약관 동의 시점 기록 — **결정상 구현 안 함(Won't-do)**. 프로토타입 프론트에서도 약관 동의 UI 제거됨. 향후 약관 기능 도입 시 재검토(access_logs 또는 별도 테이블)
 
 ---
 
