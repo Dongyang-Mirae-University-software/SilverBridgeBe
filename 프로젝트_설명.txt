@@ -271,23 +271,23 @@ SilverBridge는 노인(피보호자)과 그 가족(보호자)을 연결하는 �
     /api/ward/*, /api/notifications, /api/commonness 등. 복수형(/api/users)을
     쓰는 컨트롤러는 없음. (과거 메모의 /api/users/* 표기는 오기였음)
 
-  GET   /api/user/me/select                  → 내 프로필 조회
-  PUT   /api/user/me/update                  → 내 프로필 수정
+  GET   /api/user/me                         → 내 프로필 조회
+  PUT   /api/user/me                         → 내 프로필 수정
     → 이름, 전화번호, 성별, 생년월일, 우편번호, 주소, 상세주소 전체 필수 (부분 수정 불가)
     → 기존 사용자(성별/생년월일/우편번호 미입력 계정)는 이 API에서 해당 값 보완 입력 필수
     → 전화번호 변경 시 새 번호로 SMS 인증 완료(10분 이내) + 해당
       verificationNonce 첨부 필수 (전화번호 미변경 시 nonce 생략 가능, H-5)
 
   비밀번호 변경 (로그인 상태):
-    PUT /api/user/me/update/password-change   → 현재 비밀번호 + 새 비밀번호 입력
+    PUT /api/user/me/password   → 현재 비밀번호 + 새 비밀번호 입력
 
   프로필 이미지:
-    PATCH /api/user/me/update/image-change    → 이미지 교체 (multipart/form-data,
+    PATCH /api/user/me/image    → 이미지 교체 (multipart/form-data,
            5MB 이하, JPG/PNG/WebP/GIF). 교체 시 기존 파일 자동 삭제
     ※ 별도 이미지 삭제 엔드포인트는 없음 (교체만 지원)
 
   회원 탈퇴:
-    DELETE /api/user/me/delete   → 계정 비활성화(status=INACTIVE)
+    DELETE /api/user/me   → 계정 비활성화(status=INACTIVE)
     → 일반(LOCAL) 가입자: password 필수
     → 카카오(KAKAO) 가입자: confirmation 필드에 "탈퇴" 정확히 입력 필수
       (비밀번호가 없어 accessToken 단독 탈취만으로 영구 비활성화되던
@@ -657,7 +657,7 @@ SilverBridge는 노인(피보호자)과 그 가족(보호자)을 연결하는 �
   - 공지사항 쓰기 작업은 admin_audit_logs 자동 기록 (AdminAuditLogService)
 
   [ 전화번호 변경 시 SMS 인증 필수 ]
-  - PUT /api/user/me/update 에서 phone 변경 시 sms:verified 키 + nonce 확인
+  - PUT /api/user/me 에서 phone 변경 시 sms:verified 키 + nonce 확인
   - 미인증/nonce 불일치 시 SMS_NOT_VERIFIED 400 반환
 
   [ 요청 속도 제한 (Redis 기반, 1분 10회) ]

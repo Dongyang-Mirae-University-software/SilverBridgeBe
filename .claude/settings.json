@@ -12,16 +12,12 @@
       "Bash(git add *)",
       "Bash(gh pr *)",
       "Bash(gh issue *)",
-      "Bash(docker compose *)",
       "Bash(find *)",
       "Bash(grep *)",
       "Bash(rg *)",
       "Bash(ls *)",
-      "Bash(cat *)"
-    ],
-    "deny": [
-      "Bash(git push origin dev*)",
-      "Bash(git push --force*)",
+      "Bash(cat *)",
+      "Bash(git push *)",
       "Bash(git commit*)"
     ]
   }

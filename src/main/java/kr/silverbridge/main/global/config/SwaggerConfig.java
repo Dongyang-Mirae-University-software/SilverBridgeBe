@@ -90,11 +90,10 @@ public class SwaggerConfig {
                     "/api/auth/refresh",
                     "/api/auth/find-email",
                     // ── [사용자] ─────────────────────────────────────
-                    "/api/user/me/select",
-                    "/api/user/me/update",
-                    "/api/user/me/update/password-change",
-                    "/api/user/me/update/image-change",
-                    "/api/user/me/delete",
+                    // GET·PUT·DELETE /me 는 단일 경로 키 → /me 한 줄로 묶임
+                    "/api/user/me",
+                    "/api/user/me/password",
+                    "/api/user/me/image",
                     // ── [관리자 - 공지사항] ──────────────────────────
                     "/api/admin/announcement/select",
                     "/api/admin/announcement/select/detail/{id}",

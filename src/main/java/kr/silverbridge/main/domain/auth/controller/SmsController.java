@@ -79,7 +79,7 @@ public class SmsController {
 
                     [verificationNonce 사용처]
                     회원가입(POST /api/auth/signup, POST /api/auth/signup/kakao) 또는
-                    전화번호 변경(PUT /api/user/me/update) 요청의 verificationNonce 필드에 이 값을 그대로 전달하세요.
+                    전화번호 변경(PUT /api/user/me) 요청의 verificationNonce 필드에 이 값을 그대로 전달하세요.
 
                     [제한사항]
                     - 인증 완료 후 10분 이내에 후속 API를 호출해야 nonce가 유효합니다.
