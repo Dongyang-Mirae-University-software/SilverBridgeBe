@@ -69,8 +69,8 @@ SilverBridge는 노인(피보호자)과 그 가족(보호자)을 연결하는 �
 이 요청/응답 방식을 API라고 부릅니다.
 
   [개발 서버]
-  서버 주소  : api.dmu.gosky.kr (포트 6511)
-  메인 페이지: dmu.gosky.kr
+  서버 주소  : api.devdmu.gosky.kr (포트 6511)
+  메인 페이지: devdmu.gosky.kr
   데이터베이스: PostgreSQL 17 (포트 6513)
   캐시 서버  : Redis 7.2 (포트 6514)
 
@@ -93,7 +93,7 @@ SilverBridge는 노인(피보호자)과 그 가족(보호자)을 연결하는 �
                    함께 보내 본인임을 증명합니다.
                    accessToken (30분 유효) / refreshToken (7일 유효)
 
-  WebSocket (STOMP + SockJS) : 서버가 클라이언트에게 먼저 메시지를 보낼 수 있는
+  WebSocket (STOMP, 네이티브 wss) : 서버가 클라이언트에게 먼저 메시지를 보낼 수 있는
                    양방향 통신 방식. 연결 요청/수락/해제 등 실시간 알림에 사용.
 
   FCM            : Firebase Cloud Messaging. 앱이 꺼져 있어도 도달하는 푸시 알림.
@@ -105,7 +105,7 @@ SilverBridge는 노인(피보호자)과 그 가족(보호자)을 연결하는 �
                    어느 서버에서든 동일하게 동작하도록 포장해줍니다.
 
   Swagger / OpenAPI : API 명세서 자동 생성 도구.
-                   주소: api.dmu.gosky.kr/swagger-ui/index.html
+                   주소: api.devdmu.gosky.kr/swagger-ui/index.html
 
 
 --------------------------------------------------------------------------------
@@ -432,16 +432,19 @@ SilverBridge는 노인(피보호자)과 그 가족(보호자)을 연결하는 �
 --------------------------------------------------------------------------------
 
   연결 엔드포인트:
-    ws://api.dmu.gosky.kr:6511/ws  (SockJS + STOMP)
+    wss://api.devdmu.gosky.kr:6511/ws  (STOMP, 네이티브 WebSocket)
     인증: 쿼리 파라미터로 ?token={accessToken} 전달 (JWT 검증 필수)
 
-  프론트는 SockJS 클라이언트로 연결해야 합니다 (순수 ws:// 아님).
+  프론트는 @stomp/stompjs의 네이티브 WebSocket으로 연결합니다 (SockJS 불필요).
   예)
-    const socket = new SockJS('http://localhost:6511/ws?token=' + accessToken);
-    const stompClient = Stomp.over(socket);
-    stompClient.connect({}, () => {
-      stompClient.subscribe('/topic/' + myUserId + '/connection-request', msg => {...});
+    import { Client } from '@stomp/stompjs';
+    const stompClient = new Client({
+      brokerURL: 'wss://api.devdmu.gosky.kr:6511/ws?token=' + accessToken,
+      onConnect: () => {
+        stompClient.subscribe('/topic/' + myUserId + '/connection-request', msg => {...});
+      },
     });
+    stompClient.activate();
 
   ▶ 구독 가능 토픽 (본인의 userId만 허용 — 타인 토픽 구독 시 거부됨)
     /topic/{userId}/connection-request     피보호자가 받는 보호자의 연결 요청
@@ -694,7 +697,7 @@ SilverBridge는 노인(피보호자)과 그 가족(보호자)을 연결하는 �
 
   [ CORS 허용 도메인 ]
   - 환경변수 APP_CORS_ORIGINS (쉼표 구분)로 허용 origin 리스트 설정
-  - 기본값: https://dmu.gosky.kr, http://localhost:3000/5173/8080
+  - 기본값: https://devdmu.gosky.kr, http://localhost:3000/5173/8080
   - 목록에 없는 origin은 브라우저가 차단 (preflight OPTIONS 실패)
 
   [ 예외 처리 ]
@@ -839,7 +842,7 @@ SilverBridge는 노인(피보호자)과 그 가족(보호자)을 연결하는 �
 
   ▶ 상태 확인 방법
     로컬    : curl http://localhost:6511/actuator/health
-    프로덕션: curl https://api.dmu.gosky.kr/actuator/health
+    개발    : curl https://api.devdmu.gosky.kr/actuator/health
     Docker  : docker ps  (STATUS 열에 healthy/unhealthy 표시)
 
   ▶ 정책
@@ -968,7 +971,7 @@ SilverBridge는 노인(피보호자)과 그 가족(보호자)을 연결하는 �
 
   4) API 문서 확인
      로컬   : http://localhost:6511/swagger-ui/index.html
-     프로덕션: https://api.dmu.gosky.kr/swagger-ui/index.html
+     개발   : https://api.devdmu.gosky.kr/swagger-ui/index.html
 
 
 --------------------------------------------------------------------------------

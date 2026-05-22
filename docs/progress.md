@@ -90,7 +90,7 @@
 
 - **변경**: `WebSocketConfig.registerStompEndpoints` 의 `.withSockJS()` 호출 제거
 - **유지**: STOMP 메시지 브로커(`/topic`, `/app`), JWT 핸드셰이크 인터셉터, 구독 권한 인터셉터, `setAllowedOriginPatterns("*")` 모두 그대로
-- **프론트 영향**: 연결 URL을 `https://api.dmu.gosky.kr/ws` (SockJS) → `wss://api.dmu.gosky.kr/ws` (native WS)로 변경. `@stomp/stompjs`만 쓰고 `sockjs-client` 의존성 제거 가능
+- **프론트 영향**: 연결 URL을 `https://api.devdmu.gosky.kr/ws` (SockJS) → `wss://api.devdmu.gosky.kr/ws` (native WS)로 변경. `@stomp/stompjs`만 쓰고 `sockjs-client` 의존성 제거 가능
 - **별개 인프라 작업**: nginx의 WebSocket Upgrade proxy 설정(`proxy_set_header Upgrade $http_upgrade; proxy_set_header Connection "upgrade"; proxy_http_version 1.1; proxy_read_timeout 3600s`) 미적용 시 504 Gateway Timeout 지속 — 백엔드 코드 변경과 독립 이슈
 
 ### 프론트 영향 (응답 구조 변경)
@@ -115,7 +115,7 @@
 - 스킬 기반 점검(spring-boot-patterns, api-contract-review, jpa-patterns, security-audit 등)은 다음 세션에서 별도 진행
 - 프론트에서 `relation` 누락 시 400 에러 메시지 처리 필요 (`"피보호자와의 관계를 선택해주세요."`)
 - nginx WebSocket proxy 설정 확인 (504 Gateway Timeout 원인)
-- 프론트는 `sockjs-client` 의존성 제거 및 `brokerURL: 'wss://api.dmu.gosky.kr/ws'`로 직접 STOMP 연결
+- 프론트는 `sockjs-client` 의존성 제거 및 `brokerURL: 'wss://api.devdmu.gosky.kr/ws'`로 직접 STOMP 연결
 
 ---
 
