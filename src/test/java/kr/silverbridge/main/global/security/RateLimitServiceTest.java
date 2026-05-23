@@ -63,4 +63,52 @@ class RateLimitServiceTest {
 
         verify(redisCounter).incrementWithTtl(eq("rate:signup-sms:user123"), eq(60L));
     }
+
+    // ─── 이중 윈도우(1분/1시간) 오버로드 — 비밀번호 재설정 (2026-05-23) ──────────────
+
+    @Test
+    @DisplayName("분·시간 한도 이내(경계 10/30)면 통과한다")
+    void dualWindow_withinBothLimits_passes() {
+        when(redisCounter.incrementWithTtl("rate:pw-reset-email:1m:1.2.3.4", 60L)).thenReturn(10L);
+        when(redisCounter.incrementWithTtl("rate:pw-reset-email:1h:1.2.3.4", 3600L)).thenReturn(30L);
+
+        assertThatCode(() -> rateLimitService.check("pw-reset-email", "1.2.3.4", 10, 30))
+                .doesNotThrowAnyException();
+    }
+
+    @Test
+    @DisplayName("분 한도 초과 시 TOO_MANY_REQUESTS")
+    void dualWindow_minuteExceeded_throws() {
+        when(redisCounter.incrementWithTtl("rate:pw-reset-email:1m:1.2.3.4", 60L)).thenReturn(11L);
+        when(redisCounter.incrementWithTtl("rate:pw-reset-email:1h:1.2.3.4", 3600L)).thenReturn(5L);
+
+        assertThatThrownBy(() -> rateLimitService.check("pw-reset-email", "1.2.3.4", 10, 30))
+                .isInstanceOf(CustomException.class)
+                .extracting("errorCode")
+                .isEqualTo(ErrorCode.TOO_MANY_REQUESTS);
+    }
+
+    @Test
+    @DisplayName("시간 한도 초과 시 TOO_MANY_REQUESTS (분은 여유 있어도 차단 — 분산 저빈도 스윕 방어)")
+    void dualWindow_hourExceeded_throws() {
+        when(redisCounter.incrementWithTtl("rate:pw-reset-email:1m:1.2.3.4", 60L)).thenReturn(3L);
+        when(redisCounter.incrementWithTtl("rate:pw-reset-email:1h:1.2.3.4", 3600L)).thenReturn(31L);
+
+        assertThatThrownBy(() -> rateLimitService.check("pw-reset-email", "1.2.3.4", 10, 30))
+                .isInstanceOf(CustomException.class)
+                .extracting("errorCode")
+                .isEqualTo(ErrorCode.TOO_MANY_REQUESTS);
+    }
+
+    @Test
+    @DisplayName("이중 윈도우는 1m/1h 접미 키와 각각 60초·3600초 TTL로 두 카운터를 모두 증가시킨다")
+    void dualWindow_keyFormatAndTtls() {
+        when(redisCounter.incrementWithTtl("rate:pw-reset-sms:1m:9.9.9.9", 60L)).thenReturn(1L);
+        when(redisCounter.incrementWithTtl("rate:pw-reset-sms:1h:9.9.9.9", 3600L)).thenReturn(1L);
+
+        rateLimitService.check("pw-reset-sms", "9.9.9.9", 10, 30);
+
+        verify(redisCounter).incrementWithTtl(eq("rate:pw-reset-sms:1m:9.9.9.9"), eq(60L));
+        verify(redisCounter).incrementWithTtl(eq("rate:pw-reset-sms:1h:9.9.9.9"), eq(3600L));
+    }
 }

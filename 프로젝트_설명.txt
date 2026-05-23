@@ -230,6 +230,9 @@ SilverBridge는 노인(피보호자)과 그 가족(보호자)을 연결하는 �
 
   [ 3-4. 비밀번호 재설정 (3단계) ]
   ─────────────────────────────
+  ※ 2026-05-23 갱신: 시니어/4050 타겟 UX 우선 — 미가입/카카오 계정에 always-200 대신
+    명시적 응답(404/400)을 준다. 노출되는 enumeration은 IP 이중 윈도우 RateLimit +
+    per-email 발송 상한 + 미가입 WARN 로깅으로 방어.
   이메일 또는 SMS 중 선택. 흐름은 6자리 인증코드 하나로 통일됩니다 (UUID 토큰 없음).
 
   ▶ 이메일 방식
@@ -258,8 +261,12 @@ SilverBridge는 노인(피보호자)과 그 가족(보호자)을 연결하는 �
       (Redis password:invalidate:{userId} 에 변경 시각 기록 → JWT 필터가
        그 시각 이전 발급 토큰을 401 차단. Critical-1)
     - 이로써 "비밀번호를 바꿔도 옛 accessToken이 최대 30분 살아 있던" 결함 해소
-  ※ 카카오로 가입한 계정은 비밀번호 재설정 불가입니다.
-  ※ 보안: 가입 여부 노출 방지를 위해 계정이 없어도 200 반환.
+  ※ 정책(2026-05-23 갱신): send/resend는 미가입 시 404("해당 이메일로 가입된 계정이 없습니다"
+    /SMS는 "사용자를 찾을 수 없습니다"), 카카오 가입 계정은 400으로 명확히 안내한다.
+    (기존 "가입 여부 노출 방지를 위해 계정이 없어도 200 반환"은 폐지 — 시니어 이탈 UX 개선)
+    어뷰징 방어: 미가입 시 SMS/메일 발송 전 차단(비용 보호), 미가입 404는 [PW-RESET] WARN 로깅.
+  ※ Rate Limit(2026-05-23 갱신): send/resend 4개는 IP 이중 윈도우 1분 10회 / 1시간 30회.
+    per-email 발송 상한 password:email:sendcount 1시간 10회(SMS sms:sendcount A-M3와 대칭).
   ※ POST /api/auth/password/reset 도 1분 10회 rate limit 적용 (M-8).
   ※ 비밀번호 재설정 완료 시 access_logs에 IP/UA 포함 기록 (M-3).
 
@@ -597,6 +604,8 @@ SilverBridge는 노인(피보호자)과 그 가족(보호자)을 연결하는 �
   ▶ 비밀번호 재설정 (6자리 코드 — UUID 토큰/쿨다운 폐지)
     password:email:verify:{email}  이메일 재설정 인증코드 (5분)
     password:email:attempt:{email} 이메일 오류 횟수 (5분)
+    password:email:sendcount:{email} per-email 발송 건수 — 1시간 10회 상한 (2026-05-23,
+                                   SMS sms:sendcount A-M3와 대칭. 가입 확인된 이메일만 카운트)
     password:sms:verify:{phone}    SMS 재설정 인증코드 (5분)
     password:sms:attempt:{phone}   SMS 오류 횟수 (5분)
     password:invalidate:{userId}   비밀번호 변경 시각 — 이전 발급 accessToken
@@ -617,6 +626,9 @@ SilverBridge는 노인(피보호자)과 그 가족(보호자)을 연결하는 �
                                  INCR+EXPIRE를 Lua로 원자 처리 (RedisCounter, M-4)
                                  적용 endpoint 확대: token-refresh, kakao-login,
                                  pw-reset-confirm (M-8), signin (A-H2)
+    rate:{endpoint}:1m:{ip}      비밀번호 재설정 send/resend 이중 윈도우 — 분 카운터 (2026-05-23)
+    rate:{endpoint}:1h:{ip}      동 시간 카운터. pw-reset-email/pw-reset-sms = 1분 10회/1시간 30회
+                                 (미가입 응답 노출에 따른 자동화 enumeration 방어, 한쪽 초과 시 429)
 
   ▶ 기타
     character:expression:{wardId} 최근 표정 캐시 (조회 API용)
@@ -663,13 +675,24 @@ SilverBridge는 노인(피보호자)과 그 가족(보호자)을 연결하는 �
   - PUT /api/user/me 에서 phone 변경 시 sms:verified 키 + nonce 확인
   - 미인증/nonce 불일치 시 SMS_NOT_VERIFIED 400 반환
 
-  [ 요청 속도 제한 (Redis 기반, 1분 10회) ]
+  [ 요청 속도 제한 (Redis 기반, 기본 1분 10회) ]
   - IP 기반: signin, email-check, find-email, signup-sms, pw-reset-email, pw-reset-sms,
     token-refresh, kakao-login, pw-reset-confirm
     (signin은 A-H2에서 추가, token-refresh·kakao-login·pw-reset-confirm은 M-8에서 추가)
+  - pw-reset-email/pw-reset-sms(send·resend)는 이중 윈도우 1분 10회 / 1시간 30회 (2026-05-23)
+    — 미가입 응답 노출에 따른 자동화 enumeration·어뷰징 방어, 한쪽 초과 시 429
   - userId 기반: sos-trigger, connection-request, fcm-register
   - per-phone: SMS 발송(sms:sendcount) 1시간 10회 상한 (A-M3)
+  - per-email: 비번재설정 메일 발송(password:email:sendcount) 1시간 10회 상한 (2026-05-23)
   - INCR+EXPIRE는 Lua 스크립트로 원자 처리 (RedisCounter, M-4/L-2)
+
+  [ 비밀번호 재설정 — 가입 여부 명시 응답 (2026-05-23) ]
+  - 정책 변경: send/resend는 미가입 시 404, 카카오 가입 계정은 400으로 명확히 안내
+    (기존 always-200 enumeration 차단 폐지 — 시니어/4050 타겟 이탈 UX 개선)
+  - enumeration·비용 방어: IP 이중 윈도우 + per-email/per-phone 상한 + 미가입 [PW-RESET] WARN
+    로깅 + 미가입자 SMS/메일 발송 전 차단. confirm(reset) 단계는 코드 선검증 유지(A-M1)
+  - 거부안: 응답 시간 정규화(존재 여부를 의도적으로 노출하므로 모순), 의심 IP 블랙리스트
+    (공용 NAT 시니어 다수 오차단 위험)
 
   [ WebSocket 구독 권한 ]
   - StompSubscriptionAuthorizationInterceptor가 SUBSCRIBE 시
