@@ -6,7 +6,7 @@
 
 ## [2026-05-23] — auth: 비밀번호 재설정 정책 변경 (가입 여부 명시 응답 + Rate Limit 강화)
 
-시니어/4050 타겟 UX 우선. 비밀번호 재설정 send/resend가 미가입에도 always-200을 반환하던 정책을, 가입 여부를 명시(404/400)하도록 변경. 노출되는 enumeration은 IP 이중 윈도우 RateLimit + per-email 상한 + WARN 로깅으로 방어. (상세: `docs/2026-05-23-policy-change-password-reset.md`, `docs/2026-05-23-audit-report-auth-password-reset.md`)
+시니어/4050 타겟 UX 우선. 비밀번호 재설정 send/resend가 미가입에도 always-200을 반환하던 정책을, 가입 여부를 명시(404/400)하도록 변경. 노출되는 enumeration은 IP 이중 윈도우 RateLimit + per-email 상한 + WARN 로깅으로 방어. (상세: `docs/(2026-05-23) policy-change-password-reset.md`, `docs/(2026-05-23) audit-report-auth-password-reset.md`)
 
 ### 변경된 엔드포인트 (Breaking)
 
@@ -442,7 +442,7 @@ architecture-review / spring-boot-patterns / jpa-patterns / concurrency-review /
 - 이미 처리된 요청 재처리 응답 400 → 409
 
 ### 산출물
-- `docs/2026-05-21-audit-report-connection.md` — 종합 보고서 (신규, 수정완료 반영)
+- `docs/(2026-05-21) audit-report-connection.md` — 종합 보고서 (신규, 수정완료 반영)
 
 ---
 
