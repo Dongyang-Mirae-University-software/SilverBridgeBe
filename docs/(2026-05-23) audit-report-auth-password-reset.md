@@ -118,7 +118,7 @@
 - `프로젝트_설명.txt` §3-4(가입 여부 노출→명시 안내), §6(Redis 키 `password:email:sendcount`, rate 이중 윈도우), §7(보안 정책 요약) 갱신 — 모두 "※ 2026-05-23 갱신" 표기.
 - `CLAUDE.md` — 신규 "비밀번호 재설정 정책" 메모 + 푸터 날짜 갱신.
 - `docs/progress.md` — `[2026-05-23]` 항목 추가(변경 엔드포인트·프론트 전달사항).
-- 신규 산출물: 본 보고서 + `2026-05-23-policy-change-password-reset.md`.
+- 신규 산출물: 본 보고서 + `(2026-05-23) policy-change-password-reset.md`.
 
 ---
 

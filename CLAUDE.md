@@ -292,7 +292,7 @@ gh pr create --base dev
   - 미가입 시 `[PW-RESET]` **WARN 로깅**(마스킹 식별자+IP), 미가입자 SMS/메일 **발송 전 차단**.
   - `/password/reset`(3단계)는 코드 선검증(A-M1) 유지 — **변경 없음**.
 - **거부안**: 응답 시간 정규화(존재 여부를 의도적으로 노출 → 모순), 의심 IP 블랙리스트(공용 NAT 시니어 오차단), CAPTCHA(시니어 부담).
-- 상세: `docs/2026-05-23-policy-change-password-reset.md`, `docs/2026-05-23-audit-report-auth-password-reset.md`.
+- 상세: `docs/(2026-05-23) policy-change-password-reset.md`, `docs/(2026-05-23) audit-report-auth-password-reset.md`.
 
 ---
 
