@@ -4,6 +4,12 @@
 
 ---
 
+## [2026-05-23] — auth: 비밀번호 재설정 정책 변경 스팟 점검 완료
+
+정책 변경(`3a0fbea`/PR #166, always-200 → 404/400/429)의 변경 부분만 스팟 점검(보안·동시성·계약·테스트·문서). 코드 레벨 실결함 0건 — **조건부 PASS**. RedisCounter Lua 원자성·SMS 비용 보호(미가입 SMS 미발송)·PII 마스킹·문서 일관성 양호. 후속: ① 🟠 nginx `X-Forwarded-For` 처리 확인(always-200 폐지로 IP RateLimit이 enumeration 1차 방어가 됨 — 헤더 스푸핑 시 우회 가능), ② 🟡 validation 400(`@Email`/`@Pattern`) 컨트롤러 테스트 보강. (산출물: `docs/(2026-05-23) audit-spot-check-password-reset.md`)
+
+---
+
 ## [2026-05-23] — auth: 비밀번호 재설정 정책 변경 (가입 여부 명시 응답 + Rate Limit 강화)
 
 시니어/4050 타겟 UX 우선. 비밀번호 재설정 send/resend가 미가입에도 always-200을 반환하던 정책을, 가입 여부를 명시(404/400)하도록 변경. 노출되는 enumeration은 IP 이중 윈도우 RateLimit + per-email 상한 + WARN 로깅으로 방어. (상세: `docs/(2026-05-23) policy-change-password-reset.md`, `docs/(2026-05-23) audit-report-auth-password-reset.md`)
