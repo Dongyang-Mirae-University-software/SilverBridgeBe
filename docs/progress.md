@@ -203,14 +203,14 @@ enum 제거 (2) — GameType, AnomalyEventType
 프론트 확인 결과 카카오 로그인 미구현 상태. 모델 A(프론트 검증)로 결정.
 - 프론트가 카카오 로그인 신규 구현 시 state 생성·sessionStorage 보관·콜백 자체 대조 포함
 - 백엔드에는 기존대로 `code`만 전달 — 백엔드 코드·API 계약 변경 없음
-- 프론트에 신규 구현 명세 전달 완료, 프론트 배포 확인 시 audit-report-auth.md M-1을 "해소 완료"로 갱신 예정
-- 상세는 audit-report-auth.md "M-1 협의 사항 > 결정(2026-05-18)" 참조
+- 프론트에 신규 구현 명세 전달 완료, 프론트 배포 확인 시 audit-report-auth.md M-1을 "해소 완료"로 갱신 예정 *(audit-report-auth.md는 2026-05-23 삭제됨)*
+- 상세는 audit-report-auth.md "M-1 협의 사항 > 결정(2026-05-18)" 참조 *(audit-report-auth.md는 2026-05-23 삭제됨)*
 
 ---
 
 ## 2026-05-16 — auth / user 점검 결함 조치 완료
 
-audit-report-auth.md 발견 28건에 대한 조치를 결함 단위 PR로 분리·머지 완료. 상세 상태는 audit-report-auth.md "적용 현황" 절 참조.
+audit-report-auth.md 발견 28건에 대한 조치를 결함 단위 PR로 분리·머지 완료. 상세 상태는 audit-report-auth.md "적용 현황" 절 참조. *(audit-report-auth.md는 2026-05-23 삭제됨)*
 
 ### Phase A (Critical 1 + High 7) — PR #124~#132
 
@@ -226,7 +226,7 @@ audit-report-auth.md 발견 28건에 대한 조치를 결함 단위 PR로 분리
 - #136 코드 품질·네이밍 (M-9 VerificationKeyConfig 리네임, M-12 AuthLoginProperties 외부화, M-13, L-1/L-4/L-5/L-7)
 - #137 비밀번호 재설정 트랜잭션·로깅 (M-3 IP/UA 기록, M-5 readOnly 트랜잭션 분리)
 
-### 제외/보류 (근거는 audit-report-auth.md 기록)
+### 제외/보류 (근거는 audit-report-auth.md 기록 — 2026-05-23 삭제됨)
 
 - 제외: L-6(ID 재시도가 단일 호출보다 안전), M-10(2곳 중복 추출은 발송 추상화로 더 복잡)
 - 보류: M-1(프론트 state 검증 선확인 필요 — 협의 사항 문서화), KAKAO/SOLAPI 키 회전(운영 결정)
@@ -251,7 +251,7 @@ audit-report-auth.md 발견 28건에 대한 조치를 결함 단위 PR로 분리
 - 🟡 Medium 13건 / 🟢 Low 7건
 
 ### 산출물
-- `docs/audit-report-auth.md` — 전체 분석·수정 제안·프론트 마이그레이션·커밋 메시지 초안 일괄 정리
+- `docs/audit-report-auth.md` — 전체 분석·수정 제안·프론트 마이그레이션·커밋 메시지 초안 일괄 정리 *(2026-05-23 삭제됨)*
 - 본 progress.md 업데이트
 
 ### 다음 단계 (미적용 — 사용자 승인 후 PR 분리 진행)
@@ -386,8 +386,8 @@ architecture-review / spring-boot-patterns / jpa-patterns / security-audit (+ co
 - **M-B1**: `UserService → SmsService` 역방향 의존 — 별도 협의
 
 ### 산출물
-- `docs/audit-report-auth-2026-05-20.md` — 본 점검 종합 보고서 (신규)
-- `docs/audit-report-auth.md` — 2026-05-15 1차 점검 보고서 (그대로 보존)
+- `docs/audit-report-auth-2026-05-20.md` — 본 점검 종합 보고서 (신규) *(2026-05-23 삭제됨)*
+- `docs/audit-report-auth.md` — 2026-05-15 1차 점검 보고서 (그대로 보존) *(2026-05-23 삭제됨)*
 
 ---
 
@@ -481,7 +481,7 @@ architecture-review / spring-boot-patterns / jpa-patterns / concurrency-review /
 - 응답 필드 삭제·이름변경 없음. A-H1 배포 시 기존 access token 1회 401→refresh 자동복구. C-1/C-2는 카카오 프론트 미구현이라 영향 없음.
 
 ### 산출물
-- `docs/audit-report-auth-2026-05-22.md` — 3차 종합 보고서 (신규)
+- `docs/audit-report-auth-2026-05-22.md` — 3차 종합 보고서 (신규) *(2026-05-23 삭제됨)*
 - `fix/auth-audit-2026-05-22` → PR #159로 dev 머지 완료 (커밋 9개)
 
 ### 후속 처리 (follow-up, PR 별도) — 이월 항목 4건 추가 해소
