@@ -30,6 +30,12 @@ public class FindPasswordController {
     private final PasswordResetService passwordResetService;
     private final RateLimitService rateLimitService;
 
+    // 비밀번호 재설정 발송/재발송 IP 속도 제한 (2026-05-23) — 미가입 응답이 노출되므로 분+시간 이중 윈도우로
+    // 자동화 enumeration·어뷰징 방어. 1분 한도는 시니어의 반복 재발송을 고려해 여유(10회), 시간 한도(30회)가
+    // 분산 저빈도 스윕을 차단. send·resend는 같은 endpoint 키를 공유한다(기능 동일).
+    private static final int PW_RESET_MAX_PER_MINUTE = 10;
+    private static final int PW_RESET_MAX_PER_HOUR   = 30;
+
     /** 인증코드 발송/재발송 응답 (프론트 카운트다운용). 코드 = 숫자 6자리. */
     private CodeSentResponse codeSent() {
         return new CodeSentResponse((int) SmsVerificationService.CODE_TTL_SECONDS, 6);
@@ -51,24 +57,27 @@ public class FindPasswordController {
                     2. POST /api/auth/find-password/email/verify → 6자리 코드 사전 확인 (코드 소비 안 함)
                     3. POST /api/auth/password/reset             → 같은 email + 같은 6자리 code + 새 비밀번호
 
-                    [보안·동작]
-                    - 이메일이 존재하지 않거나 카카오 가입 계정이어도 동일하게 200을 반환합니다.
-                      (가입 여부 노출 방지 — 프론트는 항상 "발송됨"으로 처리)
+                    [보안·동작] (2026-05-23 정책 변경 — 시니어/4050 타겟 UX 우선, always-200 폐지)
+                    - 미가입 이메일: 404 "해당 이메일로 가입된 계정이 없습니다"
+                    - 카카오로 가입한 계정: 400 "카카오로 가입한 계정은 비밀번호 재설정을 사용할 수 없습니다"
+                    - enumeration·어뷰징 방어: IP 이중 윈도우 RateLimit(1분 10회/1시간 30회) + per-email 발송 상한(1시간 10회)
                     - 재발송 쿨다운 없음: 잘못 눌러도 즉시 다시 호출 가능 (기존 코드는 새 코드로 교체)
                     - 코드를 5회 잘못 입력하면 코드가 무효화됩니다. → 재발송 필요
                     """
     )
     @ApiResponses({
-            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "요청 처리 완료 (미존재/카카오 계정이어도 동일하게 200). data.expiresInSeconds로 카운트다운"),
-            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "이메일 형식 오류", content = @Content),
-            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "429", description = "동일 IP의 과도한 요청 (IP RateLimit)", content = @Content),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "인증코드 발송 완료. data.expiresInSeconds로 카운트다운"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "이메일 형식 오류 또는 카카오로 가입한 계정", content = @Content),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "해당 이메일로 가입된 계정 없음 (2026-05-23 정책 변경)", content = @Content),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "429", description = "동일 IP 과도한 요청(1분 10회/1시간 30회) 또는 per-email 발송 상한 초과", content = @Content),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "500", description = "이메일 발송 실패", content = @Content)
     })
     @PostMapping("/email/send")
     public ApiResponse<CodeSentResponse> sendEmail(@Valid @RequestBody PasswordResetRequest request,
                                                    HttpServletRequest httpRequest) {
-        rateLimitService.check("pw-reset-email", httpRequest.getRemoteAddr());
-        passwordResetService.requestReset(request);
+        String ip = httpRequest.getRemoteAddr();
+        rateLimitService.check("pw-reset-email", ip, PW_RESET_MAX_PER_MINUTE, PW_RESET_MAX_PER_HOUR);
+        passwordResetService.requestReset(request, ip);
         return ApiResponse.ok(codeSent());
     }
 
@@ -108,16 +117,18 @@ public class FindPasswordController {
                     """
     )
     @ApiResponses({
-            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "요청 처리 완료. data.expiresInSeconds로 카운트다운 재시작"),
-            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "이메일 형식 오류", content = @Content),
-            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "429", description = "동일 IP의 과도한 요청 (IP RateLimit)", content = @Content),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "인증코드 재발송 완료. data.expiresInSeconds로 카운트다운 재시작"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "이메일 형식 오류 또는 카카오로 가입한 계정", content = @Content),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "해당 이메일로 가입된 계정 없음 (2026-05-23 정책 변경)", content = @Content),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "429", description = "동일 IP 과도한 요청(1분 10회/1시간 30회) 또는 per-email 발송 상한 초과", content = @Content),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "500", description = "이메일 발송 실패", content = @Content)
     })
     @PostMapping("/email/resend")
     public ApiResponse<CodeSentResponse> resendEmail(@Valid @RequestBody PasswordResetRequest request,
                                                      HttpServletRequest httpRequest) {
-        rateLimitService.check("pw-reset-email", httpRequest.getRemoteAddr());
-        passwordResetService.requestReset(request);
+        String ip = httpRequest.getRemoteAddr();
+        rateLimitService.check("pw-reset-email", ip, PW_RESET_MAX_PER_MINUTE, PW_RESET_MAX_PER_HOUR);
+        passwordResetService.requestReset(request, ip);
         return ApiResponse.ok(codeSent());
     }
 
@@ -137,23 +148,28 @@ public class FindPasswordController {
                     2. POST /api/auth/find-password/sms/verify → 6자리 코드 사전 확인 (코드 소비 안 함)
                     3. POST /api/auth/password/reset           → 같은 phone + 같은 6자리 code + 새 비밀번호
 
-                    [보안·동작]
-                    - 일치하는 계정이 없거나 카카오 가입 계정이어도 동일하게 200을 반환합니다. (가입 여부 노출 방지)
+                    [보안·동작] (2026-05-23 정책 변경 — 시니어/4050 타겟 UX 우선, always-200 폐지)
+                    - 이름+전화번호 미일치: 404 "사용자를 찾을 수 없습니다"
+                    - 카카오로 가입한 계정만 매칭: 400 "카카오로 가입한 계정은 비밀번호 재설정을 사용할 수 없습니다"
+                    - SMS 비용 보호: 미가입자에게는 SMS를 발송하지 않습니다(404 선차단). 특정 번호 SMS 폭탄은 per-phone 발송 상한(1시간 10회)이 차단
+                    - enumeration·어뷰징 방어: IP 이중 윈도우 RateLimit(1분 10회/1시간 30회)
                     - 재발송 쿨다운 없음: 잘못 눌러도 즉시 다시 호출 가능
                     - 코드 5회 오류 시 코드 무효화 → 재발송 필요
                     """
     )
     @ApiResponses({
-            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "요청 처리 완료 (미일치/카카오 계정이어도 동일하게 200). data.expiresInSeconds로 카운트다운"),
-            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "입력값 오류 (이름 누락, 전화번호 형식 오류 등)", content = @Content),
-            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "429", description = "동일 IP의 과도한 요청 (IP RateLimit)", content = @Content),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "인증코드 발송 완료. data.expiresInSeconds로 카운트다운"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "입력값 오류(이름 누락, 전화번호 형식 오류) 또는 카카오로 가입한 계정", content = @Content),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "사용자를 찾을 수 없습니다 (이름+전화번호 미일치, 2026-05-23 정책 변경)", content = @Content),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "429", description = "동일 IP 과도한 요청(1분 10회/1시간 30회) 또는 per-phone 발송 상한 초과", content = @Content),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "500", description = "SMS 발송 실패", content = @Content)
     })
     @PostMapping("/sms/send")
     public ApiResponse<CodeSentResponse> sendSms(@Valid @RequestBody PasswordResetSmsSendRequest request,
                                                  HttpServletRequest httpRequest) {
-        rateLimitService.check("pw-reset-sms", httpRequest.getRemoteAddr());
-        passwordResetService.requestResetBySms(request);
+        String ip = httpRequest.getRemoteAddr();
+        rateLimitService.check("pw-reset-sms", ip, PW_RESET_MAX_PER_MINUTE, PW_RESET_MAX_PER_HOUR);
+        passwordResetService.requestResetBySms(request, ip);
         return ApiResponse.ok(codeSent());
     }
 
@@ -193,16 +209,18 @@ public class FindPasswordController {
                     """
     )
     @ApiResponses({
-            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "요청 처리 완료. data.expiresInSeconds로 카운트다운 재시작"),
-            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "입력값 오류", content = @Content),
-            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "429", description = "동일 IP의 과도한 요청 (IP RateLimit)", content = @Content),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "인증코드 재발송 완료. data.expiresInSeconds로 카운트다운 재시작"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "입력값 오류 또는 카카오로 가입한 계정", content = @Content),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "사용자를 찾을 수 없습니다 (이름+전화번호 미일치, 2026-05-23 정책 변경)", content = @Content),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "429", description = "동일 IP 과도한 요청(1분 10회/1시간 30회) 또는 per-phone 발송 상한 초과", content = @Content),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "500", description = "SMS 발송 실패", content = @Content)
     })
     @PostMapping("/sms/resend")
     public ApiResponse<CodeSentResponse> resendSms(@Valid @RequestBody PasswordResetSmsSendRequest request,
                                                    HttpServletRequest httpRequest) {
-        rateLimitService.check("pw-reset-sms", httpRequest.getRemoteAddr());
-        passwordResetService.requestResetBySms(request);
+        String ip = httpRequest.getRemoteAddr();
+        rateLimitService.check("pw-reset-sms", ip, PW_RESET_MAX_PER_MINUTE, PW_RESET_MAX_PER_HOUR);
+        passwordResetService.requestResetBySms(request, ip);
         return ApiResponse.ok(codeSent());
     }
 }

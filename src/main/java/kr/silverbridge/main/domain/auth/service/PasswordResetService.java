@@ -12,6 +12,8 @@ import kr.silverbridge.main.global.enums.AccessAction;
 import kr.silverbridge.main.global.exception.CustomException;
 import kr.silverbridge.main.global.exception.ErrorCode;
 import kr.silverbridge.main.global.util.MaskingUtil;
+import kr.silverbridge.main.global.util.RedisCounter;
+import kr.silverbridge.main.global.util.RedisKeys;
 import kr.silverbridge.main.global.util.VerificationCodeValidator;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -26,6 +28,7 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 
 import java.security.SecureRandom;
+import java.util.List;
 import java.util.concurrent.TimeUnit;
 
 /**
@@ -49,37 +52,63 @@ public class PasswordResetService {
     private final SmsVerificationService smsVerificationService;
     private final VerificationCodeValidator verificationCodeValidator;
     private final ApplicationEventPublisher eventPublisher;
+    private final RedisCounter redisCounter;
 
     private static final SecureRandom RANDOM = new SecureRandom();
 
     private static final String PASSWORD_RESET_SMS_TEMPLATE =
             "[SilverBridge] 비밀번호 재설정 인증번호: %s\n유효 시간: 5분";
 
-    // [이메일 방식] 비밀번호 재설정 인증코드 이메일 발송
-    // 이메일로 사용자 조회 → 6자리 코드 생성 → 메일 발송 → Redis 저장(5분) → 오류 횟수 초기화
-    // 보안을 위해 사용자가 없거나 카카오 사용자여도 동일하게 200 반환 (가입 여부 노출 방지)
-    // 단일 조회 + Redis + 외부 메일 발송이므로 트랜잭션 미사용 — SMTP 호출이 DB 커넥션을 점유하지 않게 함 (M-5)
-    public void requestReset(PasswordResetRequest request) {
-        User user = userRepository.findByEmail(request.getEmail()).orElse(null);
+    /** per-email 발송 상한 윈도우 (초) — 1시간 */
+    private static final long EMAIL_SEND_CAP_WINDOW_SECONDS = 3600L;
+    /** per-email 발송 상한 (윈도우당 최대 발송 건수) — IP 우회 메일 폭탄·비용 남용 차단 (SMS A-M3 대칭, 2026-05-23) */
+    private static final long MAX_EMAIL_SENDS_PER_WINDOW = 10L;
 
-        // 사용자가 없거나 카카오 사용자면 조용히 종료 (가입 여부 노출 방지)
-        if (user == null || user.isSocialProvider()) {
-            return;
+    // [이메일 방식] 비밀번호 재설정 인증코드 이메일 발송
+    // 이메일로 사용자 조회 → (미가입 404 / 카카오 400) → per-email 발송 상한 → 6자리 코드 생성 →
+    // 메일 발송 → Redis 저장(5분) → 오류 횟수 초기화
+    //
+    // 정책 변경(2026-05-23): 시니어/4050 타겟 UX 우선 — 미가입/카카오에 always-200 대신 명시적 응답을 준다.
+    //   "메일이 안 와요" 이탈을 줄이는 대신, enumeration 노출은 IP 이중 윈도우 RateLimit(컨트롤러) +
+    //   per-email 발송 상한(아래) + 미가입 WARN 로깅으로 방어한다.
+    // 단일 조회 + Redis + 외부 메일 발송이므로 트랜잭션 미사용 — SMTP 호출이 DB 커넥션을 점유하지 않게 함 (M-5)
+    public void requestReset(PasswordResetRequest request, String ipAddress) {
+        String email = request.getEmail();
+        User user = userRepository.findByEmail(email).orElse(null);
+
+        // 미가입 → 404로 명확히 안내. enumeration 스윕 사후 탐지를 위해 WARN 로깅(마스킹+IP).
+        if (user == null) {
+            log.warn("[PW-RESET] 미가입 이메일 재설정 요청 차단 — email={}, ip={}",
+                    MaskingUtil.maskEmail(email), ipAddress);
+            throw new CustomException(ErrorCode.EMAIL_ACCOUNT_NOT_FOUND);
+        }
+        // 카카오 가입 계정은 비밀번호가 없음 → 카카오 로그인 사용하도록 400 안내
+        if (user.isSocialProvider()) {
+            throw new CustomException(ErrorCode.SOCIAL_USER_NO_PASSWORD);
         }
 
-        String email = user.getEmail();
+        String resolvedEmail = user.getEmail();
+
+        // per-email 발송 상한 — IP 회전으로 IP RateLimit을 우회해 특정 이메일로 메일 폭탄·비용 남용하는 것을
+        // 차단 (SMS sendCode의 A-M3와 대칭). 가입 계정 확인 후에만 카운트해 미존재 이메일로 키가 늘지 않게 한다.
+        long sent = redisCounter.incrementWithTtl(
+                RedisKeys.PW_EMAIL_SEND_COUNT + resolvedEmail, EMAIL_SEND_CAP_WINDOW_SECONDS);
+        if (sent > MAX_EMAIL_SENDS_PER_WINDOW) {
+            throw new CustomException(ErrorCode.TOO_MANY_REQUESTS);
+        }
+
         VerificationKeyConfig config = VerificationKeyConfig.PASSWORD_RESET_EMAIL;
 
-        // 재발송 쿨다운 없음 — 잘못 눌러도 즉시 재요청 가능. 빈도 방어는 컨트롤러 IP RateLimit에 의존.
+        // 재발송 쿨다운 없음 — 잘못 눌러도 즉시 재요청 가능. 빈도 방어는 IP RateLimit + per-email 상한에 의존.
         String code = generateCode();
-        sendResetEmail(email, code);
+        sendResetEmail(resolvedEmail, code);
 
         // 인증코드 저장 + 기존 오류 횟수 초기화 (기존 코드가 있으면 새 코드로 교체)
         redisTemplate.opsForValue()
-                .set(config.verifyKey(email), code, SmsVerificationService.CODE_TTL_MINUTES, TimeUnit.MINUTES);
-        redisTemplate.delete(config.attemptKey(email));
+                .set(config.verifyKey(resolvedEmail), code, SmsVerificationService.CODE_TTL_MINUTES, TimeUnit.MINUTES);
+        redisTemplate.delete(config.attemptKey(resolvedEmail));
 
-        log.info("비밀번호 재설정 이메일 발송 완료: {}", MaskingUtil.maskEmail(email));
+        log.info("비밀번호 재설정 이메일 발송 완료: {}", MaskingUtil.maskEmail(resolvedEmail));
     }
 
     // [이메일 방식] 인증코드 사전 확인 (코드 미소비)
@@ -96,20 +125,29 @@ public class PasswordResetService {
     }
 
     // [SMS 방식] 비밀번호 재설정 인증코드 발송
-    // 이름+전화번호로 사용자 조회 → 공통 SMS 로직에 위임 (코드저장·발송)
-    // 보안을 위해 사용자가 없거나 카카오 사용자여도 동일하게 200 반환 (가입 여부 노출 방지)
+    // 이름+전화번호로 사용자 조회 → (미일치 404 / 카카오만 매칭 400) → 공통 SMS 로직에 위임 (코드저장·발송)
+    //
+    // 정책 변경(2026-05-23): 시니어/4050 타겟 UX 우선 — 미일치/카카오에 always-200 대신 명시적 응답을 준다.
+    //   SMS 비용 보호(#4): 미일치(404)는 SmsSender 호출 전에 차단되어 미가입자에게 SMS가 발송되지 않는다.
+    //   특정 실사용 번호로의 SMS 폭탄은 sendCode 내부 per-phone 상한(A-M3)이 별도로 막는다.
     // 단일 조회 + 외부 SMS 발송이므로 트랜잭션 미사용 — 외부 호출이 DB 커넥션을 점유하지 않게 함 (M-5)
-    public void requestResetBySms(PasswordResetSmsSendRequest request) {
+    public void requestResetBySms(PasswordResetSmsSendRequest request, String ipAddress) {
         String phone = request.getPhone();
 
-        User user = userRepository.findAllByNameAndPhone(request.getName(), phone).stream()
+        List<User> matches = userRepository.findAllByNameAndPhone(request.getName(), phone);
+        User user = matches.stream()
                 .filter(User::isLocalProvider)
                 .findFirst()
                 .orElse(null);
 
-        // 사용자가 없으면 조용히 종료 (가입 여부 노출 방지)
         if (user == null) {
-            return;
+            // 매칭 자체가 없으면 미가입(404), 카카오 계정만 있으면 카카오 안내(400)로 구분
+            if (matches.isEmpty()) {
+                log.warn("[PW-RESET] 미일치 SMS 재설정 요청 차단 — phone={}, ip={}",
+                        MaskingUtil.maskPhone(phone), ipAddress);
+                throw new CustomException(ErrorCode.USER_NOT_FOUND);
+            }
+            throw new CustomException(ErrorCode.SOCIAL_USER_NO_PASSWORD);
         }
 
         smsVerificationService.sendCode(phone, VerificationKeyConfig.PASSWORD_RESET, PASSWORD_RESET_SMS_TEMPLATE);
