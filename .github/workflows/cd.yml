@@ -31,9 +31,7 @@ jobs:
             exit 1
           fi
 
-          docker compose -f docker-compose.dev.yml build \
-            --build-arg BUILDKIT_INLINE_CACHE=1 \
-            api
+          docker compose -f docker-compose.dev.yml build api
 
           docker compose -f docker-compose.dev.yml up -d api
           docker image prune -f
