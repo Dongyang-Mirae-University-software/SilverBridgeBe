@@ -46,9 +46,10 @@
 ### A1. User Enumeration 방어 강도
 - 404(`EMAIL_ACCOUNT_NOT_FOUND`)·400(`SOCIAL_USER_NO_PASSWORD`)·200 분기는 **정책상 의도된 노출**이며 코드로 명확히 분기됨. ✅
 - RateLimit 코드 레벨 동작: 컨트롤러가 `check("pw-reset-email"/"pw-reset-sms", ip, 10, 30)` 호출 → `RateLimitService`가 1분/1시간 카운터를 각각 증가 후 한쪽이라도 초과 시 429. 키·TTL은 테스트로 검증됨. ✅
-- **🟠 (조건부) IP 우회 — X-Forwarded-For 신뢰 정책**: `application.yaml`의 `server.forward-headers-strategy: framework`로 인해 `httpRequest.getRemoteAddr()`는 `X-Forwarded-For`/`Forwarded` 헤더에서 추출한 클라이언트 IP를 반환한다. always-200이 폐지되면서 **IP RateLimit이 enumeration의 1차 방어**가 됐다. 만약 상단 nginx가 `X-Forwarded-For`를 실 client IP로 **덮어쓰지(realip/overwrite) 않고 append만** 한다면, 클라이언트가 헤더 선두값을 스푸핑해 매 요청 IP를 회전 → IP RateLimit을 무력화할 수 있다. 그 경우 **무제한 계정/Provider enumeration(404/400/200 구분)** 과 등록 사용자 대상 reset 메일 트리거가 가능해진다.
+- **🟠 확인됨(2026-05-24) → 해결(PR #173) · IP 우회 — X-Forwarded-For 신뢰 정책**: `application.yaml`의 `server.forward-headers-strategy: framework`로 인해 `httpRequest.getRemoteAddr()`는 `X-Forwarded-For`/`Forwarded` 헤더에서 추출한 클라이언트 IP를 반환한다. always-200이 폐지되면서 **IP RateLimit이 enumeration의 1차 방어**가 됐다. 만약 상단 nginx가 `X-Forwarded-For`를 실 client IP로 **덮어쓰지(realip/overwrite) 않고 append만** 한다면, 클라이언트가 헤더 선두값을 스푸핑해 매 요청 IP를 회전 → IP RateLimit을 무력화할 수 있다. 그 경우 **무제한 계정/Provider enumeration(404/400/200 구분)** 과 등록 사용자 대상 reset 메일 트리거가 가능해진다.
   - 추가 위험 증폭: **미존재 이메일**은 per-email 상한(`password:email:sendcount`)이 가입 확인 *후*에만 증가하므로, 미존재 이메일 enumeration은 **IP RateLimit이 유일한 throttle**이다.
-  - 코드 자체 결함은 아니며 모든 RateLimit 엔드포인트에 공통인 기존 사항이나, 이번 변경이 위험도를 끌어올렸다. → **nginx X-Forwarded-For 처리(realip 모듈/overwrite) 확인 필요.**
+  - 코드 자체 결함은 아니며 모든 RateLimit 엔드포인트에 공통인 기존 사항이나, 이번 변경이 위험도를 끌어올렸다.
+  - **확인 결과(2026-05-24) — 취약 확정.** 서버 nginx(`api.devdmu.gosky.kr` → `127.0.0.1:6511`)는 `proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for`(append)이고 `realip` 모듈 미설정 → XFF 스푸핑으로 `getRemoteAddr()` 위조 가능. A-M2(루프백 바인딩)는 nginx **우회** 경로만 차단해 무력. **해결: PR #173** — nginx가 덮어쓰는(위조 불가) `X-Real-IP`를 앱이 우선 신뢰(`ClientIpResolver`), `getRemoteAddr()` 보안 사용처 19곳 일괄 교체.
 
 ### A2. Timing Attack 가능성
 - 200 경로는 `sendResetEmail`(SMTP) + Redis 저장으로 404 경로보다 느려 **타이밍 차이가 존재**한다.
@@ -115,10 +116,10 @@
 
 ### 🔴 Critical — 없음
 ### 🟠 High
-- **[SPOT-H1] (조건부·인프라) X-Forwarded-For 스푸핑 시 IP RateLimit 우회 → enumeration 무력화 가능.** always-200 폐지로 IP RateLimit이 1차 방어가 됐으나, `getRemoteAddr()`가 forward 헤더에 의존(`forward-headers-strategy: framework`). nginx가 `X-Forwarded-For`를 실 client IP로 덮어쓰지 않으면 헤더 회전으로 우회 가능. 미존재 이메일 enumeration은 IP RateLimit이 유일 throttle이라 영향 큼.
+- **[SPOT-H1] ✅ 확인됨 → 해결(PR #173) · X-Forwarded-For 스푸핑 시 IP RateLimit 우회 → enumeration 무력화.** always-200 폐지로 IP RateLimit이 1차 방어가 됐고, `getRemoteAddr()`가 forward 헤더에 의존(`forward-headers-strategy: framework`). 서버 nginx가 XFF를 append(`$proxy_add_x_forwarded_for`) + `realip` 미설정 → **취약 확정**(2026-05-24 nginx 확인). 미존재 이메일 enumeration은 IP RateLimit이 유일 throttle이라 영향 큼. → `ClientIpResolver`로 `X-Real-IP` 우선 신뢰하도록 수정(PR #173).
 
 ### 🟡 Medium
-- **[SPOT-M1] validation 400 케이스 테스트 부재.** 이메일 형식 오류·전화번호 형식 오류(`@Email`/`@Pattern` → 400)가 자동화 검증으로 보장되지 않음. `@WebMvcTest` 컨트롤러 슬라이스 테스트 권장.
+- **[SPOT-M1] ✅ 해결(본 PR) · validation 400 케이스 테스트 부재.** 이메일/전화번호 형식 오류(`@Email`/`@Pattern` → 400) 자동화 검증이 없었음. 프로젝트 관행(순수 단위 테스트)에 맞춰 `@WebMvcTest` 대신 `PasswordResetDtoValidationTest`(jakarta `Validator`) 15건 추가로 해결.
 
 ### 🟢 Low
 - **[SPOT-L1]** RateLimit 실제 동시성 통합 테스트 부재 — Lua 원자성에 위임(단위 테스트는 mock 로직만). embedded Redis 통합 테스트 있으면 견고(필수 아님).
@@ -133,9 +134,11 @@
 ### 판정: **일부 수정 필요 (조건부 PASS)**
 코드 레벨 실결함(Critical/실코드 High)은 **0건**. 비즈니스 로직·동시성·SMS 비용 보호·PII 마스킹·문서 일관성 모두 양호. 단 아래 후속 확인·보강이 필요하다.
 
+> **갱신(2026-05-24)**: SPOT-H1 nginx 확인 → **취약 확정 후 해결(PR #173, `ClientIpResolver`)**. SPOT-M1 **해결(본 PR, `PasswordResetDtoValidationTest`)**. 잔여 후속은 SPOT-L1/L4(선택·사소)뿐.
+
 ### 추천 후속 조치 (우선순위 순)
-1. **[SPOT-H1] nginx `X-Forwarded-For` 처리 확인 (인프라, 우선)** — realip 모듈 또는 `proxy_set_header X-Forwarded-For $remote_addr`로 실 client IP 강제 여부 검증. 미보장 시 RateLimit 우회로 enumeration 방어가 무력화됨. 코드 변경 불필요할 수 있으나 *반드시* 확인.
-2. **[SPOT-M1] validation 400 컨트롤러 테스트 추가** — `@WebMvcTest(FindPasswordController)`로 잘못된 이메일/전화번호 → 400 검증.
+1. **[SPOT-H1] ✅ 해결(PR #173)** — nginx 확인 결과 취약 확정(XFF append + `realip` 미설정). 앱에서 `X-Real-IP` 우선 신뢰(`ClientIpResolver`)로 수정. (선택적 방어 심층: nginx `api.devdmu` 블록 XFF를 `$remote_addr`로 덮어쓰기 — 미적용, 독립 옵션)
+2. **[SPOT-M1] ✅ 해결(본 PR)** — `PasswordResetDtoValidationTest`(Bean Validation 단위, 15건). 프로젝트 관행상 `@WebMvcTest` 미도입.
 3. **[SPOT-L1] (선택) RedisCounter 동시성 통합 테스트** — embedded Redis로 동시 INCR 정합성·TTL 검증.
 4. **[SPOT-L4] 파일 끝 newline 보강** (사소).
 
