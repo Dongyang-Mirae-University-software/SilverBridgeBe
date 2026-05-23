@@ -1,6 +1,7 @@
 package kr.silverbridge.main.global.aop;
 
 import jakarta.servlet.http.HttpServletRequest;
+import kr.silverbridge.main.global.util.ClientIpResolver;
 import lombok.extern.slf4j.Slf4j;
 import org.aspectj.lang.ProceedingJoinPoint;
 import org.aspectj.lang.annotation.Around;
@@ -30,7 +31,7 @@ public class ApiLoggingAspect {
 
         String method     = request != null ? request.getMethod() : "-";
         String uri        = request != null ? request.getRequestURI() : "-";
-        String ip         = request != null ? request.getRemoteAddr() : "-";
+        String ip         = ClientIpResolver.resolve(request);
         String controller = joinPoint.getSignature().getDeclaringType().getSimpleName();
         String action     = joinPoint.getSignature().getName();
 
