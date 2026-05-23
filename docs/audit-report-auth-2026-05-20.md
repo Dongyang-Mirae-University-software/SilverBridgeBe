@@ -184,7 +184,6 @@
 
 - `docs/audit-report-auth-2026-05-20.md` — 본 보고서 (신규)
 - `docs/audit-report-auth.md` — 이전 2026-05-15 점검 보고서 (그대로 보존)
-- `docs/audit-summary-auth.csv` — 항목별 표 (신규)
 - `docs/progress.md` — "2026-05-20 auth/user 2차 점검" 섹션 append
 - 1차 커밋 `2e91381` — Critical 5개소 수정
 - 2차 누적 커밋 — High 2 + Medium 5 (본 PR 마지막 커밋)
