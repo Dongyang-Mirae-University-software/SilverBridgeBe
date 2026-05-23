@@ -276,7 +276,27 @@ gh pr create --base dev
 
 ---
 
-## 9. 리소스
+## 9. 도메인 보안 정책 메모
+
+> 코드만으로는 드러나지 않는 보안 정책 결정의 의도·이력을 기록한다.
+
+### 비밀번호 재설정 — 가입 여부 명시 응답 (2026-05-23 갱신)
+
+- **의도**: 시니어/4050 타겟 UX 우선 — "메일이 안 와요" 이탈 감소.
+- **User Enumeration 정책 변경**: 기존 `find-password` send/resend는 미가입에도 **항상 200**(enumeration 차단)이었으나, **미가입 404 / 카카오 가입 계정 400**으로 명시 안내하도록 변경.
+  - 이메일: 미가입 404("해당 이메일로 가입된 계정이 없습니다"), 카카오 400.
+  - SMS: 이름+전화번호 미일치 404("사용자를 찾을 수 없습니다"), 카카오 400.
+- **노출 보완 (Rate Limit 등)**:
+  - `pw-reset-email`/`pw-reset-sms` send·resend: IP **이중 윈도우 1분 10회 / 1시간 30회**(초과 429).
+  - per-email 발송 상한 `password:email:sendcount` **1시간 10회**(SMS `sms:sendcount` A-M3와 대칭).
+  - 미가입 시 `[PW-RESET]` **WARN 로깅**(마스킹 식별자+IP), 미가입자 SMS/메일 **발송 전 차단**.
+  - `/password/reset`(3단계)는 코드 선검증(A-M1) 유지 — **변경 없음**.
+- **거부안**: 응답 시간 정규화(존재 여부를 의도적으로 노출 → 모순), 의심 IP 블랙리스트(공용 NAT 시니어 오차단), CAPTCHA(시니어 부담).
+- 상세: `docs/policy-change-password-reset-2026-05-23.md`, `docs/audit-report-auth-password-reset-2026-05-23.md`.
+
+---
+
+## 10. 리소스
 
 ### 내부
 - `.claude/skills/README.md` — 스킬 목록 인덱스
@@ -292,5 +312,5 @@ gh pr create --base dev
 
 ---
 
-**최종 업데이트**: 2026-05-19
+**최종 업데이트**: 2026-05-23 (비밀번호 재설정 정책 변경 — §9 도메인 보안 정책 메모 참고)
 **Spring Boot**: 4.0.5 / **Java**: 21 / **빌드**: Gradle
