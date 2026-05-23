@@ -22,6 +22,9 @@ public final class RedisKeys {
     public static final String PW_SMS_ATTEMPT    = "password:sms:attempt:";
     public static final String PW_EMAIL_VERIFY   = "password:email:verify:";
     public static final String PW_EMAIL_ATTEMPT  = "password:email:attempt:";
+    // per-email 발송 건수 카운터 (2026-05-23) — IP 회전으로 IP RateLimit을 우회한 특정 이메일
+    // enumeration·메일 폭탄·비용 남용 차단용 시간당 상한. SMS의 sms:sendcount(A-M3)와 대칭.
+    public static final String PW_EMAIL_SEND_COUNT = "password:email:sendcount:";
 
     // ── 카카오 OAuth ───────────────────────────────────
     public static final String KAKAO_PENDING = "kakao:pending:";
