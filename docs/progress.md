@@ -4,6 +4,41 @@
 
 ---
 
+## [2026-05-23] — auth: 비밀번호 재설정 정책 변경 (가입 여부 명시 응답 + Rate Limit 강화)
+
+시니어/4050 타겟 UX 우선. 비밀번호 재설정 send/resend가 미가입에도 always-200을 반환하던 정책을, 가입 여부를 명시(404/400)하도록 변경. 노출되는 enumeration은 IP 이중 윈도우 RateLimit + per-email 상한 + WARN 로깅으로 방어. (상세: `docs/policy-change-password-reset-2026-05-23.md`, `docs/audit-report-auth-password-reset-2026-05-23.md`)
+
+### 변경된 엔드포인트 (Breaking)
+
+- `POST /api/auth/find-password/email/send` · `/email/resend`
+  - 미가입 이메일: 200 → **404** "해당 이메일로 가입된 계정이 없습니다"
+  - 카카오 가입 계정: 200 → **400** "카카오로 가입한 계정은 비밀번호 재설정을 사용할 수 없습니다"
+- `POST /api/auth/find-password/sms/send` · `/sms/resend`
+  - 이름+전화번호 미일치: 200 → **404** "사용자를 찾을 수 없습니다"
+  - 카카오만 매칭: 200 → **400** `SOCIAL_USER_NO_PASSWORD`
+- 4개 모두 IP RateLimit이 **1분 10회 / 1시간 30회 이중 윈도우**로 강화 (초과 시 429)
+- `/password/reset`(3단계), `/email/verify`·`/sms/verify`(2단계)는 **변경 없음**
+
+### 보안 보완 (PHASE 0.5 채택분)
+
+- per-email 발송 상한 `password:email:sendcount:{email}` 1시간 10회 (SMS A-M3 대칭)
+- 미가입 404 시 `[PW-RESET]` WARN 로깅(마스킹 식별자+IP) — enumeration 스윕 탐지
+- SMS 비용 보호: 미가입자에게는 SMS 발송 전 404 선차단
+- 거부: 응답 시간 정규화(정책상 모순), 의심 IP 블랙리스트(공용 NAT 오차단 위험)
+
+### 변경 파일
+
+- `ErrorCode`(EMAIL_ACCOUNT_NOT_FOUND 추가), `PasswordResetService`(404/400+ip+상한+로깅), `RateLimitService`(이중 윈도우 오버로드), `RedisKeys`(PW_EMAIL_SEND_COUNT), `FindPasswordController`(dual-window+Swagger), `PasswordResetRequest`·`PasswordResetSmsSendRequest`(메시지·Schema)
+- 테스트: `PasswordResetServiceTest`(404/400·SMS·per-email cap 재작성), `RateLimitServiceTest`(이중 윈도우)
+
+### 프론트 전달 사항 ⚠️
+
+- **Breaking**: send/resend 4개가 더 이상 "항상 200"이 아님. 미가입(404)·카카오(400)·형식오류(400)·상한초과(429)를 **에러 분기로 처리**해야 함.
+- 권장 UX: 404 → "가입된 계정이 없습니다" 안내 + 회원가입 유도, 카카오 400 → "카카오 로그인을 이용해주세요" 안내, 429 → "잠시 후 다시 시도" 안내.
+- 형식 검증 메시지: 이메일 "올바른 이메일 형식이 아닙니다.", 전화번호 "올바른 전화번호 형식이 아닙니다. (숫자 10~11자리, 하이픈 없이)".
+
+---
+
 ## 2026-05-21 — connection 도메인: 피보호자 측 조회 API 분리 (active / pending)
 
 피보호자웹이 "내 보호자 리스트"(ACTIVE) + "요청온 목록"(PENDING) 두 카드로 분리됨에 따라, 단일 `/api/ward/connection/select`(ACTIVE only)를 UI 구조에 맞춰 두 엔드포인트로 분리. (점검은 다음 세션 예정 — 이번엔 구현만)
