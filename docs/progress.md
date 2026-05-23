@@ -388,7 +388,6 @@ architecture-review / spring-boot-patterns / jpa-patterns / security-audit (+ co
 ### 산출물
 - `docs/audit-report-auth-2026-05-20.md` — 본 점검 종합 보고서 (신규)
 - `docs/audit-report-auth.md` — 2026-05-15 1차 점검 보고서 (그대로 보존)
-- `docs/audit-summary-auth.csv` — Phase/스킬/심각도/권장조치/수정여부 표 (신규)
 
 ---
 
@@ -444,7 +443,6 @@ architecture-review / spring-boot-patterns / jpa-patterns / concurrency-review /
 
 ### 산출물
 - `docs/audit-report-connection-2026-05-21.md` — 종합 보고서 (신규, 수정완료 반영)
-- `docs/audit-summary-connection-2026-05-21.csv` — Phase/스킬/심각도/권장조치/수정여부 표 (신규)
 
 ---
 
@@ -484,7 +482,6 @@ architecture-review / spring-boot-patterns / jpa-patterns / concurrency-review /
 
 ### 산출물
 - `docs/audit-report-auth-2026-05-22.md` — 3차 종합 보고서 (신규)
-- `docs/audit-summary-auth-2026-05-22.csv` — Phase/스킬/심각도/수정여부 표 (신규)
 - `fix/auth-audit-2026-05-22` → PR #159로 dev 머지 완료 (커밋 9개)
 
 ### 후속 처리 (follow-up, PR 별도) — 이월 항목 4건 추가 해소
