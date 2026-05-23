@@ -14,6 +14,7 @@ import kr.silverbridge.main.domain.auth.service.SmsService;
 import kr.silverbridge.main.domain.auth.service.SmsVerificationService;
 import kr.silverbridge.main.global.response.ApiResponse;
 import kr.silverbridge.main.global.security.RateLimitService;
+import kr.silverbridge.main.global.util.ClientIpResolver;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -66,7 +67,7 @@ public class SmsController {
     @PostMapping("/send")
     public ApiResponse<CodeSentResponse> send(@Valid @RequestBody SmsSendRequest request,
                                               HttpServletRequest httpRequest) {
-        rateLimitService.check("signup-sms", httpRequest.getRemoteAddr());
+        rateLimitService.check("signup-sms", ClientIpResolver.resolve(httpRequest));
         smsService.sendVerificationCode(request);
         return ApiResponse.ok(codeSent());
     }
@@ -117,7 +118,7 @@ public class SmsController {
     @PostMapping("/resend")
     public ApiResponse<CodeSentResponse> resend(@Valid @RequestBody SmsSendRequest request,
                                                 HttpServletRequest httpRequest) {
-        rateLimitService.check("signup-sms", httpRequest.getRemoteAddr());
+        rateLimitService.check("signup-sms", ClientIpResolver.resolve(httpRequest));
         smsService.sendVerificationCode(request);
         return ApiResponse.ok(codeSent());
     }

@@ -15,6 +15,7 @@ import kr.silverbridge.main.domain.auth.service.PasswordResetService;
 import kr.silverbridge.main.domain.auth.service.SmsVerificationService;
 import kr.silverbridge.main.global.response.ApiResponse;
 import kr.silverbridge.main.global.security.RateLimitService;
+import kr.silverbridge.main.global.util.ClientIpResolver;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -75,7 +76,7 @@ public class FindPasswordController {
     @PostMapping("/email/send")
     public ApiResponse<CodeSentResponse> sendEmail(@Valid @RequestBody PasswordResetRequest request,
                                                    HttpServletRequest httpRequest) {
-        String ip = httpRequest.getRemoteAddr();
+        String ip = ClientIpResolver.resolve(httpRequest);
         rateLimitService.check("pw-reset-email", ip, PW_RESET_MAX_PER_MINUTE, PW_RESET_MAX_PER_HOUR);
         passwordResetService.requestReset(request, ip);
         return ApiResponse.ok(codeSent());
@@ -126,7 +127,7 @@ public class FindPasswordController {
     @PostMapping("/email/resend")
     public ApiResponse<CodeSentResponse> resendEmail(@Valid @RequestBody PasswordResetRequest request,
                                                      HttpServletRequest httpRequest) {
-        String ip = httpRequest.getRemoteAddr();
+        String ip = ClientIpResolver.resolve(httpRequest);
         rateLimitService.check("pw-reset-email", ip, PW_RESET_MAX_PER_MINUTE, PW_RESET_MAX_PER_HOUR);
         passwordResetService.requestReset(request, ip);
         return ApiResponse.ok(codeSent());
@@ -167,7 +168,7 @@ public class FindPasswordController {
     @PostMapping("/sms/send")
     public ApiResponse<CodeSentResponse> sendSms(@Valid @RequestBody PasswordResetSmsSendRequest request,
                                                  HttpServletRequest httpRequest) {
-        String ip = httpRequest.getRemoteAddr();
+        String ip = ClientIpResolver.resolve(httpRequest);
         rateLimitService.check("pw-reset-sms", ip, PW_RESET_MAX_PER_MINUTE, PW_RESET_MAX_PER_HOUR);
         passwordResetService.requestResetBySms(request, ip);
         return ApiResponse.ok(codeSent());
@@ -218,7 +219,7 @@ public class FindPasswordController {
     @PostMapping("/sms/resend")
     public ApiResponse<CodeSentResponse> resendSms(@Valid @RequestBody PasswordResetSmsSendRequest request,
                                                    HttpServletRequest httpRequest) {
-        String ip = httpRequest.getRemoteAddr();
+        String ip = ClientIpResolver.resolve(httpRequest);
         rateLimitService.check("pw-reset-sms", ip, PW_RESET_MAX_PER_MINUTE, PW_RESET_MAX_PER_HOUR);
         passwordResetService.requestResetBySms(request, ip);
         return ApiResponse.ok(codeSent());
