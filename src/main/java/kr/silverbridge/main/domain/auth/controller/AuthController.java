@@ -20,6 +20,7 @@ import kr.silverbridge.main.global.exception.CustomException;
 import kr.silverbridge.main.global.exception.ErrorCode;
 import kr.silverbridge.main.global.response.ApiResponse;
 import kr.silverbridge.main.global.security.RateLimitService;
+import kr.silverbridge.main.global.util.ClientIpResolver;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
@@ -69,7 +70,7 @@ public class AuthController {
     @PostMapping("/signup/email/check")
     public ApiResponse<Void> checkEmail(@Valid @RequestBody EmailCheckRequest request,
                                         HttpServletRequest httpRequest) {
-        rateLimitService.check("email-check", httpRequest.getRemoteAddr());
+        rateLimitService.check("email-check", ClientIpResolver.resolve(httpRequest));
         authService.checkEmail(request);
         return ApiResponse.ok("사용 가능한 이메일입니다.");
     }
@@ -137,10 +138,10 @@ public class AuthController {
                                             HttpServletRequest httpRequest) {
         // IP 기준 속도 제한 — per-user 잠금(5회/30분)이 막지 못하는 계정 분산 credential stuffing/
         // password spraying 차단 (A-H2). 다른 인증 엔드포인트와 동일 정책(1분 10회).
-        rateLimitService.check("signin", httpRequest.getRemoteAddr());
+        rateLimitService.check("signin", ClientIpResolver.resolve(httpRequest));
         return ApiResponse.ok(authService.login(
                 request,
-                httpRequest.getRemoteAddr(),
+                ClientIpResolver.resolve(httpRequest),
                 httpRequest.getHeader("User-Agent")
         ));
     }
@@ -167,7 +168,7 @@ public class AuthController {
     @PostMapping("/refresh")
     public ApiResponse<TokenRefreshResponse> refresh(@Valid @RequestBody TokenRefreshRequest request,
                                                      HttpServletRequest httpRequest) {
-        rateLimitService.check("token-refresh", httpRequest.getRemoteAddr());
+        rateLimitService.check("token-refresh", ClientIpResolver.resolve(httpRequest));
         return ApiResponse.ok(authService.refresh(request));
     }
 
@@ -199,7 +200,7 @@ public class AuthController {
         authService.logout(
                 bearerToken.substring(7),
                 userId,
-                httpRequest.getRemoteAddr(),
+                ClientIpResolver.resolve(httpRequest),
                 httpRequest.getHeader("User-Agent")
         );
         return ApiResponse.ok("로그아웃되었습니다.");
@@ -232,7 +233,7 @@ public class AuthController {
     @PostMapping("/find-email")
     public ApiResponse<FindEmailResponse> findEmail(@Valid @RequestBody FindEmailRequest request,
                                                     HttpServletRequest httpRequest) {
-        rateLimitService.check("find-email", httpRequest.getRemoteAddr());
+        rateLimitService.check("find-email", ClientIpResolver.resolve(httpRequest));
         return ApiResponse.ok(authService.findEmail(request));
     }
 }

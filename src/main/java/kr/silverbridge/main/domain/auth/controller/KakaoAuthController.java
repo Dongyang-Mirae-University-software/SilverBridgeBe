@@ -13,6 +13,7 @@ import kr.silverbridge.main.domain.auth.dto.LoginResponse;
 import kr.silverbridge.main.domain.auth.service.KakaoAuthService;
 import kr.silverbridge.main.global.response.ApiResponse;
 import kr.silverbridge.main.global.security.RateLimitService;
+import kr.silverbridge.main.global.util.ClientIpResolver;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.*;
@@ -61,10 +62,10 @@ public class KakaoAuthController {
     @PostMapping("/signin/kakao")
     public ApiResponse<KakaoLoginResponse> kakaoLogin(@Valid @RequestBody KakaoLoginRequest request,
                                                       HttpServletRequest httpRequest) {
-        rateLimitService.check("kakao-login", httpRequest.getRemoteAddr());
+        rateLimitService.check("kakao-login", ClientIpResolver.resolve(httpRequest));
         return ApiResponse.ok(kakaoAuthService.kakaoLogin(
                 request,
-                httpRequest.getRemoteAddr(),
+                ClientIpResolver.resolve(httpRequest),
                 httpRequest.getHeader("User-Agent")
         ));
     }
@@ -109,7 +110,7 @@ public class KakaoAuthController {
                                                     HttpServletRequest httpRequest) {
         return ApiResponse.ok(kakaoAuthService.kakaoRegister(
                 request,
-                httpRequest.getRemoteAddr(),
+                ClientIpResolver.resolve(httpRequest),
                 httpRequest.getHeader("User-Agent")
         ));
     }

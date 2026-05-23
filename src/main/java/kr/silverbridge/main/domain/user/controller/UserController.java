@@ -13,6 +13,7 @@ import kr.silverbridge.main.domain.user.dto.UserUpdateRequest;
 import kr.silverbridge.main.domain.user.dto.WithdrawRequest;
 import kr.silverbridge.main.domain.user.service.UserService;
 import kr.silverbridge.main.global.response.ApiResponse;
+import kr.silverbridge.main.global.util.ClientIpResolver;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
@@ -183,7 +184,7 @@ public class UserController {
                 userId,
                 request.getPassword(),
                 request.getConfirmation(),
-                httpRequest.getRemoteAddr(),
+                ClientIpResolver.resolve(httpRequest),
                 httpRequest.getHeader("User-Agent")
         );
         return ApiResponse.ok("회원 탈퇴가 완료되었습니다.");

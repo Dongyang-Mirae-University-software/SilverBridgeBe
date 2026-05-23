@@ -10,6 +10,7 @@ import kr.silverbridge.main.domain.auth.dto.PasswordResetConfirmRequest;
 import kr.silverbridge.main.domain.auth.service.PasswordResetService;
 import kr.silverbridge.main.global.response.ApiResponse;
 import kr.silverbridge.main.global.security.RateLimitService;
+import kr.silverbridge.main.global.util.ClientIpResolver;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -56,10 +57,10 @@ public class PasswordResetController {
     @PostMapping("/reset")
     public ApiResponse<Void> confirmReset(@Valid @RequestBody PasswordResetConfirmRequest request,
                                           HttpServletRequest httpRequest) {
-        rateLimitService.check("pw-reset-confirm", httpRequest.getRemoteAddr());
+        rateLimitService.check("pw-reset-confirm", ClientIpResolver.resolve(httpRequest));
         passwordResetService.confirmReset(
                 request,
-                httpRequest.getRemoteAddr(),
+                ClientIpResolver.resolve(httpRequest),
                 httpRequest.getHeader("User-Agent")
         );
         return ApiResponse.ok("비밀번호가 변경되었습니다.");
