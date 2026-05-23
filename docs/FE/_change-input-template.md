@@ -66,6 +66,6 @@
 ### Claude에게 보낼 때 덧붙일 한 줄 (복붙용)
 ```
 위 입력 자료로 PHASE 0(현재 프론트 구조 파악) 요약부터 보여주고, 내가 "시작해" 하면
-기존 인계 문서(/home/skarndaudwls/SilverBridgeBe/docs/FE/backend-change-impact-password-reset-2026-05-22.md)와
+기존 인계 문서(/home/skarndaudwls/SilverBridgeBe/docs/FE/2026-05-22-backend-change-impact-password-reset.md)와
 같은 구조로 /home/skarndaudwls/SilverBridgeBe/docs/FE/에 인계 문서 1개를 만들어줘.
 ```
