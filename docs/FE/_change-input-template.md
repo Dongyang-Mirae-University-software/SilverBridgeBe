@@ -2,8 +2,8 @@
 
 > 사용법: 이 파일을 복사해 변경 건마다 채우세요.
 > 채운 뒤 Claude Code(SilverBridgeFe 디렉토리에서 실행)에게 그대로 붙여넣고
-> "이 백엔드 변경의 프론트 영향을 분석하고 doc/FE에 인계 문서 만들어줘"라고 하면 됩니다.
-> 규칙: 분석+문서 전용 / 프론트 코드 수정 금지 / git 금지 / 산출물은 /home/skarndaudwls/SilverBridgeBe/doc/FE/.
+> "이 백엔드 변경의 프론트 영향을 분석하고 docs/FE에 인계 문서 만들어줘"라고 하면 됩니다.
+> 규칙: 분석+문서 전용 / 프론트 코드 수정 금지 / git 금지 / 산출물은 /home/skarndaudwls/SilverBridgeBe/docs/FE/.
 >
 > 복사 추천 파일명: change-input-<주제>-YYYY-MM-DD.md  (예: change-input-login-2026-06-01.md)
 
@@ -66,6 +66,6 @@
 ### Claude에게 보낼 때 덧붙일 한 줄 (복붙용)
 ```
 위 입력 자료로 PHASE 0(현재 프론트 구조 파악) 요약부터 보여주고, 내가 "시작해" 하면
-기존 인계 문서(/home/skarndaudwls/SilverBridgeBe/doc/FE/backend-change-impact-password-reset-2026-05-22.md)와
-같은 구조로 /home/skarndaudwls/SilverBridgeBe/doc/FE/에 인계 문서 1개를 만들어줘.
+기존 인계 문서(/home/skarndaudwls/SilverBridgeBe/docs/FE/backend-change-impact-password-reset-2026-05-22.md)와
+같은 구조로 /home/skarndaudwls/SilverBridgeBe/docs/FE/에 인계 문서 1개를 만들어줘.
 ```
