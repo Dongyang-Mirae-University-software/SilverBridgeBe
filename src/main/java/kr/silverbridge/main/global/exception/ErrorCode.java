@@ -17,6 +17,8 @@ public enum ErrorCode {
 
     // 사용자
     USER_NOT_FOUND(HttpStatus.NOT_FOUND, "사용자를 찾을 수 없습니다."),
+    // 비밀번호 재설정 — 미가입 이메일 안내 (시니어 친화 UX, 2026-05-23). SMS 미일치는 USER_NOT_FOUND 재사용
+    EMAIL_ACCOUNT_NOT_FOUND(HttpStatus.NOT_FOUND, "해당 이메일로 가입된 계정이 없습니다."),
     LOGIN_LOCKED(HttpStatus.TOO_MANY_REQUESTS, "비밀번호를 5회 이상 틀렸습니다. 30분 후 다시 시도해주세요."),
     CANNOT_MODIFY_ADMIN(HttpStatus.FORBIDDEN, "관리자 계정은 변경하거나 삭제할 수 없습니다."),
     INVALID_ROLE(HttpStatus.BAD_REQUEST, "역할은 피보호자 또는 보호자만 선택할 수 있습니다."),
