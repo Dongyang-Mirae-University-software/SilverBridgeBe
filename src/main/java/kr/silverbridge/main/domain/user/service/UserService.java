@@ -12,6 +12,7 @@ import kr.silverbridge.main.global.client.FileServerClient;
 import kr.silverbridge.main.global.exception.CustomException;
 import kr.silverbridge.main.global.exception.ErrorCode;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
@@ -20,6 +21,7 @@ import org.springframework.web.multipart.MultipartFile;
 
 import java.util.List;
 
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class UserService {
@@ -122,6 +124,34 @@ public class UserService {
         fileServerClient.delete(oldImageUrl);
 
         return UserProfileResponse.from(user);
+    }
+
+    // 프로필 이미지 삭제 (기본 이미지로 되돌림)
+    // 멱등: 이미 이미지가 없으면 그대로 종료. 값이 있으면 DB를 먼저 NULL 처리(진실의 원천)한 뒤
+    // 파일 서버 실제 파일 삭제를 위임한다. 교체 시 자동 삭제(updateProfileImage)와 동일한 fire-and-forget 패턴.
+    // 반환값: 실제로 삭제한 경우 true / 이미 이미지가 없어 삭제할 대상이 없던 경우 false (둘 다 200, 안내 메시지 분기용)
+    @Transactional
+    public boolean deleteProfileImage(String userId) {
+        log.info("[PROFILE-IMAGE] 삭제 요청 수신 userId={}", userId);
+
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new CustomException(ErrorCode.USER_NOT_FOUND));
+
+        String oldImageUrl = user.getProfileImage();
+        if (oldImageUrl == null || oldImageUrl.isBlank()) {
+            // 멱등 처리: 이미 이미지가 없으므로 삭제할 대상 없음 (기본 이미지 상태)
+            log.info("[PROFILE-IMAGE] 삭제 대상 없음, 멱등 처리 userId={}", userId);
+            return false;
+        }
+
+        // DB가 진실의 원천: 파일 서버 결과와 무관하게 NULL 로 비운다
+        user.updateProfileImage(null);
+
+        // 파일 서버 실제 파일 삭제 — FileServerClient.delete 는 예외를 던지지 않고 실패 시 WARN 로깅만 함
+        fileServerClient.delete(oldImageUrl);
+
+        log.info("[PROFILE-IMAGE] 삭제 완료 userId={}", userId);
+        return true;
     }
 
     // 회원 탈퇴

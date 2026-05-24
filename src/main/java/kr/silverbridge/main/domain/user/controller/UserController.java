@@ -128,6 +128,36 @@ public class UserController {
     }
 
     @Operation(
+            summary = "프로필 이미지 삭제",
+            description = """
+                    현재 프로필 이미지를 삭제하고 기본 이미지 상태(profileImage=null)로 되돌립니다.
+                    파일 서버의 실제 파일도 함께 삭제되며, 파일 서버 삭제가 실패해도 DB는 정상적으로 비워집니다(DB가 진실의 원천).
+
+                    멱등(idempotent): 이미 이미지가 없는 경우에도 200을 반환하며, 여러 번 호출해도 결과는 동일합니다.
+                    응답 message로 상태를 안내합니다.
+                    - 실제로 삭제한 경우: "프로필 이미지가 삭제되었습니다."
+                    - 이미 이미지가 없던 경우: "설정된 프로필 이미지가 없어 기본 이미지를 사용 중입니다."
+
+                    [요청 헤더]
+                    Authorization: Bearer {accessToken}
+                    """
+    )
+    @ApiResponses({
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "프로필 이미지 삭제 완료 또는 이미 기본 이미지 상태(message로 구분)"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "인증 토큰 없음 또는 만료", content = @Content),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "사용자를 찾을 수 없음", content = @Content),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "500", description = "서버 내부 오류", content = @Content)
+    })
+    @DeleteMapping("/me/image")
+    public ApiResponse<Void> deleteProfileImage(@AuthenticationPrincipal String userId) {
+        boolean deleted = userService.deleteProfileImage(userId);
+        String message = deleted
+                ? "프로필 이미지가 삭제되었습니다."
+                : "설정된 프로필 이미지가 없어 기본 이미지를 사용 중입니다.";
+        return ApiResponse.ok(message);
+    }
+
+    @Operation(
             summary = "비밀번호 변경 (로그인 상태)",
             description = """
                     현재 비밀번호를 알고 있는 로그인된 사용자가 새 비밀번호로 변경합니다.
