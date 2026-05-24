@@ -294,6 +294,15 @@ gh pr create --base dev
 - **거부안**: 응답 시간 정규화(존재 여부를 의도적으로 노출 → 모순), 의심 IP 블랙리스트(공용 NAT 시니어 오차단), CAPTCHA(시니어 부담).
 - 상세: `docs/(2026-05-23) policy-change-password-reset.md`, `docs/(2026-05-23) audit-report-auth-password-reset.md`.
 
+### 카카오 OAuth — Client Secret 적용 (2026-05-25)
+
+- **의도**: 인가코드 탈취 시 토큰 발급을 차단(REST API Key 단독 대비 보안 강화).
+- **변경**: 백엔드 토큰 교환(`POST kauth.kakao.com/oauth/token`) 요청에 `client_secret` 추가.
+- **환경변수**: `KAKAO_CLIENT_SECRET` — `.env.dev`로만 주입(코드/Git **평문 비노출**). `application.yaml`은 `${KAKAO_CLIENT_SECRET:}`로 매핑.
+- **시작 시 검증**: 존재 여부 → `RequiredPropertiesValidator`(11개 키), 길이(≥32)·placeholder/약한 값 → `SecurityConfigValidator`. 미설정·약한 값이면 시작 중단(fail-fast).
+- **운영 적용 전제**: 카카오 콘솔 [보안 > Client Secret] 코드 발급 + **"사용 함" 활성화** 필요. 활성화 없이 secret만 보내면 무시되고, 활성화 후 secret 누락 시 토큰 발급 실패.
+- 상세: `docs/(2026-05-25) feature-kakao-client-secret.md`.
+
 ---
 
 ## 10. 리소스
@@ -312,5 +321,5 @@ gh pr create --base dev
 
 ---
 
-**최종 업데이트**: 2026-05-23 (비밀번호 재설정 정책 변경 — §9 도메인 보안 정책 메모 참고)
+**최종 업데이트**: 2026-05-25 (카카오 OAuth Client Secret 적용 — §9 도메인 보안 정책 메모 참고)
 **Spring Boot**: 4.0.5 / **Java**: 21 / **빌드**: Gradle
