@@ -42,6 +42,7 @@ public class UserService {
     private final FileServerClient fileServerClient;
     private final ApplicationEventPublisher eventPublisher;
     private final PhoneVerificationPort phoneVerificationPort;
+    private final ProfileImagePersister profileImagePersister;
 
     // 내 정보 조회
     @Transactional(readOnly = true)
@@ -105,23 +106,23 @@ public class UserService {
     }
 
     // 프로필 이미지 변경
-    // 파일 서버에 업로드 후 반환된 URL을 DB에 저장
-    @Transactional
+    // 업로드(외부 HTTP)는 트랜잭션 밖에서 수행하고, URL 영속화만 ProfileImagePersister(@Transactional)에 위임한다 (D-USER-1).
+    // 이 메서드 자체에는 DB 접근이 없어 @Transactional 을 두지 않는다 (업로드 동안 커넥션 미점유).
     public UserProfileResponse updateProfileImage(String userId, MultipartFile file) {
         log.info("[PROFILE-IMAGE] 변경 요청 수신 userId={}", userId);
-        User user = getUserOrThrow(userId);
-
         validateImage(file);
 
-        String oldImageUrl = user.getProfileImage();
+        // 파일 서버 업로드 — 트랜잭션 밖 (D-USER-1)
         String newImageUrl = fileServerClient.upload(file);
-        user.updateProfileImage(newImageUrl);
 
-        // 기존 이미지는 커밋 이후 삭제 (롤백 시 깨진 이미지 방지, D-USER-2). 실패해도 주 기능에 영향 없음.
-        deleteStoredFileAfterCommit(oldImageUrl);
+        // URL 영속화는 별도 트랜잭션(프록시 경유, dirty checking → updated_at 갱신 유지)
+        ProfileImagePersister.Result result = profileImagePersister.replace(userId, newImageUrl);
+
+        // 영속화 커밋 이후 기존 파일 삭제 — 롤백 시 깨진 이미지 방지 (D-USER-2). 실패해도 주 기능 영향 없음.
+        fileServerClient.delete(result.oldImageUrl());
 
         log.info("[PROFILE-IMAGE] 변경 완료 userId={}", userId);
-        return UserProfileResponse.from(user);
+        return result.response();
     }
 
     // 프로필 이미지 삭제 (기본 이미지로 되돌림)
