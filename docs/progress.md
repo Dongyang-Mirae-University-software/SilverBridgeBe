@@ -4,6 +4,18 @@
 
 ---
 
+## [2026-05-25] — global: 공유 @ValidPassword 추출 (B-USER-1 follow-up, user+auth 교차)
+
+user 도메인 점검 follow-up **B-USER-1** 해소. 비밀번호 정규식이 user `PasswordChangeRequest` + auth `RegisterRequest`/`PasswordResetConfirmRequest` **3곳에 복제**되던 문제(+테스트 fixture까지 4곳).
+
+- **방식**: `global/validation`에 공유 `@ValidPassword`(+`PasswordValidator`) 추출 — 기존 `@ValidBirthDate`/`BirthDateValidator` 패턴과 동일. 3개 DTO의 `@Pattern(정규식)`을 `@ValidPassword`로 치환.
+- **범위 한정**: **정규식만** 공유 제약으로 이전. `@NotBlank`(필수)·`@Size(8~64)`(길이)는 각 DTO에 유지 → 길이/형식 메시지 분리 보존(동작 불변). `@ValidPassword` 기본 메시지 = 기존 `@Pattern` 메시지 동일.
+- **null 통과**: 필수 여부는 `@NotBlank`가 담당(메시지 분리, BirthDateValidator와 동일).
+- **테스트**: `PasswordFieldValidationTest`를 fixture 인라인 정규식 → `@ValidPassword` 검증으로 재구성(마지막 중복처 제거, 문자정책·null·공백·이모지·한글). 정규식 단일 출처화.
+- **교차도메인**: auth DTO 2건 수정 포함(사용자 승인하 진행). **브랜치**: `refactor/valid-password-2026-05-25`.
+
+---
+
 ## [2026-05-24] — user: 프로필 이미지 업로드 트랜잭션 경계 분리 (D-USER-1 follow-up)
 
 user 도메인 점검 follow-up **D-USER-1** 해소. `updateProfileImage`가 파일 서버 업로드(외부 HTTP, ≤5MB)를 `@Transactional` 내부에서 수행해 업로드 동안 DB 커넥션을 점유하던 문제.
