@@ -220,6 +220,10 @@ SilverBridge는 노인(피보호자)과 그 가족(보호자)을 연결하는 �
   ※ kakaoId는 1번 응답의 값을 4번까지 계속 사용합니다.
   ※ 3번 응답의 verificationNonce를 4번 요청에 첨부해야 가입됩니다 (H-5).
   ※ isNewUser 값에 따라 응답 구조가 달라집니다.
+  ※ 2026-05-25 보안 강화: 백엔드의 인가코드→토큰 교환 요청에 client_secret를 함께 전송합니다.
+    값은 KAKAO_CLIENT_SECRET 환경변수로만 주입(코드/Git 비노출)하며, 카카오 콘솔
+    [보안 > Client Secret]에서 코드 발급 후 "사용 함" 활성화가 필요합니다. 미설정·약한 값이면
+    시작 단계에서 차단됩니다 (Required/SecurityConfigValidator).
 
   ※ CSRF(state) 방어는 프론트 검증 모델(모델 A)로 결정 (2026-05-18, M-1):
     프론트가 카카오 인가 요청 시 난수 state 생성·sessionStorage 보관,
@@ -714,16 +718,17 @@ SilverBridge는 노인(피보호자)과 그 가족(보호자)을 연결하는 �
   - ?size= 최대값 100 (초과 시 자동 제한)
 
   [ 환경변수 무결성 검증 (시작 시) ]
-  - SecurityConfigValidator: JWT_SECRET 필수 + 최소 32자 + 공개된 약한 기본값 거부
+  - SecurityConfigValidator: JWT_SECRET 필수 + 최소 32자 + 공개된 약한 기본값 거부,
+    KAKAO_CLIENT_SECRET 설정 시 최소 32자 + placeholder/약한 값 거부 (2026-05-25 추가)
     (AI_SERVER_API_KEY 검증은 AI 도메인 제거에 따라 폐지, A-L5)
   - RequiredPropertiesValidator: DB_USERNAME, DB_PASSWORD (약한 기본값 dev 제거, A-L3),
     MAIL_USERNAME, MAIL_PASSWORD,
-    KAKAO_REST_API_KEY, KAKAO_REDIRECT_URI,
+    KAKAO_REST_API_KEY, KAKAO_CLIENT_SECRET, KAKAO_REDIRECT_URI,
     SOLAPI_API_KEY, SOLAPI_API_SECRET, SOLAPI_SENDER_PHONE,
     FIREBASE_SERVICE_ACCOUNT_BASE64
     누락 시 모든 누락 키를 모아 한 번에 IllegalStateException으로 시작 중단
   - 검증 통과 시 SHA-256 12자 fingerprint 로그 — 배포 간 env 변경 여부 비교용
-    (예: "필수 환경변수 검증 통과: 10개 키 정상 (fingerprint=a3f9c2d1ee04)")
+    (예: "필수 환경변수 검증 통과: 11개 키 정상 (fingerprint=a3f9c2d1ee04)")
 
   [ CORS 허용 도메인 ]
   - 환경변수 APP_CORS_ORIGINS (쉼표 구분)로 허용 origin 리스트 설정
@@ -978,7 +983,8 @@ SilverBridge는 노인(피보호자)과 그 가족(보호자)을 연결하는 �
        (선택) MAIL_HOST, MAIL_PORT — 미설정 시 smtp.gmail.com:587
 
      ▶ 카카오 OAuth
-       KAKAO_REST_API_KEY, KAKAO_REDIRECT_URI
+       KAKAO_REST_API_KEY, KAKAO_CLIENT_SECRET, KAKAO_REDIRECT_URI
+       ※ KAKAO_CLIENT_SECRET: 카카오 콘솔 [보안 > Client Secret] 발급 값, "사용 함" 활성화 필요 (2026-05-25 추가)
 
      ▶ Solapi SMS
        SOLAPI_API_KEY, SOLAPI_API_SECRET, SOLAPI_SENDER_PHONE
