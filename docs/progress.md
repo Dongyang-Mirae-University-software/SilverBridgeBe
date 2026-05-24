@@ -14,7 +14,19 @@ user 도메인 점검(`audit-report-user.md`)의 교차도메인 follow-up **D-U
   - connection: `UserWithdrawalConnectionListener` → `ConnectionService.tearDownConnectionsOnWithdrawal`. 신규 `ConnectionRepository.findByParticipantAndStatusIn`(보호자/피보호자 양측).
 - **요청 차단**: `validateConnectionRequest`에서 대상 `Status != ACTIVE` → `USER_NOT_FOUND`(존재 비노출).
 - **테스트**: `ConnectionServiceTest`에 정리 4건 + 대상 INACTIVE 차단 1건, 리스너 위임 테스트 2건 추가.
-- **브랜치**: `fix/withdraw-cleanup-2026-05-24`. (⚠️ PR #175와 본 파일 상단 동시 삽입으로 머지 시 trivial 충돌 가능)
+- **브랜치**: `fix/withdraw-cleanup-2026-05-24`. (PR #175와 본 파일 상단 동시 삽입 → 머지 시 충돌 해소함)
+
+---
+
+## [2026-05-24] — user: 도메인 풀 점검 + 프로필 이미지 삭제 통합 점검
+
+user 도메인 **스킬 기반 종합 점검 최초**(PHASE A~G). 신규 `DELETE /api/user/me/image`(PR #174) 통합 점검. URL 패턴 3자(코드·`프로젝트_설명.txt`·Swagger) 일치 확인 — 정정 불필요. (산출물: `docs/(2026-05-24) audit-report-user.md`, `audit-summary-user.csv`)
+
+- **🟠 High**: ① **A-USER-1** 탈퇴 후 access token 미무효화(≤30분, 필터 status 미재검증·무효화 키 미설정 — 비번 변경과 비대칭) → `handleWithdrawn`에서 `invalidatePreviousAccessTokens` 호출로 해결. ② **F-USER-1/2** `changePassword` 성공 경로·`updateProfile` 테스트 부재 → 추가.
+- **🟡 Medium 해결**: A-USER-2(이미지 Magic Number 검증 추가) / D-USER-2(파일 삭제 `afterCommit` 이전 — 롤백 시 이미지 깨짐 방지) / E-USER-1(비번 변경 INFO 감사 로그) / B-USER-2(`getUserOrThrow` 헬퍼) / F-USER-3·4(이미지·LOCAL탈퇴 테스트).
+- **🟡 Medium follow-up(분리)**: D-USER-1(업로드 트랜잭션 밖 이전 — 경계 재설계 회귀 위험) / D-USER-3(탈퇴 시 connections·fcm 생명주기 — 교차도메인) / B-USER-1(공유 `@ValidPassword` — user+auth 통합).
+- **✅ 안전 확인**: IDOR 없음(me 전용·principal 파생) / 비번 변경 전 기기 무효화 견고 / N+1 없음(연관관계 미매핑) / SQL 파라미터 바인딩·LIKE ESCAPE / auth→user 단방향 / phone `uq_users_phone` 보장 / 신규 삭제 API 멱등·테스트 양호.
+- **브랜치**: `fix/user-audit-2026-05-24` (수정 Medium까지, follow-up·Low 백로그).
 
 ---
 

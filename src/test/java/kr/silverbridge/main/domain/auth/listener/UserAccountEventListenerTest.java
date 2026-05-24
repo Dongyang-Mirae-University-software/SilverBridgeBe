@@ -25,7 +25,6 @@ import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
@@ -40,15 +39,24 @@ class UserAccountEventListenerTest {
     @InjectMocks private UserAccountEventListener listener;
 
     @Test
-    @DisplayName("UserWithdrawnEvent 수신 시 토큰 삭제 + WITHDRAW 접속 로그 기록")
-    void handleWithdrawn_토큰삭제_및_WITHDRAW_로그() {
+    @DisplayName("UserWithdrawnEvent 수신 시 토큰 삭제 + access token 무효화 도장 + WITHDRAW 접속 로그 기록 (A-USER-1)")
+    void handleWithdrawn_토큰삭제_무효화_및_WITHDRAW_로그() {
+        // 탈퇴 시에도 비밀번호 변경과 동일하게 무효화 도장을 찍어 기존 access token을 즉시 차단한다 (A-USER-1)
+        when(jwtProperties.getAccessTokenExpiration()).thenReturn(1_800_000L);
+        when(redisTemplate.opsForValue()).thenReturn(valueOperations);
+
         UserWithdrawnEvent event = new UserWithdrawnEvent("user-1", "127.0.0.1", "test-agent");
 
         listener.handleWithdrawn(event);
 
         verify(refreshTokenRepository).deleteByUserId("user-1");
+        verify(valueOperations).set(
+                eq(RedisKeys.PASSWORD_INVALIDATE + "user-1"),
+                anyString(),
+                eq(1_800_000L),
+                eq(TimeUnit.MILLISECONDS)
+        );
         verify(accessLogService).log("user-1", AccessAction.WITHDRAW, "127.0.0.1", "test-agent");
-        verifyNoInteractions(redisTemplate);
     }
 
     @Test
