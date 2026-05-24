@@ -10,6 +10,7 @@ import jakarta.validation.constraints.Size;
 import kr.silverbridge.main.global.enums.Gender;
 import kr.silverbridge.main.global.enums.Role;
 import kr.silverbridge.main.global.validation.ValidBirthDate;
+import kr.silverbridge.main.global.validation.ValidPassword;
 import lombok.Getter;
 
 import java.time.LocalDate;
@@ -27,10 +28,7 @@ public class RegisterRequest {
     @Schema(description = "비밀번호 (영문·숫자·특수문자 포함, 공백 없이 8~64자)", example = "Password1!")
     @NotBlank(message = "비밀번호를 입력해주세요.")
     @Size(min = 8, max = 64, message = "비밀번호는 영문·숫자·특수문자를 포함하고, 공백 없이 8~64자여야 합니다.")
-    @Pattern(
-            regexp = "^(?=.*[A-Za-z])(?=.*[0-9])(?=.*[!@#$%^&*()_+\\-=\\[\\]{};':\"\\\\|,.<>/?`~])[A-Za-z0-9!@#$%^&*()_+\\-=\\[\\]{};':\"\\\\|,.<>/?`~]+$",
-            message = "비밀번호는 영문·숫자·특수문자를 포함하고, 공백 없이 8글자 이상이어야 합니다."
-    )
+    @ValidPassword
     private String password;
 
     @Schema(description = "이름 (최대 20자)", example = "홍길동")
