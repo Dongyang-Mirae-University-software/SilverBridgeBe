@@ -4,6 +4,20 @@
 
 ---
 
+## [2026-05-24] — withdraw: 탈퇴 시 연결·FCM 토큰 정리 (D-USER-3 follow-up)
+
+user 도메인 점검(`audit-report-user.md`)의 교차도메인 follow-up **D-USER-3** 해소. 탈퇴(soft delete INACTIVE)가 connections·fcm_tokens를 정리하지 않아 ① 탈퇴자가 상대에게 정상 연결(+ACTIVE면 연락처 PII)로 노출 ② 탈퇴자에게 푸시 지속 ③ 탈퇴자 6자리 ID로 신규 연결 요청 가능하던 문제.
+
+- **정책 결정**: 탈퇴 시 **정리(teardown)** 방식 채택(읽기 필터 대비 단일 시점·누락 위험 적음, 재활성화 플로우 없어 손실 우려 없음). ACTIVE→DISCONNECTED + **상대에게 해제 알림 발송**(기존 `ConnectionDisconnectedEvent` 재사용) / PENDING→CANCELLED(무알림, 기존 cancel·refuse와 동일).
+- **아키텍처**: 기존 `UserWithdrawnEvent`를 각 도메인이 `AFTER_COMMIT`으로 수신해 자기 데이터 정리(도메인 소유권 유지, auth 리스너와 동일 패턴). user 도메인 변경 없음.
+  - notification: `UserWithdrawalFcmListener` → `FcmService.deleteAllTokens`(`deleteByUserId`). soft delete라 FK CASCADE 미발동 → 명시적 삭제.
+  - connection: `UserWithdrawalConnectionListener` → `ConnectionService.tearDownConnectionsOnWithdrawal`. 신규 `ConnectionRepository.findByParticipantAndStatusIn`(보호자/피보호자 양측).
+- **요청 차단**: `validateConnectionRequest`에서 대상 `Status != ACTIVE` → `USER_NOT_FOUND`(존재 비노출).
+- **테스트**: `ConnectionServiceTest`에 정리 4건 + 대상 INACTIVE 차단 1건, 리스너 위임 테스트 2건 추가.
+- **브랜치**: `fix/withdraw-cleanup-2026-05-24`. (⚠️ PR #175와 본 파일 상단 동시 삽입으로 머지 시 trivial 충돌 가능)
+
+---
+
 ## [2026-05-24] — user: 프로필 이미지 삭제 API 신규 구현
 
 `DELETE /api/user/me/image` 신규 추가. **시나리오: 작업 요청 배경에는 "문서엔 명시되어 있으나 미구현"이라 되어 있었으나, 실제 `프로젝트_설명.txt` 3-5는 "별도 삭제 엔드포인트 없음(교체만 지원)"으로 정반대 기재** + `/api/users/*`(복수) 경로는 오기로 명시. 따라서 *문서 누락 보완*이 아니라 **신규 기능 추가 결정**으로 진행하고 문서 3-5도 갱신함.
