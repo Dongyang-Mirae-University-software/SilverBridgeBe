@@ -590,3 +590,9 @@ REST API Key 단독 대비 보안 강화 — 인가코드 탈취 시 토큰 발�
 - **사용자 작업(PHASE 2)**: 카카오 콘솔 [보안 > Client Secret] 코드 발급 + "사용 함" 활성화 → `.env.dev` 추가 → `api` 컨테이너 재시작
 - **산출물**: `docs/(2026-05-25) feature-kakao-client-secret.md`, CLAUDE.md §9 메모, 프로젝트_설명.txt(3-3·7·11) 갱신
 - 검증: `./gradlew build --no-daemon` BUILD SUCCESSFUL (테스트 포함)
+
+### 스팟 점검 (2026-05-25)
+- 시크릿 노출(A1~A5)·작동(B1~B3)·문서(C1~C2) 미니 점검 → **전부 PASS, 이슈 0건**
+- 시크릿 평문 노출 없음(코드/yaml/로그/Git 히스토리), `.env.dev` 미추적, 토큰 교환·검증기 정합, 기존 카카오 흐름 회귀 없음
+- 빌드 `./gradlew build -x test --no-daemon` EXIT 0
+- 산출물: `docs/(2026-05-25) audit-spot-check-kakao-client-secret.md`
