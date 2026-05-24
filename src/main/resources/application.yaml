@@ -75,6 +75,7 @@ auth:
 
 kakao:
   rest-api-key: ${KAKAO_REST_API_KEY}
+  client-secret: ${KAKAO_CLIENT_SECRET:}   # 빈 기본값 — 존재/강도 검증은 Required/SecurityConfigValidator가 담당
   redirect-uri: ${KAKAO_REDIRECT_URI}
 
 solapi:

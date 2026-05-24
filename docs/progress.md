@@ -573,3 +573,20 @@ architecture-review / spring-boot-patterns / jpa-patterns / concurrency-review /
   - ⚠️ 데드 경로 없음(하드 전환) → 배포 시 옛 경로 즉시 404. **프론트 새 경로 동시 교체 후 머지·배포 필수**
 - **E-4** ⛔ 약관 동의 시점 기록 — **결정상 구현 안 함(Won't-do)**. 프로토타입 프론트에서도 약관 동의 UI 제거. 향후 약관 기능 도입 시 재검토
 - 검증: `./gradlew build -x test --no-daemon` BUILD SUCCESSFUL
+
+---
+
+## [2026-05-25] 카카오 OAuth Client Secret 적용 (PR `feature/kakao-client-secret`)
+
+REST API Key 단독 대비 보안 강화 — 인가코드 탈취 시 토큰 발급 차단을 위해 토큰 교환 요청에 `client_secret` 추가.
+
+- **코드**:
+  - `KakaoOAuthClient` — `@Value("${kakao.client-secret}")` 필드 + `getToken` 파라미터에 `client_secret` 추가 (시그니처 불변 → 호출처·기존 테스트 무영향)
+  - `application.yaml` — `kakao.client-secret: ${KAKAO_CLIENT_SECRET:}`
+  - `RequiredPropertiesValidator` — `KAKAO_CLIENT_SECRET` 존재 검증 추가 (10 → 11개)
+  - `SecurityConfigValidator` — `KAKAO_CLIENT_SECRET` 길이(≥32)·placeholder/약한 값 거부 (JWT secret과 동일 패턴, 책임 분리 유지)
+- **테스트**: `SecurityConfigValidatorTest`(신규, 순수 단위) — 정상/blank/짧음/약한값/대소문자 5케이스
+- **시크릿 관리**: `KAKAO_CLIENT_SECRET`는 `.env.dev`로만 주입(코드/Git 평문 비노출), 로그·예외 미노출 확인
+- **사용자 작업(PHASE 2)**: 카카오 콘솔 [보안 > Client Secret] 코드 발급 + "사용 함" 활성화 → `.env.dev` 추가 → `api` 컨테이너 재시작
+- **산출물**: `docs/(2026-05-25) feature-kakao-client-secret.md`, CLAUDE.md §9 메모, 프로젝트_설명.txt(3-3·7·11) 갱신
+- 검증: `./gradlew build --no-daemon` BUILD SUCCESSFUL (테스트 포함)
