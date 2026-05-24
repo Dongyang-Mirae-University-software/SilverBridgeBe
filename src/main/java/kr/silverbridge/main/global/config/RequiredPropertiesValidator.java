@@ -35,6 +35,7 @@ public class RequiredPropertiesValidator {
             @Value("${spring.mail.username:}") String mailUsername,
             @Value("${spring.mail.password:}") String mailPassword,
             @Value("${kakao.rest-api-key:}") String kakaoRestApiKey,
+            @Value("${kakao.client-secret:}") String kakaoClientSecret,
             @Value("${kakao.redirect-uri:}") String kakaoRedirectUri,
             @Value("${solapi.api-key:}") String solapiApiKey,
             @Value("${solapi.api-secret:}") String solapiApiSecret,
@@ -48,6 +49,7 @@ public class RequiredPropertiesValidator {
         map.put("MAIL_USERNAME", mailUsername);
         map.put("MAIL_PASSWORD", mailPassword);
         map.put("KAKAO_REST_API_KEY", kakaoRestApiKey);
+        map.put("KAKAO_CLIENT_SECRET", kakaoClientSecret);
         map.put("KAKAO_REDIRECT_URI", kakaoRedirectUri);
         map.put("SOLAPI_API_KEY", solapiApiKey);
         map.put("SOLAPI_API_SECRET", solapiApiSecret);
