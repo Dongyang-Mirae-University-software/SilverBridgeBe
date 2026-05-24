@@ -23,8 +23,10 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
@@ -136,6 +138,64 @@ class UserServiceTest {
                 () -> userService.withdraw(USER_ID, null, "탈퇴하기", "127.0.0.1", "test-agent"));
 
         assertThat(ex.getErrorCode()).isEqualTo(ErrorCode.WITHDRAW_CONFIRMATION_MISMATCH);
+    }
+
+    // ─── deleteProfileImage ─────────────────────────────────────────────────
+
+    private static final String IMAGE_URL = "https://files.example.com/file/abc.png";
+
+    @Test
+    @DisplayName("프로필 이미지가 있는 사용자 삭제 → true 반환 + DB NULL + 파일 서버 삭제 호출")
+    void deleteProfileImage_이미지있음_삭제성공() {
+        User user = localUser();
+        user.updateProfileImage(IMAGE_URL);
+        when(userRepository.findById(USER_ID)).thenReturn(Optional.of(user));
+
+        boolean deleted = userService.deleteProfileImage(USER_ID);
+
+        assertThat(deleted).isTrue(); // 실제 삭제 → 안내 메시지 분기용
+        assertThat(user.getProfileImage()).isNull();
+        verify(fileServerClient).delete(IMAGE_URL);
+    }
+
+    @Test
+    @DisplayName("프로필 이미지가 없는 사용자 삭제 → false 반환(멱등 no-op), 파일 서버 미호출")
+    void deleteProfileImage_이미지없음_멱등() {
+        User user = localUser(); // profileImage == null
+        when(userRepository.findById(USER_ID)).thenReturn(Optional.of(user));
+
+        boolean deleted = userService.deleteProfileImage(USER_ID);
+
+        assertThat(deleted).isFalse(); // 삭제 대상 없음 → "기본 이미지 사용 중" 안내용
+        assertThat(user.getProfileImage()).isNull();
+        verifyNoInteractions(fileServerClient);
+    }
+
+    @Test
+    @DisplayName("파일 서버 삭제 결과와 무관하게 DB는 NULL 처리 (예외 비전파)")
+    void deleteProfileImage_파일서버삭제무관_DB는NULL() {
+        User user = localUser();
+        user.updateProfileImage(IMAGE_URL);
+        when(userRepository.findById(USER_ID)).thenReturn(Optional.of(user));
+        // FileServerClient.delete 는 내부에서 모든 예외를 삼키고 WARN 로깅만 하는 계약(throw 안 함).
+        // DB는 delete 호출 전에 이미 NULL 로 비워지므로, 파일 서버 실패 여부와 무관하게 NULL 이 유지된다.
+
+        assertThatCode(() -> userService.deleteProfileImage(USER_ID)).doesNotThrowAnyException();
+
+        assertThat(user.getProfileImage()).isNull();
+        verify(fileServerClient).delete(IMAGE_URL);
+    }
+
+    @Test
+    @DisplayName("존재하지 않는 사용자 삭제 → USER_NOT_FOUND")
+    void deleteProfileImage_사용자없음_USER_NOT_FOUND() {
+        when(userRepository.findById(USER_ID)).thenReturn(Optional.empty());
+
+        CustomException ex = assertThrows(CustomException.class,
+                () -> userService.deleteProfileImage(USER_ID));
+
+        assertThat(ex.getErrorCode()).isEqualTo(ErrorCode.USER_NOT_FOUND);
+        verifyNoInteractions(fileServerClient);
     }
 
     // ─── 헬퍼 메서드 ────────────────────────────────────────────────────────
