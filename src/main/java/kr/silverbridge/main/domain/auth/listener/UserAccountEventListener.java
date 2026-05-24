@@ -37,6 +37,10 @@ public class UserAccountEventListener {
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public void handleWithdrawn(UserWithdrawnEvent event) {
         refreshTokenRepository.deleteByUserId(event.userId());
+        // 탈퇴 이전 발급된 access token을 즉시 무효화 (A-USER-1).
+        // refresh 삭제만으로는 status=INACTIVE 계정의 기존 access token이 만료(30분)까지 유효하므로,
+        // 비밀번호 변경과 동일한 무효화 키를 설정해 탈퇴 직후 401 처리되게 한다.
+        invalidatePreviousAccessTokens(event.userId());
         accessLogService.log(event.userId(), AccessAction.WITHDRAW, event.ipAddress(), event.userAgent());
     }
 
@@ -47,8 +51,8 @@ public class UserAccountEventListener {
         invalidatePreviousAccessTokens(event.userId());
     }
 
-    // 비밀번호 변경 시각을 Redis에 저장 — 이 시각 이전 iat를 가진 access token은 401 처리.
-    // TTL은 access token 만료시간과 동일 — 자연 만료 후엔 메모도 자동 제거.
+    // 무효화 기준 시각을 Redis에 저장 — 이 시각 이전 iat를 가진 access token은 401 처리.
+    // 비밀번호 변경·회원 탈퇴 공통으로 사용한다. TTL은 access token 만료시간과 동일 — 자연 만료 후엔 메모도 자동 제거.
     private void invalidatePreviousAccessTokens(String userId) {
         redisTemplate.opsForValue().set(
                 RedisKeys.PASSWORD_INVALIDATE + userId,
