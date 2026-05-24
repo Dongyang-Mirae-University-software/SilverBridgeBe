@@ -48,6 +48,7 @@ class UserServiceTest {
     @Mock private FileServerClient fileServerClient;
     @Mock private ApplicationEventPublisher eventPublisher;
     @Mock private PhoneVerificationPort phoneVerificationPort;
+    @Mock private ProfileImagePersister profileImagePersister;
 
     @InjectMocks private UserService userService;
 
@@ -312,11 +313,11 @@ class UserServiceTest {
 
     // ─── updateProfileImage (F-USER-3 / A-USER-2) ────────────────────────────
 
+    // 검증(크기·타입·시그니처)은 업로드·영속화보다 먼저 수행되므로, 실패 시 파일 서버·영속화는 호출되지 않는다.
+
     @Test
-    @DisplayName("프로필 이미지 5MB 초과 → FILE_TOO_LARGE, 파일 서버 미호출")
+    @DisplayName("프로필 이미지 5MB 초과 → FILE_TOO_LARGE, 업로드·영속화 미호출")
     void updateProfileImage_크기초과_FILE_TOO_LARGE() {
-        User user = localUser();
-        when(userRepository.findById(USER_ID)).thenReturn(Optional.of(user));
         MultipartFile file = mock(MultipartFile.class);
         when(file.getSize()).thenReturn(6 * 1024 * 1024L);
 
@@ -324,14 +325,12 @@ class UserServiceTest {
                 () -> userService.updateProfileImage(USER_ID, file));
 
         assertThat(ex.getErrorCode()).isEqualTo(ErrorCode.FILE_TOO_LARGE);
-        verifyNoInteractions(fileServerClient);
+        verifyNoInteractions(fileServerClient, profileImagePersister);
     }
 
     @Test
     @DisplayName("허용되지 않는 Content-Type → INVALID_FILE_TYPE")
     void updateProfileImage_잘못된타입_INVALID_FILE_TYPE() {
-        User user = localUser();
-        when(userRepository.findById(USER_ID)).thenReturn(Optional.of(user));
         MultipartFile file = mock(MultipartFile.class);
         when(file.getSize()).thenReturn(1024L);
         when(file.getContentType()).thenReturn("application/pdf");
@@ -340,14 +339,12 @@ class UserServiceTest {
                 () -> userService.updateProfileImage(USER_ID, file));
 
         assertThat(ex.getErrorCode()).isEqualTo(ErrorCode.INVALID_FILE_TYPE);
-        verifyNoInteractions(fileServerClient);
+        verifyNoInteractions(fileServerClient, profileImagePersister);
     }
 
     @Test
     @DisplayName("Content-Type은 image/png이나 실제 시그니처 위조 → INVALID_FILE_TYPE (A-USER-2)")
     void updateProfileImage_시그니처위조_INVALID_FILE_TYPE() throws Exception {
-        User user = localUser();
-        when(userRepository.findById(USER_ID)).thenReturn(Optional.of(user));
         MultipartFile file = mock(MultipartFile.class);
         when(file.getSize()).thenReturn(1024L);
         when(file.getContentType()).thenReturn("image/png");
@@ -357,28 +354,31 @@ class UserServiceTest {
                 () -> userService.updateProfileImage(USER_ID, file));
 
         assertThat(ex.getErrorCode()).isEqualTo(ErrorCode.INVALID_FILE_TYPE);
-        verifyNoInteractions(fileServerClient);
+        verifyNoInteractions(fileServerClient, profileImagePersister);
     }
 
     @Test
-    @DisplayName("프로필 이미지 변경 성공 → 새 URL 저장 + 기존 파일 삭제 위임")
-    void updateProfileImage_성공_업로드및기존삭제() throws Exception {
-        User user = localUser();
-        user.updateProfileImage("https://files.example.com/file/old.png");
-        when(userRepository.findById(USER_ID)).thenReturn(Optional.of(user));
+    @DisplayName("프로필 이미지 변경 성공 → 업로드(트랜잭션 밖) + 영속화 위임 + 기존 파일 삭제")
+    void updateProfileImage_성공_업로드_영속화_기존삭제() throws Exception {
+        String oldUrl = "https://files.example.com/file/old.png";
+        String newUrl = "https://files.example.com/file/new.png";
         MultipartFile file = mock(MultipartFile.class);
         when(file.getSize()).thenReturn(2048L);
         when(file.getContentType()).thenReturn("image/png");
         when(file.getInputStream()).thenReturn(new ByteArrayInputStream(PNG_HEADER));
-        when(fileServerClient.upload(file)).thenReturn("https://files.example.com/file/new.png");
+        when(fileServerClient.upload(file)).thenReturn(newUrl);
+
+        User persisted = localUser();
+        persisted.updateProfileImage(newUrl);
+        when(profileImagePersister.replace(USER_ID, newUrl))
+                .thenReturn(new ProfileImagePersister.Result(oldUrl, UserProfileResponse.from(persisted)));
 
         UserProfileResponse res = userService.updateProfileImage(USER_ID, file);
 
-        assertThat(res.getProfileImage()).isEqualTo("https://files.example.com/file/new.png");
-        assertThat(user.getProfileImage()).isEqualTo("https://files.example.com/file/new.png");
-        verify(fileServerClient).upload(file);
-        // 트랜잭션 비활성(단위 테스트) → afterCommit 대신 즉시 위임
-        verify(fileServerClient).delete("https://files.example.com/file/old.png");
+        assertThat(res.getProfileImage()).isEqualTo(newUrl);
+        verify(fileServerClient).upload(file);                 // 업로드는 트랜잭션 밖에서 수행 (D-USER-1)
+        verify(profileImagePersister).replace(USER_ID, newUrl); // 영속화는 별도 트랜잭션에 위임
+        verify(fileServerClient).delete(oldUrl);                // 영속화 커밋 후 기존 파일 삭제 (D-USER-2)
     }
 
     // ─── withdraw LOCAL 성공 (F-USER-4) ──────────────────────────────────────
