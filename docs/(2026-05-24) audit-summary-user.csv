@@ -1,0 +1,25 @@
+Phase,스킬,항목,파일,심각도,발견사항,권장조치,수정여부
+A,security-audit,A-USER-1,auth/listener/UserAccountEventListener.java,High,회원 탈퇴 후 기존 access token이 최대 30분간 유효(필터가 status 미재검증·무효화 키 미설정),handleWithdrawn에서 invalidatePreviousAccessTokens 호출,수정
+A,security-audit,A-USER-2,user/service/UserService.java,Medium,이미지 형식 검증이 클라이언트 Content-Type에만 의존(스푸핑 가능·Magic Number 미검증),파일 시그니처(JPEG/PNG/GIF/WebP) 검증 추가,수정
+A,security-audit,A-USER-3,user/service/UserService.java,Low,전화번호 변경 TOCTOU(uq_users_phone이 최종 방어·race 시 500),DataIntegrityViolation→409 매핑 검토,백로그
+A,logging,A-USER-4,global/client/FileServerClient.java,Low,delete WARN 로그에 fileUrl 전체 노출,경로 로깅 최소화,백로그
+A,concurrency-review,A-CONC-1,user/service/UserService.java,Low,동시 이미지 업로드 시 @Version 부재로 고아 파일 가능,수용 또는 낙관적 락 검토,백로그
+B,architecture-review,B-ARCH-1,domain/user/**,N/A,auth→user 단방향 의존·이벤트/포트 적정(안전 확인),변경 불필요,확인
+B,clean-code,B-USER-1,user/dto/PasswordChangeRequest.java,Medium,비밀번호 정규식 3곳 복제(user 1·auth 2),공유 @ValidPassword 추출(user+auth 통합),follow-up
+B,clean-code,B-USER-2,user/service/UserService.java,Medium,findById().orElseThrow() 6회 반복,private getUserOrThrow 헬퍼 추출,수정
+B,clean-code,B-USER-3,user/service/UserService.java,Low,KAKAO_WITHDRAW_CONFIRMATION 상수가 클래스 중간 선언,상단 상수 블록 이동,수정
+C,api-contract-review,C-USER-1,global/exception/ErrorCode.java,Low,SOCIAL_USER_NO_PASSWORD 메시지 '재설정'인데 변경에도 사용,중립 문구화(공유 코드),백로그
+C,api-contract-review,C-USER-2,user/controller/UserController.java,Low,current-password 불일치 401(400/422가 의미상 더 적합),변경 안 함(auth 전역 일관),변경안함
+D,jpa-patterns,D-USER-1,user/service/UserService.java,Medium,외부 파일 I/O가 @Transactional 내부(커넥션 점유),업로드 트랜잭션 밖 이전,부분수정
+D,jpa-patterns,D-USER-2,user/service/UserService.java,Medium,커밋 전 파일 삭제→롤백 시 이미지 깨짐,파일 삭제 afterCommit 이전,수정
+D,jpa-patterns,D-USER-3,user/service/UserService.java,Medium,탈퇴 시 connections/fcm_tokens 미정리,교차도메인 생명주기 정책 결정,follow-up
+D,jpa-patterns,D-DATA-1,user/entity/User.java,N/A,연관관계 매핑 없음→N+1/LazyInit 없음(안전 확인),변경 불필요,확인
+E,logging-patterns,E-USER-1,user/service/UserService.java,Medium,비밀번호 변경 감사추적 부재(redis 키만),INFO 감사 로그 추가,수정
+E,logging-patterns,E-USER-2,user/service/UserService.java,Low,updateProfileImage 로그 부재(삭제는 3개),INFO 로그 추가,수정
+F,test-quality,F-USER-1,user/service/UserServiceTest.java,High,changePassword 성공 경로(이벤트·인코딩) 미검증,성공 경로 테스트 추가,수정
+F,test-quality,F-USER-2,user/service/UserServiceTest.java,High,updateProfile 테스트 전무,미변경/변경/중복/없음 테스트 추가,수정
+F,test-quality,F-USER-3,user/service/UserServiceTest.java,Medium,updateProfileImage 테스트 전무,크기/타입/시그니처/성공 테스트 추가,수정
+F,test-quality,F-USER-4,user/service/UserServiceTest.java,Medium,withdraw LOCAL 성공 경로 미검증,LOCAL 탈퇴 성공 테스트 추가,수정
+F,test-quality,F-USER-5,user/service/UserServiceTest.java,Low,getMyProfile 테스트 없음,조회/USER_NOT_FOUND 테스트 추가,수정
+G,docs,G-USER-1,프로젝트_설명.txt,N/A,3-5 섹션 삭제 API·URL 컨벤션 정확 반영(확인),변경 불필요,확인
+G,docs,G-USER-2,docs/progress.md,N/A,user 풀 점검 기록 부재,점검 기록 추가,수정
