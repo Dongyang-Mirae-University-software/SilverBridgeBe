@@ -1,10 +1,14 @@
 package kr.silverbridge.main.domain.user.service;
 
+import kr.silverbridge.main.domain.user.dto.UserProfileResponse;
+import kr.silverbridge.main.domain.user.dto.UserUpdateRequest;
 import kr.silverbridge.main.domain.user.entity.User;
 import kr.silverbridge.main.domain.user.port.PhoneVerificationPort;
+import kr.silverbridge.main.domain.user.event.PasswordChangedEvent;
 import kr.silverbridge.main.domain.user.event.UserWithdrawnEvent;
 import kr.silverbridge.main.domain.user.repository.UserRepository;
 import kr.silverbridge.main.global.client.FileServerClient;
+import kr.silverbridge.main.global.enums.Gender;
 import kr.silverbridge.main.global.enums.Provider;
 import kr.silverbridge.main.global.enums.Role;
 import kr.silverbridge.main.global.enums.Status;
@@ -19,12 +23,19 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.test.util.ReflectionTestUtils;
+import org.springframework.web.multipart.MultipartFile;
 
+import java.io.ByteArrayInputStream;
+import java.time.LocalDate;
 import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
@@ -198,6 +209,196 @@ class UserServiceTest {
         verifyNoInteractions(fileServerClient);
     }
 
+    // ─── changePassword 성공 (F-USER-1) ──────────────────────────────────────
+
+    @Test
+    @DisplayName("비밀번호 변경 성공 → 새 비밀번호 인코딩 교체 + PasswordChangedEvent 발행")
+    void changePassword_성공_이벤트발행() {
+        User user = localUser();
+        when(userRepository.findById(USER_ID)).thenReturn(Optional.of(user));
+        when(passwordEncoder.matches("currentPass", "encodedPassword")).thenReturn(true);
+        when(passwordEncoder.matches("NewPass1!", "encodedPassword")).thenReturn(false);
+        when(passwordEncoder.encode("NewPass1!")).thenReturn("encodedNew");
+
+        userService.changePassword(USER_ID, "currentPass", "NewPass1!");
+
+        assertThat(user.getPassword()).isEqualTo("encodedNew");
+        ArgumentCaptor<PasswordChangedEvent> captor = ArgumentCaptor.forClass(PasswordChangedEvent.class);
+        verify(eventPublisher).publishEvent(captor.capture());
+        assertThat(captor.getValue().userId()).isEqualTo(USER_ID);
+    }
+
+    // ─── getMyProfile (F-USER-5) ─────────────────────────────────────────────
+
+    @Test
+    @DisplayName("내 정보 조회 성공 → 프로필 응답 매핑")
+    void getMyProfile_성공() {
+        User user = localUserWithPhone("01011112222");
+        when(userRepository.findById(USER_ID)).thenReturn(Optional.of(user));
+
+        UserProfileResponse res = userService.getMyProfile(USER_ID);
+
+        assertThat(res.getId()).isEqualTo(USER_ID);
+        assertThat(res.getEmail()).isEqualTo("local@example.com");
+        assertThat(res.getPhone()).isEqualTo("01011112222");
+        assertThat(res.getProvider()).isEqualTo("LOCAL");
+    }
+
+    @Test
+    @DisplayName("내 정보 조회 시 사용자 없음 → USER_NOT_FOUND")
+    void getMyProfile_사용자없음_USER_NOT_FOUND() {
+        when(userRepository.findById(USER_ID)).thenReturn(Optional.empty());
+
+        CustomException ex = assertThrows(CustomException.class,
+                () -> userService.getMyProfile(USER_ID));
+
+        assertThat(ex.getErrorCode()).isEqualTo(ErrorCode.USER_NOT_FOUND);
+    }
+
+    // ─── updateProfile (F-USER-2) ────────────────────────────────────────────
+
+    @Test
+    @DisplayName("전화번호 미변경 시 SMS 인증·중복검사 스킵하고 프로필 수정")
+    void updateProfile_전화번호미변경_인증스킵() {
+        User user = localUserWithPhone("01011112222");
+        when(userRepository.findById(USER_ID)).thenReturn(Optional.of(user));
+
+        UserProfileResponse res = userService.updateProfile(USER_ID, updateRequest("01011112222", null));
+
+        assertThat(res.getName()).isEqualTo("새이름");
+        assertThat(user.getPhone()).isEqualTo("01011112222");
+        verifyNoInteractions(phoneVerificationPort);
+        verify(userRepository, never()).existsByPhone(anyString());
+    }
+
+    @Test
+    @DisplayName("전화번호 변경 시 SMS 인증 소비 + 중복 아니면 변경 성공")
+    void updateProfile_전화번호변경_성공() {
+        User user = localUserWithPhone("01011112222");
+        when(userRepository.findById(USER_ID)).thenReturn(Optional.of(user));
+        when(userRepository.existsByPhone("01099998888")).thenReturn(false);
+
+        userService.updateProfile(USER_ID, updateRequest("01099998888", "nonce-123"));
+
+        verify(phoneVerificationPort).consumeVerification("01099998888", "nonce-123");
+        assertThat(user.getPhone()).isEqualTo("01099998888");
+    }
+
+    @Test
+    @DisplayName("전화번호 변경 시 이미 사용 중이면 PHONE_ALREADY_EXISTS (인증은 검사 전에 소비됨)")
+    void updateProfile_전화번호중복_PHONE_ALREADY_EXISTS() {
+        User user = localUserWithPhone("01011112222");
+        when(userRepository.findById(USER_ID)).thenReturn(Optional.of(user));
+        when(userRepository.existsByPhone("01099998888")).thenReturn(true);
+
+        CustomException ex = assertThrows(CustomException.class,
+                () -> userService.updateProfile(USER_ID, updateRequest("01099998888", "nonce-123")));
+
+        assertThat(ex.getErrorCode()).isEqualTo(ErrorCode.PHONE_ALREADY_EXISTS);
+        verify(phoneVerificationPort).consumeVerification("01099998888", "nonce-123");
+        assertThat(user.getPhone()).isEqualTo("01011112222");
+    }
+
+    @Test
+    @DisplayName("정보 수정 시 사용자 없음 → USER_NOT_FOUND")
+    void updateProfile_사용자없음_USER_NOT_FOUND() {
+        when(userRepository.findById(USER_ID)).thenReturn(Optional.empty());
+
+        CustomException ex = assertThrows(CustomException.class,
+                () -> userService.updateProfile(USER_ID, updateRequest("01011112222", null)));
+
+        assertThat(ex.getErrorCode()).isEqualTo(ErrorCode.USER_NOT_FOUND);
+    }
+
+    // ─── updateProfileImage (F-USER-3 / A-USER-2) ────────────────────────────
+
+    @Test
+    @DisplayName("프로필 이미지 5MB 초과 → FILE_TOO_LARGE, 파일 서버 미호출")
+    void updateProfileImage_크기초과_FILE_TOO_LARGE() {
+        User user = localUser();
+        when(userRepository.findById(USER_ID)).thenReturn(Optional.of(user));
+        MultipartFile file = mock(MultipartFile.class);
+        when(file.getSize()).thenReturn(6 * 1024 * 1024L);
+
+        CustomException ex = assertThrows(CustomException.class,
+                () -> userService.updateProfileImage(USER_ID, file));
+
+        assertThat(ex.getErrorCode()).isEqualTo(ErrorCode.FILE_TOO_LARGE);
+        verifyNoInteractions(fileServerClient);
+    }
+
+    @Test
+    @DisplayName("허용되지 않는 Content-Type → INVALID_FILE_TYPE")
+    void updateProfileImage_잘못된타입_INVALID_FILE_TYPE() {
+        User user = localUser();
+        when(userRepository.findById(USER_ID)).thenReturn(Optional.of(user));
+        MultipartFile file = mock(MultipartFile.class);
+        when(file.getSize()).thenReturn(1024L);
+        when(file.getContentType()).thenReturn("application/pdf");
+
+        CustomException ex = assertThrows(CustomException.class,
+                () -> userService.updateProfileImage(USER_ID, file));
+
+        assertThat(ex.getErrorCode()).isEqualTo(ErrorCode.INVALID_FILE_TYPE);
+        verifyNoInteractions(fileServerClient);
+    }
+
+    @Test
+    @DisplayName("Content-Type은 image/png이나 실제 시그니처 위조 → INVALID_FILE_TYPE (A-USER-2)")
+    void updateProfileImage_시그니처위조_INVALID_FILE_TYPE() throws Exception {
+        User user = localUser();
+        when(userRepository.findById(USER_ID)).thenReturn(Optional.of(user));
+        MultipartFile file = mock(MultipartFile.class);
+        when(file.getSize()).thenReturn(1024L);
+        when(file.getContentType()).thenReturn("image/png");
+        when(file.getInputStream()).thenReturn(new ByteArrayInputStream("NOT_AN_IMAGE".getBytes()));
+
+        CustomException ex = assertThrows(CustomException.class,
+                () -> userService.updateProfileImage(USER_ID, file));
+
+        assertThat(ex.getErrorCode()).isEqualTo(ErrorCode.INVALID_FILE_TYPE);
+        verifyNoInteractions(fileServerClient);
+    }
+
+    @Test
+    @DisplayName("프로필 이미지 변경 성공 → 새 URL 저장 + 기존 파일 삭제 위임")
+    void updateProfileImage_성공_업로드및기존삭제() throws Exception {
+        User user = localUser();
+        user.updateProfileImage("https://files.example.com/file/old.png");
+        when(userRepository.findById(USER_ID)).thenReturn(Optional.of(user));
+        MultipartFile file = mock(MultipartFile.class);
+        when(file.getSize()).thenReturn(2048L);
+        when(file.getContentType()).thenReturn("image/png");
+        when(file.getInputStream()).thenReturn(new ByteArrayInputStream(PNG_HEADER));
+        when(fileServerClient.upload(file)).thenReturn("https://files.example.com/file/new.png");
+
+        UserProfileResponse res = userService.updateProfileImage(USER_ID, file);
+
+        assertThat(res.getProfileImage()).isEqualTo("https://files.example.com/file/new.png");
+        assertThat(user.getProfileImage()).isEqualTo("https://files.example.com/file/new.png");
+        verify(fileServerClient).upload(file);
+        // 트랜잭션 비활성(단위 테스트) → afterCommit 대신 즉시 위임
+        verify(fileServerClient).delete("https://files.example.com/file/old.png");
+    }
+
+    // ─── withdraw LOCAL 성공 (F-USER-4) ──────────────────────────────────────
+
+    @Test
+    @DisplayName("일반 계정 비밀번호 일치 → 탈퇴(INACTIVE) + UserWithdrawnEvent 발행")
+    void withdraw_일반계정_비밀번호일치_탈퇴() {
+        User user = localUser();
+        when(userRepository.findById(USER_ID)).thenReturn(Optional.of(user));
+        when(passwordEncoder.matches("Password1!", "encodedPassword")).thenReturn(true);
+
+        userService.withdraw(USER_ID, "Password1!", null, "10.0.0.1", "agent");
+
+        assertThat(user.getStatus()).isEqualTo(Status.INACTIVE);
+        ArgumentCaptor<UserWithdrawnEvent> captor = ArgumentCaptor.forClass(UserWithdrawnEvent.class);
+        verify(eventPublisher).publishEvent(captor.capture());
+        assertThat(captor.getValue().userId()).isEqualTo(USER_ID);
+        assertThat(captor.getValue().ipAddress()).isEqualTo("10.0.0.1");
+    }
+
     // ─── 헬퍼 메서드 ────────────────────────────────────────────────────────
 
     private User localUser() {
@@ -222,4 +423,38 @@ class UserServiceTest {
                 .provider(Provider.KAKAO)
                 .build();
     }
+
+    private User localUserWithPhone(String phone) {
+        return User.builder()
+                .id(USER_ID)
+                .email("local@example.com")
+                .password("encodedPassword")
+                .name("일반사용자")
+                .phone(phone)
+                .role(Role.WARD)
+                .status(Status.ACTIVE)
+                .provider(Provider.LOCAL)
+                .build();
+    }
+
+    // UserUpdateRequest 는 setter/builder 가 없어 리플렉션으로 필드 주입 (순수 단위 테스트 유지)
+    private UserUpdateRequest updateRequest(String phone, String nonce) {
+        UserUpdateRequest req = new UserUpdateRequest();
+        ReflectionTestUtils.setField(req, "name", "새이름");
+        ReflectionTestUtils.setField(req, "phone", phone);
+        ReflectionTestUtils.setField(req, "verificationNonce", nonce);
+        ReflectionTestUtils.setField(req, "gender", Gender.MALE);
+        ReflectionTestUtils.setField(req, "birthDate", LocalDate.of(1990, 1, 1));
+        ReflectionTestUtils.setField(req, "postcode", "06236");
+        ReflectionTestUtils.setField(req, "address", "서울특별시 강남구 테헤란로 123");
+        ReflectionTestUtils.setField(req, "addressDetail", "101동 202호");
+        return req;
+    }
+
+    // 유효한 PNG 파일 시그니처 (89 50 4E 47 0D 0A 1A 0A + 패딩) — 12바이트
+    private static final byte[] PNG_HEADER = {
+            (byte) 0x89, (byte) 0x50, (byte) 0x4E, (byte) 0x47,
+            (byte) 0x0D, (byte) 0x0A, (byte) 0x1A, (byte) 0x0A,
+            0, 0, 0, 0
+    };
 }
