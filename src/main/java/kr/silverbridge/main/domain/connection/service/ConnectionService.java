@@ -12,6 +12,7 @@ import kr.silverbridge.main.domain.user.entity.User;
 import kr.silverbridge.main.domain.user.repository.UserRepository;
 import kr.silverbridge.main.global.enums.ConnectionStatus;
 import kr.silverbridge.main.global.enums.Role;
+import kr.silverbridge.main.global.enums.Status;
 import kr.silverbridge.main.global.exception.CustomException;
 import kr.silverbridge.main.global.exception.ErrorCode;
 import lombok.RequiredArgsConstructor;
@@ -180,6 +181,37 @@ public class ConnectionService {
                 connectionId, wardId, guardianId);
     }
 
+    // ─── 계정 탈퇴 연계 ───────────────────────────────────────────
+
+    // 회원 탈퇴 시 본인이 참여(보호자/피보호자)한 live 연결을 정리한다 (D-USER-3).
+    // ACTIVE → DISCONNECTED(상대에게 해제 알림) / PENDING → CANCELLED(무알림, 기존 취소·거절과 동일).
+    // UserWithdrawnEvent 를 받은 UserWithdrawalConnectionListener 가 탈퇴 커밋 후 호출한다.
+    @Transactional
+    public void tearDownConnectionsOnWithdrawal(String withdrawnUserId) {
+        List<Connection> connections = connectionRepository.findByParticipantAndStatusIn(
+                withdrawnUserId, List.of(ConnectionStatus.ACTIVE, ConnectionStatus.PENDING));
+
+        for (Connection connection : connections) {
+            if (connection.getStatus() == ConnectionStatus.ACTIVE) {
+                boolean withdrawnIsGuardian = connection.getGuardianId().equals(withdrawnUserId);
+                String notifyTargetId = withdrawnIsGuardian ? connection.getWardId() : connection.getGuardianId();
+                ConnectionDisconnectedEvent.DisconnectedBy by = withdrawnIsGuardian
+                        ? ConnectionDisconnectedEvent.DisconnectedBy.GUARDIAN
+                        : ConnectionDisconnectedEvent.DisconnectedBy.WARD;
+
+                connection.disconnect();
+                eventPublisher.publishEvent(new ConnectionDisconnectedEvent(
+                        connection.getId(), notifyTargetId, by));
+            } else { // PENDING — 상대 알림 없이 취소 (기존 cancel/refuse 와 동일)
+                connection.cancel();
+            }
+        }
+
+        if (!connections.isEmpty()) {
+            log.info("탈퇴 연결 정리: userId={}, 정리 건수={}", withdrawnUserId, connections.size());
+        }
+    }
+
     // ─── 내부 헬퍼 ────────────────────────────────────────────────
 
     private void validateConnectionRequest(String requesterId, String targetId,
@@ -194,6 +226,10 @@ public class ConnectionService {
         }
 
         User target = requireUser(targetId);
+        // 탈퇴(INACTIVE) 대상은 존재를 드러내지 않고 미존재로 처리 (D-USER-3)
+        if (target.getStatus() != Status.ACTIVE) {
+            throw new CustomException(ErrorCode.USER_NOT_FOUND);
+        }
         if (target.getRole() != targetRole) {
             throw new CustomException(ErrorCode.INVALID_CONNECTION_ROLE);
         }
