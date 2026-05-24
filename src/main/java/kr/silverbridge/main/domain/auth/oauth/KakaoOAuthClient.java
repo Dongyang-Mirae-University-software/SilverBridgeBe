@@ -25,6 +25,10 @@ public class KakaoOAuthClient {
     @Value("${kakao.rest-api-key}")
     private String restApiKey;
 
+    // 카카오 콘솔 [보안 > Client Secret] 발급 값 — 토큰 교환 시 함께 전송해 인가코드 탈취 시 토큰 발급을 차단
+    @Value("${kakao.client-secret}")
+    private String clientSecret;
+
     private static final String TOKEN_URL     = "https://kauth.kakao.com/oauth/token";
     private static final String USER_INFO_URL = "https://kapi.kakao.com/v2/user/me";
 
@@ -55,6 +59,7 @@ public class KakaoOAuthClient {
         MultiValueMap<String, String> params = new LinkedMultiValueMap<>();
         params.add("grant_type", "authorization_code");
         params.add("client_id", restApiKey);
+        params.add("client_secret", clientSecret);
         params.add("redirect_uri", redirectUri);
         params.add("code", code);
 
