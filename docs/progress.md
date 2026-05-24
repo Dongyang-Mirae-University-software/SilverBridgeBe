@@ -4,6 +4,18 @@
 
 ---
 
+## [2026-05-24] — user: 프로필 이미지 업로드 트랜잭션 경계 분리 (D-USER-1 follow-up)
+
+user 도메인 점검 follow-up **D-USER-1** 해소. `updateProfileImage`가 파일 서버 업로드(외부 HTTP, ≤5MB)를 `@Transactional` 내부에서 수행해 업로드 동안 DB 커넥션을 점유하던 문제.
+
+- **방식**: 트랜잭션 경계를 **구조적으로 분리**. `updateProfileImage`에서 `@Transactional` 제거 → 검증·업로드는 트랜잭션 밖, URL 영속화만 신규 협력 빈 `ProfileImagePersister.replace`(@Transactional, 프록시 경유)에 위임. 커밋 후 기존 파일 삭제(D-USER-2 유지).
+- **대안 비교**: bulk `@Modifying`(❌ `@LastModifiedDate updated_at` 갱신 누락) / `TransactionTemplate`(코드베이스 미사용 신규 패턴·단위테스트 난해) / 연결 지연획득 reorder(타이밍 의존·취약) → **dirty checking 유지 + 경계가 코드로 드러나는** 협력 빈 채택.
+- **주의**: 사용자 미존재 시 업로드 후 영속화 단계에서 `USER_NOT_FOUND`(고아 파일 가능) — JWT principal 기반 + A-USER-1로 탈퇴자 토큰 무효화라 실현 가능성 극히 낮음.
+- **테스트**: `updateProfileImage` 4건을 협력 빈 위임 구조로 재작성(검증 실패 시 업로드·영속화 미호출 확인), `ProfileImagePersisterTest` 2건 신규.
+- **브랜치**: `fix/profile-image-upload-tx-2026-05-24`.
+
+---
+
 ## [2026-05-24] — withdraw: 탈퇴 시 연결·FCM 토큰 정리 (D-USER-3 follow-up)
 
 user 도메인 점검(`audit-report-user.md`)의 교차도메인 follow-up **D-USER-3** 해소. 탈퇴(soft delete INACTIVE)가 connections·fcm_tokens를 정리하지 않아 ① 탈퇴자가 상대에게 정상 연결(+ACTIVE면 연락처 PII)로 노출 ② 탈퇴자에게 푸시 지속 ③ 탈퇴자 6자리 ID로 신규 연결 요청 가능하던 문제.
