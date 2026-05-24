@@ -4,6 +4,19 @@
 
 ---
 
+## [2026-05-24] — user: 프로필 이미지 삭제 API 신규 구현
+
+`DELETE /api/user/me/image` 신규 추가. **시나리오: 작업 요청 배경에는 "문서엔 명시되어 있으나 미구현"이라 되어 있었으나, 실제 `프로젝트_설명.txt` 3-5는 "별도 삭제 엔드포인트 없음(교체만 지원)"으로 정반대 기재** + `/api/users/*`(복수) 경로는 오기로 명시. 따라서 *문서 누락 보완*이 아니라 **신규 기능 추가 결정**으로 진행하고 문서 3-5도 갱신함.
+
+- **구현**: 기존 이미지 교체(`updateProfileImage`)의 자동 삭제 패턴(`fileServerClient.delete(oldUrl)`, fire-and-forget) 재사용. 별도 헬퍼 추출 없이 동일 호출 패턴 유지.
+- **정책**: 멱등(이미 없어도 200) / DB가 진실의 원천(파일 서버 삭제 실패해도 `profile_image=NULL` 커밋) / 응답 메시지형 `ApiResponse<Void>` (형제 `withdraw`와 일관) / 로그 INFO·userId만(PII·파일 경로 미로깅).
+- **안내 메시지 분기(UX)**: 서비스가 실제 삭제 여부를 `boolean` 반환 → 실제 삭제 "프로필 이미지가 삭제되었습니다.", 이미 없던 경우 "설정된 프로필 이미지가 없어 기본 이미지를 사용 중입니다." (둘 다 200). 시니어 타겟상 *현재 기본 이미지 상태*임을 명시.
+- **FileServerClient·User 엔티티 무변경** — `delete(String)`은 이미 존재(null-safe·예외 삼킴·WARN), `updateProfileImage(null)` 그대로 사용.
+- **테스트**: `UserServiceTest`에 4건 추가(이미지 있음 삭제 / 이미지 없음 멱등 / 파일 서버 결과 무관 NULL / 사용자 없음 404). `./gradlew test --tests UserServiceTest` 11건 전부 통과, `compileJava/compileTestJava` 성공.
+- **산출물**: `docs/(2026-05-24) feature-profile-image-delete.md`, `프로젝트_설명.txt` 3-5 갱신. (브랜치 `feature/profile-image-delete`)
+
+---
+
 ## [2026-05-23] — auth: 비밀번호 재설정 정책 변경 스팟 점검 완료
 
 정책 변경(`3a0fbea`/PR #166, always-200 → 404/400/429)의 변경 부분만 스팟 점검(보안·동시성·계약·테스트·문서). 코드 레벨 실결함 0건 — **조건부 PASS**. RedisCounter Lua 원자성·SMS 비용 보호(미가입 SMS 미발송)·PII 마스킹·문서 일관성 양호. 후속: ① 🟠 nginx `X-Forwarded-For` 처리 확인(always-200 폐지로 IP RateLimit이 enumeration 1차 방어가 됨 — 헤더 스푸핑 시 우회 가능), ② 🟡 validation 400(`@Email`/`@Pattern`) 컨트롤러 테스트 보강. (산출물: `docs/(2026-05-23) audit-spot-check-password-reset.md`)
