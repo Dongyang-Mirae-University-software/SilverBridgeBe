@@ -129,6 +129,20 @@ class ConnectionServiceTest {
         }
 
         @Test
+        @DisplayName("대상이 탈퇴(INACTIVE) → USER_NOT_FOUND (존재 비노출), 저장 없음")
+        void 대상_INACTIVE_USER_NOT_FOUND() {
+            ConnectionRequestDto dto = requestDto(WARD_ID, RELATION);
+            when(userRepository.findById(GUARDIAN_ID)).thenReturn(java.util.Optional.of(guardian()));
+            when(userRepository.findById(WARD_ID)).thenReturn(java.util.Optional.of(inactiveWard()));
+
+            CustomException ex = assertThrows(CustomException.class,
+                    () -> connectionService.requestConnectionAsGuardian(GUARDIAN_ID, dto));
+
+            assertThat(ex.getErrorCode()).isEqualTo(ErrorCode.USER_NOT_FOUND);
+            verify(connectionRepository, never()).save(any());
+        }
+
+        @Test
         @DisplayName("요청자가 GUARDIAN이 아님 → INVALID_CONNECTION_ROLE")
         void 요청자역할불일치_INVALID_CONNECTION_ROLE() {
             ConnectionRequestDto dto = requestDto(WARD_ID, RELATION);
@@ -434,6 +448,83 @@ class ConnectionServiceTest {
         }
     }
 
+    // ─── 회원 탈퇴 연계 정리 (D-USER-3) ───────────────────────────────────────
+
+    @Nested
+    @DisplayName("tearDownConnectionsOnWithdrawal")
+    class TearDownOnWithdrawal {
+
+        @Test
+        @DisplayName("탈퇴자가 보호자인 ACTIVE 연결 → DISCONNECTED + 피보호자에게 알림(GUARDIAN)")
+        void 보호자탈퇴_ACTIVE해제_피보호자알림() {
+            Connection active = Connection.builder()
+                    .id(1L).guardianId(GUARDIAN_ID).wardId(WARD_ID)
+                    .status(ConnectionStatus.ACTIVE).initiatedBy(GUARDIAN_ID).relation(RELATION).build();
+            when(connectionRepository.findByParticipantAndStatusIn(
+                    GUARDIAN_ID, List.of(ConnectionStatus.ACTIVE, ConnectionStatus.PENDING)))
+                    .thenReturn(List.of(active));
+
+            connectionService.tearDownConnectionsOnWithdrawal(GUARDIAN_ID);
+
+            assertThat(active.getStatus()).isEqualTo(ConnectionStatus.DISCONNECTED);
+            ArgumentCaptor<ConnectionDisconnectedEvent> captor =
+                    ArgumentCaptor.forClass(ConnectionDisconnectedEvent.class);
+            verify(eventPublisher).publishEvent(captor.capture());
+            assertThat(captor.getValue().notifyTargetId()).isEqualTo(WARD_ID);
+            assertThat(captor.getValue().disconnectedBy())
+                    .isEqualTo(ConnectionDisconnectedEvent.DisconnectedBy.GUARDIAN);
+        }
+
+        @Test
+        @DisplayName("탈퇴자가 피보호자인 ACTIVE 연결 → DISCONNECTED + 보호자에게 알림(WARD)")
+        void 피보호자탈퇴_ACTIVE해제_보호자알림() {
+            Connection active = Connection.builder()
+                    .id(1L).guardianId(GUARDIAN_ID).wardId(WARD_ID)
+                    .status(ConnectionStatus.ACTIVE).initiatedBy(GUARDIAN_ID).relation(RELATION).build();
+            when(connectionRepository.findByParticipantAndStatusIn(
+                    WARD_ID, List.of(ConnectionStatus.ACTIVE, ConnectionStatus.PENDING)))
+                    .thenReturn(List.of(active));
+
+            connectionService.tearDownConnectionsOnWithdrawal(WARD_ID);
+
+            assertThat(active.getStatus()).isEqualTo(ConnectionStatus.DISCONNECTED);
+            ArgumentCaptor<ConnectionDisconnectedEvent> captor =
+                    ArgumentCaptor.forClass(ConnectionDisconnectedEvent.class);
+            verify(eventPublisher).publishEvent(captor.capture());
+            assertThat(captor.getValue().notifyTargetId()).isEqualTo(GUARDIAN_ID);
+            assertThat(captor.getValue().disconnectedBy())
+                    .isEqualTo(ConnectionDisconnectedEvent.DisconnectedBy.WARD);
+        }
+
+        @Test
+        @DisplayName("PENDING 연결 → CANCELLED, 알림 없음")
+        void PENDING_취소_무알림() {
+            Connection pending = Connection.builder()
+                    .id(2L).guardianId(GUARDIAN_ID).wardId(WARD_ID)
+                    .status(ConnectionStatus.PENDING).initiatedBy(GUARDIAN_ID).relation(RELATION).build();
+            when(connectionRepository.findByParticipantAndStatusIn(
+                    WARD_ID, List.of(ConnectionStatus.ACTIVE, ConnectionStatus.PENDING)))
+                    .thenReturn(List.of(pending));
+
+            connectionService.tearDownConnectionsOnWithdrawal(WARD_ID);
+
+            assertThat(pending.getStatus()).isEqualTo(ConnectionStatus.CANCELLED);
+            verify(eventPublisher, never()).publishEvent(any());
+        }
+
+        @Test
+        @DisplayName("정리할 연결 없음 → no-op, 이벤트 없음")
+        void 연결없음_noop() {
+            when(connectionRepository.findByParticipantAndStatusIn(
+                    WARD_ID, List.of(ConnectionStatus.ACTIVE, ConnectionStatus.PENDING)))
+                    .thenReturn(List.of());
+
+            connectionService.tearDownConnectionsOnWithdrawal(WARD_ID);
+
+            verify(eventPublisher, never()).publishEvent(any());
+        }
+    }
+
     // ─── 헬퍼 ───────────────────────────────────────────────────────────────
 
     private ConnectionRequestDto requestDto(String targetId, String relation) {
@@ -473,6 +564,13 @@ class ConnectionServiceTest {
                 .role(Role.WARD).status(Status.ACTIVE).provider(Provider.LOCAL)
                 .phone("010-3333-4444").address("서울시 송파구").addressDetail("202호")
                 .profileImage("https://img/w.png")
+                .build();
+    }
+
+    private User inactiveWard() {
+        return User.builder()
+                .id(WARD_ID).email("inactive@example.com").name("탈퇴피보호자")
+                .role(Role.WARD).status(Status.INACTIVE).provider(Provider.LOCAL)
                 .build();
     }
 }
