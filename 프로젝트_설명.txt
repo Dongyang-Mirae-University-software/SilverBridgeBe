@@ -289,9 +289,16 @@ SilverBridge는 노인(피보호자)과 그 가족(보호자)을 연결하는 �
     PUT /api/user/me/password   → 현재 비밀번호 + 새 비밀번호 입력
 
   프로필 이미지:
-    PATCH /api/user/me/image    → 이미지 교체 (multipart/form-data,
+    PATCH  /api/user/me/image   → 이미지 교체 (multipart/form-data,
            5MB 이하, JPG/PNG/WebP/GIF). 교체 시 기존 파일 자동 삭제
-    ※ 별도 이미지 삭제 엔드포인트는 없음 (교체만 지원)
+    DELETE /api/user/me/image   → 이미지 삭제 (기본 이미지로 복귀, profileImage=null)
+           → 멱등(idempotent): 이미 이미지가 없어도 200. 여러 번 호출해도 결과 동일.
+           → 파일 서버 파일도 함께 삭제하되, 파일 서버 삭제가 실패해도 DB는 NULL 처리
+             (DB가 진실의 원천). 응답은 메시지형(ApiResponse<Void>).
+           → 응답 message로 상태 안내(둘 다 200):
+             · 실제 삭제: "프로필 이미지가 삭제되었습니다."
+             · 이미 없던 경우: "설정된 프로필 이미지가 없어 기본 이미지를 사용 중입니다."
+           (2026-05-24 신규 추가 — 이전엔 교체만 지원했음)
 
   회원 탈퇴:
     DELETE /api/user/me   → 계정 비활성화(status=INACTIVE)
