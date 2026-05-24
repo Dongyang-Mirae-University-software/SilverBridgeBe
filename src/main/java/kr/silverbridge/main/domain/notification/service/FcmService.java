@@ -39,6 +39,14 @@ public class FcmService {
         fcmTokenRepository.deleteByToken(token);
     }
 
+    // 사용자의 모든 FCM 토큰 삭제 (회원 탈퇴 시, D-USER-3)
+    // 탈퇴는 soft delete(status=INACTIVE)라 user 행이 남아 FK CASCADE가 발동하지 않으므로 명시적으로 삭제한다.
+    @Transactional
+    public void deleteAllTokens(String userId) {
+        fcmTokenRepository.deleteByUserId(userId);
+        log.info("FCM 토큰 일괄 삭제(탈퇴): userId={}", userId);
+    }
+
     // 특정 사용자에게 푸시 알림 발송 (등록된 모든 디바이스)
     public void sendToUser(String userId, String title, String body, Map<String, String> data) {
         List<FcmToken> tokens = fcmTokenRepository.findByUserId(userId);
