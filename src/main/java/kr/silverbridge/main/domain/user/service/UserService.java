@@ -152,10 +152,10 @@ public class UserService {
         return true;
     }
 
-    // 회원 탈퇴
-    // 일반 사용자: 비밀번호 확인 후 비활성화
-    // 카카오 사용자: confirmation 문자열("탈퇴") 일치 확인 후 비활성화 — access token 단독 탈취 시 영구 비활성화 차단(H-6)
-    // 토큰 정리·접속 로그는 UserWithdrawnEvent를 통해 auth 도메인에서 처리
+    // 회원 탈퇴 (1단계) — 본인 확인 + 비활성화 + UserWithdrawnEvent 발행.
+    // 일반 사용자: 비밀번호 확인 / 카카오 사용자: confirmation 문자열("탈퇴") 일치 확인(H-6).
+    // deactivate()로 즉시 로그인을 막고, 토큰 정리·접속 로그·연결 해제(상대 알림)는 리스너가
+    // user 행이 살아있는 AFTER_COMMIT 시점에 처리한다. 그 직후 컨트롤러가 purgeWithdrawnUser()로 행을 영구 삭제한다.
     @Transactional
     public void withdraw(String userId, String password, String confirmation, String ipAddress, String userAgent) {
         User user = getUserOrThrow(userId);
@@ -173,6 +173,26 @@ public class UserService {
 
         user.deactivate();
         eventPublisher.publishEvent(new UserWithdrawnEvent(userId, ipAddress, userAgent));
+    }
+
+    // 회원 탈퇴 (2단계) — 사용자 행을 영구 삭제(hard delete)한다.
+    // withdraw() 커밋 후, 그 AFTER_COMMIT 리스너(연결 해제+상대 알림, FCM·refresh 토큰 정리, WITHDRAW 로그)가
+    // user 행이 살아있는 동안 모두 끝난 뒤 컨트롤러에서 이어 호출한다.
+    // 행 삭제 시 FK 제약에 따라 connections·fcm_tokens·refresh_tokens 는 CASCADE 삭제되고,
+    // access_logs·announcements 는 user_id 가 NULL 로 익명화된다(감사 기록 보존). 같은 이메일/전화번호 재가입 가능.
+    // 멱등: 이미 삭제됐으면 조용히 종료.
+    @Transactional
+    public void purgeWithdrawnUser(String userId) {
+        User user = userRepository.findById(userId).orElse(null);
+        if (user == null) {
+            return;
+        }
+        String profileImageUrl = user.getProfileImage();
+        userRepository.delete(user);
+        // 업로드한 프로필 이미지 파일은 커밋 이후 fire-and-forget 으로 제거 (D-USER-2).
+        // 카카오 CDN 등 외부 URL이면 파일서버가 대상 파일을 못 찾아 WARN 로깅만 하고 넘어간다.
+        deleteStoredFileAfterCommit(profileImageUrl);
+        log.info("[WITHDRAW] 계정 영구 삭제 완료 userId={}", userId);
     }
 
     // userId로 사용자 조회 (없으면 USER_NOT_FOUND) — 전 메서드 공통 진입점 (B-USER-2)
