@@ -33,6 +33,7 @@ import java.util.Optional;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
@@ -397,6 +398,41 @@ class UserServiceTest {
         verify(eventPublisher).publishEvent(captor.capture());
         assertThat(captor.getValue().userId()).isEqualTo(USER_ID);
         assertThat(captor.getValue().ipAddress()).isEqualTo("10.0.0.1");
+    }
+
+    // ─── purgeWithdrawnUser (hard delete, 2단계) ─────────────────────────────
+
+    @Test
+    @DisplayName("purgeWithdrawnUser: 사용자 행 hard delete + 업로드 프로필 이미지 파일 삭제")
+    void purgeWithdrawnUser_행삭제_및_이미지삭제() {
+        User user = User.builder()
+                .id(USER_ID)
+                .email("local@example.com")
+                .password("encodedPassword")
+                .name("일반사용자")
+                .role(Role.WARD)
+                .status(Status.INACTIVE)
+                .provider(Provider.LOCAL)
+                .profileImage(IMAGE_URL)
+                .build();
+        when(userRepository.findById(USER_ID)).thenReturn(Optional.of(user));
+
+        userService.purgeWithdrawnUser(USER_ID);
+
+        verify(userRepository).delete(user);
+        // 단위 테스트엔 활성 트랜잭션이 없어 deleteStoredFileAfterCommit 가 즉시 삭제 호출
+        verify(fileServerClient).delete(IMAGE_URL);
+    }
+
+    @Test
+    @DisplayName("purgeWithdrawnUser: 이미 삭제된 사용자면 멱등 종료(삭제 시도 없음)")
+    void purgeWithdrawnUser_없으면_멱등() {
+        when(userRepository.findById(USER_ID)).thenReturn(Optional.empty());
+
+        userService.purgeWithdrawnUser(USER_ID);
+
+        verify(userRepository, never()).delete(any());
+        verifyNoInteractions(fileServerClient);
     }
 
     // ─── 헬퍼 메서드 ────────────────────────────────────────────────────────
