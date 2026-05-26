@@ -188,7 +188,7 @@ public class UserController {
     @Operation(
             summary = "회원 탈퇴",
             description = """
-                    본인 확인 후 계정을 비활성화합니다. 탈퇴 후 해당 계정으로 로그인이 불가합니다.
+                    본인 확인 후 계정과 관련 데이터를 영구 삭제합니다. 탈퇴 후 같은 이메일/전화번호로 재가입할 수 있습니다.
 
                     [본인 확인 방식]
                     - 일반(LOCAL) 가입자: password 필수
@@ -217,6 +217,9 @@ public class UserController {
                 ClientIpResolver.resolve(httpRequest),
                 httpRequest.getHeader("User-Agent")
         );
+        // withdraw() 커밋 후 AFTER_COMMIT 리스너(연결 해제·토큰 정리·WITHDRAW 로그)가 끝난 뒤
+        // 사용자 행을 영구 삭제한다 (정리가 user 행이 살아있는 동안 끝나도록 단계를 분리).
+        userService.purgeWithdrawnUser(userId);
         return ApiResponse.ok("회원 탈퇴가 완료되었습니다.");
     }
 }
