@@ -6,6 +6,7 @@ import kr.silverbridge.main.domain.connection.dto.PendingConnectionResponse;
 import kr.silverbridge.main.domain.connection.entity.Connection;
 import kr.silverbridge.main.domain.connection.event.ConnectionAcceptedEvent;
 import kr.silverbridge.main.domain.connection.event.ConnectionDisconnectedEvent;
+import kr.silverbridge.main.domain.connection.event.ConnectionRefusedEvent;
 import kr.silverbridge.main.domain.connection.event.ConnectionRequestedEvent;
 import kr.silverbridge.main.domain.connection.repository.ConnectionRepository;
 import kr.silverbridge.main.domain.user.entity.User;
@@ -253,19 +254,24 @@ class ConnectionServiceTest {
     class RefuseConnection {
 
         @Test
-        @DisplayName("PENDING 거절 → REFUSED 전환, 이벤트 없음")
-        void 정상거절_REFUSED_이벤트없음() {
+        @DisplayName("PENDING 거절 → REFUSED 전환 + 보호자에게 ConnectionRefusedEvent 발행")
+        void 정상거절_REFUSED전환_및_이벤트() {
             Connection connection = connection(ConnectionStatus.PENDING);
             when(connectionRepository.findById(CONNECTION_ID)).thenReturn(java.util.Optional.of(connection));
 
             connectionService.refuseConnectionAsWard(WARD_ID, CONNECTION_ID);
 
             assertThat(connection.getStatus()).isEqualTo(ConnectionStatus.REFUSED);
-            verify(eventPublisher, never()).publishEvent(any());
+
+            ArgumentCaptor<ConnectionRefusedEvent> captor =
+                    ArgumentCaptor.forClass(ConnectionRefusedEvent.class);
+            verify(eventPublisher).publishEvent(captor.capture());
+            assertThat(captor.getValue().connectionId()).isEqualTo(CONNECTION_ID);
+            assertThat(captor.getValue().guardianId()).isEqualTo(GUARDIAN_ID);
         }
 
         @Test
-        @DisplayName("PENDING이 아닌 연결 거절 → CONNECTION_NOT_PENDING")
+        @DisplayName("PENDING이 아닌 연결 거절 → CONNECTION_NOT_PENDING, 상태 불변·이벤트 없음")
         void 비PENDING거절_CONNECTION_NOT_PENDING() {
             Connection connection = connection(ConnectionStatus.ACTIVE);
             when(connectionRepository.findById(CONNECTION_ID)).thenReturn(java.util.Optional.of(connection));
@@ -274,6 +280,8 @@ class ConnectionServiceTest {
                     () -> connectionService.refuseConnectionAsWard(WARD_ID, CONNECTION_ID));
 
             assertThat(ex.getErrorCode()).isEqualTo(ErrorCode.CONNECTION_NOT_PENDING);
+            assertThat(connection.getStatus()).isEqualTo(ConnectionStatus.ACTIVE);
+            verify(eventPublisher, never()).publishEvent(any());
         }
     }
 

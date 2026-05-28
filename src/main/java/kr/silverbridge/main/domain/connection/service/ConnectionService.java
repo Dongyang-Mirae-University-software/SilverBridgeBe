@@ -6,6 +6,7 @@ import kr.silverbridge.main.domain.connection.dto.PendingConnectionResponse;
 import kr.silverbridge.main.domain.connection.entity.Connection;
 import kr.silverbridge.main.domain.connection.event.ConnectionAcceptedEvent;
 import kr.silverbridge.main.domain.connection.event.ConnectionDisconnectedEvent;
+import kr.silverbridge.main.domain.connection.event.ConnectionRefusedEvent;
 import kr.silverbridge.main.domain.connection.event.ConnectionRequestedEvent;
 import kr.silverbridge.main.domain.connection.repository.ConnectionRepository;
 import kr.silverbridge.main.domain.user.entity.User;
@@ -160,7 +161,12 @@ public class ConnectionService {
             throw new CustomException(ErrorCode.CONNECTION_NOT_PENDING);
         }
         connection.refuse();
-        log.info("연결 거절(피보호자): connectionId={}, wardId={}", connectionId, wardId);
+
+        eventPublisher.publishEvent(new ConnectionRefusedEvent(
+                connectionId, connection.getGuardianId()
+        ));
+        log.info("연결 거절(피보호자): connectionId={}, wardId={}, guardianId={}",
+                connectionId, wardId, connection.getGuardianId());
     }
 
     // 피보호자: 연결 해제 (ACTIVE만)

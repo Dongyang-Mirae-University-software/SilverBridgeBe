@@ -2,6 +2,7 @@ package kr.silverbridge.main.domain.connection.listener;
 
 import kr.silverbridge.main.domain.connection.event.ConnectionAcceptedEvent;
 import kr.silverbridge.main.domain.connection.event.ConnectionDisconnectedEvent;
+import kr.silverbridge.main.domain.connection.event.ConnectionRefusedEvent;
 import kr.silverbridge.main.domain.connection.event.ConnectionRequestedEvent;
 import kr.silverbridge.main.domain.notification.service.FcmService;
 import kr.silverbridge.main.global.websocket.WebSocketEventPublisher;
@@ -54,6 +55,18 @@ public class ConnectionNotificationListener {
         fcmService.sendToUser(event.guardianId(), "연결 수락",
                 "피보호자가 연결 요청을 수락했습니다.",
                 Map.of("type", "CONNECTION_ACCEPTED",
+                        "connectionId", String.valueOf(event.connectionId())));
+    }
+
+    @Async("notificationExecutor")
+    @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
+    public void handleRefused(ConnectionRefusedEvent event) {
+        webSocketEventPublisher.sendToUser(event.guardianId(), "connection-refused",
+                Map.of("connectionId", event.connectionId()));
+
+        fcmService.sendToUser(event.guardianId(), "연결 거절",
+                "연결 요청이 거절되었습니다.",
+                Map.of("type", "CONNECTION_REFUSED",
                         "connectionId", String.valueOf(event.connectionId())));
     }
 
