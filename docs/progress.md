@@ -4,6 +4,39 @@
 
 ---
 
+## [2026-05-28] — connection: 연결 거절 시 보호자 실시간 알림 추가 (PR `feature/connection-refused-notification`)
+
+피보호자가 연결 요청을 거절해도 보호자에게 이벤트가 안 가, 보호자 웹이 새로고침 전까지 "요청중"에 멈춰 있던 문제. 수락·해제는 이벤트를 발행하는데 거절만 누락된 **비대칭** 해소.
+
+- **원인**: `ConnectionService.refuseConnectionAsWard()`가 `connection.refuse()`만 호출하고 이벤트 미발행 (수락=`ConnectionAcceptedEvent`, 해제=`ConnectionDisconnectedEvent` 발행과 대조).
+- **구현(수락 흐름 100% 미러링)**:
+  - `ConnectionRefusedEvent(connectionId, guardianId)` 신규 — `ConnectionAcceptedEvent`와 동일 구조.
+  - `refuseConnectionAsWard()` — `refuse()` 후 이벤트 발행 추가.
+  - `ConnectionNotificationListener.handleRefused()` — `@TransactionalEventListener(AFTER_COMMIT)` + `@Async`, WebSocket `connection-refused` + FCM `"연결 요청이 거절되었습니다."`(type `CONNECTION_REFUSED`).
+- **FCM 문구 결정**: 시니어/4050 직관성 우선 — "거절되었습니다"로 명확히(모호한 "종료/해제" 회피).
+- **인가**: `connection-refused`는 `StompSubscriptionAuthorizationInterceptor`의 범용 `{userId}==세션` 검증으로 자동 보호 → 코드 변경 없음(확인만).
+- **알림 비대칭(의도)**: 피보호자 거절→보호자 알림O / 보호자 취소·탈퇴 PENDING→CANCELLED 무알림 유지(거절만 명시적 거부라 통지 필요).
+- **테스트**: `ConnectionServiceTest` 기존 "거절 시 이벤트 없음" 테스트를 **의도 반전**(이벤트 발행 검증)·비PENDING `never publish` 추가, `ConnectionNotificationListenerTest`에 `handleRefused` WS+FCM 발송·문구 검증 추가.
+- **프론트 인계**: 구독 `/topic/{guardianId}/connection-refused`, payload `{ connectionId }` → 수신 시 요청 목록에서 제거 + "거절됨" 표시. FCM `"연결 요청이 거절되었습니다."` 수신 처리.
+- **DB 영향 없음**: 상태 전이 동일, 이벤트 발행만 추가 → 마이그레이션 불필요.
+- **산출물**: `docs/(2026-05-28) feature-connection-refused-notification.md`, CLAUDE.md §9 메모, 프로젝트_설명.txt(3-6·4) 갱신.
+- 검증: `./gradlew build --no-daemon` BUILD SUCCESSFUL (전체 테스트 포함).
+
+---
+
+## [2026-05-28] — auth: 카카오 로그인 409 "이미 사용 중인 이메일" 원인 진단 (백엔드 정상, 프론트 버그)
+
+`POST /api/auth/signin/kakao` → 409 `EMAIL_ALREADY_EXISTS` 신고 조사 (진단 전용, 코드 수정 없음).
+
+- **판정**: **케이스 D (프론트엔드 흐름 버그)** — 백엔드 카카오 OAuth 로직은 정상. Client Secret 회귀(C)·백엔드 신규가입 버그(B) 배제.
+- **근본 원인**: 프론트 `SignupContent.tsx:30 const isKakao = Boolean(kakaoId && email && name)`. 카카오 신규 가입자는 **name이 항상 null**(백엔드 설계, `KakaoAuthService.java:103 ofNewUser(...,null,...)`)이라 `isKakao`가 늘 false → 카카오 가입자가 **일반 가입 폼으로 빠져 LOCAL 계정(+비밀번호) 생성** → 이후 같은 이메일 카카오 로그인이 `existsByEmail` 충돌로 409. (FE 버그 2026-04-25부터, Client Secret 무관)
+- **증거**: DB `provider=LOCAL, has_password=t, KAKAO_LOGIN 로그 0건` → 일반 가입·일반 로그인한 계정임이 "카카오로 가입했다"는 인지와 모순. 사용자 생성 경로는 `register`(LOCAL)·`kakaoRegister`(KAKAO) 2개뿐이라 LOCAL+provider_id=null은 `/api/auth/signup`에서만 생성 가능.
+- **심각도**: 높음 — `isKakao`가 모든 신규 카카오 가입자에게 false라 **카카오 회원가입 기능 전체가 사실상 작동 불능**.
+- **수정 방향**: 1차(FE 필수) `SignupContent.tsx:30`에서 `name` 조건 제거 → KakaoSignupForm 정상 렌더 → `signupKakao`로 KAKAO 계정 생성. 2차(BE 선택) 콜백 409 안내 개선·login provider 격리 명시화(부작용: 카카오 계정 일반 로그인 5회 시 본인 계정 30분 잠금).
+- **상세**: `docs/(2026-05-28) bug-investigation-kakao-409.md`. 코드 수정은 별도 세션(FE 저장소 `../SilverBridgeFe`).
+
+---
+
 ## [2026-05-25] — global: 공유 @ValidPassword 추출 (B-USER-1 follow-up, user+auth 교차)
 
 user 도메인 점검 follow-up **B-USER-1** 해소. 비밀번호 정규식이 user `PasswordChangeRequest` + auth `RegisterRequest`/`PasswordResetConfirmRequest` **3곳에 복제**되던 문제(+테스트 fixture까지 4곳).
