@@ -45,7 +45,10 @@ public class KakaoAuthService {
     @Value("${kakao.redirect-uri}")
     private String redirectUri;
 
-    private static final long KAKAO_PENDING_TTL = 10L;
+    // 카카오 신규 가입 세션(pending) 유지 시간(분). 카카오 로그인(kakaoLogin) 시점부터 카운트되며,
+    // 시니어/4050 타겟이 실명·주소·전화번호 입력 + SMS 인증까지 마치는 4단계 가입을 여유 있게 끝낼 수 있도록 30분으로 둔다.
+    // (access token 만료 30분과는 무관한 별개 값 — 이 키는 가입 완료 전 임시 세션용)
+    private static final long KAKAO_PENDING_TTL = 30L;
     // 카카오가 이메일을 제공하지 않을 때 사용하는 대체 이메일 형식 (kakao_{id}@kakao.com)
     private static final String FALLBACK_EMAIL_PREFIX = "kakao_";
     private static final String FALLBACK_EMAIL_DOMAIN = "@kakao.com";
@@ -96,7 +99,7 @@ public class KakaoAuthService {
                     // 카카오 닉네임은 사용하지 않는다. 회원가입 시 사용자가 본인 실명을 직접 입력하도록
                     // name은 프리필하지 않고 null로 반환한다.
 
-                    // Redis에 카카오 정보 임시 저장 (TTL 10분)
+                    // Redis에 카카오 정보 임시 저장 (TTL 30분 — KAKAO_PENDING_TTL)
                     redisTemplate.opsForValue()
                             .set(RedisKeys.KAKAO_PENDING + kakaoId, email, KAKAO_PENDING_TTL, TimeUnit.MINUTES);
 
