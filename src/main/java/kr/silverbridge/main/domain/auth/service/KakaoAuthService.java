@@ -45,7 +45,10 @@ public class KakaoAuthService {
     @Value("${kakao.redirect-uri}")
     private String redirectUri;
 
-    private static final long KAKAO_PENDING_TTL = 10L;
+    // 카카오 신규 가입 세션(pending) 유지 시간(분). 카카오 로그인(kakaoLogin) 시점부터 카운트되며,
+    // 시니어/4050 타겟이 실명·주소·전화번호 입력 + SMS 인증까지 마치는 4단계 가입을 여유 있게 끝낼 수 있도록 30분으로 둔다.
+    // (access token 만료 30분과는 무관한 별개 값 — 이 키는 가입 완료 전 임시 세션용)
+    private static final long KAKAO_PENDING_TTL = 30L;
     // 카카오가 이메일을 제공하지 않을 때 사용하는 대체 이메일 형식 (kakao_{id}@kakao.com)
     private static final String FALLBACK_EMAIL_PREFIX = "kakao_";
     private static final String FALLBACK_EMAIL_DOMAIN = "@kakao.com";
@@ -96,7 +99,7 @@ public class KakaoAuthService {
                     // 카카오 닉네임은 사용하지 않는다. 회원가입 시 사용자가 본인 실명을 직접 입력하도록
                     // name은 프리필하지 않고 null로 반환한다.
 
-                    // Redis에 카카오 정보 임시 저장 (TTL 10분)
+                    // Redis에 카카오 정보 임시 저장 (TTL 30분 — KAKAO_PENDING_TTL)
                     redisTemplate.opsForValue()
                             .set(RedisKeys.KAKAO_PENDING + kakaoId, email, KAKAO_PENDING_TTL, TimeUnit.MINUTES);
 
@@ -105,13 +108,10 @@ public class KakaoAuthService {
     }
 
     // 카카오 신규 회원가입 완료
-    // SMS 인증 확인 → 카카오 세션 확인 → 중복 검사 → DB 저장 → 토큰 발급
+    // 카카오 세션 확인 → 중복 검사 → SMS 인증 소비 → DB 저장 → 토큰 발급
     @Transactional
     public LoginResponse kakaoRegister(KakaoRegisterRequest request, String ipAddress, String userAgent) {
         String kakaoId = request.getKakaoId();
-
-        // SMS 인증 nonce 일치 확인 + 키 소비 (H-5)
-        smsService.consumeVerification(request.getPhone(), request.getVerificationNonce());
 
         // 카카오 세션 확인 (이메일 위변조 방지)
         String pendingKey = RedisKeys.KAKAO_PENDING + kakaoId;
@@ -134,6 +134,13 @@ public class KakaoAuthService {
         if (userRepository.existsByPhone(request.getPhone())) {
             throw new CustomException(ErrorCode.PHONE_ALREADY_EXISTS);
         }
+
+        // SMS 인증 nonce 일치 확인 + 키 소비 (H-5)
+        // 위의 모든 검증(세션 만료·역할·중복)을 통과한 뒤 맨 마지막에 소비한다.
+        // consumeVerification은 Redis 키를 즉시 삭제하는데 이 삭제는 @Transactional 롤백 대상이 아니므로,
+        // 검증보다 먼저 소비하면 검증 실패 시 nonce가 비가역적으로 소모돼 재시도가 막힌다.
+        // LOCAL AuthService.register와 동일하게 "검증 후 마지막 소비" 순서를 맞춘다.
+        smsService.consumeVerification(request.getPhone(), request.getVerificationNonce());
 
         // 카카오 사용자 DB 저장
         User user = User.builder()
