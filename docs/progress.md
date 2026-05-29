@@ -629,3 +629,19 @@ REST API Key 단독 대비 보안 강화 — 인가코드 탈취 시 토큰 발�
 - 시크릿 평문 노출 없음(코드/yaml/로그/Git 히스토리), `.env.dev` 미추적, 토큰 교환·검증기 정합, 기존 카카오 흐름 회귀 없음
 - 빌드 `./gradlew build -x test --no-daemon` EXIT 0
 - 산출물: `docs/(2026-05-25) audit-spot-check-kakao-client-secret.md`
+
+---
+
+## [2026-05-29] 카카오 가입 중복/인증소비/세션만료 버그 진단 (수정 미적용)
+
+재현: LOCAL 가입 → 탈퇴 → 같은 카카오 계정 가입 → 폰 인증 완료 → "가입완료"에서 "입력값이 중복됐습니다"(409) → 재인증 후 "전화번호 인증을 먼저 완료해주세요"(SMS_NOT_VERIFIED).
+
+- **원인 C (확정·root, 카카오 한정)**: `KakaoAuthService.kakaoRegister`가 `consumeVerification`(nonce 삭제, L114)을 **중복검사·세션확인보다 먼저** 호출. 이후 단계 실패 시 `@Transactional`은 DB만 롤백, **Redis nonce 삭제는 비가역** → 가입 실패가 인증을 태워 재시도 불가. LOCAL `register`는 검증 후 마지막에 소비(L83)라 무영향 → **순서 비대칭 회귀**.
+- **원인 E (확정)**: 사용자가 본 "카카오 세션 만료"는 access token(30분)이 아니라 **`kakao:pending` 10분**(`KakaoAuthService.java:48`). 단계3에서 타이머 시작, 시니어 4단계 가입이 10분 초과 → `KAKAO_SESSION_EXPIRED`. 게다가 세션확인이 nonce소비보다 뒤라 E도 C를 유발.
+- **원인 B (기각)**: PHASE2 DB 실측 — email/phone/kakao 행 **전부 0건**. hard delete 완전 동작 → 잔존 INACTIVE 없음. **단계5 "입력값이 중복됐습니다"는 DB 진짜 중복 아님.** `existsBy*` status 필터 부재는 원인 아닌 latent 갭으로만 잔존.
+- **단계5 최종 판정 = E (소거법)**: nonce 소비(L114) 이후 실패 분기 3개 중 ①consume실패(메시지 불일치)·②중복(DB 0행) 제거 → **③ KAKAO_SESSION_EXPIRED만 남음.** 프론트가 이 400을 "중복"으로 오표기(FE 정정 필요). Redis도 pending/verified 전부 만료(TTL -2)로 사후 스냅샷 일치.
+- **연쇄**: 단계5 세션만료(E, pending 10분) → nonce 선소비(C, L114가 세션확인 L119보다 앞) → 단계6 SMS_NOT_VERIFIED 재시도 차단.
+- **수정 방향(미적용)**: C-1 소비 순서 교정(최우선, 카카오 메서드 한정·무영향) → E-1 pending TTL 상향(예 30분) + FE 에러 메시지 정정. B는 수정 불요(잠재 갭만 기록).
+- **다음**: 근본원인 확정(C+E) → 사용자 수정 방향 승인 시 `fix/kakao-register-...` 브랜치 착수.
+- 빌드: `./gradlew build -x test --no-daemon` EXIT 0.
+- 산출물: `docs/(2026-05-29) bug-investigation-kakao-signup-duplicate.md`
