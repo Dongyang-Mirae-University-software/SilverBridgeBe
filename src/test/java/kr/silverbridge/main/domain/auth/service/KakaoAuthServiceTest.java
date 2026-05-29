@@ -160,10 +160,12 @@ class KakaoAuthServiceTest {
         assertThat(res.getRefreshToken()).isEqualTo("refresh-jwt");
         verify(userRepository).save(any(User.class));
         verify(redisTemplate).delete(RedisKeys.KAKAO_PENDING + KAKAO_ID);
+        // 모든 검증 통과 시에만 nonce 소비
+        verify(smsService).consumeVerification("01012345678", "nonce-uuid");
     }
 
     @Test
-    @DisplayName("카카오 세션(pending) 만료 → KAKAO_SESSION_EXPIRED")
+    @DisplayName("카카오 세션(pending) 만료 → KAKAO_SESSION_EXPIRED + SMS nonce 미소비(재시도 보존)")
     void kakaoRegister_세션만료_KAKAO_SESSION_EXPIRED() {
         when(valueOperations.get(RedisKeys.KAKAO_PENDING + KAKAO_ID)).thenReturn(null);
 
@@ -172,11 +174,16 @@ class KakaoAuthServiceTest {
 
         assertThat(ex.getErrorCode()).isEqualTo(ErrorCode.KAKAO_SESSION_EXPIRED);
         verify(userRepository, never()).save(any());
+        // 세션 만료로 실패해도 SMS 인증 nonce는 소비되지 않아야 한다 — 검증보다 소비가 뒤이므로.
+        verify(smsService, never()).consumeVerification(anyString(), anyString());
     }
 
     @Test
-    @DisplayName("SMS 인증 미완료 상태에서 카카오 가입 → SMS_NOT_VERIFIED (세션 확인 이전 단계에서 차단)")
+    @DisplayName("SMS 인증 미완료 상태에서 카카오 가입 → SMS_NOT_VERIFIED (세션·중복 검증 통과 후 소비 단계에서 차단)")
     void kakaoRegister_SMS미인증_SMS_NOT_VERIFIED() {
+        when(valueOperations.get(RedisKeys.KAKAO_PENDING + KAKAO_ID)).thenReturn("kakao@example.com");
+        when(userRepository.existsByEmail("kakao@example.com")).thenReturn(false);
+        when(userRepository.existsByPhone("01012345678")).thenReturn(false);
         doThrow(new CustomException(ErrorCode.SMS_NOT_VERIFIED))
                 .when(smsService).consumeVerification(eq("01012345678"), anyString());
 
@@ -188,7 +195,7 @@ class KakaoAuthServiceTest {
     }
 
     @Test
-    @DisplayName("카카오 가입 시 ADMIN 역할 선택 → INVALID_ROLE")
+    @DisplayName("카카오 가입 시 ADMIN 역할 선택 → INVALID_ROLE + SMS nonce 미소비")
     void kakaoRegister_ADMIN역할_INVALID_ROLE() {
         when(valueOperations.get(RedisKeys.KAKAO_PENDING + KAKAO_ID)).thenReturn("kakao@example.com");
 
@@ -197,6 +204,37 @@ class KakaoAuthServiceTest {
 
         assertThat(ex.getErrorCode()).isEqualTo(ErrorCode.INVALID_ROLE);
         verify(userRepository, never()).save(any());
+        verify(smsService, never()).consumeVerification(anyString(), anyString());
+    }
+
+    @Test
+    @DisplayName("이메일 중복으로 카카오 가입 실패 → EMAIL_ALREADY_EXISTS + SMS nonce 미소비(재시도 보존)")
+    void kakaoRegister_이메일중복_nonce미소비() {
+        when(valueOperations.get(RedisKeys.KAKAO_PENDING + KAKAO_ID)).thenReturn("kakao@example.com");
+        when(userRepository.existsByEmail("kakao@example.com")).thenReturn(true);
+
+        CustomException ex = assertThrows(CustomException.class,
+                () -> kakaoAuthService.kakaoRegister(registerRequest(Role.WARD), IP, AGENT));
+
+        assertThat(ex.getErrorCode()).isEqualTo(ErrorCode.EMAIL_ALREADY_EXISTS);
+        verify(userRepository, never()).save(any());
+        // 중복 실패 시 nonce가 소비되면 재인증 없이는 재시도가 막힌다 — 소비되지 않아야 함(회귀 가드).
+        verify(smsService, never()).consumeVerification(anyString(), anyString());
+    }
+
+    @Test
+    @DisplayName("전화번호 중복으로 카카오 가입 실패 → PHONE_ALREADY_EXISTS + SMS nonce 미소비")
+    void kakaoRegister_전화번호중복_nonce미소비() {
+        when(valueOperations.get(RedisKeys.KAKAO_PENDING + KAKAO_ID)).thenReturn("kakao@example.com");
+        when(userRepository.existsByEmail("kakao@example.com")).thenReturn(false);
+        when(userRepository.existsByPhone("01012345678")).thenReturn(true);
+
+        CustomException ex = assertThrows(CustomException.class,
+                () -> kakaoAuthService.kakaoRegister(registerRequest(Role.WARD), IP, AGENT));
+
+        assertThat(ex.getErrorCode()).isEqualTo(ErrorCode.PHONE_ALREADY_EXISTS);
+        verify(userRepository, never()).save(any());
+        verify(smsService, never()).consumeVerification(anyString(), anyString());
     }
 
     // ─── 헬퍼 ────────────────────────────────────────────────────────────────

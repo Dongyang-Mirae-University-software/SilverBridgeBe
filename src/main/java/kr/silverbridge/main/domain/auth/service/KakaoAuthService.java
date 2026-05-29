@@ -105,13 +105,10 @@ public class KakaoAuthService {
     }
 
     // 카카오 신규 회원가입 완료
-    // SMS 인증 확인 → 카카오 세션 확인 → 중복 검사 → DB 저장 → 토큰 발급
+    // 카카오 세션 확인 → 중복 검사 → SMS 인증 소비 → DB 저장 → 토큰 발급
     @Transactional
     public LoginResponse kakaoRegister(KakaoRegisterRequest request, String ipAddress, String userAgent) {
         String kakaoId = request.getKakaoId();
-
-        // SMS 인증 nonce 일치 확인 + 키 소비 (H-5)
-        smsService.consumeVerification(request.getPhone(), request.getVerificationNonce());
 
         // 카카오 세션 확인 (이메일 위변조 방지)
         String pendingKey = RedisKeys.KAKAO_PENDING + kakaoId;
@@ -134,6 +131,13 @@ public class KakaoAuthService {
         if (userRepository.existsByPhone(request.getPhone())) {
             throw new CustomException(ErrorCode.PHONE_ALREADY_EXISTS);
         }
+
+        // SMS 인증 nonce 일치 확인 + 키 소비 (H-5)
+        // 위의 모든 검증(세션 만료·역할·중복)을 통과한 뒤 맨 마지막에 소비한다.
+        // consumeVerification은 Redis 키를 즉시 삭제하는데 이 삭제는 @Transactional 롤백 대상이 아니므로,
+        // 검증보다 먼저 소비하면 검증 실패 시 nonce가 비가역적으로 소모돼 재시도가 막힌다.
+        // LOCAL AuthService.register와 동일하게 "검증 후 마지막 소비" 순서를 맞춘다.
+        smsService.consumeVerification(request.getPhone(), request.getVerificationNonce());
 
         // 카카오 사용자 DB 저장
         User user = User.builder()
