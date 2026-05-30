@@ -4,6 +4,7 @@ import kr.silverbridge.main.domain.auth.dto.KakaoLoginRequest;
 import kr.silverbridge.main.domain.auth.dto.KakaoLoginResponse;
 import kr.silverbridge.main.domain.auth.dto.KakaoRegisterRequest;
 import kr.silverbridge.main.domain.auth.dto.LoginResponse;
+import kr.silverbridge.main.domain.auth.event.KakaoRegisteredEvent;
 import kr.silverbridge.main.domain.auth.oauth.KakaoOAuthClient;
 import kr.silverbridge.main.domain.auth.oauth.KakaoTokenResponse;
 import kr.silverbridge.main.domain.auth.oauth.KakaoUserInfoResponse;
@@ -27,6 +28,7 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.mockito.quality.Strictness;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.data.redis.core.ValueOperations;
 
@@ -58,6 +60,7 @@ class KakaoAuthServiceTest {
     @Mock private ValueOperations<String, String> valueOperations;
     @Mock private UserIdGenerator userIdGenerator;
     @Mock private SmsService smsService;
+    @Mock private ApplicationEventPublisher eventPublisher;
 
     @Mock private KakaoTokenResponse tokenResponse;
     @Mock private KakaoUserInfoResponse userInfo;
@@ -162,6 +165,11 @@ class KakaoAuthServiceTest {
         verify(redisTemplate).delete(RedisKeys.KAKAO_PENDING + KAKAO_ID);
         // 모든 검증 통과 시에만 nonce 소비
         verify(smsService).consumeVerification("01012345678", "nonce-uuid");
+        // KAKAO_LOGIN 접속로그는 가입 트랜잭션 커밋 후로 미룬다 → 이벤트만 발행한다.
+        verify(eventPublisher).publishEvent(any(KakaoRegisteredEvent.class));
+        // 회귀 가드: 가입 트랜잭션 안에서 직접 accessLogService.log()(REQUIRES_NEW)를 호출하면
+        // 아직 커밋되지 않은 users 행을 별도 트랜잭션이 보지 못해 FK 위반(SQLState 23503)이 난다 → 직접 호출 금지.
+        verify(accessLogService, never()).log(anyString(), any(), anyString(), anyString());
     }
 
     @Test
