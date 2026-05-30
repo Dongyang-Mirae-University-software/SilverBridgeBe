@@ -27,6 +27,9 @@ import java.util.stream.Collectors;
 @RestControllerAdvice
 public class GlobalExceptionHandler {
 
+    // PostgreSQL SQLSTATE — 23505: unique_violation (그 외 23503 FK, 23502 NOT NULL, 23514 CHECK)
+    private static final String SQLSTATE_UNIQUE_VIOLATION = "23505";
+
     // 커스텀 비즈니스 예외
     @ExceptionHandler(CustomException.class)
     public ResponseEntity<ApiResponse<Void>> handleCustomException(CustomException e) {
@@ -108,13 +111,38 @@ public class GlobalExceptionHandler {
                 .body(ApiResponse.fail(ErrorCode.FORBIDDEN.getMessage()));
     }
 
-    // DB 유니크 제약 조건 위반 (동시 요청으로 인한 이메일/전화번호 중복 등)
+    // DB 무결성 제약 위반 — 위반 종류(SQLState)에 따라 구분 처리한다.
+    // unique 위반(23505)만 "중복"으로 안내하고, FK(23503)·NOT NULL(23502)·CHECK(23514) 등
+    // 서버 측 정합성 결함은 "중복"으로 오안내하지 않는다(과거 카카오 가입 FK 위반이 "중복"으로 뭉개진 사례).
     @ExceptionHandler(DataIntegrityViolationException.class)
     public ResponseEntity<ApiResponse<Void>> handleDataIntegrityViolation(DataIntegrityViolationException e) {
-        log.warn("DataIntegrityViolationException: {}", e.getMessage());
+        String sqlState = extractSqlState(e);
+
+        // 23505 = unique_violation: 진짜 중복 (동시 요청으로 인한 이메일/전화번호 중복 등)
+        if (SQLSTATE_UNIQUE_VIOLATION.equals(sqlState)) {
+            // 메시지 본문에 중복 값(이메일/전화번호 등 PII)이 포함될 수 있어 SQLState만 남긴다.
+            log.warn("DataIntegrityViolation(unique, sqlState={})", sqlState);
+            return ResponseEntity
+                    .status(HttpStatus.CONFLICT)
+                    .body(ApiResponse.fail("이미 사용 중이거나 중복된 값입니다. 입력값을 확인해주세요."));
+        }
+
+        // 그 외(FK·NOT NULL·CHECK 등)는 서버 측 결함 — 진단을 위해 실제 원인을 ERROR로 남기고,
+        // 사용자에겐 "중복"이 아닌 일반 서버 오류로 응답한다.
+        log.error("DataIntegrityViolation(non-unique, sqlState={}): {}", sqlState, e.getMostSpecificCause().getMessage());
         return ResponseEntity
-                .status(HttpStatus.CONFLICT)
-                .body(ApiResponse.fail("이미 사용 중이거나 중복된 값입니다. 입력값을 확인해주세요."));
+                .internalServerError()
+                .body(ApiResponse.fail(ErrorCode.INTERNAL_SERVER_ERROR.getMessage()));
+    }
+
+    // 예외 원인 체인을 따라 내려가 최초로 만나는 SQLException의 SQLState를 추출한다(없으면 null).
+    private String extractSqlState(Throwable e) {
+        for (Throwable t = e; t != null; t = t.getCause()) {
+            if (t instanceof java.sql.SQLException sqlEx) {
+                return sqlEx.getSQLState();
+            }
+        }
+        return null;
     }
 
     // 동시 상태 전이로 인한 낙관적 락(@Version) 충돌 — 다른 요청이 먼저 커밋됨

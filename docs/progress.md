@@ -645,3 +645,20 @@ REST API Key 단독 대비 보안 강화 — 인가코드 탈취 시 토큰 발�
 - **다음**: 근본원인 확정(C+E) → 사용자 수정 방향 승인 시 `fix/kakao-register-...` 브랜치 착수.
 - 빌드: `./gradlew build -x test --no-daemon` EXIT 0.
 - 산출물: `docs/(2026-05-29) bug-investigation-kakao-signup-duplicate.md`
+
+---
+
+## [2026-05-30] 카카오 가입 access_logs FK 위반 버그 수정 (PR `fix/kakao-signup-access-log-fk`)
+
+운영 로그(SQLState 23503)로 진짜 409 "중복" 응답의 실제 발생원을 확정·수정. 2026-05-29 진단이 "프론트 세션만료 오표기"로 봤던 부분의 **실제 원인**.
+
+- **1차 원인(확정)**: `KakaoAuthService.kakaoRegister`(`@Transactional`)가 `accessLogService.log`(REQUIRES_NEW)를 가입 트랜잭션 안에서 호출 → 별도 커넥션이 **미커밋 user 행**을 못 봐 `fk_access_logs_user` 위반(23503). **순서 아닌 트랜잭션 격리 문제** — 재정렬·flush로 안 풀림.
+- **2차 원인(확정)**: `GlobalExceptionHandler`가 `DataIntegrityViolationException`을 종류 불문 409 "중복"으로 변환 → FK 위반이 "중복"으로 오표시.
+- **LOCAL 대조**: `AuthService.register`는 가입 시 접속로그 미기록(login 때만, 그땐 user 커밋됨) → 카카오만 발생.
+- **수정 C(주)**: `KakaoRegisteredEvent` + `KakaoRegisterEventListener`(`@TransactionalEventListener(AFTER_COMMIT)`+REQUIRES_NEW)로 `KAKAO_LOGIN` 로그를 커밋 후 기록. 공유 `AccessLogService` 미변경 → login/logout/refresh 무영향.
+- **수정 D(병행)**: 예외 핸들러 SQLState 구분 — 23505(unique)만 409 "중복", 23503 FK 등은 ERROR 로깅 + 500. unique PII는 SQLState만 로깅.
+- **nonce**: 1회용 의도 유지·미변경(FK 롤백 제거로 stranding 자연 해소).
+- 회귀 가드 테스트: 가입 성공 시 `accessLogService.log` 직접 호출 안 함 / 리스너 위임 / FK≠unique 매핑. 신규 테스트 2종.
+- 빌드: `./gradlew build --no-daemon`(테스트 포함) BUILD SUCCESSFUL (EXIT 0).
+- DB 영향 없음(스키마·상태전이 불변, 로그 기록 시점만 이동). 마이그레이션 불요.
+- 산출물: `docs/(2026-05-30) bugfix-kakao-signup-access-log-fk.md`
