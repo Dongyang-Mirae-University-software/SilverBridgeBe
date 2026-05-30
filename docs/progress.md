@@ -4,6 +4,20 @@
 
 ---
 
+## [2026-05-30] — hospital: 병원 예약 기능 완전 제거 (코드 + DB 테이블)
+
+병원 예약 기능을 프로젝트에서 제외하기로 결정하여 관련 자산을 정리.
+
+- **핵심**: 백엔드 구현은 **시작된 적이 없었음** — `hospital_reservations`는 `V1__init.sql`의 DB 테이블만 존재하고 Entity/Repository/Service/Controller/DTO/테스트가 전무한 미사용 자산. 대시보드 통계에도 참조 없음(컴파일 의존성 0). `V17`의 미사용 테이블 정리와 동일한 후속 작업.
+- **코드 제거**: 없음(대상 Java 파일 0개).
+- **DB**: 신규 `V24__drop_hospital_reservations.sql` — `DROP TABLE IF EXISTS hospital_reservations;`. leaf 테이블(inbound FK 없음)이라 CASCADE 불필요, 트리거·인덱스 동반 제거. 기존 `V1`~`V23` 미수정.
+- **문서**: `프로젝트_설명.txt`(테이블 섹션 제거), `.claude/rules/domain-security-policy.md`(탈퇴 CASCADE 목록의 `hospital_reservations` 언급 제거). CLAUDE.md는 언급 없어 변경 없음.
+- **마이그레이션 적용은 수동** — 비가역 DDL, dev 선검증 후 운영 적용. 본 작업은 파일 추가까지만.
+- 검증: `./gradlew build -x test --no-daemon` BUILD SUCCESSFUL (코드 변경 없음).
+- **산출물**: `docs/(2026-05-30) feature-remove-hospital-reservation.md`.
+
+---
+
 ## [2026-05-28] — connection: 연결 거절 시 보호자 실시간 알림 추가 (PR `feature/connection-refused-notification`)
 
 피보호자가 연결 요청을 거절해도 보호자에게 이벤트가 안 가, 보호자 웹이 새로고침 전까지 "요청중"에 멈춰 있던 문제. 수락·해제는 이벤트를 발행하는데 거절만 누락된 **비대칭** 해소.
