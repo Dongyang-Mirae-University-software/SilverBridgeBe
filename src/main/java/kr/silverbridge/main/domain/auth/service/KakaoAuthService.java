@@ -5,6 +5,7 @@ import kr.silverbridge.main.domain.auth.dto.KakaoLoginResponse;
 import kr.silverbridge.main.domain.auth.dto.KakaoRegisterRequest;
 import kr.silverbridge.main.domain.auth.dto.LoginResponse;
 import kr.silverbridge.main.domain.auth.entity.RefreshToken;
+import kr.silverbridge.main.domain.auth.event.KakaoRegisteredEvent;
 import kr.silverbridge.main.domain.auth.oauth.KakaoOAuthClient;
 import kr.silverbridge.main.domain.auth.oauth.KakaoTokenResponse;
 import kr.silverbridge.main.domain.auth.oauth.KakaoUserInfoResponse;
@@ -22,6 +23,7 @@ import kr.silverbridge.main.global.util.RedisKeys;
 import kr.silverbridge.main.global.util.UserIdGenerator;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -41,6 +43,7 @@ public class KakaoAuthService {
     private final StringRedisTemplate redisTemplate;
     private final UserIdGenerator userIdGenerator;
     private final SmsService smsService;
+    private final ApplicationEventPublisher eventPublisher;
 
     @Value("${kakao.redirect-uri}")
     private String redirectUri;
@@ -174,7 +177,12 @@ public class KakaoAuthService {
                 jwtTokenProvider.getRemainingExpiration(refreshToken)));
 
         user.updateLastLoginAt();
-        accessLogService.log(user.getId(), AccessAction.KAKAO_LOGIN, ipAddress, userAgent);
+
+        // KAKAO_LOGIN 접속로그는 가입 트랜잭션 커밋 후(AFTER_COMMIT)에 기록한다.
+        // 여기서 accessLogService.log()(REQUIRES_NEW)를 직접 호출하면, 아직 커밋되지 않은 users 행을
+        // 별도 트랜잭션이 보지 못해 FK 위반(SQLState 23503)이 발생한다.
+        // (일반 가입 AuthService.register는 가입 시 접속로그를 남기지 않아 이 문제가 없었다.)
+        eventPublisher.publishEvent(new KakaoRegisteredEvent(user.getId(), ipAddress, userAgent));
 
         return LoginResponse.of(user, accessToken, refreshToken);
     }
