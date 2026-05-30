@@ -565,20 +565,6 @@ SilverBridge는 노인(피보호자)과 그 가족(보호자)을 연결하는 �
     CANCELLED 이후에는 재연결 가능.
 
 
-  [ hospital_reservations — 병원 예약 ]
-  ─────────────────────────────
-  id                      : 고유 번호
-  user_id                 : 예약한 회원 ID
-  external_reservation_id : 외부 병원 예약 번호 (NULL 가능)
-  hospital_name           : 병원명
-  department              : 진료과
-  doctor_name             : 담당 의사
-  appointment_at          : 예약 일시
-  status                  : PENDING / CONFIRMED / CANCELLED / COMPLETED
-  notes                   : 메모
-  created_at / updated_at : 생성/수정 일시
-
-
   [ announcements — 공지사항 ]
   ─────────────────────────────
   id         : 고유 번호
