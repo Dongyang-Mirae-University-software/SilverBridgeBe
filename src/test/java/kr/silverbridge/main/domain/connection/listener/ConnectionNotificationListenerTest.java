@@ -96,6 +96,8 @@ class ConnectionNotificationListenerTest {
         ArgumentCaptor<NotificationContent> captor = ArgumentCaptor.forClass(NotificationContent.class);
         verify(notificationDispatcher).dispatch(eq(GUARDIAN_ID), eq(NotificationType.CONNECTION_REFUSED), captor.capture());
         assertThat(captor.getValue().body()).isEqualTo("연결 요청이 거절되었습니다.");
+        // FE가 포그라운드에서 문구를 렌더링하는 키. 해제(CONNECTION_CANCELLED)와 절대 섞이면 안 됨.
+        assertThat(captor.getValue().data()).containsEntry("type", "CONNECTION_REFUSED");
     }
 
     @Test
@@ -110,6 +112,8 @@ class ConnectionNotificationListenerTest {
         ArgumentCaptor<NotificationContent> captor = ArgumentCaptor.forClass(NotificationContent.class);
         verify(notificationDispatcher).dispatch(eq(WARD_ID), eq(NotificationType.CONNECTION_DISCONNECTED), captor.capture());
         assertThat(captor.getValue().body()).isEqualTo("보호자가 연결을 해제했습니다.");
+        // 해제 와이어 식별자는 CONNECTION_CANCELLED(레거시 호환). 거절(CONNECTION_REFUSED)과 섞이지 않음을 고정.
+        assertThat(captor.getValue().data()).containsEntry("type", "CONNECTION_CANCELLED");
     }
 
     @Test
@@ -124,5 +128,6 @@ class ConnectionNotificationListenerTest {
         ArgumentCaptor<NotificationContent> captor = ArgumentCaptor.forClass(NotificationContent.class);
         verify(notificationDispatcher).dispatch(eq(GUARDIAN_ID), eq(NotificationType.CONNECTION_DISCONNECTED), captor.capture());
         assertThat(captor.getValue().body()).isEqualTo("피보호자가 연결을 해제했습니다.");
+        assertThat(captor.getValue().data()).containsEntry("type", "CONNECTION_CANCELLED");
     }
 }
