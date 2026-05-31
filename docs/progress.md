@@ -676,3 +676,28 @@ REST API Key 단독 대비 보안 강화 — 인가코드 탈취 시 토큰 발�
 - 빌드: `./gradlew build --no-daemon`(테스트 포함) BUILD SUCCESSFUL (EXIT 0).
 - DB 영향 없음(스키마·상태전이 불변, 로그 기록 시점만 이동). 마이그레이션 불요.
 - 산출물: `docs/(2026-05-30) bugfix-kakao-signup-access-log-fk.md`
+
+---
+
+## [2026-05-31] 비밀번호 초기화 인증 재시도 버그 진단 (진단 전용, 미수정)
+
+`POST /api/auth/password/reset`에서 1차 실패 후 같은 코드로 재시도가 막히는 버그를 코드 근거로 원인 확정.
+
+- **근본 원인 확정(가설 A)**: `PasswordResetService.confirmReset`이 **소비형 `verify()`(성공 시 Redis 코드 삭제)를 비즈니스 검증보다 먼저** 호출(L192). 이후 `SAME_AS_CURRENT_PASSWORD`(L212) 등 다운스트림 검증이 실패하면, `@Transactional`이 DB만 롤백하고 **Redis 삭제는 롤백 안 됨** → 코드 비가역 소모 → 2차 재시도 시 `EXPIRED_SMS_CODE`.
+- **재현 트리거**: 식별자·6자리 코드는 정상이고 **새 비밀번호 = 현재 비밀번호**로 1차 실패 → 같은 코드로 2차 → "만료" 오류. (1회 실패로 막히는 유일 경로)
+- **가설 검증**: A 확정 / B(5회 오입력 잠금)는 의도된 동작·5회 누적 필요라 본 시나리오와 불일치 / C·D 기각. 표면 에러가 모두 `EXPIRED_SMS_CODE`라 만료로 오인되는 게 혼동의 핵심.
+- **카카오 가입 버그와 같은 뿌리**: "인증 소비가 검증·처리보다 먼저 → 실패 시 재시도 불가". 가입(LOCAL/KAKAO)은 이미 **"검증 후 마지막 소비"**로 수정 완료(`KakaoAuthService` L141-146 주석에 동일 원리 명시). 비번재설정만 미적용. 단 가입=nonce 경로/비번재설정=코드 경로라 **한 줄 공유 수정은 불가**, 같은 원칙 적용이 통합점.
+- **수정 방향(미적용)**: 맨 앞 `verify()`→`verifyWithoutConsume()`로 교체(enumeration 차단 A-M1 유지), 모든 검증·변경 성공 후 **마지막에 코드 소비**. 변경은 `confirmReset` 1곳, DB 마이그레이션 불요. 회귀 테스트 + `domain-security-policy.md`에 "소비는 마지막에" 불변 규칙 명문화 권장.
+- 빌드: `./gradlew build -x test --no-daemon` EXIT 0.
+- 산출물: `docs/(2026-05-31) bug-investigation-password-reset-verification.md`
+
+### [2026-05-31] (수정 적용) 비밀번호 초기화 인증 재시도 버그 — 가설 A 수정 완료
+
+브랜치 `fix/password-reset-code-consume-order` (dev 분기). 진단(위 항목)의 가설 A 방향대로 적용.
+
+- **수정**: `PasswordResetService.confirmReset` 맨 앞 `verify()`(검증+소비) → `verifyWithoutConsume()`(비소비)로 교체(enumeration A-M1 유지), 모든 검증·변경·로그 성공 후 **마지막에** `verificationCodeValidator.consume()` 호출. `VerificationCodeValidator`에 `consume(verifyKey, attemptKey)` 헬퍼 신설.
+- **효과**: `SAME_AS_CURRENT_PASSWORD` 등 다운스트림 1차 실패 시 코드가 보존돼 같은 코드로 즉시 재시도 가능. 최종 성공 시에만 1회용 소비.
+- **테스트**: `PasswordResetServiceTest` — 정상 시 consume 호출+verify 미사용, SAME_AS_CURRENT/SOCIAL 실패 시 consume 미호출(★회귀). `VerificationCodeValidatorTest` — verifyWithoutConsume 키 보존·consume 삭제 단위 테스트 추가.
+- **정책 문서**: `domain-security-policy.md`에 "인증코드/nonce 소비는 검증 후 마지막에" 불변 규칙 추가.
+- **영향 범위**: `confirmReset` 1곳 + 공유 validator에 헬퍼 1개. 가입(LOCAL/KAKAO)·`/verify`·DB 무영향, 마이그레이션 불요.
+- 빌드: `./gradlew build --no-daemon`(테스트 포함) BUILD SUCCESSFUL (EXIT 0).

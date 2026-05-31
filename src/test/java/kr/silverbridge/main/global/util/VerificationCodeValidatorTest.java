@@ -13,7 +13,9 @@ import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.data.redis.core.ValueOperations;
 
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -41,7 +43,8 @@ class VerificationCodeValidatorTest {
 
     @BeforeEach
     void setUp() {
-        when(redisTemplate.opsForValue()).thenReturn(valueOperations);
+        // consume() 등 opsForValue를 쓰지 않는 테스트도 있어 lenient로 둔다.
+        lenient().when(redisTemplate.opsForValue()).thenReturn(valueOperations);
     }
 
     @Test
@@ -83,6 +86,27 @@ class VerificationCodeValidatorTest {
         verify(redisCounter).incrementWithTtl(eq(ATTEMPT_KEY), eq(CODE_TTL * 60));
         // 아직 MAX 미도달 → 키 삭제 없음
         verify(redisTemplate, never()).delete(VERIFY_KEY);
+    }
+
+    @Test
+    @DisplayName("verifyWithoutConsume는 코드가 일치해도 키를 삭제하지 않는다 (검증/소비 분리)")
+    void verifyWithoutConsumeKeepsKeysOnSuccess() {
+        when(valueOperations.get(VERIFY_KEY)).thenReturn("123456");
+
+        verificationCodeValidator.verifyWithoutConsume(VERIFY_KEY, ATTEMPT_KEY, "123456", CODE_TTL, MAX_ATTEMPTS);
+
+        verify(redisTemplate, never()).delete(VERIFY_KEY);
+        verify(redisTemplate, never()).delete(ATTEMPT_KEY);
+    }
+
+    @Test
+    @DisplayName("consume는 인증키·오류 카운터를 삭제한다 (최종 성공 후 1회용 소비)")
+    void consumeDeletesBothKeys() {
+        assertThatCode(() -> verificationCodeValidator.consume(VERIFY_KEY, ATTEMPT_KEY))
+                .doesNotThrowAnyException();
+
+        verify(redisTemplate).delete(VERIFY_KEY);
+        verify(redisTemplate).delete(ATTEMPT_KEY);
     }
 
     @Test

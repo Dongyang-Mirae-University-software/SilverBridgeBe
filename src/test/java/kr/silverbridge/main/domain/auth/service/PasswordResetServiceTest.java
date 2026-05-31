@@ -162,7 +162,7 @@ class PasswordResetServiceTest {
     void confirmReset_코드검증_사용자조회보다_선행() {
         PasswordResetConfirmRequest req = confirmRequest(EMAIL, null, "Brand-New1!");
         doThrow(new CustomException(ErrorCode.EXPIRED_SMS_CODE))
-                .when(verificationCodeValidator).verify(anyString(), anyString(), anyString(), anyLong(), anyInt());
+                .when(verificationCodeValidator).verifyWithoutConsume(anyString(), anyString(), anyString(), anyLong(), anyInt());
 
         CustomException ex = assertThrows(CustomException.class,
                 () -> passwordResetService.confirmReset(req, IP, AGENT));
@@ -181,11 +181,11 @@ class PasswordResetServiceTest {
                 () -> passwordResetService.confirmReset(req, IP, AGENT));
 
         assertThat(ex.getErrorCode()).isEqualTo(ErrorCode.INVALID_INPUT);
-        verify(verificationCodeValidator, never()).verify(anyString(), anyString(), anyString(), anyLong(), anyInt());
+        verify(verificationCodeValidator, never()).verifyWithoutConsume(anyString(), anyString(), anyString(), anyLong(), anyInt());
     }
 
     @Test
-    @DisplayName("유효한 코드 + 새 비밀번호 → 비밀번호 변경 + PasswordChangedEvent 발행")
+    @DisplayName("유효한 코드 + 새 비밀번호 → 비밀번호 변경 + PasswordChangedEvent 발행 + 성공 시 코드 소비(consume)")
     void confirmReset_정상_비밀번호변경및이벤트() {
         PasswordResetConfirmRequest req = confirmRequest(EMAIL, null, "Brand-New1!");
         User user = localUser("encodedCurrent");
@@ -199,10 +199,13 @@ class PasswordResetServiceTest {
         verify(eventPublisher).publishEvent(any(PasswordChangedEvent.class));
         verify(accessLogService).log(eq(user.getId()),
                 eq(kr.silverbridge.main.global.enums.AccessAction.PASSWORD_RESET), eq(IP), eq(AGENT));
+        // 검증 단계는 코드를 소비하지 않고, 최종 성공 후에만 소비한다 (검증/소비 분리)
+        verify(verificationCodeValidator, never()).verify(anyString(), anyString(), anyString(), anyLong(), anyInt());
+        verify(verificationCodeValidator).consume(anyString(), anyString());
     }
 
     @Test
-    @DisplayName("현재 비밀번호와 동일한 새 비밀번호 → SAME_AS_CURRENT_PASSWORD")
+    @DisplayName("현재 비밀번호와 동일한 새 비밀번호 → SAME_AS_CURRENT_PASSWORD, 코드 미소비(재시도 가능) ★회귀")
     void confirmReset_현재와동일_SAME_AS_CURRENT_PASSWORD() {
         PasswordResetConfirmRequest req = confirmRequest(EMAIL, null, "SamePass1!");
         User user = localUser("encodedCurrent");
@@ -214,6 +217,21 @@ class PasswordResetServiceTest {
 
         assertThat(ex.getErrorCode()).isEqualTo(ErrorCode.SAME_AS_CURRENT_PASSWORD);
         verify(eventPublisher, never()).publishEvent(any());
+        // ★ 다운스트림 검증 실패 시 인증코드를 소비하지 않아야 한다 — 같은 코드로 재시도 가능해야 버그가 재발하지 않음
+        verify(verificationCodeValidator, never()).consume(anyString(), anyString());
+    }
+
+    @Test
+    @DisplayName("카카오 계정으로 코드 보유 시 → SOCIAL_USER_NO_PASSWORD, 코드 미소비(재시도 가능)")
+    void confirmReset_카카오계정_SOCIAL_코드미소비() {
+        PasswordResetConfirmRequest req = confirmRequest(EMAIL, null, "Brand-New1!");
+        when(userRepository.findByEmail(EMAIL)).thenReturn(Optional.of(socialUser()));
+
+        CustomException ex = assertThrows(CustomException.class,
+                () -> passwordResetService.confirmReset(req, IP, AGENT));
+
+        assertThat(ex.getErrorCode()).isEqualTo(ErrorCode.SOCIAL_USER_NO_PASSWORD);
+        verify(verificationCodeValidator, never()).consume(anyString(), anyString());
     }
 
     // ─── 헬퍼 ────────────────────────────────────────────────────────────────
