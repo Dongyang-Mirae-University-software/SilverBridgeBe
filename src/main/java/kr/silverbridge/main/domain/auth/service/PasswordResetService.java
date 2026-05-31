@@ -185,11 +185,15 @@ public class PasswordResetService {
                 : VerificationKeyConfig.PASSWORD_RESET;
         String identifier = byEmail ? request.getEmail() : request.getPhone();
 
-        // 6자리 코드를 사용자 조회보다 "먼저" 재검증·소비한다 (A-M1, 계정 enumeration 차단).
+        // 6자리 코드를 사용자 조회보다 "먼저" 재검증한다 (A-M1, 계정 enumeration 차단).
         // 미가입/카카오 계정에는 애초에 코드가 발급되지 않으므로(requestReset 가 조용히 종료) 여기서
         // EXPIRED_SMS_CODE 로 동일하게 막혀, 가입 여부·provider 가 응답으로 새지 않는다.
-        // (성공 시 코드/오류횟수 삭제 — 재사용 방지)
-        verificationCodeValidator.verify(
+        //
+        // ⚠️ 검증과 소비를 분리한다 — 여기서는 소비하지 않는다(verifyWithoutConsume).
+        // verify(소비형)를 먼저 호출하면, 이후 SAME_AS_CURRENT_PASSWORD 등 다운스트림 검증이 실패할 때
+        // Redis 삭제가 @Transactional 롤백 대상이 아니라 코드가 비가역적으로 소모돼 같은 코드로 재시도가 막힌다.
+        // 회원가입 nonce 소비(AuthService/KakaoAuthService)와 동일하게 "검증 후 마지막 소비" 순서를 맞춘다.
+        verificationCodeValidator.verifyWithoutConsume(
                 config.verifyKey(identifier),
                 config.attemptKey(identifier),
                 request.getCode(),
@@ -221,6 +225,10 @@ public class PasswordResetService {
 
         // 비밀번호 재설정 이력 기록 (IP/UA 포함 — 침해 조사 추적성)
         accessLogService.log(user.getId(), AccessAction.PASSWORD_RESET, ipAddress, userAgent);
+
+        // 모든 검증·처리가 성공한 "마지막"에 인증코드 소비 — 1회용 재사용 방지.
+        // 중간 단계가 실패하면 코드가 그대로 남아 같은 코드로 즉시 재시도할 수 있다(자연 TTL/5회 한도까지).
+        verificationCodeValidator.consume(config.verifyKey(identifier), config.attemptKey(identifier));
     }
 
     private String generateCode() {
