@@ -12,6 +12,7 @@
 - **메인 브랜치**: `dev` — push 시 CD 자동 배포 (§3 참조)
 - **도메인**: `kr.silverbridge.main.domain/<bounded-context>` = `admin`·`announcement`·`auth`·`connection`·`notification`·`user`. 공통 코드는 `global/`(aop·config·jwt·security·websocket 등).
   - ⚠️ **도메인 로직을 `global`에 넣지 말 것** — 도메인 코드는 `domain/<context>/`.
+- **알림 채널 추상화**(notification, 2026-05-31): 이벤트 → `NotificationDispatcher` → 사용자 설정 활성 채널 발송. 채널=`NotificationChannel` 전략(FCM·SMS 구현, KAKAO_ALIMTALK·EMAIL은 enum만 — 2·3단계). **새 채널 = 구현체 빈 추가**만(디스패처 자동 수집). WebSocket은 추상화 밖(항상 발송). **SMS 인증번호는 디스패처 미경유=필수**(설정 무시). 기본값 FCM ON(설정 행 없으면 적용·백필 불요). 설정 API `/api/user/me/notification-settings`(GET·PUT).
 
 ---
 
