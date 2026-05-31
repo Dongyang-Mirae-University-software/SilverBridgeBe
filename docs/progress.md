@@ -701,3 +701,19 @@ REST API Key 단독 대비 보안 강화 — 인가코드 탈취 시 토큰 발�
 - **정책 문서**: `domain-security-policy.md`에 "인증코드/nonce 소비는 검증 후 마지막에" 불변 규칙 추가.
 - **영향 범위**: `confirmReset` 1곳 + 공유 validator에 헬퍼 1개. 가입(LOCAL/KAKAO)·`/verify`·DB 무영향, 마이그레이션 불요.
 - 빌드: `./gradlew build --no-daemon`(테스트 포함) BUILD SUCCESSFUL (EXIT 0).
+
+---
+
+## [2026-05-31] 알림 채널 추상화 인프라 구축 (1단계)
+
+브랜치 `feature/notification-channel-infra` (dev 분기). 알림을 "이벤트 → 채널 라우터 → 사용자 설정 활성 채널 발송"으로 일반화. 전체 3단계 중 1단계(인프라 + FCM/SMS 추상화)만 구현, 카카오 알림톡·이메일은 enum만 정의.
+
+- **채널 추상화**: `NotificationChannelType`(FCM/SMS/KAKAO_ALIMTALK/EMAIL) + `NotificationChannel` 전략 인터페이스. 구현체 = `FcmNotificationChannel`(FcmService 위임), `SmsNotificationChannel`(SmsSender 위임). `NotificationDispatcher`가 `List<NotificationChannel>`로 구현체 자동 수집 → **새 채널 = 빈 추가만**. KAKAO/EMAIL은 구현체 없어 디스패처가 skip.
+- **현재 구조 정정**: 기존 알림은 FCM+WebSocket이었고 **SMS는 알림 미사용(인증 전용)**. SMS 알림은 신규 추가(회귀 아님). WebSocket은 추상화 밖·항상 발송(협의).
+- **사용자 설정**: 신규 테이블 `user_notification_settings`(V25, user×channel 1행, FK ON DELETE CASCADE). 기본값 = **FCM ON·그 외 OFF**, 행 없으면 기본값 → **백필 불요**. 조회/변경 API `GET·PUT /api/user/me/notification-settings`.
+- **필수/선택**: SMS 인증번호는 디스패처 미경유 동기 발송이라 **설정 무시(필수)가 구조적 보장**. 연결 알림 4종은 선택(설정 따름). 긴급 알림용 mandatory 강제발송 메커니즘은 마련했으나 현재 등록 타입 없음(휴면).
+- **라우팅 안전성**: 채널별 발송 try/catch **격리**(한 채널 실패가 다른 채널 안 막음), 미구현 채널 skip, 활성 채널 0이면 조기 종료.
+- **변경**: `ConnectionNotificationListener` 4곳을 `fcmService.sendToUser` → `dispatcher.dispatch`로 전환(WebSocket 유지). `FcmService`·`SmsSender`·인증 흐름 **미변경**(회귀 방지). 기본값 FCM ON이라 연결 푸시 동작 동일.
+- **테스트**: 채널 위임/디스패처 라우팅·격리/설정 서비스 upsert·기본값 신규 테스트 + `ConnectionNotificationListenerTest` 갱신. `./gradlew test`·`build -x test` 모두 EXIT 0(기존 회귀 없음).
+- **프론트엔드 영향 없음**(additive). 카카오 알림톡(PFID/템플릿ID/SDK 예제)·이메일은 2·3단계 인계 — 산출물 문서 §8.
+- 산출물: `docs/(2026-05-31) feature-notification-channel-infra.md`
