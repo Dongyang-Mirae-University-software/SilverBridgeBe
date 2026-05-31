@@ -421,6 +421,49 @@ SilverBridge는 노인(피보호자)과 그 가족(보호자)을 연결하는 �
     브라우저에서 토큰 발급 → Swagger 로 등록 → 트리거 API 호출 → 푸시 도착 확인.
 
 
+  [ 3-7-A. 알림 채널 추상화 및 채널별 수신 설정 ]  (2026-05-31 추가, 1단계)
+  ─────────────────────────────
+  알림을 "이벤트 → 채널 라우터 → 사용자 설정에 따라 활성 채널로 발송" 구조로 일반화했습니다.
+  전체 계획은 3단계: (1단계·현재) 인프라 + FCM/SMS 추상화, (2단계) 카카오 알림톡 채널,
+  (3단계) 이메일 채널. 1단계에서는 채널 추상화 골격과 사용자 설정 기능만 구축합니다.
+
+  [채널 추상화]
+  - NotificationChannelType(enum): FCM / SMS / KAKAO_ALIMTALK / EMAIL
+    (KAKAO_ALIMTALK·EMAIL은 enum 값만 정의, 발송 구현은 2·3단계)
+  - NotificationChannel(전략 인터페이스): 구현체를 빈으로 등록하면 디스패처가 자동 수집.
+    현재 구현체 = FcmNotificationChannel(기존 FcmService 위임), SmsNotificationChannel(SmsSender 위임).
+  - NotificationDispatcher: 이벤트가 만든 알림을 사용자 설정에 따라 활성 채널로만 발송하며,
+    채널별 발송 실패를 격리(한 채널 실패가 다른 채널을 막지 않음)하고 미구현 채널은 조용히 건너뜀.
+  - WebSocket 실시간 발송은 추상화에 포함하지 않고 항상 발송(온라인 사용자 실시간 동기화 보장).
+
+  [필수/선택 분류]
+  - 필수(설정 무시): SMS 인증번호(가입·비밀번호 재설정) — 디스패처를 경유하지 않는 동기 발송이라
+    설정으로 끌 수 없음이 구조적으로 보장됨. (긴급 알림용 mandatory 강제발송 메커니즘은 마련, 현재 등록된 타입 없음)
+  - 선택(설정 따름): 연결 요청/수락/거절/해제 알림 — 사용자 채널 설정에 따라 발송.
+
+  [기본값 정책]
+  설정 행이 없는 채널은 기본값 적용 — FCM은 기본 ON(기존 동작 보존), SMS/KAKAO/EMAIL은 기본 OFF.
+  → 기존/신규 사용자 백필 마이그레이션 불필요. (저장: user_notification_settings 테이블, V25)
+
+  [API 명세]  (Swagger 태그: "알림 설정")
+  설정 조회:
+    → GET /api/user/me/notification-settings
+    → headers: Authorization: Bearer {accessToken}
+    → 200 data: { "settings": [ { "channelType": "FCM", "enabled": true }, ... 전체 채널 ] }
+    → 설정한 적 없는 채널은 기본값으로 표시(FCM=true, 그 외 false)
+
+  설정 변경:
+    → PUT /api/user/me/notification-settings
+    → headers: Authorization: Bearer {accessToken}
+    → body: { "settings": [ { "channelType": "SMS", "enabled": true }, ... ] }  (전달한 채널만 갱신)
+    → 200 data: 변경 후 전체 채널 설정
+    → 주의: KAKAO_ALIMTALK/EMAIL은 설정값만 저장되며 실제 발송은 2·3단계에서 지원
+
+  [프론트엔드 영향]
+  추가(additive) 변경이라 기존 동작·계약 불변 — FE 수정 없이 현재와 동일하게 동작합니다.
+  알림 설정 화면을 만들 경우에만 위 2개 API를 연동하면 됩니다.
+
+
   [ 3-8. 관리자 - 공지사항 ]
   ─────────────────────────────
   관리자(ADMIN 역할) 전용 공지 CRUD/임시저장 API. 쓰기 작업은 감사 로그에 자동 기록됩니다.
