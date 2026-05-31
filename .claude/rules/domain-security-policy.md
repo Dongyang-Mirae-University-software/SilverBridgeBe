@@ -54,3 +54,13 @@
 - **변경**: `KakaoRegisteredEvent` + `@TransactionalEventListener(AFTER_COMMIT)` 리스너로 접속로그를 **커밋 후** 기록(user 커밋 후라 FK 보장). 공유 `AccessLogService`는 미변경. 예외 핸들러는 SQLState 구분 — 23505(unique)만 409 "중복", FK 등은 500 + 원인 로깅.
 - **불변 규칙**: 가입 트랜잭션 내부에서 `accessLogService.log()`(REQUIRES_NEW)를 **직접 호출하지 말 것** — 미커밋 user를 참조해 FK 위반. 접속로그는 AFTER_COMMIT 이벤트로.
 - 상세: `docs/(2026-05-30) bugfix-kakao-signup-access-log-fk.md`, PR #185.
+
+## 인증코드/nonce 소비 순서 — "검증 후 마지막 소비" (2026-05-31)
+
+- **의도**: 인증 매개체(SMS 6자리 코드·가입 nonce)의 **검증과 소비(Redis 삭제)를 분리**한다. Redis 삭제는 `@Transactional` 롤백 대상이 아니므로, 검증·비즈니스 처리보다 **먼저 소비하면 이후 단계가 실패해도 인증이 비가역적으로 소모**돼 같은 코드/nonce로 재시도가 막힌다.
+- **불변 규칙**: 인증코드/nonce 소비는 **모든 비즈니스 검증·처리가 성공한 "마지막"에** 수행한다.
+  - 비번재설정 `confirmReset`: 맨 앞은 비소비형 `verificationCodeValidator.verifyWithoutConsume()`(enumeration 차단 A-M1 유지), 모든 검증·변경 성공 후 마지막에 `verificationCodeValidator.consume()`. 소비형 `verify()`(검증+삭제 결합)를 다운스트림 검증 앞에서 호출하지 말 것.
+  - 가입 `AuthService.register`·`KakaoAuthService`: nonce는 비즈니스 검증 후 `smsService.consumeVerification()`으로 마지막 소비(이미 적용됨).
+- **버그 이력**: `confirmReset`이 소비형 `verify()`를 맨 앞에서 호출 → 새 비밀번호=현재 비밀번호(`SAME_AS_CURRENT_PASSWORD`) 등 1차 실패 시 코드가 소모돼, 같은 코드 2차 재시도가 `EXPIRED_SMS_CODE`로 막힘. 카카오 가입 nonce 버그와 동일 뿌리(검증/소비 미분리 + Redis 비롤백).
+- **공유 컴포넌트**: `VerificationCodeValidator`는 `verify`(소비형)·`verifyWithoutConsume`(비소비형)·`consume`(소비 전용)를 제공. 흐름별로 적절히 조합한다.
+- 상세: `docs/(2026-05-31) bug-investigation-password-reset-verification.md`.

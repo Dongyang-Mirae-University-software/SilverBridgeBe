@@ -85,6 +85,19 @@ public class VerificationCodeValidator {
     }
 
     /**
+     * 인증코드와 오류 횟수 키를 소비(삭제)한다.
+     * <p>
+     * {@link #verifyWithoutConsume}로 검증한 흐름에서 <b>모든 비즈니스 검증·처리가 성공한 뒤
+     * 마지막 단계</b>에 호출해 1회용 소비를 보장한다. 검증과 소비를 분리해, 중간 단계(예: 사용자 조회·
+     * 정책 위반)가 실패해도 코드가 비가역적으로 소모되지 않게 한다. (Redis 삭제는 {@code @Transactional}
+     * 롤백 대상이 아니므로 "검증 후 마지막 소비" 순서가 중요 — 회원가입 nonce 소비와 동일 원칙)
+     */
+    public void consume(String verifyKey, String attemptKey) {
+        redisTemplate.delete(verifyKey);
+        redisTemplate.delete(attemptKey);
+    }
+
+    /**
      * 인증코드 일치 여부를 상수 시간으로 비교한다 (A-L1).
      * {@code String.equals}는 첫 불일치 문자에서 단락(short-circuit)되어 미세한 타이밍 차이를 만든다.
      * 6자리 코드는 MAX_ATTEMPTS=5로 이미 제한적이지만, 비밀 비교는 일관되게 상수 시간으로 처리한다.
