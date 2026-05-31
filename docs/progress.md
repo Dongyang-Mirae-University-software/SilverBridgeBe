@@ -4,6 +4,24 @@
 
 ---
 
+## [2026-05-31] — AI 이상감지 WebSocket 연동 분석/설계 (구현 전, 분석+설계 전용)
+
+AI 서버의 실시간 이상감지 신호(`latest_analysis`)를 백엔드가 WebSocket 클라이언트로 구독해 보호자에게 긴급 알림을 보내는 기능의 **연동 방법 확정 + 설계**. 구현은 다음 단계.
+
+- **⚠️ 분석 중 저장소 오인 → 정정**: 처음엔 로컬 클론 `/home/skarndaudwls/SilverBridgeAiServer`(remote=`gosky2/SilverBridgeAiServer` **fork**, `62ddc9a` 2026-05-22)를 분석해 "WS 코드 없음"·"danger=threshold 미달"이라 **잘못 결론**. 사용자 지적으로 **정본 = `Dongyang-Mirae-University-software/SilverBridgeAiServer`**(main, 2026-05-30 push) 확인, `gh api`로 정본 코드 직접 판독해 전면 교정. **향후 AI 분석 기준은 `Dongyang-Mirae` org 저장소.**
+- **실제 아키텍처(정본 ✅)**: iPad **프레임 인제스트 + WS 구독 broadcast**. iPad가 `POST /stream-sessions`(sessionId+cameraIdentifier 제공) → `POST /stream-sessions/{id}/frame`(JPEG) 송출 → AI가 `fire_smoke.pt`(YOLO)로 **15프레임마다** 분석(in-memory, **DB 미저장**) → 매 프레임 `session_status`+`latest_analysis`를 **해당 세션 구독자에게** broadcast. WS(`/api/v1/ws/live`)는 `action` 기반(connect→list→subscribe(sessionId)→푸시 수신, ping/pong).
+- **`danger` 정정(코드 ✅)**: 라이브 경로에서 **`danger`는 항상 `False` 하드코딩**(`fire_smoke_detection_service` "표시 전용", `analyze_stream_frame` payload 고정). "fire인데 false"는 임계값 문제가 **아니라** danger가 판정필드가 아니기 때문 → **백엔드는 danger 무시, `detectedType`+`confidence`로 판단**.
+- **검증된 코드 사실**: 라이브 detectedType ∈ `{normal, fire, smoke, unknown}`(TARGET_CLASSES={fire,smoke}, **fall/weapon 없음**), `FIRE_SMOKE_CONF_THRESHOLD` 기본 **0.35**(낮음→알림용 별도 임계 권장), `STREAM_SAMPLE_EVERY_N_FRAMES` 15, 끊김 타임아웃 10초, WS 인증=`x-api-key` 헤더 또는 `apiKey` 쿼리(단일 정적 키), 불일치 시 close 1008. `sessionId↔cameraIdentifier`는 세션 생성 시 확립+`live_streams` 목록에 둘 다 포함.
+- **설계 제안(잠정)**: ① 백엔드가 WS 클라이언트로 구독(헤더 인증·지수백오프 재연결·동적 subscribe, 다중 인스턴스 중복 주의), ② 판단=`detectedType∈{fire,smoke}` + 백엔드 알림 임계값(기본 0.6~0.7), danger 무시, ③ **중복방지 3단**((sessionId,analyzedAt) dedup → 지속성 승격 → Redis 쿨다운 `anomaly:cooldown:{ward}:{type}` TTL N분), ④ `sessionId→cameraIdentifier→wardId` 매핑(live_streams로 맵 유지; wardId는 우리 자체 매핑표 권장), ⑤ `AnomalyDetectedEvent`(AFTER_COMMIT/@Async)→`anomaly_events` 저장→ACTIVE 연결로 보호자 조회→**긴급=필수 알림(설정 우회**, SMS 인증번호 선례), ⑥ `anomaly_events` 재생성(V17서 DROP)+`session_id`/`bbox`, event_type CHECK는 `FIRE/SMOKE`.
+- **선행 차단(이하늘 확인)**: cameraIdentifier→wardId 매핑 합의·iPad 세션 등록 흐름·백엔드 구독 합의(#3·4·8), 운영 임계/빈도값(#2), fall/weapon 계획(#5) 등 9건 문서 §7.
+- **testai.gosky.kr 시스템 구성 파악**: AI 서버(`SilverBridgeAiServer`, FastAPI/GPU :6017) + 테스트 FE(`SilverBridgeStreamTestFe`, React/Vite :6018)를 리버스 프록시로 한 도메인에 합친 데모 환경. 부속: MedGemma LLM(:6012), 예약 API(`SilverBridgeReservation`, NestJS/Prisma :6015, `reservation.dmu.gosky.kr` — 우리 BE는 병원예약 V24로 제거돼 분리된 별도 시스템), PostgreSQL(:6019). 운영 `.env`로 `STREAM_SAMPLE_EVERY_N_FRAMES=5`(분석 5프레임마다)·`REQUIRE_GPU=true`·`STREAM_STATE_BACKEND=memory`·`MEDIAMTX_ENABLED=false` 확인.
+- **🔒 보안 경고**: 운영 `.env` 시크릿(`API_KEY`·OpenAI `GPT_API_KEY`·`HF_TOKEN`·DB 비번)이 채팅으로 공유됨 → **전부 회전 권장**(특히 OpenAI). 또한 `VITE_API_KEY`가 FE 정적 번들에 인라인돼 브라우저로 공개(=`API_KEY`와 동일 값, 테스트 FE에 하드코딩). 문서엔 값 마스킹.
+- **문서 눈높이 정책**: 사용자가 Java/Spring 비전문가 → 산출물 상단에 **🟢 쉬운 설명** 블록 추가, 전문용어는 한 줄 풀이. (기억: [산출물은 비전문가 눈높이로])
+- **규칙 준수**: AI/FE/예약 저장소 읽기 전용(수정/커밋 0), `.env` 미열람(값은 사용자 제공분만), 시크릿 평문 미기재.
+- **산출물**: `docs/(2026-05-31) ai-anomaly-websocket-integration-spec.md`, `docs/(2026-05-31) testai-gosky-kr-system-overview.md`.
+
+---
+
 ## [2026-05-30] — hospital: 병원 예약 기능 완전 제거 (코드 + DB 테이블)
 
 병원 예약 기능을 프로젝트에서 제외하기로 결정하여 관련 자산을 정리.
