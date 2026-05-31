@@ -717,3 +717,16 @@ REST API Key 단독 대비 보안 강화 — 인가코드 탈취 시 토큰 발�
 - **테스트**: 채널 위임/디스패처 라우팅·격리/설정 서비스 upsert·기본값 신규 테스트 + `ConnectionNotificationListenerTest` 갱신. `./gradlew test`·`build -x test` 모두 EXIT 0(기존 회귀 없음).
 - **프론트엔드 영향 없음**(additive). 카카오 알림톡(PFID/템플릿ID/SDK 예제)·이메일은 2·3단계 인계 — 산출물 문서 §8.
 - 산출물: `docs/(2026-05-31) feature-notification-channel-infra.md`
+
+---
+
+### [2026-05-31] 연결 해제 알림이 "거절" 문구로 보이는 문제 — 조사 결과 백엔드 무결
+
+연결 해제 시 "피보호자가 거절하였습니다"가 표시된다는 제보 점검. 사용자 가설(직전 거절 알림 추가가 해제 문구 오염)은 **기각**.
+
+- **백엔드 무결 확정**: "피보호자가 거절하였습니다" 문자열은 `src/main` 어디에도 없음. 해제 본문은 정상("...연결을 해제했습니다"), 이벤트 매핑(`ConnectionDisconnectedEvent`→`handleDisconnected`) 정상, 액터 분기(GUARDIAN/WARD) 정상.
+- **거절 커밋 영향 없음**: `2a69188`은 `handleRefused`를 추가만 함. 해제 본문은 `fa5f86f`→`2a69188`→`ee997f9` 세 시점 모두 동일.
+- **진짜 원인**: FCM은 `notification`+`data` 둘 다 발송 → 포그라운드 앱이 `data.type`으로 자체 문구 렌더. 해제의 와이어 식별자가 `CONNECTION_CANCELLED`/`connection-cancelled`(내부 enum `CONNECTION_DISCONNECTED`·status `DISCONNECTED`와 불일치)라, 거절 분리 전 FE가 이를 "해제 겸 거절"로 취급한 잔재로 추정. → FE 렌더링 + 네이밍 이슈.
+- **처리(옵션 B)**: 와이어 호환 유지(breaking 회피) — 백엔드 코드 무변경. `ConnectionNotificationListenerTest`에 `data.type` 단언(`CONNECTION_CANCELLED`/`CONNECTION_REFUSED`) 보강해 4종 비혼동을 고정. FE에 "cancelled=해제 전용, refused=거절 전용, 서버 body 그대로 표시 권장" 계약 인계.
+- 검증: 리스너 테스트 EXIT 0, `build -x test` EXIT 0.
+- 산출물: `docs/(2026-05-31) bugfix-connection-disconnect-message.md`.
