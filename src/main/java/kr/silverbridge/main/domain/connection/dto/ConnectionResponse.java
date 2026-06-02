@@ -4,8 +4,10 @@ import io.swagger.v3.oas.annotations.media.Schema;
 import kr.silverbridge.main.domain.connection.entity.Connection;
 import kr.silverbridge.main.domain.user.entity.User;
 import kr.silverbridge.main.global.enums.ConnectionStatus;
+import kr.silverbridge.main.global.enums.Gender;
 import lombok.Getter;
 
+import java.time.LocalDate;
 import java.time.OffsetDateTime;
 
 @Schema(description = "연결 관계 응답")
@@ -33,6 +35,20 @@ public class ConnectionResponse {
     @Schema(description = "상대방 상세주소 — ACTIVE 상태에서만 노출, PENDING/CANCELLED은 null", nullable = true)
     private final String partnerAddressDetail;
 
+    @Schema(description = "상대방 우편번호 — ACTIVE 상태에서만 노출. 미입력(기존/카카오) 사용자는 null", nullable = true, example = "06234")
+    private final String partnerPostcode;
+
+    @Schema(description = "상대방 성별 — ACTIVE 상태에서만 노출. 미입력 사용자는 null",
+            nullable = true, allowableValues = {"FEMALE", "MALE"})
+    private final String partnerGender;
+
+    @Schema(description = "상대방 생년월일(ISO-8601) — ACTIVE 상태에서만 노출. 미입력 사용자는 null",
+            nullable = true, example = "1975-03-21")
+    private final LocalDate partnerBirthDate;
+
+    @Schema(description = "상대방 이메일 — ACTIVE 상태에서만 노출, PENDING/CANCELLED은 null", nullable = true, example = "partner@example.com")
+    private final String partnerEmail;
+
     @Schema(description = "보호자가 입력한 피보호자와의 관계 (예: 아들). 기존 데이터(NULL)는 응답에서도 null", nullable = true, example = "아들")
     private final String relation;
 
@@ -52,6 +68,8 @@ public class ConnectionResponse {
     private ConnectionResponse(Long id, String partnerUserId, String partnerName,
                                String partnerProfileImage, String partnerPhone,
                                String partnerAddress, String partnerAddressDetail,
+                               String partnerPostcode, String partnerGender,
+                               LocalDate partnerBirthDate, String partnerEmail,
                                String relation, String status,
                                boolean isRequester, OffsetDateTime connectedAt,
                                OffsetDateTime createdAt) {
@@ -62,11 +80,20 @@ public class ConnectionResponse {
         this.partnerPhone = partnerPhone;
         this.partnerAddress = partnerAddress;
         this.partnerAddressDetail = partnerAddressDetail;
+        this.partnerPostcode = partnerPostcode;
+        this.partnerGender = partnerGender;
+        this.partnerBirthDate = partnerBirthDate;
+        this.partnerEmail = partnerEmail;
         this.relation = relation;
         this.status = status;
         this.isRequester = isRequester;
         this.connectedAt = connectedAt;
         this.createdAt = createdAt;
+    }
+
+    // 미입력(기존/카카오) 사용자의 성별은 null이므로 null-safe하게 enum name을 추출한다.
+    private static String genderName(Gender gender) {
+        return gender == null ? null : gender.name();
     }
 
     // 보호자 관점: 피보호자 정보 반환 (PENDING/CANCELLED에서는 phone/address null)
@@ -80,6 +107,10 @@ public class ConnectionResponse {
                 revealContact ? ward.getPhone() : null,
                 revealContact ? ward.getAddress() : null,
                 revealContact ? ward.getAddressDetail() : null,
+                revealContact ? ward.getPostcode() : null,
+                revealContact ? genderName(ward.getGender()) : null,
+                revealContact ? ward.getBirthDate() : null,
+                revealContact ? ward.getEmail() : null,
                 connection.getRelation(),
                 connection.getStatus().name(),
                 connection.getGuardianId().equals(connection.getInitiatedBy()),
@@ -99,6 +130,10 @@ public class ConnectionResponse {
                 revealContact ? guardian.getPhone() : null,
                 revealContact ? guardian.getAddress() : null,
                 revealContact ? guardian.getAddressDetail() : null,
+                revealContact ? guardian.getPostcode() : null,
+                revealContact ? genderName(guardian.getGender()) : null,
+                revealContact ? guardian.getBirthDate() : null,
+                revealContact ? guardian.getEmail() : null,
                 connection.getRelation(),
                 connection.getStatus().name(),
                 connection.getWardId().equals(connection.getInitiatedBy()),
