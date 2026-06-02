@@ -730,3 +730,17 @@ REST API Key 단독 대비 보안 강화 — 인가코드 탈취 시 토큰 발�
 - **처리(옵션 B)**: 와이어 호환 유지(breaking 회피) — 백엔드 코드 무변경. `ConnectionNotificationListenerTest`에 `data.type` 단언(`CONNECTION_CANCELLED`/`CONNECTION_REFUSED`) 보강해 4종 비혼동을 고정. FE에 "cancelled=해제 전용, refused=거절 전용, 서버 body 그대로 표시 권장" 계약 인계.
 - 검증: 리스너 테스트 EXIT 0, `build -x test` EXIT 0.
 - 산출물: `docs/(2026-05-31) bugfix-connection-disconnect-message.md`.
+
+---
+
+### [2026-06-02] 연결 조회 partner 프로필 전체 필드 추가
+
+연결 조회 응답의 상대방(partner) 정보에 누락돼 있던 **성별·생년월일·이메일·우편번호**를 보강. 케어 서비스 특성상 연결된 양쪽(보호자/피보호자)이 상대 프로필 전체를 상호 열람.
+
+- **추가 필드**(`ConnectionResponse`): `partnerPostcode`·`partnerGender`(FEMALE/MALE)·`partnerBirthDate`(ISO)·`partnerEmail`.
+- **노출 규칙**: 기존 `partnerPhone/Address`와 동일한 **ACTIVE 게이팅** — PENDING/취소/거절은 모두 `null`("연결 성립 전 비노출" 정책 확장). 성별/생년월일/우편번호 미입력 계정은 ACTIVE라도 `null`(null-safe 매핑).
+- **민감/시스템 필드 미노출**: password·provider_id·provider·role·계정status·lastLoginAt — DTO에 필드 자체 부재(리플렉션 테스트로 고정).
+- **영향 엔드포인트**: 공유 DTO 1곳 수정 → `/guardian/connection/select`·`/guardian/connection/requests`·`/ward/connection/active` 3개 자동 반영. 수락 전 카드(`PendingConnectionResponse`, `/ward/connection/pending`)는 최소정보+전화 마스킹 정책 유지로 **무변경**.
+- **DB 영향 없음**(읽기 응답 매핑만 추가). 프론트 호환(additive — 기존 필드 무변경).
+- **테스트**: `ConnectionResponseTest` 신규(ACTIVE 노출/비-ACTIVE null/null 프로필 안전/민감필드 미존재) EXIT 0, `connection.*` 회귀 EXIT 0, `build -x test` EXIT 0.
+- 산출물: `docs/(2026-06-02) feature-connection-partner-full-profile.md`.
