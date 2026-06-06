@@ -762,3 +762,16 @@ REST API Key 단독 대비 보안 강화 — 인가코드 탈취 시 토큰 발�
 - **DB 영향 없음**(읽기 응답 매핑만 추가). 프론트 호환(additive — 기존 필드 무변경).
 - **테스트**: `ConnectionResponseTest` 신규(ACTIVE 노출/비-ACTIVE null/null 프로필 안전/민감필드 미존재) EXIT 0, `connection.*` 회귀 EXIT 0, `build -x test` EXIT 0.
 - 산출물: `docs/(2026-06-02) feature-connection-partner-full-profile.md`.
+
+---
+
+### [2026-06-06] 카카오 가입 / 비밀번호 재설정 버그 수정 검증 — PASS
+
+직전 머지된 3건 수정(① 카카오 가입 `access_logs` FK 위반+예외 오매핑 #185, ② 카카오 가입 실패 시 nonce 소비 #184, ③ 비번 재설정 인증코드 소비 순서 #188)의 정확성·회귀 스팟 점검. **코드 변경 없음(점검만).**
+
+- **수정 정확성 PASS**: ① 로그를 `KakaoRegisteredEvent`(AFTER_COMMIT, REQUIRES_NEW)로 미뤄 user 커밋 후 기록 → FK 안전, 가입 내부 `accessLogService.log()` 직접호출 없음. 예외는 `extractSqlState()`로 23505(unique)→409"중복"/그 외(FK 23503 등)→500+원인 ERROR 로깅으로 분리. ② nonce 소비(`consumeVerification`)가 세션·역할·중복 검증 뒤. ③ `confirmReset`이 맨앞 `verifyWithoutConsume`, 모든 검증·변경 성공 후 마지막 `consume` — Redis 비롤백 대비 "검증 후 마지막 소비".
+- **회귀 PASS**: 일반 가입(`AuthService.register`) 무변경, 가입 시 접속로그 미기록이라 FK 소지 없음(카카오만 KAKAO_LOGIN — 의도된 비대칭). 공유 컴포넌트(`VerificationCodeValidator`·`GlobalExceptionHandler`·`SmsService`) 시그니처·기존 동작 유지. 기존 카카오 로그인 인라인 로그(커밋된 user라 FK 안전) 정상.
+- **테스트 PASS**: 수정별 단위 테스트 존재 — 가입 실패 3종(세션만료/이메일중복/ADMIN) `save·consume never`, FK(23503)→500·"중복"불포함, AFTER_COMMIT 로그, `SAME_AS_CURRENT_PASSWORD`/카카오분기 `consume never`(★회귀), `verifyWithoutConsume`는 키 유지. `build -x test` EXIT 0, 관련 6 클래스 테스트 EXIT 0.
+- **이슈**: Critical/High/Medium 없음. Low 2건(소비가 `save()` 직전이라 좁은 race 시 nonce 소모 / AFTER_COMMIT 리스너 비동기 아님) — 모두 의도된 설계, 수정 불요.
+- **종합 판정**: ✅ PASS — 머지 상태 양호, 추가 조치 불요.
+- 산출물: `docs/(2026-06-06) audit-spot-check-kakao-password-bugfix.md`.
