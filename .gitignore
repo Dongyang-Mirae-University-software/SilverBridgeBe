@@ -50,3 +50,6 @@ src/main/resources/firebase-service-account.json
 
 ### Python Hypothesis 테스트 캐시 (이 Java 프로젝트와 무관, 실수 커밋분 추적 제거) ###
 .hypothesis/
+
+### Claude Code 런타임 락 (세션별 임시 상태 파일, 공유 설정은 추적 유지) ###
+.claude/*.lock
