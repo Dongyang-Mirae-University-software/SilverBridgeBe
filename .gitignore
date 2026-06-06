@@ -53,3 +53,7 @@ src/main/resources/firebase-service-account.json
 
 ### Claude Code 런타임 락 (세션별 임시 상태 파일, 공유 설정은 추적 유지) ###
 .claude/*.lock
+
+### FE 인계용 임시 문서 (로컬 공유 전용, 커밋 대상 아님) ###
+docs/(2026-05-31) fe-handoff-connection-disconnect-message.md
+docs/(2026-05-31) fe-handoff-notification-settings-api.md
