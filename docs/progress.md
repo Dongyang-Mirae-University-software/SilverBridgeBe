@@ -775,3 +775,18 @@ REST API Key 단독 대비 보안 강화 — 인가코드 탈취 시 토큰 발�
 - **이슈**: Critical/High/Medium 없음. Low 2건(소비가 `save()` 직전이라 좁은 race 시 nonce 소모 / AFTER_COMMIT 리스너 비동기 아님) — 모두 의도된 설계, 수정 불요.
 - **종합 판정**: ✅ PASS — 머지 상태 양호, 추가 조치 불요.
 - 산출물: `docs/(2026-06-06) audit-spot-check-kakao-password-bugfix.md`.
+
+---
+
+### [2026-06-06] connection 누적 변경 스팟 점검 (지난 풀 점검 이후) — PASS
+
+지난 풀 점검(`docs/(2026-05-21) audit-report-connection.md`) 이후 쌓인 connection 변경 5건을 스팟 점검. 빌드 EXIT 0, **신규 결함 0건**.
+
+- **점검 대상**: ① active/pending 조회 분리 + `relation` 컬럼(`V19`, 배경의 "V15"는 착오) ② 거절 실시간 알림(`ConnectionRefusedEvent`+`handleRefused`, #183) ③ 해제 "거절" 오표시 조사(#190, 백엔드 무변경) ④ partner 프로필 전체 필드(#191, 성별/생년월일/이메일/우편번호) ⑤ 알림 채널 추상화(FCM→dispatcher, #189).
+- **PHASE A (알림 4종 정합)**: 요청/수락/거절/해제 이벤트→리스너→문구→`data.type`까지 1:1 비혼동 확인. 해제 WS명 `connection-cancelled`(내부 enum과 불일치)는 PR #190의 의도된 와이어 호환 보존 — 결함 아님. 거절 커밋이 해제 본문 미변경 재확인.
+- **PHASE B (partner 노출)**: 신규 4필드 전부 `revealContact=ACTIVE` 게이팅·양방향(Guardian/Ward) 대칭. `password`·`provider_id`·토큰류 **응답 매핑에 부재**(🔴 Critical 없음). `genderName(null)` null-safe. 수락 전 카드(`PendingConnectionResponse`)는 전체필드 미추가 유지.
+- **PHASE C (동시성)**: 리스너 4종 `AFTER_COMMIT`+`@Async` 일관, `@Version`(V21) 낙관적 락, 알림 실패 @Async 격리. 거절(PENDING)·해제(ACTIVE) 전제 상태 배타.
+- **PHASE D (계약)**: partner 필드는 비파괴적 append, `@Schema` 문서화, `relation` DTO `@Size(max=10)`↔DB `VARCHAR(10)` 정합.
+- **이슈**: Critical/High/Medium/Low 모두 없음. 정보성 노트 2건(해제 와이어 네이밍=의도, partnerEmail=로그인 식별자지만 ACTIVE·가족 한정 의도된 노출).
+- **종합 판정**: ✅ PASS — 수정 사항 없음(커밋 대상 없음).
+- 산출물: `docs/(2026-06-06) audit-spot-check-connection-changes.md`.
