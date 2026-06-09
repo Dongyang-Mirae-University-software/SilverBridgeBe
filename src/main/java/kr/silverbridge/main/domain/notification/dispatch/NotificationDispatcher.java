@@ -32,7 +32,7 @@ import java.util.Set;
 @Component
 public class NotificationDispatcher {
 
-    /** 필수 알림이 강제 발송되는 채널. 현재 등록된 필수 타입은 없으며, 추가 시 이 집합을 재검토한다. */
+    /** 필수 알림이 강제 발송되는 채널. WARD_SOS 등 필수 타입이 사용하며, 채널 추가 시 이 집합을 재검토한다. */
     private static final Set<NotificationChannelType> MANDATORY_CHANNELS =
             EnumSet.of(NotificationChannelType.FCM);
 

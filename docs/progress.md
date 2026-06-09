@@ -4,6 +4,23 @@
 
 ---
 
+## [2026-06-09] — sos: 피보호자 긴급 SOS 기능 구현 (PR `feature/ward-sos`)
+
+피보호자(WARD)가 긴급 SOS 버튼을 누르면 발생 이력을 남기고 연결된 ACTIVE 보호자 전원에게 긴급 알림(FCM + WebSocket)을 보내는 기능.
+
+- **핵심 정책**: SOS 알림은 **필수 알림** — 보호자 알림 설정(ON/OFF)과 무관하게 무조건 발송. 연결된 ACTIVE 보호자 **전원** 발송(한 명 실패가 다른 보호자 막지 않음). 피보호자(WARD 역할)만 발생 가능.
+- **엔드포인트**: `POST /api/ward/sos` (WARD 전용, `@PreAuthorize`). 요청 바디 없음, 응답 `{ sosEventId, triggeredAt }`.
+- **신규 도메인 `domain/sos/`**: 엔티티/리포지토리/DTO/이벤트(`SosTriggeredEvent`)/서비스/컨트롤러/리스너. **신규 패턴 없이** 기존 connection 알림 흐름을 그대로 미러링.
+- **이력 테이블 V26 `sos_events`**(id/ward_id/created_at): 발송 보호자 목록은 미저장(알림은 커밋 후 AFTER_COMMIT 발송이라 저장 시점 미확정 + 정규화). `ward_id`는 탈퇴 hard delete 시 `ON DELETE SET NULL`로 익명 보존(access_logs와 동일).
+- **필수 알림 분류**: `NotificationType.WARD_SOS(true)` 추가 — 디스패처가 `isMandatory()`면 사용자 설정을 무시하고 `MANDATORY_CHANNELS`(FCM)로 강제 발송. enum javadoc이 예고했던 "긴급 알림용 확장 지점"의 **첫 사용처**(AI 이상감지도 향후 동일 메커니즘 사용 예정 — 2026-05-31 설계 참조).
+- **흐름**: `SosService.trigger`(@Transactional) 이력 저장 + `SosTriggeredEvent` 발행 → `SosNotificationListener`(@Async, AFTER_COMMIT)가 `ConnectionService.getActiveGuardianIds`로 보호자 전원 조회 → WS(`sos-triggered`) + 디스패처(WARD_SOS) 발송. **알림 실패가 이력 저장을 롤백시키지 않음**(이력은 무조건 보존).
+- **범위 밖(프론트)**: 119 통화 화면=순수 프론트 연출(백엔드 무관), 보호자 직접 전화=기존 `/api/ward/connection/active`의 partnerPhone + `tel:` 링크.
+- **rate limit 미적용(의도)**: 긴급 버튼 특성상 과도한 제한이 실제 위급을 차단할 위험.
+- **테스트**: SosService 2 / SosNotificationListener 4(전원발송·필수알림 설정무시·보호자0명·실패격리) / WardSosController 권한 2(WARD 허용·GUARDIAN 403, 메서드 시큐리티 AOP). `./gradlew build` BUILD SUCCESSFUL.
+- **산출물**: `docs/(2026-06-09) feature-ward-sos.md`.
+
+---
+
 ## [2026-05-31] — AI 이상감지 WebSocket 연동 분석/설계 (구현 전, 분석+설계 전용)
 
 AI 서버의 실시간 이상감지 신호(`latest_analysis`)를 백엔드가 WebSocket 클라이언트로 구독해 보호자에게 긴급 알림을 보내는 기능의 **연동 방법 확정 + 설계**. 구현은 다음 단계.
