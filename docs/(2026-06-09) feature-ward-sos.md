@@ -11,12 +11,14 @@
 피보호자(WARD)가 대시보드 > 긴급 전화 > **"긴급 SOS"** 버튼을 누르면 백엔드가:
 
 1. **SOS 발생 이력을 DB에 저장**한다 (`sos_events`). 알림 발송 성공 여부와 무관하게 **항상 기록**된다.
-2. 연결된 **ACTIVE 보호자 전원**에게 **긴급 알림**을 발송한다 (WebSocket + FCM).
+2. 연결된 **ACTIVE 보호자 전원**에게 **긴급 알림**을 발송한다 (WebSocket + FCM, FCM 미도달 보호자는 SMS 폴백).
 
 ### 핵심 정책
 
 - **필수 알림**: SOS 알림은 보호자의 알림 설정(ON/OFF)과 **무관하게 무조건 발송**된다.
+- **SMS 폴백(조건부)**: 필수 채널은 기본 **FCM**. 단 보호자에게 **FCM 토큰이 없으면**(앱 미설치·로그아웃·토큰 만료) 푸시가 닿지 않으므로 **그 보호자만 SMS로 폴백**한다. FCM 토큰이 있으면 SMS 비용 없이 푸시만 보낸다 — "FCM이 닿지 않는 보호자"만 SMS 대상.
 - **전원 발송**: 연결된 ACTIVE 보호자가 여러 명이면 **전원**에게 발송하며, 한 명 발송 실패가 다른 보호자를 막지 않는다(실패 격리).
+- **알림 쿨다운**: 연타 시 보호자 알림 폭주를 막기 위해 동일 피보호자 알림에 30초 쿨다운(`SosNotificationCooldown`). **이력은 전량 보존**되고 알림만 생략하며, 긴급 재요청을 차단(429)하진 않는다. Redis 장애 시 fail-open(발송).
 - **WARD 전용**: 피보호자(WARD 역할)만 SOS를 발생시킬 수 있다.
 
 ---
@@ -82,7 +84,7 @@ WardSosController.triggerSos(wardId)
 
 ### 3-5. 필수 알림 분류 (설정 무시)
 - `NotificationType`에 **`WARD_SOS(true)`** 추가 — `isMandatory()==true`.
-- `NotificationDispatcher`는 mandatory 타입이면 사용자 설정을 무시하고 `MANDATORY_CHANNELS`(현재 `{FCM}`)로 강제 발송. → SOS는 보호자가 알림을 꺼도 **반드시** FCM을 받는다. (enum javadoc이 예고했던 "긴급 알림용 확장 지점"의 첫 사용처.)
+- `NotificationDispatcher`는 mandatory 타입이면 사용자 설정을 무시하고 강제 발송한다 — 기본 채널 `FCM`, 보호자에게 FCM 토큰이 없으면(`fcmService.hasToken==false`) `SMS`를 폴백으로 추가(`mandatoryTargets(userId)`). → SOS는 보호자가 알림을 꺼도 **반드시** 받으며, 푸시가 닿지 않는 보호자만 SMS로 보강된다. (enum javadoc이 예고했던 "긴급 알림용 확장 지점"의 첫 사용처.)
 - WebSocket은 채널 추상화 밖이라 항상 발송.
 
 ---
@@ -120,7 +122,7 @@ POST /api/ward/sos
 Headers: Authorization: Bearer {accessToken}
 Body: (없음)
 
-200 OK
+201 Created   ← sos_events 행 생성
 {
   "success": true,
   "data": { "sosEventId": 42, "triggeredAt": "2026-06-09T12:34:56+09:00" }
@@ -169,4 +171,19 @@ payload  : { "wardId": "...", "wardName": "...", "sosEventId": "42" }
 ## 7. 배포/운영 메모
 
 - **마이그레이션 V26**은 `dev` 머지 시 CD가 자동 적용(빈 테이블 신규 생성, 비파괴적). 기존 `V1`~`V25` 미수정.
-- **rate limit 미적용(의도)**: SOS는 긴급 버튼이라 과도한 제한이 실제 위급을 차단할 위험이 있어 별도 rate limit을 두지 않았다. (필요 시 추후 별도 결정.)
+- **rate limit 미적용(의도)**: SOS는 긴급 버튼이라 과도한 제한이 실제 위급을 차단할 위험이 있어 차단형 rate limit(429)을 두지 않았다. 대신 아래 알림 쿨다운으로 "이력은 보존, 알림만 합치기"를 적용(차단 아님).
+
+---
+
+## 8. 후속 보강 — 스팟 점검 반영 (2026-06-09)
+
+스팟 점검(`docs/(2026-06-09) audit-spot-check-ward-sos.md`)에서 나온 이슈 4건을 반영. 알림 도달률·운영 안전성을 강화하되 "이력은 무조건 남는다" 원칙은 유지.
+
+| # | 이슈 | 반영 |
+|---|---|---|
+| M-1 | SOS 필수 채널이 FCM 단독 → 오프라인 보호자 미수신 가능 | `NotificationDispatcher.mandatoryTargets()`로 **조건부 SMS 폴백** — 기본 FCM, 보호자에게 FCM 토큰이 없을 때만(`fcmService.hasToken==false`) SMS 추가. 정상 보호자는 SMS 비용 0. (`FcmTokenRepository.existsByUserId`/`FcmService.hasToken` 신규.) 채널별 try/catch로 한쪽 실패가 다른쪽 미차단. |
+| M-2 | 중복 SOS 쿨다운 부재 → 알림 폭주 | `SosNotificationCooldown`(Redis `SET NX EX`, 30초) 신규. 리스너가 보호자 조회 후 `tryAcquire`로 알림만 생략 — **이력은 항상 저장**, 긴급 재요청 차단 안 함. Redis 장애 시 **fail-open**(발송). |
+| L-1 | HTTP 200 → 201 | `WardSosController`가 `201 Created` 반환(이력 리소스 생성). |
+| L-2 | `wardName` null → "null님이..." | `SosService`가 이름 공백 시 폴백 `"보호 대상자"`로 이벤트 발행. |
+
+신규 테스트: `SosNotificationCooldownTest`(허용/생략/fail-open), `SosNotificationListenerTest.handleSosTriggered_쿨다운_알림생략`, `SosServiceTest.trigger_이름없음_폴백`. 디스패처 필수 알림 테스트를 토큰 분기로 갱신 — `필수알림_FCM토큰있음_FCM만`(SMS 미발송)·`필수알림_FCM토큰없음_SMS폴백`. `./gradlew build -x test` 및 SOS/디스패처 테스트 BUILD SUCCESSFUL.
