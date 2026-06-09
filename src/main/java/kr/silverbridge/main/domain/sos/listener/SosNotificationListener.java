@@ -5,6 +5,7 @@ import kr.silverbridge.main.domain.notification.channel.NotificationContent;
 import kr.silverbridge.main.domain.notification.dispatch.NotificationDispatcher;
 import kr.silverbridge.main.domain.notification.dispatch.NotificationType;
 import kr.silverbridge.main.domain.sos.event.SosTriggeredEvent;
+import kr.silverbridge.main.domain.sos.service.SosNotificationCooldown;
 import kr.silverbridge.main.global.websocket.WebSocketEventPublisher;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -32,6 +33,10 @@ import java.util.Map;
  *
  * <p>보호자가 여러 명이면 각 보호자 발송을 try/catch로 감싸 한 명 발송 실패가 나머지 보호자 발송을 막지 않게
  * 격리한다(실패 격리). 연결된 ACTIVE 보호자가 없으면 이력만 남고 발송 없이 종료한다.</p>
+ *
+ * <p>연타 시 보호자 알림 폭주를 막기 위해 {@link SosNotificationCooldown}으로 동일 피보호자 알림에 쿨다운을
+ * 둔다 — 단 쿨다운은 <b>알림</b>에만 적용되며 이력({@code sos_events})은 항상 보존된다. 쿨다운 인프라 장애 시에는
+ * 긴급 우선 원칙에 따라 알림을 발송한다(fail-open).</p>
  */
 @Slf4j
 @Component
@@ -41,6 +46,7 @@ public class SosNotificationListener {
     private final ConnectionService connectionService;
     private final WebSocketEventPublisher webSocketEventPublisher;
     private final NotificationDispatcher notificationDispatcher;
+    private final SosNotificationCooldown cooldown;
 
     @Async("notificationExecutor")
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
@@ -48,6 +54,13 @@ public class SosNotificationListener {
         List<String> guardianIds = connectionService.getActiveGuardianIds(event.wardId());
         if (guardianIds.isEmpty()) {
             log.info("SOS 알림 대상 보호자 없음(이력은 보존): wardId={}, sosEventId={}",
+                    event.wardId(), event.sosEventId());
+            return;
+        }
+
+        // 연타 알림 폭주 방지 — 쿨다운 내 재요청은 알림만 생략(이력은 이미 저장됨). 긴급 재요청을 차단(429)하지는 않는다.
+        if (!cooldown.tryAcquire(event.wardId())) {
+            log.info("SOS 알림 쿨다운 — 직전 발송 후 재요청이라 알림 생략(이력은 보존): wardId={}, sosEventId={}",
                     event.wardId(), event.sosEventId());
             return;
         }
