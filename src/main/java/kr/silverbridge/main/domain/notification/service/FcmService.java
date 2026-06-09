@@ -47,6 +47,12 @@ public class FcmService {
         log.info("FCM 토큰 일괄 삭제(탈퇴): userId={}", userId);
     }
 
+    // 사용자에게 등록된 FCM 토큰이 하나라도 있는지. 긴급 알림 SMS 폴백 판단용(토큰 없으면 푸시가 닿지 않음).
+    @Transactional(readOnly = true)
+    public boolean hasToken(String userId) {
+        return fcmTokenRepository.existsByUserId(userId);
+    }
+
     // 특정 사용자에게 푸시 알림 발송 (등록된 모든 디바이스)
     public void sendToUser(String userId, String title, String body, Map<String, String> data) {
         List<FcmToken> tokens = fcmTokenRepository.findByUserId(userId);
