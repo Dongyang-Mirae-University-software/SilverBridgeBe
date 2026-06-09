@@ -13,6 +13,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.util.StringUtils;
 
 /**
  * 피보호자 긴급 SOS 처리 서비스.
@@ -26,6 +27,9 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 @RequiredArgsConstructor
 public class SosService {
+
+    /** 피보호자 이름이 비어 있을 때 알림 문구에 쓰는 폴백 — "null님이..." 같은 문구를 막는다. */
+    private static final String FALLBACK_WARD_NAME = "보호 대상자";
 
     private final SosEventRepository sosEventRepository;
     private final UserRepository userRepository;
@@ -44,7 +48,8 @@ public class SosService {
 
         SosEvent sosEvent = sosEventRepository.save(SosEvent.builder().wardId(wardId).build());
 
-        eventPublisher.publishEvent(new SosTriggeredEvent(wardId, sosEvent.getId(), ward.getName()));
+        String wardName = StringUtils.hasText(ward.getName()) ? ward.getName() : FALLBACK_WARD_NAME;
+        eventPublisher.publishEvent(new SosTriggeredEvent(wardId, sosEvent.getId(), wardName));
         log.info("SOS 발생: sosEventId={}, wardId={}", sosEvent.getId(), wardId);
 
         return new SosResponse(sosEvent.getId(), sosEvent.getCreatedAt());

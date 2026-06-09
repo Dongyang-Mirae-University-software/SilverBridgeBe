@@ -6,6 +6,7 @@ import kr.silverbridge.main.domain.sos.dto.SosResponse;
 import kr.silverbridge.main.domain.sos.service.SosService;
 import kr.silverbridge.main.global.response.ApiResponse;
 import lombok.RequiredArgsConstructor;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
@@ -44,6 +45,7 @@ public class WardSosController {
     @PostMapping("/api/ward/sos")
     public ResponseEntity<ApiResponse<SosResponse>> triggerSos(
             @AuthenticationPrincipal String wardId) {
-        return ResponseEntity.ok(ApiResponse.ok(sosService.trigger(wardId)));
+        // SOS 이력(sos_events) 행을 생성하므로 201 Created.
+        return ResponseEntity.status(HttpStatus.CREATED).body(ApiResponse.ok(sosService.trigger(wardId)));
     }
 }
