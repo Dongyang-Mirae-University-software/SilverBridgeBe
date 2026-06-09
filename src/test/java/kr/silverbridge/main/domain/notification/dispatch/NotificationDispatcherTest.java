@@ -16,6 +16,7 @@ import java.util.Arrays;
 import java.util.EnumSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
@@ -118,12 +119,29 @@ class NotificationDispatcherTest {
     }
 
     @Test
-    @DisplayName("[분류 가드] 현재 디스패처를 경유하는 알림은 모두 '선택'(필수 아님)이다")
-    void 현재_모든타입_선택() {
-        // 필수 알림(SMS 인증번호)은 디스패처를 경유하지 않으므로 디스패처 경유 mandatory 타입은 아직 없다.
-        // 향후 긴급 알림을 mandatory=true로 추가하면 디스패처가 설정을 무시하고 MANDATORY_CHANNELS로 강제 발송한다.
-        // (이 가드는 분류 결정을 코드로 고정하고, mandatory 타입이 추가되면 의도적 검토를 유도한다.)
-        boolean anyMandatory = Arrays.stream(NotificationType.values()).anyMatch(NotificationType::isMandatory);
-        assertThat(anyMandatory).isFalse();
+    @DisplayName("필수 알림(WARD_SOS)은 사용자 설정을 무시하고 FCM으로 강제 발송한다")
+    void 필수알림_설정무시_FCM강제발송() {
+        // 긴급 SOS 등 mandatory=true 타입은 settingService를 조회하지 않고 MANDATORY_CHANNELS(FCM)로 강제 발송한다.
+        dispatcher.dispatch(USER_ID, NotificationType.WARD_SOS, content);
+
+        verify(settingService, never()).enabledChannels(any()); // 설정 무시
+        verify(fcmChannel).send(any(), any());
+        verify(smsChannel, never()).send(any(), any());
+    }
+
+    @Test
+    @DisplayName("[분류 가드] 디스패처 경유 필수 타입은 WARD_SOS 뿐이고, 연결 알림은 모두 '선택'이다")
+    void 분류_가드_필수타입_고정() {
+        // 필수 알림(SMS 인증번호)은 디스패처를 경유하지 않으므로, 디스패처 경유 필수 타입은 긴급 SOS(WARD_SOS)가 유일하다.
+        // 새 필수 타입을 추가하면 이 가드가 깨져 의도적 검토를 유도한다(분류 결정을 코드로 고정).
+        Set<NotificationType> mandatory = Arrays.stream(NotificationType.values())
+                .filter(NotificationType::isMandatory)
+                .collect(java.util.stream.Collectors.toSet());
+        assertThat(mandatory).containsExactlyInAnyOrder(NotificationType.WARD_SOS);
+
+        assertThat(NotificationType.CONNECTION_REQUEST.isMandatory()).isFalse();
+        assertThat(NotificationType.CONNECTION_ACCEPTED.isMandatory()).isFalse();
+        assertThat(NotificationType.CONNECTION_REFUSED.isMandatory()).isFalse();
+        assertThat(NotificationType.CONNECTION_DISCONNECTED.isMandatory()).isFalse();
     }
 }

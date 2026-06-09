@@ -365,6 +365,15 @@ SilverBridge는 노인(피보호자)과 그 가족(보호자)을 연결하는 �
     PENDING(대기)  →  CANCELLED(해제)  [보호자 취소(무알림) / 피보호자 거절(보호자에게 실시간 알림, 2026-05-28 추가)]
     ACTIVE(활성)   →  CANCELLED(해제)  [어느 쪽이든 해제 → 상대에게 알림]
 
+  긴급 SOS (피보호자 전용):
+    → POST /api/ward/sos   → SOS 발생 이력 저장(sos_events) + 연결된 ACTIVE 보호자 전원에게
+                             긴급 알림 발송(WebSocket /topic/{보호자ID}/sos-triggered + FCM). (2026-06-09 추가)
+                             · 필수 알림 — 보호자 알림 설정(ON/OFF)과 무관하게 무조건 발송
+                             · 보호자 여러 명이면 전원 발송(한 명 실패가 다른 보호자 막지 않음)
+                             · 응답: { sosEventId, triggeredAt }
+                             · 119 통화 화면 / 보호자 직접 전화는 프론트 처리(백엔드 무관).
+                               직접 전화번호는 GET /api/ward/connection/active 의 partnerPhone 사용
+
 
   [ 3-7. 푸시 알림(FCM) 토큰 관리 ]
   ─────────────────────────────
@@ -536,6 +545,7 @@ SilverBridge는 노인(피보호자)과 그 가족(보호자)을 연결하는 �
     /topic/{userId}/connection-accepted    보호자가 받는 피보호자의 수락 알림
     /topic/{userId}/connection-refused     보호자가 받는 피보호자의 거절 알림 (2026-05-28 추가)
     /topic/{userId}/connection-cancelled   연결 해제 알림
+    /topic/{userId}/sos-triggered          보호자가 받는 피보호자의 긴급 SOS 알림 (2026-06-09 추가)
 
   ※ 보안: StompSubscriptionAuthorizationInterceptor가 구독 시점에
     {userId}가 인증 세션의 userId와 일치하는지 검증해, 타인의 실시간 알림
@@ -604,6 +614,15 @@ SilverBridge는 노인(피보호자)과 그 가족(보호자)을 연결하는 �
   ip_address : 요청 IP
   user_agent : 요청 브라우저/앱 정보
   created_at : 발생 일시
+
+
+  [ sos_events — 피보호자 긴급 SOS 발생 이력 ] (2026-06-09 추가)
+  ─────────────────────────────
+  id         : 고유 번호
+  ward_id    : SOS를 발생시킨 피보호자 ID (탈퇴 시 NULL 보존 — 익명 감사 기록)
+  created_at : 발생 일시
+  ※ 발송된 보호자 목록은 저장하지 않음 — 알림은 이력 커밋 후 발송되며,
+    대상 보호자는 발송 시점의 ACTIVE connections에서 도출(정규화 유지).
 
 
   [ connections — 보호자-피보호자 연결 ]
