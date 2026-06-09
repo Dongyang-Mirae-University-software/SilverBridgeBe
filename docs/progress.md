@@ -4,6 +4,32 @@
 
 ---
 
+### [2026-06-09] 피보호자 SOS 긴급 알림 기능 스팟 점검 — PASS
+
+신규 SOS 기능(`POST /api/ward/sos`, PR #199 / `d66343f`)을 생명 관련 긴급 기능 기준으로 점검 — **"알림이 확실히 가는가"** 최우선. **코드 변경 없음(점검만).** 빌드·SOS 단위 테스트 3클래스 모두 성공.
+
+- **PHASE A 알림 확실성 — 전 항목 PASS**: ① 필수 알림 `WARD_SOS(mandatory=true)`→dispatcher가 사용자 설정 무시·`MANDATORY_CHANNELS{FCM}` 강제 발송 ② `getActiveGuardianIds`(ACTIVE만) for 루프 전원 발송, PENDING/CANCELLED 제외 ③ 실패 격리: 보호자별 try/catch + `WebSocketEventPublisher.sendToUser` 자체 예외 삼킴(WS 실패가 FCM 미차단) + dispatcher 채널별 격리 ④ `AFTER_COMMIT`으로 이력 커밋 후 발송→발송 전량 실패해도 `sos_events` 보존 ⑤ 본문에 `wardName` 포함. 추가: `AsyncConfig` `CallerRunsPolicy`로 큐 포화 시에도 알림 드롭 없음.
+- **PHASE B 인가 PASS**: `@PreAuthorize("hasRole('WARD')")`(GUARDIAN/ADMIN 403), `wardId`는 `@AuthenticationPrincipal`만(사칭 불가), `/topic/{guardianId}/sos-triggered`는 STOMP 범용 `{userId}==세션` 인가로 보호.
+- **PHASE C/D PASS**: 트랜잭션 경계·AFTER_COMMIT·기존 connection 패턴 일관, N+1 없음, V26 최신·`ON DELETE SET NULL`. 핵심 신뢰성 케이스(필수/전원/격리/이력/403/보호자0) 단위 테스트 고정.
+- **이슈**: 🔴/🟠 **0건**. 🟡 M-1(SOS 필수 채널 FCM 단독 — 오프라인 보호자 미수신 가능, SMS 폴백 검토 권고) · M-2(중복 SOS 쿨다운 부재 — 이력 보존하며 알림만 쿨다운/프론트 디바운싱 권고, 차단형 지양). 🟢 L-1(201 vs 200) · L-2(wardName null 가드). 전부 선택적 강화이며 현재 구현 결함 아님.
+- **종합 판정**: ✅ PASS — 머지 상태 양호, 추가 조치 없이 운영 가능.
+- 산출물: `docs/(2026-06-09) audit-spot-check-ward-sos.md`.
+
+---
+
+### [2026-06-09] SOS 스팟 점검 이슈 4건 반영 (branch `feature/ward-sos-audit-fixes`)
+
+위 점검에서 나온 M-1·M-2·L-1·L-2를 모두 코드에 반영. "이력은 무조건 남는다"·"긴급 재요청 차단 안 함"·"인프라 장애 fail-open" 원칙 유지.
+
+- **M-1 조건부 SMS 폴백**: 필수 알림 기본 FCM, 보호자에게 FCM 토큰이 없을 때만 SMS 추가(`NotificationDispatcher.mandatoryTargets`, `FcmService.hasToken`/`FcmTokenRepository.existsByUserId` 신규). 정상 보호자는 SMS 비용 0, 푸시 미도달 보호자만 보강. (초안의 '항상 FCM+SMS' → 사용자 결정으로 '토큰 없을 때만'으로 전환.)
+- **M-2 알림 쿨다운**: `SosNotificationCooldown`(Redis SET NX EX 30초). 알림만 생략하고 `sos_events` 이력은 보존, 429 차단 없음, Redis 장애 시 fail-open.
+- **L-1**: `WardSosController` → `201 Created`.
+- **L-2**: `SosService` wardName 공백 시 `"보호 대상자"` 폴백.
+- **테스트**: 신규 `SosNotificationCooldownTest` + 리스너 쿨다운/서비스 폴백/디스패처 토큰분기 테스트. SOS·디스패처 테스트 및 `build -x test` BUILD SUCCESSFUL.
+- 산출물: `docs/(2026-06-09) feature-ward-sos.md` §8, `docs/(2026-06-09) audit-spot-check-ward-sos.md` §9 갱신.
+
+---
+
 ## [2026-06-09] — sos: 피보호자 긴급 SOS 기능 구현 (PR `feature/ward-sos`)
 
 피보호자(WARD)가 긴급 SOS 버튼을 누르면 발생 이력을 남기고 연결된 ACTIVE 보호자 전원에게 긴급 알림(FCM + WebSocket)을 보내는 기능.

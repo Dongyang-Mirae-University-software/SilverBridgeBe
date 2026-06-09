@@ -4,6 +4,7 @@ import kr.silverbridge.main.domain.notification.channel.NotificationChannel;
 import kr.silverbridge.main.domain.notification.channel.NotificationChannelType;
 import kr.silverbridge.main.domain.notification.channel.NotificationContent;
 import kr.silverbridge.main.domain.notification.channel.NotificationRecipient;
+import kr.silverbridge.main.domain.notification.service.FcmService;
 import kr.silverbridge.main.domain.notification.service.NotificationSettingService;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
@@ -32,23 +33,27 @@ import java.util.Set;
 @Component
 public class NotificationDispatcher {
 
-    /** 필수 알림이 강제 발송되는 채널. WARD_SOS 등 필수 타입이 사용하며, 채널 추가 시 이 집합을 재검토한다. */
-    private static final Set<NotificationChannelType> MANDATORY_CHANNELS =
-            EnumSet.of(NotificationChannelType.FCM);
+    /** 필수 알림의 기본 강제 채널(푸시). 사용자 설정과 무관하게 항상 발송한다. */
+    private static final NotificationChannelType MANDATORY_PRIMARY = NotificationChannelType.FCM;
+    /** 필수 알림에서 푸시가 닿지 않을 때(FCM 토큰 없음)만 쓰는 폴백 채널. */
+    private static final NotificationChannelType MANDATORY_FALLBACK = NotificationChannelType.SMS;
 
     private final Map<NotificationChannelType, NotificationChannel> channels;
     private final NotificationSettingService settingService;
     private final NotificationRecipientResolver recipientResolver;
+    private final FcmService fcmService;
 
     public NotificationDispatcher(List<NotificationChannel> channelBeans,
                                   NotificationSettingService settingService,
-                                  NotificationRecipientResolver recipientResolver) {
+                                  NotificationRecipientResolver recipientResolver,
+                                  FcmService fcmService) {
         this.channels = new EnumMap<>(NotificationChannelType.class);
         for (NotificationChannel channel : channelBeans) {
             this.channels.put(channel.getType(), channel);
         }
         this.settingService = settingService;
         this.recipientResolver = recipientResolver;
+        this.fcmService = fcmService;
     }
 
     /**
@@ -60,7 +65,7 @@ public class NotificationDispatcher {
      */
     public void dispatch(String userId, NotificationType type, NotificationContent content) {
         Set<NotificationChannelType> targets = type.isMandatory()
-                ? MANDATORY_CHANNELS
+                ? mandatoryTargets(userId)
                 : settingService.enabledChannels(userId);
 
         if (targets.isEmpty()) {
@@ -84,5 +89,18 @@ public class NotificationDispatcher {
                 log.error("채널 발송 실패: userId={}, channel={}, error={}", userId, channelType, e.getMessage());
             }
         }
+    }
+
+    /**
+     * 필수 알림(WARD_SOS 등)의 발송 채널을 결정한다. 항상 FCM으로 강제 발송하되, <b>FCM 토큰이 없으면</b>
+     * (앱 미설치·로그아웃·토큰 만료) 푸시가 닿지 않으므로 SMS로 폴백한다. 토큰이 있으면 SMS 비용을 아끼고
+     * 푸시만 보낸다(SMS는 "FCM이 닿지 않는 보호자"만 대상으로 하는 폴백).
+     */
+    private Set<NotificationChannelType> mandatoryTargets(String userId) {
+        EnumSet<NotificationChannelType> targets = EnumSet.of(MANDATORY_PRIMARY);
+        if (!fcmService.hasToken(userId)) {
+            targets.add(MANDATORY_FALLBACK);
+        }
+        return targets;
     }
 }
