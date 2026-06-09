@@ -119,6 +119,15 @@ public class ConnectionService {
         return buildResponseFromWardView(connections);
     }
 
+    // 피보호자: 내 ACTIVE 보호자 ID 목록 (연결 오래된 순)
+    // — 긴급 SOS 등 "ACTIVE 보호자 전원에게 발송"이 필요한 곳에서 재사용. 보호자 조회 로직을 connection 도메인에 둔다.
+    @Transactional(readOnly = true)
+    public List<String> getActiveGuardianIds(String wardId) {
+        return connectionRepository
+                .findByWardIdAndStatusOrderByCreatedAtAsc(wardId, ConnectionStatus.ACTIVE)
+                .stream().map(Connection::getGuardianId).toList();
+    }
+
     // 피보호자: 보호자가 보낸 PENDING 요청 목록 조회 (요청일 최신순)
     // — 피보호자웹 "요청온 목록" 카드. 전화번호는 마스킹, 주소는 미노출.
     @Transactional(readOnly = true)
