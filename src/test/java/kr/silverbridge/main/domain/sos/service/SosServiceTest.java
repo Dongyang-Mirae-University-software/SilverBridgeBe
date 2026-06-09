@@ -76,6 +76,24 @@ class SosServiceTest {
     }
 
     @Test
+    @DisplayName("피보호자 이름이 비어 있으면 폴백('보호 대상자')으로 이벤트 발행 — \"null님이...\" 방지")
+    void trigger_이름없음_폴백() {
+        User ward = User.builder().id(WARD_ID).name(null).role(Role.WARD).build();
+        when(userRepository.findById(WARD_ID)).thenReturn(Optional.of(ward));
+
+        SosEvent saved = mock(SosEvent.class);
+        when(saved.getId()).thenReturn(42L);
+        when(saved.getCreatedAt()).thenReturn(OffsetDateTime.now());
+        when(sosEventRepository.save(any(SosEvent.class))).thenReturn(saved);
+
+        sosService.trigger(WARD_ID);
+
+        ArgumentCaptor<SosTriggeredEvent> pubCaptor = ArgumentCaptor.forClass(SosTriggeredEvent.class);
+        verify(eventPublisher).publishEvent(pubCaptor.capture());
+        assertThat(pubCaptor.getValue().wardName()).isEqualTo("보호 대상자");
+    }
+
+    @Test
     @DisplayName("존재하지 않는 사용자 → USER_NOT_FOUND, 이력 미저장·이벤트 미발행")
     void trigger_사용자없음() {
         when(userRepository.findById(WARD_ID)).thenReturn(Optional.empty());
