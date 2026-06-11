@@ -2,13 +2,8 @@ package kr.silverbridge.main.domain.user.repository;
 
 import kr.silverbridge.main.domain.user.entity.User;
 import kr.silverbridge.main.global.enums.Provider;
-import kr.silverbridge.main.global.enums.Role;
 import kr.silverbridge.main.global.enums.Status;
-import org.springframework.data.domain.Page;
-import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
-import org.springframework.data.jpa.repository.Query;
-import org.springframework.data.repository.query.Param;
 
 import java.time.OffsetDateTime;
 import java.util.List;
@@ -41,27 +36,6 @@ public interface UserRepository extends JpaRepository<User, String> {
     // 일정 시간 지난 INACTIVE 행은 purge 실패 잔여물이다 (WithdrawnUserPurgeScheduler, M-S1-1)
     List<User> findAllByStatusAndUpdatedAtBefore(Status status, OffsetDateTime cutoff);
 
-    // 역할 목록으로 사용자 조회 (피보호자/보호자 필터링, 최신 가입순, 페이징)
-    Page<User> findByRoleInOrderByCreatedAtDesc(List<Role> roles, Pageable pageable);
-
-    // 최근 가입 회원 조회 (ADMIN 제외, Pageable 로 limit 지정, 가입 일시 내림차순)
-    List<User> findByRoleNotOrderByCreatedAtDesc(Role role, Pageable pageable);
-
-    // 관리자 회원관리 화면 — 키워드(name/phone LIKE) + role + status 통합 검색 (페이징)
-    // 모든 필터는 null 허용 (null 이면 해당 조건 무시)
-    // 이메일은 검색 대상에서 제외 (관리자는 이름/전화번호로 식별)
-    // LIKE 메타문자(%, _)는 서비스 레이어에서 이스케이프 처리 → ESCAPE '\\' 명시
-    @Query("""
-            SELECT u FROM User u
-            WHERE (:keyword IS NULL
-                   OR u.name LIKE CONCAT('%', :keyword, '%') ESCAPE '\\'
-                   OR u.phone LIKE CONCAT('%', :keyword, '%') ESCAPE '\\')
-              AND (:role IS NULL OR u.role = :role)
-              AND (:status IS NULL OR u.status = :status)
-            """)
-    Page<User> searchByKeywordAndFilters(
-            @Param("keyword") String keyword,
-            @Param("role") Role role,
-            @Param("status") Status status,
-            Pageable pageable);
+    // (관리자 회원관리 화면용 검색·역할 필터 쿼리 3종은 호출처 없는 dead code라 제거 — L-S3-5.
+    //  회원관리 기능 구현 시 git 이력(2026-06-11 이전)에서 복원할 것.)
 }
