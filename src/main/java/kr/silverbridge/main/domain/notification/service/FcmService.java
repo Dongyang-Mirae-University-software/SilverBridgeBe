@@ -23,20 +23,28 @@ public class FcmService {
     private final FirebaseMessaging firebaseMessaging;
     private final FcmTokenRepository fcmTokenRepository;
 
-    // FCM 토큰 등록 (이미 존재하면 무시)
+    // FCM 토큰 등록. 같은 토큰이 다른 사용자 소유로 남아 있으면(공유 디바이스에서 사용자 전환,
+    // 이전 사용자가 로그아웃 시 삭제 API를 못 부른 경우) 소유자를 현재 사용자로 갱신한다 (M-S2-2)
+    // — 그대로 두면 이전 사용자의 연결·SOS 알림이 현 사용자 기기에 계속 표시된다.
     @Transactional
     public void registerToken(String userId, String token, String platform) {
-        if (fcmTokenRepository.findByToken(token).isPresent()) {
-            return;
-        }
-        fcmTokenRepository.save(FcmToken.of(userId, token, platform));
-        log.info("FCM 토큰 등록: userId={}", userId);
+        fcmTokenRepository.findByToken(token).ifPresentOrElse(
+                existing -> {
+                    if (!existing.getUserId().equals(userId)) {
+                        existing.reassignTo(userId, platform);
+                        log.info("FCM 토큰 소유자 갱신(공유 디바이스): newUserId={}", userId);
+                    }
+                },
+                () -> {
+                    fcmTokenRepository.save(FcmToken.of(userId, token, platform));
+                    log.info("FCM 토큰 등록: userId={}", userId);
+                });
     }
 
-    // FCM 토큰 삭제 (로그아웃 시)
+    // FCM 토큰 삭제 (로그아웃 시) — 본인 소유 토큰만 삭제 (L-S2-3: 타인 토큰 무단 삭제 차단)
     @Transactional
-    public void deleteToken(String token) {
-        fcmTokenRepository.deleteByToken(token);
+    public void deleteToken(String userId, String token) {
+        fcmTokenRepository.deleteByTokenAndUserId(token, userId);
     }
 
     // 사용자의 모든 FCM 토큰 삭제 (회원 탈퇴 시, D-USER-3)
@@ -47,39 +55,22 @@ public class FcmService {
         log.info("FCM 토큰 일괄 삭제(탈퇴): userId={}", userId);
     }
 
-    // 사용자에게 등록된 FCM 토큰이 하나라도 있는지. 긴급 알림 SMS 폴백 판단용(토큰 없으면 푸시가 닿지 않음).
-    @Transactional(readOnly = true)
-    public boolean hasToken(String userId) {
-        return fcmTokenRepository.existsByUserId(userId);
-    }
-
-    // 특정 사용자에게 푸시 알림 발송 (등록된 모든 디바이스)
-    public void sendToUser(String userId, String title, String body, Map<String, String> data) {
+    // 특정 사용자에게 푸시 알림 발송 (등록된 모든 디바이스).
+    // 반환: 1건 이상 실제 전달 성공 여부 — 토큰 없음/전 토큰 만료/발송 예외는 모두 false.
+    // 필수(긴급) 알림의 결과 기반 SMS 폴백 판단에 사용한다 (M-S2-1).
+    public boolean sendToUser(String userId, String title, String body, Map<String, String> data) {
         List<FcmToken> tokens = fcmTokenRepository.findByUserId(userId);
         if (tokens.isEmpty()) {
             log.debug("FCM 토큰 없음: userId={}", userId);
-            return;
+            return false;
         }
 
         List<String> tokenStrings = tokens.stream().map(FcmToken::getToken).toList();
-        sendMulticast(tokenStrings, title, body, data);
+        return sendMulticast(tokenStrings, title, body, data);
     }
 
-    // 여러 사용자에게 동시 발송
-    public void sendToUsers(List<String> userIds, String title, String body, Map<String, String> data) {
-        List<String> tokens = userIds.stream()
-                .flatMap(uid -> fcmTokenRepository.findByUserId(uid).stream())
-                .map(FcmToken::getToken)
-                .toList();
-
-        if (tokens.isEmpty()) {
-            return;
-        }
-        sendMulticast(tokens, title, body, data);
-    }
-
-    // MulticastMessage로 최대 500개 토큰에 동시 발송
-    private void sendMulticast(List<String> tokens, String title, String body, Map<String, String> data) {
+    // MulticastMessage로 최대 500개 토큰에 동시 발송. 반환: 성공 1건 이상 여부.
+    private boolean sendMulticast(List<String> tokens, String title, String body, Map<String, String> data) {
         MulticastMessage.Builder builder = MulticastMessage.builder()
                 .setNotification(Notification.builder()
                         .setTitle(title)
@@ -99,8 +90,10 @@ public class FcmService {
             if (response.getFailureCount() > 0) {
                 cleanupInvalidTokens(tokens, response);
             }
+            return response.getSuccessCount() > 0;
         } catch (FirebaseMessagingException e) {
-            log.error("FCM 발송 실패: {}", e.getMessage());
+            log.error("FCM 발송 실패", e);
+            return false;
         }
     }
 

@@ -29,12 +29,13 @@ public class SmsNotificationChannel implements NotificationChannel {
     }
 
     @Override
-    public void send(NotificationRecipient recipient, NotificationContent content) {
+    public boolean send(NotificationRecipient recipient, NotificationContent content) {
         if (recipient.phone() == null || recipient.phone().isBlank()) {
             log.warn("SMS 알림 건너뜀(전화번호 없음): userId={}", recipient.userId());
-            return;
+            return false;
         }
         smsSender.send(recipient.phone(), buildText(content));
+        return true;
     }
 
     // SMS는 title/body 구분이 없어 한 줄로 합친다. body만 있으면 body만 발송.
