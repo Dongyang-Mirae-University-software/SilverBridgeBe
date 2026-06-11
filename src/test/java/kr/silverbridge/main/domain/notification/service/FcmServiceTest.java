@@ -48,16 +48,32 @@ class FcmServiceTest {
     }
 
     @Test
-    @DisplayName("UNREGISTERED 실패 토큰은 DB에서 삭제 — 만료 토큰 정리로 hasToken이 false가 되어 SOS SMS 폴백이 살아난다 (H-S2-1)")
-    void sendToUser_만료토큰_정리() throws FirebaseMessagingException {
+    @DisplayName("UNREGISTERED 실패 토큰은 DB에서 삭제 + 전달 실패(false) 반환 — SMS 폴백 판단 근거 (H-S2-1/M-S2-1)")
+    void sendToUser_만료토큰_정리_및_실패반환() throws FirebaseMessagingException {
         BatchResponse batch = batchWithSingleFailure(MessagingErrorCode.UNREGISTERED);
         when(fcmTokenRepository.findByUserId("GD0001"))
                 .thenReturn(List.of(FcmToken.of("GD0001", "expired-token", "ANDROID")));
         when(firebaseMessaging.sendEachForMulticast(any(MulticastMessage.class))).thenReturn(batch);
 
-        fcmService.sendToUser("GD0001", "긴급 SOS", "도움 요청", Map.of("type", "WARD_SOS"));
+        boolean delivered = fcmService.sendToUser("GD0001", "긴급 SOS", "도움 요청", Map.of("type", "WARD_SOS"));
 
+        org.assertj.core.api.Assertions.assertThat(delivered).isFalse();
         verify(fcmTokenRepository).deleteByToken("expired-token");
+    }
+
+    @Test
+    @DisplayName("1건 이상 전달 성공 시 true 반환 — SMS 폴백 생략 근거 (M-S2-1)")
+    void sendToUser_전달성공_true() throws FirebaseMessagingException {
+        BatchResponse batch = mock(BatchResponse.class);
+        when(batch.getSuccessCount()).thenReturn(1);
+        when(batch.getFailureCount()).thenReturn(0);
+        when(fcmTokenRepository.findByUserId("GD0001"))
+                .thenReturn(List.of(FcmToken.of("GD0001", "live-token", "ANDROID")));
+        when(firebaseMessaging.sendEachForMulticast(any(MulticastMessage.class))).thenReturn(batch);
+
+        boolean delivered = fcmService.sendToUser("GD0001", "긴급 SOS", "도움 요청", null);
+
+        org.assertj.core.api.Assertions.assertThat(delivered).isTrue();
     }
 
     @Test
@@ -74,24 +90,47 @@ class FcmServiceTest {
     }
 
     @Test
-    @DisplayName("등록 토큰이 없으면 FCM 발송 자체를 시도하지 않는다")
+    @DisplayName("등록 토큰이 없으면 FCM 발송을 시도하지 않고 false 반환 — SMS 폴백으로 이어진다")
     void sendToUser_토큰없음_미발송() throws FirebaseMessagingException {
         when(fcmTokenRepository.findByUserId("GD0001")).thenReturn(List.of());
 
-        fcmService.sendToUser("GD0001", "제목", "본문", null);
+        boolean delivered = fcmService.sendToUser("GD0001", "제목", "본문", null);
 
+        org.assertj.core.api.Assertions.assertThat(delivered).isFalse();
         verify(firebaseMessaging, never()).sendEachForMulticast(any(MulticastMessage.class));
     }
 
     @Test
-    @DisplayName("이미 등록된 토큰은 재등록하지 않는다 (멱등)")
+    @DisplayName("같은 사용자의 기존 토큰 재등록 → 저장·갱신 없이 멱등 처리")
     void registerToken_중복_무시() {
-        when(fcmTokenRepository.findByToken("tok-1"))
-                .thenReturn(Optional.of(FcmToken.of("GD0001", "tok-1", "ANDROID")));
+        FcmToken existing = FcmToken.of("GD0001", "tok-1", "ANDROID");
+        when(fcmTokenRepository.findByToken("tok-1")).thenReturn(Optional.of(existing));
 
         fcmService.registerToken("GD0001", "tok-1", "ANDROID");
 
         verify(fcmTokenRepository, never()).save(any());
+        org.assertj.core.api.Assertions.assertThat(existing.getUserId()).isEqualTo("GD0001");
+    }
+
+    @Test
+    @DisplayName("다른 사용자 소유 토큰 재등록(공유 디바이스) → 소유자를 현재 사용자로 갱신 (M-S2-2)")
+    void registerToken_타인소유_소유자갱신() {
+        FcmToken ownedByPrevUser = FcmToken.of("GD0001", "tok-1", "ANDROID");
+        when(fcmTokenRepository.findByToken("tok-1")).thenReturn(Optional.of(ownedByPrevUser));
+
+        fcmService.registerToken("WD0002", "tok-1", "IOS");
+
+        verify(fcmTokenRepository, never()).save(any());
+        org.assertj.core.api.Assertions.assertThat(ownedByPrevUser.getUserId()).isEqualTo("WD0002");
+        org.assertj.core.api.Assertions.assertThat(ownedByPrevUser.getPlatform()).isEqualTo("IOS");
+    }
+
+    @Test
+    @DisplayName("토큰 삭제는 본인 소유 조건이 포함된 쿼리로 위임된다 (L-S2-3)")
+    void deleteToken_본인소유만() {
+        fcmService.deleteToken("GD0001", "tok-1");
+
+        verify(fcmTokenRepository).deleteByTokenAndUserId("tok-1", "GD0001");
     }
 
     @Test

@@ -4,7 +4,6 @@ import kr.silverbridge.main.domain.notification.channel.NotificationChannel;
 import kr.silverbridge.main.domain.notification.channel.NotificationChannelType;
 import kr.silverbridge.main.domain.notification.channel.NotificationContent;
 import kr.silverbridge.main.domain.notification.channel.NotificationRecipient;
-import kr.silverbridge.main.domain.notification.service.FcmService;
 import kr.silverbridge.main.domain.notification.service.NotificationSettingService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -42,7 +41,6 @@ class NotificationDispatcherTest {
     @Mock private NotificationChannel smsChannel;
     @Mock private NotificationSettingService settingService;
     @Mock private NotificationRecipientResolver recipientResolver;
-    @Mock private FcmService fcmService;
 
     private NotificationDispatcher dispatcher;
 
@@ -55,7 +53,7 @@ class NotificationDispatcherTest {
         lenient().when(fcmChannel.getType()).thenReturn(NotificationChannelType.FCM);
         lenient().when(smsChannel.getType()).thenReturn(NotificationChannelType.SMS);
         // KAKAO_ALIMTALK / EMAIL 구현체는 등록하지 않음(미구현 채널 시나리오 재현)
-        dispatcher = new NotificationDispatcher(List.of(fcmChannel, smsChannel), settingService, recipientResolver, fcmService);
+        dispatcher = new NotificationDispatcher(List.of(fcmChannel, smsChannel), settingService, recipientResolver);
         lenient().when(recipientResolver.resolve(USER_ID))
                 .thenReturn(new NotificationRecipient(USER_ID, "01012345678", "a@b.com"));
     }
@@ -122,11 +120,11 @@ class NotificationDispatcherTest {
     }
 
     @Test
-    @DisplayName("필수 알림(WARD_SOS) + FCM 토큰 있음 → 설정 무시하고 FCM만 강제 발송(SMS 미발송)")
-    void 필수알림_FCM토큰있음_FCM만() {
-        // mandatory=true 타입은 settingService를 조회하지 않고 강제 발송한다. FCM 토큰이 있으면 푸시가 닿으므로
-        // SMS 비용을 아끼고 FCM만 보낸다.
-        when(fcmService.hasToken(USER_ID)).thenReturn(true);
+    @DisplayName("필수 알림(WARD_SOS) + FCM 전달 성공 → 설정 무시하고 FCM만 발송(SMS 미발송)")
+    void 필수알림_FCM전달성공_SMS미발송() {
+        // mandatory=true 타입은 settingService를 조회하지 않고 강제 발송한다.
+        // FCM이 실제로 전달됐으면(true) SMS 비용을 아끼고 폴백하지 않는다 (결과 기반, M-S2-1).
+        when(fcmChannel.send(any(), any())).thenReturn(true);
 
         dispatcher.dispatch(USER_ID, NotificationType.WARD_SOS, content);
 
@@ -136,14 +134,24 @@ class NotificationDispatcherTest {
     }
 
     @Test
-    @DisplayName("필수 알림(WARD_SOS) + FCM 토큰 없음 → SMS로 폴백 발송(푸시가 닿지 않는 보호자 보강)")
-    void 필수알림_FCM토큰없음_SMS폴백() {
-        // 앱 미설치·로그아웃·토큰 만료로 FCM 토큰이 없으면 푸시가 닿지 않으므로 SMS를 폴백으로 발송한다.
-        when(fcmService.hasToken(USER_ID)).thenReturn(false);
+    @DisplayName("필수 알림(WARD_SOS) + FCM 전달 실패(토큰 없음/전부 만료) → SMS로 폴백 발송")
+    void 필수알림_FCM전달실패_SMS폴백() {
+        // 토큰 부재·전 토큰 만료 등 "실제 전달 실패"(false)면 SMS를 폴백으로 발송한다 (M-S2-1).
+        when(fcmChannel.send(any(), any())).thenReturn(false);
 
         dispatcher.dispatch(USER_ID, NotificationType.WARD_SOS, content);
 
         verify(settingService, never()).enabledChannels(any()); // 설정 무시
+        verify(smsChannel).send(any(), any());
+    }
+
+    @Test
+    @DisplayName("필수 알림(WARD_SOS) + FCM 발송 예외 → 예외도 전달 실패로 보고 SMS 폴백")
+    void 필수알림_FCM예외_SMS폴백() {
+        doThrow(new RuntimeException("FCM 장애")).when(fcmChannel).send(any(), any());
+
+        dispatcher.dispatch(USER_ID, NotificationType.WARD_SOS, content);
+
         verify(smsChannel).send(any(), any());
     }
 
