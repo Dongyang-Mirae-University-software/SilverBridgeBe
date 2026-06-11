@@ -861,3 +861,11 @@ REST API Key 단독 대비 보안 강화 — 인가코드 탈취 시 토큰 발�
 - **global 실증(안전 확인)**: STOMP 구독 `{userId}` 일치 강제로 sos/connection 토픽 자동 보호, 핸들러 23505/낙관락 분기(세션 1 "동시 탈퇴 500" 추정은 **409로 정정**), RateLimit Lua 원자성, notificationExecutor CallerRunsPolicy, AOP 로깅 PII 안전, 시크릿 fail-fast.
 - **최종 통합**: 52개 엔드포인트 전수 — IDOR/PII 노출/SQLi 없음, 회귀 0건. 점검 중 수정 완료 2건(M-S1-1 PR #202, H-S2-1 PR #203). 미해결 Critical 1·Medium 3 + Low 17. 발표 전 우선순위는 최종 리포트 §4.
 - 산출물: `docs/(2026-06-11) audit-full-api-session3.md`, `docs/(2026-06-11) audit-full-api-final-report.md`.
+
+## [2026-06-11] API 점검 잔여 이슈 일괄 반영 완료 (PR #205) — 점검 발견 이슈 전체 처리 종료
+
+- **M-S2-1** (설계 결정: FCM 실패 시에만 SMS): `NotificationChannel.send`가 실제 전달 성공 여부를 반환, 필수 알림은 토큰 없음·전 토큰 만료·발송 예외를 모두 "전달 실패"로 수렴해 SMS 폴백. 동시 발송 아님(성공 시 SMS 비용 절약).
+- **M-S2-2**: FCM 토큰 등록 시 타 사용자 소유면 소유자 갱신(공유 디바이스 알림 오수신 차단). **M-S3-1**: WS 핸드셰이크에 typ·로그아웃 블랙리스트·무효화(iat) 검증 추가(HTTP 필터와 동일 수준) + Origin을 `app.cors.allowed-origins`로 통일.
+- **Low 7건**: signup 2곳 RateLimit, Swagger 429·SOS 문서, FindEmailRequest @Pattern, 이미지 고아 파일 방지, SecureRandom 재사용, draft null 정규화, dead query 3종 제거.
+- 신규 테스트: JwtHandshakeInterceptorTest 6 + FcmServiceTest 4 + 디스패처 폴백 3케이스. 전체 239 tests 통과.
+- **점검 사이클 총결산**: 발견 Critical 1·High 1·Medium 4 **전부 수정 머지**(PR #202~#205). 잔여는 의도적 수용(Low: iat 1초 창, 공지 무페이징, URL 동사형/래퍼 스타일 컨벤션)뿐 — 최종 리포트 §4 참조.
