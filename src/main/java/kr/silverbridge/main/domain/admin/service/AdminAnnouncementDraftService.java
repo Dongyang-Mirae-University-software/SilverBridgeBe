@@ -64,12 +64,13 @@ public class AdminAnnouncementDraftService {
     }
 
     // 임시저장 생성
+    // title/content는 "작성 중"이라 비어 있을 수 있지만 DB 컬럼은 NOT NULL이므로 null만 빈 문자열로 정규화 (L-S3-2)
     @Transactional
     public AdminAnnouncementDraftResponse createDraft(AnnouncementDraftCreateRequest request, String adminId) {
         AnnouncementDraft draft = AnnouncementDraft.builder()
                 .authorId(adminId)
-                .title(request.getTitle())
-                .content(request.getContent())
+                .title(nullToEmpty(request.getTitle()))
+                .content(nullToEmpty(request.getContent()))
                 .build();
 
         AnnouncementDraft saved = draftRepository.save(draft);
@@ -84,7 +85,7 @@ public class AdminAnnouncementDraftService {
     @Transactional
     public AdminAnnouncementDraftResponse updateDraft(Long id, AnnouncementDraftUpdateRequest request, String adminId) {
         AnnouncementDraft draft = findDraft(id);
-        draft.update(request.getTitle(), request.getContent());
+        draft.update(nullToEmpty(request.getTitle()), nullToEmpty(request.getContent()));
 
         auditLogService.log(adminId, AdminAuditAction.ANNOUNCEMENT_DRAFT_UPDATE, String.valueOf(id),
                 String.format("공지 임시저장 수정: %s", safeTitle(request.getTitle())));
@@ -139,5 +140,10 @@ public class AdminAnnouncementDraftService {
 
     private String safeTitle(String title) {
         return (title == null || title.isBlank()) ? "(제목 없음)" : title;
+    }
+
+    // DB NOT NULL 컬럼 보호 — null 전송 시 23502(500) 대신 빈 문자열로 저장 (L-S3-2)
+    private String nullToEmpty(String value) {
+        return value == null ? "" : value;
     }
 }

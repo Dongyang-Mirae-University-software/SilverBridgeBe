@@ -14,11 +14,14 @@ public interface FcmTokenRepository extends JpaRepository<FcmToken, Long> {
     // 사용자의 모든 FCM 토큰 조회
     List<FcmToken> findByUserId(String userId);
 
-    // 사용자에게 등록된 FCM 토큰 존재 여부 (긴급 알림 SMS 폴백 판단용 — 토큰 없으면 푸시가 닿지 않음)
-    boolean existsByUserId(String userId);
-
-    // 토큰 값으로 조회 (중복 등록 방지)
+    // 토큰 값으로 조회 (중복 등록 방지 + 공유 디바이스 소유자 갱신)
     Optional<FcmToken> findByToken(String token);
+
+    // 본인 소유 토큰만 삭제 (로그아웃 시, L-S2-3 — 타인 토큰 무단 삭제 차단)
+    @Transactional
+    @Modifying
+    @Query("DELETE FROM FcmToken t WHERE t.token = :token AND t.userId = :userId")
+    void deleteByTokenAndUserId(String token, String userId);
 
     // 특정 토큰 삭제 (로그아웃·만료 토큰 정리 시)
     // @Transactional 필수 (H-S2-1): 만료 토큰 정리(FcmService.cleanupInvalidTokens)는 @Async 리스너 →

@@ -115,8 +115,15 @@ public class UserService {
         // 파일 서버 업로드 — 트랜잭션 밖 (D-USER-1)
         String newImageUrl = fileServerClient.upload(file);
 
-        // URL 영속화는 별도 트랜잭션(프록시 경유, dirty checking → updated_at 갱신 유지)
-        ProfileImagePersister.Result result = profileImagePersister.replace(userId, newImageUrl);
+        // URL 영속화는 별도 트랜잭션(프록시 경유, dirty checking → updated_at 갱신 유지).
+        // 영속화 실패 시 방금 업로드한 파일이 고아로 남으므로 fire-and-forget 정리 후 원예외 전파 (L-S1-5)
+        ProfileImagePersister.Result result;
+        try {
+            result = profileImagePersister.replace(userId, newImageUrl);
+        } catch (RuntimeException e) {
+            fileServerClient.delete(newImageUrl);
+            throw e;
+        }
 
         // 영속화 커밋 이후 기존 파일 삭제 — 롤백 시 깨진 이미지 방지 (D-USER-2). 실패해도 주 기능 영향 없음.
         fileServerClient.delete(result.oldImageUrl());

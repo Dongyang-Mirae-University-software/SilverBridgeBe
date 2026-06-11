@@ -81,9 +81,9 @@ public class SosNotificationListener {
                                         "sosEventId", String.valueOf(event.sosEventId()))));
                 sent++;
             } catch (Exception e) {
-                // 한 보호자 발송 실패가 나머지 보호자 발송을 막지 않도록 격리
-                log.error("SOS 알림 발송 실패: guardianId={}, sosEventId={}, error={}",
-                        guardianId, event.sosEventId(), e.getMessage());
+                // 한 보호자 발송 실패가 나머지 보호자 발송을 막지 않도록 격리. 원인 진단을 위해 스택 포함 (L-S2-6)
+                log.error("SOS 알림 발송 실패: guardianId={}, sosEventId={}",
+                        guardianId, event.sosEventId(), e);
             }
         }
         log.info("SOS 긴급 알림 발송: sosEventId={}, 대상 보호자={}명, 발송={}건",

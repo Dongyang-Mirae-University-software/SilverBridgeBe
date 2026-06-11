@@ -1,6 +1,8 @@
 package kr.silverbridge.main.domain.sos.controller;
 
 import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.media.Content;
+import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import kr.silverbridge.main.domain.sos.dto.SosResponse;
 import kr.silverbridge.main.domain.sos.service.SosService;
@@ -42,6 +44,13 @@ public class WardSosController {
                     - 보호자에게 직접 전화는 기존 보호자 조회(GET /api/ward/connection/active)의
                       전화번호 + tel: 링크로 처리합니다.
                     """)
+    @ApiResponses({
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "201", description = "SOS 이력 저장 완료. data: sosEventId, triggeredAt (알림은 커밋 후 비동기 발송)"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "인증 토큰 없음 또는 만료", content = @Content),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "피보호자(WARD)가 아닌 계정", content = @Content),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "사용자를 찾을 수 없음", content = @Content),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "500", description = "서버 내부 오류", content = @Content)
+    })
     @PostMapping("/api/ward/sos")
     public ResponseEntity<ApiResponse<SosResponse>> triggerSos(
             @AuthenticationPrincipal String wardId) {
