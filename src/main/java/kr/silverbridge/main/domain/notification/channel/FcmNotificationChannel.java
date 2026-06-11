@@ -22,7 +22,7 @@ public class FcmNotificationChannel implements NotificationChannel {
     }
 
     @Override
-    public void send(NotificationRecipient recipient, NotificationContent content) {
-        fcmService.sendToUser(recipient.userId(), content.title(), content.body(), content.data());
+    public boolean send(NotificationRecipient recipient, NotificationContent content) {
+        return fcmService.sendToUser(recipient.userId(), content.title(), content.body(), content.data());
     }
 }

@@ -12,6 +12,7 @@ import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
 class FcmNotificationChannelTest {
@@ -26,14 +27,16 @@ class FcmNotificationChannelTest {
     }
 
     @Test
-    @DisplayName("send는 FcmService.sendToUser에 그대로 위임한다")
+    @DisplayName("send는 FcmService.sendToUser에 위임하고 전달 결과를 그대로 반환한다")
     void send_FcmService위임() {
         NotificationRecipient recipient = new NotificationRecipient("WD0001", "01012345678", "a@b.com");
         Map<String, String> data = Map.of("type", "CONNECTION_REQUEST", "connectionId", "100");
         NotificationContent content = NotificationContent.of("연결 요청", "요청이 도착했습니다.", data);
+        when(fcmService.sendToUser("WD0001", "연결 요청", "요청이 도착했습니다.", data)).thenReturn(true);
 
-        channel.send(recipient, content);
+        boolean delivered = channel.send(recipient, content);
 
+        assertThat(delivered).isTrue();
         verify(fcmService).sendToUser("WD0001", "연결 요청", "요청이 도착했습니다.", data);
     }
 }
