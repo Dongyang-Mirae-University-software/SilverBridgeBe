@@ -842,3 +842,13 @@ REST API Key 단독 대비 보안 강화 — 인가코드 탈취 시 토큰 발�
 - **신규 이슈**: 🟡 M-S1-1(탈퇴 2단계 사이 실패 시 좀비 계정 — 재로그인·재시도·재가입 불가, 복구 경로 없음) 1건 + 🟢 Low 5건(signup 2종 RateLimit 부재, Swagger 429 미문서화, find-email 죽은 dual 분기+@Pattern 누락, 이미지 고아파일 경로, SecureRandom 비일관) + 테스트 갭 3건(SmsServiceTest 부재 우선).
 - 산출물: `docs/(2026-06-11) audit-full-api-session1.md`, `docs/(2026-06-11) audit-summary-session1.csv`.
 - 다음: 세션 2(connection+notification+SOS 정밀 — 탈퇴 리스너 @Async 전환 금지 유의), 세션 3(announcement+admin+global).
+
+## [2026-06-11] 전체 API 점검 세션 2 완료 (connection + notification + SOS)
+
+- **범위**: connection 10 + notification 4 + SOS 1 = 15 엔드포인트 + 디스패치 인프라. connection=회귀 위주, **notification=정밀(첫 풀 점검)**, SOS=스팟(06-09) 반영 확인.
+- **인가**: `@EnableMethodSecurity`+ROLE_ 프리픽스로 클래스 `@PreAuthorize` 동작 실증. connection 소유 헬퍼 2종으로 IDOR 없음. **Critical 없음.**
+- **🟠 H-S2-1 (핵심 발견)**: 만료 FCM 토큰 정리(`cleanupInvalidTokens`→`deleteByToken`)가 무트랜잭션 경로(리스너 @Async→디스패처→채널)에서 호출돼 derived delete가 구조적으로 실패 → 만료 토큰 영구 잔존 → `hasToken()` 항상 true → **앱 삭제 보호자에게 SOS 푸시·SMS 폴백 모두 영구 유실**. 정적 분석 결론(런타임 재현 미수행), FcmService 테스트 부재로 회귀망 미포착.
+- **🟡 Medium 2**: M-S2-1(presence 기반 폴백 — 무효 토큰 첫 SOS 유실), M-S2-2(토큰 소유자 재할당 없음 — 공유 디바이스 알림 오수신). 🟢 Low 4(토큰 삭제 소유 검증, ResponseEntity 스타일 분기, SOS Swagger 블록 부재, 채널 실패 로그 스택 누락) + 테스트 갭 3.
+- **회귀 0건**: 연결 알림 4종 디스패처 전환 후 정합 유지, 알림 비대칭 정책·SMS 인증 미경유 규칙·SOS 수정 4건(201·이름 폴백·쿨다운 fail-open)·sos_events/settings FK(탈퇴 차단 없음) 전부 확인.
+- 산출물: `docs/(2026-06-11) audit-full-api-session2.md` (CSV는 세션 1 제거 결정에 따라 미생성).
+- 다음: 세션 3(announcement+admin+global 정밀) — WS 토픽 인가 실증·H-S2-1 수정 후 재확인 인계.
