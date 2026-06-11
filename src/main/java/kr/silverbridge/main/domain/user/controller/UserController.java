@@ -15,6 +15,7 @@ import kr.silverbridge.main.domain.user.service.UserService;
 import kr.silverbridge.main.global.response.ApiResponse;
 import kr.silverbridge.main.global.util.ClientIpResolver;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
@@ -23,6 +24,7 @@ import org.springframework.web.multipart.MultipartFile;
         로그인한 사용자 본인의 프로필 조회/수정, 비밀번호 변경, 회원 탈퇴 API.
         모든 요청에 Authorization 헤더가 필요합니다: Authorization: Bearer {accessToken}
         """)
+@Slf4j
 @RestController
 @RequestMapping("/api/user")
 @RequiredArgsConstructor
@@ -219,7 +221,17 @@ public class UserController {
         );
         // withdraw() 커밋 후 AFTER_COMMIT 리스너(연결 해제·토큰 정리·WITHDRAW 로그)가 끝난 뒤
         // 사용자 행을 영구 삭제한다 (정리가 user 행이 살아있는 동안 끝나도록 단계를 분리).
-        userService.purgeWithdrawnUser(userId);
+        // purge 실패 시 1회 재시도 — 그래도 실패하면 INACTIVE 행이 남아 재가입이 막히므로(M-S1-1)
+        // ERROR 로깅 후 200을 유지하고, WithdrawnUserPurgeScheduler 스윕이 잔여 행을 회수한다.
+        try {
+            userService.purgeWithdrawnUser(userId);
+        } catch (RuntimeException first) {
+            try {
+                userService.purgeWithdrawnUser(userId);
+            } catch (RuntimeException retry) {
+                log.error("[WITHDRAW-PURGE-FAILED] 영구 삭제 실패, 스윕 스케줄러가 회수 예정 userId={}", userId, retry);
+            }
+        }
         return ApiResponse.ok("회원 탈퇴가 완료되었습니다.");
     }
 }
