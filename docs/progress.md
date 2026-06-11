@@ -833,3 +833,12 @@ REST API Key 단독 대비 보안 강화 — 인가코드 탈취 시 토큰 발�
 - **이슈**: Critical/High/Medium/Low 모두 없음. 정보성 노트 2건(해제 와이어 네이밍=의도, partnerEmail=로그인 식별자지만 ACTIVE·가족 한정 의도된 노출).
 - **종합 판정**: ✅ PASS — 수정 사항 없음(커밋 대상 없음).
 - 산출물: `docs/(2026-06-06) audit-spot-check-connection-changes.md`.
+
+## [2026-06-11] 전체 API 점검 세션 1 완료 (auth + user, 회귀 위주)
+
+- **범위**: 3세션 분할 점검의 1차 — auth 18 + user 6 = 24 엔드포인트. 기준선(05-23 auth / 05-24 user) 이후 변경 커밋 14건 중심 회귀 점검.
+- **인가 매트릭스**: IDOR 없음(user 전부 `@AuthenticationPrincipal`만), `/api/auth/**` permitAll 아래 보호 누락 없음(logout만 명시 인증), deny-by-default 유지. **Critical/High 없음.**
+- **회귀**: 기준선 수정 14건(A-USER-1·2, D-USER-1·2·3, B-USER-1·2, E-USER-1, F-USER-1~5, 인증코드 소비순서, 카카오 FK/secret) **전부 해소 유지 — 회귀 0건.** 탈퇴 리스너 3종이 동기 AFTER_COMMIT임을 확인해 purge 순서 전제 유효성 검증.
+- **신규 이슈**: 🟡 M-S1-1(탈퇴 2단계 사이 실패 시 좀비 계정 — 재로그인·재시도·재가입 불가, 복구 경로 없음) 1건 + 🟢 Low 5건(signup 2종 RateLimit 부재, Swagger 429 미문서화, find-email 죽은 dual 분기+@Pattern 누락, 이미지 고아파일 경로, SecureRandom 비일관) + 테스트 갭 3건(SmsServiceTest 부재 우선).
+- 산출물: `docs/(2026-06-11) audit-full-api-session1.md`, `docs/(2026-06-11) audit-summary-session1.csv`.
+- 다음: 세션 2(connection+notification+SOS 정밀 — 탈퇴 리스너 @Async 전환 금지 유의), 세션 3(announcement+admin+global).
