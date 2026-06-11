@@ -65,3 +65,11 @@
 - **공유 컴포넌트**: `VerificationCodeValidator`는 `verify`(소비형)·`verifyWithoutConsume`(비소비형)·`consume`(소비 전용)를 제공. 흐름별로 적절히 조합한다.
 - **L-1 경계 (2026-06-06 점검, 의도적 미수정)**: 가입 nonce 소비는 "비즈니스 검증 후"지만 `userRepository.save()` *앞*이다. 이를 `save()` 뒤로 옮기는 단순 변경은 **무효** — User는 assigned-ID라 Hibernate가 INSERT를 커밋(flush)까지 지연시켜, 유니크 위반(`DataIntegrityViolationException`)이 consume *뒤*인 커밋 시점에 터진다. 게다가 가입 `save` 실패는 항상 ① 영구 중복(이메일/전화 — 같은 값 재시도 자체 불가) 또는 ② 서버측 결함(FK·NOT NULL — 재시도 무의미)뿐이라, nonce 보존 실익이 사실상 0(#184/#188이 막은 "1차 실패 후 정상 재입력" 케이스는 이 경로에 없음). → **"일관성" 명목으로 `saveAndFlush`나 nonce 검증/소비 분리를 추가하지 말 것**(복잡도·회귀만 증가).
 - 상세: `docs/(2026-05-31) bug-investigation-password-reset-verification.md`, `docs/(2026-06-06) audit-spot-check-kakao-password-bugfix.md`(L-1 분석).
+
+## 회원 탈퇴 — 2단계 사이 실패 복원력 + INACTIVE 불변식 (2026-06-11)
+
+- **의도**: 탈퇴는 `withdraw()`(INACTIVE 전환, 커밋) → AFTER_COMMIT 리스너 3종 → `purgeWithdrawnUser()`(영구 삭제)의 2단계라, 사이에 배포 재시작·인프라 순단이 끼면 INACTIVE 행이 잔존(M-S1-1). 이 상태는 재로그인(INACTIVE)·탈퇴 재시도(토큰 무효화로 401)·재가입(이메일/전화 잔존) 모두 불가한 자가 복구 불능 좀비.
+- **변경(3중 방어)**: ① 탈퇴 리스너 3종(auth 토큰정리·connection 해제·notification FCM)을 try/catch로 best-effort화 — 한 리스너 실패가 나머지·purge를 막지 않음(행 정리는 purge FK CASCADE가 최종 담당, 유실 가능한 건 상대 알림·WITHDRAW 접속로그뿐). ② 컨트롤러 purge 실패 시 1회 재시도 + `[WITHDRAW-PURGE-FAILED]` ERROR. ③ `WithdrawnUserPurgeScheduler`(10분 주기)가 `INACTIVE && updated_at < now-10분` 행을 스윕 purge — 좀비는 최대 ~20분 내 자동 회수.
+- **불변 규칙 (INACTIVE 불변식)**: `Status.INACTIVE`를 만드는 경로는 **탈퇴(`User.deactivate()`) 단 하나**여야 한다. 스윕이 "오래된 INACTIVE = 좀비"로 판정해 **영구 삭제**하므로, 관리자 계정 제한·휴면 등 다른 용도로 INACTIVE를 재사용하면 **해당 계정이 스윕에 삭제된다**. 그런 기능 도입 시 반드시 별도 상태값(예: RESTRICTED)을 추가할 것. (`user.activate()`는 현재 미사용 — 복구 기능 추가 시에도 동일 주의)
+- **수용한 한계**: 스윕 경유 purge는 리스너를 거치지 않아 실패 경로에 한해 상대방 알림·WITHDRAW 감사로그가 유실될 수 있음(`[WITHDRAW-SWEEP]` WARN으로 흔적 보존). 리스너 내부 REQUIRES_NEW 커밋 실패는 try/catch 밖이라 전파되지만 이 경우도 스윕이 회수.
+- 상세: `docs/(2026-06-11) audit-full-api-session1.md` M-S1-1.

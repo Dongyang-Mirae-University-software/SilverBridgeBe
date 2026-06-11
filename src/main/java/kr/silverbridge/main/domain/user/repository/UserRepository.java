@@ -10,6 +10,7 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
+import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.Optional;
 
@@ -35,6 +36,10 @@ public interface UserRepository extends JpaRepository<User, String> {
 
     // 소셜 로그인 사용자 존재 여부 (신규 가입 여부 판별)
     boolean existsByProviderAndProviderId(Provider provider, String providerId);
+
+    // 탈퇴 진행 중 멈춘(좀비) 계정 조회 — INACTIVE는 탈퇴 흐름(withdraw)만 만들므로
+    // 일정 시간 지난 INACTIVE 행은 purge 실패 잔여물이다 (WithdrawnUserPurgeScheduler, M-S1-1)
+    List<User> findAllByStatusAndUpdatedAtBefore(Status status, OffsetDateTime cutoff);
 
     // 역할 목록으로 사용자 조회 (피보호자/보호자 필터링, 최신 가입순, 페이징)
     Page<User> findByRoleInOrderByCreatedAtDesc(List<Role> roles, Pageable pageable);

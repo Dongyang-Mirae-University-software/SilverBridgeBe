@@ -91,4 +91,16 @@ class UserAccountEventListenerTest {
         long savedAt = Long.parseLong(captor.getValue());
         assertThat(savedAt).isBetween(before, after);
     }
+
+    @Test
+    @DisplayName("탈퇴 정리 중 예외 발생 시 전파하지 않음 — 나머지 리스너·purge가 막히지 않도록 격리 (M-S1-1)")
+    void handleWithdrawn_정리_실패_예외_미전파() {
+        org.mockito.Mockito.doThrow(new RuntimeException("Redis 장애"))
+                .when(refreshTokenRepository).deleteByUserId("user-3");
+
+        UserWithdrawnEvent event = new UserWithdrawnEvent("user-3", "127.0.0.1", "test-agent");
+
+        org.assertj.core.api.Assertions.assertThatCode(() -> listener.handleWithdrawn(event))
+                .doesNotThrowAnyException();
+    }
 }
