@@ -28,6 +28,9 @@ public class SmsVerificationService {
     private final SmsSender smsSender;
     private final RedisCounter redisCounter;
 
+    // 호출마다 생성하지 않고 재사용 — PasswordResetService와 동일 패턴 (L-S1-6)
+    private static final SecureRandom RANDOM = new SecureRandom();
+
     /** 인증코드 유효 시간 (분) */
     public static final long CODE_TTL_MINUTES = 5L;
     /** 인증코드 유효 시간 (초) — 프론트 카운트다운(CodeSentResponse) 노출용 */
@@ -83,6 +86,6 @@ public class SmsVerificationService {
     }
 
     private String generateCode() {
-        return String.format("%06d", new SecureRandom().nextInt(1_000_000));
+        return String.format("%06d", RANDOM.nextInt(1_000_000));
     }
 }
