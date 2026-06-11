@@ -17,7 +17,11 @@ public interface NotificationChannel {
 
     /**
      * 수신자에게 알림을 발송한다. 발송에 필요한 식별자가 없으면(예: SMS인데 전화번호 null)
-     * 구현체가 발송을 건너뛰고 정상 반환한다.
+     * 구현체가 발송을 건너뛰고 {@code false}를 반환한다.
+     *
+     * @return 실제 전달이 이루어졌으면 {@code true}. 필수 알림의 결과 기반 SMS 폴백 판단에
+     *         사용한다(M-S2-1: 토큰이 있어도 전부 만료면 false → 디스패처가 폴백).
+     *         선택 알림 경로에서는 반환값을 사용하지 않는다.
      */
-    void send(NotificationRecipient recipient, NotificationContent content);
+    boolean send(NotificationRecipient recipient, NotificationContent content);
 }

@@ -27,24 +27,26 @@ class SmsNotificationChannelTest {
     }
 
     @Test
-    @DisplayName("전화번호가 있으면 '[제목] 본문' 형태로 SmsSender에 위임한다")
+    @DisplayName("전화번호가 있으면 '[제목] 본문' 형태로 SmsSender에 위임하고 true를 반환한다")
     void send_전화번호있음_위임() {
         NotificationRecipient recipient = new NotificationRecipient("WD0001", "01012345678", null);
         NotificationContent content = NotificationContent.of("연결 요청", "요청이 도착했습니다.", Map.of());
 
-        channel.send(recipient, content);
+        boolean delivered = channel.send(recipient, content);
 
+        assertThat(delivered).isTrue();
         verify(smsSender).send("01012345678", "[연결 요청] 요청이 도착했습니다.");
     }
 
     @Test
-    @DisplayName("전화번호가 없으면 발송하지 않는다(건너뜀)")
+    @DisplayName("전화번호가 없으면 발송하지 않고 false를 반환한다(건너뜀)")
     void send_전화번호없음_미발송() {
         NotificationRecipient recipient = new NotificationRecipient("WD0001", null, null);
         NotificationContent content = NotificationContent.of("연결 요청", "요청이 도착했습니다.", Map.of());
 
-        channel.send(recipient, content);
+        boolean delivered = channel.send(recipient, content);
 
+        assertThat(delivered).isFalse();
         verifyNoInteractions(smsSender);
     }
 }

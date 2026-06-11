@@ -69,7 +69,8 @@ public class NotificationController {
     public ResponseEntity<ApiResponse<Void>> deleteFcmToken(
             @AuthenticationPrincipal String userId,
             @RequestParam String token) {
-        fcmService.deleteToken(token);
+        // 본인 소유 토큰만 삭제 — 타인 토큰 값 무단 삭제 차단 (L-S2-3)
+        fcmService.deleteToken(userId, token);
         return ResponseEntity.ok(ApiResponse.ok("FCM 토큰이 삭제되었습니다."));
     }
 }
