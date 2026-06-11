@@ -52,6 +52,7 @@ public class PasswordResetController {
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "비밀번호 변경 성공. 모든 기기에서 로그아웃됨 → 재로그인 필요"),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "email/phone 동시 지정 또는 둘 다 누락 / 코드 만료·불일치·5회초과 / 현재 비밀번호와 동일 / 입력 형식 오류 / 카카오 계정", content = @Content),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "사용자를 찾을 수 없음", content = @Content),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "429", description = "동일 IP의 과도한 요청 (1분 10회)", content = @Content),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "500", description = "서버 오류", content = @Content)
     })
     @PostMapping("/reset")
