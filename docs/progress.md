@@ -852,3 +852,12 @@ REST API Key 단독 대비 보안 강화 — 인가코드 탈취 시 토큰 발�
 - **회귀 0건**: 연결 알림 4종 디스패처 전환 후 정합 유지, 알림 비대칭 정책·SMS 인증 미경유 규칙·SOS 수정 4건(201·이름 폴백·쿨다운 fail-open)·sos_events/settings FK(탈퇴 차단 없음) 전부 확인.
 - 산출물: `docs/(2026-06-11) audit-full-api-session2.md` (CSV는 세션 1 제거 결정에 따라 미생성).
 - 다음: 세션 3(announcement+admin+global 정밀) — WS 토픽 인가 실증·H-S2-1 수정 후 재확인 인계.
+
+## [2026-06-11] 전체 API 점검 세션 3 완료 + 3세션 최종 통합 리포트 (점검 전체 종료)
+
+- **범위**: announcement 2 + admin 11 = 13 엔드포인트(점검 이력 전무 → 정밀) + global 12패키지(jwt/security/websocket/exception/aop/config) 풀 점검.
+- **🔴 C-S3-1 (Critical, 미수정)**: `chk_admin_audit_action` CHECK(V1)가 enum의 `ANNOUNCEMENT_DRAFT_*` 4종을 허용하지 않아, 감사 로그(REQUIRED 합류)가 23514로 터지며 **공지 임시저장 4개 엔드포인트가 항상 500(전체 롤백) — 기능 동작 불능**. announcement/admin 테스트 0건이라 미발견. 수정=V27 마이그레이션(CHECK 재정의).
+- **🟡 M-S3-1**: WS 핸드셰이크가 HTTP 필터 대비 약함 — typ 미검증(refresh로 연결 가능, A-H1 우회)·로그아웃 블랙리스트·PASSWORD_INVALIDATE 미확인. 🟢 Low 6건(draft DTO null vs NOT NULL 500 경로, WS Origin `*` 비대칭, iat 초 절사 1초 오차단 창, 관리자 검색 dead query 3종, 공지 무페이징, commonness 네이밍).
+- **global 실증(안전 확인)**: STOMP 구독 `{userId}` 일치 강제로 sos/connection 토픽 자동 보호, 핸들러 23505/낙관락 분기(세션 1 "동시 탈퇴 500" 추정은 **409로 정정**), RateLimit Lua 원자성, notificationExecutor CallerRunsPolicy, AOP 로깅 PII 안전, 시크릿 fail-fast.
+- **최종 통합**: 52개 엔드포인트 전수 — IDOR/PII 노출/SQLi 없음, 회귀 0건. 점검 중 수정 완료 2건(M-S1-1 PR #202, H-S2-1 PR #203). 미해결 Critical 1·Medium 3 + Low 17. 발표 전 우선순위는 최종 리포트 §4.
+- 산출물: `docs/(2026-06-11) audit-full-api-session3.md`, `docs/(2026-06-11) audit-full-api-final-report.md`.
