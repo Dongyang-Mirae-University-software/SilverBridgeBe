@@ -869,3 +869,15 @@ REST API Key 단독 대비 보안 강화 — 인가코드 탈취 시 토큰 발�
 - **Low 7건**: signup 2곳 RateLimit, Swagger 429·SOS 문서, FindEmailRequest @Pattern, 이미지 고아 파일 방지, SecureRandom 재사용, draft null 정규화, dead query 3종 제거.
 - 신규 테스트: JwtHandshakeInterceptorTest 6 + FcmServiceTest 4 + 디스패처 폴백 3케이스. 전체 239 tests 통과.
 - **점검 사이클 총결산**: 발견 Critical 1·High 1·Medium 4 **전부 수정 머지**(PR #202~#205). 잔여는 의도적 수용(Low: iat 1초 창, 공지 무페이징, URL 동사형/래퍼 스타일 컨벤션)뿐 — 최종 리포트 §4 참조.
+
+## [2026-06-20] 피보호자 FCM 미수신 버그 진단 (수정 미적용)
+
+- **증상**: 같은 프론트 로직인데 보호자는 FCM 정상 수신, 피보호자만 미수신. 프론트 로그 "이미 등록된 토큰 사용".
+- **근본 원인(2층위 수렴, 둘 다 "같은 브라우저 멀티계정"에서만 발현)**:
+  - **3-A 구조적**: Firebase `getToken()`은 브라우저당 동일 토큰 1개 + 백엔드 `uq_fcm_tokens_token` UNIQUE → 토큰은 **마지막 등록자 1명만** 소유. 다른 쪽은 `findByUserId` 0건 → 미수신.
+  - **3-B 프론트 가중**: `fcm.ts` `registerFcmTokenForCurrentDevice` 조기 반환 가드가 **토큰 값만 보고 userId를 안 봄**. 로그아웃 미경유 계정 전환 시 sessionStorage 잔존 → 피보호자 등록 POST 자체를 건너뜀 → 백엔드 `reassignTo` 미발동 → 토큰 보호자에 하드 고정.
+- **검증 결과**: 백엔드 발송 경로 정상(역할 필터 없음·기본 FCM ON·wardId 정확). 가설 2/3/4 배제. 가설 1이 원인이나 "이전 누락"이 아니라 "단일 토큰 독점 + 프론트 가드 생략".
+- **결론**: 같은 브라우저 멀티계정 **테스트 아티팩트**. 운영(기기 분리) 환경에선 양쪽 정상일 가능성 높음.
+- **수정 방향(미적용, 결정 대기)**: A 무수정(테스트 분리) / **B 프론트 보강(로그인 시 항상 재등록, userId 포함 가드) — 권장, 백엔드 회귀 없음** / C 백엔드 `(user_id,token)` 복합키(회귀 큼, 비권장).
+- **잔여 확인(보류)**: 테스트 계정 ID 확보 후 `fcm_tokens`/`user_notification_settings` DB 조회로 최종 확정.
+- 산출물: `docs/(2026-06-20) bug-investigation-ward-fcm-not-received.md`.
