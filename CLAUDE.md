@@ -29,7 +29,8 @@
 
 ## 3. 브랜치 & 커밋 전략
 
-> ⚠️ **`dev` / `prod` 직접 커밋·푸시 금지.** feat 브랜치 → PR → `dev` 흐름만 허용.
+> ⚠️ **`dev` / `prod` 직접 커밋·푸시 금지(코드).** feat 브랜치 → PR → `dev` 흐름만 허용.
+> 📄 **예외 — 문서(`.md`·`docs/**`)는 PR 생략, `dev`에 직접 커밋·푸시 허용.** 배포는 `cd.yml` paths-ignore로 어차피 스킵되므로 PR 게이트 불요(2026-06-20 결정). 코드 변경이 1줄이라도 섞이면 이 예외 적용 불가 → PR 경유.
 
 - **브랜치 명명**: `type/short-description` (소문자·하이픈, 이슈 번호: `type/123-desc`)
   - type: `feature` `fix` `hotfix` `refactor` `design` `docs` `test` `chore` `release` `infra`
@@ -45,6 +46,8 @@
 4. **push 전 검증**: `./gradlew build -x test --no-daemon`
 5. `git push origin type/short-description`
 6. `gh pr create --base dev` → 머지 → **로컬·원격 feat 브랜치 삭제**(머지가 dev에 반영됐는지 확인 후)
+
+> 📄 **문서만 변경 시**: 위 브랜치/PR 절차 생략 — `dev`에서 바로 커밋 후 `git push origin dev`. (배포 스킵, §3 예외)
 
 ### 자동 배포 (CD)
 
@@ -91,7 +94,7 @@
 
 ## 7. 피해야 할 패턴
 
-1. **`dev` 직접 커밋·푸시** — 반드시 PR 경유
+1. **`dev` 직접 커밋·푸시(코드)** — 반드시 PR 경유 (문서 `.md`·`docs/**`만 예외: dev 직접 푸시 허용, §3)
 2. **AI 출력 그대로 적용** — 항상 diff 검토 후 적용
 3. **스킬 반복 로드** — 세션당 한 번
 4. **Maven 명령 사용** — 이 프로젝트는 Gradle (`./gradlew ...`)
