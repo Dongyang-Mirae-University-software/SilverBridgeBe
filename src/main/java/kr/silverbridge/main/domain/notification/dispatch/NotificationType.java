@@ -18,6 +18,9 @@ public enum NotificationType {
     CONNECTION_REFUSED(false),
     CONNECTION_DISCONNECTED(false),
 
+    // 문의 답변 완료 → 작성자(보호자)에게 알림. 긴급하지 않으므로 선택(mandatory=false, 사용자 설정 따름).
+    INQUIRY_ANSWERED(false),
+
     // 피보호자 긴급 SOS. 보호자가 알림을 꺼도 반드시 받아야 하는 긴급 알림이라 필수(mandatory=true)로 분류한다.
     WARD_SOS(true);
 
