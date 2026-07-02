@@ -49,6 +49,13 @@ public class SwaggerConfig {
                                         "※ Authorization: Bearer {accessToken} 헤더 필수."),
                         new Tag().name("관리자 - 공지사항")
                                 .description("공지 CRUD 및 임시저장 — 게시된 공지 관리와 작성 중 공지(임시저장) 보관/게시 전환.\n" +
+                                        "※ ADMIN 권한 계정만 호출 가능. Authorization: Bearer {accessToken} 헤더 필수."),
+                        new Tag().name("보호자 - 문의")
+                                .description("보호자가 고객센터에 문의를 작성하고 본인 문의 목록·상세를 조회.\n" +
+                                        "카테고리: ANOMALY(이상감지)/HOSPITAL(병원)/ACCOUNT(계정·회원)/SERVICE(서비스 이용)/ETC(기타), 상태: WAITING(답변 대기)/ANSWERED(답변 완료).\n" +
+                                        "※ GUARDIAN 역할 계정만 호출 가능. Authorization: Bearer {accessToken} 헤더 필수."),
+                        new Tag().name("관리자 - 문의")
+                                .description("전체 문의 목록(탭 카운트·필터·검색·페이징)·상세 조회 및 답변 작성.\n" +
                                         "※ ADMIN 권한 계정만 호출 가능. Authorization: Bearer {accessToken} 헤더 필수.")
                 ))
                 // 전역 JWT Bearer 인증 적용
@@ -105,7 +112,15 @@ public class SwaggerConfig {
                     "/api/admin/announcement/draft/create",
                     "/api/admin/announcement/draft/update/{id}",
                     "/api/admin/announcement/draft/delete/{id}",
-                    "/api/admin/announcement/draft/publish/{id}"
+                    "/api/admin/announcement/draft/publish/{id}",
+                    // ── [보호자 - 문의] ──────────────────────────────
+                    // POST(작성)·GET(내 목록)은 단일 경로 키 → /api/guardian/inquiry 한 줄로 묶임
+                    "/api/guardian/inquiry",
+                    "/api/guardian/inquiry/{id}",
+                    // ── [관리자 - 문의] ──────────────────────────────
+                    "/api/admin/inquiry",
+                    "/api/admin/inquiry/{id}",
+                    "/api/admin/inquiry/{id}/answer"
             );
 
             Map<String, PathItem> original = new LinkedHashMap<>(openApi.getPaths());
