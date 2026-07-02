@@ -24,7 +24,12 @@ jobs:
         run: |
           set -e
           cd ~/SilverBridgeBe
-          git pull origin dev
+          # 배포 서버는 origin/dev의 순수 미러다(진실의 원천 아님).
+          # git pull(merge)은 dev가 rewrite/force-push되면 로컬과 divergent가 되어 실패하므로
+          # (2026-07-02 실제 발생: 로컬 578 vs 원격 588 커밋 분기 → 배포 중단),
+          # fetch 후 origin/dev로 강제 정렬해 항상 원격과 정확히 일치시킨다.
+          git fetch origin dev
+          git reset --hard origin/dev
 
           if [ ! -f .env.dev ]; then
             echo "::error::.env.dev 파일이 호스트에 없습니다 (~/SilverBridgeBe/.env.dev). 배포 중단."
