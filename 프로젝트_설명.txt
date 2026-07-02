@@ -374,6 +374,30 @@ SilverBridge는 노인(피보호자)과 그 가족(보호자)을 연결하는 �
                              · 119 통화 화면 / 보호자 직접 전화는 프론트 처리(백엔드 무관).
                                직접 전화번호는 GET /api/ward/connection/active 의 partnerPhone 사용
 
+  문의하기 / 고객센터 (inquiry, 2026-07-01 추가):
+    보호자가 문의를 작성하고 관리자가 답변하는 고객센터 기능. 신규 도메인.
+    카테고리(고정 5종): ANOMALY(이상감지)/HOSPITAL(병원)/ACCOUNT(계정·회원)/SERVICE(서비스 이용)/ETC(기타)
+    상태: WAITING(답변 대기) / ANSWERED(답변 완료). 한글 라벨은 프론트가 코드값으로 매핑.
+
+    보호자(GUARDIAN 전용):
+    → POST /api/guardian/inquiry        → 문의 작성(최초 WAITING)
+    → GET  /api/guardian/inquiry        → 내 문의 목록(본인만, 최신순)
+    → GET  /api/guardian/inquiry/{id}   → 내 문의 상세(본인만, 타인 ID는 404 = IDOR 차단)
+
+    관리자(ADMIN 전용, /api/admin/**):
+    → GET  /api/admin/inquiry           → 전체 목록. 탭 카운트(totalCount/waitingCount/answeredCount,
+                                          필터 무관 전역) + 카테고리·상태 필터 + 검색(제목·내용·작성자명)
+                                          + 페이징(page/size). 코드베이스 첫 페이징 응답(PageResponse).
+    → GET  /api/admin/inquiry/{id}      → 상세(답변 모달용, 본문+기존 답변)
+    → POST /api/admin/inquiry/{id}/answer → 답변 작성(WAITING→ANSWERED, answered_by/at 기록)
+                                          · 이미 답변된 문의 재답변 시 409
+                                          · 답변 완료 → 작성자에게 FCM 알림(선택 — 사용자 설정 따름,
+                                            NotificationType.INQUIRY_ANSWERED, 기본 FCM ON). WebSocket 미발송.
+
+    테이블 inquiries(V28): user_id FK CASCADE(탈퇴 시 함께 삭제), answered_by FK SET NULL(관리자 삭제 시 답변 보존).
+    ※ 관리자 대시보드 "미처리 문의" 통계: 대시보드 API 자체가 아직 미구현이라 이번 범위 밖.
+      InquiryRepository.countByStatus(WAITING) 를 제공하므로 대시보드 신설 시 즉시 연결 가능.
+
 
   [ 3-7. 푸시 알림(FCM) 토큰 관리 ]
   ─────────────────────────────

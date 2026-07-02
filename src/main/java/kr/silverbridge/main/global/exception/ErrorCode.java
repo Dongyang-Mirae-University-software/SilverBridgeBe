@@ -56,6 +56,12 @@ public enum ErrorCode {
     ANNOUNCEMENT_NOT_FOUND(HttpStatus.NOT_FOUND, "공지를 찾을 수 없습니다."),
     ANNOUNCEMENT_DRAFT_NOT_FOUND(HttpStatus.NOT_FOUND, "임시저장된 공지를 찾을 수 없습니다."),
 
+    // 문의(고객센터)
+    INQUIRY_NOT_FOUND(HttpStatus.NOT_FOUND, "문의를 찾을 수 없습니다."),
+    // 타인 문의 접근 — 존재 노출 방지를 위해 NOT_FOUND 로 위장 (IDOR 차단)
+    INQUIRY_NOT_AUTHORIZED(HttpStatus.NOT_FOUND, "문의를 찾을 수 없습니다."),
+    INQUIRY_ALREADY_ANSWERED(HttpStatus.CONFLICT, "이미 답변이 완료된 문의입니다."),
+
     // 카카오 OAuth
     KAKAO_INVALID_CODE(HttpStatus.UNAUTHORIZED, "카카오 로그인 시간이 초과되었습니다. 다시 시도해주세요."),
     KAKAO_PERMISSION_DENIED(HttpStatus.FORBIDDEN, "카카오 로그인에 필요한 정보 제공에 동의해주세요."),
