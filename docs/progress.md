@@ -881,3 +881,15 @@ REST API Key 단독 대비 보안 강화 — 인가코드 탈취 시 토큰 발�
 - **수정 방향(미적용, 결정 대기)**: A 무수정(테스트 분리) / **B 프론트 보강(로그인 시 항상 재등록, userId 포함 가드) — 권장, 백엔드 회귀 없음** / C 백엔드 `(user_id,token)` 복합키(회귀 큼, 비권장).
 - **잔여 확인(보류)**: 테스트 계정 ID 확보 후 `fcm_tokens`/`user_notification_settings` DB 조회로 최종 확정.
 - 산출물: `docs/(2026-06-20) bug-investigation-ward-fcm-not-received.md`.
+
+## [2026-07-01] 문의하기(고객센터) 기능 구현 (보호자 작성 + 관리자 답변)
+
+- **신규 도메인 `inquiry`**: 보호자가 문의를 작성하고 관리자가 답변하는 고객센터 기능. 완전 신규(기존 코드 없음).
+- **테이블**(Flyway V28 `inquiries`): user_id(작성자, FK→users **CASCADE** — 탈퇴 시 함께 삭제) / category / title / content / status / answer / answered_by(FK→users **SET NULL**) / answered_at. 인덱스 3종(본인 목록·상태 탭·카테고리).
+- **enum**(global/enums, 순수 enum): `InquiryCategory`(ANOMALY/HOSPITAL/ACCOUNT/SERVICE/ETC) · `InquiryStatus`(WAITING/ANSWERED). 한글 라벨은 프론트 매핑.
+- **엔드포인트**: 보호자 `POST/GET /api/guardian/inquiry`·`GET .../{id}`(본인만, IDOR 차단) / 관리자 `GET /api/admin/inquiry`(탭 카운트+카테고리·상태 필터+제목·내용·작성자명 검색+**페이징**)·`GET .../{id}`·`POST .../{id}/answer`(WAITING→ANSWERED).
+- **답변 알림**(선택): `InquiryAnsweredEvent`(AFTER_COMMIT `@Async`) → `NotificationDispatcher.dispatch(작성자, INQUIRY_ANSWERED, ...)`. `NotificationType.INQUIRY_ANSWERED(false)` = 사용자 설정 따름(기본 FCM ON). WebSocket 미발송(실시간 화면 이벤트 아님).
+- **재사용**: ApiResponse·NotificationDispatcher·BaseTimeEntity·String userId(FK 미매핑)·IDOR 검증 패턴. **신규 공통** `PageResponse<T>`(코드베이스 첫 페이징 래퍼 — 관리자 목록에 도입, 이후 재사용).
+- **범위 외(열어둠)**: 관리자 대시보드 "미처리 문의" 통계는 대시보드 API 자체가 미구현이라 제외 — `countByStatus(WAITING)` 제공으로 향후 연결 가능. 답변 감사 로그는 CHECK(V27) 동기화 필요해 제외.
+- 테스트 3종(보호자 서비스·관리자 서비스·알림 리스너) 통과, 전체 build 회귀 0건.
+- 산출물: `docs/(2026-07-01) feature-inquiry.md`.
