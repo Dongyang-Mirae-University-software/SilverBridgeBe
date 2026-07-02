@@ -893,3 +893,11 @@ REST API Key 단독 대비 보안 강화 — 인가코드 탈취 시 토큰 발�
 - **범위 외(열어둠)**: 관리자 대시보드 "미처리 문의" 통계는 대시보드 API 자체가 미구현이라 제외 — `countByStatus(WAITING)` 제공으로 향후 연결 가능. 답변 감사 로그는 CHECK(V27) 동기화 필요해 제외.
 - 테스트 3종(보호자 서비스·관리자 서비스·알림 리스너) 통과, 전체 build 회귀 0건.
 - 산출물: `docs/(2026-07-01) feature-inquiry.md`.
+
+## [2026-07-02] CD 배포 서버 divergent 복구 + 재발 방지 패치 (PR #210)
+
+- **증상**: PR #209(문의 기능) 머지 후 CD 배포가 14초 만에 실패(exit 128). 직전 PR #208(6/15)도 동일 실패 — 마지막 정상 배포는 6/11 PR #205.
+- **원인**: 배포 서버(self-hosted `[self-hosted, dev]`, `~/SilverBridgeBe`) 로컬 `dev`가 `origin/dev`와 **divergent**(로컬 578 vs 원격 588 커밋). 과거 `dev` 히스토리가 rewrite/force-push되며 해시가 바뀌었는데(로컬 `e305384` Merge #205 vs 원격 `cbbb366` 같은 내용·다른 해시), 배포 서버는 옛 해시 체인에 멈춘 채 `git pull`(merge)을 반복해 분기 누적 → `git pull origin dev`가 "divergent branches"로 중단. 로컬-온리 578커밋은 전부 원격 중복(고유 작업 없음), working tree clean.
+- **복구**: 서버 SSH 접속 → `git fetch origin` + `git reset --hard origin/dev`로 `37e4b5e`(PR #209 포함)에 정확히 정렬. 실패한 CD 워크플로우 재실행 → **배포 성공(8m35s)**. 문의 API 정상 반영.
+- **재발 방지(PR #210)**: `cd.yml` 배포 스텝을 `git pull origin dev` → `git fetch origin dev` + `git reset --hard origin/dev`로 전환. 배포 서버는 origin/dev의 순수 미러(진실의 원천 아님)이므로 merge 대신 강제 정렬 → dev가 또 rewrite돼도 divergent 원천 차단. 머지 후 새 스텝으로 CD 재실행 성공(로그에서 fetch+reset→api Recreated 확인).
+- **후속 권장**: 배포 서버 SSH 자격증명이 세션에 노출됨 → 비밀번호 교체 권장.
