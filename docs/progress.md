@@ -61,7 +61,7 @@ AI 서버의 실시간 이상감지 신호(`latest_analysis`)를 백엔드가 We
 - **🔒 보안 경고**: 운영 `.env` 시크릿(`API_KEY`·OpenAI `GPT_API_KEY`·`HF_TOKEN`·DB 비번)이 채팅으로 공유됨 → **전부 회전 권장**(특히 OpenAI). 또한 `VITE_API_KEY`가 FE 정적 번들에 인라인돼 브라우저로 공개(=`API_KEY`와 동일 값, 테스트 FE에 하드코딩). 문서엔 값 마스킹.
 - **문서 눈높이 정책**: 사용자가 Java/Spring 비전문가 → 산출물 상단에 **🟢 쉬운 설명** 블록 추가, 전문용어는 한 줄 풀이. (기억: [산출물은 비전문가 눈높이로])
 - **규칙 준수**: AI/FE/예약 저장소 읽기 전용(수정/커밋 0), `.env` 미열람(값은 사용자 제공분만), 시크릿 평문 미기재.
-- **산출물**: `docs/(2026-05-31) ai-anomaly-websocket-integration-spec.md`, `docs/(2026-05-31) testai-gosky-kr-system-overview.md`.
+- **산출물**: (2026-07-03 통합) 위 두 분석 문서 `ai-anomaly-websocket-integration-spec.md`·`testai-gosky-kr-system-overview.md`는 skyserver 배포본 SSH 실측으로 확증 후, AI 서버 자체 설명은 `docs/프로젝트_설명_AI서버.txt`로, 백엔드 연동 요청은 노션(DMU/AI서버팀)으로 각각 통합·이관하고 두 .md는 삭제.
 
 ---
 

@@ -1,0 +1,372 @@
+================================================================================
+  SilverBridge AI 서버 프로젝트 설명서
+================================================================================
+
+  작성 기준일 : 2026-07-03  (skyserver 배포본 SSH 직접 실측 + 정본 코드 대조)
+  대상 저장소 : SilverBridgeAiServer 외 AI 관련 저장소 (백엔드 SilverBridgeBe와 별도)
+  문서 목적   : AI 서버 생태계를 처음 접하는 팀원이 "무엇이, 어떻게 구성돼
+                동작하는지"를 빠르게 이해하도록 정리한 프로젝트 설명서.
+
+  ※ 이 문서는 "현재 배포되어 동작하는 코드"를 기준으로 한다. 요구사항 전체는
+     각 저장소의 PRD를 참고. 둘이 다르면 이 문서가 실제 동작 기준이다.
+  ※ 기존 AI서버_프로젝트_설명.txt / SilverBridgeAI_프로젝트_설명.txt(2026-05-28,
+     옛 MVP: SQLite·스텁 추론·포트 9000)를 대체·통합한다. 실제 배포본은 그보다
+     크게 앞서 있어(실모델 추론·PostgreSQL·포트 6017·자체 WebSocket) 다시 쓴다.
+
+
+--------------------------------------------------------------------------------
+  1. 이 프로젝트는 무엇인가요?
+--------------------------------------------------------------------------------
+
+SilverBridge는 노인(피보호자)과 그 가족(보호자)을 연결하는 돌봄 서비스입니다.
+그중 "AI 서버"는 SilverBridge 생태계에서 AI 기능을 독립적으로 담당하는
+별도 서버 프로그램입니다.
+
+  [전체 시스템에서의 위치]
+    보호자 앱 / 피보호자 앱   ─(REST/Socket)→  API 서버(SilverBridgeBe)
+    iPad(카메라 송출 앱)      ─(프레임 업로드)→  AI 서버(이 저장소)
+    API 서버                  ─(REST/WS)──────→  AI 서버
+    AI 서버                   ─(프록시)────────→  의료 챗 서버 / 예약 API
+    AI 서버                   ─(저장)──────────→  PostgreSQL
+
+  즉 AI 서버는 사용자 앱과 직접 통신하지 않는 "내부 전문 서비스"입니다.
+  카메라 영상 분석, 의료 챗 응답, 예약 오케스트레이션을 담당하고, 그 결과를
+  REST/WebSocket으로 API 서버·프론트에 제공합니다.
+
+  [AI 서버가 하는 일]
+    - iPad가 올리는 실시간 영상 프레임에서 화재/연기를 감지(YOLO 추론)
+    - 감지 결과를 자체 WebSocket으로 구독자에게 실시간 broadcast
+    - 모델/카메라 메타데이터 관리, 분석 결과 조회
+    - 의료 챗(증상 → 위험도/권장행동) 및 병원 예약 흐름 중개
+    - 위 기능을 REST + WebSocket + Swagger로 제공
+
+  [AI 서버가 하지 않는 일 — 책임 분리]
+    - 보호자/피보호자 앱 직접 연동, 사용자 알림(FCM/SMS/푸시) 발송
+    - 사용자 인증·인가 (AI 서버는 서버 간 API Key 한 겹만 검사)
+    - 감지 결과를 "누구네 보호자에게" 전달하는 로직 (그건 API 서버 몫)
+
+
+--------------------------------------------------------------------------------
+  2. AI 관련 저장소 지도 (/home/apps/SilverBridgeSky/ 아래)
+--------------------------------------------------------------------------------
+
+  같은 상위 폴더에 여러 프로젝트가 섞여 있다. 역할별로 구분한다.
+  (git = github.com/Dongyang-Mirae-University-software)
+
+  ── 운영 서빙 ────────────────────────────────────────────────
+   SilverBridgeAiServer   [Python/FastAPI] 운영 AI 서버(추론 서빙 + API 게이트웨이).
+                          이상감지·라이브 스트림·의료 챗·예약을 한 서버로 묶어
+                          REST + WebSocket으로 제공. → 상세 §3~§8.
+
+  ── 감지 모델 학습 (서빙 아님, .pt 의 출처) ───────────────────
+   AiSilverBridgeSky      [Python] fire_smoke·weapon 학습/추론 서비스 코드
+                          (service/run.py, training/, fire_smoke/, weapon/,
+                          기반모델 yolo26n.pt).
+   SilverBridgeAi         [Python] 화재/연기·흉기 데이터셋 + 학습 도구
+                          (datasets/, fall/, src/, tools/, models/). §9.
+   SilverBridgeJH         [Python] 낙상(fall) 감지 개인 작업물
+                          (fall/person_detection·pose_test·fall_detection,
+                          ModelTraining/train.py). 아직 서버 미탑재.
+
+  ── AI 서버가 뒤로 호출하는 연계 서비스 ───────────────────────
+   ChatSilverBridge       [Python/FastAPI] MedGemma 의료 챗 서버(POST /chat, 6012).
+                          AI 서버가 CHAT_UPSTREAM_URL로 프록시.
+   SilverBridgeReservation[Node] 병원 예약 MCP/API(6015). AI 서버가
+                          RESERVATION_API_BASE_URL로 호출(챗→예약 오케스트레이션).
+
+  ── 테스트/참조 프론트 ────────────────────────────────────────
+   SilverBridgeStreamTestFe [Node/React] AI 서버(6017) 스트림·WS 테스트 FE
+                          (testai.gosky.kr, 컨테이너 6018). 라이브 WS 프로토콜의
+                          동작하는 참조 클라이언트.
+   ChatSilverBridgeTest   [Node/Next] ChatSilverBridge /chat 테스트 UI.
+
+  ── AI 이상감지와 무관 (별개 서비스) ──────────────────────────
+   CharacterAi            [Node/Next] 캐릭터 AI 프론트(2026-04). 이상감지 무관.
+   SilverBridgeSSOBe      [Java/Spring] SSO 인증 백엔드(6501). AI 무관.
+   TestSilverBridge       정적 HTML 목업(guardian/ward 화면). AI 무관.
+
+
+--------------------------------------------------------------------------------
+  3. 사용하는 기술
+--------------------------------------------------------------------------------
+
+  Python 3.11        : 서버 구현 언어.
+  FastAPI / Uvicorn  : 웹 API 프레임워크 + ASGI 실행기. REST와 WebSocket을 함께
+                       제공하고 Swagger 문서를 자동 생성.
+  SQLAlchemy         : 파이썬 객체 ↔ DB 테이블 매핑(ORM).
+  PostgreSQL 17      : 운영 데이터베이스(컨테이너 silverbridge-ai-postgres).
+                       (옛 MVP는 SQLite였으나 운영은 PostgreSQL로 전환됨)
+  Pydantic           : 요청/응답 JSON 형식·값 검증.
+  Ultralytics YOLO   : 영상 객체 탐지 모델(YOLO26). fire_smoke.pt 등 .pt 가중치를
+                       로드해 프레임에서 화재/연기를 탐지. GPU(CUDA)로 추론.
+  OpenCV / torch     : 프레임 디코딩·영상 처리 / 딥러닝 엔진.
+  transformers·GPT   : 의료 챗(MedGemma) 및 구조화 응답(gpt-4o-mini) 연동.
+  Docker             : 컨테이너 실행(GPU 패스스루, network_mode host).
+  Swagger / OpenAPI  : 자동 생성 API 명세 — /api/docs, /api/redoc, /api/openapi.json.
+
+  ★ 인증은 사용자 로그인(JWT)이 아니라 서버 간 단일 API Key(X-API-Key)다.
+    "API 서버가 호출하는가"만 확인하는 내부 서비스 전제. (상세 §10)
+
+
+--------------------------------------------------------------------------------
+  4. 운영 배포 구성 (skyserver)
+--------------------------------------------------------------------------------
+
+  ▶ 서버       : skyserver (SSH 58.75.21.151:2022)
+  ▶ 코드 위치  : /home/apps/SilverBridgeSky/SilverBridgeAiServer
+  ▶ 외부 도메인: testai.gosky.kr
+  ▶ 컨테이너
+      silverbridge-ai-server   : FastAPI 앱. network_mode=host, GPU 사용, 포트 6017.
+      silverbridge-ai-postgres : PostgreSQL 17. 호스트 포트 6019, DB silverbridge_ai.
+  ▶ 헬스체크   : GET /health → 200 { success:true, ..., status:"ok" }
+  ▶ API 문서   : /api/docs (Swagger) · /api/redoc · /api/openapi.json
+  ▶ 도메인 구성: testai.gosky.kr(HTTPS 443) → 리버스 프록시(nginx 추정)가 경로로
+                분기 — /api/*·ws → AI 서버(6017), 그 외 → 테스트 FE(6018).
+                ※ 프록시 설정은 저장소 밖(서버 인프라). 정확한 라우팅은 nginx 확인.
+
+  [ 포트 맵 (같은 skyserver 내부) ]
+    AI 서버(FastAPI/GPU)   6017        컨테이너 silverbridge-ai-server(network host)
+    테스트 FE(React/Vite)  6018        컨테이너 silverbridge-stream-test-fe
+    PostgreSQL 17         6019→5432   컨테이너 silverbridge-ai-postgres
+    MedGemma 업스트림     6012        의료 챗 LLM (CHAT_UPSTREAM_URL, repo 밖)
+    예약 API              6015        SilverBridgeReservation(RESERVATION_API_BASE_URL,
+                                     도메인 reservation.dmu.gosky.kr)
+
+  [ 기동 시퀀스 (main.py lifespan) ]
+    ① Base.metadata.create_all (테이블 자동 생성 — Flyway 아님, SQLAlchemy)
+    ② 디렉터리 보장 → ③ GPU 점검(REQUIRE_GPU=true, CUDA 없으면 기동 실패)
+    ④ MedGemma 로드 + warmup → ⑤ fire_smoke 모델 로드
+    ※ GPU 필수, shm_size 2gb. 세션 상태는 memory(재시작 시 라이브 세션 소실).
+
+  ※ 로컬 클론(~/SilverBridgeAiServer)은 옛 fork라 배포본보다 뒤처져 있다.
+    구조/동작 확인은 반드시 위 배포본(정본 = Dongyang-Mirae org main) 기준.
+
+
+--------------------------------------------------------------------------------
+  5. 라이브 스트림 & 이상감지 파이프라인 (핵심 기능)
+--------------------------------------------------------------------------------
+
+  iPad가 카메라 프레임을 올리면, AI 서버가 이를 분석해 결과를 실시간으로
+  구독자에게 흘려보낸다.
+
+  [iPad 송출 앱]
+     │ ① POST /api/v1/stream-sessions
+     │      {sessionId, cameraIdentifier, deviceType:"ipad"}     ← 세션 생성
+     │ ② POST /api/v1/stream-sessions/{sessionId}/frame (JPEG)   ← 매 프레임 반복
+     ▼
+  [AI 서버]
+     • 프레임을 메모리(frame_store)에 저장 + fps/lastFrameAt 갱신
+     • analyze_stream_frame: N프레임마다(운영 N=5) fire_smoke.pt로 추론,
+       결과를 session_analysis_store(메모리)에 캐시
+     • 매 프레임마다 해당 sessionId 구독자에게 broadcast:
+         {session_status} + {latest_analysis}
+     ▼
+  [WS /api/v1/ws/live]  구독자(보호자 웹 등)에게 실시간 푸시
+
+  [동작 성질 — 코드로 확인]
+    - 감지 종류는 화재/연기(fire/smoke) 전용. (낙상·흉기 모델은 학습 중이나
+      라이브 경로 미탑재 — .env 플래그만 존재)
+    - 라이브 분석 결과는 DB에 저장하지 않는다(메모리 캐시만). 실측상
+      analysis_results 테이블 0행.
+    - broadcast는 매 프레임마다 발생(초당 여러 번), 분석 재계산만 N프레임마다.
+      → 같은 analyzedAt 결과가 반복 broadcast될 수 있음.
+    - 세션 상태는 STREAM_STATE_BACKEND=memory (실측) → 메모리 관리. 서버
+      재시작 시 진행 중 세션 정보는 사라짐.
+    - 무프레임 LIVE_STREAM_DISCONNECT_TIMEOUT_SEC(기본 10초) 초과 시 세션
+      status=disconnected 로 전환.
+
+
+--------------------------------------------------------------------------------
+  6. WebSocket API (/api/v1/ws/live)
+--------------------------------------------------------------------------------
+
+  [ 6-1. 인증 ]
+    x-api-key 헤더  또는  ?apiKey= 쿼리 ( .env API_KEY 단일 정적 키 ).
+    불일치 시 close(1008, "AUTH_INVALID_KEY").
+    ※ 쿼리 방식은 접속 URL 로깅 시 키가 노출되므로 헤더 방식이 안전.
+
+  [ 6-2. 클라이언트 → 서버 (action) ]
+    연결 직후 서버가 {"type":"connected"} 전송. 이후 action:
+      {"action":"ping"}                        → {"type":"pong"}
+      {"action":"list"}                        → {"type":"live_streams","data":[...]}
+      {"action":"subscribe","sessionId":"..."} → subscribed → session_status →
+                                                 latest_analysis (스냅샷 1회)
+      {"action":"unsubscribe","sessionId":"..."} → unsubscribed
+    ※ latest_analysis는 "구독한 세션"에만 온다. live_streams(세션 목록)는 전체
+      연결에 broadcast(세션 생성/종료 시).
+
+  [ 6-3. 서버 → 클라이언트 신호 ]
+
+    ① session_status (세션 헬스)
+       { "type":"session_status", "sessionId":"stream_009",
+         "data":{ "status":"running|stopped|disconnected",
+                  "lastFrameAt":"...|null", "fps":12.0,
+                  "viewerCount":1, "isAnalyzing":true } }
+
+    ② latest_analysis (분석 결과)
+       { "type":"latest_analysis", "sessionId":"stream_009",
+         "data":{
+           "detectedType":"fire",     // normal | fire | smoke | unknown
+           "confidence":0.4547,       // YOLO score (최고 confidence 객체)
+           "danger":false,            // 표시 전용 — 라이브 경로에서 항상 false
+           "detections":[ {"detectedType":"fire","confidence":0.4547,
+                           "bbox":{"x1":..,"y1":..,"x2":..,"y2":..}} ],
+           "analyzedAt":"2026-05-30T10:20:22.939247"   // naive UTC
+         } }
+
+       ※ danger 필드는 판정값이 아니라 더미(표시 전용)다. detect_from_jpeg
+         docstring "danger 는 항상 False (표시 전용)", analyze_stream_frame도
+         "danger":False 하드코딩. 위험 판단은 detectedType + confidence로.
+       ※ 캐시 없을 때 fallback 스키마는 {detectedType, confidence, danger}만
+         올 수 있음(detections/analyzedAt 없음).
+       ※ 모델 추론 임계 FIRE_SMOKE_CONF_THRESHOLD 기본 0.35 (낮음 = "표시"용).
+         unknown = 프레임 없음/모델 미로드/디코드 실패(에러 상태).
+
+
+--------------------------------------------------------------------------------
+  7. REST API 요약 (Swagger: /api/docs)
+--------------------------------------------------------------------------------
+
+  ★ 명명 : API 필드 camelCase, DB 컬럼 snake_case (서비스 계층 자동 변환).
+  ★ 인증 : /health 외 대부분 X-API-Key 필수. 불일치 401 AUTH_INVALID_KEY.
+  ★ 응답 : { success, message, data } / 실패 { success:false, errorCode, data:null }.
+
+  [ 라이브 스트림 ]
+    POST /api/v1/stream-sessions                        송출 세션 생성(iPad)
+    POST /api/v1/stream-sessions/{sessionId}/frame      프레임 수신(JPEG)
+    POST /api/v1/stream-sessions/{sessionId}/stop       세션 종료
+    GET  /api/v1/live-streams                           송출 중 세션 목록
+    GET  /api/v1/live-streams/{sessionId}/status        세션 상태
+    GET  /api/v1/live-streams/{sessionId}/latest-analysis 최신 분석
+    GET  /api/v1/live-streams/{sessionId}/latest-frame  JPEG 1장(스냅샷)
+    GET  /api/v1/live-streams/{sessionId}/mjpeg         실시간 보기(MJPEG)
+    (ws) /api/v1/ws/live                                실시간 구독(§6)
+
+  [ 모델 / 카메라 / 분석(구 경로) ]
+    /api/v1/models/**    모델 메타데이터 CRUD (type: fall/fire/weapon/medical/custom)
+    /api/v1/cameras/**   카메라 CRUD (targetUserId/guardianUserId 문자열 보관)
+    /api/v1/analysis/**  단일 이미지 분석 / (구) 카메라 RTSP 스트림 분석·결과 조회
+                         ※ 라이브(iPad) 경로와 별개인 구 경로.
+
+  [ 의료 챗 / 예약 ]
+    /api/v1/chat/**      증상 → 위험도/권장행동. 뒤로 ChatSilverBridge(6012) 프록시.
+    /api/v1/reservation-credential/**  예약 자격증명 저장(예약 API 6015 연동).
+    (예약 흐름)          챗에서 SilverBridgeReservation(6015) 오케스트레이션.
+
+  [ 기타 ]
+    /api/v1/game/**      인지 게임 임베드 (무인증)
+
+  ※ 라우터별 인증: health·game·(ws)live 는 무인증(단 ws는 자체 apiKey 검증),
+    나머지 model·camera·analysis·chat·live_stream·reservation-credential 은
+    X-API-Key 헤더 필수.
+
+
+--------------------------------------------------------------------------------
+  8. 데이터베이스 테이블 (PostgreSQL)
+--------------------------------------------------------------------------------
+
+  ※ 라이브 분석 결과는 DB에 안 남는다(메모리 캐시). 아래는 메타/구 경로 테이블.
+  ※ 시간은 UTC, 컬럼 snake_case.
+
+  [ cameras ] — 분석 대상 카메라
+    id, camera_no, identifier, name, stream_url,
+    stream_type(rtsp/http_mjpeg/droidcam),
+    target_user_id(피보호자 식별자·문자열), guardian_user_id(보호자·문자열),
+    location_name(예 "거실"), is_active, created_at, updated_at
+    ※ target_user_id/guardian_user_id 는 AI가 검증 안 하는 자유 문자열
+      (연동 편의용 보관). 실측상 현재 비어 있음.
+
+  [ analysis_results ] — (구) 분석 결과. 라이브는 미기록.
+    id, analysis_no, camera_id/identifier, model_id/identifier,
+    detected_type(fall/fire/weapon/normal/unknown), confidence, danger,
+    snapshot_path, raw_result_json, analyzed_at, created_at
+
+  [ ai_models ] — 모델 메타데이터
+    id, model_no, identifier, name, type, file_path, framework, version,
+    description, threshold(기본 0.75), is_active, created_at, updated_at
+
+  [ stream_sessions ] — iPad 송출 세션(상태 backend=db일 때)
+    session_id, camera_identifier, device_type,
+    status(running/stopped/disconnected), started_at, last_frame_at,
+    stopped_at, fps, viewer_count, is_analyzing
+
+  [ chat_logs ] — 의료 챗 기록
+    id, chat_no, user_id, message, context_json, reply,
+    risk_level(low/medium/high), recommended_action, reservation_required, created_at
+
+
+--------------------------------------------------------------------------------
+  9. 감지 모델 학습 (배경)
+--------------------------------------------------------------------------------
+
+  감지 .pt 파일은 별도 학습 저장소에서 만든다.
+  기술: Python + Ultralytics YOLO26 + OpenCV + Roboflow(라벨링) + yt-dlp(수집).
+
+  ▶ 감지 대상 : 화재/연기(Fire/Smoke), 흉기(Knife/Knife_Handle), 낙상(fall)
+                ※ 서버 라이브 경로 실제 탑재 = fire/smoke.
+  ▶ 방식      : yolo26n.pt(사전학습) 기반 전이학습. 데이터셋 train/valid/test 3분할.
+  ▶ 흐름      : 영상 수집 → 라벨링(Roboflow, YOLO26 640x640) → 학습(epochs
+                30→100→200→500) → 카메라 실시간 탐지 테스트.
+  ▶ 성능 지표 : precision(오탐↓) / recall(놓침↓) / mAP50 / mAP50-95.
+  ▶ 흉기 실험 결론 : 클래스 정리(Knife/Knife_Handle) 후 mAP50 0.59~0.68 → 0.90
+                   (최고 Data/Knife 500epoch, mAP50 0.900).
+  ▶ 화재 모델 : epochs30 firetrain/weights/best.pt 계열.
+  ▶ 저장소    : SilverBridgeAi(데이터셋·학습), AiSilverBridgeSky(fire_smoke·weapon),
+                SilverBridgeJH(낙상). §2 참고.
+  ▶ 주의      : 학습 스크립트 경로가 절대경로 하드코딩(Windows PC / Linux 학습서버).
+                대용량 .pt·이미지 → Git LFS 미도입.
+
+
+--------------------------------------------------------------------------------
+  10. 인증 · 보안 · 환경변수
+--------------------------------------------------------------------------------
+
+  [ 인증 ]  서버 간 단일 API Key(X-API-Key = .env API_KEY). 사용자 JWT 없음.
+            /health만 공개. WS는 x-api-key 헤더/apiKey 쿼리.
+  [ CORS ]  allow_origins=["*"] (내부 서비스 전제). 외부 노출 시 좁혀야 함.
+  [ 데이터 노출 ] 모델/스냅샷은 경로만 관리, 파일 자체는 응답에 내보내지 않음.
+                민감값(API_KEY·HF_TOKEN·GPT_API_KEY)은 .env로만 주입(Git 비노출).
+  [ 현재 한계 ] 단일 평문 키(회전·만료 없음), rate limit·HTTPS 강제 미비 —
+              내부망 + API 서버 전용 호출 전제.
+  [ 보안 이슈(인지) ]
+    - 테스트 FE(StreamTestFe)는 빌드 시 VITE_API_KEY를 정적 JS 번들에 인라인 →
+      testai.gosky.kr 방문자가 API_KEY를 추출 가능(단일 정적 키가 사실상 공개
+      상태, .env API_KEY와 동일 값). 운영 전 키 분리·회전 + AI 서버를 프록시/
+      내부망 뒤로 보호 필요.
+    - 시크릿(API_KEY·GPT_API_KEY·HF_TOKEN·POSTGRES_PASSWORD)은 회전 권장.
+    - 테이블 자동 생성(create_all)이라 마이그레이션 이력 관리 없음(AI 서버 한정).
+  [ 주요 .env (실측, 값 마스킹) ]
+     APP_PORT=6017
+     DATABASE_URL=postgresql+psycopg2://.../silverbridge_ai (호스트 6019)
+     API_KEY=*** · GPT_API_KEY=*** (GPT_MODEL_NAME=gpt-4o-mini) · HF_TOKEN=***
+     FIRE_SMOKE_CONF_THRESHOLD=0.35 · FIRE_SMOKE_IOU_THRESHOLD=0.45
+     STREAM_SAMPLE_EVERY_N_FRAMES=5 · STREAM_FALLBACK_INTERVAL_SEC=2
+     LIVE_STREAM_DISCONNECT_TIMEOUT_SEC=10 · STREAM_STATE_BACKEND=memory
+     KNIFE_ENABLED=true · FALL_ENABLED=true (라이브 경로엔 fire_smoke만 연결)
+     CHAT_UPSTREAM_URL=127.0.0.1:6012 · RESERVATION_API_BASE_URL=127.0.0.1:6015
+     DOCS_PATH=/api/docs · REQUIRE_GPU=true
+
+
+--------------------------------------------------------------------------------
+  11. 현재 구현 상태 · 향후
+--------------------------------------------------------------------------------
+
+  [ 동작하는 것 ]
+    - iPad 프레임 인제스트 → fire_smoke YOLO 실시간 추론 → WS broadcast
+    - 라이브 세션 관리(생성/상태/종료), MJPEG·최신 프레임 조회
+    - 모델/카메라/분석 REST, 의료 챗(MedGemma) + 예약 오케스트레이션
+    - API Key 인증, 표준 응답, Swagger 자동 문서, GPU 추론, PostgreSQL
+
+  [ 아직 없는 것 / 표시 전용 ]
+    - 라이브 danger 판정(항상 false, 표시 전용) — 위험 판정 로직 미탑재
+    - 낙상(fall)/흉기(weapon) 라이브 감지(모델 학습 중, 서버 미연결)
+    - 라이브 분석 결과 영속화(메모리 캐시만)
+
+  [ 향후 확장 여지 ]
+    - 감지 종류 확대(fall/weapon), danger 판정 정식화
+    - 분석 이력 영속화·대시보드, 임계값 튜닝, 다중 세션 확장
+
+  ※ 백엔드(SilverBridgeBe)와의 이상감지 실시간 알림 연동 설계·요청 사항은
+     별도 문서/노션으로 관리한다(이 문서는 AI 서버 자체 설명에 한정).
+
+================================================================================
