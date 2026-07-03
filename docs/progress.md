@@ -901,3 +901,13 @@ REST API Key 단독 대비 보안 강화 — 인가코드 탈취 시 토큰 발�
 - **복구**: 서버 SSH 접속 → `git fetch origin` + `git reset --hard origin/dev`로 `37e4b5e`(PR #209 포함)에 정확히 정렬. 실패한 CD 워크플로우 재실행 → **배포 성공(8m35s)**. 문의 API 정상 반영.
 - **재발 방지(PR #210)**: `cd.yml` 배포 스텝을 `git pull origin dev` → `git fetch origin dev` + `git reset --hard origin/dev`로 전환. 배포 서버는 origin/dev의 순수 미러(진실의 원천 아님)이므로 merge 대신 강제 정렬 → dev가 또 rewrite돼도 divergent 원천 차단. 머지 후 새 스텝으로 CD 재실행 성공(로그에서 fetch+reset→api Recreated 확인).
 - **후속 권장**: 배포 서버 SSH 자격증명이 세션에 노출됨 → 비밀번호 교체 권장.
+
+## [2026-07-03] 문의하기(고객센터) 기능 통합 점검 (PASS)
+
+- **대상**: PR #209(`feat(inquiry)`) + #211(Swagger 태그) / `V28__add_inquiries.sql` — 문의 도메인 전용 정적 점검(코드·DB·git 미변경). build -x test ✅, 문의 테스트 3종 ✅.
+- **IDOR ★ PASS**: `getOwnedInquiry()` 소유권 검증 + `INQUIRY_NOT_AUTHORIZED`=404 위장, 목록은 본인 스코프(`findByUserId...`). 전용 테스트 존재.
+- **인가 PASS**: 보호자 API 클래스 `@PreAuthorize("hasRole('GUARDIAN')")`(`@EnableMethodSecurity` 확인), 관리자 API `/api/admin/**`→`hasRole("ADMIN")`. answeredBy=`@AuthenticationPrincipal`(위조 불가).
+- **기능 PASS**: 상태전환 WAITING→ANSWERED + 재답변 409, 탭카운트=전역(필터 무관), 검색=제목·내용·작성자명 동적필터, 답변알림=`INQUIRY_ANSWERED(mandatory=false)` 선택·AFTER_COMMIT `@Async`.
+- **성능 PASS**: 작성자명 `findAllById` 배치(N+1 없음), 인덱스 3종 조회패턴 정합.
+- **이슈**: 🔴/🟠 없음. 🟡 M-1 저장형 XSS 잠재(보호자 입력→관리자 화면, **FE 렌더링 의존** → SilverBridgeFe 점검 이관 권장). 🟢 생성 응답 200(201 아님)·반환타입 외형 불일치·작성 rate limit 없음(저권한). ℹ️ 탈퇴자 문의 CASCADE 삭제=의도(고객지원 이력 소실 유의).
+- **판정: PASS** — 조치 없이 배포 가능, M-1만 FE 후속 트래킹. 산출물 `docs/(2026-07-03) audit-spot-check-inquiry.md`.
