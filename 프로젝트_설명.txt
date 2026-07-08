@@ -1133,4 +1133,71 @@ SilverBridge는 노인(피보호자)과 그 가족(보호자)을 연결하는 �
     6) PR 생성 → dev로 머지 → 브랜치 자동 삭제 → 서버 자동 배포
 
 
+--------------------------------------------------------------------------------
+  13. 연관 서비스 — 이미 구축된 SilverBridge 도메인 (다른 저장소)
+--------------------------------------------------------------------------------
+
+  SilverBridge는 이 백엔드(SilverBridgeBe) 하나로 끝나지 않고, 같은 GitHub 조직
+  (Dongyang-Mirae-University-software)의 여러 저장소가 역할을 나눠 맡는 구조입니다.
+  아래 서비스들은 이미 구현되어 배포 서버(skyserver, 내부 IP 58.75.21.151)에
+  Docker 컨테이너로 떠 있습니다. 이 백엔드나 프론트에서 "새로 만드는" 것이 아니라
+  "API로 연결"하는 대상입니다.
+
+  ※ 아래 포트는 서버 내부(localhost) 기준입니다. 공개 도메인이 붙은 것도 있고,
+    없는 것은 SSH 터널로만 접근합니다.
+
+  ▶ (A) SilverBridgeReservation — 병원 예약 / 병원 예약 현황  [이미 구현·가동 중]
+    - 역할   : 병원 예약, 예약 현황(운영상태·혼잡도·대기), 예약 가능 시간대 제공
+    - 스택   : NestJS + Prisma + JWT  (자체 관리자 웹 admin-ui, MCP 브릿지 포함)
+    - 포트   : 6015  (컨테이너 silverbridgereservation-reservation-api-1)
+    - 문서   : Swagger  http://localhost:6015/docs
+    - 주요 API (prefix /api/v1)
+        예약     : POST /reservations,  GET /reservations/my,
+                   GET /reservations/{id},  PATCH /reservations/{id}/cancel,
+                   DELETE /reservations/{id}
+        예약현황 : GET /hospitals,  GET /hospitals/{id},
+                   GET /hospitals/{id}/status          (운영상태·혼잡도·대기인원),
+                   GET /hospitals/{id}/available-slots  (예약 가능 시간대),
+                   GET /hospitals/{id}/departments
+    - ⚠️ 데이터는 실제 병원 EMR이 아니라 "더미(모의)"입니다. 데모/과제용 연동 목적.
+    - ✅ 결론: 병원 예약·예약 현황은 우리가 새로 구현할 필요 없이 위 API만 연결.
+
+  ▶ (B) SilverBridgeAiServer — AI 이상감지 / 의료 챗 서버  [이미 구현·가동 중]
+    - 역할   : 카메라·모델 관리, 이미지/스트림 이상감지 분석, iPad 송출(MJPEG),
+               의료 챗(MedGemma) 상담, 예약 API 키 저장, 미니 게임
+    - 스택   : FastAPI (Python) + PostgreSQL,  API Key 인증
+    - 포트   : 6017 (AI 서버, 컨테이너 silverbridge-ai-server) / 6019 (전용 PG)
+    - 주요 API (prefix /api/v1)
+        카메라       : /cameras (등록·목록·상세·수정·삭제·연결테스트)
+        모델         : /models  (등록·목록·상세·활성화 등)
+        스트림/이상감지: /stream-sessions, /live-streams/{id}/mjpeg,
+                        /live-streams/{id}/latest-analysis
+        의료 챗      : POST /chat,  GET /chat/logs
+        예약 연동    : POST /reservation-credentials (예약 API 키 저장)
+    - 참고: 배포본은 로컬 SilverBridgeAi(개발용)보다 앞선 버전.
+
+  ▶ (C) ChatSilverBridge — 의료 AI(MedGemma) 챗 백엔드
+    - 역할   : 증상/건강 질문에 대한 의료 보조 안내형 답변 (모델 medgemma-1.5-4b-it)
+    - 스택   : FastAPI (Python),  API: GET /health, POST /chat
+    - 참고   : HuggingFace gated 모델(HF_TOKEN 필요). AiServer의 챗 기능과 연관.
+    - 테스트 FE: ChatSilverBridgeTest (Next.js, ChatSilverBridge /chat 호출 검증용)
+
+  ▶ (D) SilverBridgeFe — 메인 프론트엔드  [가동 중]
+    - 스택   : Next.js,  포트 6510 (컨테이너 silver-bridge-fe-dev-web)
+    - 참고   : 로컬 경로는 ../SilverBridgeFe. 이 백엔드(6511)와 짝을 이루는 앱.
+
+  ▶ (E) SilverBridgeStreamTestFe — 스트림/이상감지 테스트 프론트  [가동 중]
+    - 역할   : SilverBridgeAiServer(6017)의 카메라·스트림·감지기 출력 점검용 UI
+    - 스택   : React/Next,  포트 6018 (컨테이너 silverbridge-stream-test-fe)
+
+  ▶ (F) 보조·실험 저장소 (참고용, 주력 아님)
+    - SilverBridgeAi        : AI 관련 개발 브랜치(developing) 저장소
+    - AiSilverBridgeSky     : 카메라 송출/DISPLAY_MODE 관련 초기 서비스
+    - SilverBridgeSSOBe     : 별도 SSO 백엔드(Spring, Auth·Kakao·Admin) — 참고
+    - SilverBridgeSky       : 상위 셋팅 저장소(umbrella)
+
+  ※ 같은 서버에 있는 WhiteHouse* / sky-card / skyhub / ocrall / immich 등은
+    SilverBridge와 무관한 다른 프로젝트이므로 위 목록에서 제외했습니다.
+
+
 ================================================================================
