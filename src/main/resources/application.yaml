@@ -87,6 +87,12 @@ solapi:
 file-server:
   base-url: ${FILE_SERVER_BASE_URL:https://v1api.gosky.kr}
 
+# 이상감지 카메라 — 피보호자 송출 권장 프레임레이트(카메라 등록 응답으로 내려줌).
+# 화재/연기는 느리게 변하고 AI 서버가 5프레임마다 추론(STREAM_SAMPLE_EVERY_N_FRAMES=5)하므로
+# 5fps면 충분(과한 fps는 대역폭·GPU 낭비). 필요 시 CAMERA_RECOMMENDED_FPS로 조정.
+camera:
+  recommended-fps: ${CAMERA_RECOMMENDED_FPS:5}
+
 springdoc:
   api-docs:
     enabled: ${SWAGGER_ENABLED:true}
