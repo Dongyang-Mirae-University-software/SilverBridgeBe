@@ -93,6 +93,19 @@ file-server:
 camera:
   recommended-fps: ${CAMERA_RECOMMENDED_FPS:5}
 
+# AI 이상감지 수신 (1단계 — 수신·판정·이력. 보호자 알림 발송은 2단계).
+# 백엔드가 AI WS에 클라이언트로 붙어 latest_analysis를 받는다(AI 서버 무변경 — 웹훅 없음).
+# 연결 실패·키 미설정은 기동을 막지 않는다(구독만 비활성/재접속).
+anomaly:
+  enabled: ${ANOMALY_ENABLED:true}
+  ws-url: ${AI_WS_URL:wss://testai.gosky.kr/api/v1/ws/live}
+  api-key: ${AI_API_KEY:}                                   # .env.dev로만 주입(평문 커밋 금지). 미설정 시 구독 비활성 + WARN
+  # 판정 기준: DANGER(기본, AI가 채운 danger 플래그만 신뢰 — 위험 판정 책임 = AI 서버)
+  #            CONFIDENCE(폴백, AI danger 정식화 배포 지연으로 이력 0건일 때만 임시 전환)
+  trigger-mode: ${ANOMALY_TRIGGER_MODE:DANGER}
+  confidence-threshold: ${ANOMALY_CONFIDENCE_THRESHOLD:0.6} # CONFIDENCE 모드 임계. AI 표시용 임계(0.35)보다 높게
+  cooldown-minutes: ${ANOMALY_COOLDOWN_MINUTES:5}           # 같은 (sessionId, detectedType) 이력 최소 간격 — 매 프레임 broadcast 폭주 방지
+
 springdoc:
   api-docs:
     enabled: ${SWAGGER_ENABLED:true}

@@ -697,6 +697,24 @@ SilverBridge는 노인(피보호자)과 그 가족(보호자)을 연결하는 �
   created_at / updated_at : 생성/수정 일시
 
 
+  [ anomaly_events — AI 이상감지 이력 ] (2026-07-13 추가, 1단계)
+  ─────────────────────────────
+  id            : 고유 번호
+  ward_id       : 카메라 소유 피보호자 (CASCADE — 탈퇴 시 이력도 삭제)
+  session_id    : 감지된 카메라 세션 (cameras.session_id 비정규화 — 카메라 삭제 후에도 판독)
+  detected_type : FIRE / SMOKE  (fall·weapon 은 AI 라이브 미탑재)
+  confidence    : 신뢰도
+  danger        : AI 위험 판정 플래그 (판정 근거 기록 — CONFIDENCE 폴백 적재분은 false)
+  detected_at   : AI 분석 시각(analyzedAt). NULL 허용 — AI 캐시 미스 페이로드엔 이 값이 없음
+                  (NULL = 분석 시각 불명, 수신 시각은 created_at)
+  created_at    : 백엔드 수신·적재 일시
+
+  ※ 적재 조건: AI WS(latest_analysis) 신호 중 danger=true (기본 DANGER 모드) 인 건만.
+    같은 (session_id, detected_type) 은 Redis 쿨다운 5분에 1건만 적재된다
+    (AI가 매 프레임 broadcast 하므로 쿨다운이 없으면 위험 1건에 이력 수백 개).
+  ※ 보호자 알림 발송은 2단계 (미구현).
+
+
 --------------------------------------------------------------------------------
   6. Redis 키 (임시 데이터)
 --------------------------------------------------------------------------------
@@ -739,6 +757,13 @@ SilverBridge는 노인(피보호자)과 그 가족(보호자)을 연결하는 �
     rate:{endpoint}:1m:{ip}      비밀번호 재설정 send/resend 이중 윈도우 — 분 카운터 (2026-05-23)
     rate:{endpoint}:1h:{ip}      동 시간 카운터. pw-reset-email/pw-reset-sms = 1분 10회/1시간 30회
                                  (미가입 응답 노출에 따른 자동화 enumeration 방어, 한쪽 초과 시 429)
+
+  ▶ 이상감지 (2026-07-13)
+    anomaly:cooldown:{sessionId}:{detectedType}
+                                 이상감지 이력 적재 쿨다운 (기본 5분, SET NX EX)
+                                 AI는 매 프레임(초당 여러 번) 분석 결과를 broadcast 하므로
+                                 이 키가 없으면 위험 1건이 이력 수백 행이 된다.
+                                 Redis 장애 시 fail-open (중복 이력 < 이력 유실)
 
   ▶ 기타
     character:expression:{wardId} 최근 표정 캐시 (조회 API용)
@@ -828,6 +853,17 @@ SilverBridge는 노인(피보호자)과 그 가족(보호자)을 연결하는 �
     누락 시 모든 누락 키를 모아 한 번에 IllegalStateException으로 시작 중단
   - 검증 통과 시 SHA-256 12자 fingerprint 로그 — 배포 간 env 변경 여부 비교용
     (예: "필수 환경변수 검증 통과: 11개 키 정상 (fingerprint=a3f9c2d1ee04)")
+
+  [ 이상감지 수신 환경변수 (2026-07-13, 1단계) ]
+  - AI_API_KEY                    AI 서버 API Key (x-api-key 헤더). .env.dev 로만 주입(평문 커밋 금지)
+                                  ※ 필수 검증 대상 아님 — 미설정 시 앱은 정상 기동하고
+                                    이상감지 구독만 비활성화 + WARN (기동을 막지 않는다)
+  - AI_WS_URL                     기본 wss://testai.gosky.kr/api/v1/ws/live
+  - ANOMALY_ENABLED               기본 true (false면 AI WS 미접속)
+  - ANOMALY_TRIGGER_MODE          DANGER(기본, AI danger==true만 인정 — 위험 판정 책임=AI 서버)
+                                  CONFIDENCE(폴백, AI danger 정식화 배포 지연 시에만 임시 전환)
+  - ANOMALY_CONFIDENCE_THRESHOLD  기본 0.6 (CONFIDENCE 모드 임계. AI 표시용 임계 0.35보다 높게)
+  - ANOMALY_COOLDOWN_MINUTES      기본 5 (같은 세션·종류 이력 최소 간격)
 
   [ CORS 허용 도메인 ]
   - 환경변수 APP_CORS_ORIGINS (쉼표 구분)로 허용 origin 리스트 설정
