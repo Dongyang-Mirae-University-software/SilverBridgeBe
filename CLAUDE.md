@@ -10,8 +10,9 @@
 - **인프라**: PostgreSQL + Flyway / Redis(캐시·세션) / WebSocket(실시간)
 - **보안·연동**: Spring Security, OAuth2(카카오), JWT(jjwt) / Firebase(FCM), Solapi(SMS), SMTP / springdoc-openapi(Swagger) / OWASP DependencyCheck
 - **메인 브랜치**: `dev` — push 시 CD 자동 배포 (§3 참조)
-- **도메인**: `kr.silverbridge.main.domain/<bounded-context>` = `admin`·`announcement`·`auth`·`connection`·`inquiry`·`notification`·`sos`·`user`. 공통 코드는 `global/`(aop·config·jwt·security·websocket 등).
+- **도메인**: `kr.silverbridge.main.domain/<bounded-context>` = `admin`·`announcement`·`anomaly`·`auth`·`camera`·`connection`·`inquiry`·`notification`·`sos`·`user`. 공통 코드는 `global/`(aop·config·jwt·security·websocket 등).
   - ⚠️ **도메인 로직을 `global`에 넣지 말 것** — 도메인 코드는 `domain/<context>/`.
+- **이상감지 수신**(anomaly, 2026-07-13, **1단계**): AI 서버는 웹훅이 없어 백엔드가 **AI WS를 클라이언트로 구독**(`AiLiveStreamSubscriber`, AI 무변경). 등록된 `cameras.session_id`만 subscribe → `latest_analysis` 판정 → Redis 쿨다운(5분) → `anomaly_events` 적재. 판정=`anomaly.trigger-mode`: **`DANGER`(기본, AI `danger==true`만 — 위험 판정 책임=AI)** / `CONFIDENCE`(폴백, AI danger 미배포 공백용). ⚠️ **AI 라이브 `danger`는 현재 항상 false** → DANGER 모드 이력 0건이 정상(미배포는 `[ANOMALY-DANGER-MISMATCH]` WARN으로 감지). **보호자 알림 발송은 2단계**(미구현 — FCM 고정 + 알림톡·SMS 선택, 설계는 `docs/(2026-07-13) design-anomaly-notification.md`). WS 연결 실패·`AI_API_KEY` 미설정은 **기동을 막지 않음**(구독만 비활성).
 - **알림 채널 추상화**(notification, 2026-05-31): 이벤트 → `NotificationDispatcher` → 사용자 설정 활성 채널 발송. 채널=`NotificationChannel` 전략(FCM·SMS 구현, KAKAO_ALIMTALK·EMAIL은 enum만 — 2·3단계). **새 채널 = 구현체 빈 추가**만(디스패처 자동 수집). WebSocket은 추상화 밖(항상 발송). **SMS 인증번호는 디스패처 미경유=필수**(설정 무시). 기본값 FCM ON(설정 행 없으면 적용·백필 불요). 설정 API `/api/user/me/notification-settings`(GET·PUT).
 
 ---

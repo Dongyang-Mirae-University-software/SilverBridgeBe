@@ -911,3 +911,14 @@ REST API Key 단독 대비 보안 강화 — 인가코드 탈취 시 토큰 발�
 - **성능 PASS**: 작성자명 `findAllById` 배치(N+1 없음), 인덱스 3종 조회패턴 정합.
 - **이슈**: 🔴/🟠 없음. 🟡 M-1 저장형 XSS 잠재(보호자 입력→관리자 화면, **FE 렌더링 의존** → SilverBridgeFe 점검 이관 권장). 🟢 생성 응답 200(201 아님)·반환타입 외형 불일치·작성 rate limit 없음(저권한). ℹ️ 탈퇴자 문의 CASCADE 삭제=의도(고객지원 이력 소실 유의).
 - **판정: PASS** — 조치 없이 배포 가능, M-1만 FE 후속 트래킹. 산출물 `docs/(2026-07-03) audit-spot-check-inquiry.md`.
+
+## [2026-07-13] AI 이상감지 WebSocket 수신 + 이력 (1단계, danger 기반)
+
+- **범위**: 수신·판정·이력까지. **보호자 알림 발송은 2단계**(별도) — 설계는 `docs/(2026-07-13) design-anomaly-notification.md`.
+- **수신**: AI 서버는 웹훅이 없고 자체 WS로 broadcast만 하므로, 백엔드가 **클라이언트로 구독**(`AiLiveStreamSubscriber`, AI 서버 무변경). `x-api-key` 헤더 인증, `ApplicationReadyEvent` 이후 접속 + 지수 백오프 재접속 — **연결 실패·키 미설정이 기동을 막지 않는다**(구독만 비활성).
+- **구독 범위**: 연결 직후 `{"action":"list"}` → **우리 `cameras`에 등록된 세션만** subscribe(미등록 세션은 구독조차 안 함 → 로그 폭주 차단). 세션 생성/종료 broadcast(`live_streams`)로 신규 카메라 자동 구독.
+- **판정**: `anomaly.trigger-mode` — **`DANGER`(기본)** = `danger==true`만 인정(위험 판정 책임=AI, AI 담당 협의). **`CONFIDENCE`(폴백)** = 신뢰도 임계(기본 0.6) — AI의 danger 정식화 배포 지연으로 이력 0건일 때 임시 전환용. `normal`·`unknown` 및 미탑재 종류(fall·weapon)는 무시.
+- **조용한 침묵 방지**: 라이브 경로의 AI `danger`는 현재 항상 false 하드코딩 → DANGER 모드에서 이력 0건이 정상이다. "고신뢰 감지인데 danger=false"가 지속되면 `[ANOMALY-DANGER-MISMATCH]` WARN(세션당 1분 스로틀)로 미배포를 드러낸다.
+- **중복 방지**: AI는 매 프레임(초당 여러 번) broadcast → Redis 쿨다운 `anomaly:cooldown:{sessionId}:{detectedType}` TTL 5분(SET NX EX). Redis 장애 시 fail-open(중복 이력 < 이력 유실).
+- **이력**: `V30__add_anomaly_events.sql` — `ward_id`(users FK CASCADE)·`session_id`·`detected_type`·`confidence`·`danger`·`detected_at`(**NULL 허용** — AI fallback 페이로드엔 `analyzedAt`이 없다. NULL = 분석 시각 불명, 수신 시각은 `created_at`)·`created_at`, 인덱스 `(ward_id, created_at DESC)`. `session_id`→`ward_id` 매핑은 camera 도메인 재사용(`CameraService.findWardIdBySessionId`), 미등록 세션은 스킵+WARN.
+- 테스트 3종(판정·이력 흐름·페이로드 파싱) 통과, 전체 build 회귀 0건. 산출물: `docs/(2026-07-13) feature-anomaly-detection-receiver.md`.

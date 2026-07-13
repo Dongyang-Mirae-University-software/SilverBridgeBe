@@ -125,6 +125,17 @@ public class CameraService {
                 .toList();
     }
 
+    /**
+     * AI 이상감지 신호의 {@code sessionId}를 소유 피보호자로 매핑한다(anomaly 도메인 협력용).
+     *
+     * <p>백엔드에 등록되지 않은 세션(직접 AI에 붙은 카메라 등)은 소유자를 알 수 없으므로 빈 값을 돌려주고,
+     * 호출부가 해당 신호를 버린다 — 소유권 없는 세션의 이력을 남기지 않는다.</p>
+     */
+    @Transactional(readOnly = true)
+    public Optional<String> findWardIdBySessionId(String sessionId) {
+        return cameraRepository.findBySessionId(sessionId).map(Camera::getWardId);
+    }
+
     // 전달된 deviceId가 본인 소유일 때만 기존 카메라로 인정 (타인/무효 토큰은 신규 발급 경로로)
     private Optional<Camera> findOwnedByDeviceId(String wardId, String deviceId) {
         if (deviceId == null || deviceId.isBlank()) {
