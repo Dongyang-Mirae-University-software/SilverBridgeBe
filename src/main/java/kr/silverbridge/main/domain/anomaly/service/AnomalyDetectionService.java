@@ -2,12 +2,17 @@ package kr.silverbridge.main.domain.anomaly.service;
 
 import kr.silverbridge.main.domain.anomaly.dto.AnomalySignal;
 import kr.silverbridge.main.domain.anomaly.entity.AnomalyEvent;
+import kr.silverbridge.main.domain.anomaly.event.AnomalyDetectedEvent;
 import kr.silverbridge.main.domain.anomaly.repository.AnomalyEventRepository;
+import kr.silverbridge.main.domain.camera.dto.CameraOwner;
 import kr.silverbridge.main.domain.camera.service.CameraService;
+import kr.silverbridge.main.domain.user.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.util.StringUtils;
 
 import java.util.Optional;
 
@@ -20,18 +25,24 @@ import java.util.Optional;
  * <p>미등록 세션은 애초에 구독하지 않으므로(구독 필터가 1차 방어) 여기까지 오는 경우는 드물다 —
  * 세션 등록 직후·삭제 직후의 경합 정도. 그때는 WARN만 남기고 버린다(소유자 없는 이력은 만들지 않는다).</p>
  *
- * <p><b>2단계 인계 지점</b>: 이력 저장 직후가 알림 이벤트({@code AnomalyDetectedEvent}) 발행 자리다.
- * SOS와 동일하게 AFTER_COMMIT 리스너가 보호자에게 발송하는 구조를 예정한다(이번 단계에서는 발행하지 않음).</p>
+ * <p><b>2단계(알림)</b>: 이력 저장 직후 {@link AnomalyDetectedEvent}를 발행한다. 실제 발송은
+ * {@code AnomalyNotificationListener}가 커밋 후(AFTER_COMMIT) 담당하므로, 발송이 실패하거나 느려도 이력은
+ * 롤백되지 않는다(SOS와 동일 패턴).</p>
  */
 @Slf4j
 @Service
 @RequiredArgsConstructor
 public class AnomalyDetectionService {
 
+    /** 피보호자 이름이 비어 있을 때 알림 문구에 쓰는 폴백 — "null님 댁…" 같은 문구를 막는다(SosService와 동일). */
+    private static final String FALLBACK_WARD_NAME = "보호 대상자";
+
     private final AnomalyJudge judge;
     private final AnomalyEventCooldown cooldown;
     private final CameraService cameraService;
     private final AnomalyEventRepository anomalyEventRepository;
+    private final UserRepository userRepository;
+    private final ApplicationEventPublisher eventPublisher;
 
     /**
      * 신호 1건을 처리한다. 이상감지가 아니거나(정상 프레임) 쿨다운·매핑에서 걸리면 아무것도 남기지 않는다.
@@ -50,15 +61,16 @@ public class AnomalyDetectionService {
             return Optional.empty();
         }
 
-        Optional<String> wardId = cameraService.findWardIdBySessionId(signal.sessionId());
-        if (wardId.isEmpty()) {
+        Optional<CameraOwner> owner = cameraService.findOwnerBySessionId(signal.sessionId());
+        if (owner.isEmpty()) {
             log.warn("[ANOMALY] 알 수 없는 세션 — 등록된 카메라가 없어 이력 스킵: sessionId={}, detectedType={}",
                     signal.sessionId(), signal.detectedType());
             return Optional.empty();
         }
+        String wardId = owner.get().wardId();
 
         AnomalyEvent event = anomalyEventRepository.save(AnomalyEvent.builder()
-                .wardId(wardId.get())
+                .wardId(wardId)
                 .sessionId(signal.sessionId())
                 .detectedType(signal.detectedType())
                 .confidence(signal.confidence())
@@ -70,7 +82,18 @@ public class AnomalyDetectionService {
                 event.getId(), event.getWardId(), event.getSessionId(),
                 event.getDetectedType(), event.getConfidence(), event.isDanger());
 
-        // 2단계: 여기서 AnomalyDetectedEvent 발행 → AFTER_COMMIT 리스너가 보호자에게 FCM(고정)·알림톡/SMS(선택) 발송
+        // 커밋 후 AnomalyNotificationListener가 보호자 전원 + 피보호자 본인에게 발송(FCM 고정 + SMS/알림톡 선택)
+        eventPublisher.publishEvent(new AnomalyDetectedEvent(
+                event.getId(), wardId, wardName(wardId),
+                signal.sessionId(), owner.get().label(), signal.detectedType()));
+
         return Optional.of(event);
+    }
+
+    // 알림 문구용 피보호자 이름. 사용자 행이 없거나 이름이 비어도 발송은 계속한다(문구만 폴백).
+    private String wardName(String wardId) {
+        return userRepository.findById(wardId)
+                .map(user -> StringUtils.hasText(user.getName()) ? user.getName() : FALLBACK_WARD_NAME)
+                .orElse(FALLBACK_WARD_NAME);
     }
 }

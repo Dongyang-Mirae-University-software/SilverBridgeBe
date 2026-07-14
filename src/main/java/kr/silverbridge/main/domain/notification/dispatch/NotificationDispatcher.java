@@ -9,6 +9,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 
 import java.util.EnumMap;
+import java.util.EnumSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -16,13 +17,15 @@ import java.util.Set;
 /**
  * 알림 라우터. 이벤트가 만든 {@link NotificationContent}를 사용자 설정에 따라 활성 채널로만 발송한다.
  *
- * <p>핵심 동작:</p>
+ * <p>발송 대상 채널은 {@link NotificationType#policy()}가 정한다:</p>
  * <ol>
- *   <li><b>선택 알림</b>({@link NotificationType#isMandatory()}==false) → 사용자 설정({@link NotificationSettingService})의 활성 채널로만 발송.</li>
- *   <li><b>필수 알림</b> → 사용자 설정을 무시하고 FCM 강제 발송, <b>실제 전달 실패 시</b> SMS 폴백(결과 기반, M-S2-1).</li>
- *   <li><b>채널별 실패 격리</b> → 각 채널 발송을 try/catch로 감싸 한 채널 실패가 다른 채널을 막지 않는다.</li>
- *   <li><b>미구현 채널 무시</b> → enabled여도 구현체(빈)가 없으면(KAKAO_ALIMTALK/EMAIL) 조용히 건너뛴다.</li>
+ *   <li>{@link NotificationType.Policy#SETTINGS_ONLY} → 사용자 설정({@link NotificationSettingService})의 활성 채널로만 발송.</li>
+ *   <li>{@link NotificationType.Policy#FORCED_PUSH_WITH_SMS_FALLBACK} → 설정 무시 FCM 강제 발송, <b>실제 전달 실패 시</b> SMS 폴백(결과 기반, M-S2-1).</li>
+ *   <li>{@link NotificationType.Policy#FORCED_PUSH_PLUS_SETTINGS} → FCM은 항상 + 나머지 채널은 설정대로. <b>SMS 폴백 없음</b>(이상감지).</li>
  * </ol>
+ *
+ * <p>공통: <b>채널별 실패 격리</b>(한 채널 실패가 다른 채널을 막지 않음), <b>미구현 채널 무시</b>
+ * (enabled여도 구현체 빈이 없으면 — KAKAO_ALIMTALK/EMAIL — 조용히 건너뜀).</p>
  *
  * <p>구현체는 {@code List<NotificationChannel>} 생성자 주입으로 자동 수집된다 — 새 채널 빈을 추가하면
  * 별도 등록 없이 라우팅 대상이 된다(전략 패턴).</p>
@@ -31,9 +34,9 @@ import java.util.Set;
 @Component
 public class NotificationDispatcher {
 
-    /** 필수 알림의 기본 강제 채널(푸시). 사용자 설정과 무관하게 항상 발송한다. */
-    private static final NotificationChannelType MANDATORY_PRIMARY = NotificationChannelType.FCM;
-    /** 필수 알림에서 푸시 전달이 실패했을 때만 쓰는 폴백 채널. */
+    /** 강제 발송 채널(푸시). 두 강제 정책 모두 사용자 설정과 무관하게 이 채널로 발송한다. */
+    private static final NotificationChannelType FORCED_PUSH = NotificationChannelType.FCM;
+    /** {@code FORCED_PUSH_WITH_SMS_FALLBACK}에서 푸시 전달이 실패했을 때만 쓰는 폴백 채널. */
     private static final NotificationChannelType MANDATORY_FALLBACK = NotificationChannelType.SMS;
 
     private final Map<NotificationChannelType, NotificationChannel> channels;
@@ -59,11 +62,15 @@ public class NotificationDispatcher {
      * @param content 발송할 제목/본문/부가데이터
      */
     public void dispatch(String userId, NotificationType type, NotificationContent content) {
-        if (type.isMandatory()) {
-            dispatchMandatory(userId, content);
-            return;
+        switch (type.policy()) {
+            case FORCED_PUSH_WITH_SMS_FALLBACK -> dispatchMandatory(userId, content);
+            case FORCED_PUSH_PLUS_SETTINGS -> dispatchForcedPushPlusSettings(userId, type, content);
+            case SETTINGS_ONLY -> dispatchBySettings(userId, type, content);
         }
+    }
 
+    /** 사용자 설정의 활성 채널로만 발송(연결·문의 알림). */
+    private void dispatchBySettings(String userId, NotificationType type, NotificationContent content) {
         Set<NotificationChannelType> targets = settingService.enabledChannels(userId);
         if (targets.isEmpty()) {
             log.debug("발송할 활성 채널 없음: userId={}, type={}", userId, type);
@@ -71,20 +78,55 @@ public class NotificationDispatcher {
         }
 
         NotificationRecipient recipient = recipientResolver.resolve(userId);
-
         for (NotificationChannelType channelType : targets) {
-            NotificationChannel channel = channels.get(channelType);
-            if (channel == null) {
-                // KAKAO_ALIMTALK / EMAIL 등 미구현 채널: 설정상 켜져 있어도 발송 수단이 없음
-                log.debug("미구현 채널 건너뜀: userId={}, channel={}", userId, channelType);
-                continue;
+            sendQuietly(channelType, recipient, content);
+        }
+    }
+
+    /**
+     * FCM 고정 + 나머지 채널은 사용자 설정대로(이상감지).
+     *
+     * <p>대상 = {@code {FCM} ∪ 사용자 활성 채널}. FCM은 사용자가 꺼도 발송하고, SMS·알림톡은 켠 경우에만 추가된다.
+     * <b>푸시 전달 실패해도 SMS로 폴백하지 않는다</b>(D-2) — 문자는 사용자가 선택하는 채널이라 폴백이 그 선택을
+     * 뒤집기 때문. 대신 미전달을 WARN으로 남겨 "아무에게도 안 갔는데 아무도 모르는" 침묵을 막는다.</p>
+     */
+    private void dispatchForcedPushPlusSettings(String userId, NotificationType type, NotificationContent content) {
+        Set<NotificationChannelType> targets = EnumSet.of(FORCED_PUSH);
+        targets.addAll(settingService.enabledChannels(userId));
+
+        NotificationRecipient recipient = recipientResolver.resolve(userId);
+
+        boolean pushDelivered = false;
+        for (NotificationChannelType channelType : targets) {
+            boolean sent = sendQuietly(channelType, recipient, content);
+            if (channelType == FORCED_PUSH) {
+                pushDelivered = sent;
             }
-            try {
-                channel.send(recipient, content);
-            } catch (Exception e) {
-                // 한 채널 실패가 다른 채널 발송을 막지 않도록 격리. 구조 결함 진단을 위해 스택 포함 (L-S2-6)
-                log.error("채널 발송 실패: userId={}, channel={}", userId, channelType, e);
-            }
+        }
+
+        if (!pushDelivered) {
+            // 토큰 없음·전 토큰 만료·발송 예외 — SMS 폴백을 하지 않는 정책이라 로그가 유일한 감지 수단이다.
+            log.warn("[NOTIFY-UNDELIVERED] 푸시 미전달(SMS 폴백 안 함 — 문자는 사용자 선택): userId={}, type={}",
+                    userId, type);
+        }
+    }
+
+    /** 채널 1건 발송. 미구현 채널은 건너뛰고, 발송 실패는 격리한다. 실제 전달됐으면 true. */
+    private boolean sendQuietly(NotificationChannelType channelType,
+                                NotificationRecipient recipient,
+                                NotificationContent content) {
+        NotificationChannel channel = channels.get(channelType);
+        if (channel == null) {
+            // KAKAO_ALIMTALK / EMAIL 등 미구현 채널: 설정상 켜져 있어도 발송 수단이 없음
+            log.debug("미구현 채널 건너뜀: userId={}, channel={}", recipient.userId(), channelType);
+            return false;
+        }
+        try {
+            return channel.send(recipient, content);
+        } catch (Exception e) {
+            // 한 채널 실패가 다른 채널 발송을 막지 않도록 격리. 구조 결함 진단을 위해 스택 포함 (L-S2-6)
+            log.error("채널 발송 실패: userId={}, channel={}", recipient.userId(), channelType, e);
+            return false;
         }
     }
 
@@ -99,7 +141,7 @@ public class NotificationDispatcher {
         NotificationRecipient recipient = recipientResolver.resolve(userId);
 
         boolean delivered = false;
-        NotificationChannel primary = channels.get(MANDATORY_PRIMARY);
+        NotificationChannel primary = channels.get(FORCED_PUSH);
         if (primary != null) {
             try {
                 delivered = primary.send(recipient, content);

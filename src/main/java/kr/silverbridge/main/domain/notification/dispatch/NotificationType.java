@@ -1,37 +1,51 @@
 package kr.silverbridge.main.domain.notification.dispatch;
 
 /**
- * 디스패처를 경유하는 알림 종류와 "필수/선택" 분류.
+ * 디스패처를 경유하는 알림 종류와 <b>채널 정책</b>({@link Policy}).
  *
- * <ul>
- *   <li><b>선택(mandatory=false)</b> — 사용자 알림 설정(채널 ON/OFF)을 따른다. 현재 연결 관련 알림 전부.</li>
- *   <li><b>필수(mandatory=true)</b> — 사용자 설정을 무시하고 강제 발송. 피보호자 긴급 SOS({@code WARD_SOS})가
- *       첫 사용처이며, 향후 이상감지 등 긴급 알림도 여기에 등록한다.</li>
- * </ul>
+ * <p>정책이 발송 대상 채널을 정한다 — 사용자 설정을 따를지, 무시하고 강제 발송할지, 둘을 섞을지.</p>
  *
  * <p>참고: SMS 인증번호(가입·비밀번호 재설정)는 애초에 디스패처를 경유하지 않고 동기 발송되므로,
- * "설정으로 끌 수 없음"이 구조적으로 보장된다 — 여기 필수 타입으로 둘 필요가 없다.</p>
+ * "설정으로 끌 수 없음"이 구조적으로 보장된다 — 여기 등록할 필요가 없다.</p>
  */
 public enum NotificationType {
-    CONNECTION_REQUEST(false),
-    CONNECTION_ACCEPTED(false),
-    CONNECTION_REFUSED(false),
-    CONNECTION_DISCONNECTED(false),
 
-    // 문의 답변 완료 → 작성자(보호자)에게 알림. 긴급하지 않으므로 선택(mandatory=false, 사용자 설정 따름).
-    INQUIRY_ANSWERED(false),
+    CONNECTION_REQUEST(Policy.SETTINGS_ONLY),
+    CONNECTION_ACCEPTED(Policy.SETTINGS_ONLY),
+    CONNECTION_REFUSED(Policy.SETTINGS_ONLY),
+    CONNECTION_DISCONNECTED(Policy.SETTINGS_ONLY),
 
-    // 피보호자 긴급 SOS. 보호자가 알림을 꺼도 반드시 받아야 하는 긴급 알림이라 필수(mandatory=true)로 분류한다.
-    WARD_SOS(true);
+    // 문의 답변 완료 → 작성자(보호자)에게 알림. 긴급하지 않으므로 사용자 설정을 따른다.
+    INQUIRY_ANSWERED(Policy.SETTINGS_ONLY),
 
-    private final boolean mandatory;
+    // 피보호자 긴급 SOS. 생명 관련이라 설정을 무시하고 강제 발송하며, 푸시 미전달 시 SMS로 폴백한다.
+    WARD_SOS(Policy.FORCED_PUSH_WITH_SMS_FALLBACK),
 
-    NotificationType(boolean mandatory) {
-        this.mandatory = mandatory;
+    // 이상감지(화재·연기). FCM은 끌 수 없고(고정), SMS·알림톡은 사용자가 켠 경우에만 추가 발송한다.
+    ANOMALY_DETECTED(Policy.FORCED_PUSH_PLUS_SETTINGS);
+
+    /** 알림 종류별 채널 결정 규칙. */
+    public enum Policy {
+        /** 사용자 설정의 활성 채널로만 발송. */
+        SETTINGS_ONLY,
+        /** 설정 무시하고 FCM 강제 발송, <b>전달 실패 시에만</b> SMS 폴백(WARD_SOS 전용). */
+        FORCED_PUSH_WITH_SMS_FALLBACK,
+        /**
+         * FCM은 설정과 무관하게 항상 발송 + 나머지 채널(SMS·알림톡·이메일)은 사용자가 켠 것만 추가 발송.
+         *
+         * <p>SMS 폴백은 <b>하지 않는다</b> — 문자는 사용자가 선택(과금·수신 동의)하는 채널이라, 푸시가
+         * 실패했다고 문자를 밀어 넣으면 그 선택을 무시하게 된다. 미전달은 로그로만 드러낸다(D-2).</p>
+         */
+        FORCED_PUSH_PLUS_SETTINGS
     }
 
-    /** true면 사용자 설정을 무시하고 강제 발송한다. */
-    public boolean isMandatory() {
-        return mandatory;
+    private final Policy policy;
+
+    NotificationType(Policy policy) {
+        this.policy = policy;
+    }
+
+    public Policy policy() {
+        return policy;
     }
 }

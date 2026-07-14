@@ -70,8 +70,9 @@ class SosNotificationListenerTest {
         assertThat(captor.getValue().body()).isEqualTo("김순자님이 긴급 도움을 요청했습니다.");
         assertThat(captor.getValue().data()).containsEntry("type", "WARD_SOS");
 
-        // 디스패처가 사용자 설정을 무시하고 강제 발송하도록 보장하는 분류(필수 알림)
-        assertThat(NotificationType.WARD_SOS.isMandatory()).isTrue();
+        // 디스패처가 사용자 설정을 무시하고 강제 발송(+미전달 시 SMS 폴백)하도록 보장하는 정책
+        assertThat(NotificationType.WARD_SOS.policy())
+                .isEqualTo(NotificationType.Policy.FORCED_PUSH_WITH_SMS_FALLBACK);
     }
 
     @Test

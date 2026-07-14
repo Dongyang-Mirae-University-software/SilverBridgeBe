@@ -2,9 +2,14 @@ package kr.silverbridge.main.domain.anomaly.service;
 
 import kr.silverbridge.main.domain.anomaly.dto.AnomalySignal;
 import kr.silverbridge.main.domain.anomaly.entity.AnomalyEvent;
+import kr.silverbridge.main.domain.anomaly.event.AnomalyDetectedEvent;
 import kr.silverbridge.main.domain.anomaly.repository.AnomalyEventRepository;
+import kr.silverbridge.main.domain.camera.dto.CameraOwner;
 import kr.silverbridge.main.domain.camera.service.CameraService;
+import kr.silverbridge.main.domain.user.entity.User;
+import kr.silverbridge.main.domain.user.repository.UserRepository;
 import kr.silverbridge.main.global.enums.DetectedType;
+import org.springframework.context.ApplicationEventPublisher;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -33,15 +38,28 @@ class AnomalyDetectionServiceTest {
     private static final String SESSION_ID = "ward_a9cC5f_k3m";
     private static final String WARD_ID = "WD0001";
 
+    private static final String CAMERA_LABEL = "거실";
+
     @Mock private AnomalyJudge judge;
     @Mock private AnomalyEventCooldown cooldown;
     @Mock private CameraService cameraService;
     @Mock private AnomalyEventRepository anomalyEventRepository;
+    @Mock private UserRepository userRepository;
+    @Mock private ApplicationEventPublisher eventPublisher;
 
     @InjectMocks private AnomalyDetectionService detectionService;
 
     private AnomalySignal signal(OffsetDateTime analyzedAt) {
         return new AnomalySignal(SESSION_ID, DetectedType.FIRE, 0.84, true, analyzedAt);
+    }
+
+    /** 소유 카메라(거실) + 피보호자 이름 조회를 성공 경로로 스터빙한다. */
+    private void givenRegisteredCamera() {
+        when(cameraService.findOwnerBySessionId(SESSION_ID))
+                .thenReturn(Optional.of(new CameraOwner(WARD_ID, CAMERA_LABEL)));
+        User ward = mock(User.class);
+        when(ward.getName()).thenReturn("김순자");
+        when(userRepository.findById(WARD_ID)).thenReturn(Optional.of(ward));
     }
 
     @Test
@@ -51,7 +69,7 @@ class AnomalyDetectionServiceTest {
         AnomalySignal signal = signal(analyzedAt);
         when(judge.isAnomaly(signal)).thenReturn(true);
         when(cooldown.tryAcquire(SESSION_ID, DetectedType.FIRE)).thenReturn(true);
-        when(cameraService.findWardIdBySessionId(SESSION_ID)).thenReturn(Optional.of(WARD_ID));
+        givenRegisteredCamera();
         when(anomalyEventRepository.save(any(AnomalyEvent.class))).thenAnswer(inv -> inv.getArgument(0));
 
         assertThat(detectionService.handle(signal)).isPresent();
@@ -73,7 +91,7 @@ class AnomalyDetectionServiceTest {
         AnomalySignal signal = signal(null);
         when(judge.isAnomaly(signal)).thenReturn(true);
         when(cooldown.tryAcquire(SESSION_ID, DetectedType.FIRE)).thenReturn(true);
-        when(cameraService.findWardIdBySessionId(SESSION_ID)).thenReturn(Optional.of(WARD_ID));
+        givenRegisteredCamera();
         when(anomalyEventRepository.save(any(AnomalyEvent.class))).thenAnswer(inv -> inv.getArgument(0));
 
         assertThat(detectionService.handle(signal)).isPresent();
@@ -84,6 +102,27 @@ class AnomalyDetectionServiceTest {
     }
 
     @Test
+    @DisplayName("이력이 적재되면 알림 이벤트를 발행한다 (문구에 필요한 이름·방 이름 포함)")
+    void anomaly_publishesNotificationEvent() {
+        AnomalySignal signal = signal(OffsetDateTime.now());
+        when(judge.isAnomaly(signal)).thenReturn(true);
+        when(cooldown.tryAcquire(SESSION_ID, DetectedType.FIRE)).thenReturn(true);
+        givenRegisteredCamera();
+        when(anomalyEventRepository.save(any(AnomalyEvent.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        detectionService.handle(signal);
+
+        ArgumentCaptor<AnomalyDetectedEvent> captor = ArgumentCaptor.forClass(AnomalyDetectedEvent.class);
+        verify(eventPublisher).publishEvent(captor.capture());
+        AnomalyDetectedEvent published = captor.getValue();
+        assertThat(published.wardId()).isEqualTo(WARD_ID);
+        assertThat(published.wardName()).isEqualTo("김순자");
+        assertThat(published.sessionId()).isEqualTo(SESSION_ID);
+        assertThat(published.cameraLabel()).isEqualTo(CAMERA_LABEL);
+        assertThat(published.detectedType()).isEqualTo(DetectedType.FIRE);
+    }
+
+    @Test
     @DisplayName("이상감지가 아니면 쿨다운·매핑도 타지 않고 이력도 남기지 않는다")
     void notAnomaly_skipped() {
         AnomalySignal signal = signal(OffsetDateTime.now());
@@ -91,7 +130,7 @@ class AnomalyDetectionServiceTest {
 
         assertThat(detectionService.handle(signal)).isEmpty();
 
-        verifyNoInteractions(cooldown, cameraService, anomalyEventRepository);
+        verifyNoInteractions(cooldown, cameraService, anomalyEventRepository, eventPublisher);
     }
 
     @Test
@@ -103,7 +142,8 @@ class AnomalyDetectionServiceTest {
 
         assertThat(detectionService.handle(signal)).isEmpty();
 
-        verifyNoInteractions(cameraService, anomalyEventRepository);
+        // 이력이 없으면 알림도 없다 — 쿨다운이 이력·알림을 함께 억제한다(2단계 알림은 이력 적재 건에만 발행)
+        verifyNoInteractions(cameraService, anomalyEventRepository, eventPublisher);
     }
 
     @Test
@@ -112,10 +152,10 @@ class AnomalyDetectionServiceTest {
         AnomalySignal signal = signal(OffsetDateTime.now());
         when(judge.isAnomaly(signal)).thenReturn(true);
         when(cooldown.tryAcquire(SESSION_ID, DetectedType.FIRE)).thenReturn(true);
-        when(cameraService.findWardIdBySessionId(SESSION_ID)).thenReturn(Optional.empty());
+        when(cameraService.findOwnerBySessionId(SESSION_ID)).thenReturn(Optional.empty());
 
         assertThat(detectionService.handle(signal)).isEmpty();
 
-        verifyNoInteractions(anomalyEventRepository);
+        verifyNoInteractions(anomalyEventRepository, eventPublisher);
     }
 }
