@@ -8,7 +8,7 @@ import lombok.*;
 import java.time.OffsetDateTime;
 
 @Entity
-@Table(name = "connections", indexes = {
+@Table(name = "connection", indexes = {
         @Index(name = "idx_connections_guardian_status_created_at", columnList = "guardian_id, status, created_at")
 })
 @Getter

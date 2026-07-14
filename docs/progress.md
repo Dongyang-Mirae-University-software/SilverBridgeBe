@@ -922,3 +922,18 @@ REST API Key 단독 대비 보안 강화 — 인가코드 탈취 시 토큰 발�
 - **중복 방지**: AI는 매 프레임(초당 여러 번) broadcast → Redis 쿨다운 `anomaly:cooldown:{sessionId}:{detectedType}` TTL 5분(SET NX EX). Redis 장애 시 fail-open(중복 이력 < 이력 유실).
 - **이력**: `V30__add_anomaly_events.sql` — `ward_id`(users FK CASCADE)·`session_id`·`detected_type`·`confidence`·`danger`·`detected_at`(**NULL 허용** — AI fallback 페이로드엔 `analyzedAt`이 없다. NULL = 분석 시각 불명, 수신 시각은 `created_at`)·`created_at`, 인덱스 `(ward_id, created_at DESC)`. `session_id`→`ward_id` 매핑은 camera 도메인 재사용(`CameraService.findWardIdBySessionId`), 미등록 세션은 스킵+WARN.
 - 테스트 3종(판정·이력 흐름·페이로드 파싱) 통과, 전체 build 회귀 0건. 산출물: `docs/(2026-07-13) feature-anomaly-detection-receiver.md`.
+
+## [2026-07-14] 테이블 명명 단수형 통일 (V31)
+
+- **결정**: 테이블명을 복수형 → **단수형**으로 통일. `connections→connection`, `cameras→camera`, `anomaly_events→anomaly_event`, `sos_events→sos_event`, `inquiries→inquiry`, `announcements→announcement`, `announcement_drafts→announcement_draft`, `admin_audit_logs→admin_audit_log`, `access_logs→access_log`, `fcm_tokens→fcm_token`, `refresh_tokens→refresh_token`, `user_notification_settings→user_notification_setting` (12개).
+- ⚠️ **`users`만 복수형 유지(의도적 예외)**: `user`는 PostgreSQL 예약어 — 테이블명으로 쓰면 모든 참조를 `"user"`로 인용해야 하고, 인용을 빠뜨린 `SELECT * FROM user`는 테이블이 아닌 세션 사용자를 뜻해 **조용히 오동작**한다. 그 함정을 감수할 이득이 없어 예외로 남김.
+- **변경 범위**: `V31__rename_tables_to_singular.sql`(ALTER TABLE RENAME 12건) + 엔티티 12개의 `@Table(name=...)`. **네이티브 SQL 0건**이라 그 외 코드 변경 없음(JPQL은 엔티티명 사용). FK·인덱스는 rename을 따라가므로 재생성 불필요 — 다만 제약·인덱스 **이름에는 복수형이 남는다**(예: `fk_cameras_ward`). 이름은 식별 라벨일 뿐 동작 무관이라 변경 폭을 줄이기 위해 그대로 둠.
+- ⚠️ **마이그레이션과 엔티티는 반드시 같이 배포**: `ddl-auto: validate`라 한쪽만 반영되면 앱이 기동하지 않는다.
+- **사전 검증**: 실제 dev DB에서 `BEGIN; ALTER TABLE … RENAME …; ROLLBACK;` 리허설로 12건 전부 성공 확인(데이터 무변경). 로컬 `./gradlew build` 회귀 0건.
+
+## [2026-07-14] dev 배포 경로 불일치 발견 — CD가 실제 dev 서버에 배포하지 않고 있었음
+
+- **증상**: PR #209(문의)·#213(카메라)·#214(이상감지) CD가 모두 **success**인데, 도메인이 물린 dev API(`api.devdmu.gosky.kr` → nginx → `127.0.0.1:6511` → skyserver `dmu-dev-api`)는 **4주째 옛 컨테이너**였고 DB도 **Flyway V27**에 정체(V28~V30 미적용).
+- **원인**: CD(`cd.yml`)는 `cd ~/SilverBridgeBe`로 들어가는데 **skyserver에는 그 경로도 GitHub Actions 러너도 없다**. 실제 서비스 중인 저장소는 `/home/apps/SilverBridgeSky/SilverBridgeBe`(수동 배포). 즉 CD는 **다른 머신**에 배포해 왔고 도메인이 가리키는 서버에는 아무 반영이 없었다.
+- **조치(임시)**: skyserver에서 수동 배포 — `git fetch origin dev` + `git reset --hard origin/dev`(divergent라 `pull` 불가, 2026-07-02와 동일 원인) → `docker compose -f docker-compose.dev.yml build/up -d api`. 결과: Flyway V28·V29·V30 적용 성공, 기동 에러 0건, `[ANOMALY] AI WS 연결됨` 확인.
+- **미결**: 운영 서버에는 CD를 두지 않기로 함 → **CD가 다른 머신에 조용히 배포하는 상태를 정리해야 한다**(cd.yml 비활성화 또는 대상 서버 명시). 방치 시 "머지=success인데 반영 안 됨"이 반복된다.

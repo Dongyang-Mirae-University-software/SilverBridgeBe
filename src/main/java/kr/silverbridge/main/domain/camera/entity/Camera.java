@@ -20,7 +20,7 @@ import lombok.NoArgsConstructor;
  * FK 대신 {@code String wardId}로만 저장(프로젝트 관례 — connections/inquiries 동일). createdAt/updatedAt은 {@link BaseTimeEntity}.</p>
  */
 @Entity
-@Table(name = "cameras",
+@Table(name = "camera",
         indexes = {
                 @Index(name = "idx_cameras_ward", columnList = "ward_id")
         },

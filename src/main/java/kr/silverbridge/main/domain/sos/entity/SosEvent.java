@@ -18,7 +18,7 @@ import java.time.OffsetDateTime;
  * {@code ON DELETE SET NULL}로 익명 보존된다(access_logs와 동일 정책).</p>
  */
 @Entity
-@Table(name = "sos_events")
+@Table(name = "sos_event")
 @Getter
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 @EntityListeners(AuditingEntityListener.class)

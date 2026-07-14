@@ -5,7 +5,7 @@ import kr.silverbridge.main.global.entity.BaseTimeEntity;
 import lombok.*;
 
 @Entity
-@Table(name = "fcm_tokens", indexes = {
+@Table(name = "fcm_token", indexes = {
         @Index(name = "idx_fcm_tokens_user_id", columnList = "user_id")
 })
 @Getter

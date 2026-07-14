@@ -27,7 +27,7 @@ import java.time.OffsetDateTime;
  * 나중에 "이 이력이 AI 판정이었나, 백엔드 임계 폴백이었나"를 사후 구분할 수 있다.</p>
  */
 @Entity
-@Table(name = "anomaly_events", indexes = {
+@Table(name = "anomaly_event", indexes = {
         @Index(name = "idx_anomaly_events_ward_created", columnList = "ward_id, created_at DESC")
 })
 @Getter

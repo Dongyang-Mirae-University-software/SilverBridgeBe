@@ -86,6 +86,7 @@
 
 ## 6. DB & 마이그레이션
 
+- **테이블 명명 = 단수형**(2026-07-14, V31). `connection`·`camera`·`anomaly_event`·`access_log` … ⚠️ **`users`만 예외로 복수형 유지** — `user`는 PostgreSQL 예약어라 모든 참조를 `"user"`로 인용해야 하고, 인용을 빠뜨린 쿼리는 테이블이 아닌 세션 사용자를 뜻해 조용히 오동작한다. 신규 테이블도 단수형으로.
 - 마이그레이션: `src/main/resources/db/migration/V*.sql` (Flyway). 스키마는 Flyway 단일 관리 — 빈 DB에 V1부터 순차 적용, 별도 schema.sql 시딩 없음(drift·baseline 충돌 방지).
 - ⚠️ **Spring Boot 4는 Flyway 자동설정이 분리됨** — `spring-boot-starter-flyway` 의존성이 없으면 마이그레이션을 조용히 건너뜀.
 - 로컬: `docker compose -f docker-compose.dev.yml up -d` (env: `.env.dev`). env 변경은 `restart`가 아닌 `up -d`로 재생성해야 반영됨.

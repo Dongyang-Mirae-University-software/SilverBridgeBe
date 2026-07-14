@@ -167,7 +167,7 @@ SilverBridge는 노인(피보호자)과 그 가족(보호자)을 연결하는 �
     → 기존 refreshToken은 즉시 무효화 (Refresh Token Rotation)
     → 폐기된 옛 refreshToken이 다시 들어왔는데 같은 사용자에게 다른
       refreshToken이 남아 있으면 도난 신호로 간주 → 해당 사용자의 모든
-      refreshToken 강제 폐기 + access_logs에 TOKEN_REUSE_DETECTED 기록 (H-3)
+      refreshToken 강제 폐기 + access_log에 TOKEN_REUSE_DETECTED 기록 (H-3)
     → POST /api/auth/refresh 도 1분 10회 rate limit 적용 (M-8)
 
   로그아웃:
@@ -272,7 +272,7 @@ SilverBridge는 노인(피보호자)과 그 가족(보호자)을 연결하는 �
   ※ Rate Limit(2026-05-23 갱신): send/resend 4개는 IP 이중 윈도우 1분 10회 / 1시간 30회.
     per-email 발송 상한 password:email:sendcount 1시간 10회(SMS sms:sendcount A-M3와 대칭).
   ※ POST /api/auth/password/reset 도 1분 10회 rate limit 적용 (M-8).
-  ※ 비밀번호 재설정 완료 시 access_logs에 IP/UA 포함 기록 (M-3).
+  ※ 비밀번호 재설정 완료 시 access_log에 IP/UA 포함 기록 (M-3).
 
 
   [ 3-5. 내 정보 관리 ]
@@ -313,11 +313,11 @@ SilverBridge는 노인(피보호자)과 그 가족(보호자)을 연결하는 �
     → 2단계 처리 (2026-05-26 soft delete→hard delete 전환):
       1) withdraw(): 본인 확인 + deactivate() + UserWithdrawnEvent 발행 → 커밋
          AFTER_COMMIT 리스너가 user 행이 살아있는 동안 연결 해제(상대 알림)·
-         FCM/refreshToken 정리·access_logs WITHDRAW 기록 처리
+         FCM/refreshToken 정리·access_log WITHDRAW 기록 처리
       2) purgeWithdrawnUser(): 리스너 완료 후 user 행 영구 삭제
     → 연관 데이터 (FK 제약, 마이그레이션 불필요):
-      · CASCADE 삭제: connections, fcm_tokens, refresh_tokens
-      · SET NULL 익명화: access_logs(감사 보존), announcements, announcement_drafts
+      · CASCADE 삭제: connection, fcm_token, refresh_token
+      · SET NULL 익명화: access_log(감사 보존), announcement, announcement_draft
       · 업로드 프로필 이미지 파일은 커밋 후 제거(외부 CDN URL이면 무시)
     → 같은 이메일/전화번호로 재가입 가능 (이전 soft delete는 INACTIVE 행이 남아 재가입 차단)
     → 비가역(복구 불가) — 접속로그 익명 기록만 잔존. 상세: PR #181
@@ -366,7 +366,7 @@ SilverBridge는 노인(피보호자)과 그 가족(보호자)을 연결하는 �
     ACTIVE(활성)   →  CANCELLED(해제)  [어느 쪽이든 해제 → 상대에게 알림]
 
   긴급 SOS (피보호자 전용):
-    → POST /api/ward/sos   → SOS 발생 이력 저장(sos_events) + 연결된 ACTIVE 보호자 전원에게
+    → POST /api/ward/sos   → SOS 발생 이력 저장(sos_event) + 연결된 ACTIVE 보호자 전원에게
                              긴급 알림 발송(WebSocket /topic/{보호자ID}/sos-triggered + FCM). (2026-06-09 추가)
                              · 필수 알림 — 보호자 알림 설정(ON/OFF)과 무관하게 무조건 발송
                              · 보호자 여러 명이면 전원 발송(한 명 실패가 다른 보호자 막지 않음)
@@ -394,7 +394,7 @@ SilverBridge는 노인(피보호자)과 그 가족(보호자)을 연결하는 �
                                           · 답변 완료 → 작성자에게 FCM 알림(선택 — 사용자 설정 따름,
                                             NotificationType.INQUIRY_ANSWERED, 기본 FCM ON). WebSocket 미발송.
 
-    테이블 inquiries(V28): user_id FK CASCADE(탈퇴 시 함께 삭제), answered_by FK SET NULL(관리자 삭제 시 답변 보존).
+    테이블 inquiry(V28): user_id FK CASCADE(탈퇴 시 함께 삭제), answered_by FK SET NULL(관리자 삭제 시 답변 보존).
     ※ 관리자 대시보드 "미처리 문의" 통계: 대시보드 API 자체가 아직 미구현이라 이번 범위 밖.
       InquiryRepository.countByStatus(WAITING) 를 제공하므로 대시보드 신설 시 즉시 연결 가능.
 
@@ -406,7 +406,7 @@ SilverBridge는 노인(피보호자)과 그 가족(보호자)을 연결하는 �
   [역할 분담]
   - 프론트엔드 : Firebase SDK 초기화 → 알림 권한 요청 → FCM 토큰 발급 →
                  백엔드 API 로 토큰 등록/삭제
-  - 백엔드      : 토큰을 DB 에 저장(fcm_tokens) → 이벤트 발생 시 저장된 토큰으로
+  - 백엔드      : 토큰을 DB 에 저장(fcm_token) → 이벤트 발생 시 저장된 토큰으로
                  Firebase Admin SDK 통해 푸시 발송 (이미 구현됨)
   - Firebase    : 같은 프로젝트(silverbridgebe) 를 프론트/백엔드 모두 공유
 
@@ -490,7 +490,7 @@ SilverBridge는 노인(피보호자)과 그 가족(보호자)을 연결하는 �
 
   [기본값 정책]
   설정 행이 없는 채널은 기본값 적용 — FCM은 기본 ON(기존 동작 보존), SMS/KAKAO/EMAIL은 기본 OFF.
-  → 기존/신규 사용자 백필 마이그레이션 불필요. (저장: user_notification_settings 테이블, V25)
+  → 기존/신규 사용자 백필 마이그레이션 불필요. (저장: user_notification_setting 테이블, V25)
 
   [API 명세]  (Swagger 태그: "알림 설정")
   설정 조회:
@@ -610,7 +610,7 @@ SilverBridge는 노인(피보호자)과 그 가족(보호자)을 연결하는 �
   ※ name 은 V18에서 VARCHAR(50)→VARCHAR(20) 축소. 신규 가입·프로필 수정 시 성별/생년월일/우편번호 필수입력.
 
 
-  [ refresh_tokens — 로그인 재발급 토큰 ]
+  [ refresh_token — 로그인 재발급 토큰 ]
   ─────────────────────────────
   id         : 고유 번호
   user_id    : 어떤 회원의 토큰인지 (users.id FK, CASCADE 삭제)
@@ -624,7 +624,7 @@ SilverBridge는 노인(피보호자)과 그 가족(보호자)을 연결하는 �
   ※ refresh token 재사용(도난) 감지 시 해당 회원 토큰 전부 강제 폐기 (H-3).
 
 
-  [ access_logs — 접근 로그 ]
+  [ access_log — 접근 로그 ]
   ─────────────────────────────
   id         : 고유 번호
   user_id    : 해당 회원 ID (탈퇴 시 NULL 보존)
@@ -640,16 +640,16 @@ SilverBridge는 노인(피보호자)과 그 가족(보호자)을 연결하는 �
   created_at : 발생 일시
 
 
-  [ sos_events — 피보호자 긴급 SOS 발생 이력 ] (2026-06-09 추가)
+  [ sos_event — 피보호자 긴급 SOS 발생 이력 ] (2026-06-09 추가)
   ─────────────────────────────
   id         : 고유 번호
   ward_id    : SOS를 발생시킨 피보호자 ID (탈퇴 시 NULL 보존 — 익명 감사 기록)
   created_at : 발생 일시
   ※ 발송된 보호자 목록은 저장하지 않음 — 알림은 이력 커밋 후 발송되며,
-    대상 보호자는 발송 시점의 ACTIVE connections에서 도출(정규화 유지).
+    대상 보호자는 발송 시점의 ACTIVE connection에서 도출(정규화 유지).
 
 
-  [ connections — 보호자-피보호자 연결 ]
+  [ connection — 보호자-피보호자 연결 ]
   ─────────────────────────────
   id           : 고유 번호
   guardian_id  : 보호자 회원 ID (CASCADE)
@@ -665,7 +665,7 @@ SilverBridge는 노인(피보호자)과 그 가족(보호자)을 연결하는 �
     CANCELLED 이후에는 재연결 가능.
 
 
-  [ announcements — 공지사항 ]
+  [ announcement — 공지사항 ]
   ─────────────────────────────
   id         : 고유 번호
   author_id  : 작성 관리자 ID (탈퇴 시 NULL)
@@ -677,7 +677,7 @@ SilverBridge는 노인(피보호자)과 그 가족(보호자)을 연결하는 �
   ※ 공지는 작성 즉시 게시됩니다 (별도 published 상태 없음).
 
 
-  [ admin_audit_logs — 관리자 작업 이력 ]
+  [ admin_audit_log — 관리자 작업 이력 ]
   ─────────────────────────────
   id         : 고유 번호
   admin_id   : 작업 수행 관리자 ID (FK 없음, 이력 보존)
@@ -688,7 +688,7 @@ SilverBridge는 노인(피보호자)과 그 가족(보호자)을 연결하는 �
   created_at : 작업 일시
 
 
-  [ fcm_tokens — 푸시 알림 토큰 ]
+  [ fcm_token — 푸시 알림 토큰 ]
   ─────────────────────────────
   id         : 고유 번호
   user_id    : 어떤 회원의 기기인지 (CASCADE)
@@ -697,11 +697,11 @@ SilverBridge는 노인(피보호자)과 그 가족(보호자)을 연결하는 �
   created_at / updated_at : 생성/수정 일시
 
 
-  [ anomaly_events — AI 이상감지 이력 ] (2026-07-13 추가, 1단계)
+  [ anomaly_event — AI 이상감지 이력 ] (2026-07-13 추가, 1단계)
   ─────────────────────────────
   id            : 고유 번호
   ward_id       : 카메라 소유 피보호자 (CASCADE — 탈퇴 시 이력도 삭제)
-  session_id    : 감지된 카메라 세션 (cameras.session_id 비정규화 — 카메라 삭제 후에도 판독)
+  session_id    : 감지된 카메라 세션 (camera.session_id 비정규화 — 카메라 삭제 후에도 판독)
   detected_type : FIRE / SMOKE  (fall·weapon 은 AI 라이브 미탑재)
   confidence    : 신뢰도
   danger        : AI 위험 판정 플래그 (판정 근거 기록 — CONFIDENCE 폴백 적재분은 false)
@@ -804,7 +804,7 @@ SilverBridge는 노인(피보호자)과 그 가족(보호자)을 연결하는 �
     (login·kakaoLogin·refresh 세 경로 일관, H-4)
 
   [ 관리자 보호 ]
-  - 공지사항 쓰기 작업은 admin_audit_logs 자동 기록 (AdminAuditLogService)
+  - 공지사항 쓰기 작업은 admin_audit_log 자동 기록 (AdminAuditLogService)
 
   [ 전화번호 변경 시 SMS 인증 필수 ]
   - PUT /api/user/me 에서 phone 변경 시 sms:verified 키 + nonce 확인
@@ -1204,7 +1204,7 @@ SilverBridge는 노인(피보호자)과 그 가족(보호자)을 연결하는 �
     - 스택   : FastAPI (Python) + PostgreSQL,  API Key 인증
     - 포트   : 6017 (AI 서버, 컨테이너 silverbridge-ai-server) / 6019 (전용 PG)
     - 주요 API (prefix /api/v1)
-        카메라       : /cameras (등록·목록·상세·수정·삭제·연결테스트)
+        카메라       : /camera (등록·목록·상세·수정·삭제·연결테스트)
         모델         : /models  (등록·목록·상세·활성화 등)
         스트림/이상감지: /stream-sessions, /live-streams/{id}/mjpeg,
                         /live-streams/{id}/latest-analysis

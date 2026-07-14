@@ -9,7 +9,7 @@ import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 import java.time.OffsetDateTime;
 
 @Entity
-@Table(name = "admin_audit_logs", indexes = {
+@Table(name = "admin_audit_log", indexes = {
         @Index(name = "idx_admin_audit_logs_admin_created", columnList = "admin_id, created_at")
 })
 @Getter
