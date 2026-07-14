@@ -16,6 +16,7 @@
 ### 워크플로우 (Workflow)
 | 스킬 | 설명 |
 |------|------|
+| [work-prompt](work-prompt/) | **구현·점검 요청 시 가장 먼저** — PHASE 구조 작업 프롬프트를 설계해 제시하고 "시작해" 승인 후 실행 (생성/점검 템플릿 2종) |
 | [git-commit](git-commit/) | Java 프로젝트용 컨벤셔널 커밋 메시지 작성 |
 | [changelog-generator](changelog-generator/) | git 커밋 이력으로부터 체인지로그 생성 |
 | [issue-triage](issue-triage/) | GitHub 이슈 분류 및 우선순위 정리 |
