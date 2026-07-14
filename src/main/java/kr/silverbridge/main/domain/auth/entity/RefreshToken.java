@@ -9,7 +9,7 @@ import java.time.OffsetDateTime;
 import java.util.concurrent.TimeUnit;
 
 @Entity
-@Table(name = "refresh_tokens")
+@Table(name = "refresh_token")
 @Getter
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 @EntityListeners(AuditingEntityListener.class)

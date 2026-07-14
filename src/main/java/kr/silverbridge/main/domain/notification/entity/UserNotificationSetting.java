@@ -14,7 +14,7 @@ import lombok.*;
  * <p>users FK는 {@code ON DELETE CASCADE}(V25)라 회원 탈퇴(hard delete) 시 자동 정리된다.</p>
  */
 @Entity
-@Table(name = "user_notification_settings", uniqueConstraints = {
+@Table(name = "user_notification_setting", uniqueConstraints = {
         @UniqueConstraint(name = "uq_user_notif_channel", columnNames = {"user_id", "channel_type"})
 }, indexes = {
         @Index(name = "idx_user_notif_user", columnList = "user_id")

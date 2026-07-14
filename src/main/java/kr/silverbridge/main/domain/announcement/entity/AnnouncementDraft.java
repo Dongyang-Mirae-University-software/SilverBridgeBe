@@ -5,7 +5,7 @@ import kr.silverbridge.main.global.entity.BaseTimeEntity;
 import lombok.*;
 
 @Entity
-@Table(name = "announcement_drafts")
+@Table(name = "announcement_draft")
 @Getter
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 @Builder

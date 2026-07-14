@@ -20,7 +20,7 @@ import java.time.OffsetDateTime;
  * createdAt/updatedAt은 {@link BaseTimeEntity}가 제공한다.</p>
  */
 @Entity
-@Table(name = "inquiries", indexes = {
+@Table(name = "inquiry", indexes = {
         @Index(name = "idx_inquiries_user_created", columnList = "user_id, created_at"),
         @Index(name = "idx_inquiries_status_created", columnList = "status, created_at"),
         @Index(name = "idx_inquiries_category", columnList = "category")
