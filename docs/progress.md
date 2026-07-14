@@ -931,9 +931,20 @@ REST API Key 단독 대비 보안 강화 — 인가코드 탈취 시 토큰 발�
 - ⚠️ **마이그레이션과 엔티티는 반드시 같이 배포**: `ddl-auto: validate`라 한쪽만 반영되면 앱이 기동하지 않는다.
 - **사전 검증**: 실제 dev DB에서 `BEGIN; ALTER TABLE … RENAME …; ROLLBACK;` 리허설로 12건 전부 성공 확인(데이터 무변경). 로컬 `./gradlew build` 회귀 0건.
 
-## [2026-07-14] dev 배포 경로 불일치 발견 — CD가 실제 dev 서버에 배포하지 않고 있었음
+## [2026-07-14] 배포 환경은 2개 — CD(vkcs-linux) / 수동(skyserver). 혼동 주의
 
-- **증상**: PR #209(문의)·#213(카메라)·#214(이상감지) CD가 모두 **success**인데, 도메인이 물린 dev API(`api.devdmu.gosky.kr` → nginx → `127.0.0.1:6511` → skyserver `dmu-dev-api`)는 **4주째 옛 컨테이너**였고 DB도 **Flyway V27**에 정체(V28~V30 미적용).
-- **원인**: CD(`cd.yml`)는 `cd ~/SilverBridgeBe`로 들어가는데 **skyserver에는 그 경로도 GitHub Actions 러너도 없다**. 실제 서비스 중인 저장소는 `/home/apps/SilverBridgeSky/SilverBridgeBe`(수동 배포). 즉 CD는 **다른 머신**에 배포해 왔고 도메인이 가리키는 서버에는 아무 반영이 없었다.
-- **조치(임시)**: skyserver에서 수동 배포 — `git fetch origin dev` + `git reset --hard origin/dev`(divergent라 `pull` 불가, 2026-07-02와 동일 원인) → `docker compose -f docker-compose.dev.yml build/up -d api`. 결과: Flyway V28·V29·V30 적용 성공, 기동 에러 0건, `[ANOMALY] AI WS 연결됨` 확인.
-- **미결**: 운영 서버에는 CD를 두지 않기로 함 → **CD가 다른 머신에 조용히 배포하는 상태를 정리해야 한다**(cd.yml 비활성화 또는 대상 서버 명시). 방치 시 "머지=success인데 반영 안 됨"이 반복된다.
+- **구성(의도된 것)**:
+  - **vkcs-linux** — **CD 자동 배포** 대상. 러너 `silverbridge-dev`(labels: self-hosted,dev)가 여기 있고 `cd.yml`이 `~/SilverBridgeBe`로 배포한다. 공개 도메인 없음(SSH 터널로 확인).
+  - **skyserver(gosky)** — `api.devdmu.gosky.kr`이 물린 **실사용 환경. CD 미적용 = 수동 배포**. 저장소 `/home/apps/SilverBridgeSky/SilverBridgeBe`, 컨테이너 `dmu-dev-api/db/redis`.
+- ⚠️ **혼동 포인트**: `dev` 머지 → CD success 는 **vkcs-linux 반영**일 뿐이다. **skyserver는 수동 배포하지 않으면 그대로다** — 실제로 PR #209(문의)·#213(카메라)·#214(이상감지) 머지 후에도 skyserver는 4주째 옛 컨테이너(Flyway V27)였다. "머지했는데 왜 안 보이지?"의 원인은 대개 이것.
+- **skyserver 수동 배포 절차** (CD 스크립트와 동일):
+  ```
+  cd /home/apps/SilverBridgeSky/SilverBridgeBe
+  git fetch origin dev && git reset --hard origin/dev   # pull(merge) 금지 — divergent 재발(2026-07-02)
+  docker compose -f docker-compose.dev.yml build api
+  docker compose -f docker-compose.dev.yml up -d api
+  docker image prune -f
+  ```
+  ※ `reset --hard`는 추적 파일만 되돌린다(서버의 untracked CSV/SQL 보존). `.env.dev`는 서버 로컬 파일이라 git에 없다 — `AI_API_KEY` 등은 서버에서 직접 관리.
+- **2026-07-14 skyserver 반영 결과**: V28·V29·V30·**V31**(단수형 rename) 전부 success, 기동 에러 0건, `[ANOMALY] AI WS 연결됨` 확인, 외부 `api.devdmu.gosky.kr/actuator/health` = 200 UP.
+- **접속**: skyserver = `ssh gosky`(ed25519 키). vkcs-linux = `ssh vkcs-linux`(키 인증 미설정 — 필요 시 `ssh-copy-id`).
