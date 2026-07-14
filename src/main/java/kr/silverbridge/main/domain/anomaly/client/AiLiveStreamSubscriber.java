@@ -138,7 +138,7 @@ public class AiLiveStreamSubscriber extends TextWebSocketHandler {
             if (sessionId == null || sessionId.isBlank() || subscribedSessions.contains(sessionId)) {
                 continue;
             }
-            if (cameraService.findWardIdBySessionId(sessionId).isEmpty()) {
+            if (cameraService.findOwnerBySessionId(sessionId).isEmpty()) {
                 log.debug("[ANOMALY] 미등록 세션 — 구독하지 않음: sessionId={}", sessionId);
                 continue;
             }

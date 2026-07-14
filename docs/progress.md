@@ -948,3 +948,13 @@ REST API Key 단독 대비 보안 강화 — 인가코드 탈취 시 토큰 발�
   ※ `reset --hard`는 추적 파일만 되돌린다(서버의 untracked CSV/SQL 보존). `.env.dev`는 서버 로컬 파일이라 git에 없다 — `AI_API_KEY` 등은 서버에서 직접 관리.
 - **2026-07-14 skyserver 반영 결과**: V28·V29·V30·**V31**(단수형 rename) 전부 success, 기동 에러 0건, `[ANOMALY] AI WS 연결됨` 확인, 외부 `api.devdmu.gosky.kr/actuator/health` = 200 UP.
 - **접속**: skyserver = `ssh gosky`(ed25519 키). vkcs-linux = `ssh vkcs-linux`(키 인증 미설정 — 필요 시 `ssh-copy-id`).
+
+## [2026-07-14] 이상감지 알림 2단계 — 보호자·본인 발송 (FCM 고정 + SMS 선택)
+
+- **범위**: 1단계(수신·판정·이력) 위에 **알림 발송**을 얹음. 이력 적재 → `AnomalyDetectedEvent` → AFTER_COMMIT 리스너가 **ACTIVE 보호자 전원 + 피보호자 본인**에게 WebSocket(`anomaly-detected`) + FCM/SMS 발송. 마이그레이션 없음(V31 최신, 스키마 그대로).
+- **채널 정책 확장**: `NotificationType`에 `Policy` 도입 — `SETTINGS_ONLY`(연결·문의) / `FORCED_PUSH_WITH_SMS_FALLBACK`(WARD_SOS, **기존 동작 그대로**) / `FORCED_PUSH_PLUS_SETTINGS`(신규 `ANOMALY_DETECTED` — FCM 고정 + SMS·알림톡은 사용자 설정대로). 디스패처 3분기. `isMandatory()` → `policy()`.
+- **결정**: ① 본인에게도 발송(화재는 당사자 대피 최우선, 본인 문구엔 대피 안내) ② **FCM 미전달 시 SMS 강제 폴백 안 함** — 문자는 사용자 선택(과금 동의)이라 폴백이 그 선택을 뒤집음. `[NOTIFY-UNDELIVERED]` WARN만. ※ SOS 폴백은 유지 ③ 알림톡은 2차 PR(템플릿 심사 리드타임).
+- **쿨다운 2층**: 이력(`AnomalyEventCooldown`, `(sessionId,type)` 5분) + 알림(`AnomalyNotificationCooldown`, `(userId,sessionId,type)` — **보호자 5분 / 본인 1분**). 둘 다 Redis fail-open(긴급 우선).
+- **AI 팀 합의(2026-07-14)**: 라이브 경로에서 **`confidence >= 0.6` 이면 `danger=true`** 로 채우기로 함 → 배포되면 현행 `DANGER` 모드가 곧바로 실동작(백엔드 코드 변경 불필요). 그 전까지 이력 0건이 정상이며 `[ANOMALY-DANGER-MISMATCH]` WARN으로 감지된다.
+- **테스트**: `./gradlew test` 278건 통과(실패 0). 디스패처 정책·리스너(수신자/쿨다운/격리)·이벤트 발행 검증 추가.
+- 상세: `docs/(2026-07-14) feature-anomaly-notification-phase2.md`

@@ -102,9 +102,12 @@ anomaly:
   api-key: ${AI_API_KEY:}                                   # .env.dev로만 주입(평문 커밋 금지). 미설정 시 구독 비활성 + WARN
   # 판정 기준: DANGER(기본, AI가 채운 danger 플래그만 신뢰 — 위험 판정 책임 = AI 서버)
   #            CONFIDENCE(폴백, AI danger 정식화 배포 지연으로 이력 0건일 때만 임시 전환)
+  # AI 팀 합의(2026-07-14): 라이브 경로에서 confidence >= 0.6이면 danger=true로 채운다 → 배포되면 DANGER 모드가 실동작
   trigger-mode: ${ANOMALY_TRIGGER_MODE:DANGER}
-  confidence-threshold: ${ANOMALY_CONFIDENCE_THRESHOLD:0.6} # CONFIDENCE 모드 임계. AI 표시용 임계(0.35)보다 높게
+  confidence-threshold: ${ANOMALY_CONFIDENCE_THRESHOLD:0.6} # CONFIDENCE 폴백 임계 + danger 불일치 경고 기준(AI 합의값과 동일하게 유지)
   cooldown-minutes: ${ANOMALY_COOLDOWN_MINUTES:5}           # 같은 (sessionId, detectedType) 이력 최소 간격 — 매 프레임 broadcast 폭주 방지
+  notify-cooldown-minutes: ${ANOMALY_NOTIFY_COOLDOWN_MINUTES:5}        # 보호자 알림 재발송 최소 간격
+  notify-self-cooldown-minutes: ${ANOMALY_NOTIFY_SELF_COOLDOWN_MINUTES:1} # 피보호자 본인 알림 재발송 최소 간격(대피 재촉 — 더 짧게)
 
 springdoc:
   api-docs:

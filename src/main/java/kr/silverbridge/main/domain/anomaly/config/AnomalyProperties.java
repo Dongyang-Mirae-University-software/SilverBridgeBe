@@ -47,6 +47,12 @@ public class AnomalyProperties {
     /** 같은 (sessionId, detectedType) 이력 적재 최소 간격(분). 매 프레임 broadcast로 인한 이력 폭주를 막는다. */
     private long cooldownMinutes = 5;
 
+    /** 보호자에게 같은 감지를 다시 알리기까지의 최소 간격(분). alarm fatigue 방지. */
+    private long notifyCooldownMinutes = 5;
+
+    /** 피보호자 본인에게 다시 알리기까지의 최소 간격(분). 현장 당사자라 대피 재촉을 위해 더 짧게 잡는다. */
+    private long notifySelfCooldownMinutes = 1;
+
     /** 재연결 백오프 최소 간격(초). */
     private long reconnectMinSeconds = 2;
 
