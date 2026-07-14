@@ -1,24 +1,51 @@
 # 설계안 — 이상감지 알림 (FCM 고정 + 알림톡·문자 선택)
 
-> 작성 2026-07-13 · 대상 저장소 SilverBridgeBe · 상태 **제안(미구현)**
+> 작성 2026-07-13 · 대상 저장소 SilverBridgeBe · 상태 **1단계 구현 완료 / 2단계(알림 발송) 진행 중**
 > 목적: AI 서버가 감지한 화재/연기 등 이상 상황을 **연결된 보호자에게 즉시 알림**한다.
 > 채널 정책(요구): **FCM = 고정(끌 수 없음)**, **카카오 알림톡 · SMS = 사용자가 선택**해서 추가 수신.
 > 선행: `camera` 도메인(PR #213, 소유권·SessionID 발급) — 이 설계는 그 위에 얹는다.
-> 갱신 이력: 초안 → **현판**(AI `danger==true` 트리거안 검토 → **트리거 모드**(`BACKEND_JUDGE`/`BOTH`/`AI_DANGER`) 설정 전환으로 수용, §2-3).
+> 갱신 이력: 초안 → 현판(트리거 모드 설정 전환 수용) → **2026-07-14 정정**(아래 §-1 — 1단계 구현 결과와 문서를 일치시킴).
 
 ---
 
-## 0. 지금 있는 것 / 없는 것
+## -1. 정정 (2026-07-14) — 이 문서와 실제 구현의 차이
+
+**1단계(수신·판정·이력)는 2026-07-13에 이미 머지됐다.** 그 과정에서 아래 항목이 설계와 달라졌으므로, **이 문서의 §2-2·§2-3·§3·§8을 그대로 읽고 구현하면 중복 생성·설계 되돌림이 발생한다.** 실제 코드가 기준이다.
+
+| 항목 | 이 문서(초안) | **실제 구현(기준)** |
+|---|---|---|
+| 트리거 모드 | `BACKEND_JUDGE`(기본) / `BOTH` / `AI_DANGER` 3개 | **`DANGER`(기본) / `CONFIDENCE`(폴백) 2개** — 위험 판정 책임을 AI로 확정(담당자 협의). 백엔드 판정은 AI danger 미배포 공백용 폴백으로 격하 |
+| 판정 필터 | 종류 + 종류별 임계(fire 0.60/smoke 0.70) + 지속성(15초 내 3회) | **종류 필터 + 모드별 조건만.** 지속성·종류별 임계는 **미구현**(단일 `confidence-threshold: 0.6`, CONFIDENCE 모드에서만 사용) |
+| 중복 제거 | `analyzedAt` 기준 dedup + 해시 폴백 | **미구현.** 매 프레임 반복은 **Redis 쿨다운**(`AnomalyEventCooldown`, `(sessionId, detectedType)` 5분)이 흡수 |
+| 이력/쿨다운 관계 | "이력은 항상 저장, 알림만 쿨다운" | **쿨다운이 이력 적재도 억제**한다(초당 수 회 broadcast라 동일 행 폭주를 막기 위함). 따라서 2단계 알림은 "이력이 적재된 건"에만 발송되며 **알림 쿨다운이 자동으로 따라온다** |
+| `anomaly_event` 스키마 | `camera_id`·`notified` 컬럼 | **없음.** 대신 `danger`(판정 근거 기록) 추가, `detected_at` nullable, 단수형 테이블명(V31 규칙) |
+| 마이그레이션 | V30 | **V30 적용 완료**(현 최신 V31). 새 테이블 필요 없음 |
+| 클래스명 | `AiLiveAnalysisSubscriber` | **`AiLiveStreamSubscriber`** |
+
+### 2단계 잔여 범위 (이번 PR)
+
+1. `AnomalyDetectedEvent` 발행 (`AnomalyDetectionService` 이력 저장 직후)
+2. `AnomalyNotificationCooldown` — **알림** 쿨다운(이력 쿨다운과 별개). 보호자 5분 / **본인 1분**
+3. `AnomalyNotificationListener` — AFTER_COMMIT + `@Async("notificationExecutor")`, WebSocket + 디스패처
+4. `NotificationType` **Policy 도입** + `NotificationDispatcher` 3분기 (§4)
+5. 테스트 (디스패처 정책·리스너)
+
+알림톡은 **2차 PR**로 분리(§5·D-4). 필요한 값: `pfId`, `templateId`, 승인 템플릿 원문(변수 포함), 버튼 유무, 발신번호, **대체발송 OFF 확인**.
+
+---
+
+## 0. 지금 있는 것 / 없는 것 *(초안 시점 기준 — 현재 상태는 §-1)*
 
 | | 상태 |
 |---|---|
 | 카메라 소유권(`cameras`, ward당 방별 N행, SessionID 발급) | ✅ 있음 (PR #213) |
 | FCM·SMS 발송 인프라(`NotificationDispatcher` + 채널 전략) | ✅ 있음 |
 | 긴급 알림 강제 발송(`WARD_SOS`, mandatory) | ✅ 있음 |
-| **AI → 백엔드 이상감지 전달 경로** | ❌ 없음 |
-| **위험 판정 로직** | ❌ 없음 (AI `danger` 필드는 **항상 false인 더미**) |
-| **이상감지 알림 타입·이력** | ❌ 없음 |
-| **카카오 알림톡 채널 구현체** | ❌ 없음 (enum 값만 존재 → 켜도 조용히 스킵됨) |
+| **AI → 백엔드 이상감지 전달 경로** | ✅ **구현됨**(1단계, `AiLiveStreamSubscriber`) |
+| **위험 판정 로직** | ✅ **구현됨**(1단계, `AnomalyJudge` — DANGER/CONFIDENCE) |
+| **이상감지 이력** | ✅ **구현됨**(1단계, `anomaly_event` V30) |
+| **이상감지 알림 타입·발송** | ❌ 없음 — **2단계 = 이번 PR** |
+| **카카오 알림톡 채널 구현체** | ❌ 없음 (enum 값만 존재 → 켜도 조용히 스킵됨) — 2차 PR |
 
 ---
 
@@ -74,6 +101,17 @@ AI 코드 실측:
 ### 2-3. 트리거 모드 (설정 전환)
 
 `danger` 정식화는 AI 팀 일정에 달렸으므로, **백엔드를 그 일정에 묶지 않는다.** 트리거 조건을 설정값 `silverbridge.anomaly.trigger-mode`로 전환 가능하게 둔다.
+
+> ⚠️ **아래 3모드 표는 초안이며 채택되지 않았다.** 실제 구현은 **2모드**다(§-1). 위험 판정 책임을 AI 서버로 확정하고, 백엔드 판정은 폴백으로 격하했다.
+>
+> | 모드 | 트리거 조건 | 언제 | 상태 |
+> |---|---|---|---|
+> | **`DANGER`** (기본) | AI `danger == true`만 신뢰 | 현재 기본값. 위험 판정 책임 = AI | ✅ 구현 |
+> | **`CONFIDENCE`** (폴백) | `confidence >= confidence-threshold`(0.6) | AI danger 미배포로 이력이 0건일 때만 임시 전환 | ✅ 구현 |
+>
+> AI 라이브 `danger`는 현재 항상 false라 **DANGER 모드에서 이력 0건이 정상**이며, 이 침묵은 `[ANOMALY-DANGER-MISMATCH]` WARN(세션당 1분 스로틀)으로 드러난다.
+
+*(이하 초안 — 기록용)*
 
 | 모드 | 트리거 조건 | 언제 |
 |---|---|---|
@@ -218,39 +256,55 @@ targets = {FCM} ∪ (settingService.enabledChannels(userId) \ {FCM})
 
 ---
 
-## 7. 결정이 필요한 사항
+## 7. 결정 사항 (2026-07-14 확정)
 
-| # | 질문 | 권장안 |
+| # | 질문 | **결정** |
 |---|---|---|
-| **D-0** | **트리거 모드**(§2-3) — `danger==true`로 알릴 것인가? | **`BACKEND_JUDGE`로 시작**(AI 무변경, 즉시 동작). 동시에 AI 팀에 danger 정식화를 요청하고, 배포되면 **`BOTH`로 전환**(danger 신호 + 백엔드 가드 유지). `AI_DANGER` 단독은 현장 검증 후에만 |
-| **D-1** | 피보호자 **본인에게도** 이상감지 알림? | **보낸다**(FCM). 화재는 당사자 대피가 최우선. 단 본인 알림엔 쿨다운을 더 짧게(1분) 둘 수도 |
-| **D-2** | FCM **전달 실패**(토큰 만료 등) 시 SMS 강제 폴백? | **하지 않는다**(요구대로 문자는 선택). 대신 `[ANOMALY-UNDELIVERED]` WARN 로깅. ※ SOS는 기존대로 폴백 유지 |
-| **D-3** | 알림 문구 톤 — "감지되었습니다" vs "의심됩니다" | 초기 오탐률 미검증이므로 **"감지되었습니다"로 시작하되 오탐 잦으면 재검토** |
-| **D-4** | 알림톡 1차 포함? | **2차로 분리**(템플릿 심사 리드타임) |
-| **D-5** | 백엔드 인스턴스가 늘어나면 WS 구독자도 중복 → 알림 중복 | 현재 단일 컨테이너라 문제없음. 스케일아웃 시엔 Redis 쿨다운 키가 1차 방어, 정식 해법은 구독자 leader election 또는 웹훅(안 B) 전환 |
+| **D-0** | **트리거 모드**(§2-3) — `danger==true`로 알릴 것인가? | ✅ **`DANGER`(AI 판정 신뢰) 유지** — 1단계에서 확정·구현됨. 초안의 `BACKEND_JUDGE`는 채택되지 않았고, 백엔드 임계 판정은 `CONFIDENCE` 폴백으로만 남는다. AI가 danger를 정식화하면 그대로 동작 |
+| **D-1** | 피보호자 **본인에게도** 이상감지 알림? | ✅ **보낸다.** 화재는 당사자 대피가 최우선. 수신자 = ACTIVE 보호자 전원 + **피보호자 본인**. 알림 쿨다운은 **본인 1분 / 보호자 5분** |
+| **D-2** | FCM **전달 실패**(토큰 만료 등) 시 SMS 강제 폴백? | ✅ **하지 않는다.** 문자는 사용자 선택(과금·수신 동의) — 폴백은 그 의사를 무시한다. 전달 실패 시 WARN 로깅으로 침묵만 드러낸다. ※ SOS(`WARD_SOS`)의 기존 폴백은 **그대로 유지** |
+| **D-3** | 알림 문구 톤 — "감지되었습니다" vs "의심됩니다" | ✅ **"감지되었습니다"** — 시니어 대상 모호한 완곡어법 금지 원칙. 오탐률 확인 후 재검토 |
+| **D-4** | 알림톡 1차 포함? | ✅ **2차 PR로 분리.** 카카오 알림톡은 이 프로젝트에서 **사용 이력이 없다**(카카오 연동은 OAuth 로그인뿐). 채널 개설·발신 프로필·**템플릿 사전 심사**가 선행돼야 하며, 구현체 없이 enum만 켜면 "선택했는데 아무것도 안 오는" UI가 된다 |
+| **D-5** | 백엔드 인스턴스가 늘어나면 WS 구독자도 중복 → 알림 중복 | ✅ **현재 단일 컨테이너 전제.** Redis 쿨다운 키가 1차 방어. 스케일아웃 시 구독자 leader election 또는 웹훅(안 B) 전환 |
 
 ---
 
-## 8. 작업 목록 (1차 PR 기준)
+## 8. 작업 목록
 
-- `V30__add_anomaly_events.sql` — 테이블 + FK(CASCADE) + 인덱스(`ward_id`, `detected_at`)
-- `domain/anomaly/entity/AnomalyEvent.java`, `repository/AnomalyEventRepository.java`
-- `domain/anomaly/service/AnomalyJudge.java` — §2 판정(트리거 모드 분기 + 종류·임계·지속성), 세션별 슬라이딩 윈도우, `analyzedAt` 부재 시 해시 폴백 중복 제거
-- `domain/anomaly/service/AnomalyService.java` — 이력 저장 + `AnomalyDetectedEvent` 발행
-- `domain/anomaly/service/AnomalyNotificationCooldown.java` — Redis, `SosNotificationCooldown` 패턴
-- `domain/anomaly/listener/AnomalyNotificationListener.java` — AFTER_COMMIT + `@Async("notificationExecutor")`, WS + 디스패처
-- `domain/anomaly/client/AiLiveAnalysisSubscriber.java` — AI WS 상시 구독·재접속(백오프), `cameras.session_id` 매칭 필터
-- `notification/dispatch/NotificationType.java` — `Policy` 도입(+`NotificationDispatcher` 3분기)
-- 설정: `silverbridge.anomaly.{trigger-mode, fire-threshold, smoke-threshold, sustain-count, sustain-window-sec, cooldown-sec}`, `AI_API_KEY`·`AI_WS_URL`(`.env.dev` 주입, 평문 커밋 금지)
-- 테스트: `AnomalyJudge`(임계 미달/지속성 미달/중복 analyzedAt/`analyzedAt` 부재 fallback/확정 · **모드별**: `BACKEND_JUDGE`는 danger=false여도 확정, `AI_DANGER`는 danger=false면 미확정), `NotificationDispatcher`(FORCED_PUSH_PLUS_SETTINGS에서 FCM OFF여도 FCM 발송 + SMS OFF면 미발송), 리스너(쿨다운 시 이력만 저장)
-- **AI 팀 요청 티켓**: 라이브 경로 `danger` 정식화(§2-3 계약) — 백엔드 1차 PR과 **병렬 진행**, 완료 시 `trigger-mode: BOTH` 전환
+### 1단계 — 수신·판정·이력 ✅ 완료 (2026-07-13)
+
+- ✅ `V30__add_anomaly_events.sql` (테이블명은 V31에서 단수형 `anomaly_event`로 통일)
+- ✅ `domain/anomaly/entity/AnomalyEvent.java`, `repository/AnomalyEventRepository.java`
+- ✅ `domain/anomaly/service/AnomalyJudge.java` — DANGER/CONFIDENCE 분기 + 종류 필터 + danger 불일치 WARN (**지속성·종류별 임계는 미채택**)
+- ✅ `domain/anomaly/service/AnomalyDetectionService.java` — 판정 → 쿨다운 → sessionId→wardId 매핑 → 이력 적재
+- ✅ `domain/anomaly/service/AnomalyEventCooldown.java` — Redis, **이력** 쿨다운 5분(매 프레임 broadcast 흡수)
+- ✅ `domain/anomaly/client/AiLiveStreamSubscriber.java` + `AnomalySignalParser` — WS 상시 구독·재접속(지수 백오프), 등록된 `session_id`만 구독
+- ✅ 설정: `anomaly.{enabled, ws-url, api-key, trigger-mode, confidence-threshold, cooldown-minutes, reconnect-*}`, `AI_API_KEY`·`AI_WS_URL`(`.env.dev` 주입)
+- ✅ 테스트: `AnomalyJudgeTest`, `AnomalyDetectionServiceTest`, `AnomalySignalParserTest`
+
+### 2단계 — 알림 발송 (이번 PR)
+
+- `domain/anomaly/event/AnomalyDetectedEvent.java` — 이력 저장 직후 발행(`AnomalyDetectionService`)
+- `domain/anomaly/service/AnomalyNotificationCooldown.java` — Redis, **알림** 쿨다운(보호자 5분 / 본인 1분). 이력 쿨다운(`AnomalyEventCooldown`)과 별개 컴포넌트
+- `domain/anomaly/listener/AnomalyNotificationListener.java` — AFTER_COMMIT + `@Async("notificationExecutor")`, WebSocket(`anomaly-detected`) + 디스패처, 수신자별 try/catch 실패 격리
+- `notification/dispatch/NotificationType.java` — `Policy` 도입 + `ANOMALY_DETECTED(FORCED_PUSH_PLUS_SETTINGS)` (+`NotificationDispatcher` 3분기). **기존 6타입 런타임 동작 100% 보존**(`WARD_SOS`의 SMS 폴백 포함)
+- 테스트: `NotificationDispatcher`(FORCED_PUSH_PLUS_SETTINGS — FCM OFF여도 FCM 발송 / SMS OFF면 미발송 / SMS ON이면 추가 발송 / **FCM 미전달이어도 SMS 폴백 없음**), `AnomalyNotificationListener`(보호자 전원 + 본인 발송, 쿨다운 시 생략, 한 명 실패가 나머지를 막지 않음)
+
+### 3단계(2차 PR) — 카카오 알림톡
+
+- `KakaoAlimtalkNotificationChannel implements NotificationChannel` (빈 추가만 — 디스패처 수정 불필요)
+- 선행(코드 밖): 카카오 비즈니스 채널 + Solapi 발신 프로필(`pfId`) + **템플릿 사전 심사**(`templateId`, 승인 문구 원문·변수·버튼), **Solapi 대체발송(SMS) OFF**
+
+### AI 팀 요청 계약 (병렬)
+
+라이브 경로에서 `danger = detectedType ∈ {fire,smoke} && confidence >= threshold`로 채울 것(구 경로 `detection_service.py:27`과 동일식). **페이로드 스키마 변경 불필요 — 기존 필드를 실제 값으로 채우기만 하면 된다.** 배포 전까지 DANGER 모드 이력은 0건이 정상이며, 공백을 메워야 하면 `anomaly.trigger-mode=CONFIDENCE`로 임시 전환한다.
 
 ---
 
 ## 9. 함께 지켜야 할 기존 불변 규칙
 
 - **AI `danger` 필드를 무조건 신뢰해 트리거하지 말 것** — 라이브 경로에서 **현재 항상 false인 더미**다. AI가 정식화하기 전까지 이 값에 의존하는 트리거는 알림 0건(조용한 침묵)을 뜻한다. 전환은 `trigger-mode` 설정으로만(§2-3).
-- **이력은 항상, 알림은 쿨다운** — SOS와 동일. 쿨다운이 이력 저장을 막으면 안 된다.
+- ~~**이력은 항상, 알림은 쿨다운**~~ → **정정(§-1)**: 1단계는 매 프레임 broadcast로 인한 동일 행 폭주를 막기 위해 **이력 적재 자체에 쿨다운**(`AnomalyEventCooldown`, 5분)을 뒀다. 2단계 알림은 "이력이 적재된 건"에서만 발행되므로 알림 쿨다운은 그 위에 **추가로**(본인 1분) 얹는다.
 - **WebSocket은 채널 추상화 밖** — 사용자 설정과 무관하게 항상 발송(`CLAUDE.md` §1).
 - **도메인 로직을 `global`에 넣지 말 것** — AI WS 클라이언트도 `domain/anomaly/client`에 둔다.
 - **알림 발송은 AFTER_COMMIT + `@Async`** — 발송 실패가 이력 트랜잭션을 롤백시키면 안 된다.
