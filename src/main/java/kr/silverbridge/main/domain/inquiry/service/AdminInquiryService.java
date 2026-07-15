@@ -109,10 +109,17 @@ public class AdminInquiryService {
         return userRepository.findById(userId).orElse(null);
     }
 
-    // 검색어 정규화 — 공백만 있거나 빈 문자열은 "검색 안 함"(null)으로 취급
+    /**
+     * 검색어 정규화 — 공백만 있거나 빈 문자열은 "검색 안 함"(null)으로 취급하고,
+     * LIKE 와일드카드({@code %}·{@code _})는 이스케이프해 <b>입력한 문자 그대로</b> 검색되게 한다.
+     * (쿼리는 {@code ESCAPE '\'}를 선언한다. 인젝션은 파라미터 바인딩으로 이미 차단 — 검색 정확도 문제다.)
+     */
     private String normalize(String keyword) {
         if (keyword == null) return null;
         String trimmed = keyword.trim();
-        return trimmed.isEmpty() ? null : trimmed;
+        if (trimmed.isEmpty()) return null;
+        return trimmed.replace("\\", "\\\\")
+                .replace("%", "\\%")
+                .replace("_", "\\_");
     }
 }

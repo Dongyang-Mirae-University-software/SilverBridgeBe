@@ -58,8 +58,8 @@ public enum ErrorCode {
 
     // 문의(고객센터)
     INQUIRY_NOT_FOUND(HttpStatus.NOT_FOUND, "문의를 찾을 수 없습니다."),
-    // 타인 문의 접근 — 존재 노출 방지를 위해 NOT_FOUND 로 위장 (IDOR 차단)
-    INQUIRY_NOT_AUTHORIZED(HttpStatus.NOT_FOUND, "문의를 찾을 수 없습니다."),
+    // 타인 문의 접근 — 무슨 일이 일어났는지 그대로 안내한다(시니어 UX 우선, 2026-07-14 정책)
+    INQUIRY_NOT_AUTHORIZED(HttpStatus.FORBIDDEN, "본인이 작성한 문의만 볼 수 있습니다."),
     INQUIRY_ALREADY_ANSWERED(HttpStatus.CONFLICT, "이미 답변이 완료된 문의입니다."),
 
     // 카카오 OAuth
@@ -83,8 +83,10 @@ public enum ErrorCode {
     API_NOT_FOUND(HttpStatus.NOT_FOUND, "요청하신 API를 찾을 수 없습니다."),
     FILE_SIZE_EXCEEDED(HttpStatus.BAD_REQUEST, "파일 크기는 5MB를 초과할 수 없습니다."),
 
-    // 카메라(이상감지) — 없거나 본인 소유가 아니면 404 위장으로 IDOR 차단
-    CAMERA_NOT_FOUND(HttpStatus.NOT_FOUND, "카메라를 찾을 수 없습니다.");
+    // 카메라(이상감지)
+    CAMERA_NOT_FOUND(HttpStatus.NOT_FOUND, "카메라를 찾을 수 없습니다."),
+    // 타인 카메라 접근 — 무슨 일이 일어났는지 그대로 안내한다(시니어 UX 우선, 2026-07-14 정책)
+    CAMERA_NOT_AUTHORIZED(HttpStatus.FORBIDDEN, "본인이 등록한 카메라만 사용할 수 있습니다.");
 
     private final HttpStatus status;
     private final String message;

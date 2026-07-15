@@ -47,7 +47,7 @@ public class GuardianCameraController {
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "인증 토큰 없음 또는 만료", content = @Content),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "보호자 권한 필요", content = @Content)
     })
-    @GetMapping("/api/guardian/cameras")
+    @GetMapping("/api/guardian/camera")
     public ResponseEntity<ApiResponse<List<GuardianCameraView>>> getConnectedWardCameras(
             @AuthenticationPrincipal String guardianId) {
         return ResponseEntity.ok(ApiResponse.ok(cameraService.getConnectedWardCameras(guardianId)));

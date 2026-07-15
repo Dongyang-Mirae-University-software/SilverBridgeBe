@@ -82,10 +82,10 @@ class NotificationDispatcherTest {
     }
 
     @Test
-    @DisplayName("미구현 채널(KAKAO_ALIMTALK)만 켜져 있으면 아무것도 발송하지 않고 예외도 없다")
+    @DisplayName("구현체 없는 채널(EMAIL)만 켜져 있으면 아무것도 발송하지 않고 예외도 없다")
     void 미구현채널_무시() {
         given(settingService.enabledChannels(USER_ID))
-                .willReturn(EnumSet.of(NotificationChannelType.KAKAO_ALIMTALK));
+                .willReturn(EnumSet.of(NotificationChannelType.EMAIL));
 
         dispatcher.dispatch(USER_ID, NotificationType.CONNECTION_REQUEST, content);
 

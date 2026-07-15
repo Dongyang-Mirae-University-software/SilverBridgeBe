@@ -25,7 +25,7 @@ import java.util.Set;
  * </ol>
  *
  * <p>공통: <b>채널별 실패 격리</b>(한 채널 실패가 다른 채널을 막지 않음), <b>미구현 채널 무시</b>
- * (enabled여도 구현체 빈이 없으면 — KAKAO_ALIMTALK/EMAIL — 조용히 건너뜀).</p>
+ * (enabled여도 구현체 빈이 없거나 설정이 꺼져 있으면 — EMAIL·알림톡 템플릿 미승인 — 조용히 건너뜀).</p>
  *
  * <p>구현체는 {@code List<NotificationChannel>} 생성자 주입으로 자동 수집된다 — 새 채널 빈을 추가하면
  * 별도 등록 없이 라우팅 대상이 된다(전략 패턴).</p>
@@ -117,7 +117,7 @@ public class NotificationDispatcher {
                                 NotificationContent content) {
         NotificationChannel channel = channels.get(channelType);
         if (channel == null) {
-            // KAKAO_ALIMTALK / EMAIL 등 미구현 채널: 설정상 켜져 있어도 발송 수단이 없음
+            // EMAIL 등 미구현 채널: 설정상 켜져 있어도 발송 수단이 없음
             log.debug("미구현 채널 건너뜀: userId={}, channel={}", recipient.userId(), channelType);
             return false;
         }

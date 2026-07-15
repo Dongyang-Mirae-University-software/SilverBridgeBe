@@ -1,10 +1,12 @@
 package kr.silverbridge.main.domain.anomaly.client;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.annotation.PreDestroy;
 import kr.silverbridge.main.domain.anomaly.config.AnomalyProperties;
 import kr.silverbridge.main.domain.anomaly.service.AnomalyDetectionService;
+import kr.silverbridge.main.domain.camera.event.CameraRegisteredEvent;
 import kr.silverbridge.main.domain.camera.service.CameraService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -24,6 +26,8 @@ import java.io.IOException;
 import java.net.URI;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.HashSet;
+import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 
@@ -57,6 +61,9 @@ public class AiLiveStreamSubscriber extends TextWebSocketHandler {
     private final CameraService cameraService;
     private final ObjectMapper objectMapper;
     private final TaskScheduler taskScheduler;
+
+    /** AI에 세션 목록을 요청하는 페이로드(고정 문자열 — 변수 삽입 없음). */
+    private static final String LIST_ACTION = "{\"action\":\"list\"}";
 
     /** 현재 구독 중인 세션 — 재연결 시 초기화된다(서버 측 구독 상태가 날아가므로). */
     private final Set<String> subscribedSessions = ConcurrentHashMap.newKeySet();
@@ -110,7 +117,7 @@ public class AiLiveStreamSubscriber extends TextWebSocketHandler {
         this.reconnectAttempts = 0;
         subscribedSessions.clear();   // 재연결이면 서버 측 구독이 사라졌으므로 다시 구독해야 한다
         log.info("[ANOMALY] AI WS 연결됨 — 세션 목록 요청");
-        send("{\"action\":\"list\"}");
+        send(LIST_ACTION);
     }
 
     @Override
@@ -128,24 +135,68 @@ public class AiLiveStreamSubscriber extends TextWebSocketHandler {
         }
     }
 
-    /** AI가 알려준 세션 목록 중 백엔드에 등록된(=소유자를 아는) 카메라만 구독한다. */
+    /**
+     * 카메라가 등록·재등록되면 AI 세션 목록을 다시 요청한다.
+     *
+     * <p>AI는 세션 <b>생성·종료 시에만</b> 목록을 broadcast한다. 따라서 "스트리밍이 이미 돌고 있는 세션을
+     * 나중에 카메라로 등록"하면 그 broadcast는 이미 지나갔고, 재요청이 없으면 해당 세션은 <b>앱 재시작 전까지
+     * 구독되지 않는다</b>(감지·알림이 에러 없이 0건 — 조용한 침묵).</p>
+     */
+    @EventListener
+    public void onCameraRegistered(CameraRegisteredEvent event) {
+        if (session == null) {
+            return;   // 미연결 상태 — 재연결 시 afterConnectionEstablished가 목록을 다시 받아온다
+        }
+        log.info("[ANOMALY] 카메라 등록 감지 — AI 세션 목록 재요청: sessionId={}", event.sessionId());
+        send(LIST_ACTION);
+    }
+
+    /**
+     * AI 세션 목록으로 구독 상태를 <b>재동기화</b>한다: 등록된(=소유자를 아는) 세션은 구독하고, 목록에서 사라진
+     * 세션은 구독 기록에서 지운다.
+     *
+     * <p>지우는 쪽이 중요하다 — 카메라의 {@code session_id}는 영속이라 iPad가 끊었다 <b>같은 sessionId로</b>
+     * 다시 붙으면 AI 입장에선 새 세션이지만, 우리가 "이미 구독함"으로 기억하고 있으면 subscribe를 다시 보내지 않아
+     * {@code latest_analysis}가 영영 오지 않는다.</p>
+     */
     private void subscribeRegisteredSessions(JsonNode streams) {
         if (!streams.isArray()) {
             return;
         }
+
+        Set<String> live = new HashSet<>();
         for (JsonNode stream : streams) {
             String sessionId = stream.path("sessionId").asText(null);
-            if (sessionId == null || sessionId.isBlank() || subscribedSessions.contains(sessionId)) {
+            if (sessionId == null || sessionId.isBlank()) {
+                continue;
+            }
+            live.add(sessionId);
+
+            if (subscribedSessions.contains(sessionId)) {
                 continue;
             }
             if (cameraService.findOwnerBySessionId(sessionId).isEmpty()) {
                 log.debug("[ANOMALY] 미등록 세션 — 구독하지 않음: sessionId={}", sessionId);
                 continue;
             }
-            if (send("{\"action\":\"subscribe\",\"sessionId\":\"" + sessionId + "\"}")) {
+            if (send(subscribeAction(sessionId))) {
                 subscribedSessions.add(sessionId);
                 log.info("[ANOMALY] 세션 구독: sessionId={}", sessionId);
             }
+        }
+
+        // AI 목록에서 사라진 세션 = 종료된 세션. 기록을 지워야 같은 sessionId로 재시작할 때 다시 구독한다.
+        if (subscribedSessions.retainAll(live)) {
+            log.info("[ANOMALY] 종료된 세션 구독 해제 — 남은 구독={}건", subscribedSessions.size());
+        }
+    }
+
+    /** subscribe 페이로드. sessionId를 문자열로 이어붙이지 않고 직렬화한다(따옴표 등으로 JSON이 깨지지 않도록). */
+    private String subscribeAction(String sessionId) {
+        try {
+            return objectMapper.writeValueAsString(Map.of("action", "subscribe", "sessionId", sessionId));
+        } catch (JsonProcessingException e) {
+            throw new IllegalStateException("subscribe 페이로드 직렬화 실패: sessionId=" + sessionId, e);
         }
     }
 

@@ -6,6 +6,7 @@ import kr.silverbridge.main.domain.camera.dto.CameraResponse;
 import kr.silverbridge.main.domain.camera.dto.CameraUpdateRequest;
 import kr.silverbridge.main.domain.camera.dto.GuardianCameraView;
 import kr.silverbridge.main.domain.camera.entity.Camera;
+import kr.silverbridge.main.domain.camera.event.CameraRegisteredEvent;
 import kr.silverbridge.main.domain.camera.repository.CameraRepository;
 import kr.silverbridge.main.domain.connection.entity.Connection;
 import kr.silverbridge.main.domain.connection.repository.ConnectionRepository;
@@ -15,7 +16,9 @@ import kr.silverbridge.main.global.enums.ConnectionStatus;
 import kr.silverbridge.main.global.exception.CustomException;
 import kr.silverbridge.main.global.exception.ErrorCode;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -31,6 +34,7 @@ import java.util.stream.Collectors;
  * 보호자는 ACTIVE 연결된 피보호자들의 활성 카메라만 allowlist로 조회한다 —
  * 별도 카메라-보호자 매핑 없이 기존 {@code connections}를 재사용하므로 연결이 끊기면 접근도 자동 소멸한다.</p>
  */
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class CameraService {
@@ -39,6 +43,7 @@ public class CameraService {
     private final ConnectionRepository connectionRepository;
     private final UserRepository userRepository;
     private final CameraIdentifierFactory identifierFactory;
+    private final ApplicationEventPublisher eventPublisher;
 
     // 서버가 소유하는 권장 송출 fps (FE 매직상수 방지) — application.yaml camera.recommended-fps
     @Value("${camera.recommended-fps:5}")
@@ -55,6 +60,7 @@ public class CameraService {
         if (existing.isPresent()) {
             Camera camera = existing.get();
             camera.rename(request.label());
+            publishRegistered(camera);
             return CameraResponse.of(camera, recommendedFps);
         }
 
@@ -67,7 +73,18 @@ public class CameraService {
                 .isActive(true)
                 .build();
 
-        return CameraResponse.of(cameraRepository.save(camera), recommendedFps);
+        Camera saved = cameraRepository.save(camera);
+        publishRegistered(saved);
+        return CameraResponse.of(saved, recommendedFps);
+    }
+
+    /**
+     * 등록 사실을 알려 이상감지 구독자가 AI 세션 목록을 다시 확인하게 한다(재등록도 포함 — 구독 갱신은 멱등).
+     * AI는 세션 생성·종료 시에만 목록을 broadcast하므로, 스트리밍이 먼저 시작된 경우 이 재확인이 없으면
+     * 해당 세션은 구독되지 않는다.
+     */
+    private void publishRegistered(Camera camera) {
+        eventPublisher.publishEvent(new CameraRegisteredEvent(camera.getWardId(), camera.getSessionId()));
     }
 
     // 내 카메라 목록 (방별, 최신순)
@@ -148,12 +165,19 @@ public class CameraService {
         return cameraRepository.findByWardIdAndDeviceId(wardId, deviceId);
     }
 
-    // 조회 + 소유권 검증 (없거나 타인 것이면 404 위장으로 IDOR 차단)
+    /**
+     * 조회 + 소유권 검증. 없으면 404, <b>타인 것이면 403 + 명시적 안내</b>.
+     *
+     * <p>이전에는 타인 카메라를 404로 위장했으나(존재 노출 차단), 무슨 일인지 알 수 없는 오류로 시니어가 이탈하는
+     * 것을 막기 위해 그대로 알린다(2026-07-14 정책). 노출은 "그 id의 카메라가 있다"는 사실뿐이며(방 이름·세션ID 등
+     * 내용은 주지 않는다), 시도는 WARN으로 남긴다.</p>
+     */
     private Camera getOwnedCamera(String wardId, Long cameraId) {
         Camera camera = cameraRepository.findById(cameraId)
                 .orElseThrow(() -> new CustomException(ErrorCode.CAMERA_NOT_FOUND));
         if (!camera.getWardId().equals(wardId)) {
-            throw new CustomException(ErrorCode.CAMERA_NOT_FOUND);
+            log.warn("[IDOR-ATTEMPT] 타인 카메라 접근 시도: wardId={}, cameraId={}", wardId, cameraId);
+            throw new CustomException(ErrorCode.CAMERA_NOT_AUTHORIZED);
         }
         return camera;
     }
