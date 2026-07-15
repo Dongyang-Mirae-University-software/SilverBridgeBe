@@ -958,3 +958,29 @@ REST API Key 단독 대비 보안 강화 — 인가코드 탈취 시 토큰 발�
 - **AI 팀 합의(2026-07-14)**: 라이브 경로에서 **`confidence >= 0.6` 이면 `danger=true`** 로 채우기로 함 → 배포되면 현행 `DANGER` 모드가 곧바로 실동작(백엔드 코드 변경 불필요). 그 전까지 이력 0건이 정상이며 `[ANOMALY-DANGER-MISMATCH]` WARN으로 감지된다.
 - **테스트**: `./gradlew test` 278건 통과(실패 0). 디스패처 정책·리스너(수신자/쿨다운/격리)·이벤트 발행 검증 추가.
 - 상세: `docs/(2026-07-14) feature-anomaly-notification-phase2.md`
+
+## [2026-07-14] 누적 점검 — SOS(#199) 이후 ~ 이상감지 알림(#217) · 조건부 PASS
+
+- **범위**: camera(#213)·이상감지 1단계(#214)·단수형 rename(#215)·빌드 캐시(#216)·이상감지 알림(#217) 신규 점검 + SOS·문의는 회귀 관점 재확인.
+- **보안 전 영역 PASS**: IDOR(camera·inquiry 404 위장 / anomaly 수신자는 서버 결정) · 역할 인가(@PreAuthorize + `/api/admin/**` hasRole) · **WS 구독 인가**(`/topic/{userId}` 검증으로 `anomaly-detected` 자동 보호) · SQL 인젝션 0(네이티브 쿼리 없음) · 시크릿 평문 0(#216 캐시는 GRADLE_USER_HOME 마운트라 산출물·시크릿 유입 없음).
+- **🟠 H-1(최우선)**: `AiLiveStreamSubscriber`가 `subscribedSessions`를 **WS 재연결 시에만 clear** → ① iPad가 같은 sessionId로 재접속하면 재구독을 안 보내고 ② 스트리밍 중인 세션을 나중에 카메라 등록하면 영원히 구독 안 됨. 둘 다 **에러 없이 이상감지 0건**(조용한 침묵). 권고: 세션 종료 시 목록에서 제거 + 카메라 등록 시 `{"action":"list"}` 재요청.
+- **🟡**: STOMP `handleConnect/Disconnect` NPE(접속마다 발생, WS 감사 로그 유실 — gosky 로그에서 실물 확인) / camera 인가 회귀 테스트 부재 / `/api/guardian/cameras`만 복수형.
+- **운영 현황**: gosky `camera` 0행 + AI 세션ID가 백엔드 발급 형식이 아님(`stream_001`) → **이상감지 통합 경로 미연결**. FE 수정 후 통합 검증 예정.
+- **점검 이력 대장 신설**: `docs/audit-index.md` — 무엇이 점검됐고 안 됐는지 한 장으로 추적(신규 기능 머지 시 행 추가).
+- 상세: `docs/(2026-07-14) audit-sos-to-anomaly-cumulative.md`
+
+## [2026-07-14] 점검 지적사항 일괄 수정 + 카카오 알림톡 채널 인프라
+
+- **IDOR 응답 정책 변경**: 타인 자원 접근을 404 위장 → **403 명시 안내**(`CAMERA_NOT_AUTHORIZED`, `INQUIRY_NOT_AUTHORIZED`). 시니어 UX 우선(비밀번호 재설정과 같은 판단). 내용은 비노출 + `[IDOR-ATTEMPT]` WARN 로깅. `.claude/rules/domain-security-policy.md` 기록.
+- **🟠 H-1 수정**: `AiLiveStreamSubscriber`가 AI 목록 기준으로 구독을 **재동기화**(사라진 세션 제거) + **카메라 등록 시 목록 재요청**(`CameraRegisteredEvent`). 같은 sessionId 재접속·"스트리밍 먼저, 등록 나중" 순서에서도 구독이 살아난다(조용한 침묵 해소).
+- **🟡 수정**: STOMP 리스너 NPE(접속마다 발생, WS 감사 로그 유실) null-safe / camera 인가 테스트 신설 / `/api/guardian/cameras` → `/api/guardian/camera` 단수형(FE 호출처 없음 확인) / 관리자 검색 LIKE 와일드카드 이스케이프 / 알림 쿨다운 테스트 신설.
+- **카카오 알림톡**: 구현이 없어서가 아니라 **이상감지 템플릿이 미승인**이라 못 보내던 것(계정 승인 템플릿 = 인증번호용 3건뿐). `AlimtalkSender`(Solapi `KakaoOption`, **disableSms=true**) + `KakaoAlimtalkNotificationChannel` + `AlimtalkProperties`(종류→템플릿 매핑) 구현. **템플릿 없으면 스킵**이라 현재 동작 변화 없음 → 심사 통과 후 `ALIMTALK_*` 주입만 하면 발송.
+- **테스트**: 291건 통과(실패 0, 신규 13). 마이그레이션 없음.
+- 상세: `docs/(2026-07-14) fix-audit-findings.md` · 점검 대장 `docs/audit-index.md` 갱신
+
+## [2026-07-15] 카카오 알림 채널 = 알림톡으로 확정 (푸시 검토 후 회귀)
+
+- "카카오톡 채팅으로 알림"을 원해 **카카오 푸시**(kapi `/v2/push/*`)를 구현했다가 되돌림 — 카카오 푸시는 카카오톡이 아니라 **우리 앱 푸시(FCM/APNs 대행)**라 기존 FCM 직접 발송과 도착지가 같아 이득이 없었다. 카카오톡 메시지 API(친구톡)는 친구 관계·동의가 필요해 부적합. → **알림톡**(Solapi, 전화번호 수신)으로 확정. push_uuid·V32 마이그레이션 등 푸시 관련 변경은 전부 revert.
+- **알림톡 채널 구현**: `AlimtalkSender`(Solapi `KakaoOption`, `disableSms=true`) + `KakaoAlimtalkNotificationChannel`(승인 템플릿 없으면 스킵) + `AlimtalkProperties`(종류→템플릿 매핑). 자유 문구 불가 — 승인 템플릿 문구에 `#{변수}`만 치환.
+- **이상감지 템플릿**: `KA01TP260715015020754dXeU0ww3my9`(발신 프로필 `KA01PF240930145539248iUN6bVyplGB`) 2026-07-15 등록, **검수중**. 변수 `wardName`·`location`·`detectedTypeLabel`가 코드와 일치. 승인 후 `.env.dev`에 `ALIMTALK_ENABLED=true`·`ALIMTALK_PF_ID`·`ALIMTALK_TEMPLATE_ANOMALY` 주입 시 발송.
+- **마이그레이션 없음**. 테스트 295건 통과.

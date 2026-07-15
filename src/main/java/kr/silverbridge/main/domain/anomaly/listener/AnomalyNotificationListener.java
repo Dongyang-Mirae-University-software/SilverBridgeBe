@@ -55,11 +55,16 @@ public class AnomalyNotificationListener {
         List<String> recipients = new ArrayList<>(connectionService.getActiveGuardianIds(event.wardId()));
         recipients.add(event.wardId());   // 피보호자 본인 — 화재 현장 당사자 (D-1)
 
+        // detectedType은 enum 그대로 유지(FE 계약). wardName·location·detectedTypeLabel은 화면 표시용 —
+        // 알림톡 템플릿 변수로도 쓰인다(AlimtalkProperties.variables와 키 이름이 일치해야 바인딩된다).
         Map<String, String> data = Map.of(
                 "type", NotificationType.ANOMALY_DETECTED.name(),
                 "wardId", event.wardId(),
+                "wardName", event.wardName(),
+                "location", event.cameraLabel(),
                 "sessionId", event.sessionId(),
                 "detectedType", event.detectedType().name(),
+                "detectedTypeLabel", label(event.detectedType()),
                 "anomalyEventId", String.valueOf(event.anomalyEventId()));
 
         int sent = 0;

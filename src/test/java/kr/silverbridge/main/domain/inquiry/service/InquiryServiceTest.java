@@ -88,7 +88,7 @@ class InquiryServiceTest {
     }
 
     @Test
-    @DisplayName("타인 문의 상세 조회 → INQUIRY_NOT_AUTHORIZED(404 위장, IDOR 차단)")
+    @DisplayName("타인 문의 상세 조회 → INQUIRY_NOT_AUTHORIZED(403 — 본인 문의만 볼 수 있다고 안내)")
     void getMyInquiry_타인것_차단() {
         Inquiry inquiry = inquiry(OTHER_ID, InquiryStatus.WAITING);
         when(inquiryRepository.findById(INQUIRY_ID)).thenReturn(Optional.of(inquiry));

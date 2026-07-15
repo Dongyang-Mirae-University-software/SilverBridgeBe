@@ -109,6 +109,20 @@ anomaly:
   notify-cooldown-minutes: ${ANOMALY_NOTIFY_COOLDOWN_MINUTES:5}        # 보호자 알림 재발송 최소 간격
   notify-self-cooldown-minutes: ${ANOMALY_NOTIFY_SELF_COOLDOWN_MINUTES:1} # 피보호자 본인 알림 재발송 최소 간격(대피 재촉 — 더 짧게)
 
+notification:
+  alimtalk:
+    # 카카오 알림톡(Solapi 경유) — 카카오톡 채팅으로 도착하는 유일한 현실적 경로(전화번호 기반, 친구추가 불필요).
+    # ⚠️ 승인된 템플릿 문구만 발송 가능(변수만 치환). 종류별 템플릿이 없으면 채널이 조용히 스킵된다.
+    # ⚠️ Solapi 콘솔의 "알림톡 실패 시 SMS 대체발송"은 OFF로 유지할 것 — 코드에서도 disableSms=true.
+    enabled: ${ALIMTALK_ENABLED:false}
+    pf-id: ${ALIMTALK_PF_ID:}                  # 발신 프로필(KA01PF…) — .env.dev 주입
+    templates:
+      # 이상감지 템플릿은 심사 등록 필요(2026-07-14 기준 계정 승인 템플릿은 '인증번호'용뿐).
+      # 승인되면 ALIMTALK_TEMPLATE_ANOMALY에 templateId(KA01TP…)를 넣고 ALIMTALK_ENABLED=true로 켠다.
+      ANOMALY_DETECTED:
+        template-id: ${ALIMTALK_TEMPLATE_ANOMALY:}
+        variables: [wardName, location, detectedTypeLabel]   # 값은 알림 data의 동명 키에서 바인딩
+
 springdoc:
   api-docs:
     enabled: ${SWAGGER_ENABLED:true}

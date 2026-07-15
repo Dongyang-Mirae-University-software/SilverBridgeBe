@@ -22,6 +22,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.test.util.ReflectionTestUtils;
 
 import java.util.List;
@@ -42,7 +43,7 @@ import static org.mockito.Mockito.when;
  *
  * 핵심 정책 3가지를 검증한다.
  * ① 등록 멱등 — 같은 (wardId, deviceId)면 기존 SessionID 재사용(신규 저장 없음).
- * ② 소유권(IDOR) — 타인 카메라는 존재 노출 없이 CAMERA_NOT_FOUND(404 위장).
+ * ② 소유권(IDOR) — 타인 카메라 접근은 CAMERA_NOT_AUTHORIZED(403 + 명시 안내, 2026-07-14 정책).
  * ③ 보호자 allowlist — ACTIVE 연결된 피보호자의 활성 카메라만, 이름을 배치 조회로 채워 반환.
  */
 @ExtendWith(MockitoExtension.class)
@@ -52,6 +53,7 @@ class CameraServiceTest {
     @Mock private ConnectionRepository connectionRepository;
     @Mock private UserRepository userRepository;
     @Mock private CameraIdentifierFactory identifierFactory;
+    @Mock private ApplicationEventPublisher eventPublisher;
 
     @InjectMocks private CameraService cameraService;
 
@@ -132,25 +134,25 @@ class CameraServiceTest {
     class Ownership {
 
         @Test
-        @DisplayName("타인 카메라 수정 시도 → CAMERA_NOT_FOUND (존재 여부 비노출)")
-        void 타인카메라_수정_404() {
+        @DisplayName("타인 카메라 수정 시도 → CAMERA_NOT_AUTHORIZED (403 — 본인 것만 사용 가능하다고 안내)")
+        void 타인카메라_수정_403() {
             Camera others = camera(9L, OTHER_WARD_ID, "ward_zz9Q1x_aaa", "dev_bbb", "거실");
             when(cameraRepository.findById(9L)).thenReturn(Optional.of(others));
 
             assertThatThrownBy(() -> cameraService.update(WARD_ID, 9L, new CameraUpdateRequest("안방", null)))
                     .isInstanceOf(CustomException.class)
-                    .hasFieldOrPropertyWithValue("errorCode", ErrorCode.CAMERA_NOT_FOUND);
+                    .hasFieldOrPropertyWithValue("errorCode", ErrorCode.CAMERA_NOT_AUTHORIZED);
         }
 
         @Test
-        @DisplayName("타인 카메라 삭제 시도 → CAMERA_NOT_FOUND, 삭제 미수행")
-        void 타인카메라_삭제_404() {
+        @DisplayName("타인 카메라 삭제 시도 → CAMERA_NOT_AUTHORIZED(403), 삭제 미수행")
+        void 타인카메라_삭제_403() {
             Camera others = camera(9L, OTHER_WARD_ID, "ward_zz9Q1x_aaa", "dev_bbb", "거실");
             when(cameraRepository.findById(9L)).thenReturn(Optional.of(others));
 
             assertThatThrownBy(() -> cameraService.delete(WARD_ID, 9L))
                     .isInstanceOf(CustomException.class)
-                    .hasFieldOrPropertyWithValue("errorCode", ErrorCode.CAMERA_NOT_FOUND);
+                    .hasFieldOrPropertyWithValue("errorCode", ErrorCode.CAMERA_NOT_AUTHORIZED);
             verify(cameraRepository, never()).delete(any(Camera.class));
         }
 

@@ -31,9 +31,9 @@ public interface InquiryRepository extends JpaRepository<Inquiry, Long> {
               AND (:category IS NULL OR i.category = :category)
               AND (:status IS NULL OR i.status = :status)
               AND (:keyword IS NULL OR :keyword = ''
-                   OR LOWER(i.title) LIKE LOWER(CONCAT('%', :keyword, '%'))
-                   OR LOWER(i.content) LIKE LOWER(CONCAT('%', :keyword, '%'))
-                   OR LOWER(u.name) LIKE LOWER(CONCAT('%', :keyword, '%')))
+                   OR LOWER(i.title) LIKE LOWER(CONCAT('%', :keyword, '%')) ESCAPE '\\'
+                   OR LOWER(i.content) LIKE LOWER(CONCAT('%', :keyword, '%')) ESCAPE '\\'
+                   OR LOWER(u.name) LIKE LOWER(CONCAT('%', :keyword, '%')) ESCAPE '\\')
             """)
     Page<Inquiry> searchForAdmin(@Param("category") InquiryCategory category,
                                  @Param("status") InquiryStatus status,
