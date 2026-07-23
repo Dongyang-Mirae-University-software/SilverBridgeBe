@@ -984,3 +984,14 @@ REST API Key 단독 대비 보안 강화 — 인가코드 탈취 시 토큰 발�
 - **알림톡 채널 구현**: `AlimtalkSender`(Solapi `KakaoOption`, `disableSms=true`) + `KakaoAlimtalkNotificationChannel`(승인 템플릿 없으면 스킵) + `AlimtalkProperties`(종류→템플릿 매핑). 자유 문구 불가 — 승인 템플릿 문구에 `#{변수}`만 치환.
 - **이상감지 템플릿**: `KA01TP260715015020754dXeU0ww3my9`(발신 프로필 `KA01PF240930145539248iUN6bVyplGB`) 2026-07-15 등록, **검수중**. 변수 `wardName`·`location`·`detectedTypeLabel`가 코드와 일치. 승인 후 `.env.dev`에 `ALIMTALK_ENABLED=true`·`ALIMTALK_PF_ID`·`ALIMTALK_TEMPLATE_ANOMALY` 주입 시 발송.
 - **마이그레이션 없음**. 테스트 295건 통과.
+
+## [2026-07-23] 피보호자 SOS 동작 설정 — 계정 단위 영속화
+
+- **발단**: FE 점검 결과 환경설정 > SOS 동작 설정 3개 옵션이 **선택만 저장되고 실제 동작에 영향 0** 이었다. 배포본(`develop`/`e160256`)에서 `sosAction` 참조 6곳이 전부 저장·표시용이고 SOS 실행 화면(`WardSosContent.tsx`) 참조는 **0건**, **`tel:119` 코드 자체가 부재**. 설정은 localStorage 전용이라 기기 바꾸면 초기화.
+- **결정**: ① **보호자 알림은 끌 수 없음**(WARD_SOS 강제 발송 유지 — 백엔드 무변경) ② **설정을 계정 단위로 동기화**(이번 작업) ③ **UI는 기능 완성까지 FE에서 숨김**. ①에 따라 세 옵션의 차이를 "보호자 알림 여부"가 아니라 **"119를 어떻게 연결·안내할지"** 로 재정의 — 긴급 SOS에서 알림을 끄는 선택지는 서비스 취지에 맞지 않고 "필수 알림" 정책과 충돌한다.
+- **구현**: `sos_setting` 테이블(V32, 단수형) + `SosAction` enum 3값 + `GET·PUT /api/ward/sos-setting`(`hasRole('WARD')`). **행 없으면 기본값 `CALL_119_AND_NOTIFY`** → 백필 불요(V25 `user_notification_setting`과 동일 방식), FE 기존 기본값과 같은 값이라 전환해도 동작 불변.
+- **범위 = 설정값 보관·조회만**. `SosService`·`SosNotificationListener`·`NotificationDispatcher`·`NotificationType`·`WardSosController` **전부 무변경**. 119 전화 연결은 종전대로 프론트 `tel:` 담당.
+- **enum 네이밍**: FE 기존 키와 1:1(A안) — `CALL_119`/`CALL_119_AND_NOTIFY`/`NOTIFY_GUARDIAN_FIRST`. ⚠️ `CALL_119`는 "알림 없이"가 아님(세 값 모두 알림 발송) — enum·서비스·Swagger에 명시.
+- **V32 번호**: 2026-07-15 카카오 푸시 검토 때 쓰였다 revert된 V32가 있으나 **git 전체 브랜치에 흔적 0건**(미커밋) → CD 배포된 적 없어 재사용 안전.
+- **테스트**: `./gradlew build` 전체 통과(신규 8건 — 기본값·저장값 우선·upsert·역할 인가 4종). 
+- 상세: `docs/(2026-07-23) feature-sos-action-setting.md`
