@@ -121,7 +121,8 @@ notification:
       # 승인되면 ALIMTALK_TEMPLATE_ANOMALY에 templateId(KA01TP…)를 넣고 ALIMTALK_ENABLED=true로 켠다.
       ANOMALY_DETECTED:
         template-id: ${ALIMTALK_TEMPLATE_ANOMALY:}
-        variables: [wardName, location, detectedTypeLabel]   # 값은 알림 data의 동명 키에서 바인딩
+        # 값은 알림 data의 동명 키에서 바인딩 — 승인 템플릿 본문의 #{변수}와 이름·개수가 일치해야 한다.
+        variables: [wardName, location, detectedTypeLabel, detectedAt]
 
 springdoc:
   api-docs:

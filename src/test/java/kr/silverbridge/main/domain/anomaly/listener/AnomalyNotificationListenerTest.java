@@ -16,6 +16,8 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
+import java.time.OffsetDateTime;
+import java.time.ZoneOffset;
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -32,7 +34,7 @@ import static org.mockito.Mockito.when;
  * AnomalyNotificationListener 단위 테스트.
  *
  * 검증: 수신자 구성(ACTIVE 보호자 전원 + 피보호자 본인) / 쿨다운 시 생략 / 수신자별 실패 격리 /
- * 본인·보호자 문구 구분.
+ * 본인·보호자 문구 구분 / 감지 시각 표기(KST 변환·null 대체 — 알림톡 템플릿 변수).
  */
 @ExtendWith(MockitoExtension.class)
 class AnomalyNotificationListenerTest {
@@ -47,8 +49,12 @@ class AnomalyNotificationListenerTest {
 
     @InjectMocks private AnomalyNotificationListener listener;
 
+    /** AI analyzedAt은 UTC — 표시는 KST(+9)라 05:20Z → 14:20이어야 한다. */
+    private static final OffsetDateTime DETECTED_AT =
+            OffsetDateTime.of(2026, 7, 23, 5, 20, 0, 0, ZoneOffset.UTC);
+
     private final AnomalyDetectedEvent event =
-            new AnomalyDetectedEvent(7L, WARD_ID, "김순자", SESSION_ID, "거실", DetectedType.FIRE);
+            new AnomalyDetectedEvent(7L, WARD_ID, "김순자", SESSION_ID, "거실", DetectedType.FIRE, DETECTED_AT);
 
     @Test
     @DisplayName("ACTIVE 보호자 전원과 피보호자 본인 모두에게 발송한다")
@@ -78,7 +84,8 @@ class AnomalyNotificationListenerTest {
         assertThat(guardian.getValue().body()).isEqualTo("김순자님 댁 거실에서 화재가 감지되었습니다.");
         assertThat(guardian.getValue().data())
                 .containsEntry("type", "ANOMALY_DETECTED")
-                .containsEntry("anomalyEventId", "7");
+                .containsEntry("anomalyEventId", "7")
+                .containsEntry("detectedAt", "2026-07-23 14:20");   // UTC 05:20 → KST 14:20
 
         ArgumentCaptor<NotificationContent> self = ArgumentCaptor.forClass(NotificationContent.class);
         verify(notificationDispatcher).dispatch(eq(WARD_ID), any(), self.capture());
@@ -110,6 +117,22 @@ class AnomalyNotificationListenerTest {
         listener.handleAnomalyDetected(event);
 
         verify(notificationDispatcher).dispatch(eq(WARD_ID), any(), any());
+    }
+
+    @Test
+    @DisplayName("AI 분석 시각이 없어도(fallback 페이로드) 감지 시각을 빈 값으로 보내지 않는다")
+    void 분석시각없으면_발송시각으로_표시대체() {
+        AnomalyDetectedEvent noAnalyzedAt =
+                new AnomalyDetectedEvent(7L, WARD_ID, "김순자", SESSION_ID, "거실", DetectedType.FIRE, null);
+        when(connectionService.getActiveGuardianIds(WARD_ID)).thenReturn(List.of());
+        when(cooldown.tryAcquire(eq(WARD_ID), eq(SESSION_ID), eq(DetectedType.FIRE), eq(true))).thenReturn(true);
+
+        listener.handleAnomalyDetected(noAnalyzedAt);
+
+        ArgumentCaptor<NotificationContent> captor = ArgumentCaptor.forClass(NotificationContent.class);
+        verify(notificationDispatcher).dispatch(eq(WARD_ID), any(), captor.capture());
+        // 승인 템플릿의 #{detectedAt}이 빈 문자열로 나가면 "감지 시각: "만 발송된다 (분 경계 flaky 방지로 형식만 검증)
+        assertThat(captor.getValue().data().get("detectedAt")).matches("\\d{4}-\\d{2}-\\d{2} \\d{2}:\\d{2}");
     }
 
     @Test

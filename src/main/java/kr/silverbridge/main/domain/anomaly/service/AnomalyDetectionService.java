@@ -85,7 +85,7 @@ public class AnomalyDetectionService {
         // 커밋 후 AnomalyNotificationListener가 보호자 전원 + 피보호자 본인에게 발송(FCM 고정 + SMS·알림톡은 선택)
         eventPublisher.publishEvent(new AnomalyDetectedEvent(
                 event.getId(), wardId, wardName(wardId),
-                signal.sessionId(), owner.get().label(), signal.detectedType()));
+                signal.sessionId(), owner.get().label(), signal.detectedType(), signal.analyzedAt()));
 
         return Optional.of(event);
     }
