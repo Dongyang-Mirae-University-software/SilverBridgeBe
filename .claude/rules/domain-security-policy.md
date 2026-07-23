@@ -103,3 +103,12 @@
   - 📄 **제출 문구 원문·차수별 diff는 `docs/(2026-07-23) alimtalk-template-review-history.md`** — 재검수 요청할 때마다 제출 본문 전문을 그 문서에 추가할 것(승인 후 문구 수정은 재검수 대상이라 원문이 없으면 대응 불가).
   - **`#{detectedAt}` 코드 반영 완료(2026-07-23)**: `AnomalyDetectedEvent.detectedAt`(AI `analyzedAt`, nullable) → 리스너가 KST `yyyy-MM-dd HH:mm`로 포맷해 `data["detectedAt"]`에 담고 `application.yaml` `variables`에 등록. null(AI fallback 페이로드)이면 **발송 시각으로 대체 표시**하되 이력 `anomaly_event.detected_at`은 NULL 그대로 둔다(이력에서만 "AI 시각 vs 수신 시각" 구분 유지).
   - **피보호자 본인용 템플릿은 미등록** — 현재 리스너는 보호자·본인 양쪽에 같은 알림을 보내는데, 본인에게 "OOO님 ~에서 감지"는 문구가 어긋난다. 별도 템플릿 등록 + `templateFor()`의 종류별 단일 매핑 구조 확장이 필요하다(리스너에 `self` 플래그는 이미 있음).
+
+## SOS 동작 설정 — 알림 억제 용도로 쓰지 말 것 (2026-07-23)
+
+- **경위**: 피보호자 환경설정의 "SOS 동작 설정"(3개 옵션)이 UI만 배포되고 동작이 없던 것을 발견 → 설정을 계정 단위로 영속화(`sos_setting`, V32)하면서 의미를 확정했다. 원래 라벨 "119에 바로 연결"은 *보호자 알림 없이* 를 뜻하는 것처럼 읽혔다.
+- **불변 규칙**: `SosAction`은 **프론트의 119 연결·안내 흐름**만 정한다. **어떤 값에서도 보호자 알림은 항상 발송된다** — SOS는 `NotificationType.WARD_SOS`(`FORCED_PUSH_WITH_SMS_FALLBACK`)로 사용자 설정을 무시하고 강제 발송하는 필수 알림이고, 이 설정으로 끌 수 없다. `SosNotificationListener`·`NotificationDispatcher`가 `sosAction`을 읽게 만들지 말 것.
+  - 값 이름 `CALL_119`는 "알림 없이"가 아니라 "119 즉시 연결"이다. 이름만 보고 알림 분기를 넣지 말 것.
+- **거부안**: "119만 걸고 알림은 생략" 옵션 — ① API를 호출하지 않으면 **SOS 이력(`sos_event`)도 안 남아** "알림이 실패해도 이력은 무조건 남는다"는 원칙이 깨지고, ② 호출하면 알림이 나가 라벨이 거짓이 된다. 긴급 SOS에서 보호자 알림을 끄는 선택지 자체가 서비스 취지에 반한다고 판단해 채택하지 않았다.
+- **기본값**: 행이 없으면 `CALL_119_AND_NOTIFY`(FE 기존 기본값과 동일) — 백필 마이그레이션 불요.
+- 상세: `docs/(2026-07-23) feature-sos-action-setting.md`.
