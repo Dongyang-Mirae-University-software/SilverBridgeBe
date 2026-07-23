@@ -102,9 +102,10 @@ class AnomalyDetectionServiceTest {
     }
 
     @Test
-    @DisplayName("이력이 적재되면 알림 이벤트를 발행한다 (문구에 필요한 이름·방 이름 포함)")
+    @DisplayName("이력이 적재되면 알림 이벤트를 발행한다 (문구에 필요한 이름·방 이름·분석 시각 포함)")
     void anomaly_publishesNotificationEvent() {
-        AnomalySignal signal = signal(OffsetDateTime.now());
+        OffsetDateTime analyzedAt = OffsetDateTime.now();
+        AnomalySignal signal = signal(analyzedAt);
         when(judge.isAnomaly(signal)).thenReturn(true);
         when(cooldown.tryAcquire(SESSION_ID, DetectedType.FIRE)).thenReturn(true);
         givenRegisteredCamera();
@@ -120,6 +121,8 @@ class AnomalyDetectionServiceTest {
         assertThat(published.sessionId()).isEqualTo(SESSION_ID);
         assertThat(published.cameraLabel()).isEqualTo(CAMERA_LABEL);
         assertThat(published.detectedType()).isEqualTo(DetectedType.FIRE);
+        // 알림톡 승인 템플릿의 #{detectedAt} 원천 — 리스너가 KST로 포맷해 쓴다
+        assertThat(published.detectedAt()).isEqualTo(analyzedAt);
     }
 
     @Test

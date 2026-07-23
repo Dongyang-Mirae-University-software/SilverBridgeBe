@@ -15,6 +15,9 @@ import org.springframework.stereotype.Component;
 import org.springframework.transaction.event.TransactionPhase;
 import org.springframework.transaction.event.TransactionalEventListener;
 
+import java.time.OffsetDateTime;
+import java.time.ZoneId;
+import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -44,6 +47,10 @@ public class AnomalyNotificationListener {
 
     private static final String TITLE = "이상 상황 감지";
 
+    /** AI analyzedAt은 UTC 오프셋이라 표시 직전 KST로 변환한다(컨테이너 TZ에 의존하지 않는다). */
+    private static final ZoneId DISPLAY_ZONE = ZoneId.of("Asia/Seoul");
+    private static final DateTimeFormatter DETECTED_AT_FORMAT = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm");
+
     private final ConnectionService connectionService;
     private final WebSocketEventPublisher webSocketEventPublisher;
     private final NotificationDispatcher notificationDispatcher;
@@ -55,7 +62,7 @@ public class AnomalyNotificationListener {
         List<String> recipients = new ArrayList<>(connectionService.getActiveGuardianIds(event.wardId()));
         recipients.add(event.wardId());   // 피보호자 본인 — 화재 현장 당사자 (D-1)
 
-        // detectedType은 enum 그대로 유지(FE 계약). wardName·location·detectedTypeLabel은 화면 표시용 —
+        // detectedType은 enum 그대로 유지(FE 계약). wardName·location·detectedTypeLabel·detectedAt은 화면 표시용 —
         // 알림톡 템플릿 변수로도 쓰인다(AlimtalkProperties.variables와 키 이름이 일치해야 바인딩된다).
         Map<String, String> data = Map.of(
                 "type", NotificationType.ANOMALY_DETECTED.name(),
@@ -65,6 +72,7 @@ public class AnomalyNotificationListener {
                 "sessionId", event.sessionId(),
                 "detectedType", event.detectedType().name(),
                 "detectedTypeLabel", label(event.detectedType()),
+                "detectedAt", formatDetectedAt(event.detectedAt()),
                 "anomalyEventId", String.valueOf(event.anomalyEventId()));
 
         int sent = 0;
@@ -102,6 +110,19 @@ public class AnomalyNotificationListener {
             return event.cameraLabel() + "에서 " + what + "가 감지되었습니다. 안전한 곳으로 대피해 주세요.";
         }
         return event.wardName() + "님 댁 " + event.cameraLabel() + "에서 " + what + "가 감지되었습니다.";
+    }
+
+    /**
+     * 감지 시각 표기(KST). 알림톡 승인 템플릿의 {@code #{detectedAt}}에 그대로 들어간다.
+     *
+     * <p>AI fallback 페이로드엔 {@code analyzedAt}이 없어 null일 수 있는데, 그대로 두면 승인 문구가
+     * "감지 시각: "으로 비어 나간다. 알림은 감지 직후(AFTER_COMMIT) 발송돼 오차가 초 단위라
+     * <b>표시에 한해</b> 발송 시각으로 대체한다 — 이력({@code anomaly_event.detected_at})은 NULL 그대로 두어
+     * "AI가 알려준 시각"과 "우리가 받은 시각"의 구분을 유지한다.</p>
+     */
+    private String formatDetectedAt(OffsetDateTime detectedAt) {
+        OffsetDateTime shown = (detectedAt != null) ? detectedAt : OffsetDateTime.now();
+        return shown.atZoneSameInstant(DISPLAY_ZONE).format(DETECTED_AT_FORMAT);
     }
 
     // 알림 문구용 표기. DetectedType(global enum)은 AI 계약을 표현하는 값이라 UI 문자열을 넣지 않는다.

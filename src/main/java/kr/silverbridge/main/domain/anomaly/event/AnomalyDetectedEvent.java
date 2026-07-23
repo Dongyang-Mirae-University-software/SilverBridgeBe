@@ -2,6 +2,8 @@ package kr.silverbridge.main.domain.anomaly.event;
 
 import kr.silverbridge.main.global.enums.DetectedType;
 
+import java.time.OffsetDateTime;
+
 /**
  * 이상감지 이력이 적재됐을 때 발행되는 이벤트.
  *
@@ -17,6 +19,9 @@ import kr.silverbridge.main.global.enums.DetectedType;
  * @param sessionId      감지된 카메라 SessionID
  * @param cameraLabel    카메라 설치 위치(방 이름 — 거실·안방 등)
  * @param detectedType   감지 종류(FIRE·SMOKE)
+ * @param detectedAt     AI 분석 시각({@code analyzedAt}). AI 캐시 미스 fallback 페이로드엔 없어 <b>null 가능</b> —
+ *                       이력({@code anomaly_event.detected_at})과 동일하게 수신 시각을 몰래 채우지 않는다.
+ *                       알림 문구에 빈 칸이 나가지 않게 하는 대체는 리스너가 표시 단계에서만 한다.
  */
 public record AnomalyDetectedEvent(
         Long anomalyEventId,
@@ -24,5 +29,6 @@ public record AnomalyDetectedEvent(
         String wardName,
         String sessionId,
         String cameraLabel,
-        DetectedType detectedType
+        DetectedType detectedType,
+        OffsetDateTime detectedAt
 ) {}
