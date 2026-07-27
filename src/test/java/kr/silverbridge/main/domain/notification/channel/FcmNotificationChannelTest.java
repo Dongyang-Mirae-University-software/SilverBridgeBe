@@ -1,5 +1,7 @@
 package kr.silverbridge.main.domain.notification.channel;
 
+import kr.silverbridge.main.domain.notification.dispatch.NotificationType;
+
 import kr.silverbridge.main.domain.notification.service.FcmService;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -34,7 +36,7 @@ class FcmNotificationChannelTest {
         NotificationContent content = NotificationContent.of("연결 요청", "요청이 도착했습니다.", data);
         when(fcmService.sendToUser("WD0001", "연결 요청", "요청이 도착했습니다.", data)).thenReturn(true);
 
-        boolean delivered = channel.send(recipient, content);
+        boolean delivered = channel.send(NotificationType.CONNECTION_REQUEST, recipient, content);
 
         assertThat(delivered).isTrue();
         verify(fcmService).sendToUser("WD0001", "연결 요청", "요청이 도착했습니다.", data);

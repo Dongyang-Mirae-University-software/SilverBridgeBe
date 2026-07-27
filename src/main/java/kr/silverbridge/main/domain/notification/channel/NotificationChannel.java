@@ -1,5 +1,7 @@
 package kr.silverbridge.main.domain.notification.channel;
 
+import kr.silverbridge.main.domain.notification.dispatch.NotificationType;
+
 /**
  * 알림 전송 채널 전략(strategy). 채널 종류별 구현체를 Spring 빈으로 등록하면
  * {@code NotificationDispatcher}가 {@link #getType()} 기준으로 자동 수집·라우팅한다.
@@ -19,9 +21,11 @@ public interface NotificationChannel {
      * 수신자에게 알림을 발송한다. 발송에 필요한 식별자가 없으면(예: SMS인데 전화번호 null)
      * 구현체가 발송을 건너뛰고 {@code false}를 반환한다.
      *
+     * @param type 알림 종류. 채널이 종류별 발송 수단을 골라야 할 때 쓴다(알림톡의 승인 템플릿 매핑).
+     *             문구({@code content})만으로 발송되는 채널(FCM·SMS)은 사용하지 않는다.
      * @return 실제 전달이 이루어졌으면 {@code true}. 필수 알림의 결과 기반 SMS 폴백 판단에
      *         사용한다(M-S2-1: 토큰이 있어도 전부 만료면 false → 디스패처가 폴백).
      *         선택 알림 경로에서는 반환값을 사용하지 않는다.
      */
-    boolean send(NotificationRecipient recipient, NotificationContent content);
+    boolean send(NotificationType type, NotificationRecipient recipient, NotificationContent content);
 }

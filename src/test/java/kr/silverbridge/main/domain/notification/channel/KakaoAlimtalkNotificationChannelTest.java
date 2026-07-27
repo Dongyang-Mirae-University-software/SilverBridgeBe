@@ -1,6 +1,7 @@
 package kr.silverbridge.main.domain.notification.channel;
 
 import kr.silverbridge.main.domain.notification.config.AlimtalkProperties;
+import kr.silverbridge.main.domain.notification.dispatch.NotificationType;
 import kr.silverbridge.main.domain.notification.service.AlimtalkSender;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -65,7 +66,7 @@ class KakaoAlimtalkNotificationChannelTest {
         givenAnomalyTemplate();
         when(alimtalkSender.send(anyString(), anyString(), any())).thenReturn(true);
 
-        boolean sent = channel.send(new NotificationRecipient("GD0001", "01012345678", null), content);
+        boolean sent = channel.send(NotificationType.ANOMALY_DETECTED, new NotificationRecipient("GD0001", "01012345678", null), content);
 
         assertThat(sent).isTrue();
         @SuppressWarnings("unchecked")
@@ -81,10 +82,41 @@ class KakaoAlimtalkNotificationChannelTest {
     @DisplayName("해당 알림 종류의 승인 템플릿이 없으면 발송하지 않는다(자유 문구 발송은 불가)")
     void 템플릿없음_미발송() {
         // 템플릿 매핑 없음 — 승인 전에 다른 템플릿으로 억지 발송하면 문구가 어긋나 채널 제재 대상이 된다.
-        boolean sent = channel.send(new NotificationRecipient("GD0001", "01012345678", null), content);
+        boolean sent = channel.send(NotificationType.ANOMALY_DETECTED, new NotificationRecipient("GD0001", "01012345678", null), content);
 
         assertThat(sent).isFalse();
         verifyNoInteractions(alimtalkSender);
+    }
+
+    @Test
+    @DisplayName("피보호자 본인 수신분(ANOMALY_DETECTED_SELF)은 승인 템플릿이 없어 발송하지 않는다")
+    void 본인수신분_미발송() {
+        // 승인 문구는 보호자용("회원님께서 보호자로 등록하시고 직접 신청하신… 대상: OOO님")이라
+        // 본인에게 나가면 사실과 어긋난다 = 카카오 채널 제재 사유. 템플릿 매핑을 두지 않아 스킵되어야 한다.
+        givenAnomalyTemplate();
+
+        boolean sent = channel.send(NotificationType.ANOMALY_DETECTED_SELF,
+                new NotificationRecipient("WD0001", "01012345678", null), content);
+
+        assertThat(sent).isFalse();
+        verifyNoInteractions(alimtalkSender);
+    }
+
+    @Test
+    @DisplayName("템플릿은 알림 종류로 고른다 — data[\"type\"](FE 계약)이 달라도 영향받지 않는다")
+    void 템플릿선택_data타입에_의존하지않음() {
+        givenAnomalyTemplate();
+        when(alimtalkSender.send(anyString(), anyString(), any())).thenReturn(true);
+
+        // FE 계약값이 바뀌거나 비어 있어도 발송 종류(type) 기준으로 승인 템플릿이 선택돼야 한다
+        NotificationContent noTypeKey = NotificationContent.of(
+                "이상 상황 감지", "본문", Map.of("wardName", "김순자", "location", "거실", "detectedTypeLabel", "화재"));
+
+        boolean sent = channel.send(NotificationType.ANOMALY_DETECTED,
+                new NotificationRecipient("GD0001", "01012345678", null), noTypeKey);
+
+        assertThat(sent).isTrue();
+        verify(alimtalkSender).send(eq("01012345678"), eq(TEMPLATE_ID), any());
     }
 
     @Test
@@ -93,7 +125,7 @@ class KakaoAlimtalkNotificationChannelTest {
         givenAnomalyTemplate();
         properties.setEnabled(false);
 
-        boolean sent = channel.send(new NotificationRecipient("GD0001", "01012345678", null), content);
+        boolean sent = channel.send(NotificationType.ANOMALY_DETECTED, new NotificationRecipient("GD0001", "01012345678", null), content);
 
         assertThat(sent).isFalse();
         verifyNoInteractions(alimtalkSender);
@@ -104,7 +136,7 @@ class KakaoAlimtalkNotificationChannelTest {
     void 전화번호없음_미발송() {
         givenAnomalyTemplate();
 
-        boolean sent = channel.send(new NotificationRecipient("GD0001", null, null), content);
+        boolean sent = channel.send(NotificationType.ANOMALY_DETECTED, new NotificationRecipient("GD0001", null, null), content);
 
         assertThat(sent).isFalse();
         verifyNoInteractions(alimtalkSender);

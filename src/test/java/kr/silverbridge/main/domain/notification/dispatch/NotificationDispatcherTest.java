@@ -20,6 +20,7 @@ import java.util.Set;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.lenient;
@@ -65,8 +66,8 @@ class NotificationDispatcherTest {
 
         dispatcher.dispatch(USER_ID, NotificationType.CONNECTION_REQUEST, content);
 
-        verify(fcmChannel).send(any(), any());
-        verify(smsChannel, never()).send(any(), any());
+        verify(fcmChannel).send(any(), any(), any());
+        verify(smsChannel, never()).send(any(), any(), any());
     }
 
     @Test
@@ -77,8 +78,8 @@ class NotificationDispatcherTest {
 
         dispatcher.dispatch(USER_ID, NotificationType.CONNECTION_REQUEST, content);
 
-        verify(fcmChannel).send(any(), any());
-        verify(smsChannel).send(any(), any());
+        verify(fcmChannel).send(any(), any(), any());
+        verify(smsChannel).send(any(), any(), any());
     }
 
     @Test
@@ -89,8 +90,8 @@ class NotificationDispatcherTest {
 
         dispatcher.dispatch(USER_ID, NotificationType.CONNECTION_REQUEST, content);
 
-        verify(fcmChannel, never()).send(any(), any());
-        verify(smsChannel, never()).send(any(), any());
+        verify(fcmChannel, never()).send(any(), any(), any());
+        verify(smsChannel, never()).send(any(), any(), any());
     }
 
     @Test
@@ -98,12 +99,12 @@ class NotificationDispatcherTest {
     void 채널실패_격리() {
         given(settingService.enabledChannels(USER_ID))
                 .willReturn(EnumSet.of(NotificationChannelType.FCM, NotificationChannelType.SMS));
-        doThrow(new RuntimeException("FCM 장애")).when(fcmChannel).send(any(), any());
+        doThrow(new RuntimeException("FCM 장애")).when(fcmChannel).send(any(), any(), any());
 
         dispatcher.dispatch(USER_ID, NotificationType.CONNECTION_REQUEST, content);
 
-        verify(fcmChannel).send(any(), any());
-        verify(smsChannel).send(any(), any()); // FCM 실패에도 SMS는 발송됨
+        verify(fcmChannel).send(any(), any(), any());
+        verify(smsChannel).send(any(), any(), any()); // FCM 실패에도 SMS는 발송됨
     }
 
     @Test
@@ -115,8 +116,8 @@ class NotificationDispatcherTest {
         dispatcher.dispatch(USER_ID, NotificationType.CONNECTION_REQUEST, content);
 
         verifyNoInteractions(recipientResolver);
-        verify(fcmChannel, never()).send(any(), any());
-        verify(smsChannel, never()).send(any(), any());
+        verify(fcmChannel, never()).send(any(), any(), any());
+        verify(smsChannel, never()).send(any(), any(), any());
     }
 
     @Test
@@ -124,35 +125,35 @@ class NotificationDispatcherTest {
     void 필수알림_FCM전달성공_SMS미발송() {
         // mandatory=true 타입은 settingService를 조회하지 않고 강제 발송한다.
         // FCM이 실제로 전달됐으면(true) SMS 비용을 아끼고 폴백하지 않는다 (결과 기반, M-S2-1).
-        when(fcmChannel.send(any(), any())).thenReturn(true);
+        when(fcmChannel.send(any(), any(), any())).thenReturn(true);
 
         dispatcher.dispatch(USER_ID, NotificationType.WARD_SOS, content);
 
         verify(settingService, never()).enabledChannels(any()); // 설정 무시
-        verify(fcmChannel).send(any(), any());
-        verify(smsChannel, never()).send(any(), any());
+        verify(fcmChannel).send(any(), any(), any());
+        verify(smsChannel, never()).send(any(), any(), any());
     }
 
     @Test
     @DisplayName("필수 알림(WARD_SOS) + FCM 전달 실패(토큰 없음/전부 만료) → SMS로 폴백 발송")
     void 필수알림_FCM전달실패_SMS폴백() {
         // 토큰 부재·전 토큰 만료 등 "실제 전달 실패"(false)면 SMS를 폴백으로 발송한다 (M-S2-1).
-        when(fcmChannel.send(any(), any())).thenReturn(false);
+        when(fcmChannel.send(any(), any(), any())).thenReturn(false);
 
         dispatcher.dispatch(USER_ID, NotificationType.WARD_SOS, content);
 
         verify(settingService, never()).enabledChannels(any()); // 설정 무시
-        verify(smsChannel).send(any(), any());
+        verify(smsChannel).send(any(), any(), any());
     }
 
     @Test
     @DisplayName("필수 알림(WARD_SOS) + FCM 발송 예외 → 예외도 전달 실패로 보고 SMS 폴백")
     void 필수알림_FCM예외_SMS폴백() {
-        doThrow(new RuntimeException("FCM 장애")).when(fcmChannel).send(any(), any());
+        doThrow(new RuntimeException("FCM 장애")).when(fcmChannel).send(any(), any(), any());
 
         dispatcher.dispatch(USER_ID, NotificationType.WARD_SOS, content);
 
-        verify(smsChannel).send(any(), any());
+        verify(smsChannel).send(any(), any(), any());
     }
 
     @Test
@@ -160,24 +161,24 @@ class NotificationDispatcherTest {
     void 이상감지_FCM고정_SMS선택() {
         // FORCED_PUSH_PLUS_SETTINGS: FCM은 설정 무시(고정), 나머지 채널은 설정대로.
         given(settingService.enabledChannels(USER_ID)).willReturn(EnumSet.noneOf(NotificationChannelType.class));
-        when(fcmChannel.send(any(), any())).thenReturn(true);
+        when(fcmChannel.send(any(), any(), any())).thenReturn(true);
 
         dispatcher.dispatch(USER_ID, NotificationType.ANOMALY_DETECTED, content);
 
-        verify(fcmChannel).send(any(), any());
-        verify(smsChannel, never()).send(any(), any());
+        verify(fcmChannel).send(any(), any(), any());
+        verify(smsChannel, never()).send(any(), any(), any());
     }
 
     @Test
     @DisplayName("이상감지: SMS를 켠 사용자에게는 FCM + SMS 모두 발송한다")
     void 이상감지_SMS켜짐_추가발송() {
         given(settingService.enabledChannels(USER_ID)).willReturn(EnumSet.of(NotificationChannelType.SMS));
-        when(fcmChannel.send(any(), any())).thenReturn(true);
+        when(fcmChannel.send(any(), any(), any())).thenReturn(true);
 
         dispatcher.dispatch(USER_ID, NotificationType.ANOMALY_DETECTED, content);
 
-        verify(fcmChannel).send(any(), any());
-        verify(smsChannel).send(any(), any());
+        verify(fcmChannel).send(any(), any(), any());
+        verify(smsChannel).send(any(), any(), any());
     }
 
     @Test
@@ -185,11 +186,23 @@ class NotificationDispatcherTest {
     void 이상감지_FCM미전달_SMS폴백없음() {
         // WARD_SOS와 결정적으로 다른 지점(D-2). 폴백하면 문자를 선택하지 않은 사용자에게 과금·발송이 발생한다.
         given(settingService.enabledChannels(USER_ID)).willReturn(EnumSet.noneOf(NotificationChannelType.class));
-        when(fcmChannel.send(any(), any())).thenReturn(false);
+        when(fcmChannel.send(any(), any(), any())).thenReturn(false);
 
         dispatcher.dispatch(USER_ID, NotificationType.ANOMALY_DETECTED, content);
 
-        verify(smsChannel, never()).send(any(), any());
+        verify(smsChannel, never()).send(any(), any(), any());
+    }
+
+    @Test
+    @DisplayName("채널에 알림 종류를 그대로 전달한다(알림톡이 승인 템플릿을 고르는 근거)")
+    void 채널에_알림종류_전달() {
+        given(settingService.enabledChannels(USER_ID)).willReturn(EnumSet.noneOf(NotificationChannelType.class));
+        when(fcmChannel.send(any(), any(), any())).thenReturn(true);
+
+        dispatcher.dispatch(USER_ID, NotificationType.ANOMALY_DETECTED_SELF, content);
+
+        // 종류가 뭉개져 전달되면 본인에게 보호자용 승인 템플릿이 선택될 수 있다
+        verify(fcmChannel).send(eq(NotificationType.ANOMALY_DETECTED_SELF), any(), any());
     }
 
     @Test
@@ -201,7 +214,14 @@ class NotificationDispatcherTest {
                 .filter(type -> type.policy() != NotificationType.Policy.SETTINGS_ONLY)
                 .collect(java.util.stream.Collectors.toSet());
         assertThat(forced).containsExactlyInAnyOrder(
-                NotificationType.WARD_SOS, NotificationType.ANOMALY_DETECTED);
+                NotificationType.WARD_SOS,
+                NotificationType.ANOMALY_DETECTED,
+                NotificationType.ANOMALY_DETECTED_SELF);
+
+        // 본인 수신분은 알림톡 템플릿만 없을 뿐 채널 정책은 보호자분과 동일해야 한다
+        // (FCM 고정 유지 — 화재 시 본인 대피 안내가 설정으로 꺼지면 안 된다, D-1)
+        assertThat(NotificationType.ANOMALY_DETECTED_SELF.policy())
+                .isEqualTo(NotificationType.ANOMALY_DETECTED.policy());
 
         // SOS만 SMS 폴백을 갖는다. 이상감지는 FCM 고정 + 설정 채널(폴백 없음).
         assertThat(NotificationType.WARD_SOS.policy())

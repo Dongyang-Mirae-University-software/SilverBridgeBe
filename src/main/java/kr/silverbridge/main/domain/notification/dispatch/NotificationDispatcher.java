@@ -63,7 +63,7 @@ public class NotificationDispatcher {
      */
     public void dispatch(String userId, NotificationType type, NotificationContent content) {
         switch (type.policy()) {
-            case FORCED_PUSH_WITH_SMS_FALLBACK -> dispatchMandatory(userId, content);
+            case FORCED_PUSH_WITH_SMS_FALLBACK -> dispatchMandatory(userId, type, content);
             case FORCED_PUSH_PLUS_SETTINGS -> dispatchForcedPushPlusSettings(userId, type, content);
             case SETTINGS_ONLY -> dispatchBySettings(userId, type, content);
         }
@@ -79,7 +79,7 @@ public class NotificationDispatcher {
 
         NotificationRecipient recipient = recipientResolver.resolve(userId);
         for (NotificationChannelType channelType : targets) {
-            sendQuietly(channelType, recipient, content);
+            sendQuietly(channelType, type, recipient, content);
         }
     }
 
@@ -98,7 +98,7 @@ public class NotificationDispatcher {
 
         boolean pushDelivered = false;
         for (NotificationChannelType channelType : targets) {
-            boolean sent = sendQuietly(channelType, recipient, content);
+            boolean sent = sendQuietly(channelType, type, recipient, content);
             if (channelType == FORCED_PUSH) {
                 pushDelivered = sent;
             }
@@ -113,6 +113,7 @@ public class NotificationDispatcher {
 
     /** 채널 1건 발송. 미구현 채널은 건너뛰고, 발송 실패는 격리한다. 실제 전달됐으면 true. */
     private boolean sendQuietly(NotificationChannelType channelType,
+                                NotificationType type,
                                 NotificationRecipient recipient,
                                 NotificationContent content) {
         NotificationChannel channel = channels.get(channelType);
@@ -122,7 +123,7 @@ public class NotificationDispatcher {
             return false;
         }
         try {
-            return channel.send(recipient, content);
+            return channel.send(type, recipient, content);
         } catch (Exception e) {
             // 한 채널 실패가 다른 채널 발송을 막지 않도록 격리. 구조 결함 진단을 위해 스택 포함 (L-S2-6)
             log.error("채널 발송 실패: userId={}, channel={}", recipient.userId(), channelType, e);
@@ -137,14 +138,14 @@ public class NotificationDispatcher {
      * 푸시·SMS 모두 미발송되는 갭이 있었다. 토큰 없음·전 토큰 만료·발송 예외를 모두
      * "전달 실패"로 수렴시켜 SMS 폴백한다. 전달 성공 시엔 SMS 비용을 아낀다.
      */
-    private void dispatchMandatory(String userId, NotificationContent content) {
+    private void dispatchMandatory(String userId, NotificationType type, NotificationContent content) {
         NotificationRecipient recipient = recipientResolver.resolve(userId);
 
         boolean delivered = false;
         NotificationChannel primary = channels.get(FORCED_PUSH);
         if (primary != null) {
             try {
-                delivered = primary.send(recipient, content);
+                delivered = primary.send(type, recipient, content);
             } catch (Exception e) {
                 log.error("필수 알림 FCM 발송 실패 — SMS 폴백 진행: userId={}", userId, e);
             }
@@ -159,7 +160,7 @@ public class NotificationDispatcher {
             return;
         }
         try {
-            boolean sent = fallback.send(recipient, content);
+            boolean sent = fallback.send(type, recipient, content);
             log.info("필수 알림 SMS 폴백 {}: userId={}", sent ? "발송" : "건너뜀(전화번호 없음)", userId);
         } catch (Exception e) {
             log.error("필수 알림 SMS 폴백 발송 실패: userId={}", userId, e);

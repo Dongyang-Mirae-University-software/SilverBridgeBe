@@ -66,8 +66,27 @@ class AnomalyNotificationListenerTest {
 
         verify(notificationDispatcher).dispatch(eq("GD0001"), eq(NotificationType.ANOMALY_DETECTED), any());
         verify(notificationDispatcher).dispatch(eq("GD0002"), eq(NotificationType.ANOMALY_DETECTED), any());
-        verify(notificationDispatcher).dispatch(eq(WARD_ID), eq(NotificationType.ANOMALY_DETECTED), any());
+        verify(notificationDispatcher).dispatch(eq(WARD_ID), eq(NotificationType.ANOMALY_DETECTED_SELF), any());
         verify(webSocketEventPublisher).sendToUser(eq(WARD_ID), eq("anomaly-detected"), any());
+    }
+
+    @Test
+    @DisplayName("본인은 별도 알림 종류로 보낸다(보호자용 승인 알림톡 템플릿이 본인에게 선택되지 않도록)")
+    void 본인은_별도_알림종류로_발송() {
+        when(connectionService.getActiveGuardianIds(WARD_ID)).thenReturn(List.of("GD0001"));
+        when(cooldown.tryAcquire(anyString(), eq(SESSION_ID), eq(DetectedType.FIRE), anyBoolean())).thenReturn(true);
+
+        listener.handleAnomalyDetected(event);
+
+        // 본인에게 ANOMALY_DETECTED(보호자용)로 나가면 알림톡 문구가 어긋난다 = 카카오 채널 제재 사유
+        verify(notificationDispatcher, never()).dispatch(eq(WARD_ID), eq(NotificationType.ANOMALY_DETECTED), any());
+        verify(notificationDispatcher, never())
+                .dispatch(eq("GD0001"), eq(NotificationType.ANOMALY_DETECTED_SELF), any());
+
+        // 클라이언트 계약(data["type"])은 수신자와 무관하게 그대로 유지한다
+        ArgumentCaptor<NotificationContent> self = ArgumentCaptor.forClass(NotificationContent.class);
+        verify(notificationDispatcher).dispatch(eq(WARD_ID), eq(NotificationType.ANOMALY_DETECTED_SELF), self.capture());
+        assertThat(self.getValue().data()).containsEntry("type", "ANOMALY_DETECTED");
     }
 
     @Test
@@ -143,6 +162,6 @@ class AnomalyNotificationListenerTest {
 
         listener.handleAnomalyDetected(event);
 
-        verify(notificationDispatcher).dispatch(eq(WARD_ID), eq(NotificationType.ANOMALY_DETECTED), any());
+        verify(notificationDispatcher).dispatch(eq(WARD_ID), eq(NotificationType.ANOMALY_DETECTED_SELF), any());
     }
 }
