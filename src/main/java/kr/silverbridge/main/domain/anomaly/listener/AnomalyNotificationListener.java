@@ -86,7 +86,10 @@ public class AnomalyNotificationListener {
                 }
 
                 webSocketEventPublisher.sendToUser(userId, "anomaly-detected", data);
-                notificationDispatcher.dispatch(userId, NotificationType.ANOMALY_DETECTED,
+                // 본인은 별도 타입으로 보낸다 — 승인된 알림톡 템플릿이 보호자용 문구라 본인에게 나가면 안 된다.
+                // (data["type"]은 계속 ANOMALY_DETECTED — 클라이언트 계약은 그대로 둔다)
+                notificationDispatcher.dispatch(userId,
+                        self ? NotificationType.ANOMALY_DETECTED_SELF : NotificationType.ANOMALY_DETECTED,
                         NotificationContent.of(TITLE, body(event, self), data));
                 sent++;
             } catch (Exception e) {

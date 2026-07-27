@@ -135,16 +135,33 @@ detectedAt: 2026-07-23 14:30
 
 - **`#{detectedAt}` 코드 반영** — 2026-07-23 완료(아래 "코드 연동" 참조). 반영 전이었다면 승인돼도
   `bindVariables()`가 빈 문자열을 채워 "감지 시각: "만 발송됐다.
-- 🚧 **피보호자 본인 발송 차단이 켜기 전 선결 조건** — 리스너는 보호자·본인 **양쪽**에 같은
-  `ANOMALY_DETECTED` 알림을 보내는데, 승인 문구는 **보호자용**이다("회원님께서 보호자로 등록하시고 직접
-  신청하신…" / "대상: #{wardName}님"). 본인이 알림톡을 켜 둔 상태로 `ALIMTALK_ENABLED=true`가 되면
-  **피보호자 본인에게 사실과 다른 문구가 나간다**(= 신고·채널 차단 사유). 본인용 템플릿을 별도 등록하거나,
-  등록 전까지 **본인 수신자는 알림톡 채널을 건너뛰도록** 막아야 한다(리스너에 `self` 플래그는 이미 있음).
+- ✅ **피보호자 본인 발송 차단 — 2026-07-27 구현 완료** (아래 "본인 수신분 차단" 참조).
+  **피보호자 본인용 템플릿은 등록하지 않기로 결정** — 이상감지 알림톡은 **보호자만** 받는다.
+  본인은 종전대로 FCM·WebSocket·SMS로 대피 안내를 받는다(설계 D-1 유지).
 - **브랜드 표기 3중화** — 채널 `@gosky` / 템플릿명 `SilverBridge` / 본문 `CareAI`. 검수자에겐 서로 다른
   주체로 보인다. 대외 서비스명을 하나로 정리하는 것이 안전하다(참고 의견으로 임시 방어 중).
 - **환경변수 주입**: `.env.dev`의 `ALIMTALK_PF_ID`·`ALIMTALK_TEMPLATE_ANOMALY`는 이미 승인 값과 동일
-  (콘솔 재확인 완료 — 수정 제출이라 ID 유지됨). 남은 건 `ALIMTALK_ENABLED=true` 전환뿐이며,
-  **위 본인 발송 차단이 선행돼야 한다**. 서버는 로컬과 별개로 각 환경 `.env.dev`에 직접 주입(평문 커밋 금지).
+  (콘솔 재확인 완료 — 수정 제출이라 ID 유지됨). **남은 건 `ALIMTALK_ENABLED=true` 전환뿐**이다.
+  서버는 로컬과 별개로 각 환경 `.env.dev`에 직접 주입(평문 커밋 금지).
+
+## 본인 수신분 차단 (2026-07-27)
+
+승인 문구가 보호자용이라, **피보호자 본인에게는 알림톡이 나가지 않도록** 알림 종류를 분리했다.
+
+| 위치 | 내용 |
+|---|---|
+| `NotificationType` | `ANOMALY_DETECTED_SELF` 추가(정책은 보호자분과 동일 `FORCED_PUSH_PLUS_SETTINGS`) |
+| `application.yaml` | `templates`에 `ANOMALY_DETECTED_SELF` **매핑을 두지 않음** → `templateFor()`가 null → 알림톡만 스킵 |
+| `AnomalyNotificationListener` | 수신자별로 `self ? ANOMALY_DETECTED_SELF : ANOMALY_DETECTED` 로 dispatch |
+| `NotificationChannel` | `send(type, recipient, content)` — 채널이 **발송 종류**를 받는다 |
+| `KakaoAlimtalkNotificationChannel` | 템플릿 조회를 `data["type"]` 스니핑 → `type.name()`으로 변경 |
+
+- **`data["type"]`은 `"ANOMALY_DETECTED"` 그대로** 유지한다 — 클라이언트가 파싱하는 FE 계약 값이라
+  건드리지 않는다. 발송 라우팅(승인 템플릿 선택)을 FE 계약 문자열에 묶어두면 계약이 바뀔 때 엉뚱한 템플릿이
+  선택될 수 있어 이번에 분리했다.
+- **본인은 FCM·WebSocket·SMS를 그대로 받는다** — 화재 시 집 안 당사자 대피 안내(D-1)는 유지된다.
+- 채널을 제외하는 방식(디스패처에 "제외 채널" 파라미터)은 **채택하지 않았다** — 호출자가 임의 채널을 끌 수
+  있게 되어 "FCM은 사용자 설정으로 끌 수 없다"는 보장에 구멍이 생긴다.
 
 ## 코드 연동 (`#{detectedAt}`)
 

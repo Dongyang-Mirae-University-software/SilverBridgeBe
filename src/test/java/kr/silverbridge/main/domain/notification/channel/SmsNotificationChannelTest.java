@@ -1,5 +1,7 @@
 package kr.silverbridge.main.domain.notification.channel;
 
+import kr.silverbridge.main.domain.notification.dispatch.NotificationType;
+
 import kr.silverbridge.main.domain.auth.service.SmsSender;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -32,7 +34,7 @@ class SmsNotificationChannelTest {
         NotificationRecipient recipient = new NotificationRecipient("WD0001", "01012345678", null);
         NotificationContent content = NotificationContent.of("연결 요청", "요청이 도착했습니다.", Map.of());
 
-        boolean delivered = channel.send(recipient, content);
+        boolean delivered = channel.send(NotificationType.CONNECTION_REQUEST, recipient, content);
 
         assertThat(delivered).isTrue();
         verify(smsSender).send("01012345678", "[연결 요청] 요청이 도착했습니다.");
@@ -44,7 +46,7 @@ class SmsNotificationChannelTest {
         NotificationRecipient recipient = new NotificationRecipient("WD0001", null, null);
         NotificationContent content = NotificationContent.of("연결 요청", "요청이 도착했습니다.", Map.of());
 
-        boolean delivered = channel.send(recipient, content);
+        boolean delivered = channel.send(NotificationType.CONNECTION_REQUEST, recipient, content);
 
         assertThat(delivered).isFalse();
         verifyNoInteractions(smsSender);

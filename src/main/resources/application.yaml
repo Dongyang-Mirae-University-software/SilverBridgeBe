@@ -117,8 +117,10 @@ notification:
     enabled: ${ALIMTALK_ENABLED:false}
     pf-id: ${ALIMTALK_PF_ID:}                  # 발신 프로필(KA01PF…) — .env.dev 주입
     templates:
-      # 이상감지 템플릿은 심사 등록 필요(2026-07-14 기준 계정 승인 템플릿은 '인증번호'용뿐).
-      # 승인되면 ALIMTALK_TEMPLATE_ANOMALY에 templateId(KA01TP…)를 넣고 ALIMTALK_ENABLED=true로 켠다.
+      # 이상감지 보호자용 템플릿 — 2026-07-27 승인(KA01TP26071501…). templateId는 .env.dev 주입.
+      # ⚠️ ANOMALY_DETECTED_SELF(피보호자 본인 수신분)는 여기에 매핑을 두지 않는다 — 승인 문구가
+      #    보호자용("회원님께서 보호자로 등록하시고…")이라 본인에게 보내면 문구가 어긋나 채널 제재 대상이다.
+      #    매핑이 없으므로 본인 알림톡은 스킵되고 FCM·WS·SMS만 나간다. (본인용 템플릿은 등록하지 않기로 결정)
       ANOMALY_DETECTED:
         template-id: ${ALIMTALK_TEMPLATE_ANOMALY:}
         # 값은 알림 data의 동명 키에서 바인딩 — 승인 템플릿 본문의 #{변수}와 이름·개수가 일치해야 한다.

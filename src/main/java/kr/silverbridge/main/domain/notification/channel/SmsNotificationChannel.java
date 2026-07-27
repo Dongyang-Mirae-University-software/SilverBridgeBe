@@ -1,6 +1,7 @@
 package kr.silverbridge.main.domain.notification.channel;
 
 import kr.silverbridge.main.domain.auth.service.SmsSender;
+import kr.silverbridge.main.domain.notification.dispatch.NotificationType;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
@@ -29,7 +30,8 @@ public class SmsNotificationChannel implements NotificationChannel {
     }
 
     @Override
-    public boolean send(NotificationRecipient recipient, NotificationContent content) {
+    public boolean send(NotificationType type, NotificationRecipient recipient, NotificationContent content) {
+        // 문자는 종류와 무관하게 title/body 한 줄로 나간다(승인 템플릿 같은 종류별 제약이 없다).
         if (recipient.phone() == null || recipient.phone().isBlank()) {
             log.warn("SMS 알림 건너뜀(전화번호 없음): userId={}", recipient.userId());
             return false;

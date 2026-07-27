@@ -1,6 +1,7 @@
 package kr.silverbridge.main.domain.notification.channel;
 
 import kr.silverbridge.main.domain.notification.config.AlimtalkProperties;
+import kr.silverbridge.main.domain.notification.dispatch.NotificationType;
 import kr.silverbridge.main.domain.notification.service.AlimtalkSender;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -36,17 +37,19 @@ public class KakaoAlimtalkNotificationChannel implements NotificationChannel {
     }
 
     @Override
-    public boolean send(NotificationRecipient recipient, NotificationContent content) {
+    public boolean send(NotificationType type, NotificationRecipient recipient, NotificationContent content) {
         if (recipient.phone() == null || recipient.phone().isBlank()) {
             log.warn("알림톡 건너뜀(전화번호 없음): userId={}", recipient.userId());
             return false;
         }
 
-        String notificationType = content.data() != null ? content.data().get("type") : null;
-        AlimtalkProperties.Template template = properties.templateFor(notificationType);
+        // 템플릿은 발송 종류(type)로 고른다 — data["type"]은 클라이언트가 파싱하는 FE 계약 값이라
+        // 발송 라우팅을 거기에 묶으면 FE 계약이 바뀔 때 엉뚱한 템플릿이 선택될 수 있다.
+        AlimtalkProperties.Template template = properties.templateFor(type != null ? type.name() : null);
         if (template == null) {
-            // 승인된 템플릿이 없는 알림 종류 — 발송 수단이 없으므로 스킵(설정을 켜도 아무 일도 일어나지 않는다)
-            log.debug("알림톡 템플릿 미설정 — 건너뜀: userId={}, type={}", recipient.userId(), notificationType);
+            // 승인된 템플릿이 없는 알림 종류 — 발송 수단이 없으므로 스킵(설정을 켜도 아무 일도 일어나지 않는다).
+            // 승인 문구와 수신자가 어긋나는 발송을 막는 지점이기도 하다(예: 보호자용 문구를 피보호자에게).
+            log.debug("알림톡 템플릿 미설정 — 건너뜀: userId={}, type={}", recipient.userId(), type);
             return false;
         }
 
