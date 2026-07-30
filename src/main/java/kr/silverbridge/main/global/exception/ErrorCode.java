@@ -86,7 +86,12 @@ public enum ErrorCode {
     // 카메라(이상감지)
     CAMERA_NOT_FOUND(HttpStatus.NOT_FOUND, "카메라를 찾을 수 없습니다."),
     // 타인 카메라 접근 — 무슨 일이 일어났는지 그대로 안내한다(시니어 UX 우선, 2026-07-14 정책)
-    CAMERA_NOT_AUTHORIZED(HttpStatus.FORBIDDEN, "본인이 등록한 카메라만 사용할 수 있습니다.");
+    CAMERA_NOT_AUTHORIZED(HttpStatus.FORBIDDEN, "본인이 등록한 카메라만 사용할 수 있습니다."),
+
+    // SOS 이력·처리(ACK)
+    SOS_EVENT_NOT_FOUND(HttpStatus.NOT_FOUND, "SOS 이력을 찾을 수 없습니다."),
+    // 연결되지 않은 피보호자의 이력 접근 — 404 위장 대신 그대로 안내한다(2026-07-14 정책)
+    SOS_NOT_AUTHORIZED(HttpStatus.FORBIDDEN, "연결된 피보호자의 SOS 이력만 볼 수 있습니다.");
 
     private final HttpStatus status;
     private final String message;

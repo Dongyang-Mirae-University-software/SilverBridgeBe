@@ -1019,3 +1019,14 @@ REST API Key 단독 대비 보안 강화 — 인가코드 탈취 시 토큰 발�
 - **코드 기본값을 서버 값과 일치**시켰다(`application.yaml`·`AnomalyProperties`) — 종전엔 서버만 환경변수로 덮어써 **로컬 개발 환경만 다르게 동작**했다. 이제 환경변수가 없어도 같은 빈도로 돈다.
 - **본인 알림 1분 → 3분**. 피보호자 화면은 24시간 켜져 있어 **오탐 시 1분마다 알림이 쌓이는 소음**이 실질적 부담이다. "보호자보다 짧게"라는 D-1의 의도는 3분으로도 유지된다.
 - 최종값: **이력 1분 / 보호자 5분 / 본인 3분** (코드 기본값 = 두 서버 `.env.dev` 값).
+
+## [2026-07-30] 보호자용 SOS 이력 조회 + 처리 결과(ACK)
+
+- **발단**: SOS는 **발생**만 있고(`POST /api/ward/sos`) 보호자가 지난 이력을 볼 API가 없었다 — `SosEventRepository`는 빈 인터페이스. 근거는 보호자 대시보드 프로토타입("OOO 님 SOS 이력" + 건별 `안전 확인`/`응급 출동` 배지)이며, **프로토타입은 목업이고 운영(gosky) FE에 미반영**이다(로컬 FE에도 보호자 SOS 화면·호출 0건) → **API 계약은 백엔드가 정의**.
+- **구현**: `sos_event`에 ACK 컬럼 4개(V33: `ack_status`·`ack_by`(FK SET NULL)·`ack_at`·`ack_note`) + `GET /api/guardian/sos/history`(페이징, `wardId` 선택) + `PATCH /api/guardian/sos/{id}/ack`(`hasRole('GUARDIAN')`). 조회·ACK는 `GuardianSosService`로 분리 — `SosService`(발생 경로)·`SosNotificationListener`·`NotificationDispatcher` **전부 무변경**.
+- **인가 = 현재 ACTIVE 연결만**. 연결이 해제되면 **과거 이력도 비공개**. 인가 목록으로 `getMyWards()`를 쓰지 않은 이유는 **PENDING이 섞여 수락 전 피보호자 이력이 노출**되기 때문 → `ConnectionService.getActiveWardIds()`·`isActiveConnection()` 신설. 연결 없는 접근은 **403 + `[IDOR-ATTEMPT]` WARN**(2026-07-14 정책), 탈퇴로 `ward_id`가 NULL인 익명 이력도 403.
+- **ACK 정책**: 이력 1행 = ACK 1개(마지막 처리로 덮어쓰기, 재ACK 허용), 미처리는 `ack_status IS NULL`(백필 불요). **ACK는 알림에 개입하지 않는다** — WARD_SOS 필수 알림은 처리 여부와 무관하게 항상 발송(2026-07-23 규칙 연장).
+- **ACK 알림은 WebSocket만**(`sos-acknowledged`, AFTER_COMMIT + `@Async`) — ACTIVE 보호자 전원 + 피보호자 본인. FCM·SMS·알림톡 없음(상황 종료 후 상태 갱신이라 소음).
+- **범위 제외**: 프로토타입의 **위치(📍)** — SOS는 버튼 입력이라 위치 소스가 없고(`camera.label`은 카메라 전용), 넣으려면 발생 API 계약 변경 + FE 동시 수정이 필요해 후속으로 분리. 화면 문구 조립도 FE 책임(서버는 원자값만).
+- **테스트**: `./gradlew build` 전체 통과 — **327건 / 실패 0**(신규 19건: 인가·페이지 보정·재ACK·탈퇴 이력·WS 수신자). ⚠️ Docker 미설치 환경이라 **Flyway 실적용은 미검증** — 배포 전 기동 로그의 `version "33"` 확인 필요(`ddl-auto=validate`).
+- 상세: `docs/(2026-07-30) feature-sos-history-ack.md`
