@@ -39,12 +39,12 @@ class AnomalyNotificationCooldownTest {
     void setUp() {
         AnomalyProperties properties = new AnomalyProperties();
         properties.setNotifyCooldownMinutes(5);
-        properties.setNotifySelfCooldownMinutes(1);
+        properties.setNotifySelfCooldownMinutes(3);
         cooldown = new AnomalyNotificationCooldown(redisTemplate, properties);
     }
 
     @Test
-    @DisplayName("보호자는 5분, 피보호자 본인은 1분 쿨다운을 적용한다(현장 당사자라 더 자주 알린다)")
+    @DisplayName("보호자는 5분, 피보호자 본인은 3분 쿨다운을 적용한다(현장 당사자라 더 자주 알린다)")
     void 수신자별_TTL() {
         when(redisTemplate.opsForValue()).thenReturn(valueOperations);
         when(valueOperations.setIfAbsent(anyString(), eq("1"), any(Duration.class))).thenReturn(true);
@@ -55,7 +55,7 @@ class AnomalyNotificationCooldownTest {
         ArgumentCaptor<Duration> ttl = ArgumentCaptor.forClass(Duration.class);
         org.mockito.Mockito.verify(valueOperations, org.mockito.Mockito.times(2))
                 .setIfAbsent(anyString(), eq("1"), ttl.capture());
-        assertThat(ttl.getAllValues()).containsExactly(Duration.ofMinutes(5), Duration.ofMinutes(1));
+        assertThat(ttl.getAllValues()).containsExactly(Duration.ofMinutes(5), Duration.ofMinutes(3));
     }
 
     @Test

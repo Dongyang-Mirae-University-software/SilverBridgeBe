@@ -44,14 +44,29 @@ public class AnomalyProperties {
     /** CONFIDENCE 폴백 모드에서 이상감지로 인정할 최소 신뢰도. AI 표시용 임계(0.35)보다 높게 잡는다. */
     private double confidenceThreshold = 0.6;
 
-    /** 같은 (sessionId, detectedType) 이력 적재 최소 간격(분). 매 프레임 broadcast로 인한 이력 폭주를 막는다. */
-    private long cooldownMinutes = 5;
+    /**
+     * 같은 (sessionId, detectedType) 이력 적재 최소 간격(분). 매 프레임 broadcast로 인한 이력 폭주를 막는다.
+     *
+     * <p>알림 간격보다 <b>짧게</b> 잡는다 — 이력은 촘촘할수록 "언제부터 언제까지 감지됐는지" 타임라인이
+     * 남아 사후 분석에 쓸모가 있고, 저장 비용도 작다. 사람에게 가는 빈도는 아래 알림 쿨다운이 따로 정한다.</p>
+     */
+    private long cooldownMinutes = 1;
 
-    /** 보호자에게 같은 감지를 다시 알리기까지의 최소 간격(분). alarm fatigue 방지. */
+    /**
+     * 보호자에게 같은 감지를 다시 알리기까지의 최소 간격(분). alarm fatigue 방지.
+     *
+     * <p>보호자는 폰으로 받는다 — FCM뿐 아니라 <b>알림톡·SMS도 이 간격으로 나가므로</b> 과금과
+     * 카카오 신고·발신 프로필 차단 리스크가 함께 걸린다. 이력 쿨다운과 분리해 두는 이유다.</p>
+     */
     private long notifyCooldownMinutes = 5;
 
-    /** 피보호자 본인에게 다시 알리기까지의 최소 간격(분). 현장 당사자라 대피 재촉을 위해 더 짧게 잡는다. */
-    private long notifySelfCooldownMinutes = 1;
+    /**
+     * 피보호자 본인에게 다시 알리기까지의 최소 간격(분). 현장 당사자라 보호자보다 짧게 잡는다.
+     *
+     * <p>1분이 아니라 3분인 이유: 오탐이 났을 때 24시간 켜져 있는 피보호자 화면에 알림이 1분마다 쌓이면
+     * 소음이 된다. 대피 재촉이라는 목적(D-1)은 보호자보다 짧다는 것으로 충분히 달성된다.</p>
+     */
+    private long notifySelfCooldownMinutes = 3;
 
     /** 재연결 백오프 최소 간격(초). */
     private long reconnectMinSeconds = 2;

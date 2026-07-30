@@ -105,9 +105,12 @@ anomaly:
   # AI 팀 합의(2026-07-14): 라이브 경로에서 confidence >= 0.6이면 danger=true로 채운다 → 배포되면 DANGER 모드가 실동작
   trigger-mode: ${ANOMALY_TRIGGER_MODE:DANGER}
   confidence-threshold: ${ANOMALY_CONFIDENCE_THRESHOLD:0.6} # CONFIDENCE 폴백 임계 + danger 불일치 경고 기준(AI 합의값과 동일하게 유지)
-  cooldown-minutes: ${ANOMALY_COOLDOWN_MINUTES:5}           # 같은 (sessionId, detectedType) 이력 최소 간격 — 매 프레임 broadcast 폭주 방지
+  # 빈도 정책(2026-07-28): 이력은 촘촘히(1분) 남겨 화재 지속 구간의 타임라인을 확보하되,
+  # 사람에게 가는 알림은 그보다 성기게 — 보호자 5분(알림톡·SMS 건수·카카오 신고 리스크),
+  # 본인 3분(현장 당사자라 보호자보다 짧게, 다만 오탐 시 화면 소음을 감안해 1분에서 완화).
+  cooldown-minutes: ${ANOMALY_COOLDOWN_MINUTES:1}           # 같은 (sessionId, detectedType) 이력 최소 간격 — 매 프레임 broadcast 폭주 방지
   notify-cooldown-minutes: ${ANOMALY_NOTIFY_COOLDOWN_MINUTES:5}        # 보호자 알림 재발송 최소 간격
-  notify-self-cooldown-minutes: ${ANOMALY_NOTIFY_SELF_COOLDOWN_MINUTES:1} # 피보호자 본인 알림 재발송 최소 간격(대피 재촉 — 더 짧게)
+  notify-self-cooldown-minutes: ${ANOMALY_NOTIFY_SELF_COOLDOWN_MINUTES:3} # 피보호자 본인 알림 재발송 최소 간격(대피 재촉 — 보호자보다 짧게)
 
 notification:
   alimtalk:
