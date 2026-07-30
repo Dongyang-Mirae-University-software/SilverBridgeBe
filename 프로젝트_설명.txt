@@ -1,5 +1,5 @@
 ================================================================================
-  Claude Code Skills (이 저장소에 설치된 13개)
+  Claude Code Skills (이 저장소에 설치된 20개)
 ================================================================================
 
   Skill이란?
@@ -22,6 +22,11 @@
     Cross-cut   : security-audit, test-quality, logging-patterns,
                   concurrency-review, performance-smell-detection,
                   api-contract-review        (보안·테스트·로깅·동시성·성능·API)
+    Workflow    : work-prompt, git-commit, changelog-generator,
+                  issue-triage, maven-dependency-audit, java-migration
+                                              (작업 절차·커밋·릴리스·의존성·버전업)
+
+  ※ 정확한 최신 목록은 .claude/skills/README.md 가 기준입니다(이 문서는 요약).
 
   ▶ 타입별 분류
     Audit (기존 코드 점검) : architecture-review, java-code-review,
@@ -368,8 +373,13 @@ SilverBridge는 노인(피보호자)과 그 가족(보호자)을 연결하는 �
   긴급 SOS (피보호자 전용):
     → POST /api/ward/sos   → SOS 발생 이력 저장(sos_event) + 연결된 ACTIVE 보호자 전원에게
                              긴급 알림 발송(WebSocket /topic/{보호자ID}/sos-triggered + FCM). (2026-06-09 추가)
-                             · 필수 알림 — 보호자 알림 설정(ON/OFF)과 무관하게 무조건 발송
+                             · 필수 알림(WARD_SOS) — 보호자 알림 설정(ON/OFF)과 무관하게 FCM 강제 발송.
+                               FCM이 실제로 전달되지 않으면(토큰 없음·전 토큰 만료·발송 예외) SMS로 폴백
+                               (결과 기반 폴백, M-S2-1). 이상감지와 달리 SOS만 폴백이 있습니다.
                              · 보호자 여러 명이면 전원 발송(한 명 실패가 다른 보호자 막지 않음)
+                             · 알림 쿨다운: 같은 피보호자의 반복 SOS는 Redis 쿨다운으로 억제(fail-open)
+                             · 동작 설정(GET·PUT /api/ward/sos-setting)은 119 연결·안내 흐름만 정하며,
+                               어떤 값에서도 보호자 알림은 항상 발송됩니다 (3-12 참고)
                              · 응답: { sosEventId, triggeredAt }
                              · 119 통화 화면 / 보호자 직접 전화는 프론트 처리(백엔드 무관).
                                직접 전화번호는 GET /api/ward/connection/active 의 partnerPhone 사용
@@ -382,7 +392,10 @@ SilverBridge는 노인(피보호자)과 그 가족(보호자)을 연결하는 �
     보호자(GUARDIAN 전용):
     → POST /api/guardian/inquiry        → 문의 작성(최초 WAITING)
     → GET  /api/guardian/inquiry        → 내 문의 목록(본인만, 최신순)
-    → GET  /api/guardian/inquiry/{id}   → 내 문의 상세(본인만, 타인 ID는 404 = IDOR 차단)
+    → GET  /api/guardian/inquiry/{id}   → 내 문의 상세(본인만, 타인 ID는 403 = IDOR 차단)
+                                          ※ 2026-07-14 정책 변경: 404 위장 → 403 명시 안내
+                                            ("본인이 작성한 문의만 볼 수 있습니다." — 내용은 미노출,
+                                             시도는 [IDOR-ATTEMPT] WARN 로깅). 없는 문의는 그대로 404.
 
     관리자(ADMIN 전용, /api/admin/**):
     → GET  /api/admin/inquiry           → 전체 목록. 탭 카운트(totalCount/waitingCount/answeredCount,
@@ -468,25 +481,35 @@ SilverBridge는 노인(피보호자)과 그 가족(보호자)을 연결하는 �
     브라우저에서 토큰 발급 → Swagger 로 등록 → 트리거 API 호출 → 푸시 도착 확인.
 
 
-  [ 3-7-A. 알림 채널 추상화 및 채널별 수신 설정 ]  (2026-05-31 추가, 1단계)
+  [ 3-7-A. 알림 채널 추상화 및 채널별 수신 설정 ]  (2026-05-31 추가 / 알림톡 2026-07-27 가동)
   ─────────────────────────────
-  알림을 "이벤트 → 채널 라우터 → 사용자 설정에 따라 활성 채널로 발송" 구조로 일반화했습니다.
-  전체 계획은 3단계: (1단계·현재) 인프라 + FCM/SMS 추상화, (2단계) 카카오 알림톡 채널,
-  (3단계) 이메일 채널. 1단계에서는 채널 추상화 골격과 사용자 설정 기능만 구축합니다.
+  알림을 "이벤트 → 채널 라우터 → 알림 종류의 정책에 따라 채널 결정" 구조로 일반화했습니다.
+  전체 계획은 3단계: (1단계) 인프라 + FCM/SMS 추상화 ✅, (2단계) 카카오 알림톡 채널 ✅(2026-07-27
+  템플릿 승인·가동), (3단계) 이메일 채널 — 미구현(enum 값만).
 
   [채널 추상화]
   - NotificationChannelType(enum): FCM / SMS / KAKAO_ALIMTALK / EMAIL
-    (KAKAO_ALIMTALK·EMAIL은 enum 값만 정의, 발송 구현은 2·3단계)
+    (EMAIL만 enum 값 정의 상태이고 발송 구현은 없음 → 켜도 조용히 건너뜀)
   - NotificationChannel(전략 인터페이스): 구현체를 빈으로 등록하면 디스패처가 자동 수집.
-    현재 구현체 = FcmNotificationChannel(기존 FcmService 위임), SmsNotificationChannel(SmsSender 위임).
-  - NotificationDispatcher: 이벤트가 만든 알림을 사용자 설정에 따라 활성 채널로만 발송하며,
-    채널별 발송 실패를 격리(한 채널 실패가 다른 채널을 막지 않음)하고 미구현 채널은 조용히 건너뜀.
+    구현체 = FcmNotificationChannel / SmsNotificationChannel / KakaoAlimtalkNotificationChannel.
+    시그니처는 send(알림종류, 수신자, 내용) — 알림톡이 종류별 승인 템플릿을 고르는 근거로 쓴다.
+  - NotificationDispatcher: 알림 종류의 정책에 따라 채널을 정하고, 채널별 발송 실패를 격리
+    (한 채널 실패가 다른 채널을 막지 않음), 미구현·미설정 채널은 조용히 건너뜀.
   - WebSocket 실시간 발송은 추상화에 포함하지 않고 항상 발송(온라인 사용자 실시간 동기화 보장).
+
+  [알림 종류별 채널 정책 (NotificationType.Policy)]
+  - SETTINGS_ONLY               사용자 설정의 활성 채널로만 발송
+                                → 연결 요청/수락/거절/해제, 문의 답변
+  - FORCED_PUSH_WITH_SMS_FALLBACK  설정 무시 FCM 강제 + 실제 미전달 시 SMS 폴백
+                                → WARD_SOS (생명 관련이라 설정으로 끌 수 없음)
+  - FORCED_PUSH_PLUS_SETTINGS   FCM은 항상 + 나머지 채널은 설정대로, SMS 폴백 없음
+                                → ANOMALY_DETECTED(이상감지). 문자는 사용자가 선택하는 채널이라
+                                  폴백이 그 선택을 뒤집기 때문에 의도적으로 폴백하지 않는다.
 
   [필수/선택 분류]
   - 필수(설정 무시): SMS 인증번호(가입·비밀번호 재설정) — 디스패처를 경유하지 않는 동기 발송이라
-    설정으로 끌 수 없음이 구조적으로 보장됨. (긴급 알림용 mandatory 강제발송 메커니즘은 마련, 현재 등록된 타입 없음)
-  - 선택(설정 따름): 연결 요청/수락/거절/해제 알림 — 사용자 채널 설정에 따라 발송.
+    설정으로 끌 수 없음이 구조적으로 보장됨. 그 외 WARD_SOS·ANOMALY_DETECTED의 FCM(위 정책 참고).
+  - 선택(설정 따름): 연결 요청/수락/거절/해제·문의 답변 알림, 그리고 SOS·이상감지의 SMS·알림톡.
 
   [기본값 정책]
   설정 행이 없는 채널은 기본값 적용 — FCM은 기본 ON(기존 동작 보존), SMS/KAKAO/EMAIL은 기본 OFF.
@@ -504,7 +527,22 @@ SilverBridge는 노인(피보호자)과 그 가족(보호자)을 연결하는 �
     → headers: Authorization: Bearer {accessToken}
     → body: { "settings": [ { "channelType": "SMS", "enabled": true }, ... ] }  (전달한 채널만 갱신)
     → 200 data: 변경 후 전체 채널 설정
-    → 주의: KAKAO_ALIMTALK/EMAIL은 설정값만 저장되며 실제 발송은 2·3단계에서 지원
+    → KAKAO_ALIMTALK를 ON으로 두면 이상감지 알림이 카카오톡으로도 도착(승인 템플릿 문구 고정).
+      EMAIL은 설정값만 저장되며 실제 발송은 미지원(3단계).
+
+  [카카오 알림톡 (KAKAO_ALIMTALK)]
+  Solapi 발신 프로필을 경유해 카카오톡 채팅으로 도착합니다. 수신자를 전화번호로 찾으므로
+  카카오 로그인·친구추가가 필요 없습니다.
+  - ⚠️ 사전 심사에서 승인된 템플릿 문구만 발송 가능 — 자유 문구 불가, #{변수}만 치환합니다.
+    종류별 승인 템플릿이 없으면 그 종류의 알림톡은 조용히 스킵됩니다.
+  - 이상감지 템플릿: 2026-07-27 승인(보호자용). 변수 = wardName·location·detectedTypeLabel·detectedAt
+  - 🚫 피보호자 본인에게는 알림톡을 보내지 않습니다 — 승인 문구가 보호자용("회원님께서 보호자로
+    등록하시고 직접 신청하신…")이라 본인에게 보내면 사실과 어긋나 카카오 채널 제재 사유가 됩니다.
+    본인 수신분은 ANOMALY_DETECTED_SELF 종류로 발송되고 이 종류엔 템플릿 매핑이 없어 알림톡만
+    빠집니다(FCM·WebSocket·SMS는 그대로).
+  - 🚫 Solapi "알림톡 실패 시 SMS 대체발송"은 콘솔·코드 모두 OFF(disableSms=true) — 문자를
+    선택하지 않은 사용자에게 과금·발송이 나가는 것을 막습니다.
+  - 환경변수: ALIMTALK_ENABLED / ALIMTALK_PF_ID / ALIMTALK_TEMPLATE_ANOMALY (.env.dev 주입)
 
   [프론트엔드 영향]
   추가(additive) 변경이라 기존 동작·계약 불변 — FE 수정 없이 현재와 동일하게 동작합니다.
@@ -545,6 +583,68 @@ SilverBridge는 노인(피보호자)과 그 가족(보호자)을 연결하는 �
   ※ 공지는 작성 즉시 게시되므로 별도 published 상태 없이 전부 조회됩니다.
 
 
+  [ 3-10. 이상감지 카메라 등록·관리 ]  (camera, 2026-07-13 추가)
+  ─────────────────────────────
+  이상감지의 전제인 "이 카메라는 누구 집 것인가"를 백엔드가 소유권으로 관리합니다.
+  소유자 = 피보호자(ward_id). 보호자는 ACTIVE 연결을 통해 전이 접근합니다(피보호자당 여러 대 = 방별).
+
+  피보호자(WARD 전용):
+    → POST   /api/ward/camera        → 카메라 등록. session_id(AI 세션)·device_id·label(방 이름) 저장.
+                                       응답에 권장 프레임레이트(recommended-fps, 기본 5)를 함께 내려줌
+    → GET    /api/ward/camera        → 내 카메라 목록
+    → PATCH  /api/ward/camera/{id}   → 라벨(설치 위치) 수정
+    → DELETE /api/ward/camera/{id}   → 카메라 삭제
+
+  보호자(GUARDIAN 전용):
+    → GET /api/guardian/camera       → 연결된 피보호자들의 카메라 목록(ACTIVE 연결 기준 allowlist)
+
+  ※ 타인 카메라 접근 시 403 CAMERA_NOT_AUTHORIZED("본인이 등록한 카메라만 사용할 수 있습니다.")
+    — 방 이름·세션ID 등 내용은 노출하지 않고, 시도는 [IDOR-ATTEMPT] WARN으로 남깁니다.
+    없는 카메라는 404. (2026-07-14 정책: 404 위장 → 403 명시 안내)
+  ※ 카메라 등록 시 CameraRegisteredEvent가 발행돼 AI 세션 목록을 즉시 재요청합니다
+    ("스트리밍 먼저, 등록 나중" 순서에서도 구독이 살아나도록).
+
+
+  [ 3-11. AI 이상감지 (수신 → 판정 → 이력 → 알림) ]  (anomaly, 2026-07-13/07-14)
+  ─────────────────────────────
+  AI 서버에는 웹훅이 없어서, 백엔드가 AI의 WebSocket에 **클라이언트로 접속**해 분석 결과를
+  구독합니다(AI 서버 코드 변경 없음). 프론트가 호출하는 API가 아니라 서버 내부 파이프라인입니다.
+
+  흐름:
+    AI WS(latest_analysis) 수신 → 판정 → 이력 쿨다운 → anomaly_event 적재
+    → AnomalyDetectedEvent → (커밋 후) 리스너가 ACTIVE 보호자 전원 + 피보호자 본인에게 발송
+
+  - 구독 대상: 등록된 camera.session_id만 subscribe(미등록 세션은 애초에 구독하지 않음)
+  - 판정: ANOMALY_TRIGGER_MODE=DANGER(기본) — AI가 채운 danger 플래그만 신뢰(위험 판정 책임=AI).
+    CONFIDENCE는 폴백 모드(confidence >= 0.6). ※ 배포된 AI가 danger를 항상 false로 내리는 동안은
+    이력 0건이 정상이며 [ANOMALY-DANGER-MISMATCH] WARN으로 드러납니다.
+  - 발송 채널: WebSocket(anomaly-detected, 항상) + FCM(고정) + SMS·알림톡(사용자 설정대로).
+    알림톡은 보호자만 받습니다(3-7-A의 알림톡 항목 참고).
+  - 문구: 보호자 "OOO님 댁 거실에서 화재가 감지되었습니다." / 본인 "거실에서 화재가 감지되었습니다.
+    안전한 곳으로 대피해 주세요."(현장 당사자에게는 대피 행동을 함께 지시)
+  - 알림 data: type·wardId·wardName·location·sessionId·detectedType·detectedTypeLabel·
+    detectedAt(KST yyyy-MM-dd HH:mm)·anomalyEventId
+  - 빈도(2026-07-28 조정): 이력 1분 / 보호자 알림 5분 / 본인 알림 3분.
+    이력은 촘촘히 남겨 화재 지속 구간의 타임라인을 확보하고, 사람에게 가는 알림은 성기게 보냅니다
+    (보호자는 알림톡·SMS가 같은 간격으로 나가 과금·카카오 신고 리스크가 함께 걸립니다).
+  - 발송 실패·WS 연결 실패·AI_API_KEY 미설정은 앱 기동을 막지 않습니다(구독만 비활성).
+
+
+  [ 3-12. 피보호자 SOS 동작 설정 ]  (sos_setting, 2026-07-23 추가)
+  ─────────────────────────────
+  환경설정 > "SOS 동작 설정"을 계정 단위로 보관합니다(종전에는 프론트 localStorage 전용이라
+  기기·브라우저를 바꾸면 초기화됐습니다).
+
+    → GET /api/ward/sos-setting   → 현재 설정(행이 없으면 기본값 CALL_119_AND_NOTIFY)
+    → PUT /api/ward/sos-setting   → 설정 저장(upsert). WARD 전용
+
+  값(SosAction): CALL_119 / CALL_119_AND_NOTIFY / NOTIFY_GUARDIAN_FIRST
+
+  ※ 이 설정은 "119를 어떻게 연결·안내할지"(프론트 흐름)만 정합니다.
+    ⚠️ 어떤 값에서도 보호자 알림은 항상 발송됩니다 — SOS는 필수 알림(WARD_SOS)이라 사용자 설정으로
+    끌 수 없습니다. 값 이름 CALL_119는 "알림 없이"가 아니라 "119 즉시 연결"을 뜻합니다.
+
+
 --------------------------------------------------------------------------------
   4. WebSocket(실시간 알림) 사용 가이드
 --------------------------------------------------------------------------------
@@ -570,6 +670,11 @@ SilverBridge는 노인(피보호자)과 그 가족(보호자)을 연결하는 �
     /topic/{userId}/connection-refused     보호자가 받는 피보호자의 거절 알림 (2026-05-28 추가)
     /topic/{userId}/connection-cancelled   연결 해제 알림
     /topic/{userId}/sos-triggered          보호자가 받는 피보호자의 긴급 SOS 알림 (2026-06-09 추가)
+    /topic/{userId}/anomaly-detected       이상감지 알림 — 보호자·피보호자 본인 모두 (2026-07-14 추가)
+                                           payload = wardId·wardName·location·detectedType·
+                                           detectedTypeLabel·detectedAt·anomalyEventId 등
+                                           ※ 피보호자 화면을 24시간 켜두는 사용 형태에서는 이 토픽이
+                                             가장 확실한 경보 경로입니다(브라우저 알림 권한·무음 설정과 무관).
 
   ※ 보안: StompSubscriptionAuthorizationInterceptor가 구독 시점에
     {userId}가 인증 세션의 userId와 일치하는지 검증해, 타인의 실시간 알림
@@ -583,6 +688,9 @@ SilverBridge는 노인(피보호자)과 그 가족(보호자)을 연결하는 �
   ※ 모든 날짜/시간 컬럼은 시간대 포함(TIMESTAMPTZ) 형식으로 저장됩니다.
      예) 2025-04-19T09:00:00+09:00
   ※ 모든 사용자 ID(users.id, user_id 참조)는 6자리 문자열입니다.
+  ※ 테이블 이름은 단수형입니다 (2026-07-14, V31에서 통일 — connection·camera·anomaly_event…).
+     users만 예외로 복수형을 유지합니다 — user는 PostgreSQL 예약어라 모든 참조를 "user"로
+     인용해야 하고, 인용을 빠뜨린 쿼리는 테이블이 아니라 세션 사용자를 뜻해 조용히 오동작합니다.
 
 
   [ users — 회원 ]
@@ -710,9 +818,52 @@ SilverBridge는 노인(피보호자)과 그 가족(보호자)을 연결하는 �
   created_at    : 백엔드 수신·적재 일시
 
   ※ 적재 조건: AI WS(latest_analysis) 신호 중 danger=true (기본 DANGER 모드) 인 건만.
-    같은 (session_id, detected_type) 은 Redis 쿨다운 5분에 1건만 적재된다
+    같은 (session_id, detected_type) 은 Redis 쿨다운 1분에 1건만 적재된다 (2026-07-28 5분→1분)
     (AI가 매 프레임 broadcast 하므로 쿨다운이 없으면 위험 1건에 이력 수백 개).
-  ※ 보호자 알림 발송은 2단계 (미구현).
+  ※ 보호자·본인 알림 발송은 2단계로 구현 완료(2026-07-14) — 3-11 참고.
+    알림은 이력이 적재된 건에만 발행되므로, 이력 쿨다운이 알림 상한도 함께 정한다.
+
+
+  [ camera — 이상감지 카메라 소유권 ] (2026-07-13 추가, V29)
+  ─────────────────────────────
+  id            : 고유 번호
+  ward_id       : 소유 피보호자 (CASCADE — 탈퇴 시 카메라도 삭제)
+  session_id    : AI 카메라 세션 ID (UNIQUE — 이상감지 신호를 소유자에게 매핑하는 열쇠)
+  device_id     : 백엔드 발급 기기 토큰 (FE localStorage 보관, (ward_id, device_id) UNIQUE)
+  label         : 설치 위치 = 방 이름 (거실·안방 등, 알림 문구에 그대로 쓰임)
+  registered_by : 등록 주체 (SET NULL — 등록자 계정이 사라져도 소유자 기준으로 카메라는 유지)
+  is_active     : 사용 여부
+  created_at / updated_at
+
+  [ sos_setting — 피보호자 SOS 동작 설정 ] (2026-07-23 추가, V32)
+  ─────────────────────────────
+  id         : 고유 번호
+  user_id    : 피보호자 (CASCADE, UNIQUE — 계정당 1행)
+  sos_action : CALL_119 / CALL_119_AND_NOTIFY / NOTIFY_GUARDIAN_FIRST
+  created_at / updated_at
+  ※ 행이 없으면 기본값 CALL_119_AND_NOTIFY → 기존 사용자 백필 마이그레이션 불필요.
+  ⚠️ 이 값으로 보호자 알림을 끌 수는 없다(3-12 참고).
+
+  [ inquiry — 문의하기 / 고객센터 ] (2026-07-01 추가, V28)
+  ─────────────────────────────
+  id          : 고유 번호
+  user_id     : 작성자(보호자) — CASCADE (탈퇴 시 문의도 삭제)
+  category    : ANOMALY / HOSPITAL / ACCOUNT / SERVICE / ETC
+  title       : 제목(최대 100자)   content : 본문
+  status      : WAITING / ANSWERED
+  answer      : 관리자 답변 본문
+  answered_by : 답변한 관리자 (SET NULL — 관리자 계정 삭제 시에도 답변 보존)
+  answered_at : 답변 일시
+  created_at / updated_at
+
+  [ user_notification_setting — 채널별 알림 수신 설정 ] (2026-05-31 추가, V25)
+  ─────────────────────────────
+  id           : 고유 번호
+  user_id      : 사용자 (CASCADE)
+  channel_type : FCM / SMS / KAKAO_ALIMTALK / EMAIL   ((user_id, channel_type) UNIQUE)
+  enabled      : 수신 여부
+  created_at / updated_at
+  ※ 행이 없는 채널은 기본값 — FCM만 ON, 나머지는 OFF. 백필 마이그레이션 불필요.
 
 
 --------------------------------------------------------------------------------
@@ -758,12 +909,18 @@ SilverBridge는 노인(피보호자)과 그 가족(보호자)을 연결하는 �
     rate:{endpoint}:1h:{ip}      동 시간 카운터. pw-reset-email/pw-reset-sms = 1분 10회/1시간 30회
                                  (미가입 응답 노출에 따른 자동화 enumeration 방어, 한쪽 초과 시 429)
 
-  ▶ 이상감지 (2026-07-13)
+  ▶ 이상감지 (2026-07-13 / 알림 쿨다운 2026-07-14)
     anomaly:cooldown:{sessionId}:{detectedType}
-                                 이상감지 이력 적재 쿨다운 (기본 5분, SET NX EX)
+                                 이상감지 이력 적재 쿨다운 (기본 1분, SET NX EX)
                                  AI는 매 프레임(초당 여러 번) 분석 결과를 broadcast 하므로
                                  이 키가 없으면 위험 1건이 이력 수백 행이 된다.
                                  Redis 장애 시 fail-open (중복 이력 < 이력 유실)
+    anomaly:notify:{userId}:{sessionId}:{detectedType}
+                                 수신자별 알림 재발송 쿨다운 — 보호자 5분 / 피보호자 본인 3분.
+                                 이력 쿨다운과 별개다: 이력은 촘촘히 남기고 사람에게는 성기게 알린다.
+                                 보호자 쪽은 알림톡·SMS가 같은 간격으로 나가 과금·카카오 신고
+                                 리스크가 함께 걸리므로 더 길게 잡는다.
+                                 Redis 장애 시 fail-open (화재 알림을 인프라 장애로 삼키지 않는다)
 
   ▶ 기타
     character:expression:{wardId} 최근 표정 캐시 (조회 API용)
@@ -829,6 +986,16 @@ SilverBridge는 노인(피보호자)과 그 가족(보호자)을 연결하는 �
   - 거부안: 응답 시간 정규화(존재 여부를 의도적으로 노출하므로 모순), 의심 IP 블랙리스트
     (공용 NAT 시니어 다수 오차단 위험)
 
+  [ 타인 자원 접근(IDOR) 응답 — 404 위장 → 403 명시 안내 (2026-07-14) ]
+  - 종전에는 타인의 카메라·문의를 404로 위장해 존재 자체를 숨겼으나, "왜 안 보이지"로 이탈하는
+    시니어/4050 UX를 우선해 무슨 일이 일어났는지 그대로 안내하도록 바꿨습니다
+    (비밀번호 재설정의 판단과 동일).
+  - CAMERA_NOT_AUTHORIZED(403) "본인이 등록한 카메라만 사용할 수 있습니다."
+    INQUIRY_NOT_AUTHORIZED(403) "본인이 작성한 문의만 볼 수 있습니다."
+    없는 자원은 그대로 404(*_NOT_FOUND).
+  - 수용한 노출은 "그 id의 자원이 존재한다"는 사실뿐 — 방 이름·세션ID·문의 본문 등 내용은
+    절대 응답에 싣지 않습니다. 시도는 [IDOR-ATTEMPT] WARN(userId + 대상 id)으로 로깅합니다.
+
   [ WebSocket 구독 권한 ]
   - StompSubscriptionAuthorizationInterceptor가 SUBSCRIBE 시
     /topic/{userId}/... 의 userId를 세션 인증 userId와 비교
@@ -854,7 +1021,7 @@ SilverBridge는 노인(피보호자)과 그 가족(보호자)을 연결하는 �
   - 검증 통과 시 SHA-256 12자 fingerprint 로그 — 배포 간 env 변경 여부 비교용
     (예: "필수 환경변수 검증 통과: 11개 키 정상 (fingerprint=a3f9c2d1ee04)")
 
-  [ 이상감지 수신 환경변수 (2026-07-13, 1단계) ]
+  [ 이상감지 환경변수 (2026-07-13 수신 / 2026-07-14 알림 / 2026-07-28 빈도 조정) ]
   - AI_API_KEY                    AI 서버 API Key (x-api-key 헤더). .env.dev 로만 주입(평문 커밋 금지)
                                   ※ 필수 검증 대상 아님 — 미설정 시 앱은 정상 기동하고
                                     이상감지 구독만 비활성화 + WARN (기동을 막지 않는다)
@@ -863,7 +1030,17 @@ SilverBridge는 노인(피보호자)과 그 가족(보호자)을 연결하는 �
   - ANOMALY_TRIGGER_MODE          DANGER(기본, AI danger==true만 인정 — 위험 판정 책임=AI 서버)
                                   CONFIDENCE(폴백, AI danger 정식화 배포 지연 시에만 임시 전환)
   - ANOMALY_CONFIDENCE_THRESHOLD  기본 0.6 (CONFIDENCE 모드 임계. AI 표시용 임계 0.35보다 높게)
-  - ANOMALY_COOLDOWN_MINUTES      기본 5 (같은 세션·종류 이력 최소 간격)
+  - ANOMALY_COOLDOWN_MINUTES      기본 1 (같은 세션·종류 이력 최소 간격. 2026-07-28 5→1)
+  - ANOMALY_NOTIFY_COOLDOWN_MINUTES       기본 5 (보호자 알림 재발송 최소 간격)
+  - ANOMALY_NOTIFY_SELF_COOLDOWN_MINUTES  기본 3 (피보호자 본인 알림 재발송 최소 간격)
+                                  ※ 세 값은 코드 기본값과 두 서버 .env.dev가 동일하다(2026-07-28 일원화)
+
+  [ 카카오 알림톡 환경변수 (2026-07-27 가동) ]
+  - ALIMTALK_ENABLED              발송 전체 ON/OFF. false면 알림톡 채널이 항상 스킵
+  - ALIMTALK_PF_ID                Solapi 발신 프로필 ID(KA01PF…)
+  - ALIMTALK_TEMPLATE_ANOMALY     승인된 이상감지 템플릿 ID(KA01TP…)
+                                  ※ 세 값 모두 .env.dev로만 주입(평문 커밋 금지).
+                                    필수 검증 대상 아님 — 미설정 시 알림톡만 조용히 비활성.
 
   [ CORS 허용 도메인 ]
   - 환경변수 APP_CORS_ORIGINS (쉼표 구분)로 허용 origin 리스트 설정
@@ -1069,7 +1246,17 @@ SilverBridge는 노인(피보호자)과 그 가족(보호자)을 연결하는 �
   │   │   ├── event      연결 상태 변경 이벤트 (Requested/Accepted/Refused/Disconnected)
   │   │   └── listener   이벤트 수신 후 WebSocket + FCM 알림 (AFTER_COMMIT)
   │   ├── announcement   공지사항 엔티티
-  │   └── notification   FCM 토큰 관리, 푸시 발송
+  │   ├── camera         이상감지 카메라 소유권 (피보호자 등록 / 보호자 조회)
+  │   ├── anomaly        AI 이상감지 — WS 구독·판정·이력·알림
+  │   │   ├── client     AiLiveStreamSubscriber (AI WS를 클라이언트로 구독)
+  │   │   ├── service    AnomalyJudge(판정) / AnomalyEventCooldown / AnomalyNotificationCooldown
+  │   │   └── listener   AnomalyNotificationListener (AFTER_COMMIT + @Async 발송)
+  │   ├── sos            피보호자 긴급 SOS + SOS 동작 설정(sos_setting)
+  │   ├── inquiry        문의하기 / 고객센터 (보호자 작성 + 관리자 답변)
+  │   └── notification   알림 채널 추상화 — 채널(FCM·SMS·카카오 알림톡)·디스패처·수신 설정
+  │       ├── channel    NotificationChannel 전략 + 구현체 3종
+  │       ├── dispatch   NotificationDispatcher / NotificationType(정책)
+  │       └── config     AlimtalkProperties (알림 종류 → 승인 템플릿 매핑)
   └── global
       ├── config         Redis/메일/Web/보안 설정, SecurityConfigValidator
       ├── security       Spring Security, RateLimitService
@@ -1167,6 +1354,17 @@ SilverBridge는 노인(피보호자)과 그 가족(보호자)을 연결하는 �
     4) push 전 ./gradlew build -x test --no-daemon 검증
     5) git push origin type/short-description
     6) PR 생성 → dev로 머지 → 브랜치 자동 삭제 → 서버 자동 배포
+
+  ⚠️ dev/prod에 코드를 직접 커밋·푸시하지 않습니다 — feature 브랜치 → PR → dev 흐름만 허용.
+  📄 예외: 문서(.md·docs/**)만 바뀌는 변경은 PR을 생략하고 dev에 직접 커밋·푸시합니다
+     (2026-06-20 결정). CD가 paths-ignore로 배포를 어차피 건너뛰므로 PR 게이트가 불필요합니다.
+     코드가 1줄이라도 섞이면 이 예외는 적용되지 않습니다.
+
+  배포 환경이 둘입니다:
+    - vkcs-linux : dev push 시 CD(GitHub Actions self-hosted)로 자동 배포
+    - skyserver  : 공개 도메인(api.devdmu.gosky.kr)이 붙은 환경. 수동 배포
+                   (git reset --hard origin/dev → docker compose build/up → image prune)
+    ※ dev에 머지해도 skyserver는 바뀌지 않습니다. 각 서버의 .env.dev도 서로 별개입니다.
 
 
 --------------------------------------------------------------------------------
