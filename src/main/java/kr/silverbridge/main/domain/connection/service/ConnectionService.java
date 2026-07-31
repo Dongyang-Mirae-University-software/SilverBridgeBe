@@ -46,6 +46,27 @@ public class ConnectionService {
         return buildResponseFromGuardianView(connections);
     }
 
+    // 보호자: 내 ACTIVE 피보호자 ID 목록 (최신 연결순)
+    // — SOS 이력처럼 "연결된 피보호자 전원의 자원"을 모아 보여줄 때 재사용. getMyWards()는 PENDING까지 섞여
+    //   있어 인가 목록으로 쓸 수 없다(수락 전 피보호자의 이력이 노출됨).
+    @Transactional(readOnly = true)
+    public List<String> getActiveWardIds(String guardianId) {
+        return connectionRepository
+                .findByGuardianIdAndStatusInOrderByCreatedAtDesc(guardianId, List.of(ConnectionStatus.ACTIVE))
+                .stream()
+                .map(Connection::getWardId)
+                .distinct()
+                .toList();
+    }
+
+    // 보호자-피보호자 쌍이 현재 ACTIVE 연결인지 — 타 도메인(SOS 이력·ACK)의 IDOR 인가 판정용.
+    // 연결 판정 로직을 connection 도메인 안에 두어 타 도메인이 상태값을 직접 다루지 않게 한다.
+    @Transactional(readOnly = true)
+    public boolean isActiveConnection(String guardianId, String wardId) {
+        return connectionRepository.existsByGuardianIdAndWardIdAndStatusIn(
+                guardianId, wardId, List.of(ConnectionStatus.ACTIVE));
+    }
+
     // 보호자: 본인이 보낸 모든 연결 요청 이력 (PENDING + ACTIVE + CANCELLED, 최신 요청순)
     // — "피보호자 등록" 화면의 "요청 내역" 테이블에서 거절·취소된 이력까지 함께 노출
     @Transactional(readOnly = true)

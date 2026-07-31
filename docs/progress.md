@@ -1019,3 +1019,21 @@ REST API Key 단독 대비 보안 강화 — 인가코드 탈취 시 토큰 발�
 - **코드 기본값을 서버 값과 일치**시켰다(`application.yaml`·`AnomalyProperties`) — 종전엔 서버만 환경변수로 덮어써 **로컬 개발 환경만 다르게 동작**했다. 이제 환경변수가 없어도 같은 빈도로 돈다.
 - **본인 알림 1분 → 3분**. 피보호자 화면은 24시간 켜져 있어 **오탐 시 1분마다 알림이 쌓이는 소음**이 실질적 부담이다. "보호자보다 짧게"라는 D-1의 의도는 3분으로도 유지된다.
 - 최종값: **이력 1분 / 보호자 5분 / 본인 3분** (코드 기본값 = 두 서버 `.env.dev` 값).
+
+## [2026-07-30] 보호자용 SOS 이력 조회 + 처리 결과(ACK)
+
+- **발단**: SOS는 **발생**만 있고(`POST /api/ward/sos`) 보호자가 지난 이력을 볼 API가 없었다 — `SosEventRepository`는 빈 인터페이스. 근거는 보호자 대시보드 프로토타입("OOO 님 SOS 이력" + 건별 `안전 확인`/`응급 출동` 배지)이며, **프로토타입은 목업이고 운영(gosky) FE에 미반영**이다(로컬 FE에도 보호자 SOS 화면·호출 0건) → **API 계약은 백엔드가 정의**.
+- **구현**: `sos_event`에 ACK 컬럼 4개(V33: `ack_status`·`ack_by`(FK SET NULL)·`ack_at`·`ack_note`) + `GET /api/guardian/sos/history`(페이징, `wardId` 선택) + `PATCH /api/guardian/sos/{id}/ack`(`hasRole('GUARDIAN')`). 조회·ACK는 `GuardianSosService`로 분리 — `SosService`(발생 경로)·`SosNotificationListener`·`NotificationDispatcher` **전부 무변경**.
+- **인가 = 현재 ACTIVE 연결만**. 연결이 해제되면 **과거 이력도 비공개**. 인가 목록으로 `getMyWards()`를 쓰지 않은 이유는 **PENDING이 섞여 수락 전 피보호자 이력이 노출**되기 때문 → `ConnectionService.getActiveWardIds()`·`isActiveConnection()` 신설. 연결 없는 접근은 **403 + `[IDOR-ATTEMPT]` WARN**(2026-07-14 정책), 탈퇴로 `ward_id`가 NULL인 익명 이력도 403.
+- **ACK 정책**: 이력 1행 = ACK 1개(마지막 처리로 덮어쓰기, 재ACK 허용), 미처리는 `ack_status IS NULL`(백필 불요). **ACK는 알림에 개입하지 않는다** — WARD_SOS 필수 알림은 처리 여부와 무관하게 항상 발송(2026-07-23 규칙 연장).
+- **ACK 알림은 WebSocket만**(`sos-acknowledged`, AFTER_COMMIT + `@Async`) — ACTIVE 보호자 전원 + 피보호자 본인. FCM·SMS·알림톡 없음(상황 종료 후 상태 갱신이라 소음).
+- **범위 제외**: 프로토타입의 **위치(📍)** — SOS는 버튼 입력이라 위치 소스가 없고(`camera.label`은 카메라 전용), 넣으려면 발생 API 계약 변경 + FE 동시 수정이 필요해 후속으로 분리. 화면 문구 조립도 FE 책임(서버는 원자값만).
+- **테스트**: `./gradlew build` 전체 통과 — **327건 / 실패 0**(신규 19건: 인가·페이지 보정·재ACK·탈퇴 이력·WS 수신자). ⚠️ Docker 미설치 환경이라 **Flyway 실적용은 미검증** — 배포 전 기동 로그의 `version "33"` 확인 필요(`ddl-auto=validate`).
+- 상세: `docs/(2026-07-30) feature-sos-history-ack.md`
+
+### 후속(2026-07-31): 위치 필드 백엔드 선반영 + gosky 마이그레이션 검증
+
+- **위치(📍)를 하위호환으로 먼저 반영**(V34, `sos_event.location VARCHAR(100) NULL`). `POST /api/ward/sos`의 **요청 바디 전체를 선택**으로 만들어 바디 없이 호출하는 기존 FE가 그대로 동작한다 → **FE 동시 수정 불필요**. 서버는 위치를 추정하지 않고 프론트가 보낸 문구를 보관만 하며, 이력 응답 `location`으로 노출된다(미전송·공백이면 `null` = 위치 미상).
+- **V33은 수정하지 않고 V34로 분리** — 이미 PR에 올라간 마이그레이션 파일은 고치지 않는다는 규칙 준수.
+- **gosky(skyserver)에서 마이그레이션 실적용 검증**: dev DB 스키마를 복제한 **임시 DB**에 V33·V34 적용 → 오류 0, 컬럼·FK가 엔티티 매핑과 일치(`ddl-auto=validate` 통과 조건 충족). **FK 동작까지 확인** — 보호자 삭제 시 `ack_by`만 NULL이고 이력·처리결과는 보존, 피보호자 삭제 시 `ward_id` NULL(익명 보존). 검증 후 임시 DB 삭제, **운영 dev DB는 무변경**(적용 전 최신 = V32, sos_event 3컬럼 그대로).
+- **테스트**: `./gradlew build` 전체 통과 — **329건 / 실패 0**(위치 2건 추가). `SosService.trigger()`는 `trigger(wardId, location)`로 시그니처만 변경(저장·이벤트 흐름 동일).

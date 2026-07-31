@@ -38,20 +38,32 @@ public class SosService {
     /**
      * 피보호자 SOS 발생: 이력을 저장하고 커밋 후 ACTIVE 보호자 전원에게 긴급 알림을 보내도록 이벤트를 발행한다.
      *
-     * @param wardId SOS를 발생시킨 피보호자 ID (인증 주체)
+     * @param wardId   SOS를 발생시킨 피보호자 ID (인증 주체)
+     * @param location 발생 위치 자유 문구. {@code null}·공백이면 위치 미상으로 기록한다 — 서버는 위치를 추정하지 않는다
      * @return 저장된 이력 ID와 발생 시각
      */
     @Transactional
-    public SosResponse trigger(String wardId) {
+    public SosResponse trigger(String wardId, String location) {
         User ward = userRepository.findById(wardId)
                 .orElseThrow(() -> new CustomException(ErrorCode.USER_NOT_FOUND));
 
-        SosEvent sosEvent = sosEventRepository.save(SosEvent.builder().wardId(wardId).build());
+        SosEvent sosEvent = sosEventRepository.save(SosEvent.builder()
+                .wardId(wardId)
+                .location(normalizeLocation(location))
+                .build());
 
         String wardName = StringUtils.hasText(ward.getName()) ? ward.getName() : FALLBACK_WARD_NAME;
         eventPublisher.publishEvent(new SosTriggeredEvent(wardId, sosEvent.getId(), wardName));
         log.info("SOS 발생: sosEventId={}, wardId={}", sosEvent.getId(), wardId);
 
         return new SosResponse(sosEvent.getId(), sosEvent.getCreatedAt());
+    }
+
+    /**
+     * 공백만 들어온 위치는 저장하지 않는다 — 이력 화면에 빈 "📍" 줄이 생기지 않게 한다.
+     * (위치 문구는 알림 발송에 쓰이지 않으므로 여기서 정규화만 하고 통보 경로는 손대지 않는다.)
+     */
+    private String normalizeLocation(String location) {
+        return StringUtils.hasText(location) ? location.trim() : null;
     }
 }
