@@ -56,7 +56,7 @@ class SosServiceTest {
         when(saved.getCreatedAt()).thenReturn(now);
         when(sosEventRepository.save(any(SosEvent.class))).thenReturn(saved);
 
-        SosResponse res = sosService.trigger(WARD_ID);
+        SosResponse res = sosService.trigger(WARD_ID, null);
 
         // 이력 저장 — wardId 보존
         ArgumentCaptor<SosEvent> saveCaptor = ArgumentCaptor.forClass(SosEvent.class);
@@ -86,7 +86,7 @@ class SosServiceTest {
         when(saved.getCreatedAt()).thenReturn(OffsetDateTime.now());
         when(sosEventRepository.save(any(SosEvent.class))).thenReturn(saved);
 
-        sosService.trigger(WARD_ID);
+        sosService.trigger(WARD_ID, null);
 
         ArgumentCaptor<SosTriggeredEvent> pubCaptor = ArgumentCaptor.forClass(SosTriggeredEvent.class);
         verify(eventPublisher).publishEvent(pubCaptor.capture());
@@ -98,11 +98,45 @@ class SosServiceTest {
     void trigger_사용자없음() {
         when(userRepository.findById(WARD_ID)).thenReturn(Optional.empty());
 
-        assertThatThrownBy(() -> sosService.trigger(WARD_ID))
+        assertThatThrownBy(() -> sosService.trigger(WARD_ID, null))
                 .isInstanceOf(CustomException.class)
                 .hasFieldOrPropertyWithValue("errorCode", ErrorCode.USER_NOT_FOUND);
 
         verifyNoInteractions(sosEventRepository);
         verify(eventPublisher, never()).publishEvent(any());
+    }
+
+    @Test
+    @DisplayName("위치를 함께 보내면 이력에 그대로 저장 — 서버는 위치를 추정하지 않는다")
+    void trigger_위치저장() {
+        User ward = User.builder().id(WARD_ID).name(WARD_NAME).role(Role.WARD).build();
+        when(userRepository.findById(WARD_ID)).thenReturn(Optional.of(ward));
+        SosEvent saved = mock(SosEvent.class);
+        when(saved.getId()).thenReturn(42L);
+        when(saved.getCreatedAt()).thenReturn(OffsetDateTime.now());
+        when(sosEventRepository.save(any(SosEvent.class))).thenReturn(saved);
+
+        sosService.trigger(WARD_ID, "자택 거실");
+
+        ArgumentCaptor<SosEvent> saveCaptor = ArgumentCaptor.forClass(SosEvent.class);
+        verify(sosEventRepository).save(saveCaptor.capture());
+        assertThat(saveCaptor.getValue().getLocation()).isEqualTo("자택 거실");
+    }
+
+    @Test
+    @DisplayName("위치 미전송(바디 없음)·공백만 전송 → null로 저장(위치 미상). 기존 호출 방식 그대로 동작")
+    void trigger_위치없음_null() {
+        User ward = User.builder().id(WARD_ID).name(WARD_NAME).role(Role.WARD).build();
+        when(userRepository.findById(WARD_ID)).thenReturn(Optional.of(ward));
+        SosEvent saved = mock(SosEvent.class);
+        when(saved.getId()).thenReturn(42L);
+        when(saved.getCreatedAt()).thenReturn(OffsetDateTime.now());
+        when(sosEventRepository.save(any(SosEvent.class))).thenReturn(saved);
+
+        sosService.trigger(WARD_ID, "   ");
+
+        ArgumentCaptor<SosEvent> saveCaptor = ArgumentCaptor.forClass(SosEvent.class);
+        verify(sosEventRepository).save(saveCaptor.capture());
+        assertThat(saveCaptor.getValue().getLocation()).isNull();
     }
 }

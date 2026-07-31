@@ -18,6 +18,7 @@ import java.time.OffsetDateTime;
 
 import static org.assertj.core.api.Assertions.assertThatNoException;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.when;
 
@@ -50,16 +51,16 @@ class WardSosControllerSecurityTest {
     @WithMockUser(roles = "WARD")
     @DisplayName("WARD 역할 → SOS 호출 허용")
     void ward_허용() {
-        when(sosService.trigger(anyString())).thenReturn(new SosResponse(1L, OffsetDateTime.now()));
+        when(sosService.trigger(anyString(), any())).thenReturn(new SosResponse(1L, OffsetDateTime.now()));
 
-        assertThatNoException().isThrownBy(() -> controller.triggerSos("WD0001"));
+        assertThatNoException().isThrownBy(() -> controller.triggerSos("WD0001", null));
     }
 
     @Test
     @WithMockUser(roles = "GUARDIAN")
     @DisplayName("WARD 아닌 역할(GUARDIAN) → 403 (AccessDeniedException)")
     void 비WARD_거부() {
-        assertThatThrownBy(() -> controller.triggerSos("GD0001"))
+        assertThatThrownBy(() -> controller.triggerSos("GD0001", null))
                 .isInstanceOf(AccessDeniedException.class);
     }
 }

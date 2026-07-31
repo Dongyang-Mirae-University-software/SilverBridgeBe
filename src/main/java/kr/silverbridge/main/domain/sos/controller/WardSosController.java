@@ -4,7 +4,9 @@ import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.validation.Valid;
 import kr.silverbridge.main.domain.sos.dto.SosResponse;
+import kr.silverbridge.main.domain.sos.dto.SosTriggerRequest;
 import kr.silverbridge.main.domain.sos.service.SosService;
 import kr.silverbridge.main.global.response.ApiResponse;
 import lombok.RequiredArgsConstructor;
@@ -13,6 +15,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RestController;
 
 @Tag(name = "피보호자")
@@ -28,7 +31,13 @@ public class WardSosController {
                     [요청 헤더]
                     Authorization: Bearer {accessToken}
 
-                    피보호자가 대시보드 > 긴급 전화 > "긴급 SOS" 버튼을 누르면 호출됩니다. 요청 바디는 없습니다.
+                    피보호자가 대시보드 > 긴급 전화 > "긴급 SOS" 버튼을 누르면 호출됩니다.
+
+                    [요청 바디 — 전체가 선택]
+                    - location (선택, 100자): 발생 위치 자유 문구. 예 "자택 거실", "역삼동 인근"
+                    바디 없이 호출하면 위치 미상으로 기록됩니다(기존 호출 방식 그대로 동작).
+                    서버는 위치를 추정하지 않습니다 — 프론트가 아는 값(거주지 라벨·브라우저 위치 등)을 그대로 보관하며,
+                    보호자 SOS 이력 화면(GET /api/guardian/sos/history)의 location 으로 표시됩니다.
 
                     [동작]
                     1. SOS 발생 이력(sos_events)을 저장합니다 — 알림 발송 성공 여부와 무관하게 항상 기록됩니다.
@@ -46,6 +55,7 @@ public class WardSosController {
                     """)
     @ApiResponses({
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "201", description = "SOS 이력 저장 완료. data: sosEventId, triggeredAt (알림은 커밋 후 비동기 발송)"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "위치가 100자를 초과", content = @Content),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "인증 토큰 없음 또는 만료", content = @Content),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "피보호자(WARD)가 아닌 계정", content = @Content),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "사용자를 찾을 수 없음", content = @Content),
@@ -53,8 +63,12 @@ public class WardSosController {
     })
     @PostMapping("/api/ward/sos")
     public ResponseEntity<ApiResponse<SosResponse>> triggerSos(
-            @AuthenticationPrincipal String wardId) {
+            @AuthenticationPrincipal String wardId,
+            // 바디 없는 기존 호출을 그대로 받기 위해 required=false — 긴급 경로라 바디 유무로 실패하게 두지 않는다.
+            @Valid @RequestBody(required = false) SosTriggerRequest request) {
+        String location = (request == null) ? null : request.location();
         // SOS 이력(sos_events) 행을 생성하므로 201 Created.
-        return ResponseEntity.status(HttpStatus.CREATED).body(ApiResponse.ok(sosService.trigger(wardId)));
+        return ResponseEntity.status(HttpStatus.CREATED)
+                .body(ApiResponse.ok(sosService.trigger(wardId, location)));
     }
 }

@@ -35,6 +35,13 @@ public class SosEvent {
     @Column(name = "ward_id", length = 6)
     private String wardId;
 
+    /**
+     * 발생 위치 자유 문구(선택). 프론트가 보낸 값을 그대로 보관하며 서버는 위치를 추정하지 않는다.
+     * {@code null}이면 위치 미상 — 표시·보관 전용이라 알림 발송에는 관여하지 않는다.
+     */
+    @Column(name = "location", length = 100)
+    private String location;
+
     @CreatedDate
     @Column(name = "created_at", nullable = false, updatable = false)
     private OffsetDateTime createdAt;
@@ -56,8 +63,9 @@ public class SosEvent {
     private String ackNote;
 
     @Builder
-    public SosEvent(String wardId) {
+    public SosEvent(String wardId, String location) {
         this.wardId = wardId;
+        this.location = location;
     }
 
     /**

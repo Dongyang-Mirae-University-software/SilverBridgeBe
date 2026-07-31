@@ -67,7 +67,7 @@ class GuardianSosControllerSecurityTest {
     @DisplayName("GUARDIAN 역할 → 처리 결과 기록 허용")
     void guardian_ACK_허용() {
         when(guardianSosService.acknowledge(anyString(), anyLong(), any()))
-                .thenReturn(new SosHistoryItem(7L, "WD0001", "김영희", OffsetDateTime.now(),
+                .thenReturn(new SosHistoryItem(7L, "WD0001", "김영희", OffsetDateTime.now(), "자택 거실",
                         SosAckStatus.SAFE_CONFIRMED, null, "남궁명진", OffsetDateTime.now()));
 
         assertThatNoException().isThrownBy(() -> controller.acknowledgeSos("GD0001", 7L, ACK_REQUEST));

@@ -16,6 +16,7 @@ import java.time.OffsetDateTime;
  * @param wardId              SOS를 발생시킨 피보호자 ID (탈퇴 시 null)
  * @param wardName            피보호자 이름 (탈퇴·조회 실패 시 null)
  * @param triggeredAt         SOS 발생 시각
+ * @param location            발생 위치 자유 문구. 프론트가 보내지 않았으면 null(위치 미상 → 화면에서 위치 줄 생략)
  * @param ackStatus           처리 결과. null이면 미처리
  * @param ackNote             처리 메모 (없으면 null)
  * @param acknowledgedByName  처리한 보호자 이름 (미처리·탈퇴 시 null)
@@ -36,6 +37,9 @@ public record SosHistoryItem(
         @Schema(description = "SOS 발생 시각")
         OffsetDateTime triggeredAt,
 
+        @Schema(description = "발생 위치 (프론트가 보낸 값. 미상이면 null)", example = "자택 거실")
+        String location,
+
         @Schema(description = "처리 결과 (null = 미처리)", example = "SAFE_CONFIRMED",
                 allowableValues = {"SAFE_CONFIRMED", "EMERGENCY_DISPATCHED"})
         SosAckStatus ackStatus,
@@ -55,6 +59,7 @@ public record SosHistoryItem(
                 event.getWardId(),
                 wardName,
                 event.getCreatedAt(),
+                event.getLocation(),
                 event.getAckStatus(),
                 event.getAckNote(),
                 event.isAcknowledged() ? acknowledgedByName : null,

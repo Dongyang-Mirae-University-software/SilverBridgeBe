@@ -66,7 +66,7 @@ class GuardianSosServiceTest {
     @DisplayName("wardId 생략 → ACTIVE 연결된 피보호자 전원의 이력을 최신순으로 병합 조회(이름·처리결과 매핑)")
     void getHistory_전체_병합조회() {
         OffsetDateTime now = OffsetDateTime.now();
-        SosEvent unacked = sosEvent(1L, WARD_ID, now);
+        SosEvent unacked = sosEvent(1L, WARD_ID, now, "자택 거실");
         SosEvent acked = sosEvent(2L, OTHER_WARD_ID, now.minusDays(1));
         acked.acknowledge(GUARDIAN_ID, SosAckStatus.EMERGENCY_DISPATCHED, "119 출동 · 병원 이송");
 
@@ -92,12 +92,15 @@ class GuardianSosServiceTest {
         assertThat(first.sosEventId()).isEqualTo(1L);
         assertThat(first.wardName()).isEqualTo(WARD_NAME);
         assertThat(first.triggeredAt()).isEqualTo(now);
+        assertThat(first.location()).isEqualTo("자택 거실");
         assertThat(first.ackStatus()).isNull();
         assertThat(first.acknowledgedByName()).isNull();
         assertThat(first.acknowledgedAt()).isNull();
 
         SosHistoryItem second = result.content().get(1);
         assertThat(second.wardName()).isEqualTo("박철수");
+        // 프론트가 위치를 보내지 않은 이력은 null(위치 미상) — 화면에서 위치 줄을 생략한다
+        assertThat(second.location()).isNull();
         assertThat(second.ackStatus()).isEqualTo(SosAckStatus.EMERGENCY_DISPATCHED);
         assertThat(second.ackNote()).isEqualTo("119 출동 · 병원 이송");
         assertThat(second.acknowledgedByName()).isEqualTo(GUARDIAN_NAME);
@@ -298,9 +301,13 @@ class GuardianSosServiceTest {
 
     // ─── 헬퍼 ────────────────────────────────────────────────────
 
-    /** id·createdAt은 JPA가 채우는 값이라 테스트에서는 리플렉션으로 주입한다. */
     private static SosEvent sosEvent(long id, String wardId, OffsetDateTime createdAt) {
-        SosEvent event = SosEvent.builder().wardId(wardId).build();
+        return sosEvent(id, wardId, createdAt, null);
+    }
+
+    /** id·createdAt은 JPA가 채우는 값이라 테스트에서는 리플렉션으로 주입한다. */
+    private static SosEvent sosEvent(long id, String wardId, OffsetDateTime createdAt, String location) {
+        SosEvent event = SosEvent.builder().wardId(wardId).location(location).build();
         ReflectionTestUtils.setField(event, "id", id);
         ReflectionTestUtils.setField(event, "createdAt", createdAt);
         return event;
