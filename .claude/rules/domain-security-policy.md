@@ -106,7 +106,7 @@
   - **반려 이력**: 1차(2026-07-20) = 수신 대상·발송 사유 불명확("수신자 액션 기반 정보성 메시지"가 아님). 2차(2026-07-23) = **다발성 메시지 수신 동의 고지 누락**. → 3차는 검수자 제시 예시 문장을 거의 그대로 고정 문구로 넣고, 비어 있던 **검수자 참고 의견**(변수 예시값·발송 대상·동의 획득 경로)을 채워 제출 → 승인.
   - 📄 **제출 문구 원문·차수별 diff는 `docs/(2026-07-23) alimtalk-template-review-history.md`** — 재검수 요청할 때마다 제출 본문 전문을 그 문서에 추가할 것(승인 후 문구 수정은 재검수 대상이라 원문이 없으면 대응 불가).
   - **`#{detectedAt}` 코드 반영 완료(2026-07-23)**: `AnomalyDetectedEvent.detectedAt`(AI `analyzedAt`, nullable) → 리스너가 KST `yyyy-MM-dd HH:mm`로 포맷해 `data["detectedAt"]`에 담고 `application.yaml` `variables`에 등록. null(AI fallback 페이로드)이면 **발송 시각으로 대체 표시**하되 이력 `anomaly_event.detected_at`은 NULL 그대로 둔다(이력에서만 "AI 시각 vs 수신 시각" 구분 유지).
-  - **남은 것 = `ALIMTALK_ENABLED=true` 전환뿐** — `pfId`·`templateId`는 이미 승인 값과 동일하다(각 환경 `.env.dev`에 개별 주입 필요, 서버는 로컬과 별개).
+  - **활성화 완료(2026-07-31 확인)** — gosky·vkcs-linux 두 서버의 `.env.dev` 모두 `ALIMTALK_ENABLED=true`이고 `pfId`·`templateId`도 승인 값과 동일하다. 즉 **이상감지 알림톡은 실제로 발송 중**이다(로컬은 코드 기본값 `false`라 발송되지 않는다 — 서버와 별개).
 
 ## SOS 동작 설정 — 알림 억제 용도로 쓰지 말 것 (2026-07-23)
 
