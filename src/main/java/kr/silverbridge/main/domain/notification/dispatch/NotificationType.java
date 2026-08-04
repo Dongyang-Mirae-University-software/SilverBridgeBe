@@ -18,6 +18,15 @@ public enum NotificationType {
     // 문의 답변 완료 → 작성자(보호자)에게 알림. 긴급하지 않으므로 사용자 설정을 따른다.
     INQUIRY_ANSWERED(Policy.SETTINGS_ONLY),
 
+    /**
+     * 등록 보호자 탈퇴로 복약 일정이 중지됨 → <b>남은 보호자</b>에게 알림.
+     *
+     * <p>피보호자는 스스로 약을 등록할 수 없으므로, 남은 보호자가 재등록하지 않으면 그 약은 화면에서
+     * 사라진 채로 남는다. 조치할 수 있는 사람에게만 보낸다(피보호자 본인에게는 보내지 않는다).
+     * 긴급 상황이 아니라 사용자 설정을 따른다.</p>
+     */
+    MEDICATION_STOPPED(Policy.SETTINGS_ONLY),
+
     // 피보호자 긴급 SOS. 생명 관련이라 설정을 무시하고 강제 발송하며, 푸시 미전달 시 SMS로 폴백한다.
     WARD_SOS(Policy.FORCED_PUSH_WITH_SMS_FALLBACK),
 

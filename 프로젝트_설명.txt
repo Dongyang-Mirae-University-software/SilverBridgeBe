@@ -406,6 +406,52 @@ SilverBridge는 노인(피보호자)과 그 가족(보호자)을 연결하는 �
                              ⚠️ ACK는 사후 기록일 뿐 알림 발송에 개입하지 않습니다 — 처리된 SOS라도
                                WARD_SOS 필수 알림은 그대로 발송됩니다.
 
+  복약 알림 (medication, 2026-08-04 추가):
+    보호자가 피보호자의 약을 등록하고, 피보호자가 복용을 체크하면 그 결과가 보호자에게 보입니다.
+    ★ 역할 분리가 이 기능의 목적입니다 — 약 등록·삭제는 보호자만, 복용 체크는 피보호자만.
+      (보호자가 대신 체크할 수 있으면 "실제로 드셨는지"가 추측이 되므로 보호자용 체크 API는 없습니다.)
+
+    보호자(GUARDIAN 전용):
+    → GET    /api/guardian/medication                     → ACTIVE 연결 피보호자 전원의 오늘 복약 현황
+                             · 응답: WardMedicationSummary[]
+                               { wardId, wardName, age(만 나이, 생년월일 없으면 null), alarmEnabled,
+                                 doseDate(KST), takenCount, totalCount, medications[] }
+                             · medications[] = { medicationId, name, timeSlot, doseTime, doseAmount,
+                                                 memo, taken, takenAt }
+                             · 약이 없는 피보호자도 카드는 나옵니다(medications 빈 배열, 0/0).
+    → POST   /api/guardian/ward/{wardId}/medication       → 약 추가
+                             · 바디: name(필수 100자) / timeSlot(필수) / doseTime(선택) /
+                                     doseAmount(선택 1~99, 기본 1) / memo(선택 100자)
+                             · timeSlot: MORNING(08:00) / LUNCH(13:00) / DINNER(18:00) / BEDTIME(22:00)
+                               — doseTime을 생략하면 괄호 안 기본 시각으로 저장됩니다.
+    → DELETE /api/guardian/medication/{medicationId}      → 약 삭제(soft delete — 지난 복용 이력은 보존)
+                             · 등록한 보호자가 아니어도 ACTIVE 연결이면 삭제 가능(보호자가 여럿일 때 대비)
+    → GET    /api/guardian/ward/{wardId}/medication-setting → 복약 알림 ON/OFF 조회(미설정 시 true)
+    → PUT    /api/guardian/ward/{wardId}/medication-setting → 복약 알림 ON/OFF 변경. 바디 { alarmEnabled }
+                             · 설정은 피보호자 계정에 붙습니다 — 보호자가 여럿이면 한 명이 끈 결과가
+                               모두에게 보입니다. SOS 등 필수 알림에는 영향 없습니다.
+
+    피보호자(WARD 전용):
+    → GET    /api/ward/medication/today                   → 오늘의 복약 일정(복용 시각 순)
+                             · 응답: { doseDate(KST), takenCount, totalCount, medications[] }
+    → POST   /api/ward/medication/{medicationId}/intake   → 복용 체크
+    → DELETE /api/ward/medication/{medicationId}/intake   → 체크 해제(오늘 것만 — 오터치 정정용)
+                             · 중복 체크·미체크 해제는 오류가 아닙니다(멱등). 이때는 보호자에게
+                               알림이 다시 가지 않습니다.
+                             · 커밋 후 WebSocket medication-taken 발송 — ACTIVE 보호자 전원 + 본인.
+                               푸시·문자는 없습니다(하루 여러 번 일어나는 일상 동작이라 소음).
+
+    · 인가: 보호자는 요청 시점 ACTIVE 연결인 피보호자의 복약 정보만, 피보호자는 본인 약만.
+      연결이 해제되면 과거 복약 정보도 비공개. 위반은 403 MEDICATION_NOT_AUTHORIZED(+[IDOR-ATTEMPT]
+      WARN), 없는·삭제된 약은 404. 인가 목록은 getActiveWardIds() — getMyWards()는 PENDING이
+      섞여 있어 쓰면 안 됩니다.
+    · "오늘"은 항상 한국 시간(KST) 기준입니다 — 자정을 넘기면 새 날짜의 일정(전부 미복용)이 됩니다.
+    · 등록 보호자가 탈퇴하면 그 보호자가 등록한 약도 중지되고, 남은 ACTIVE 보호자에게 중지 안내
+      알림(MEDICATION_STOPPED)이 갑니다. 피보호자 본인에게는 보내지 않습니다(재등록 수단이 없어
+      조치가 불가능하므로).
+    ⚠️ 복용 시각이 되면 울리는 알림 발송(스케줄러)은 아직 없습니다(2차). alarmEnabled는 현재
+      보관·조회만 하며, 2차에서 발송 여부를 가르는 게이트가 됩니다.
+
   문의하기 / 고객센터 (inquiry, 2026-07-01 추가):
     보호자가 문의를 작성하고 관리자가 답변하는 고객센터 기능. 신규 도메인.
     카테고리(고정 5종): ANOMALY(이상감지)/HOSPITAL(병원)/ACCOUNT(계정·회원)/SERVICE(서비스 이용)/ETC(기타)
@@ -531,7 +577,10 @@ SilverBridge는 노인(피보호자)과 그 가족(보호자)을 연결하는 �
   [필수/선택 분류]
   - 필수(설정 무시): SMS 인증번호(가입·비밀번호 재설정) — 디스패처를 경유하지 않는 동기 발송이라
     설정으로 끌 수 없음이 구조적으로 보장됨. 그 외 WARD_SOS·ANOMALY_DETECTED의 FCM(위 정책 참고).
-  - 선택(설정 따름): 연결 요청/수락/거절/해제·문의 답변 알림, 그리고 SOS·이상감지의 SMS·알림톡.
+  - 선택(설정 따름): 연결 요청/수락/거절/해제·문의 답변·복약 중지 안내(MEDICATION_STOPPED) 알림,
+    그리고 SOS·이상감지의 SMS·알림톡.
+  ※ 복약 체크(medication-taken)와 SOS 처리 결과(sos-acknowledged)는 WebSocket 전용이라
+    이 분류(디스패처 경유)에 들어가지 않습니다 — 알림 설정과 무관하게 항상 발송됩니다.
 
   [기본값 정책]
   설정 행이 없는 채널은 기본값 적용 — FCM은 기본 ON(기존 동작 보존), SMS/KAKAO/EMAIL은 기본 OFF.
@@ -702,6 +751,13 @@ SilverBridge는 노인(피보호자)과 그 가족(보호자)을 연결하는 �
                                            detectedTypeLabel·detectedAt·anomalyEventId 등
                                            ※ 피보호자 화면을 24시간 켜두는 사용 형태에서는 이 토픽이
                                              가장 확실한 경보 경로입니다(브라우저 알림 권한·무음 설정과 무관).
+    /topic/{userId}/medication-taken        복약 체크·해제 실시간 반영 (2026-08-04 추가)
+                                           — 해당 피보호자의 ACTIVE 보호자 전원 + 피보호자 본인 수신
+                                           payload = medicationId·wardId·medicationName·doseDate·
+                                           taken·takenAt (값은 모두 문자열, 해제 시 takenAt은 null)
+                                           ※ 푸시·문자는 없습니다(일상 동작이라 소음).
+    /topic/{userId}/medication-stopped      등록 보호자 탈퇴로 약이 중지됨 (2026-08-04 추가)
+                                           — 남은 ACTIVE 보호자만 수신. payload = wardId·stoppedCount
 
   ※ 보안: StompSubscriptionAuthorizationInterceptor가 구독 시점에
     {userId}가 인증 세션의 userId와 일치하는지 검증해, 타인의 실시간 알림
@@ -789,6 +845,40 @@ SilverBridge는 노인(피보호자)과 그 가족(보호자)을 연결하는 �
     대상 보호자는 발송 시점의 ACTIVE connection에서 도출(정규화 유지).
   ※ 처리 결과(ACK)는 이력 1행당 하나 — 보호자가 여러 명이어도 "그 SOS가 어떻게 처리됐는지"는 공유된
     하나의 사실이라 마지막 처리로 덮어씀(보호자별 개별 ACK 테이블 없음, 개인별 읽음 표시 미지원).
+
+
+  [ medication — 복약 일정 ] (V35, 2026-08-04 추가)
+  ─────────────────────────────
+  id          : 고유 번호
+  ward_id     : 약을 복용하는 피보호자 ID (탈퇴 시 CASCADE 삭제)
+  created_by  : 등록한 보호자 ID (탈퇴 시 CASCADE — 그 보호자가 등록한 약도 함께 중지)
+  name        : 약 이름 (100자)
+  time_slot   : 복용 시간대 — MORNING / LUNCH / DINNER / BEDTIME
+  dose_time   : 복용 시각 (미지정 시 time_slot 기본값 08:00/13:00/18:00/22:00)
+  dose_amount : 복용량(정, 기본 1)
+  memo        : 복용 안내 (선택, 100자 — 예 "식사와 함께")
+  deleted_at  : 삭제 일시 (NULL이면 사용 중 — soft delete로 지난 복용 이력을 보존)
+  created_at / updated_at
+  ※ 등록은 보호자만 — created_by가 피보호자인 행은 존재하지 않습니다.
+  ※ 조회는 항상 deleted_at IS NULL로 거릅니다(부분 인덱스도 같은 조건).
+
+  [ medication_intake — 날짜별 복용 체크 ] (V35, 2026-08-04 추가)
+  ─────────────────────────────
+  id            : 고유 번호
+  medication_id : 약 ID (약 삭제 시 CASCADE — 단 soft delete에서는 남습니다)
+  dose_date     : 복용 예정일 (KST 기준 날짜)
+  taken_at      : 피보호자가 실제로 체크한 시각
+  ※ 행의 존재 자체가 "그날 복용했다"는 뜻이고, 체크 해제는 행 삭제입니다.
+  ※ UNIQUE(medication_id, dose_date) — 같은 약을 같은 날 두 번 체크할 수 없습니다(재시도·더블탭 멱등).
+
+  [ medication_setting — 피보호자별 복약 알림 ON/OFF ] (V35, 2026-08-04 추가)
+  ─────────────────────────────
+  id            : 고유 번호
+  user_id       : 피보호자 회원 ID (UNIQUE, CASCADE)
+  alarm_enabled : 복약 알림 사용 여부
+  created_at / updated_at
+  ※ 행이 없으면 기본값 ON — 기존 사용자 백필 불필요(sos_setting과 동일한 방식).
+  ※ 토글은 보호자 화면에 있지만 값은 피보호자 계정에 붙습니다(보호자가 여럿이어도 하나).
 
 
   [ connection — 보호자-피보호자 연결 ]
