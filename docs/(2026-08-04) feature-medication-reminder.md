@@ -118,7 +118,23 @@ medication_setting   피보호자별 복약 알림 ON/OFF
   - 카운트: "2/3", 약 없는 피보호자 카드(0/0), soft delete 제외
   - 탈퇴: 건수 집계·삭제, 탈퇴자 제외 수신자, 남은 보호자 없으면 미발송, 예외 미전파
 - `dose_amount`는 **INT**로 정의했다 — `ddl-auto: validate`에서 엔티티 `int`와 `SMALLINT`가 어긋나면 기동이 실패한다(기존 마이그레이션도 전부 `INT`).
-- ⚠️ **Flyway 실적용 미검증** — 이 환경에 Docker·로컬 PostgreSQL이 없다. 배포 전 V33 때처럼 dev 스키마 복제본에 V35를 적용해 확인하거나, 기동 로그에서 `version "35"`와 `validate` 통과를 확인할 것.
+
+### 마이그레이션 실적용 검증 (2026-08-04, gosky `dmu-dev-db`)
+
+V33 때와 같은 방식으로 **운영 dev DB는 읽기만 하고**, 스키마 복제본(`v35_verify`)에 V35를 적용해 확인했다. 검증 후 임시 DB는 삭제했고 **운영 dev DB는 무변경**(적용 전 그대로 V34, `medication*` 테이블 0개).
+
+- **적용**: 오류 0 (`ON_ERROR_STOP=1`) — 테이블 3개 + 부분 인덱스 2개 생성.
+- **타입 일치**(= `ddl-auto: validate` 통과 조건): `dose_amount` **integer** / `dose_time` time / `dose_date` date / `deleted_at`·`taken_at`·`created_at`·`updated_at` timestamptz / `ward_id`·`created_by`·`user_id` varchar(6) / `name`·`memo` varchar(100) / `time_slot` varchar(20) / `alarm_enabled` boolean — 엔티티 매핑과 전부 일치.
+- **제약**: FK 4개 모두 `ON DELETE CASCADE`, `uq_medication_intake(medication_id, dose_date)`·`uq_medication_setting_user(user_id)` UNIQUE 확인.
+- **FK 동작을 실제 데이터로 확인**:
+
+  | 시나리오 | 결과 |
+  |---|---|
+  | 같은 약 + 같은 날 중복 체크 | `uq_medication_intake` 위반으로 **거부** (멱등 보장) |
+  | 등록 보호자 A 탈퇴 (보호자 A·B가 각각 1건씩 등록) | A가 등록한 약과 그 복용 체크만 삭제, **B가 등록한 약은 잔존**, 피보호자의 알림 설정도 잔존 |
+  | 피보호자 탈퇴 | 약·복용 체크·알림 설정 **모두 삭제** |
+
+  두 번째 행이 이번 결정(등록 보호자 탈퇴 = 그 보호자가 등록한 약만 중지)이 DB 레벨에서 의도대로 동작함을 보여준다.
 
 ---
 

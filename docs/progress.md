@@ -1049,6 +1049,6 @@ REST API Key 단독 대비 보안 강화 — 인가코드 탈취 시 토큰 발�
 - **탈퇴 리스너는 동기 AFTER_COMMIT**(`@Async` 아님) — 커밋 직후 purge가 돌아 FK CASCADE가 약을 먼저 지우면 "몇 건인지" 셀 수 없다. best-effort try/catch(좀비 계정 M-S1-1 방지), DB CASCADE는 안전망. 스윕 purge 경로에서는 안내가 유실될 수 있음(기존 WITHDRAW 감사로그와 동일한 수용 한계).
 - **복용 체크 알림 = WebSocket만**(`medication-taken`, AFTER_COMMIT + `@Async`) — ACTIVE 보호자 전원 + 본인(기기 동기화). 하루 여러 번 일어나는 일상 동작이라 푸시는 소음(SOS ACK와 동일 판단). 중복 체크·미체크 해제는 **이벤트 미발행**.
 - **테스트**: `./gradlew test` **361건 / 실패 0**(신규 32건 — 인가 우회·역할 분리·멱등·카운트·탈퇴 정리). `dose_amount`는 **INT**(엔티티 `int`와 `SMALLINT`가 어긋나면 `ddl-auto=validate`에서 기동 실패).
-- ⚠️ **Flyway 실적용 미검증** — 작업 환경에 Docker·로컬 PostgreSQL 없음. 배포 전 V33 때처럼 dev 스키마 복제본에 V35 적용 확인 권장.
+- **마이그레이션 실적용 검증 완료**(gosky `dmu-dev-db`, V33 때와 동일 방식) — dev 스키마 복제본(`v35_verify`)에 V35 적용 시 **오류 0**, 컬럼 타입이 엔티티 매핑과 전부 일치(`dose_amount`=integer 등 → `ddl-auto=validate` 통과 조건 충족), FK 4개 CASCADE·UNIQUE 2개 확인. **FK 동작까지 실데이터로 확인** — ① 같은 약+같은 날 중복 체크는 거부(멱등) ② 보호자 A 탈퇴 시 **A가 등록한 약·체크만** 삭제되고 B가 등록한 약과 피보호자 알림 설정은 잔존 ③ 피보호자 탈퇴 시 전부 삭제. 검증 후 임시 DB 삭제, **운영 dev DB는 무변경**(그대로 V34, `medication*` 0개).
 - **범위 밖(후속)**: 복용 시각 알림 발송(스케줄러 + `alarm_enabled`가 게이트) · 미복용 시 보호자 알림 · 약봉투 OCR(인프라 없음) · 약 수정 API(화면에 UI 없음).
 - 상세: `docs/(2026-08-04) feature-medication-reminder.md`
