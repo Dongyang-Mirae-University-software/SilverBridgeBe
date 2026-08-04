@@ -91,7 +91,12 @@ public enum ErrorCode {
     // SOS 이력·처리(ACK)
     SOS_EVENT_NOT_FOUND(HttpStatus.NOT_FOUND, "SOS 이력을 찾을 수 없습니다."),
     // 연결되지 않은 피보호자의 이력 접근 — 404 위장 대신 그대로 안내한다(2026-07-14 정책)
-    SOS_NOT_AUTHORIZED(HttpStatus.FORBIDDEN, "연결된 피보호자의 SOS 이력만 볼 수 있습니다.");
+    SOS_NOT_AUTHORIZED(HttpStatus.FORBIDDEN, "연결된 피보호자의 SOS 이력만 볼 수 있습니다."),
+
+    // 복약 알림
+    MEDICATION_NOT_FOUND(HttpStatus.NOT_FOUND, "복약 정보를 찾을 수 없습니다."),
+    // 연결되지 않은 피보호자의 약 접근 — 404 위장 대신 그대로 안내한다(2026-07-14 정책)
+    MEDICATION_NOT_AUTHORIZED(HttpStatus.FORBIDDEN, "연결된 피보호자의 복약 정보만 볼 수 있습니다.");
 
     private final HttpStatus status;
     private final String message;

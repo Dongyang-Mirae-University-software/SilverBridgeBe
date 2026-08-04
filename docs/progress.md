@@ -1037,3 +1037,18 @@ REST API Key 단독 대비 보안 강화 — 인가코드 탈취 시 토큰 발�
 - **V33은 수정하지 않고 V34로 분리** — 이미 PR에 올라간 마이그레이션 파일은 고치지 않는다는 규칙 준수.
 - **gosky(skyserver)에서 마이그레이션 실적용 검증**: dev DB 스키마를 복제한 **임시 DB**에 V33·V34 적용 → 오류 0, 컬럼·FK가 엔티티 매핑과 일치(`ddl-auto=validate` 통과 조건 충족). **FK 동작까지 확인** — 보호자 삭제 시 `ack_by`만 NULL이고 이력·처리결과는 보존, 피보호자 삭제 시 `ward_id` NULL(익명 보존). 검증 후 임시 DB 삭제, **운영 dev DB는 무변경**(적용 전 최신 = V32, sos_event 3컬럼 그대로).
 - **테스트**: `./gradlew build` 전체 통과 — **329건 / 실패 0**(위치 2건 추가). `SosService.trigger()`는 `trigger(wardId, location)`로 시그니처만 변경(저장·이벤트 흐름 동일).
+
+## [2026-08-04] 복약 알림 API (1차: 등록·체크·조회)
+
+- **발단**: 보호자/피보호자 복약 화면 4종(목록·약 추가 모달 2탭·오늘의 일정)에 대응하는 백엔드가 전무(`medication` 흔적 0건). 화면 기준으로 API 계약을 백엔드가 정의했다.
+- **확정 규칙 3가지** — ① 조회·등록·삭제는 **ACTIVE 연결** 전제 ② **약 등록·삭제는 보호자만**(시니어가 약 이름·용량을 직접 입력하는 부담 제거) ③ **복용 체크는 피보호자만**(체크해야 보호자에게 보이는 게 이 기능의 목적). ②③은 문서가 아니라 **엔드포인트 구조**로 지킨다 — 보호자 컨트롤러에 체크 API가 없고 피보호자 컨트롤러에 등록 API가 없다.
+- **스키마(V35)**: `medication`(soft delete로 복용 이력 보존) + `medication_intake`(행 존재 = 복용, `UNIQUE(medication_id, dose_date)`로 멱등) + `medication_setting`(알림 ON/OFF, 행 없으면 기본 ON → 백필 불요). 날짜는 **항상 KST**(`MedicationClock`) — UTC로 돌면 09:00 이전 체크가 전날로 기록돼 카운트가 되돌아간다.
+- **경로는 단수형**(사용자 요청 + 기존 `/api/admin/announcement`·`/api/ward/sos-setting` 관례): `GET /api/guardian/medication`, `POST /api/guardian/ward/{wardId}/medication`, `DELETE /api/guardian/medication/{id}`, `GET·PUT .../medication-setting`, `GET /api/ward/medication/today`, `POST·DELETE /api/ward/medication/{id}/intake`.
+- **인가**: `getActiveWardIds`·`isActiveConnection`만 사용(`getMyWards`는 PENDING 혼입 → 인가에 쓰면 수락 전 피보호자 정보 노출). 위반은 **403 `MEDICATION_NOT_AUTHORIZED` + `[IDOR-ATTEMPT]` WARN**, 없는·삭제된 약은 404.
+- **결정: 등록 보호자 탈퇴 시 그 보호자가 등록한 약도 삭제**(`created_by` CASCADE). 초안은 `SET NULL`(약은 피보호자 자산)이었으나 "탈퇴자 데이터를 붙들지 않는다"를 우선. 다만 조용히 사라지면 피보호자가 실제 복용 중인 약이 본인 화면에서도 없어지고 **본인은 재등록 불가**(규칙②)라, **남은 ACTIVE 보호자에게 중지 안내**를 함께 넣었다(`NotificationType.MEDICATION_STOPPED`, SETTINGS_ONLY). 피보호자 본인에게는 보내지 않는다(조치 불가능한 알림).
+- **탈퇴 리스너는 동기 AFTER_COMMIT**(`@Async` 아님) — 커밋 직후 purge가 돌아 FK CASCADE가 약을 먼저 지우면 "몇 건인지" 셀 수 없다. best-effort try/catch(좀비 계정 M-S1-1 방지), DB CASCADE는 안전망. 스윕 purge 경로에서는 안내가 유실될 수 있음(기존 WITHDRAW 감사로그와 동일한 수용 한계).
+- **복용 체크 알림 = WebSocket만**(`medication-taken`, AFTER_COMMIT + `@Async`) — ACTIVE 보호자 전원 + 본인(기기 동기화). 하루 여러 번 일어나는 일상 동작이라 푸시는 소음(SOS ACK와 동일 판단). 중복 체크·미체크 해제는 **이벤트 미발행**.
+- **테스트**: `./gradlew test` **361건 / 실패 0**(신규 32건 — 인가 우회·역할 분리·멱등·카운트·탈퇴 정리). `dose_amount`는 **INT**(엔티티 `int`와 `SMALLINT`가 어긋나면 `ddl-auto=validate`에서 기동 실패).
+- ⚠️ **Flyway 실적용 미검증** — 작업 환경에 Docker·로컬 PostgreSQL 없음. 배포 전 V33 때처럼 dev 스키마 복제본에 V35 적용 확인 권장.
+- **범위 밖(후속)**: 복용 시각 알림 발송(스케줄러 + `alarm_enabled`가 게이트) · 미복용 시 보호자 알림 · 약봉투 OCR(인프라 없음) · 약 수정 API(화면에 UI 없음).
+- 상세: `docs/(2026-08-04) feature-medication-reminder.md`
