@@ -24,10 +24,17 @@ import org.springframework.stereotype.Component;
 public class MedicationReminderScheduler {
 
     private final MedicationReminderService reminderService;
+    private final MedicationMissedAlertService missedAlertService;
     private final MedicationProperties properties;
 
     @Scheduled(fixedDelay = 60_000)
     public void sendDueReminders() {
+        sendWardReminders();
+        sendGuardianMissedAlerts();
+    }
+
+    /** 피보호자에게 보내는 복용 시각 알림·재알림(2차). */
+    private void sendWardReminders() {
         if (!properties.isEnabled()) {
             return;
         }
@@ -48,6 +55,27 @@ public class MedicationReminderScheduler {
             }
         } catch (RuntimeException e) {
             log.error("[MEDICATION-REMINDER] 복약 재알림 발송 실패, 다음 주기에 재시도", e);
+        }
+    }
+
+    /**
+     * 보호자에게 보내는 저녁 미복용 요약(3차).
+     *
+     * <p>킬 스위치가 <b>피보호자 알림과 별개</b>다 — 보호자 쪽 문구·빈도 문제로 이걸 끄더라도
+     * 피보호자의 복용 알림은 계속 나가야 한다. 실제 발송 시각 판정은 Planner가 한다.</p>
+     */
+    private void sendGuardianMissedAlerts() {
+        if (!properties.getMissedAlert().isEnabled()) {
+            return;
+        }
+
+        try {
+            int missed = missedAlertService.sendMissedAlerts();
+            if (missed > 0) {
+                log.info("[MEDICATION-MISSED] 미복용 요약 발송 {}건", missed);
+            }
+        } catch (RuntimeException e) {
+            log.error("[MEDICATION-MISSED] 미복용 요약 발송 실패, 다음 주기에 재시도", e);
         }
     }
 }

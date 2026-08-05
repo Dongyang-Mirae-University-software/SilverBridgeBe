@@ -4,6 +4,8 @@ import lombok.Getter;
 import lombok.Setter;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 
+import java.time.LocalTime;
+
 /**
  * 복약 알림 발송 설정 (application.yaml {@code medication.reminder.*}).
  *
@@ -40,4 +42,37 @@ public class MedicationProperties {
      * <p>유예 창과 같은 취지 — 서버가 오래 내려갔다 올라왔을 때 한참 지난 재알림이 튀어나오지 않게 한다.</p>
      */
     private int retryDeadlineMinutes = 60;
+
+    /** 미복용 시 보호자에게 보내는 저녁 요약 알림 설정(3차). */
+    private MissedAlert missedAlert = new MissedAlert();
+
+    /**
+     * 미복용 요약 알림 설정 ({@code medication.reminder.missed-alert.*}).
+     *
+     * <p>피보호자 알림(위 필드들)과 <b>독립적으로 끌 수 있게</b> 분리했다 — 보호자 쪽 문구·빈도 문제가
+     * 드러났을 때 피보호자 복용 알림까지 함께 멈추면 안 된다.</p>
+     */
+    @Getter
+    @Setter
+    public static class MissedAlert {
+
+        /** 미복용 요약 알림 ON/OFF(킬 스위치). false면 보호자에게 아무것도 보내지 않는다. */
+        private boolean enabled = true;
+
+        /**
+         * 요약을 보내는 시각(KST).
+         *
+         * <p>이 시각까지 복용 시각이 지난 약만 집계한다 — 취침 전 약은 아직 먹을 때가 아니라 제외된다.
+         * 자정 직전으로 미루면 보호자가 자고 있어 대응할 수 없으므로 저녁으로 둔다.</p>
+         */
+        private LocalTime alertTime = LocalTime.of(21, 0);
+
+        /**
+         * 발송 마감(분). {@code alertTime}부터 이 시간까지만 보낸다.
+         *
+         * <p>서버가 늦게 복구됐을 때 자정 직전에 요약이 튀어나오는 걸 막는다.
+         * 마감이 자정을 넘기면 그날 23:59:59에서 끊는다(날짜가 바뀌면 요약 대상 자체가 달라지므로).</p>
+         */
+        private int deadlineMinutes = 120;
+    }
 }

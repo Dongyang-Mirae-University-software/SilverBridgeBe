@@ -6,12 +6,15 @@ import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
+import kr.silverbridge.main.domain.medication.dto.GuardianMedicationAlertSettingRequest;
+import kr.silverbridge.main.domain.medication.dto.GuardianMedicationAlertSettingResponse;
 import kr.silverbridge.main.domain.medication.dto.MedicationCreateRequest;
 import kr.silverbridge.main.domain.medication.dto.MedicationItem;
 import kr.silverbridge.main.domain.medication.dto.MedicationSettingResponse;
 import kr.silverbridge.main.domain.medication.dto.MedicationSettingUpdateRequest;
 import kr.silverbridge.main.domain.medication.dto.WardMedicationSummary;
 import kr.silverbridge.main.domain.medication.service.GuardianMedicationService;
+import kr.silverbridge.main.domain.medication.service.GuardianMedicationSettingService;
 import kr.silverbridge.main.global.response.ApiResponse;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
@@ -42,6 +45,7 @@ import java.util.List;
 public class GuardianMedicationController {
 
     private final GuardianMedicationService guardianMedicationService;
+    private final GuardianMedicationSettingService guardianMedicationSettingService;
 
     @Operation(summary = "피보호자별 오늘 복약 현황 조회 (보호자 전용)",
             description = """
@@ -189,5 +193,61 @@ public class GuardianMedicationController {
             @Valid @RequestBody MedicationSettingUpdateRequest request) {
         return ResponseEntity.ok(ApiResponse.ok(guardianMedicationService.updateSetting(
                 guardianId, wardId, request.alarmEnabled(), request.remindAgainEnabled())));
+    }
+
+    @Operation(summary = "내 복약 알림 수신 설정 조회 (보호자 전용)",
+            description = """
+                    [요청 헤더]
+                    Authorization: Bearer {accessToken}
+
+                    보호자 본인이 받을 복약 알림 설정을 반환합니다. 설정한 적이 없으면 기본값 true입니다.
+
+                    ※ 피보호자별 설정(/api/guardian/ward/{wardId}/medication-setting)과 다릅니다 —
+                      저쪽은 "피보호자에게 무엇을 보낼지", 이쪽은 "내가 무엇을 받을지"입니다.
+                    """)
+    @ApiResponses({
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "설정 반환"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "인증 토큰 없음 또는 만료", content = @Content),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "보호자 권한 필요", content = @Content)
+    })
+    @GetMapping("/api/guardian/medication-alert-setting")
+    public ResponseEntity<ApiResponse<GuardianMedicationAlertSettingResponse>> getAlertSetting(
+            @AuthenticationPrincipal String guardianId) {
+        return ResponseEntity.ok(ApiResponse.ok(GuardianMedicationAlertSettingResponse.of(
+                guardianMedicationSettingService.isMissedAlertEnabled(guardianId))));
+    }
+
+    @Operation(summary = "내 복약 알림 수신 설정 변경 (보호자 전용)",
+            description = """
+                    [요청 헤더]
+                    Authorization: Bearer {accessToken}
+
+                    [요청 바디] missedAlertEnabled (선택 — 생략 시 기존값 유지)
+                    - true: 피보호자가 복약을 체크하지 않은 날 저녁에 요약 알림을 받습니다.
+                    - false: 받지 않습니다.
+
+                    [발송 동작]
+                    - 매일 21시(KST)에 한 번, 피보호자별로 요약해 보냅니다(FCM·문자 — 사용자 알림 설정을 따름).
+                    - 21시까지 복용 시각이 지난 약만 집계합니다 — 취침 전 22시 약은 그날 요약에 포함되지 않습니다.
+                    - 체크되지 않은 약이 하나도 없으면 보내지 않습니다.
+                    - 같은 피보호자 건은 하루 한 번만 발송됩니다.
+
+                    [주의]
+                    - 이 알림은 "약을 안 드셨다"가 아니라 "체크되지 않았다"를 알립니다 —
+                      실제로는 복용하고 체크만 안 한 경우가 있을 수 있습니다.
+                    - 이 설정은 복약 요약 알림에만 적용됩니다. SOS 등 필수 알림에는 영향이 없습니다.
+                    """)
+    @ApiResponses({
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "변경 완료. data: 적용된 설정"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "인증 토큰 없음 또는 만료", content = @Content),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "보호자 권한 필요", content = @Content)
+    })
+    @PutMapping("/api/guardian/medication-alert-setting")
+    public ResponseEntity<ApiResponse<GuardianMedicationAlertSettingResponse>> updateAlertSetting(
+            @AuthenticationPrincipal String guardianId,
+            @Valid @RequestBody GuardianMedicationAlertSettingRequest request) {
+        return ResponseEntity.ok(ApiResponse.ok(GuardianMedicationAlertSettingResponse.of(
+                guardianMedicationSettingService.updateMissedAlertEnabled(
+                        guardianId, request.missedAlertEnabled()))));
     }
 }

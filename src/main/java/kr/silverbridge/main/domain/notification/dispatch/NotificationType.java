@@ -41,6 +41,19 @@ public enum NotificationType {
      */
     MEDICATION_REMINDER(Policy.SETTINGS_ONLY),
 
+    /**
+     * 피보호자가 복약을 체크하지 않은 날 저녁, <b>보호자</b>에게 보내는 요약(3차).
+     *
+     * <p>채널은 {@code MEDICATION_REMINDER}와 같다(FCM·문자, 알림톡 매핑 없음).</p>
+     *
+     * <p>⚠️ <b>문구는 "안 드셨다"가 아니라 "체크되지 않았다"</b>여야 한다 — 실제로는 복용하고 체크만
+     * 안 한 경우가 흔하고, 제3자에게 사실이 아닌 통보를 하면 불필요한 걱정을 만든다.</p>
+     *
+     * <p>강제 발송이 아닌 이유 — 매일 반복될 수 있는 알림이라, 보호자가 이것만 끌 수 없으면 앱 알림을
+     * 통째로 꺼버려 SOS·이상감지 같은 필수 알림까지 함께 죽는다.</p>
+     */
+    MEDICATION_MISSED(Policy.SETTINGS_ONLY),
+
     // 피보호자 긴급 SOS. 생명 관련이라 설정을 무시하고 강제 발송하며, 푸시 미전달 시 SMS로 폴백한다.
     WARD_SOS(Policy.FORCED_PUSH_WITH_SMS_FALLBACK),
 

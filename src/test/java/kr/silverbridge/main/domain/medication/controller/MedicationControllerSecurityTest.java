@@ -1,10 +1,12 @@
 package kr.silverbridge.main.domain.medication.controller;
 
 import kr.silverbridge.main.domain.medication.dto.MedicationCreateRequest;
+import kr.silverbridge.main.domain.medication.dto.GuardianMedicationAlertSettingRequest;
 import kr.silverbridge.main.domain.medication.dto.MedicationSettingUpdateRequest;
 import kr.silverbridge.main.domain.medication.dto.TodayMedicationResponse;
 import kr.silverbridge.main.domain.medication.entity.MedicationTimeSlot;
 import kr.silverbridge.main.domain.medication.service.GuardianMedicationService;
+import kr.silverbridge.main.domain.medication.service.GuardianMedicationSettingService;
 import kr.silverbridge.main.domain.medication.service.WardMedicationService;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -51,6 +53,8 @@ class MedicationControllerSecurityTest {
     private GuardianMedicationService guardianMedicationService;
     @MockitoBean
     private WardMedicationService wardMedicationService;
+    @MockitoBean
+    private GuardianMedicationSettingService guardianMedicationSettingService;
 
     @Autowired
     private GuardianMedicationController guardianController;
@@ -72,6 +76,9 @@ class MedicationControllerSecurityTest {
         assertThatNoException().isThrownBy(() -> guardianController.getWardMedications("GD0001"));
         assertThatNoException().isThrownBy(() -> guardianController.create("GD0001", "WD0001", CREATE_REQUEST));
         assertThatNoException().isThrownBy(() -> guardianController.delete("GD0001", 1L));
+        assertThatNoException().isThrownBy(() -> guardianController.getAlertSetting("GD0001"));
+        assertThatNoException().isThrownBy(() -> guardianController.updateAlertSetting(
+                "GD0001", new GuardianMedicationAlertSettingRequest(false)));
     }
 
     @Test
@@ -86,6 +93,12 @@ class MedicationControllerSecurityTest {
                 new MedicationSettingUpdateRequest(false, null)))
                 .isInstanceOf(AccessDeniedException.class);
         assertThatThrownBy(() -> guardianController.getWardMedications("WD0001"))
+                .isInstanceOf(AccessDeniedException.class);
+        // 미복용 요약 수신 설정도 보호자 전용 — 피보호자가 건드릴 수 없다
+        assertThatThrownBy(() -> guardianController.getAlertSetting("WD0001"))
+                .isInstanceOf(AccessDeniedException.class);
+        assertThatThrownBy(() -> guardianController.updateAlertSetting(
+                "WD0001", new GuardianMedicationAlertSettingRequest(true)))
                 .isInstanceOf(AccessDeniedException.class);
     }
 
