@@ -1052,3 +1052,20 @@ REST API Key 단독 대비 보안 강화 — 인가코드 탈취 시 토큰 발�
 - **마이그레이션 실적용 검증 완료**(gosky `dmu-dev-db`, V33 때와 동일 방식) — dev 스키마 복제본(`v35_verify`)에 V35 적용 시 **오류 0**, 컬럼 타입이 엔티티 매핑과 전부 일치(`dose_amount`=integer 등 → `ddl-auto=validate` 통과 조건 충족), FK 4개 CASCADE·UNIQUE 2개 확인. **FK 동작까지 실데이터로 확인** — ① 같은 약+같은 날 중복 체크는 거부(멱등) ② 보호자 A 탈퇴 시 **A가 등록한 약·체크만** 삭제되고 B가 등록한 약과 피보호자 알림 설정은 잔존 ③ 피보호자 탈퇴 시 전부 삭제. 검증 후 임시 DB 삭제, **운영 dev DB는 무변경**(그대로 V34, `medication*` 0개).
 - **범위 밖(후속)**: 복용 시각 알림 발송(스케줄러 + `alarm_enabled`가 게이트) · 미복용 시 보호자 알림 · 약봉투 OCR(인프라 없음) · 약 수정 API(화면에 UI 없음).
 - 상세: `docs/(2026-08-04) feature-medication-reminder.md`
+
+## [2026-08-05] 복약 알림 발송 스케줄러 (2차)
+
+- **발단**: 1차(V35)는 등록·체크·조회까지라 "정해진 시각에 먼저 울려주는" 주체가 없었다 — 피보호자가 앱을 열어야만 오늘 일정을 봤고, 화면의 알림 토글(`alarm_enabled`)은 값만 보관되고 읽는 코드가 없었다(PHASE 0에서 확인).
+- **스케줄러**: `MedicationReminderScheduler`(1분 주기, `fixedDelay`) → `MedicationReminderPlanner`(선점) → `MedicationReminderService`(발송). `@EnableScheduling`은 이미 `BackendApplication`에 있어 인프라 변경 없음.
+- **중복 발송 방지 = "선점 후 발송"**: 트랜잭션 안에서 `medication_reminder_log`에 행을 남기고 커밋한 뒤, 트랜잭션 밖에서 발송한다. 기록이 없으면 유예 창 30분 내내 같은 알림이 30번 나간다. 대가는 **발송 실패 시 그 회차 유실**이며, 반대 순서(보내고 기록)는 앱이 죽었을 때 중복 발송이라 **두 번 가는 쪽이 더 나쁘다**고 판단했다(재알림이 두 번째 기회). `UNIQUE(medication_id, dose_date, attempt)`가 최종 방어선 — 사전 조회가 놓친 중복은 저장 시 막히고, 그 주기는 롤백되지만 다음 주기에 스스로 회복된다.
+- **판정 규칙**(기준 시각 항상 KST): 최초 = 미삭제 && 복용시각 ∈ [now-30분, now] && 오늘 미체크 && 알림 ON && 미발송. 재알림 = 최초 발송이 [now-60분, now-15분] && 여전히 미체크 && 약 생존 && 알림·재알림 모두 ON.
+  - **유예 창은 자정을 넘지 않는다**(00:00에서 자름) — 되감으면 `dose_date`가 달라져 "어제 약을 오늘 날짜로" 보내게 된다. 23:50 복용 건을 자정 넘겨 놓치면 그 건은 건너뛴다(수용한 한계).
+  - **재알림 마감 60분** — 서버가 오래 내려갔다 올라왔을 때 한참 지난 재알림이 튀어나오지 않게.
+- **결정: 재알림은 사용자 선택**(기본 켜짐, 15분 뒤 1회). `medication_setting`에 `remind_again_enabled` 추가(V36, `NOT NULL DEFAULT true`로 기존 행 자동 백필). 문자까지 켜면 한 번 복용에 2건이 나가므로 끌 수 있어야 한다는 판단.
+- **결정: 채널은 FCM + 문자만**. `NotificationType.MEDICATION_REMINDER(SETTINGS_ONLY)` — 알림톡은 `templates` 매핑을 두지 않아 스킵(`ANOMALY_DETECTED_SELF`와 같은 구조). ⚠️ 복약은 전형적 **다발성 메시지**라 알림톡을 쓰려면 "반복 수신 동의" 고지를 넣은 별도 템플릿 승인이 필요하다(이상감지 2차 반려 사유). WebSocket도 보내지 않는다.
+- **설정 API 하위호환**: `PUT .../medication-setting`의 두 필드를 모두 **선택**으로 바꿨다(`null`=변경 안 함). 기존 FE의 `{alarmEnabled}` 요청이 그대로 동작하고 재알림 설정이 초기화되지 않는다. 이를 위해 `alarmEnabled`의 `@NotNull`을 뗐다.
+- **킬 스위치**: `medication.reminder.enabled`(+유예·재알림 지연·마감) 환경변수화. 운영에서 문구·빈도 문제가 드러나면 배포 없이 즉시 멈춘다. 코드 기본값 = 서버 값(이상감지 2026-07-28 교훈).
+- **테스트**: `./gradlew build` **379건 / 실패 0**(복약 50건 = 1차 32 + 신규 18 — 대상 선정·재발송 방지·유예/재알림 구간·설정 역전 방어·문구·발송 실패 격리·킬 스위치).
+- **마이그레이션 실적용 검증 완료**(gosky `dmu-dev-db` 스키마 복제본): 적용 오류 0, 타입 일치(`attempt`=integer 등), UNIQUE·FK CASCADE·인덱스 확인. 실데이터로 ① `alarm_enabled`만 넣어도 `remind_again_enabled` true 백필 ② 같은 회차 중복 기록 **거부** ③ attempt=2 허용 ④ 약 삭제 시 발송 기록 CASCADE 삭제 확인. 임시 DB 삭제, **운영 dev DB 무변경**(V35 그대로).
+- **범위 밖(후속)**: 미복용 시 보호자 알림 · 복약 알림톡 템플릿 심사 · 순응도 통계 · OCR · 약 수정 API.
+- 상세: `docs/(2026-08-05) feature-medication-reminder-scheduler.md`

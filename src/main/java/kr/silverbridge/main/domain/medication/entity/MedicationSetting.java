@@ -36,16 +36,30 @@ public class MedicationSetting extends BaseTimeEntity {
     @Column(name = "alarm_enabled", nullable = false)
     private boolean alarmEnabled;
 
-    private MedicationSetting(String userId, boolean alarmEnabled) {
+    /**
+     * 복용 시각 알림을 받고도 체크하지 않았을 때 한 번 더 보낼지(2차, V36).
+     *
+     * <p>기본값은 켜짐이다 — 어르신은 한 번으로 놓치는 경우가 많다. 다만 문자를 켜둔 사용자에게는
+     * 한 번 복용에 문자가 2건까지 나가므로 끌 수 있어야 한다.</p>
+     */
+    @Column(name = "remind_again_enabled", nullable = false)
+    private boolean remindAgainEnabled;
+
+    private MedicationSetting(String userId, boolean alarmEnabled, boolean remindAgainEnabled) {
         this.userId = userId;
         this.alarmEnabled = alarmEnabled;
+        this.remindAgainEnabled = remindAgainEnabled;
     }
 
-    public static MedicationSetting of(String userId, boolean alarmEnabled) {
-        return new MedicationSetting(userId, alarmEnabled);
+    public static MedicationSetting of(String userId, boolean alarmEnabled, boolean remindAgainEnabled) {
+        return new MedicationSetting(userId, alarmEnabled, remindAgainEnabled);
     }
 
     public void updateAlarmEnabled(boolean alarmEnabled) {
         this.alarmEnabled = alarmEnabled;
+    }
+
+    public void updateRemindAgainEnabled(boolean remindAgainEnabled) {
+        this.remindAgainEnabled = remindAgainEnabled;
     }
 }

@@ -83,7 +83,7 @@ class MedicationControllerSecurityTest {
         assertThatThrownBy(() -> guardianController.delete("WD0001", 1L))
                 .isInstanceOf(AccessDeniedException.class);
         assertThatThrownBy(() -> guardianController.updateSetting("WD0001", "WD0001",
-                new MedicationSettingUpdateRequest(false)))
+                new MedicationSettingUpdateRequest(false, null)))
                 .isInstanceOf(AccessDeniedException.class);
         assertThatThrownBy(() -> guardianController.getWardMedications("WD0001"))
                 .isInstanceOf(AccessDeniedException.class);

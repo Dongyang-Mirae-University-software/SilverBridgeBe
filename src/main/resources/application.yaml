@@ -96,6 +96,15 @@ camera:
 # AI 이상감지 수신 (1단계 — 수신·판정·이력. 보호자 알림 발송은 2단계).
 # 백엔드가 AI WS에 클라이언트로 붙어 latest_analysis를 받는다(AI 서버 무변경 — 웹훅 없음).
 # 연결 실패·키 미설정은 기동을 막지 않는다(구독만 비활성/재접속).
+# 복약 알림 발송 (2차). 코드 기본값과 서버 값을 같게 유지한다 —
+# 서버만 환경변수로 덮어쓰면 로컬만 다르게 동작하는 문제가 생긴다(이상감지 2026-07-28 교훈).
+medication:
+  reminder:
+    enabled: ${MEDICATION_REMINDER_ENABLED:true}          # 킬 스위치. false면 발송만 멈추고 등록·체크·조회는 그대로
+    grace-minutes: ${MEDICATION_REMINDER_GRACE_MINUTES:30}        # 복용 시각을 놓쳤을 때 발송 허용 유예
+    retry-delay-minutes: ${MEDICATION_REMINDER_RETRY_DELAY_MINUTES:15}      # 체크 없을 때 재알림까지 대기
+    retry-deadline-minutes: ${MEDICATION_REMINDER_RETRY_DEADLINE_MINUTES:60} # 이 시간이 지나면 재알림 포기
+
 anomaly:
   enabled: ${ANOMALY_ENABLED:true}
   ws-url: ${AI_WS_URL:wss://testai.gosky.kr/api/v1/ws/live}

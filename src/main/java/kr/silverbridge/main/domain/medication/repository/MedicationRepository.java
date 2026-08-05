@@ -3,6 +3,7 @@ package kr.silverbridge.main.domain.medication.repository;
 import kr.silverbridge.main.domain.medication.entity.Medication;
 import org.springframework.data.jpa.repository.JpaRepository;
 
+import java.time.LocalTime;
 import java.util.Collection;
 import java.util.List;
 
@@ -23,4 +24,12 @@ public interface MedicationRepository extends JpaRepository<Medication, Long> {
      * 등록자가 사라지면 soft delete된 약도 남겨둘 이유가 없다.
      */
     List<Medication> findByCreatedBy(String createdBy);
+
+    /**
+     * 복용 시각이 지난 약(알림 발송 후보). {@code from}은 유예 창 시작, {@code to}는 현재 시각이다.
+     *
+     * <p>실제 발송 여부는 호출자가 미복용·설정 ON·발송 기록 없음을 확인해 결정한다 —
+     * 여기서는 시각 조건만 거른다.</p>
+     */
+    List<Medication> findByDeletedAtIsNullAndDoseTimeBetween(LocalTime from, LocalTime to);
 }
