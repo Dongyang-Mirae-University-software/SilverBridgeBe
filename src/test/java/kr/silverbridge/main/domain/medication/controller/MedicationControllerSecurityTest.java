@@ -3,6 +3,7 @@ package kr.silverbridge.main.domain.medication.controller;
 import kr.silverbridge.main.domain.medication.dto.MedicationCreateRequest;
 import kr.silverbridge.main.domain.medication.dto.GuardianMedicationAlertSettingRequest;
 import kr.silverbridge.main.domain.medication.dto.MedicationSettingUpdateRequest;
+import kr.silverbridge.main.domain.medication.dto.MedicationUpdateRequest;
 import kr.silverbridge.main.domain.medication.dto.TodayMedicationResponse;
 import kr.silverbridge.main.domain.medication.entity.MedicationTimeSlot;
 import kr.silverbridge.main.domain.medication.service.GuardianMedicationService;
@@ -72,10 +73,13 @@ class MedicationControllerSecurityTest {
     void guardian_보호자API_허용() {
         when(guardianMedicationService.getWardMedications(any())).thenReturn(List.of());
         when(guardianMedicationService.create(any(), any(), any())).thenReturn(null);
+        when(guardianMedicationService.update(any(), any(), any())).thenReturn(null);
 
         assertThatNoException().isThrownBy(() -> guardianController.getWardMedications("GD0001"));
         assertThatNoException().isThrownBy(() -> guardianController.create("GD0001", "WD0001", CREATE_REQUEST));
         assertThatNoException().isThrownBy(() -> guardianController.delete("GD0001", 1L));
+        assertThatNoException().isThrownBy(() -> guardianController.update(
+                "GD0001", 1L, new MedicationUpdateRequest("혈압약", null, null, null, null)));
         assertThatNoException().isThrownBy(() -> guardianController.getAlertSetting("GD0001"));
         assertThatNoException().isThrownBy(() -> guardianController.updateAlertSetting(
                 "GD0001", new GuardianMedicationAlertSettingRequest(false)));
@@ -88,6 +92,10 @@ class MedicationControllerSecurityTest {
         assertThatThrownBy(() -> guardianController.create("WD0001", "WD0001", CREATE_REQUEST))
                 .isInstanceOf(AccessDeniedException.class);
         assertThatThrownBy(() -> guardianController.delete("WD0001", 1L))
+                .isInstanceOf(AccessDeniedException.class);
+        // 약 수정도 보호자 전용 — 피보호자는 자기 약도 고칠 수 없다(등록·수정·삭제는 보호자 몫)
+        assertThatThrownBy(() -> guardianController.update(
+                "WD0001", 1L, new MedicationUpdateRequest("혈압약", null, null, null, null)))
                 .isInstanceOf(AccessDeniedException.class);
         assertThatThrownBy(() -> guardianController.updateSetting("WD0001", "WD0001",
                 new MedicationSettingUpdateRequest(false, null)))

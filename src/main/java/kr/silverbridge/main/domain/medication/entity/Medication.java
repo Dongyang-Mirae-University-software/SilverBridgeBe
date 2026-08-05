@@ -78,6 +78,24 @@ public class Medication extends BaseTimeEntity {
     }
 
     /**
+     * 약 정보를 갱신한다. <b>확정된 최종값</b>만 받는다 — "무엇을 바꾸지 않을지"(부분 수정의 null 병합)는
+     * 서비스가 판단해 넘기고, 엔티티는 결과 상태만 반영한다.
+     *
+     * <p>{@code wardId}·{@code createdBy}는 바뀌지 않는다 — 소유자와 등록자는 약의 정체성이라
+     * 옮기려면 삭제 후 재등록해야 한다.</p>
+     *
+     * @param memo 없으면 {@code null}(메모 삭제)
+     */
+    public void update(String name, MedicationTimeSlot timeSlot, LocalTime doseTime,
+                       int doseAmount, String memo) {
+        this.name = name;
+        this.timeSlot = timeSlot;
+        this.doseTime = doseTime;
+        this.doseAmount = doseAmount;
+        this.memo = memo;
+    }
+
+    /**
      * 약을 삭제 처리한다(soft delete). 이미 삭제된 약은 시각을 덮어쓰지 않는다 —
      * 최초 삭제 시점이 이력 해석의 기준이기 때문이다.
      */
