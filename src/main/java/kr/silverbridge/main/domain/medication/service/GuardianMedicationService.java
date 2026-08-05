@@ -4,10 +4,13 @@ import kr.silverbridge.main.domain.connection.service.ConnectionService;
 import kr.silverbridge.main.domain.medication.dto.MedicationCreateRequest;
 import kr.silverbridge.main.domain.medication.dto.MedicationItem;
 import kr.silverbridge.main.domain.medication.dto.MedicationSettingResponse;
+import kr.silverbridge.main.domain.medication.dto.MedicationUpdateRequest;
 import kr.silverbridge.main.domain.medication.dto.WardMedicationSummary;
 import kr.silverbridge.main.domain.medication.entity.Medication;
 import kr.silverbridge.main.domain.medication.entity.MedicationIntake;
+import kr.silverbridge.main.domain.medication.entity.MedicationTimeSlot;
 import kr.silverbridge.main.domain.medication.repository.MedicationIntakeRepository;
+import kr.silverbridge.main.domain.medication.repository.MedicationReminderLogRepository;
 import kr.silverbridge.main.domain.medication.repository.MedicationRepository;
 import kr.silverbridge.main.domain.user.entity.User;
 import kr.silverbridge.main.domain.user.repository.UserRepository;
@@ -19,6 +22,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDate;
+import java.time.LocalTime;
 import java.time.Period;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -45,6 +49,7 @@ public class GuardianMedicationService {
 
     private final MedicationRepository medicationRepository;
     private final MedicationIntakeRepository intakeRepository;
+    private final MedicationReminderLogRepository reminderLogRepository;
     private final MedicationSettingService settingService;
     private final ConnectionService connectionService;
     private final UserRepository userRepository;
@@ -115,6 +120,47 @@ public class GuardianMedicationService {
     }
 
     /**
+     * 약 정보를 부분 수정한다. 전달하지 않은 항목({@code null})은 기존값을 유지한다.
+     *
+     * <p><b>복용 시각이 실제로 바뀌면 그 약의 당일 발송 기록을 지운다</b> — 그래야 새 시각 기준으로 다시
+     * 판정되어 알림이 나간다(08:00을 20:00으로 고쳤는데 오늘 저녁에 안 울리는 문제 방지). 복용 체크는
+     * 건드리지 않으므로 이미 드신 약은 여전히 울리지 않는다.</p>
+     *
+     * @throws CustomException {@code MEDICATION_NOT_FOUND} 없거나 이미 삭제된 약 /
+     *                         {@code MEDICATION_NOT_AUTHORIZED} ACTIVE 연결이 아닌 피보호자의 약
+     */
+    @Transactional
+    public MedicationItem update(String guardianId, Long medicationId, MedicationUpdateRequest request) {
+        Medication medication = findActiveMedication(medicationId);
+        requireActiveConnection(guardianId, medication.getWardId(), "약 수정");
+
+        LocalTime previousDoseTime = medication.getDoseTime();
+        MedicationTimeSlot timeSlot = request.timeSlot() != null ? request.timeSlot() : medication.getTimeSlot();
+        LocalTime doseTime = resolveDoseTime(request, medication, timeSlot);
+
+        medication.update(
+                resolveName(request, medication),
+                timeSlot,
+                doseTime,
+                request.doseAmount() != null ? request.doseAmount() : medication.getDoseAmount(),
+                resolveMemo(request, medication));
+
+        LocalDate today = MedicationClock.today();
+        if (!doseTime.equals(previousDoseTime)) {
+            reminderLogRepository.deleteByMedicationIdAndDoseDate(medicationId, today);
+            log.info("복약 시각 변경으로 당일 발송 기록 초기화: medicationId={}, {} → {}",
+                    medicationId, previousDoseTime, doseTime);
+        }
+
+        log.info("복약 수정: medicationId={}, wardId={}, guardianId={}",
+                medicationId, medication.getWardId(), guardianId);
+
+        // 응답은 오늘 복용 체크 상태를 그대로 반영한다(수정이 체크를 지우지 않는다).
+        return MedicationItem.of(medication,
+                intakeRepository.findByMedicationIdAndDoseDate(medicationId, today).orElse(null));
+    }
+
+    /**
      * 약을 삭제한다(soft delete — 지난 복용 이력은 남는다).
      *
      * @throws CustomException {@code MEDICATION_NOT_FOUND} 없거나 이미 삭제된 약 /
@@ -150,6 +196,39 @@ public class GuardianMedicationService {
         log.info("복약 알림 설정 변경: wardId={}, alarmEnabled={}, remindAgainEnabled={}, guardianId={}",
                 wardId, applied.alarmEnabled(), applied.remindAgainEnabled(), guardianId);
         return MedicationSettingResponse.of(wardId, applied);
+    }
+
+    /** 이름은 공백만 보낸 경우 기존값을 유지한다(빈 이름으로 덮어써 목록을 못 알아보게 만들지 않는다). */
+    private static String resolveName(MedicationUpdateRequest request, Medication medication) {
+        if (request.name() == null || request.name().isBlank()) {
+            return medication.getName();
+        }
+        return request.name().trim();
+    }
+
+    /**
+     * 복용 시각을 결정한다.
+     *
+     * <p>시각을 명시하면 그 값을 쓰고, <b>시간대만 바꿨으면 새 시간대의 기본 시각</b>으로 갱신한다 —
+     * 그러지 않으면 "저녁 08:00" 같은 상태가 남는다. 둘 다 없으면 기존 시각 그대로다.</p>
+     */
+    private static LocalTime resolveDoseTime(MedicationUpdateRequest request, Medication medication,
+                                             MedicationTimeSlot timeSlot) {
+        if (request.doseTime() != null) {
+            return request.doseTime();
+        }
+        if (request.timeSlot() != null && request.timeSlot() != medication.getTimeSlot()) {
+            return timeSlot.defaultTime();
+        }
+        return medication.getDoseTime();
+    }
+
+    /** 메모는 {@code null}이면 미변경, <b>빈 문자열이면 삭제</b>다(null로는 지울 수 없으므로). */
+    private static String resolveMemo(MedicationUpdateRequest request, Medication medication) {
+        if (request.memo() == null) {
+            return medication.getMemo();
+        }
+        return request.memo().isBlank() ? null : request.memo().trim();
     }
 
     /** 삭제되지 않은 약을 찾는다. 삭제된 약은 존재하지 않는 것으로 취급한다. */

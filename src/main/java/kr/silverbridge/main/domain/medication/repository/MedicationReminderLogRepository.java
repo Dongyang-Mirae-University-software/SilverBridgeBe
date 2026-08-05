@@ -19,6 +19,15 @@ public interface MedicationReminderLogRepository extends JpaRepository<Medicatio
     List<MedicationReminderLog> findByMedicationIdInAndDoseDate(Collection<Long> medicationIds, LocalDate doseDate);
 
     /**
+     * 특정 약의 특정 날짜 발송 기록을 지운다(최초·재알림 모두).
+     *
+     * <p><b>복용 시각이 수정됐을 때만</b> 쓴다 — 기록을 지우면 그 약은 "오늘 아직 안 보낸" 상태가 되어
+     * 새 시각 기준으로 다시 판정된다. 08:00을 20:00으로 바꿨는데 오늘 저녁 알림이 안 나가는 문제를 막는다.
+     * 복용 체크({@code medication_intake})는 건드리지 않으므로 이미 드신 약은 여전히 울리지 않는다.</p>
+     */
+    void deleteByMedicationIdAndDoseDate(Long medicationId, LocalDate doseDate);
+
+    /**
      * 재알림 대상이 될 <b>최초 발송 기록</b>을 찾는다.
      *
      * <p>조건 = 오늘 발송된 {@code attempt=1} 중 발송 시각이 {@code [from, to]} 구간이고

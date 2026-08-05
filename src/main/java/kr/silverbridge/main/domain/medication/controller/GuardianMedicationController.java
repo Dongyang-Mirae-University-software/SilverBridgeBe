@@ -12,6 +12,7 @@ import kr.silverbridge.main.domain.medication.dto.MedicationCreateRequest;
 import kr.silverbridge.main.domain.medication.dto.MedicationItem;
 import kr.silverbridge.main.domain.medication.dto.MedicationSettingResponse;
 import kr.silverbridge.main.domain.medication.dto.MedicationSettingUpdateRequest;
+import kr.silverbridge.main.domain.medication.dto.MedicationUpdateRequest;
 import kr.silverbridge.main.domain.medication.dto.WardMedicationSummary;
 import kr.silverbridge.main.domain.medication.service.GuardianMedicationService;
 import kr.silverbridge.main.domain.medication.service.GuardianMedicationSettingService;
@@ -22,6 +23,7 @@ import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
@@ -112,6 +114,52 @@ public class GuardianMedicationController {
             @Parameter(description = "피보호자 ID") @PathVariable String wardId,
             @Valid @RequestBody MedicationCreateRequest request) {
         return ResponseEntity.ok(ApiResponse.ok(guardianMedicationService.create(guardianId, wardId, request)));
+    }
+
+    @Operation(summary = "약 수정 (보호자 전용)",
+            description = """
+                    [요청 헤더]
+                    Authorization: Bearer {accessToken}
+
+                    등록된 약의 정보를 수정합니다. **부분 수정**이라 보낸 필드만 바뀌고, 생략한 필드는 그대로입니다.
+                    ACTIVE 연결된 피보호자의 약만 수정할 수 있으며, 등록한 보호자가 아니어도 됩니다.
+
+                    [요청 바디] 모두 선택 — null인 필드는 변경하지 않습니다.
+                    - name (1~100자): 약 이름
+                    - timeSlot: MORNING · LUNCH · DINNER · BEDTIME
+                    - doseTime: 복용 시각
+                    - doseAmount (1~99): 복용량(정)
+                    - memo (100자 이내): 복용 안내. **빈 문자열을 보내면 메모가 삭제**됩니다
+                      (null은 "변경 안 함"이라 메모를 지울 수 없습니다).
+
+                    [시간대만 바꾼 경우]
+                    doseTime을 함께 주지 않으면 **새 시간대의 기본 시각**으로 갱신됩니다
+                    (아침 08:00 → 저녁으로 바꾸면 18:00). 그러지 않으면 "저녁 08:00"이 남습니다.
+
+                    [복용 시각이 바뀌면 오늘 알림이 다시 나갑니다]
+                    - 그 약의 당일 발송 기록(최초·재알림)을 지워 새 시각 기준으로 다시 판정합니다.
+                      08:00을 20:00으로 고쳤는데 오늘 저녁에 안 울리는 문제를 막기 위함입니다.
+                    - 이미 복용 체크를 했다면 여전히 알림은 나가지 않습니다(체크는 지워지지 않습니다).
+                    - 이름·메모만 바꾼 경우에는 발송 기록을 건드리지 않습니다.
+
+                    [응답] data: MedicationItem — 수정된 약(오늘 복용 체크 상태 포함)
+
+                    [주의] 피보호자를 바꾸는 것은 지원하지 않습니다 — 삭제 후 새로 등록해 주세요.
+                    """)
+    @ApiResponses({
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "수정 완료. data: 수정된 약"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "길이·범위 위반", content = @Content),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "인증 토큰 없음 또는 만료", content = @Content),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "보호자 권한 필요 / 연결되지 않은 피보호자의 약", content = @Content),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "존재하지 않거나 삭제된 약", content = @Content)
+    })
+    @PatchMapping("/api/guardian/medication/{medicationId}")
+    public ResponseEntity<ApiResponse<MedicationItem>> update(
+            @AuthenticationPrincipal String guardianId,
+            @Parameter(description = "약 ID") @PathVariable Long medicationId,
+            @Valid @RequestBody MedicationUpdateRequest request) {
+        return ResponseEntity.ok(ApiResponse.ok(
+                guardianMedicationService.update(guardianId, medicationId, request)));
     }
 
     @Operation(summary = "약 삭제 (보호자 전용)",

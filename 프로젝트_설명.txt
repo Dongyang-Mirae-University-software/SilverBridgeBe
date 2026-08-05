@@ -424,6 +424,14 @@ SilverBridge는 노인(피보호자)과 그 가족(보호자)을 연결하는 �
                                      doseAmount(선택 1~99, 기본 1) / memo(선택 100자)
                              · timeSlot: MORNING(08:00) / LUNCH(13:00) / DINNER(18:00) / BEDTIME(22:00)
                                — doseTime을 생략하면 괄호 안 기본 시각으로 저장됩니다.
+    → PATCH  /api/guardian/medication/{medicationId}      → 약 수정 (부분 수정 — 보낸 필드만 변경)
+                             · 바디 { name, timeSlot, doseTime, doseAmount, memo } — 전부 선택(null=미변경)
+                             · 시간대만 바꾸고 doseTime을 생략하면 새 시간대 기본 시각으로 갱신됩니다
+                               (아침 08:00 → 저녁이면 18:00). "저녁 08:00" 같은 상태를 막기 위함입니다.
+                             · 메모를 지우려면 빈 문자열을 보냅니다(null은 "변경 안 함"이라 못 지웁니다).
+                             · 복용 시각이 바뀌면 그 약의 당일 발송 기록을 지워 새 시각으로 다시 알립니다.
+                               단 이미 복용 체크를 했다면 알림은 나가지 않습니다(체크는 지워지지 않음).
+                             · 피보호자 변경은 지원하지 않습니다 — 삭제 후 재등록하세요.
     → DELETE /api/guardian/medication/{medicationId}      → 약 삭제(soft delete — 지난 복용 이력은 보존)
                              · 등록한 보호자가 아니어도 ACTIVE 연결이면 삭제 가능(보호자가 여럿일 때 대비)
     → GET    /api/guardian/ward/{wardId}/medication-setting → 복약 알림 설정 조회(미설정 시 둘 다 true)
