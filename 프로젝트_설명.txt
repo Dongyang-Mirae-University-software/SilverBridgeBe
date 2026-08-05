@@ -444,6 +444,24 @@ SilverBridge는 노인(피보호자)과 그 가족(보호자)을 연결하는 �
                              · 커밋 후 WebSocket medication-taken 발송 — ACTIVE 보호자 전원 + 본인.
                                푸시·문자는 없습니다(하루 여러 번 일어나는 일상 동작이라 소음).
 
+    보호자 본인의 알림 수신 설정 (2026-08-05, 3차 추가 — 축이 보호자라 wardId가 없습니다):
+    → GET /api/guardian/medication-alert-setting  → 내 수신 설정 조회(미설정 시 true)
+    → PUT /api/guardian/medication-alert-setting  → 변경. 바디 { missedAlertEnabled } (선택, 생략 시 유지)
+                             · 피보호자가 복약을 체크하지 않은 날 저녁 요약을 받을지 정합니다.
+                             · 피보호자별 설정(.../ward/{wardId}/medication-setting)과 다릅니다 —
+                               저쪽은 "피보호자에게 무엇을 보낼지", 이쪽은 "내가 무엇을 받을지"입니다.
+
+    · 미복용 요약 알림 (2026-08-05, 3차 — V37):
+      - 매일 21시(KST)에 한 번, 피보호자별로 묶어 ACTIVE 보호자 중 수신 설정이 켜진 사람에게 보냅니다.
+        (피보호자 본인에게는 보내지 않습니다 — 본인은 이미 복용 시각 알림·재알림을 받았습니다.)
+      - 21시까지 복용 시각이 지난 약만 집계합니다. 취침 전 22시 약은 아직 먹을 때가 아니라
+        그날 요약에서 빠집니다(포함하면 매일 거짓 알림이 나갑니다).
+      - 체크되지 않은 약이 하나도 없으면 보내지 않으며, 같은 피보호자 건은 하루 한 번만 나갑니다.
+      - ⚠️ 문구는 "약을 안 드셨습니다"가 아니라 "아직 체크되지 않았습니다"입니다 —
+        실제로는 복용하고 체크만 안 한 경우가 있을 수 있습니다.
+      - 운영 스위치: MEDICATION_MISSED_ALERT_ENABLED=false로 보호자 요약만 중단할 수 있습니다
+        (피보호자 복용 알림은 계속 동작).
+
     · 인가: 보호자는 요청 시점 ACTIVE 연결인 피보호자의 복약 정보만, 피보호자는 본인 약만.
       연결이 해제되면 과거 복약 정보도 비공개. 위반은 403 MEDICATION_NOT_AUTHORIZED(+[IDOR-ATTEMPT]
       WARN), 없는·삭제된 약은 404. 인가 목록은 getActiveWardIds() — getMyWards()는 PENDING이
@@ -590,7 +608,8 @@ SilverBridge는 노인(피보호자)과 그 가족(보호자)을 연결하는 �
   [필수/선택 분류]
   - 필수(설정 무시): SMS 인증번호(가입·비밀번호 재설정) — 디스패처를 경유하지 않는 동기 발송이라
     설정으로 끌 수 없음이 구조적으로 보장됨. 그 외 WARD_SOS·ANOMALY_DETECTED의 FCM(위 정책 참고).
-  - 선택(설정 따름): 연결 요청/수락/거절/해제·문의 답변·복약 알림(MEDICATION_REMINDER)·복약 중지 안내,
+  - 선택(설정 따름): 연결 요청/수락/거절/해제·문의 답변·복약 알림(MEDICATION_REMINDER)·
+    미복용 요약(MEDICATION_MISSED)·복약 중지 안내,
     그리고 SOS·이상감지의 SMS·알림톡.
   ※ 복약 체크(medication-taken)와 SOS 처리 결과(sos-acknowledged)는 WebSocket 전용이라
     이 분류(디스패처 경유)에 들어가지 않습니다 — 알림 설정과 무관하게 항상 발송됩니다.
@@ -907,6 +926,27 @@ SilverBridge는 노인(피보호자)과 그 가족(보호자)을 연결하는 �
   ※ UNIQUE(medication_id, dose_date, attempt) — 재기동·주기 중복에도 같은 회차는 한 번만 나갑니다.
   ※ 발송 "전"에 기록을 먼저 남기고 보냅니다. 발송이 실패하면 그 회차는 재시도하지 않습니다
     (알림이 두 번 가는 쪽이 더 나쁘다는 판단 — 재알림이 두 번째 기회).
+
+  [ guardian_medication_setting — 보호자별 복약 알림 수신 설정 ] (V37, 2026-08-05 추가)
+  ─────────────────────────────
+  id                   : 고유 번호
+  guardian_id          : 보호자 회원 ID (UNIQUE, CASCADE)
+  missed_alert_enabled : 미복용 요약 알림 수신 여부
+  created_at / updated_at
+  ※ 행이 없으면 기본값 ON. medication_setting(피보호자 단위)과 축이 다릅니다 —
+    저쪽은 "피보호자에게 무엇을 보낼지", 이쪽은 "보호자가 무엇을 받을지"입니다.
+
+  [ medication_missed_alert_log — 미복용 요약 발송 기록 ] (V37, 2026-08-05 추가)
+  ─────────────────────────────
+  id           : 고유 번호
+  guardian_id  : 받은 보호자 (CASCADE)
+  ward_id      : 대상 피보호자 (CASCADE)
+  dose_date    : 요약 대상 날짜 (KST 기준)
+  missed_count : 체크되지 않은 약 수
+  total_count  : 판정 시각까지 예정된 약 수 (요약의 분모)
+  sent_at      : 발송 시각
+  ※ UNIQUE(guardian_id, ward_id, dose_date) — 하루 한 번만 발송됩니다.
+  ※ 축이 약 단위가 아니라 (보호자, 피보호자, 날짜)입니다 — 요약이라 약 3건이 미체크여도 알림은 1건.
 
   [ connection — 보호자-피보호자 연결 ]
   ─────────────────────────────

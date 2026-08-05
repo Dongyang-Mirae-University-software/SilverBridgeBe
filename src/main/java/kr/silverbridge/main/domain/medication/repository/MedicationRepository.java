@@ -32,4 +32,12 @@ public interface MedicationRepository extends JpaRepository<Medication, Long> {
      * 여기서는 시각 조건만 거른다.</p>
      */
     List<Medication> findByDeletedAtIsNullAndDoseTimeBetween(LocalTime from, LocalTime to);
+
+    /**
+     * 특정 시각까지 복용 시각이 지난 약 전부(미복용 요약 판정용).
+     *
+     * <p>판정 시각(기본 21:00) 이후에 먹는 약(예: 취침 전 22:00)은 <b>아직 복용할 때가 아니므로</b>
+     * 요약에서 제외한다 — 포함하면 매일 "체크되지 않았다"는 거짓 알림이 나간다.</p>
+     */
+    List<Medication> findByDeletedAtIsNullAndDoseTimeLessThanEqual(LocalTime until);
 }
