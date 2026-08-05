@@ -27,6 +27,20 @@ public enum NotificationType {
      */
     MEDICATION_STOPPED(Policy.SETTINGS_ONLY),
 
+    /**
+     * 복용 시각 알림 → <b>피보호자 본인</b>에게. 스케줄러가 보낸다(2차).
+     *
+     * <p>채널은 <b>FCM과 문자뿐</b>이다. {@code SETTINGS_ONLY}라 사용자가 켠 채널로만 나가고,
+     * 알림톡은 {@code notification.alimtalk.templates}에 <b>매핑을 두지 않아</b> 조용히 스킵된다.
+     * ⚠️ 복약 알림은 매일 반복되는 전형적인 <b>다발성 메시지</b>라, 알림톡으로 보내려면 "반복 수신에
+     * 동의했음"을 고정 문구로 고지한 별도 템플릿 승인이 필요하다(이상감지 2차 반려 사유).
+     * 그 전에 이 타입에 템플릿을 매핑하면 승인 문구와 다른 발송이 되어 채널 제재 대상이 된다.</p>
+     *
+     * <p>강제 발송이 아닌 이유 — 복약은 생명이 걸린 즉시 대응(SOS·화재)과 달리 매일 반복되는 일상이라,
+     * 끄고 싶은 사용자의 선택을 뒤집을 근거가 없다.</p>
+     */
+    MEDICATION_REMINDER(Policy.SETTINGS_ONLY),
+
     // 피보호자 긴급 SOS. 생명 관련이라 설정을 무시하고 강제 발송하며, 푸시 미전달 시 SMS로 폴백한다.
     WARD_SOS(Policy.FORCED_PUSH_WITH_SMS_FALLBACK),
 

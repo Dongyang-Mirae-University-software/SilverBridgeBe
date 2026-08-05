@@ -67,7 +67,7 @@ public class GuardianMedicationService {
         Map<Long, MedicationIntake> intakes = findTodayIntakes(medications, today);
         Map<String, User> wards = userRepository.findAllById(wardIds).stream()
                 .collect(Collectors.toMap(User::getId, Function.identity()));
-        Map<String, Boolean> alarms = settingService.findAlarmEnabledByWardIds(wardIds);
+        Map<String, MedicationPreference> preferences = settingService.findPreferences(wardIds);
 
         // 약이 하나도 없는 피보호자도 카드는 보여야 하므로 groupingBy 결과가 아니라 wardIds를 기준으로 조립한다.
         Map<String, List<Medication>> byWard = medications.stream()
@@ -83,7 +83,7 @@ public class GuardianMedicationService {
                             wardId,
                             ward != null ? ward.getName() : null,
                             calculateAge(ward, today),
-                            alarms.getOrDefault(wardId, MedicationSettingService.defaultAlarmEnabled()),
+                            preferences.getOrDefault(wardId, MedicationPreference.DEFAULT).alarmEnabled(),
                             today,
                             items);
                 })
@@ -134,16 +134,21 @@ public class GuardianMedicationService {
     @Transactional(readOnly = true)
     public MedicationSettingResponse getSetting(String guardianId, String wardId) {
         requireActiveConnection(guardianId, wardId, "복약 알림 설정 조회");
-        return MedicationSettingResponse.of(wardId, settingService.isAlarmEnabled(wardId));
+        return MedicationSettingResponse.of(wardId, settingService.getPreference(wardId));
     }
 
-    /** 피보호자의 복약 알림을 켜거나 끈다. 설정은 피보호자 계정에 붙으므로 다른 보호자 화면에도 동일하게 보인다. */
+    /**
+     * 피보호자의 복약 알림 설정을 변경한다. 설정은 피보호자 계정에 붙으므로 다른 보호자 화면에도 동일하게 보인다.
+     * 전달하지 않은 항목({@code null})은 기존값을 유지한다.
+     */
     @Transactional
-    public MedicationSettingResponse updateSetting(String guardianId, String wardId, boolean alarmEnabled) {
+    public MedicationSettingResponse updateSetting(String guardianId, String wardId,
+                                                   Boolean alarmEnabled, Boolean remindAgainEnabled) {
         requireActiveConnection(guardianId, wardId, "복약 알림 설정 변경");
 
-        boolean applied = settingService.updateAlarmEnabled(wardId, alarmEnabled);
-        log.info("복약 알림 설정 변경: wardId={}, alarmEnabled={}, guardianId={}", wardId, applied, guardianId);
+        MedicationPreference applied = settingService.updatePreference(wardId, alarmEnabled, remindAgainEnabled);
+        log.info("복약 알림 설정 변경: wardId={}, alarmEnabled={}, remindAgainEnabled={}, guardianId={}",
+                wardId, applied.alarmEnabled(), applied.remindAgainEnabled(), guardianId);
         return MedicationSettingResponse.of(wardId, applied);
     }
 

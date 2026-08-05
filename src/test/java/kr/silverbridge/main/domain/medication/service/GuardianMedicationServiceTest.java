@@ -76,7 +76,7 @@ class GuardianMedicationServiceTest {
                         MedicationIntake.of(1L, today, OffsetDateTime.now()),
                         MedicationIntake.of(2L, today, OffsetDateTime.now())));
         when(userRepository.findAllById(any())).thenReturn(List.of(user(WARD_ID, "김영희", LocalDate.of(1948, 3, 2))));
-        when(settingService.findAlarmEnabledByWardIds(any())).thenReturn(Map.of(WARD_ID, false));
+        when(settingService.findPreferences(any())).thenReturn(Map.of(WARD_ID, new MedicationPreference(false, true)));
 
         List<WardMedicationSummary> summaries = guardianMedicationService.getWardMedications(GUARDIAN_ID);
 
@@ -103,7 +103,7 @@ class GuardianMedicationServiceTest {
         when(medicationRepository.findByWardIdInAndDeletedAtIsNullOrderByDoseTimeAscIdAsc(any()))
                 .thenReturn(List.of());
         when(userRepository.findAllById(any())).thenReturn(List.of(user(OTHER_WARD_ID, "이순자", null)));
-        when(settingService.findAlarmEnabledByWardIds(any())).thenReturn(Map.of());
+        when(settingService.findPreferences(any())).thenReturn(Map.of());
 
         List<WardMedicationSummary> summaries = guardianMedicationService.getWardMedications(GUARDIAN_ID);
 
@@ -224,23 +224,26 @@ class GuardianMedicationServiceTest {
     void updateSetting_연결없음_차단() {
         when(connectionService.isActiveConnection(GUARDIAN_ID, OTHER_WARD_ID)).thenReturn(false);
 
-        assertThatThrownBy(() -> guardianMedicationService.updateSetting(GUARDIAN_ID, OTHER_WARD_ID, false))
+        assertThatThrownBy(() -> guardianMedicationService.updateSetting(GUARDIAN_ID, OTHER_WARD_ID, false, null))
                 .isInstanceOf(CustomException.class)
                 .hasFieldOrPropertyWithValue("errorCode", ErrorCode.MEDICATION_NOT_AUTHORIZED);
 
-        verify(settingService, never()).updateAlarmEnabled(anyString(), anyBoolean());
+        verify(settingService, never()).updatePreference(anyString(), any(), any());
     }
 
     @Test
     @DisplayName("알림 설정 변경 — 피보호자 계정에 저장된다")
     void updateSetting_정상() {
         when(connectionService.isActiveConnection(GUARDIAN_ID, WARD_ID)).thenReturn(true);
-        when(settingService.updateAlarmEnabled(WARD_ID, false)).thenReturn(false);
+        when(settingService.updatePreference(WARD_ID, false, null))
+                .thenReturn(new MedicationPreference(false, true));
 
-        assertThat(guardianMedicationService.updateSetting(GUARDIAN_ID, WARD_ID, false))
+        assertThat(guardianMedicationService.updateSetting(GUARDIAN_ID, WARD_ID, false, null))
                 .satisfies(response -> {
                     assertThat(response.wardId()).isEqualTo(WARD_ID);
                     assertThat(response.alarmEnabled()).isFalse();
+                    // 보내지 않은 항목은 기존값이 유지된다(하위호환).
+                    assertThat(response.remindAgainEnabled()).isTrue();
                 });
     }
 

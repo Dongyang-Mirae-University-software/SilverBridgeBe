@@ -12,23 +12,31 @@ import java.time.LocalTime;
  */
 public enum MedicationTimeSlot {
 
-    /** 아침 */
-    MORNING(LocalTime.of(8, 0)),
-    /** 점심 */
-    LUNCH(LocalTime.of(13, 0)),
-    /** 저녁 */
-    DINNER(LocalTime.of(18, 0)),
-    /** 취침 전 */
-    BEDTIME(LocalTime.of(22, 0));
+    MORNING(LocalTime.of(8, 0), "아침"),
+    LUNCH(LocalTime.of(13, 0), "점심"),
+    DINNER(LocalTime.of(18, 0), "저녁"),
+    BEDTIME(LocalTime.of(22, 0), "취침 전");
 
     private final LocalTime defaultTime;
+    private final String label;
 
-    MedicationTimeSlot(LocalTime defaultTime) {
+    MedicationTimeSlot(LocalTime defaultTime, String label) {
         this.defaultTime = defaultTime;
+        this.label = label;
     }
 
     /** 요청에 복용 시각이 없을 때 적용되는 기본 시각. */
     public LocalTime defaultTime() {
         return defaultTime;
+    }
+
+    /**
+     * 알림 문구에 넣는 한글 표기("아침" 등).
+     *
+     * <p><b>서버가 만드는 발송 문구 전용</b>이다 — 푸시·문자 본문은 서버가 완성해서 보내야 하기 때문에
+     * 여기에만 표시 문구를 둔다. 화면 표기는 여전히 프론트가 조립한다(서버는 API로 슬롯 코드만 준다).</p>
+     */
+    public String label() {
+        return label;
     }
 }

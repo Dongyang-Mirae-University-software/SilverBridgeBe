@@ -155,24 +155,30 @@ public class GuardianMedicationController {
         return ResponseEntity.ok(ApiResponse.ok(guardianMedicationService.getSetting(guardianId, wardId)));
     }
 
-    @Operation(summary = "피보호자 복약 알림 켜기/끄기 (보호자 전용)",
+    @Operation(summary = "피보호자 복약 알림 설정 변경 (보호자 전용)",
             description = """
                     [요청 헤더]
                     Authorization: Bearer {accessToken}
 
                     피보호자의 복약 알림을 켜거나 끕니다(화면의 알림 토글).
 
-                    [요청 바디] alarmEnabled (필수): true = 알림 켜기, false = 끄기
+                    [요청 바디] 둘 다 선택 — 보내지 않은 항목은 기존값이 유지됩니다.
+                    - alarmEnabled: true = 알림 켜기, false = 끄기
+                    - remindAgainEnabled: 복용 체크를 안 했을 때 15분 뒤 한 번 더 알릴지 (기본 true)
+
+                    [발송 동작]
+                    - 복용 시각이 되면 피보호자 본인에게 알림이 갑니다(FCM·문자 — 사용자 알림 설정을 따름).
+                    - 이미 복용 체크를 했으면 보내지 않습니다.
+                    - 정각을 놓쳐도 30분까지는 발송하고, 그 뒤로는 건너뜁니다(밤늦게 아침 약 알림 방지).
+                    - remindAgainEnabled=true면 체크가 없을 때 15분 뒤 한 번 더 보냅니다(최대 1회).
 
                     [주의]
                     - 설정은 피보호자 계정에 붙습니다 — 보호자가 여러 명이면 한 명이 끈 결과가 모두에게 보입니다.
                     - 이 설정은 복약 알림에만 적용됩니다. SOS 등 필수 알림에는 영향이 없습니다.
-                    - 현재는 값을 보관·조회만 합니다. 복용 시각 알림 발송은 후속 작업이며,
-                      그때 이 값이 발송 여부를 가릅니다.
+                    - 문자를 켜둔 경우 재알림까지 켜면 한 번 복용에 문자가 2건까지 나갑니다.
                     """)
     @ApiResponses({
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "변경 완료. data: 적용된 설정"),
-            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "alarmEnabled 누락", content = @Content),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "인증 토큰 없음 또는 만료", content = @Content),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "보호자 권한 필요 / 연결되지 않은 피보호자", content = @Content)
     })
@@ -181,7 +187,7 @@ public class GuardianMedicationController {
             @AuthenticationPrincipal String guardianId,
             @Parameter(description = "피보호자 ID") @PathVariable String wardId,
             @Valid @RequestBody MedicationSettingUpdateRequest request) {
-        return ResponseEntity.ok(ApiResponse.ok(
-                guardianMedicationService.updateSetting(guardianId, wardId, request.alarmEnabled())));
+        return ResponseEntity.ok(ApiResponse.ok(guardianMedicationService.updateSetting(
+                guardianId, wardId, request.alarmEnabled(), request.remindAgainEnabled())));
     }
 }
