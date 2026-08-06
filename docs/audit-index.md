@@ -9,10 +9,10 @@
 
 | 머지 | 기능 | 상태 | 점검 문서 | 잔여 이슈 |
 |---|---|---|---|---|
-| #227 (2026-08-05) | 복약 4차 — 약 수정 PATCH | ✅ | `(2026-08-05) audit-medication-sos-notification.md` | L-3 (PATCH 역할 게이트 테스트 없음) |
-| #226 (2026-08-05) | 복약 3차 — 미복용 보호자 요약 (V37) | ✅ | 〃 | L-2 (발송 창 내 ward별 조회 반복) |
-| #225 (2026-08-05) | 복약 2차 — 스케줄러 발송 (V36) | ✅ | 〃 | M-2 (자정 유예 창 테스트가 회귀 미검출) · L-1 (dose_time 인덱스 없음) |
-| #224 (2026-08-04) | 복약 1차 — 등록·체크 (V35) | ✅ | 〃 | M-3 (피보호자 인가 문구 부적합) |
+| #227 (2026-08-05) | 복약 4차 — 약 수정 PATCH | ✅ | `(2026-08-05) audit-medication-sos-notification.md` | — (L-3은 오탐, 이미 커버됨 — `(2026-08-06) fix-audit-findings.md`) |
+| #226 (2026-08-05) | 복약 3차 — 미복용 보호자 요약 (V37) | ✅ | 〃 | — (L-2 수정 완료 2026-08-06) |
+| #225 (2026-08-05) | 복약 2차 — 스케줄러 발송 (V36) | ✅ | 〃 | — (M-2·L-1 수정 완료 2026-08-06, V38) |
+| #224 (2026-08-04) | 복약 1차 — 등록·체크 (V35) | ✅ | 〃 | — (M-3 수정 완료 2026-08-06) |
 | #223 (2026-07-31) | SOS 이력 조회 + ACK + 위치 (V33·V34) | ✅ | 〃 | — |
 | #222 (2026-07-30) | 이상감지 쿨다운 기본값 조정 | ✅ | 〃 | — |
 | #221 (2026-07-27) | 알림톡 보호자 전용 (`ANOMALY_DETECTED_SELF`) | ✅ | 〃 | — |
@@ -36,7 +36,7 @@
 |---|---|---|
 | `global/websocket` (STOMP 리스너) | ✅ | M-1 STOMP NPE 수정 완료(2026-07-14, null-safe) |
 | **탈퇴 리스너 트랜잭션 전파** | ⚠️ | H-1 — AFTER_COMMIT에서 `@Transactional`(REQUIRED) 쓰기(`MedicationWithdrawalService`·`ConnectionService.tearDownConnectionsOnWithdrawal`). 리포의 다른 AFTER_COMMIT 경로는 `REQUIRES_NEW`. 현재는 purge FK CASCADE가 가려 무해. **미검증 — 실측 필요** |
-| **실 DB 통합 테스트** | ❌ | M-1 — 405개 테스트가 전부 목 기반(H2·Testcontainers 없음). Flyway V1~V37, `uq_medication_reminder` UNIQUE, 트랜잭션 전파가 한 번도 실행 검증되지 않음 |
+| **실 DB 통합 테스트** | ❌ | M-1 — 407개 테스트가 전부 목 기반(H2·Testcontainers 없음). Flyway V1~V38, `uq_medication_reminder` UNIQUE, 트랜잭션 전파가 한 번도 실행 검증되지 않음. **2026-08-06 착수했으나 작업 환경에 Docker 미가용(Docker Desktop 미실행)으로 보류** — 재개 절차는 `(2026-08-06) fix-audit-findings.md` |
 | 이상감지 **통합 경로**(카메라 등록 ↔ AI sessionId) | ❌ | FE가 발급 sessionId로 스트리밍하도록 수정된 뒤 검증 예정. 현재 gosky `camera` 0행 |
 | 카카오 알림톡 채널 | ⚠️ | **구현 완료(2026-07-15)** — 이상감지 템플릿 `KA01TP2607...my9` **검수중**. 승인 후 `.env.dev`에 `ALIMTALK_*` 주입 시 발송(현재 스킵). 카카오 푸시는 검토 후 미채택(앱 푸시=FCM 중복) |
 | 프론트엔드(SilverBridgeFe) | ➖ | 별도 저장소 — 이 대장의 범위 밖 |

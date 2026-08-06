@@ -1110,3 +1110,15 @@ REST API Key 단독 대비 보안 강화 — 인가코드 탈취 시 토큰 발�
 - **🟢 L-1~L-3**: `medication(dose_time)` 인덱스 없음(1분 주기 풀스캔) · 미복용 Planner가 발송 창 내내 ward별 조회 반복 · PATCH 역할 게이트 테스트 누락.
 - **검증**: `./gradlew build -x test` 통과, `./gradlew test` **405건 / 실패 0**.
 - 상세: `docs/(2026-08-05) audit-medication-sos-notification.md` · 대장 갱신 `docs/audit-index.md`
+
+## [2026-08-06] 점검 이슈 반영 (M-2·M-3·L-1·L-2)
+
+- **발단**: 전날 점검(#218~#227)에서 나온 이슈 6건 반영. 결과는 **4건 수정 · 1건 오탐 정정 · 2건 보류**.
+- **M-3 (피보호자 인가 문구)**: `WardMedicationService`가 보호자용 문구("연결된 피보호자의 복약 정보만…")를 그대로 던져 피보호자에게는 뜻이 통하지 않았고 Swagger("본인의 약이 아님")와도 어긋났다. **`MEDICATION_NOT_OWNED`(403, "본인의 약만 체크할 수 있습니다.")** 신설. 403을 쓰는 이유가 "무슨 일이 일어났는지 그대로 안내"(2026-07-14)이므로 문구가 통하지 않으면 그 결정이 무의미해진다. 상태코드·`[IDOR-ATTEMPT]` WARN·응답에 소유자 정보 미포함은 **모두 그대로**. 테스트가 문구를 고정(`doesNotContain("연결된 피보호자")`).
+- **M-2 (자정 유예 창 테스트)**: 기존 테스트가 ① 기대값을 프로덕션과 **같은 삼항식으로 재계산**하고 ② 실 시각에 의존해, 불변 규칙 ⑥(자정 되감기 금지) 회귀를 그대로 통과시켰다. `graceWindowStart`를 **`static (now, graceMinutes)`** 로 바꿔 경계 규칙을 시각과 분리하고, 00:00·00:10·**00:30(경계)** → `LocalTime.MIN` / 00:31·12:00·23:59 → 정상 감산을 **리터럴로** 검증한다(동작 변경 없음, 호출부만 인자 전달). **뮤테이션으로 실효성 확인** — 자정 절단을 제거하니 해당 테스트만 정확히 FAILED, 원복 후 통과.
+- **L-1 (V38)**: 스케줄러가 1분마다 던지는 `dose_time` 조건 쿼리 2종이 V35 인덱스(ward_id·created_by)로는 커버되지 않아 풀스캔이었다. `idx_medication_dose_time ... WHERE deleted_at IS NULL` 추가.
+- **L-2 (조회 반복)**: `alreadySent` 필터가 ward 루프 안쪽이라 발송 창(120분) 내내 설정 조회가 헛돌았다. 보호자 목록 직후로 선필터를 올렸다. **`getActiveGuardianIds`는 의도적으로 남겼다** — "로그 있으면 끝"으로 단정하면 21시 이후 새로 연결된 보호자가 그날 요약을 못 받는다(조회 1건 < 정확성).
+- **L-3 = 점검 오탐**: PATCH 역할 게이트는 `MedicationControllerSecurityTest:76,81-82`(GUARDIAN 허용)·`:96-99`(WARD 거부)로 **이미 커버돼 있었다**. 점검 시 grep이 `guardianController.update(...)` 호출을 못 잡은 탓. 코드 변경 없이 대장에서 제거.
+- **M-1·H-1 보류**: 작업 환경에 **Docker 미가용**(`/usr/bin/docker`가 Docker Desktop WSL 마운트를 가리키나 대상 없음 = 미실행). 승인된 프롬프트 PHASE 0의 사전 분기("docker 없으면 M-1 스킵·H-1 보류")를 따랐다. 실행해 보지 않은 Testcontainers 테스트를 커밋하면 H-1 실측이라는 목적도 못 이루고 docker 없는 환경의 빌드를 깨뜨린다. **H-1은 여전히 미검증 추정**이며 `created_by`를 SET NULL로 바꾸기 전에 반드시 판정할 것.
+- **검증**: `./gradlew build` **407건 / 실패 0**(기존 405 + 신규 2).
+- 상세: `docs/(2026-08-06) fix-audit-findings.md`

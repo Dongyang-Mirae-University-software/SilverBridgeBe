@@ -107,14 +107,21 @@ public class MedicationMissedAlertPlanner {
             if (guardianIds.isEmpty()) {
                 continue;
             }
-            Map<String, Boolean> enabled = guardianSettingService.findMissedAlertEnabled(guardianIds);
+            // 이미 보낸 보호자를 설정 조회 "전에" 걸러 낸다 — 미체크 약은 그대로 남아 이 피보호자가 발송 창
+            // (기본 120분) 내내 목록에 있으므로, 필터가 뒤에 있으면 매 분 설정 조회가 헛돌았다.
+            // ※ getActiveGuardianIds는 남겨 둔다 — "로그가 있으면 이 피보호자는 끝났다"고 단정하면
+            //   21시 이후 새로 연결된 보호자가 그날 요약을 못 받는다(정확성 > 조회 1건).
+            List<String> pending = guardianIds.stream()
+                    .filter(guardianId -> !alreadySent.contains(sentKey(guardianId, wardId)))
+                    .toList();
+            if (pending.isEmpty()) {
+                continue;
+            }
+            Map<String, Boolean> enabled = guardianSettingService.findMissedAlertEnabled(pending);
             int[] counts = countsByWard.get(wardId);
 
-            for (String guardianId : guardianIds) {
+            for (String guardianId : pending) {
                 if (!enabled.getOrDefault(guardianId, GuardianMedicationSettingService.defaultMissedAlertEnabled())) {
-                    continue;
-                }
-                if (alreadySent.contains(sentKey(guardianId, wardId))) {
                     continue;
                 }
                 logs.add(MedicationMissedAlertLog.of(guardianId, wardId, today, counts[1], counts[0], now));

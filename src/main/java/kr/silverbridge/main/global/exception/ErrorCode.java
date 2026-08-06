@@ -95,8 +95,11 @@ public enum ErrorCode {
 
     // 복약 알림
     MEDICATION_NOT_FOUND(HttpStatus.NOT_FOUND, "복약 정보를 찾을 수 없습니다."),
-    // 연결되지 않은 피보호자의 약 접근 — 404 위장 대신 그대로 안내한다(2026-07-14 정책)
-    MEDICATION_NOT_AUTHORIZED(HttpStatus.FORBIDDEN, "연결된 피보호자의 복약 정보만 볼 수 있습니다.");
+    // 연결되지 않은 피보호자의 약 접근(보호자 경로) — 404 위장 대신 그대로 안내한다(2026-07-14 정책)
+    MEDICATION_NOT_AUTHORIZED(HttpStatus.FORBIDDEN, "연결된 피보호자의 복약 정보만 볼 수 있습니다."),
+    // 타인의 약 체크 시도(피보호자 경로) — 위 문구는 "연결된 피보호자"를 전제해 피보호자에게는 뜻이 통하지 않는다.
+    // 무슨 일이 일어났는지 그대로 안내한다는 2026-07-14 정책의 취지를 살리려면 수신자 기준의 문구가 필요하다.
+    MEDICATION_NOT_OWNED(HttpStatus.FORBIDDEN, "본인의 약만 체크할 수 있습니다.");
 
     private final HttpStatus status;
     private final String message;

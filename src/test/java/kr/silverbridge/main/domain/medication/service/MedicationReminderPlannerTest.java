@@ -127,7 +127,7 @@ class MedicationReminderPlannerTest {
     }
 
     @Test
-    @DisplayName("유예 창 = [현재-30분, 현재] — 이 구간의 복용 시각만 조회한다")
+    @DisplayName("유예 창 = [현재-유예, 현재] — 계산된 구간을 그대로 조회에 넘긴다")
     void claimFirst_유예창_조회구간() {
         when(medicationRepository.findByDeletedAtIsNullAndDoseTimeBetween(any(), any())).thenReturn(List.of());
 
@@ -137,13 +137,35 @@ class MedicationReminderPlannerTest {
         ArgumentCaptor<LocalTime> to = ArgumentCaptor.forClass(LocalTime.class);
         verify(medicationRepository).findByDeletedAtIsNullAndDoseTimeBetween(from.capture(), to.capture());
 
-        LocalTime now = MedicationClock.now().toLocalTime();
-        // 자정 직후에는 00:00에서 잘린다 — 하루를 되감아 어제 약을 오늘 날짜로 보내지 않기 위함
-        LocalTime expectedFrom = now.toSecondOfDay() / 60 <= properties.getGraceMinutes()
-                ? LocalTime.MIN
-                : now.minusMinutes(properties.getGraceMinutes());
-        assertThat(from.getValue()).isCloseTo(expectedFrom, within(2));
-        assertThat(to.getValue()).isCloseTo(now, within(2));
+        // 이 테스트는 "배선"만 본다 — 상한이 현재 시각이고, 하한이 그 상한으로 계산한 유예 창 시작인지.
+        // 경계 규칙 자체(자정 절단 포함)는 아래 graceWindowStart_* 테스트가 시각과 무관하게 검증한다.
+        assertThat(to.getValue()).isCloseTo(MedicationClock.now().toLocalTime(), within(2));
+        assertThat(from.getValue()).isCloseTo(
+                MedicationReminderPlanner.graceWindowStart(to.getValue(), properties.getGraceMinutes()), within(2));
+    }
+
+    // ─── 유예 창 경계(불변 규칙 ⑥) — 실 시각과 무관하게 검증 ────────────────
+
+    @Test
+    @DisplayName("[규칙⑥] 유예 창은 자정을 되감지 않는다 — 00:00에서 잘린다")
+    void graceWindowStart_자정_절단() {
+        // 되감으면 dose_date가 어제가 되어 "어제 약을 오늘 날짜로" 보내게 된다.
+        assertThat(MedicationReminderPlanner.graceWindowStart(LocalTime.of(0, 0), 30)).isEqualTo(LocalTime.MIN);
+        assertThat(MedicationReminderPlanner.graceWindowStart(LocalTime.of(0, 10), 30)).isEqualTo(LocalTime.MIN);
+        // 경계 = 유예와 정확히 같은 시점까지 절단 대상
+        assertThat(MedicationReminderPlanner.graceWindowStart(LocalTime.of(0, 30), 30)).isEqualTo(LocalTime.MIN);
+    }
+
+    @Test
+    @DisplayName("[규칙⑥] 자정 경계를 벗어나면 현재-유예를 그대로 쓴다")
+    void graceWindowStart_일반() {
+        assertThat(MedicationReminderPlanner.graceWindowStart(LocalTime.of(0, 31), 30))
+                .isEqualTo(LocalTime.of(0, 1));
+        assertThat(MedicationReminderPlanner.graceWindowStart(LocalTime.of(12, 0), 30))
+                .isEqualTo(LocalTime.of(11, 30));
+        // 23:50 약이 자정을 넘겨 건너뛰어지는 것은 의도된 동작 — 하한이 되감기지 않는지만 본다.
+        assertThat(MedicationReminderPlanner.graceWindowStart(LocalTime.of(23, 59), 30))
+                .isEqualTo(LocalTime.of(23, 29));
     }
 
     // ─── 재알림 ────────────────────────────────────────────────────

@@ -70,7 +70,7 @@ public class WardMedicationService {
      * 오늘 복용했다고 체크한다. 이미 체크되어 있으면 기존 기록을 그대로 반환한다.
      *
      * @throws CustomException {@code MEDICATION_NOT_FOUND} 없거나 삭제된 약 /
-     *                         {@code MEDICATION_NOT_AUTHORIZED} 본인 약이 아님
+     *                         {@code MEDICATION_NOT_OWNED} 본인 약이 아님
      */
     @Transactional
     public MedicationItem markTaken(String wardId, Long medicationId) {
@@ -125,7 +125,9 @@ public class WardMedicationService {
 
         if (!medication.getWardId().equals(wardId)) {
             log.warn("[IDOR-ATTEMPT] 타인 복약 체크 시도: wardId={}, medicationId={}", wardId, medicationId);
-            throw new CustomException(ErrorCode.MEDICATION_NOT_AUTHORIZED);
+            // 보호자용 MEDICATION_NOT_AUTHORIZED("연결된 피보호자의…")를 쓰지 않는다 — 피보호자에게는
+            // "연결된 피보호자"라는 말이 성립하지 않아 왜 막혔는지 알 수 없다(Swagger 문구와도 어긋났다).
+            throw new CustomException(ErrorCode.MEDICATION_NOT_OWNED);
         }
         return medication;
     }
