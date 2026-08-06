@@ -9,6 +9,16 @@
 
 | 머지 | 기능 | 상태 | 점검 문서 | 잔여 이슈 |
 |---|---|---|---|---|
+| #227 (2026-08-05) | 복약 4차 — 약 수정 PATCH | ✅ | `(2026-08-05) audit-medication-sos-notification.md` | L-3 (PATCH 역할 게이트 테스트 없음) |
+| #226 (2026-08-05) | 복약 3차 — 미복용 보호자 요약 (V37) | ✅ | 〃 | L-2 (발송 창 내 ward별 조회 반복) |
+| #225 (2026-08-05) | 복약 2차 — 스케줄러 발송 (V36) | ✅ | 〃 | M-2 (자정 유예 창 테스트가 회귀 미검출) · L-1 (dose_time 인덱스 없음) |
+| #224 (2026-08-04) | 복약 1차 — 등록·체크 (V35) | ✅ | 〃 | M-3 (피보호자 인가 문구 부적합) |
+| #223 (2026-07-31) | SOS 이력 조회 + ACK + 위치 (V33·V34) | ✅ | 〃 | — |
+| #222 (2026-07-30) | 이상감지 쿨다운 기본값 조정 | ✅ | 〃 | — |
+| #221 (2026-07-27) | 알림톡 보호자 전용 (`ANOMALY_DETECTED_SELF`) | ✅ | 〃 | — |
+| #219 (2026-07-23) | SOS 동작 설정 (V32) | ✅ | 〃 | — |
+| #220 (2026-07-23) | 알림톡 `#{detectedAt}` 변수 | ✅ | 〃 | — |
+| #218 (2026-07-15) | 감사 지적 수정 + 알림톡 채널 구현 | ✅ | 〃 | — |
 | #217 (2026-07-14) | 이상감지 알림 2단계 (FCM 고정 + SMS 선택) | ✅ | `(2026-07-14) audit-sos-to-anomaly-cumulative.md` | — (L-3 수정 완료) |
 | #216 (2026-07-14) | Gradle 빌드 캐시(CD 단축) | ✅ | 〃 | — |
 | #215 (2026-07-14) | 테이블 단수형 통일 (V31) | ✅ | 〃 | — |
@@ -25,12 +35,16 @@
 | 영역 | 상태 | 메모 |
 |---|---|---|
 | `global/websocket` (STOMP 리스너) | ✅ | M-1 STOMP NPE 수정 완료(2026-07-14, null-safe) |
+| **탈퇴 리스너 트랜잭션 전파** | ⚠️ | H-1 — AFTER_COMMIT에서 `@Transactional`(REQUIRED) 쓰기(`MedicationWithdrawalService`·`ConnectionService.tearDownConnectionsOnWithdrawal`). 리포의 다른 AFTER_COMMIT 경로는 `REQUIRES_NEW`. 현재는 purge FK CASCADE가 가려 무해. **미검증 — 실측 필요** |
+| **실 DB 통합 테스트** | ❌ | M-1 — 405개 테스트가 전부 목 기반(H2·Testcontainers 없음). Flyway V1~V37, `uq_medication_reminder` UNIQUE, 트랜잭션 전파가 한 번도 실행 검증되지 않음 |
 | 이상감지 **통합 경로**(카메라 등록 ↔ AI sessionId) | ❌ | FE가 발급 sessionId로 스트리밍하도록 수정된 뒤 검증 예정. 현재 gosky `camera` 0행 |
 | 카카오 알림톡 채널 | ⚠️ | **구현 완료(2026-07-15)** — 이상감지 템플릿 `KA01TP2607...my9` **검수중**. 승인 후 `.env.dev`에 `ALIMTALK_*` 주입 시 발송(현재 스킵). 카카오 푸시는 검토 후 미채택(앱 푸시=FCM 중복) |
 | 프론트엔드(SilverBridgeFe) | ➖ | 별도 저장소 — 이 대장의 범위 밖 |
 
 ## 다음 점검 트리거
 
+- **Testcontainers 도입 시** → H-1(탈퇴 리스너 커밋 여부) 실측 판정
+- **`medication.created_by`를 SET NULL로 바꿀 때** → H-1이 즉시 실제 결함이 되므로 먼저 전파 속성 수정
 - **FE 카메라 연동 완료 시** → 이상감지 통합 검증(H-1 수정이 실제로 재구독을 살리는지 확인)
 - **알림톡 템플릿 승인 시** → `.env.dev`에 `ALIMTALK_ENABLED=true`·`ALIMTALK_PF_ID`·`ALIMTALK_TEMPLATE_ANOMALY` 주입 후 실발송 검증
 - **AI danger 정식 배포 시** → DANGER 모드 실동작·오탐률 확인(임계 조정 판단)
