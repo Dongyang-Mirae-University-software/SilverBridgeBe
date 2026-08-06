@@ -1,0 +1,13 @@
+-- 복약 스케줄러 조회용 인덱스 (2026-08-06, 점검 L-1)
+--
+-- MedicationReminderScheduler가 1분마다 두 쿼리를 던진다:
+--   findByDeletedAtIsNullAndDoseTimeBetween(유예창 시작, 현재)   — 복용 시각 알림
+--   findByDeletedAtIsNullAndDoseTimeLessThanEqual(판정 시각)      — 미복용 요약(21:00~23:00 매 분)
+--
+-- V35의 인덱스는 (ward_id)·(created_by) 부분 인덱스뿐이라 dose_time 조건에 쓰이지 않아
+-- 두 쿼리 모두 medication 풀스캔이 된다. 지금 데이터량에서는 문제가 없지만 약이 늘면
+-- "1분마다 전체 스캔"이 가장 먼저 드러나는 지점이라 미리 덮어 둔다.
+--
+-- 부분 인덱스(WHERE deleted_at IS NULL)인 이유 — 두 쿼리 모두 deleted_at IS NULL을 함께 걸고,
+-- soft delete된 약은 영원히 대상이 아니라 인덱스에 들고 있을 이유가 없다(V35의 두 인덱스와 같은 방식).
+CREATE INDEX idx_medication_dose_time ON medication (dose_time) WHERE deleted_at IS NULL;

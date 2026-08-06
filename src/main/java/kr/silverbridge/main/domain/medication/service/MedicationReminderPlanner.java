@@ -56,7 +56,7 @@ public class MedicationReminderPlanner {
         OffsetDateTime now = MedicationClock.now();
 
         List<Medication> due = medicationRepository.findByDeletedAtIsNullAndDoseTimeBetween(
-                graceWindowStart(now.toLocalTime()), now.toLocalTime());
+                graceWindowStart(now.toLocalTime(), properties.getGraceMinutes()), now.toLocalTime());
         if (due.isEmpty()) {
             return List.of();
         }
@@ -144,10 +144,13 @@ public class MedicationReminderPlanner {
 
     /**
      * 유예 창의 시작 시각. 자정을 넘겨 되감지 않는다 — 하루 경계를 넘으면 {@code dose_date}가 달라져
-     * "어제 약을 오늘 날짜로" 보내는 셈이 되므로, 00:00에서 잘라 그 건은 건너뛴다.
+     * "어제 약을 오늘 날짜로" 보내는 셈이 되므로, 00:00에서 잘라 그 건은 건너뛴다(불변 규칙 ⑥).
+     *
+     * <p><b>시각을 인자로 받는 static</b>이다 — 이 경계 규칙이 현재 시각에 의존하면 자정 분기가
+     * "테스트가 00:00~00:30에 돌 때만" 검증되어 회귀를 놓친다. 시각과 분리해 두면 경계값을
+     * 리터럴로 직접 검증할 수 있다.</p>
      */
-    private LocalTime graceWindowStart(LocalTime now) {
-        long graceMinutes = properties.getGraceMinutes();
+    static LocalTime graceWindowStart(LocalTime now, long graceMinutes) {
         long minutesFromMidnight = now.toSecondOfDay() / 60L;
         return minutesFromMidnight <= graceMinutes ? LocalTime.MIN : now.minusMinutes(graceMinutes);
     }

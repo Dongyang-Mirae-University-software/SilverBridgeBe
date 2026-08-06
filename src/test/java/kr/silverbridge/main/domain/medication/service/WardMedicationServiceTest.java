@@ -140,7 +140,13 @@ class WardMedicationServiceTest {
 
         assertThatThrownBy(() -> wardMedicationService.markTaken(WARD_ID, 1L))
                 .isInstanceOf(CustomException.class)
-                .hasFieldOrPropertyWithValue("errorCode", ErrorCode.MEDICATION_NOT_AUTHORIZED);
+                .hasFieldOrPropertyWithValue("errorCode", ErrorCode.MEDICATION_NOT_OWNED);
+
+        // 보호자용 문구("연결된 피보호자의…")를 재사용하면 피보호자에게 뜻이 통하지 않는다.
+        // 403을 쓰는 이유가 "무슨 일이 일어났는지 그대로 안내"(2026-07-14)이므로 수신자 기준 문구를 고정한다.
+        assertThat(ErrorCode.MEDICATION_NOT_OWNED.getMessage())
+                .isEqualTo("본인의 약만 체크할 수 있습니다.")
+                .doesNotContain("연결된 피보호자");
 
         verify(intakeRepository, never()).save(any());
         verify(eventPublisher, never()).publishEvent(any(MedicationIntakeChangedEvent.class));
@@ -204,7 +210,7 @@ class WardMedicationServiceTest {
 
         assertThatThrownBy(() -> wardMedicationService.unmarkTaken(WARD_ID, 1L))
                 .isInstanceOf(CustomException.class)
-                .hasFieldOrPropertyWithValue("errorCode", ErrorCode.MEDICATION_NOT_AUTHORIZED);
+                .hasFieldOrPropertyWithValue("errorCode", ErrorCode.MEDICATION_NOT_OWNED);
 
         verify(intakeRepository, never()).delete(any());
     }
