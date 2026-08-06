@@ -1097,3 +1097,16 @@ REST API Key 단독 대비 보안 강화 — 인가코드 탈취 시 토큰 발�
 - **테스트**: `./gradlew build` **405건 / 실패 0**(복약 76건 = 3차 64 + 신규 12).
 - **다음**: 약봉투 OCR(업로드·엔진·파싱·비동기 인프라 전무 + 민감정보 이슈로 별도 설계 필요).
 - 상세: `docs/(2026-08-05) feature-medication-update.md`
+
+## [2026-08-05] 미점검 API 전수 점검 (#218~#227)
+
+- **발단**: `docs/audit-index.md`의 마지막 점검이 #217(2026-07-14)이었고, 그 뒤 **10개 PR이 점검 없이 머지**돼 있었다. 신규 엔드포인트 15개 + 스케줄러·리스너 등 비-HTTP 경로가 미검증 상태였다.
+- **범위**: `8ac668f..99769bb`(29 커밋) — 복약 1~4차(V35~V37), SOS 동작 설정·이력·ACK·위치(V32~V34), 알림톡 채널·보호자 전용 분리, 이상감지 쿨다운 기본값.
+- **판정: Critical(🔴) 0건.** 인가 우회·PII 노출·필수 알림 소실 없음. 신규 엔드포인트 15개 전건이 `getActiveWardIds()`·`isActiveConnection()`만 사용하며 **`getMyWards()` 사용처 0건**. 403 + `[IDOR-ATTEMPT]` WARN 형태도 4곳 모두 준수. 불변 규칙 ③~⑨(KST·선점 후 발송·알림톡 매핑 금지·자정 미되감기·단정 금지·집계 상한·요약 축)이 전부 코드에서 확인됐고 **문서-코드 drift 없음**.
+- **🟠 H-1 (미검증)**: `MedicationWithdrawalService`·`ConnectionService.tearDownConnectionsOnWithdrawal`이 **AFTER_COMMIT 리스너에서 `@Transactional`(REQUIRED)로 쓰기**를 한다 — 완료된 트랜잭션에 참여해 커밋되지 않을 수 있는 Spring의 알려진 함정이며, 리포의 다른 AFTER_COMMIT 경로(auth·kakao·AccessLog)는 **모두 `REQUIRES_NEW`**다. 현재는 purge FK CASCADE가 같은 결과를 만들어 **가려져 있고**, `created_by`를 SET NULL로 바꾸면 즉시 드러난다. **코드 리딩 기반 추정이라 실측 전까지 단정하지 말 것.**
+- **🟡 M-1**: 테스트 405개가 **전부 목 기반**(H2·Testcontainers 없음). Flyway V1~V37, "선점 후 발송"의 최종 방어선인 `uq_medication_reminder` UNIQUE, 트랜잭션 전파가 **한 번도 실제로 실행되지 않았다**. H-1을 판정할 수단이 없는 이유이기도 하다 — 가장 값어치 있는 후속.
+- **🟡 M-2**: 자정 유예 창(불변 규칙 ⑥) 테스트가 ① 기대값을 프로덕션과 같은 삼항식으로 재계산하고 ② 실 시각에 의존해, **되감기 회귀를 통과시킨다**. `MedicationMissedAlertPlannerTest`가 properties를 조작해 결정적으로 검증하는 것이 좋은 대비.
+- **🟡 M-3**: `MEDICATION_NOT_AUTHORIZED` 문구("연결된 피보호자의…")가 **피보호자 경로에서도 그대로** 나가 뜻이 통하지 않는다(Swagger는 "본인의 약이 아님"이라 문서와도 불일치). 404 위장을 버린 2026-07-14 결정의 효과를 되돌리는 지점.
+- **🟢 L-1~L-3**: `medication(dose_time)` 인덱스 없음(1분 주기 풀스캔) · 미복용 Planner가 발송 창 내내 ward별 조회 반복 · PATCH 역할 게이트 테스트 누락.
+- **검증**: `./gradlew build -x test` 통과, `./gradlew test` **405건 / 실패 0**.
+- 상세: `docs/(2026-08-05) audit-medication-sos-notification.md` · 대장 갱신 `docs/audit-index.md`
