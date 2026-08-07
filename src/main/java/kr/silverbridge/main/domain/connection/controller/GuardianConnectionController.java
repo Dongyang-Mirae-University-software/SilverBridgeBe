@@ -18,7 +18,7 @@ import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
 
-@Tag(name = "보호자")
+@Tag(name = "보호자 - 연결")
 @RestController
 @RequiredArgsConstructor
 @PreAuthorize("hasRole('GUARDIAN')")

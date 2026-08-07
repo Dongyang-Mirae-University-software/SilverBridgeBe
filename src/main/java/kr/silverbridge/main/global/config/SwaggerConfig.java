@@ -28,35 +28,89 @@ public class SwaggerConfig {
                         .description("SilverBridge Main 백엔드 API 문서")
                         .version("v1.0.0"))
                 // Swagger UI 태그 순서 및 설명 정의 (표시 순서 = 리스트 순서)
+                //
+                // 명명 규칙 = "<역할> - <도메인>", 역할은 공통 / 피보호자 / 보호자 / 관리자 4가지뿐이다.
+                // "누가 쓰는 API인지 → 무슨 기능인지" 두 단계로 읽히게 하려는 것이며,
+                // 역할만 적은 태그("보호자")나 도메인만 적은 태그("인증")를 새로 만들지 말 것 —
+                // 전자는 그 역할의 API 전부인 것처럼 읽히고, 후자는 누가 호출하는지가 사라진다.
+                //
+                // ⚠️ 새 컨트롤러를 추가하면 이 목록에도 반드시 태그를 등록한다. 빠뜨리면 설명 없이
+                //    목록 맨 뒤에 붙어, 최근 기능일수록 문서가 부실해진다(2026-08-07 정리 이전 상태).
                 .tags(List.of(
-                        new Tag().name("인증")
-                                .description("회원가입 / 로그인 / 로그아웃 / 이메일·카카오 인증 / SMS 인증 / 비밀번호 찾기 및 재설정\n" +
-                                        "※ 로그인·회원가입 관련 API는 토큰 없이 호출 가능. 로그아웃은 토큰 필요."),
-                        new Tag().name("사용자")
-                                .description("내 정보 조회 및 수정 / 비밀번호 변경 / 회원 탈퇴\n" +
-                                        "※ 모든 API에 Authorization: Bearer {accessToken} 헤더 필수."),
-                        new Tag().name("보호자")
-                                .description("보호자 전용 API — 피보호자 연결 관리\n" +
-                                        "※ GUARDIAN 역할 계정만 호출 가능. Authorization: Bearer {accessToken} 헤더 필수."),
-                        new Tag().name("피보호자")
-                                .description("피보호자 전용 API — 보호자 연결 관리\n" +
-                                        "※ WARD 역할 계정만 호출 가능. Authorization: Bearer {accessToken} 헤더 필수."),
-                        new Tag().name("알림")
-                                .description("FCM 푸시 알림 토큰 등록 및 삭제\n" +
-                                        "※ 모든 API에 Authorization: Bearer {accessToken} 헤더 필수."),
-                        new Tag().name("피보호자/보호자 - 공지사항")
-                                .description("로그인한 사용자(피보호자/보호자/관리자)가 열람하는 공지사항 조회 API.\n" +
-                                        "※ Authorization: Bearer {accessToken} 헤더 필수."),
-                        new Tag().name("관리자 - 공지사항")
-                                .description("공지 CRUD 및 임시저장 — 게시된 공지 관리와 작성 중 공지(임시저장) 보관/게시 전환.\n" +
-                                        "※ ADMIN 권한 계정만 호출 가능. Authorization: Bearer {accessToken} 헤더 필수."),
+                        // ── 공통: 역할과 무관하게 로그인한 사용자면 호출 ──────────────
+                        new Tag().name("공통 - 인증")
+                                .description("회원가입 / 로그인 / 로그아웃 / 토큰 재발급 / 카카오 로그인 / SMS 인증 / 이메일·비밀번호 찾기 및 재설정\n"
+                                        + "※ 로그인·회원가입 관련 API는 토큰 없이 호출 가능. 로그아웃·재발급은 토큰 필요.\n"
+                                        + "\n"
+                                        + "[공통 응답 포맷] 모든 API가 아래 구조로 응답합니다 (null 필드는 생략).\n"
+                                        + "  성공(데이터): { \"success\": true, \"data\": { ... } }\n"
+                                        + "  성공(메시지): { \"success\": true, \"message\": \"처리되었습니다.\" }\n"
+                                        + "  실패:        { \"success\": false, \"message\": \"오류 메시지\" }  (종류는 HTTP 상태코드로 구분)\n"
+                                        + "\n"
+                                        + "[토큰 사용법] 로그인으로 받은 accessToken을 우측 상단 Authorize에 입력하면\n"
+                                        + "이후 인증이 필요한 모든 API에 자동 적용됩니다. Header: Authorization: Bearer {accessToken}"),
+                        new Tag().name("공통 - 내 계정")
+                                .description("로그인한 본인의 프로필 조회·수정 / 프로필 이미지 / 비밀번호 변경 / 회원 탈퇴\n"
+                                        + "※ 피보호자·보호자·관리자가 모두 같은 경로를 씁니다(역할별로 나뉘지 않습니다).\n"
+                                        + "※ Authorization: Bearer {accessToken} 헤더 필수."),
+                        new Tag().name("공통 - 알림 설정")
+                                .description("FCM 푸시 토큰 등록·삭제 + 알림 채널(FCM/SMS/카카오 알림톡/이메일) ON/OFF 설정\n"
+                                        + "※ 토큰 등록은 기기 단위, 채널 설정은 계정 단위입니다.\n"
+                                        + "※ SOS 등 필수 알림은 이 설정과 무관하게 항상 발송됩니다.\n"
+                                        + "※ Authorization: Bearer {accessToken} 헤더 필수."),
+                        new Tag().name("공통 - 공지사항")
+                                .description("로그인한 사용자(피보호자·보호자·관리자)가 열람하는 공지사항 조회.\n"
+                                        + "※ 공지 작성·수정은 [관리자 - 공지사항] 참고.\n"
+                                        + "※ Authorization: Bearer {accessToken} 헤더 필수."),
+
+                        // ── 피보호자(WARD) 전용: 다른 역할이 호출하면 403 ──────────────
+                        new Tag().name("피보호자 - 연결")
+                                .description("보호자가 보낸 연결 요청 수락·거절, 연결된 보호자 목록 조회·해제\n"
+                                        + "※ WARD 역할 계정만 호출 가능."),
+                        new Tag().name("피보호자 - SOS")
+                                .description("긴급 SOS 발생(위치 문구 선택 전송) + SOS 동작 설정(119 연결·안내 방식) 조회·변경\n"
+                                        + "※ 동작 설정은 119 연결 흐름만 정합니다 — 어떤 값이어도 보호자 알림은 항상 발송됩니다.\n"
+                                        + "※ WARD 역할 계정만 호출 가능."),
+                        new Tag().name("피보호자 - 복약")
+                                .description("오늘의 복약 일정 조회 + 복용 체크·해제\n"
+                                        + "※ 복용 체크는 피보호자만 할 수 있습니다(보호자에겐 체크 API가 없습니다).\n"
+                                        + "※ 약 등록·수정·삭제는 보호자 전용이라 여기 없습니다. 기준일은 항상 KST.\n"
+                                        + "※ WARD 역할 계정만 호출 가능."),
+                        new Tag().name("피보호자 - 카메라")
+                                .description("이상감지 카메라 등록·목록·수정·삭제 (SessionID 발급)\n"
+                                        + "※ 본인이 등록한 카메라만 다룰 수 있습니다.\n"
+                                        + "※ WARD 역할 계정만 호출 가능."),
+
+                        // ── 보호자(GUARDIAN) 전용: 다른 역할이 호출하면 403 ────────────
+                        new Tag().name("보호자 - 연결")
+                                .description("피보호자에게 연결 요청·취소, 연결된 피보호자 목록 조회·해제\n"
+                                        + "※ 목록에는 수락 대기(PENDING)가 섞여 있습니다 — 다른 API에 wardId를 넘길 땐 ACTIVE만 사용하세요.\n"
+                                        + "※ GUARDIAN 역할 계정만 호출 가능."),
+                        new Tag().name("보호자 - SOS 이력")
+                                .description("피보호자의 SOS 발생 이력 조회(최신순 페이징) + 처리 결과(ACK) 기록\n"
+                                        + "※ 요청 시점에 ACTIVE 연결인 피보호자의 이력만 보입니다(연결 해제 시 과거 이력도 비공개).\n"
+                                        + "※ ACK는 사후 기록일 뿐이라 다음 SOS 알림을 끄지 못합니다.\n"
+                                        + "※ GUARDIAN 역할 계정만 호출 가능."),
+                        new Tag().name("보호자 - 복약")
+                                .description("피보호자별 오늘 복약 현황 조회 / 약 추가·수정·삭제 / 알림 설정(피보호자별·본인 수신)\n"
+                                        + "※ 약 등록·수정·삭제는 보호자만, 복용 체크는 피보호자만입니다.\n"
+                                        + "※ ACTIVE 연결된 피보호자만 대상입니다.\n"
+                                        + "※ GUARDIAN 역할 계정만 호출 가능."),
+                        new Tag().name("보호자 - 카메라")
+                                .description("연결된 피보호자의 카메라 목록 조회(실시간 영상 연동용)\n"
+                                        + "※ GUARDIAN 역할 계정만 호출 가능."),
                         new Tag().name("보호자 - 문의")
-                                .description("보호자가 고객센터에 문의를 작성하고 본인 문의 목록·상세를 조회.\n" +
-                                        "카테고리: ANOMALY(이상감지)/HOSPITAL(병원)/ACCOUNT(계정·회원)/SERVICE(서비스 이용)/ETC(기타), 상태: WAITING(답변 대기)/ANSWERED(답변 완료).\n" +
-                                        "※ GUARDIAN 역할 계정만 호출 가능. Authorization: Bearer {accessToken} 헤더 필수."),
+                                .description("고객센터 문의 작성 및 본인 문의 목록·상세 조회.\n"
+                                        + "카테고리: ANOMALY(이상감지)/HOSPITAL(병원)/ACCOUNT(계정·회원)/SERVICE(서비스 이용)/ETC(기타), 상태: WAITING(답변 대기)/ANSWERED(답변 완료).\n"
+                                        + "※ GUARDIAN 역할 계정만 호출 가능."),
+
+                        // ── 관리자(ADMIN) 전용 ────────────────────────────────────
+                        new Tag().name("관리자 - 공지사항")
+                                .description("공지 CRUD 및 임시저장 — 게시된 공지 관리와 작성 중 공지(임시저장) 보관/게시 전환.\n"
+                                        + "※ ADMIN 권한 계정만 호출 가능."),
                         new Tag().name("관리자 - 문의")
-                                .description("전체 문의 목록(탭 카운트·필터·검색·페이징)·상세 조회 및 답변 작성.\n" +
-                                        "※ ADMIN 권한 계정만 호출 가능. Authorization: Bearer {accessToken} 헤더 필수.")
+                                .description("전체 문의 목록(탭 카운트·필터·검색·페이징)·상세 조회 및 답변 작성.\n"
+                                        + "※ ADMIN 권한 계정만 호출 가능.")
                 ))
                 // 전역 JWT Bearer 인증 적용
                 .addSecurityItem(new SecurityRequirement().addList(SECURITY_SCHEME_NAME))
@@ -113,6 +167,25 @@ public class SwaggerConfig {
                     "/api/admin/announcement/draft/update/{id}",
                     "/api/admin/announcement/draft/delete/{id}",
                     "/api/admin/announcement/draft/publish/{id}",
+                    // ── [피보호자 - 연결] ────────────────────────────
+                    "/api/ward/connection/select",
+                    // ── [피보호자 - SOS] ─────────────────────────────
+                    "/api/ward/sos",
+                    "/api/ward/sos-setting",
+                    // ── [피보호자 - 복약] ────────────────────────────
+                    "/api/ward/medication/today",
+                    "/api/ward/medication/{medicationId}/intake",
+                    // ── [보호자 - 연결] ──────────────────────────────
+                    "/api/guardian/connection/select",
+                    // ── [보호자 - SOS 이력] ──────────────────────────
+                    "/api/guardian/sos/history",
+                    "/api/guardian/sos/{sosEventId}/ack",
+                    // ── [보호자 - 복약] ──────────────────────────────
+                    "/api/guardian/medication",
+                    "/api/guardian/ward/{wardId}/medication",
+                    "/api/guardian/medication/{medicationId}",
+                    "/api/guardian/ward/{wardId}/medication-setting",
+                    "/api/guardian/medication-alert-setting",
                     // ── [보호자 - 문의] ──────────────────────────────
                     // POST(작성)·GET(내 목록)은 단일 경로 키 → /api/guardian/inquiry 한 줄로 묶임
                     "/api/guardian/inquiry",

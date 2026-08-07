@@ -26,7 +26,7 @@ import org.springframework.web.bind.annotation.RestController;
  * <p><b>약 등록·삭제 API는 여기 없다</b> — 등록·삭제는 보호자 전용({@code /api/guardian/...})이다.
  * 반대로 <b>복용 체크는 이 경로가 유일</b>하며, 보호자에게는 체크 API가 없다.</p>
  */
-@Tag(name = "피보호자 - 복약 알림")
+@Tag(name = "피보호자 - 복약")
 @RestController
 @RequiredArgsConstructor
 @PreAuthorize("hasRole('WARD')")

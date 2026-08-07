@@ -20,10 +20,9 @@ import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
-@Tag(name = "사용자", description = """
-        로그인한 사용자 본인의 프로필 조회/수정, 비밀번호 변경, 회원 탈퇴 API.
-        모든 요청에 Authorization 헤더가 필요합니다: Authorization: Bearer {accessToken}
-        """)
+// 태그 설명은 SwaggerConfig.tags()에 모아 둔다 — 컨트롤러마다 흩어지면 태그 하나에 컨트롤러가 여럿일 때
+// 설명이 충돌하고, 전체 목록을 한눈에 점검할 수 없다.
+@Tag(name = "공통 - 내 계정")
 @Slf4j
 @RestController
 @RequestMapping("/api/user")

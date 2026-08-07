@@ -26,7 +26,7 @@ import org.springframework.web.bind.annotation.RestController;
  * 보호자용 SOS 이력 조회·처리(ACK) API.
  * 클래스 레벨 {@code @PreAuthorize("hasRole('GUARDIAN')")}로 GUARDIAN만 접근 가능(WARD/ADMIN 403).
  */
-@Tag(name = "보호자 - SOS")
+@Tag(name = "보호자 - SOS 이력")
 @RestController
 @RequiredArgsConstructor
 @PreAuthorize("hasRole('GUARDIAN')")

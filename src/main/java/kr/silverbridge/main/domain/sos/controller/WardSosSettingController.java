@@ -18,10 +18,7 @@ import org.springframework.web.bind.annotation.*;
 /**
  * 피보호자 SOS 동작 설정 API. SOS는 피보호자 전용 기능이라 WARD만 접근 가능하다(GUARDIAN/ADMIN 403).
  */
-@Tag(name = "피보호자", description = """
-        피보호자 본인의 SOS 동작 설정(환경설정 > SOS 동작 설정) 조회·변경 API.
-        모든 요청에 Authorization 헤더가 필요합니다: Authorization: Bearer {accessToken}
-        """)
+@Tag(name = "피보호자 - SOS")
 @RestController
 @RequestMapping("/api/ward/sos-setting")
 @RequiredArgsConstructor
