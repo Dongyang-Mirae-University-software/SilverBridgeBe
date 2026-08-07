@@ -40,7 +40,7 @@ import java.util.List;
  * 보호자 화면의 체크 표시는 읽기 전용이며, 이 구분이 "피보호자가 체크해야 보호자에게 보인다"는
  * 요구를 엔드포인트 구조로 보장한다.</p>
  */
-@Tag(name = "보호자 - 복약 알림")
+@Tag(name = "보호자 - 복약")
 @RestController
 @RequiredArgsConstructor
 @PreAuthorize("hasRole('GUARDIAN')")

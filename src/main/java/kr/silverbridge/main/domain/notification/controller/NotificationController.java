@@ -14,7 +14,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 
-@Tag(name = "알림")
+@Tag(name = "공통 - 알림 설정")
 @RestController
 @RequestMapping("/api/notifications")
 @RequiredArgsConstructor

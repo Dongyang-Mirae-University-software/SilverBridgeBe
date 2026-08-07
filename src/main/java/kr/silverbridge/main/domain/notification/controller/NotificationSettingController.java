@@ -14,10 +14,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 
-@Tag(name = "알림 설정", description = """
-        로그인한 사용자 본인의 알림 채널(FCM/SMS/카카오 알림톡/이메일) ON/OFF 설정 조회·변경 API.
-        모든 요청에 Authorization 헤더가 필요합니다: Authorization: Bearer {accessToken}
-        """)
+@Tag(name = "공통 - 알림 설정")
 @RestController
 @RequestMapping("/api/user/me/notification-settings")
 @RequiredArgsConstructor

@@ -18,7 +18,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.*;
 
-@Tag(name = "인증")
+@Tag(name = "공통 - 인증")
 @RestController
 @RequestMapping("/api/auth")
 @RequiredArgsConstructor
