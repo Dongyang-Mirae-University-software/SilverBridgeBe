@@ -111,6 +111,17 @@ SilverBridge는 노인(피보호자)과 그 가족(보호자)을 연결하는 �
 
   Swagger / OpenAPI : API 명세서 자동 생성 도구.
                    주소: api.devdmu.gosky.kr/swagger-ui/index.html
+                   ▶ 태그(그룹) 규칙 (2026-08-07 통일): "<역할> - <도메인>"
+                     역할은 공통 / 피보호자 / 보호자 / 관리자 4가지뿐이며,
+                     "누가 쓰는지 → 무슨 기능인지" 두 단계로 읽히게 했습니다.
+                     현재 15개 태그 / 22개 컨트롤러 / 78개 엔드포인트가 전부 분류돼 있고,
+                     표시 순서도 공통 → 피보호자 → 보호자 → 관리자로 고정입니다.
+                     예) 공통 - 인증 / 공통 - 내 계정 / 공통 - 알림 설정 / 공통 - 공지사항 /
+                         피보호자 - 연결·SOS·복약·카메라 /
+                         보호자 - 연결·SOS 이력·복약·카메라·문의 /
+                         관리자 - 공지사항·문의
+                     ⚠️ 태그 설명은 SwaggerConfig.tags()에 모아 둡니다 — 새 컨트롤러를 만들면
+                       여기에 등록해야 설명 없는 태그가 뒤에 붙지 않습니다.
 
 
 --------------------------------------------------------------------------------
@@ -471,9 +482,14 @@ SilverBridge는 노인(피보호자)과 그 가족(보호자)을 연결하는 �
         (피보호자 복용 알림은 계속 동작).
 
     · 인가: 보호자는 요청 시점 ACTIVE 연결인 피보호자의 복약 정보만, 피보호자는 본인 약만.
-      연결이 해제되면 과거 복약 정보도 비공개. 위반은 403 MEDICATION_NOT_AUTHORIZED(+[IDOR-ATTEMPT]
-      WARN), 없는·삭제된 약은 404. 인가 목록은 getActiveWardIds() — getMyWards()는 PENDING이
+      연결이 해제되면 과거 복약 정보도 비공개. 위반은 403(+[IDOR-ATTEMPT] WARN),
+      없는·삭제된 약은 404. 인가 목록은 getActiveWardIds() — getMyWards()는 PENDING이
       섞여 있어 쓰면 안 됩니다.
+      · 오류 문구는 경로별로 다릅니다 (2026-08-06 분리) —
+        보호자 경로: MEDICATION_NOT_AUTHORIZED "연결된 피보호자의 복약 정보만 볼 수 있습니다."
+        피보호자 경로: MEDICATION_NOT_OWNED    "본인의 약만 체크할 수 있습니다."
+        (피보호자에게 "연결된 피보호자"라고 안내하면 뜻이 통하지 않아, 404 위장을 버리고
+         403으로 그대로 안내하기로 한 이유 자체가 무의미해지기 때문입니다.)
     · "오늘"은 항상 한국 시간(KST) 기준입니다 — 자정을 넘기면 새 날짜의 일정(전부 미복용)이 됩니다.
     · 등록 보호자가 탈퇴하면 그 보호자가 등록한 약도 중지되고, 남은 ACTIVE 보호자에게 중지 안내
       알림(MEDICATION_STOPPED)이 갑니다. 피보호자 본인에게는 보내지 않습니다(재등록 수단이 없어
@@ -626,7 +642,7 @@ SilverBridge는 노인(피보호자)과 그 가족(보호자)을 연결하는 �
   설정 행이 없는 채널은 기본값 적용 — FCM은 기본 ON(기존 동작 보존), SMS/KAKAO/EMAIL은 기본 OFF.
   → 기존/신규 사용자 백필 마이그레이션 불필요. (저장: user_notification_setting 테이블, V25)
 
-  [API 명세]  (Swagger 태그: "알림 설정")
+  [API 명세]  (Swagger 태그: "공통 - 알림 설정" — FCM 토큰 등록과 채널 ON/OFF를 한 그룹으로 통합)
   설정 조회:
     → GET /api/user/me/notification-settings
     → headers: Authorization: Bearer {accessToken}
@@ -901,6 +917,9 @@ SilverBridge는 노인(피보호자)과 그 가족(보호자)을 연결하는 �
   created_at / updated_at
   ※ 등록은 보호자만 — created_by가 피보호자인 행은 존재하지 않습니다.
   ※ 조회는 항상 deleted_at IS NULL로 거릅니다(부분 인덱스도 같은 조건).
+  ※ 인덱스: (ward_id)·(created_by) 부분 인덱스(V35) + (dose_time) 부분 인덱스(V38, 2026-08-06).
+    dose_time 인덱스는 스케줄러가 1분마다 던지는 "복용 시각이 지난 약" 조회가 풀스캔이 되지 않게
+    미리 덮어 둔 것입니다.
 
   [ medication_intake — 날짜별 복용 체크 ] (V35, 2026-08-04 추가)
   ─────────────────────────────
@@ -1402,22 +1421,30 @@ SilverBridge는 노인(피보호자)과 그 가족(보호자)을 연결하는 �
 --------------------------------------------------------------------------------
 
   단위 테스트 중심으로 구성되어 있습니다 (JUnit 5 + Mockito + AssertJ).
-  통합 테스트는 없으며, 빌드 속도를 우선해 Swagger로 수동 확인합니다.
+  2026-08-07 기준 테스트 클래스 65개 / 407건, 실패 0.
+  ⚠️ 통합 테스트는 아직 없습니다 — 전부 목(mock) 기반이라 Flyway 마이그레이션(V1~V38),
+    UNIQUE 제약(예: 복약 알림 중복 방지), 트랜잭션 전파는 테스트로 한 번도 실행되지 않았습니다.
+    (2026-08-05 점검 M-1 — 가장 값어치 있는 후속 작업으로 기록돼 있습니다.
+     현재는 Swagger 수동 확인 + 마이그레이션은 gosky의 스키마 복제본에 실적용해 검증합니다.)
 
-  ▶ 테스트 대상 (보안·인증·공통 로직 위주)
+  ▶ 테스트 대상 (도메인별)
     global/jwt/JwtTokenProviderTest           JWT 발급/검증/만료/위조/typ 구분
     global/jwt/JwtAuthenticationFilterTest    인증 필터 — 로그아웃·비번무효화·refresh→access 차단 (A-H1)
     global/security/RateLimitServiceTest      요청 속도 제한 Redis 로직
     global/util/VerificationCodeValidatorTest SMS 인증코드 검증·오류 누적
+    global/util/ClientIpResolverTest          nginx X-Real-IP 기반 클라이언트 IP 판별
     global/validation/PasswordFieldValidation 비밀번호 규칙(@ValidPassword)
     global/validation/BirthDateValidatorTest  생년월일 검증(미래·만14세·만120세 경계)
-    domain/auth/AuthServiceTest               로그인·토큰·블랙리스트
-    domain/auth/KakaoAuthServiceTest          카카오 로그인/가입 분기·INACTIVE·세션 만료
-    domain/auth/PasswordResetServiceTest      비번재설정 email/SMS 경로·enumeration 차단
-    domain/auth/SmsVerificationServiceTest    SMS 발송·per-phone 상한·오류 초기화
-    domain/auth/RefreshTokenRevocationServiceTest  refresh token 폐기 위임
-    domain/auth/UserAccountEventListenerTest  탈퇴/비밀번호 변경 이벤트 수신 처리
-    domain/user/UserServiceTest               프로필 수정·비밀번호 변경·탈퇴 이벤트
+    global/websocket/JwtHandshakeInterceptorTest  WebSocket 핸드셰이크 인증
+    domain/auth/*                             로그인·토큰·카카오 분기·비번재설정·SMS 인증(8종)
+    domain/user/*                             프로필·비밀번호 변경·탈퇴 이벤트·좀비 계정 스윕
+    domain/connection/*                       연결 상태 전이·알림 리스너·탈퇴 시 연결 정리
+    domain/sos/*                              SOS 발생·이력·ACK 인가·동작 설정·알림 쿨다운(9종)
+    domain/anomaly/*                          AI WS 구독·판정·쿨다운·알림 리스너(6종)
+    domain/medication/*                       역할 분리·인가·멱등·알림 대상 선정·재알림·
+                                              미복용 요약·자정 경계·킬 스위치(11종, 76건)
+    domain/notification/*                     채널 3종(FCM·SMS·알림톡)·디스패처 정책·수신 설정
+    domain/camera/*, domain/inquiry/*, domain/admin/*  소유권 인가·문의 흐름·공지 임시저장
 
   ▶ 실행
     ./gradlew test                            → 전체 단위 테스트
@@ -1450,7 +1477,11 @@ SilverBridge는 노인(피보호자)과 그 가족(보호자)을 연결하는 �
   │   │   ├── client     AiLiveStreamSubscriber (AI WS를 클라이언트로 구독)
   │   │   ├── service    AnomalyJudge(판정) / AnomalyEventCooldown / AnomalyNotificationCooldown
   │   │   └── listener   AnomalyNotificationListener (AFTER_COMMIT + @Async 발송)
-  │   ├── sos            피보호자 긴급 SOS + SOS 동작 설정(sos_setting)
+  │   ├── sos            피보호자 긴급 SOS + SOS 동작 설정(sos_setting) + 보호자용 이력·ACK
+  │   ├── medication     복약 — 등록(보호자)·복용 체크(피보호자)·알림 스케줄러
+  │   │   ├── service    Guardian/Ward 서비스 + Planner(선점)·ReminderService(발송)·
+  │   │   │              MissedAlert(보호자 저녁 요약)
+  │   │   └── listener   MedicationWithdrawalListener (등록 보호자 탈퇴 → 중지 안내)
   │   ├── inquiry        문의하기 / 고객센터 (보호자 작성 + 관리자 답변)
   │   └── notification   알림 채널 추상화 — 채널(FCM·SMS·카카오 알림톡)·디스패처·수신 설정
   │       ├── channel    NotificationChannel 전략 + 구현체 3종
