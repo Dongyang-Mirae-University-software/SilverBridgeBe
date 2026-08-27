@@ -60,9 +60,10 @@ public class MedicationProperties {
         private boolean enabled = true;
 
         /**
-         * 요약을 보내는 시각(KST).
+         * 요약을 보내는 시각(KST) - <b>발송 시각을 직접 지정하지 않은 보호자의 기본값</b>이다.
+         * 보호자별 시각은 {@code guardian_medication_setting.missed_alert_time}에 있다(2026-08-27).
          *
-         * <p>이 시각까지 복용 시각이 지난 약만 집계한다 — 취침 전 약은 아직 먹을 때가 아니라 제외된다.
+         * <p>이 시각까지 복용 시각이 지난 약만 집계한다 - 취침 전 약은 아직 먹을 때가 아니라 제외된다.
          * 자정 직전으로 미루면 보호자가 자고 있어 대응할 수 없으므로 저녁으로 둔다.</p>
          */
         private LocalTime alertTime = LocalTime.of(21, 0);

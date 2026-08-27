@@ -11,6 +11,7 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
+import java.time.LocalTime;
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -81,8 +82,26 @@ class MedicationMissedAlertServiceTest {
         verify(notificationDispatcher, times(2)).dispatch(any(), any(), any());
     }
 
+    @Test
+    @DisplayName("보호자가 지정한 시각을 문구에 밝힌다 - 분모가 '오늘 전체'가 아님을 읽을 수 있어야 한다")
+    void 문구_집계상한_노출() {
+        when(planner.claimMissedAlerts()).thenReturn(List.of(target(2, 1, LocalTime.of(19, 30))));
+
+        missedAlertService.sendMissedAlerts();
+
+        ArgumentCaptor<NotificationContent> captor = ArgumentCaptor.forClass(NotificationContent.class);
+        verify(notificationDispatcher).dispatch(any(), any(), captor.capture());
+
+        assertThat(captor.getValue().body()).contains("19:30까지 예정된");
+        assertThat(captor.getValue().data()).containsEntry("alertTime", "19:30");
+    }
+
     private static MedicationMissedAlertTarget target(int total, int missed) {
+        return target(total, missed, LocalTime.of(21, 0));
+    }
+
+    private static MedicationMissedAlertTarget target(int total, int missed, LocalTime alertTime) {
         return new MedicationMissedAlertTarget(
-                GUARDIAN_ID, WARD_ID, "김영희", MedicationClock.today(), missed, total);
+                GUARDIAN_ID, WARD_ID, "김영희", MedicationClock.today(), alertTime, missed, total);
     }
 }

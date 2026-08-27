@@ -6,6 +6,9 @@ import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 
+import java.time.LocalTime;
+import java.time.temporal.ChronoUnit;
+
 /**
  * 보호자별 복약 알림 수신 설정. 보호자당 한 행({@code guardian_id} UNIQUE).
  *
@@ -31,20 +34,40 @@ public class GuardianMedicationSetting extends BaseTimeEntity {
     @Column(name = "guardian_id", nullable = false, length = 6)
     private String guardianId;
 
-    /** 피보호자가 복약을 체크하지 않은 날 저녁 요약 알림을 받을지. */
+    /** 피보호자가 복약을 체크하지 않은 날 요약 알림을 받을지. */
     @Column(name = "missed_alert_enabled", nullable = false)
     private boolean missedAlertEnabled;
 
-    private GuardianMedicationSetting(String guardianId, boolean missedAlertEnabled) {
+    /**
+     * 요약을 받을 시각(KST). {@code null}이면 전역 기본값(21:00)을 따른다.
+     *
+     * <p><b>발송 시각이자 집계 상한이다</b> - 이 시각까지 복용 시각이 지난 약만 센다.
+     * 아직 먹을 때가 아닌 약을 미복용으로 통보하면 매일 거짓 알림이 되기 때문이다.
+     * 이르게 잡을수록 그날 요약에 포함되는 약이 줄어드는 것은 의도된 동작이다.</p>
+     */
+    @Column(name = "missed_alert_time")
+    private LocalTime missedAlertTime;
+
+    private GuardianMedicationSetting(String guardianId, boolean missedAlertEnabled, LocalTime missedAlertTime) {
         this.guardianId = guardianId;
         this.missedAlertEnabled = missedAlertEnabled;
+        this.missedAlertTime = missedAlertTime;
     }
 
+    /** 시각 미지정(전역 기본값을 따르는) 상태로 만든다. */
     public static GuardianMedicationSetting of(String guardianId, boolean missedAlertEnabled) {
-        return new GuardianMedicationSetting(guardianId, missedAlertEnabled);
+        return new GuardianMedicationSetting(guardianId, missedAlertEnabled, null);
     }
 
     public void updateMissedAlertEnabled(boolean missedAlertEnabled) {
         this.missedAlertEnabled = missedAlertEnabled;
+    }
+
+    /**
+     * 발송 시각을 바꾼다. 스케줄러가 분 단위로 돌므로 초·나노는 버린다 -
+     * 저장해 봐야 판정에 쓰이지 않으면서 조회 결과만 지저분해진다.
+     */
+    public void updateMissedAlertTime(LocalTime missedAlertTime) {
+        this.missedAlertTime = missedAlertTime.truncatedTo(ChronoUnit.MINUTES);
     }
 }
