@@ -51,6 +51,7 @@ public class GuardianMedicationService {
     private final MedicationIntakeRepository intakeRepository;
     private final MedicationReminderLogRepository reminderLogRepository;
     private final MedicationSettingService settingService;
+    private final GuardianMedicationSettingService guardianSettingService;
     private final ConnectionService connectionService;
     private final UserRepository userRepository;
 
@@ -73,6 +74,9 @@ public class GuardianMedicationService {
         Map<String, User> wards = userRepository.findAllById(wardIds).stream()
                 .collect(Collectors.toMap(User::getId, Function.identity()));
         Map<String, MedicationPreference> preferences = settingService.findPreferences(wardIds);
+        Map<String, GuardianMissedAlertSetting> missedAlerts =
+                guardianSettingService.findSettingsOfGuardian(guardianId, wardIds);
+        GuardianMissedAlertSetting defaultMissedAlert = guardianSettingService.defaultSetting();
 
         // 약이 하나도 없는 피보호자도 카드는 보여야 하므로 groupingBy 결과가 아니라 wardIds를 기준으로 조립한다.
         Map<String, List<Medication>> byWard = medications.stream()
@@ -88,7 +92,8 @@ public class GuardianMedicationService {
                             wardId,
                             ward != null ? ward.getName() : null,
                             calculateAge(ward, today),
-                            preferences.getOrDefault(wardId, MedicationPreference.DEFAULT).alarmEnabled(),
+                            preferences.getOrDefault(wardId, MedicationPreference.DEFAULT),
+                            missedAlerts.getOrDefault(wardId, defaultMissedAlert),
                             today,
                             items);
                 })

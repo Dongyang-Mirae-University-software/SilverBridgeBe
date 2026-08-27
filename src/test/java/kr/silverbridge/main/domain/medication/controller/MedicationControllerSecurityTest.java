@@ -77,17 +77,17 @@ class MedicationControllerSecurityTest {
         when(guardianMedicationService.create(any(), any(), any())).thenReturn(null);
         when(guardianMedicationService.update(any(), any(), any())).thenReturn(null);
         GuardianMissedAlertSetting setting = new GuardianMissedAlertSetting(true, LocalTime.of(21, 0));
-        when(guardianMedicationSettingService.getSetting(any())).thenReturn(setting);
-        when(guardianMedicationSettingService.update(any(), any(), any())).thenReturn(setting);
+        when(guardianMedicationSettingService.getSetting(any(), any())).thenReturn(setting);
+        when(guardianMedicationSettingService.update(any(), any(), any(), any())).thenReturn(setting);
 
         assertThatNoException().isThrownBy(() -> guardianController.getWardMedications("GD0001"));
         assertThatNoException().isThrownBy(() -> guardianController.create("GD0001", "WD0001", CREATE_REQUEST));
         assertThatNoException().isThrownBy(() -> guardianController.delete("GD0001", 1L));
         assertThatNoException().isThrownBy(() -> guardianController.update(
                 "GD0001", 1L, new MedicationUpdateRequest("혈압약", null, null, null, null)));
-        assertThatNoException().isThrownBy(() -> guardianController.getAlertSetting("GD0001"));
+        assertThatNoException().isThrownBy(() -> guardianController.getAlertSetting("GD0001", "WD0001"));
         assertThatNoException().isThrownBy(() -> guardianController.updateAlertSetting(
-                "GD0001", new GuardianMedicationAlertSettingRequest(false, null)));
+                "GD0001", "WD0001", new GuardianMedicationAlertSettingRequest(false, null)));
     }
 
     @Test
@@ -108,10 +108,10 @@ class MedicationControllerSecurityTest {
         assertThatThrownBy(() -> guardianController.getWardMedications("WD0001"))
                 .isInstanceOf(AccessDeniedException.class);
         // 미복용 요약 수신 설정도 보호자 전용 — 피보호자가 건드릴 수 없다
-        assertThatThrownBy(() -> guardianController.getAlertSetting("WD0001"))
+        assertThatThrownBy(() -> guardianController.getAlertSetting("WD0001", "WD0002"))
                 .isInstanceOf(AccessDeniedException.class);
         assertThatThrownBy(() -> guardianController.updateAlertSetting(
-                "WD0001", new GuardianMedicationAlertSettingRequest(true, null)))
+                "WD0001", "WD0002", new GuardianMedicationAlertSettingRequest(true, null)))
                 .isInstanceOf(AccessDeniedException.class);
     }
 

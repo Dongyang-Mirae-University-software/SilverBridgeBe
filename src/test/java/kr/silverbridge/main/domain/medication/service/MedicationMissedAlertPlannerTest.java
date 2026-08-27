@@ -82,7 +82,7 @@ class MedicationMissedAlertPlannerTest {
                 .thenReturn(List.of(MedicationIntake.of(1L, MedicationClock.today(), OffsetDateTime.now())));
         when(missedAlertLogRepository.findByDoseDateAndWardIdIn(any(), any())).thenReturn(List.of());
         when(connectionService.getActiveGuardianIds(WARD_ID)).thenReturn(List.of(GUARDIAN_A, GUARDIAN_B));
-        when(guardianSettingService.findSettings(any())).thenReturn(Map.of());
+        when(guardianSettingService.findSettings(any(), any())).thenReturn(Map.of());
         when(userRepository.findAllById(any()))
                 .thenReturn(List.of(User.builder().id(WARD_ID).name("김영희").build()));
 
@@ -134,7 +134,7 @@ class MedicationMissedAlertPlannerTest {
         when(guardianSettingRepository.findLatestAlertTime()).thenReturn(Optional.of(early));
         stubOneMissed();
         when(connectionService.getActiveGuardianIds(WARD_ID)).thenReturn(List.of(GUARDIAN_A));
-        when(guardianSettingService.findSettings(any()))
+        when(guardianSettingService.findSettings(any(), any()))
                 .thenReturn(Map.of(GUARDIAN_A, new GuardianMissedAlertSetting(true, early)));
 
         assertThat(planner.claimMissedAlerts()).hasSize(1);
@@ -157,7 +157,7 @@ class MedicationMissedAlertPlannerTest {
         LocalTime alertTime = properties.getMissedAlert().getAlertTime();
         stubOneMissed();
         when(connectionService.getActiveGuardianIds(WARD_ID)).thenReturn(List.of(GUARDIAN_A, GUARDIAN_B));
-        when(guardianSettingService.findSettings(any())).thenReturn(Map.of(
+        when(guardianSettingService.findSettings(any(), any())).thenReturn(Map.of(
                 GUARDIAN_A, new GuardianMissedAlertSetting(false, alertTime),
                 GUARDIAN_B, new GuardianMissedAlertSetting(true, alertTime)));
 
@@ -171,7 +171,7 @@ class MedicationMissedAlertPlannerTest {
     void 설정없음_기본값() {
         stubOneMissed();
         when(connectionService.getActiveGuardianIds(WARD_ID)).thenReturn(List.of(GUARDIAN_A));
-        when(guardianSettingService.findSettings(any())).thenReturn(Map.of());
+        when(guardianSettingService.findSettings(any(), any())).thenReturn(Map.of());
 
         assertThat(planner.claimMissedAlerts())
                 .singleElement()
@@ -183,7 +183,7 @@ class MedicationMissedAlertPlannerTest {
     void 보호자시각_전_제외() {
         stubOneMissed();
         when(connectionService.getActiveGuardianIds(WARD_ID)).thenReturn(List.of(GUARDIAN_A));
-        when(guardianSettingService.findSettings(any())).thenReturn(Map.of(
+        when(guardianSettingService.findSettings(any(), any())).thenReturn(Map.of(
                 GUARDIAN_A, new GuardianMissedAlertSetting(true, MedicationClock.now().toLocalTime().plusMinutes(30))));
 
         assertThat(planner.claimMissedAlerts()).isEmpty();
@@ -196,7 +196,7 @@ class MedicationMissedAlertPlannerTest {
         LocalTime alertTime = properties.getMissedAlert().getAlertTime();
         stubOneMissed();
         when(connectionService.getActiveGuardianIds(WARD_ID)).thenReturn(List.of(GUARDIAN_A, GUARDIAN_B));
-        when(guardianSettingService.findSettings(any())).thenReturn(Map.of(
+        when(guardianSettingService.findSettings(any(), any())).thenReturn(Map.of(
                 GUARDIAN_A, new GuardianMissedAlertSetting(true, alertTime),
                 GUARDIAN_B, new GuardianMissedAlertSetting(true, alertTime)));
         when(missedAlertLogRepository.findByDoseDateAndWardIdIn(any(), any()))
@@ -247,7 +247,7 @@ class MedicationMissedAlertPlannerTest {
         when(intakeRepository.findByMedicationIdInAndDoseDate(any(), any())).thenReturn(List.of());
         when(missedAlertLogRepository.findByDoseDateAndWardIdIn(any(), any())).thenReturn(List.of());
         when(connectionService.getActiveGuardianIds(WARD_ID)).thenReturn(List.of(GUARDIAN_A, GUARDIAN_B));
-        when(guardianSettingService.findSettings(any())).thenReturn(Map.of(
+        when(guardianSettingService.findSettings(any(), any())).thenReturn(Map.of(
                 GUARDIAN_A, new GuardianMissedAlertSetting(true, earlyCutoff),
                 GUARDIAN_B, new GuardianMissedAlertSetting(true, lateCutoff)));
         when(userRepository.findAllById(any()))
@@ -268,6 +268,18 @@ class MedicationMissedAlertPlannerTest {
                     assertThat(t.missedCount()).isEqualTo(2);
                     assertThat(t.alertTime()).isEqualTo(lateCutoff);
                 });
+    }
+
+    @Test
+    @DisplayName("설정은 그 피보호자 축으로 조회한다 - 다른 피보호자에 지정한 시각이 섞이면 안 된다")
+    void 설정조회는_피보호자축() {
+        stubOneMissed();
+        when(connectionService.getActiveGuardianIds(WARD_ID)).thenReturn(List.of(GUARDIAN_A));
+        when(guardianSettingService.findSettings(any(), any())).thenReturn(Map.of());
+
+        planner.claimMissedAlerts();
+
+        verify(guardianSettingService).findSettings(eq(WARD_ID), eq(List.of(GUARDIAN_A)));
     }
 
     /** 기본 시각을 바꾸고, 그에 맞춰 서비스가 돌려줄 기본 실효값도 갱신한다. */

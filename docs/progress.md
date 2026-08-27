@@ -1161,3 +1161,14 @@ REST API Key 단독 대비 보안 강화 — 인가코드 탈취 시 토큰 발�
 - **보존**: 하루 1건 UNIQUE·선점 후 발송·자정 컷·"체크되지 않았습니다" 문구·킬 스위치 독립·알림톡 미매핑(FCM·문자만), **피보호자 복용 알림(2차) 경로 무변경**.
 - **검증**: `./gradlew build` **403건 / 실패 0**(기존 399 + 신규 4).
 - 상세: `docs/(2026-08-27) feature-medication-missed-alert-time.md`
+
+## [2026-08-27] 미복용 요약 설정 - 축을 (보호자) → (보호자, 피보호자)로
+
+- **발단**: 같은 날 머지한 V40은 발송 시각을 보호자당 하나만 가질 수 있었다. 그런데 이 시각은 **집계 상한을 겸해서**(불변 규칙 ⑧), 피보호자마다 마지막 복약 시각이 다르면 하나의 값으로는 반드시 누군가 손해를 본다. 김영희(수면 보조제 22:00)와 이순자(마지막 약 12:00)를 함께 돌보는 보호자가 21:00을 쓰면 **김영희의 22:00 약이 매일 요약에서 빠지고**, 22:30으로 올리면 이순자 요약까지 밤 10시 반에 도착한다. 프론트 프로토타입이 카드마다 시각 피커를 둔 것도 같은 직관이었다.
+- **V41**: `guardian_medication_setting`에 `ward_id` 추가, UNIQUE를 `(guardian_id)` → `(guardian_id, ward_id)`로 재정의, `ward_id` 단독 인덱스 추가(발송 판정이 피보호자 축으로 조회하는데 UNIQUE는 guardian_id 선행이라 안 쓰인다). 기존 행은 ward_id를 채울 근거가 없어 `DELETE` - **배포 2곳 모두 0건 확인 후** 넣었고, 행이 있어도 기본값(ON·21:00)으로 되돌아갈 뿐이다.
+- **파괴적 변경**: `/api/guardian/medication-alert-setting` → `/api/guardian/ward/{wardId}/medication-alert-setting`. 착수 전 `../SilverBridgeFe`에서 **사용처 0건**을 확인하고(복약 관련 파일은 `(ward)/ward/medication` 하나뿐) 호환 경로 없이 교체했다.
+- **인가가 새로 필요해졌다**: 이전엔 대상이 본인뿐이라 검증할 게 없었지만 이제 남의 피보호자 설정을 건드릴 수 있다. `isActiveConnection` 위반 시 **403 `MEDICATION_NOT_AUTHORIZED` + `[IDOR-ATTEMPT]` WARN**(복약 도메인 기존 형태).
+- **카드에 설정 4종 동봉**: `GET /api/guardian/medication` 응답에 `alarmEnabled`·`remindAgainEnabled`(피보호자 계정 축, 보호자들이 공유) + `missedAlertEnabled`·`missedAlertTime`(보호자별 축)을 실었다. 없으면 프론트가 피보호자 수만큼 설정 API를 더 호출한다. `remindAgainEnabled`는 이미 있던 값인데 응답에 안 실려 프론트가 볼 수 없었다.
+- **집계 로직은 거의 무변경**: V40에서 이미 보호자별로 상한을 따로 계산하도록 재구성해 둔 덕분에 조회 키에 `wardId`가 하나 붙은 것이 전부다. 상위집합 조회·매 분 스캔 방지 게이트·하루 1건 UNIQUE·선점 후 발송·자정 컷 모두 그대로이고, `medication_missed_alert_log`는 이미 ward 축이라 손댈 것이 없었다.
+- **검증**: `./gradlew build` **415건 / 실패 0**(기존 403 + 신규 12). 마이그레이션은 gosky dev DB에서 트랜잭션 실행 후 롤백으로 사전 검증(컬럼·UNIQUE·인덱스·FK 정상, 스키마 원상 확인).
+- 상세: `docs/(2026-08-27) refactor-medication-missed-alert-per-ward.md`

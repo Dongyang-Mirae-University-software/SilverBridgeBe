@@ -5,14 +5,14 @@ import io.swagger.v3.oas.annotations.media.Schema;
 import java.time.LocalTime;
 
 /**
- * 보호자 본인의 복약 알림 수신 설정 변경 요청.
+ * 보호자가 특정 피보호자에 대해 받을 미복용 요약 설정 변경 요청.
  *
  * <p>{@code null}은 "변경하지 않음"이다(설정 API 공통 규약).</p>
  */
-@Schema(description = "보호자 복약 알림 수신 설정 변경 요청")
+@Schema(description = "보호자 미복용 요약 수신 설정 변경 요청 (피보호자별)")
 public record GuardianMedicationAlertSettingRequest(
 
-        @Schema(description = "피보호자가 복약을 체크하지 않은 날 요약을 받을지 (생략 시 기존값 유지)",
+        @Schema(description = "이 피보호자가 복약을 체크하지 않은 날 요약을 받을지 (생략 시 기존값 유지)",
                 example = "true")
         Boolean missedAlertEnabled,
 
