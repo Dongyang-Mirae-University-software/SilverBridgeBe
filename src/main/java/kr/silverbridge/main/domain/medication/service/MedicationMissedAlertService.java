@@ -7,6 +7,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
+import java.time.format.DateTimeFormatter;
 import java.util.List;
 import java.util.Map;
 
@@ -23,6 +24,8 @@ import java.util.Map;
 @Service
 @RequiredArgsConstructor
 public class MedicationMissedAlertService {
+
+    private static final DateTimeFormatter TIME_FORMAT = DateTimeFormatter.ofPattern("HH:mm");
 
     private final MedicationMissedAlertPlanner planner;
     private final NotificationDispatcher notificationDispatcher;
@@ -45,14 +48,22 @@ public class MedicationMissedAlertService {
         return sent;
     }
 
+    /**
+     * 알림 문구.
+     *
+     * <p><b>집계 상한(보호자가 지정한 시각)을 본문에 밝힌다</b> - 분모가 "오늘 전체"가 아니라
+     * "그 시각까지 예정된" 수라, 시각을 빼면 이후에 먹을 약까지 확인된 것처럼 읽힌다.</p>
+     */
     private NotificationContent content(MedicationMissedAlertTarget target) {
-        String body = "%s님의 오늘 저녁까지 예정된 복약 %d건 중 %d건이 아직 체크되지 않았습니다."
-                .formatted(target.wardName(), target.totalCount(), target.missedCount());
+        String alertTime = target.alertTime().format(TIME_FORMAT);
+        String body = "%s님의 %s까지 예정된 복약 %d건 중 %d건이 아직 체크되지 않았습니다."
+                .formatted(target.wardName(), alertTime, target.totalCount(), target.missedCount());
 
         return NotificationContent.of("복약 확인이 필요해요", body, Map.of(
                 "type", "MEDICATION_MISSED",
                 "wardId", target.wardId(),
                 "doseDate", target.doseDate().toString(),
+                "alertTime", alertTime,
                 "missedCount", String.valueOf(target.missedCount()),
                 "totalCount", String.valueOf(target.totalCount())));
     }

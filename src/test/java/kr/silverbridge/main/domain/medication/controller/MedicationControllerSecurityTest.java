@@ -8,6 +8,7 @@ import kr.silverbridge.main.domain.medication.dto.TodayMedicationResponse;
 import kr.silverbridge.main.domain.medication.entity.MedicationTimeSlot;
 import kr.silverbridge.main.domain.medication.service.GuardianMedicationService;
 import kr.silverbridge.main.domain.medication.service.GuardianMedicationSettingService;
+import kr.silverbridge.main.domain.medication.service.GuardianMissedAlertSetting;
 import kr.silverbridge.main.domain.medication.service.WardMedicationService;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -22,6 +23,7 @@ import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.context.junit.jupiter.SpringExtension;
 
 import java.time.LocalDate;
+import java.time.LocalTime;
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThatNoException;
@@ -74,6 +76,9 @@ class MedicationControllerSecurityTest {
         when(guardianMedicationService.getWardMedications(any())).thenReturn(List.of());
         when(guardianMedicationService.create(any(), any(), any())).thenReturn(null);
         when(guardianMedicationService.update(any(), any(), any())).thenReturn(null);
+        GuardianMissedAlertSetting setting = new GuardianMissedAlertSetting(true, LocalTime.of(21, 0));
+        when(guardianMedicationSettingService.getSetting(any())).thenReturn(setting);
+        when(guardianMedicationSettingService.update(any(), any(), any())).thenReturn(setting);
 
         assertThatNoException().isThrownBy(() -> guardianController.getWardMedications("GD0001"));
         assertThatNoException().isThrownBy(() -> guardianController.create("GD0001", "WD0001", CREATE_REQUEST));
@@ -82,7 +87,7 @@ class MedicationControllerSecurityTest {
                 "GD0001", 1L, new MedicationUpdateRequest("혈압약", null, null, null, null)));
         assertThatNoException().isThrownBy(() -> guardianController.getAlertSetting("GD0001"));
         assertThatNoException().isThrownBy(() -> guardianController.updateAlertSetting(
-                "GD0001", new GuardianMedicationAlertSettingRequest(false)));
+                "GD0001", new GuardianMedicationAlertSettingRequest(false, null)));
     }
 
     @Test
@@ -106,7 +111,7 @@ class MedicationControllerSecurityTest {
         assertThatThrownBy(() -> guardianController.getAlertSetting("WD0001"))
                 .isInstanceOf(AccessDeniedException.class);
         assertThatThrownBy(() -> guardianController.updateAlertSetting(
-                "WD0001", new GuardianMedicationAlertSettingRequest(true)))
+                "WD0001", new GuardianMedicationAlertSettingRequest(true, null)))
                 .isInstanceOf(AccessDeniedException.class);
     }
 

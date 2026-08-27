@@ -104,10 +104,13 @@ medication:
     grace-minutes: ${MEDICATION_REMINDER_GRACE_MINUTES:30}        # 복용 시각을 놓쳤을 때 발송 허용 유예
     retry-delay-minutes: ${MEDICATION_REMINDER_RETRY_DELAY_MINUTES:15}      # 체크 없을 때 재알림까지 대기
     retry-deadline-minutes: ${MEDICATION_REMINDER_RETRY_DEADLINE_MINUTES:60} # 이 시간이 지나면 재알림 포기
-    # 미복용 시 보호자에게 보내는 저녁 요약(3차). 피보호자 알림과 별개로 끌 수 있다.
+    # 미복용 시 보호자에게 보내는 요약(3차). 피보호자 알림과 별개로 끌 수 있다.
     missed-alert:
       enabled: ${MEDICATION_MISSED_ALERT_ENABLED:true}                        # 킬 스위치(보호자 요약만 중단)
-      alert-time: ${MEDICATION_MISSED_ALERT_TIME:21:00}                       # 판정·발송 시각(KST). 이 시각까지 예정된 약만 집계
+      # 발송 시각을 직접 지정하지 않은 보호자에게 적용되는 기본값(KST).
+      # 보호자별 시각은 guardian_medication_setting.missed_alert_time에 저장된다(2026-08-27).
+      # 이 시각까지 복용 시각이 지난 약만 집계한다 - 아직 먹을 때가 아닌 약은 미복용으로 세지 않는다.
+      alert-time: ${MEDICATION_MISSED_ALERT_TIME:21:00}
       deadline-minutes: ${MEDICATION_MISSED_ALERT_DEADLINE_MINUTES:120}       # 이 시간이 지나면 그날 발송 포기
 
 anomaly:
