@@ -2,6 +2,7 @@ package kr.silverbridge.main.domain.sos.service;
 
 import kr.silverbridge.main.domain.sos.dto.SosResponse;
 import kr.silverbridge.main.domain.sos.entity.SosEvent;
+import kr.silverbridge.main.domain.sos.entity.SosTriggerType;
 import kr.silverbridge.main.domain.sos.event.SosTriggeredEvent;
 import kr.silverbridge.main.domain.sos.repository.SosEventRepository;
 import kr.silverbridge.main.domain.user.entity.User;
@@ -56,7 +57,7 @@ class SosServiceTest {
         when(saved.getCreatedAt()).thenReturn(now);
         when(sosEventRepository.save(any(SosEvent.class))).thenReturn(saved);
 
-        SosResponse res = sosService.trigger(WARD_ID, null);
+        SosResponse res = sosService.trigger(WARD_ID, null, null);
 
         // 이력 저장 — wardId 보존
         ArgumentCaptor<SosEvent> saveCaptor = ArgumentCaptor.forClass(SosEvent.class);
@@ -86,7 +87,7 @@ class SosServiceTest {
         when(saved.getCreatedAt()).thenReturn(OffsetDateTime.now());
         when(sosEventRepository.save(any(SosEvent.class))).thenReturn(saved);
 
-        sosService.trigger(WARD_ID, null);
+        sosService.trigger(WARD_ID, null, null);
 
         ArgumentCaptor<SosTriggeredEvent> pubCaptor = ArgumentCaptor.forClass(SosTriggeredEvent.class);
         verify(eventPublisher).publishEvent(pubCaptor.capture());
@@ -98,7 +99,7 @@ class SosServiceTest {
     void trigger_사용자없음() {
         when(userRepository.findById(WARD_ID)).thenReturn(Optional.empty());
 
-        assertThatThrownBy(() -> sosService.trigger(WARD_ID, null))
+        assertThatThrownBy(() -> sosService.trigger(WARD_ID, null, null))
                 .isInstanceOf(CustomException.class)
                 .hasFieldOrPropertyWithValue("errorCode", ErrorCode.USER_NOT_FOUND);
 
@@ -116,7 +117,7 @@ class SosServiceTest {
         when(saved.getCreatedAt()).thenReturn(OffsetDateTime.now());
         when(sosEventRepository.save(any(SosEvent.class))).thenReturn(saved);
 
-        sosService.trigger(WARD_ID, "자택 거실");
+        sosService.trigger(WARD_ID, "자택 거실", null);
 
         ArgumentCaptor<SosEvent> saveCaptor = ArgumentCaptor.forClass(SosEvent.class);
         verify(sosEventRepository).save(saveCaptor.capture());
@@ -133,10 +134,47 @@ class SosServiceTest {
         when(saved.getCreatedAt()).thenReturn(OffsetDateTime.now());
         when(sosEventRepository.save(any(SosEvent.class))).thenReturn(saved);
 
-        sosService.trigger(WARD_ID, "   ");
+        sosService.trigger(WARD_ID, "   ", null);
 
         ArgumentCaptor<SosEvent> saveCaptor = ArgumentCaptor.forClass(SosEvent.class);
         verify(sosEventRepository).save(saveCaptor.capture());
         assertThat(saveCaptor.getValue().getLocation()).isNull();
+    }
+
+    @Test
+    @DisplayName("발생 경로 미전송 → SOS_BUTTON으로 기록 (바디 없는 기존 호출 하위호환)")
+    void trigger_경로없음_기본값() {
+        stubSavedEvent();
+
+        sosService.trigger(WARD_ID, null, null);
+
+        ArgumentCaptor<SosEvent> saveCaptor = ArgumentCaptor.forClass(SosEvent.class);
+        verify(sosEventRepository).save(saveCaptor.capture());
+        assertThat(saveCaptor.getValue().getTriggerType()).isEqualTo(SosTriggerType.SOS_BUTTON);
+    }
+
+    @Test
+    @DisplayName("보호자 직접 전화(GUARDIAN_CALL)도 이력에 남고 알림 이벤트가 동일하게 발행된다")
+    void trigger_보호자전화_이력과알림() {
+        stubSavedEvent();
+
+        sosService.trigger(WARD_ID, null, SosTriggerType.GUARDIAN_CALL);
+
+        ArgumentCaptor<SosEvent> saveCaptor = ArgumentCaptor.forClass(SosEvent.class);
+        verify(sosEventRepository).save(saveCaptor.capture());
+        assertThat(saveCaptor.getValue().getTriggerType()).isEqualTo(SosTriggerType.GUARDIAN_CALL);
+
+        // 발생 경로는 이력 표시용일 뿐 알림을 가르지 않는다 - 전화받은 보호자 외 나머지도 알아야 한다
+        verify(eventPublisher).publishEvent(any(SosTriggeredEvent.class));
+    }
+
+    /** 세 테스트가 공유하는 저장 결과 스텁 - 반환 mock은 응답 조립에만 쓰인다. */
+    private void stubSavedEvent() {
+        User ward = User.builder().id(WARD_ID).name(WARD_NAME).role(Role.WARD).build();
+        when(userRepository.findById(WARD_ID)).thenReturn(Optional.of(ward));
+        SosEvent saved = mock(SosEvent.class);
+        when(saved.getId()).thenReturn(42L);
+        when(saved.getCreatedAt()).thenReturn(OffsetDateTime.now());
+        when(sosEventRepository.save(any(SosEvent.class))).thenReturn(saved);
     }
 }

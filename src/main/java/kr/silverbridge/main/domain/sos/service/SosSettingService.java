@@ -16,7 +16,8 @@ import org.springframework.transaction.annotation.Transactional;
  * 기본값({@code call119AndNotify})과 같은 값이라 계정 동기화 전환 후에도 동작이 바뀌지 않고,
  * 기존 사용자 백필 마이그레이션도 필요 없다({@code NotificationSettingService}와 동일한 방식).</p>
  *
- * <p>이 설정은 <b>프론트의 119 연결·안내 흐름</b>만 정한다 — 보호자 알림 발송 경로
+ * <p>이 설정은 <b>프론트의 119 안내 화면 흐름</b>만 정한다(실제 발신은 하지 않는다 - {@link SosAction} 참조).
+ * 보호자 알림 발송 경로
  * ({@code SosNotificationListener} → {@code NotificationType.WARD_SOS} 강제 발송)는 이 값을 읽지 않으며,
  * 어떤 값이든 보호자 알림은 항상 나간다. 자세한 배경은 {@link SosAction} 참조.</p>
  */
@@ -24,7 +25,7 @@ import org.springframework.transaction.annotation.Transactional;
 @RequiredArgsConstructor
 public class SosSettingService {
 
-    /** 설정 행이 없을 때 적용되는 기본 동작. 프론트 기존 기본값과 동일(119 연결 + 보호자 알림 안내). */
+    /** 설정 행이 없을 때 적용되는 기본 동작. 프론트 기존 기본값과 동일(119 화면 + 보호자 알림 안내). */
     private static final SosAction DEFAULT_SOS_ACTION = SosAction.CALL_119_AND_NOTIFY;
 
     private final SosSettingRepository repository;

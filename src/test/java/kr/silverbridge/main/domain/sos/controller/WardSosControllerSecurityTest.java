@@ -51,7 +51,7 @@ class WardSosControllerSecurityTest {
     @WithMockUser(roles = "WARD")
     @DisplayName("WARD 역할 → SOS 호출 허용")
     void ward_허용() {
-        when(sosService.trigger(anyString(), any())).thenReturn(new SosResponse(1L, OffsetDateTime.now()));
+        when(sosService.trigger(anyString(), any(), any())).thenReturn(new SosResponse(1L, OffsetDateTime.now()));
 
         assertThatNoException().isThrownBy(() -> controller.triggerSos("WD0001", null));
     }
