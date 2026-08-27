@@ -2,6 +2,7 @@ package kr.silverbridge.main.domain.sos.service;
 
 import kr.silverbridge.main.domain.sos.dto.SosResponse;
 import kr.silverbridge.main.domain.sos.entity.SosEvent;
+import kr.silverbridge.main.domain.sos.entity.SosTriggerType;
 import kr.silverbridge.main.domain.sos.event.SosTriggeredEvent;
 import kr.silverbridge.main.domain.sos.repository.SosEventRepository;
 import kr.silverbridge.main.domain.user.entity.User;
@@ -38,23 +39,29 @@ public class SosService {
     /**
      * 피보호자 SOS 발생: 이력을 저장하고 커밋 후 ACTIVE 보호자 전원에게 긴급 알림을 보내도록 이벤트를 발행한다.
      *
-     * @param wardId   SOS를 발생시킨 피보호자 ID (인증 주체)
-     * @param location 발생 위치 자유 문구. {@code null}·공백이면 위치 미상으로 기록한다 — 서버는 위치를 추정하지 않는다
+     * <p>발생 경로({@code triggerType})는 이력 표시용일 뿐 <b>알림 발송을 가르지 않는다</b> - 보호자에게 직접
+     * 전화한 경우에도 나머지 보호자가 상황을 알아야 하므로 동일하게 발송한다(2026-08-26 결정).</p>
+     *
+     * @param wardId      SOS를 발생시킨 피보호자 ID (인증 주체)
+     * @param location    발생 위치 자유 문구. {@code null}·공백이면 위치 미상으로 기록한다 - 서버는 위치를 추정하지 않는다
+     * @param triggerType 발생 경로. {@code null}이면 긴급 SOS 버튼({@code SOS_BUTTON})으로 기록한다
      * @return 저장된 이력 ID와 발생 시각
      */
     @Transactional
-    public SosResponse trigger(String wardId, String location) {
+    public SosResponse trigger(String wardId, String location, SosTriggerType triggerType) {
         User ward = userRepository.findById(wardId)
                 .orElseThrow(() -> new CustomException(ErrorCode.USER_NOT_FOUND));
 
         SosEvent sosEvent = sosEventRepository.save(SosEvent.builder()
                 .wardId(wardId)
                 .location(normalizeLocation(location))
+                .triggerType(triggerType)
                 .build());
 
         String wardName = StringUtils.hasText(ward.getName()) ? ward.getName() : FALLBACK_WARD_NAME;
         eventPublisher.publishEvent(new SosTriggeredEvent(wardId, sosEvent.getId(), wardName));
-        log.info("SOS 발생: sosEventId={}, wardId={}", sosEvent.getId(), wardId);
+        log.info("SOS 발생: sosEventId={}, wardId={}, triggerType={}",
+                sosEvent.getId(), wardId, sosEvent.getTriggerType());
 
         return new SosResponse(sosEvent.getId(), sosEvent.getCreatedAt());
     }
