@@ -168,11 +168,13 @@
 
 - **불변 규칙 ⑦(단정 금지)**: 미복용 알림 문구는 **"체크되지 않았습니다"**여야 하며 **"약을 안 드셨습니다"로 쓰지 말 것**. 체크 누락과 실제 미복용을 서버는 구분할 수 없고, 제3자(보호자)에게 사실이 아닌 통보를 하면 불필요한 걱정과 전화를 만든다. `MedicationMissedAlertServiceTest`가 이 문구를 테스트로 고정한다.
 - **불변 규칙 ⑧(집계 상한 = 발송 시각)**: 요약은 **발송 시각까지 복용 시각이 지난 약만** 센다. 취침 전 22:00 약을 21:00 요약에 포함하면 "아직 먹을 때가 아닌 약"이 매일 미복용으로 잡혀 거짓 알림이 나간다. 그 약이 요약에서 빠지는 것은 **의도된 동작**이다. **발송 시각과 집계 상한을 분리하지 말 것** — "시각만 앞당기고 집계는 21:00 기준" 같은 변형은 정확히 이 거짓 경보를 만든다.
-  - **발송 시각은 보호자별 설정이다 (2026-08-27, V40)**: `guardian_medication_setting.missed_alert_time`(분 단위 자유, `NULL`=미설정 → `medication.reminder.missed-alert.alert-time` 기본값 21:00). 시각을 이르게 고른 보호자는 그날 요약에 담기는 약이 줄어드는데, **그 사실을 알림 본문에 시각으로 밝힌다**("19:30까지 예정된 복약 N건 중"). 시각을 문구에서 빼면 이후에 먹을 약까지 확인된 것처럼 읽히므로 빼지 말 것.
+  - **발송 시각은 (보호자, 피보호자)별 설정이다 (2026-08-27, V40→V41)**: `guardian_medication_setting.missed_alert_time`(분 단위 자유, `NULL`=미설정 → `medication.reminder.missed-alert.alert-time` 기본값 21:00). 시각을 이르게 고른 보호자는 그날 요약에 담기는 약이 줄어드는데, **그 사실을 알림 본문에 시각으로 밝힌다**("19:30까지 예정된 복약 N건 중"). 시각을 문구에서 빼면 이후에 먹을 약까지 확인된 것처럼 읽히므로 빼지 말 것.
+  - **축을 다시 보호자 단위로 되돌리지 말 것 (2026-08-27, V41)**: 발송 시각이 집계 상한을 겸하므로, 피보호자마다 마지막 복약 시각이 다르면 값 하나로는 반드시 누군가 손해를 본다(늦게 드시는 분의 약이 매일 빠지거나, 일찍 끝나는 분의 요약이 밤늦게 도착). UNIQUE는 `(guardian_id, ward_id)`이며 같은 피보호자를 보는 보호자끼리 시각이 다를 수 있다 - "설정이 중복된다"는 이유로 합치지 말 것.
+    - 축이 나뉘면서 **남의 피보호자 설정을 건드릴 수 있는 경로**가 되었다. `GET·PUT /api/guardian/ward/{wardId}/medication-alert-setting`은 `isActiveConnection`으로 막고 위반 시 403 `MEDICATION_NOT_AUTHORIZED` + `[IDOR-ATTEMPT]` WARN이다(`getMyWards`는 PENDING 혼입이라 금지). 발송용 벌크 조회는 스케줄러 경로라 검증하지 않는다 - 호출자가 이미 `getActiveGuardianIds`로 좁힌 뒤 부른다.
   - `NULL`을 `21:00` 기본값으로 백필하거나 컬럼을 `NOT NULL DEFAULT`로 바꾸지 말 것 — 그러면 서버 기본값을 바꿔도 기존 보호자가 따라오지 않고, "정하지 않았다"와 "21:00을 골랐다"를 구분할 수 없게 된다.
   - 설정 API의 `missedAlertTime`은 `null`=변경 안 함이다(공통 규약). 기본값 복귀는 21:00을 직접 지정하는 것으로 갈음하며, `null`을 초기화 신호로 재해석하지 말 것 — 기존 프론트의 `{missedAlertEnabled}` 단독 요청이 시각을 초기화해 버린다.
   - 발송 창(`deadline-minutes`)은 **보호자 시각 기준**으로 움직이며 자정에서 끊는다. 보호자마다 시각이 달라 "지금이 발송 시각인가"를 값 하나로 판단할 수 없으므로, Planner는 설정 테이블의 `MIN`/`MAX(missed_alert_time)`과 기본값으로 전체 구간을 먼저 잡아 복약 테이블 스캔을 막는다 — 이 게이트를 지우면 스케줄러가 하루 종일 매 분 복약 전체를 훑는다.
 - **불변 규칙 ⑨(요약 축)**: 미복용 알림은 **(보호자, 피보호자, 날짜)당 하루 한 건**이다(`uq_medication_missed_alert`). 약 단위로 쪼개 건별 발송으로 바꾸지 말 것 — 알림 피로로 보호자가 앱 알림을 통째로 끄면 **SOS·이상감지 같은 필수 알림까지 함께 죽는다**. 같은 이유로 보호자가 이 알림만 끌 수 있는 설정(`guardian_medication_setting.missed_alert_enabled`)을 제거하거나 강제 채널로 승격시키지 말 것.
 - **킬 스위치 독립**: `medication.reminder.missed-alert.enabled`는 **보호자 요약만** 멈춘다. 피보호자의 복용 알림(2차)과 같은 스위치로 묶지 말 것 — 보호자 쪽 문제로 피보호자 복약 알림까지 멈추면 안 된다.
 - **설정 축 구분**: `medication_setting`(피보호자 단위 = 무엇을 **보낼지**)과 `guardian_medication_setting`(보호자 단위 = 무엇을 **받을지**)은 축이 다르다. 하나로 합치지 말 것.
-- 상세: `docs/(2026-08-05) feature-medication-missed-alert.md`, `docs/(2026-08-27) feature-medication-missed-alert-time.md`(발송 시각 보호자 선택).
+- 상세: `docs/(2026-08-05) feature-medication-missed-alert.md`, `docs/(2026-08-27) feature-medication-missed-alert-time.md`(발송 시각 선택), `docs/(2026-08-27) refactor-medication-missed-alert-per-ward.md`(피보호자별 축).

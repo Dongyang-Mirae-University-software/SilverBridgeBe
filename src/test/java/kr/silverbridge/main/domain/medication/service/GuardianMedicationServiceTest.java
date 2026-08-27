@@ -13,6 +13,7 @@ import kr.silverbridge.main.domain.user.entity.User;
 import kr.silverbridge.main.domain.user.repository.UserRepository;
 import kr.silverbridge.main.global.exception.CustomException;
 import kr.silverbridge.main.global.exception.ErrorCode;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -49,6 +50,7 @@ class GuardianMedicationServiceTest {
     @Mock private MedicationRepository medicationRepository;
     @Mock private MedicationIntakeRepository intakeRepository;
     @Mock private MedicationSettingService settingService;
+    @Mock private GuardianMedicationSettingService guardianSettingService;
     @Mock private ConnectionService connectionService;
     @Mock private UserRepository userRepository;
 
@@ -57,6 +59,15 @@ class GuardianMedicationServiceTest {
     private static final String GUARDIAN_ID = "GD0001";
     private static final String WARD_ID = "WD0001";
     private static final String OTHER_WARD_ID = "WD0002";
+    private static final GuardianMissedAlertSetting DEFAULT_MISSED_ALERT =
+            new GuardianMissedAlertSetting(true, LocalTime.of(21, 0));
+
+    @BeforeEach
+    void setUp() {
+        // 카드에 실리는 미복용 요약 설정 — 기본값(ON · 21:00)을 돌려주도록 맞춰 둔다.
+        lenient().when(guardianSettingService.defaultSetting()).thenReturn(DEFAULT_MISSED_ALERT);
+        lenient().when(guardianSettingService.findSettingsOfGuardian(any(), any())).thenReturn(Map.of());
+    }
 
     // ─── 피보호자별 현황 조회 ────────────────────────────────────────
 
@@ -116,6 +127,33 @@ class GuardianMedicationServiceTest {
         assertThat(summaries.get(0).age()).isNull();
         // 약이 없으면 복용 체크를 조회할 필요도 없다.
         verify(intakeRepository, never()).findByMedicationIdInAndDoseDate(any(), any());
+    }
+
+    @Test
+    @DisplayName("카드에 알림 설정 4종이 함께 실린다 — 피보호자 수만큼 설정 API를 더 부르지 않아도 되게")
+    void getWardMedications_알림설정_동봉() {
+        when(connectionService.getActiveWardIds(GUARDIAN_ID)).thenReturn(List.of(WARD_ID, OTHER_WARD_ID));
+        when(medicationRepository.findByWardIdInAndDeletedAtIsNullOrderByDoseTimeAscIdAsc(any()))
+                .thenReturn(List.of());
+        when(userRepository.findAllById(any())).thenReturn(List.of(user(WARD_ID, "김영희", null)));
+        when(settingService.findPreferences(any()))
+                .thenReturn(Map.of(WARD_ID, new MedicationPreference(true, false)));
+        // 김영희 건만 22:30으로 지정, 이순자 건은 미설정 → 기본값
+        when(guardianSettingService.findSettingsOfGuardian(eq(GUARDIAN_ID), any()))
+                .thenReturn(Map.of(WARD_ID, new GuardianMissedAlertSetting(true, LocalTime.of(22, 30))));
+
+        List<WardMedicationSummary> summaries = guardianMedicationService.getWardMedications(GUARDIAN_ID);
+
+        assertThat(summaries).filteredOn(s -> s.wardId().equals(WARD_ID)).singleElement()
+                .satisfies(s -> {
+                    assertThat(s.alarmEnabled()).isTrue();
+                    assertThat(s.remindAgainEnabled()).isFalse();
+                    assertThat(s.missedAlertEnabled()).isTrue();
+                    assertThat(s.missedAlertTime()).isEqualTo(LocalTime.of(22, 30));
+                });
+        // 같은 보호자라도 피보호자마다 시각이 다르다 — 미설정 피보호자는 기본 21:00
+        assertThat(summaries).filteredOn(s -> s.wardId().equals(OTHER_WARD_ID)).singleElement()
+                .satisfies(s -> assertThat(s.missedAlertTime()).isEqualTo(LocalTime.of(21, 0)));
     }
 
     @Test

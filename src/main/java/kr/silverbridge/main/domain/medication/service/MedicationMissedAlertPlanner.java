@@ -36,8 +36,8 @@ import java.util.stream.Collectors;
  * 취침 전 22:00 약은 21:00 요약에서 아직 먹을 때가 아니므로 빠진다. 포함하면 매일 거짓 알림이 나간다.
  * 그래서 문구의 분모는 "오늘 전체"가 아니라 "지정 시각까지 예정된" 수다.</p>
  *
- * <p><b>보호자마다 시각이 다르다</b>(2026-08-27). 같은 피보호자라도 19:00을 고른 보호자와 21:00을
- * 고른 보호자는 분모가 다를 수 있어, 집계를 피보호자 단위로 미리 확정하지 못한다. 그래서
+ * <p><b>시각은 (보호자, 피보호자)마다 다르다</b>(2026-08-27). 같은 피보호자라도 19:00을 고른 보호자와
+ * 21:00을 고른 보호자는 분모가 다를 수 있어, 집계를 피보호자 단위로 미리 확정하지 못한다. 그래서
  * "지금까지 지난 약"을 한 번 상위집합으로 읽고 보호자별 상한으로 걸러 센다 - 발송 창 안에 있는
  * 보호자의 시각은 언제나 현재 시각 이하라 상위집합이 각자의 집계 대상을 모두 포함한다.</p>
  *
@@ -120,7 +120,8 @@ public class MedicationMissedAlertPlanner {
             if (pending.isEmpty()) {
                 continue;
             }
-            Map<String, GuardianMissedAlertSetting> settings = guardianSettingService.findSettings(pending);
+            Map<String, GuardianMissedAlertSetting> settings =
+                    guardianSettingService.findSettings(wardId, pending);
 
             for (String guardianId : pending) {
                 // 저장된 행이 없는 보호자는 기본값(ON · 전역 기본 시각)으로 받는다.
