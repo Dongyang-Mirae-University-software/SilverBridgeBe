@@ -68,15 +68,6 @@ public class AnomalyProperties {
      */
     private long notifySelfCooldownMinutes = 3;
 
-    /**
-     * 연속 감지를 같은 "상황(incident)"으로 묶는 최대 간격(분).
-     *
-     * <p>이력 쿨다운(1분)보다 훨씬 길게 잡는다 - 화재가 잠깐 잦아들었다 다시 잡히는 구간까지 한 사건으로
-     * 봐야 보호자가 같은 불을 여러 번 판정하지 않는다. 기준을 짧게 잡으면 통계의 "이상감지 건수"가
-     * 실제 사건 수보다 부풀고, 길게 잡으면 별개 사건이 합쳐져 줄어든다.</p>
-     */
-    private long incidentMergeMinutes = 10;
-
     /** 재연결 백오프 최소 간격(초). */
     private long reconnectMinSeconds = 2;
 

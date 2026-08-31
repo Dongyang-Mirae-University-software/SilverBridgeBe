@@ -14,8 +14,6 @@ import java.time.OffsetDateTime;
  * 돌고, 문구 하나를 위해 다시 DB를 조회할 이유가 없다.</p>
  *
  * @param anomalyEventId 적재된 {@code anomaly_event} 행 ID (클라이언트 상관관계용)
- * @param incidentId     이 감지가 속한 상황 ID. 보호자가 알림에서 바로 오탐 응답을 하려면 <b>판정 단위</b>인
- *                       상황 식별자가 필요하다(이력 행 ID로는 판정할 수 없다).
  * @param wardId         카메라 소유 피보호자 ID
  * @param wardName       피보호자 이름 (비어 있으면 발행 측에서 "보호 대상자"로 폴백)
  * @param sessionId      감지된 카메라 SessionID
@@ -27,7 +25,6 @@ import java.time.OffsetDateTime;
  */
 public record AnomalyDetectedEvent(
         Long anomalyEventId,
-        Long incidentId,
         String wardId,
         String wardName,
         String sessionId,
