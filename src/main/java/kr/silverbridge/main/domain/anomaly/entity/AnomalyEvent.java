@@ -28,8 +28,7 @@ import java.time.OffsetDateTime;
  */
 @Entity
 @Table(name = "anomaly_event", indexes = {
-        @Index(name = "idx_anomaly_events_ward_created", columnList = "ward_id, created_at DESC"),
-        @Index(name = "idx_anomaly_event_incident", columnList = "incident_id")
+        @Index(name = "idx_anomaly_events_ward_created", columnList = "ward_id, created_at DESC")
 })
 @Getter
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
@@ -63,17 +62,6 @@ public class AnomalyEvent {
     // AI analyzedAt. fallback 페이로드엔 없을 수 있어 NULL 허용 (수신 시각은 createdAt)
     @Column(name = "detected_at")
     private OffsetDateTime detectedAt;
-
-    /**
-     * 이 이력이 속한 상황({@link AnomalyIncident}). 판정·통계는 상황 단위라 이력 하나하나가 아니라
-     * 이 값으로 묶인다.
-     *
-     * <p>NULL은 <b>상황 묶음 도입(V42) 이전 이력</b>이라는 뜻이다 - 사후에 채울 근거가 없어 백필하지 않았고,
-     * 판정 대상도 아니다. 연관관계 대신 ID만 두는 이유는 적재 경로가 알림 문구 하나 때문에 상황 전체를
-     * 로딩할 필요가 없기 때문이다.</p>
-     */
-    @Column(name = "incident_id")
-    private Long incidentId;
 
     @CreatedDate
     @Column(name = "created_at", nullable = false, updatable = false)

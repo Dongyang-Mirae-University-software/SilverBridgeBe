@@ -64,19 +64,16 @@ public class AnomalyNotificationListener {
 
         // detectedType은 enum 그대로 유지(FE 계약). wardName·location·detectedTypeLabel·detectedAt은 화면 표시용 —
         // 알림톡 템플릿 변수로도 쓰인다(AlimtalkProperties.variables와 키 이름이 일치해야 바인딩된다).
-        // Map.of는 10쌍이 상한이라 Map.ofEntries를 쓴다 — 여기가 정확히 그 경계였다.
-        Map<String, String> data = Map.ofEntries(
-                Map.entry("type", NotificationType.ANOMALY_DETECTED.name()),
-                Map.entry("wardId", event.wardId()),
-                Map.entry("wardName", event.wardName()),
-                Map.entry("location", event.cameraLabel()),
-                Map.entry("sessionId", event.sessionId()),
-                Map.entry("detectedType", event.detectedType().name()),
-                Map.entry("detectedTypeLabel", label(event.detectedType())),
-                Map.entry("detectedAt", formatDetectedAt(event.detectedAt())),
-                Map.entry("anomalyEventId", String.valueOf(event.anomalyEventId())),
-                // 보호자가 알림에서 바로 오탐 응답을 하려면 판정 단위(상황) 식별자가 필요하다.
-                Map.entry("incidentId", String.valueOf(event.incidentId())));
+        Map<String, String> data = Map.of(
+                "type", NotificationType.ANOMALY_DETECTED.name(),
+                "wardId", event.wardId(),
+                "wardName", event.wardName(),
+                "location", event.cameraLabel(),
+                "sessionId", event.sessionId(),
+                "detectedType", event.detectedType().name(),
+                "detectedTypeLabel", label(event.detectedType()),
+                "detectedAt", formatDetectedAt(event.detectedAt()),
+                "anomalyEventId", String.valueOf(event.anomalyEventId()));
 
         int sent = 0;
         for (String userId : recipients) {
