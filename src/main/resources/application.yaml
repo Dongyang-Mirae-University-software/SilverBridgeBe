@@ -128,6 +128,9 @@ anomaly:
   cooldown-minutes: ${ANOMALY_COOLDOWN_MINUTES:1}           # 같은 (sessionId, detectedType) 이력 최소 간격 — 매 프레임 broadcast 폭주 방지
   notify-cooldown-minutes: ${ANOMALY_NOTIFY_COOLDOWN_MINUTES:5}        # 보호자 알림 재발송 최소 간격
   notify-self-cooldown-minutes: ${ANOMALY_NOTIFY_SELF_COOLDOWN_MINUTES:3} # 피보호자 본인 알림 재발송 최소 간격(대피 재촉 — 보호자보다 짧게)
+  # 연속 감지를 하나의 "상황"으로 묶는 최대 간격(분). 판정·통계의 단위가 이 상황이다 —
+  # 이력 쿨다운(1분) 기준 최대 10건이 한 상황에 묶인다. 상황은 KST 자정을 넘기지 않는다(일자별 통계 기준).
+  incident-merge-minutes: ${ANOMALY_INCIDENT_MERGE_MINUTES:10}
 
 notification:
   alimtalk:

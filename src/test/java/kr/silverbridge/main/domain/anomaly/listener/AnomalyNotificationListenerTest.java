@@ -19,6 +19,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
 import java.util.List;
+import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
@@ -49,12 +50,14 @@ class AnomalyNotificationListenerTest {
 
     @InjectMocks private AnomalyNotificationListener listener;
 
+    private static final Long INCIDENT_ID = 37L;
+
     /** AI analyzedAt은 UTC — 표시는 KST(+9)라 05:20Z → 14:20이어야 한다. */
     private static final OffsetDateTime DETECTED_AT =
             OffsetDateTime.of(2026, 7, 23, 5, 20, 0, 0, ZoneOffset.UTC);
 
     private final AnomalyDetectedEvent event =
-            new AnomalyDetectedEvent(7L, WARD_ID, "김순자", SESSION_ID, "거실", DetectedType.FIRE, DETECTED_AT);
+            new AnomalyDetectedEvent(7L, INCIDENT_ID, WARD_ID, "김순자", SESSION_ID, "거실", DetectedType.FIRE, DETECTED_AT);
 
     @Test
     @DisplayName("ACTIVE 보호자 전원과 피보호자 본인 모두에게 발송한다")
@@ -142,7 +145,7 @@ class AnomalyNotificationListenerTest {
     @DisplayName("AI 분석 시각이 없어도(fallback 페이로드) 감지 시각을 빈 값으로 보내지 않는다")
     void 분석시각없으면_발송시각으로_표시대체() {
         AnomalyDetectedEvent noAnalyzedAt =
-                new AnomalyDetectedEvent(7L, WARD_ID, "김순자", SESSION_ID, "거실", DetectedType.FIRE, null);
+                new AnomalyDetectedEvent(7L, INCIDENT_ID, WARD_ID, "김순자", SESSION_ID, "거실", DetectedType.FIRE, null);
         when(connectionService.getActiveGuardianIds(WARD_ID)).thenReturn(List.of());
         when(cooldown.tryAcquire(eq(WARD_ID), eq(SESSION_ID), eq(DetectedType.FIRE), eq(true))).thenReturn(true);
 
@@ -163,5 +166,25 @@ class AnomalyNotificationListenerTest {
         listener.handleAnomalyDetected(event);
 
         verify(notificationDispatcher).dispatch(eq(WARD_ID), eq(NotificationType.ANOMALY_DETECTED_SELF), any());
+    }
+
+    @Test
+    @DisplayName("알림 payload에 상황 식별자(incidentId)를 싣는다 — 보호자가 알림에서 바로 오탐 응답을 하려면 필요하다")
+    void payload_carriesIncidentId() {
+        when(connectionService.getActiveGuardianIds(WARD_ID)).thenReturn(List.of("GD0001"));
+        when(cooldown.tryAcquire(anyString(), eq(SESSION_ID), eq(DetectedType.FIRE), anyBoolean())).thenReturn(true);
+
+        listener.handleAnomalyDetected(event);
+
+        ArgumentCaptor<NotificationContent> captor = ArgumentCaptor.forClass(NotificationContent.class);
+        verify(notificationDispatcher).dispatch(eq("GD0001"), eq(NotificationType.ANOMALY_DETECTED), captor.capture());
+        Map<String, String> data = captor.getValue().data();
+
+        assertThat(data.get("incidentId")).isEqualTo("37");
+        // 기존 키가 하나도 사라지지 않아야 한다 — Map.of(10쌍 상한) → Map.ofEntries 교체로 늘린 자리다.
+        // 알림톡 승인 템플릿의 변수 바인딩이 이 키 이름에 걸려 있어 이름이 바뀌면 발송 문구가 비어 나간다.
+        assertThat(data).containsKeys("type", "wardId", "wardName", "location", "sessionId",
+                "detectedType", "detectedTypeLabel", "detectedAt", "anomalyEventId", "incidentId");
+        assertThat(data.get("type")).isEqualTo(NotificationType.ANOMALY_DETECTED.name());
     }
 }
