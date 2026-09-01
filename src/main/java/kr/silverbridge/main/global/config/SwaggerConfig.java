@@ -87,14 +87,21 @@ public class SwaggerConfig {
                                         + "※ 목록에는 수락 대기(PENDING)가 섞여 있습니다 — 다른 API에 wardId를 넘길 땐 ACTIVE만 사용하세요.\n"
                                         + "※ GUARDIAN 역할 계정만 호출 가능."),
                         new Tag().name("보호자 - SOS 이력")
-                                .description("피보호자의 SOS 발생 이력 조회(최신순 페이징) + 처리 결과(ACK) 기록\n"
+                                .description("피보호자의 SOS 발생 이력 조회(최신순 페이징)\n"
                                         + "※ 요청 시점에 ACTIVE 연결인 피보호자의 이력만 보입니다(연결 해제 시 과거 이력도 비공개).\n"
-                                        + "※ ACK는 사후 기록일 뿐이라 다음 SOS 알림을 끄지 못합니다.\n"
+                                        + "※ 발생 경로(SOS_BUTTON·GUARDIAN_CALL)는 이력 표시 전용이며 알림 대상을 가르지 않습니다.\n"
                                         + "※ GUARDIAN 역할 계정만 호출 가능."),
                         new Tag().name("보호자 - 복약")
                                 .description("피보호자별 오늘 복약 현황 조회 / 약 추가·수정·삭제 / 알림 설정(피보호자별·본인 수신)\n"
                                         + "※ 약 등록·수정·삭제는 보호자만, 복용 체크는 피보호자만입니다.\n"
                                         + "※ ACTIVE 연결된 피보호자만 대상입니다.\n"
+                                        + "※ GUARDIAN 역할 계정만 호출 가능."),
+                        new Tag().name("보호자 - 이상감지")
+                                .description("피보호자의 이상감지 이력 조회(상황 단위, 최신순 페이징) + 오탐 응답 + 확인 요청 알림 설정\n"
+                                        + "※ 단위는 \"상황\"입니다 — 10분 이내 연속 감지는 한 건으로 묶입니다.\n"
+                                        + "※ 실제 위험이었는지는 보호자만 판정합니다(1인 1표, 번복 가능). 답이 갈리면 CONFLICTED로 관리자가 확인합니다.\n"
+                                        + "※ 요청 시점에 ACTIVE 연결인 피보호자의 이력만 보입니다(연결 해제 시 과거 이력도 비공개).\n"
+                                        + "※ 응답은 이미 나간 알림을 되돌리지 않습니다.\n"
                                         + "※ GUARDIAN 역할 계정만 호출 가능."),
                         new Tag().name("보호자 - 카메라")
                                 .description("연결된 피보호자의 카메라 목록 조회(실시간 영상 연동용)\n"
@@ -179,14 +186,17 @@ public class SwaggerConfig {
                     "/api/guardian/connection/select",
                     // ── [보호자 - SOS 이력] ──────────────────────────
                     "/api/guardian/sos/history",
-                    "/api/guardian/sos/{sosEventId}/ack",
                     // ── [보호자 - 복약] ──────────────────────────────
                     "/api/guardian/medication",
                     "/api/guardian/ward/{wardId}/medication",
                     "/api/guardian/medication/{medicationId}",
                     "/api/guardian/ward/{wardId}/medication-setting",
-                    "/api/guardian/medication-alert-setting",
+                    "/api/guardian/ward/{wardId}/medication-alert-setting",
                     // ── [보호자 - 문의] ──────────────────────────────
+                    "/api/guardian/anomaly/history",
+                    "/api/guardian/anomaly/{incidentId}/feedback",
+                    "/api/guardian/anomaly/reminder-setting",
+
                     // POST(작성)·GET(내 목록)은 단일 경로 키 → /api/guardian/inquiry 한 줄로 묶임
                     "/api/guardian/inquiry",
                     "/api/guardian/inquiry/{id}",

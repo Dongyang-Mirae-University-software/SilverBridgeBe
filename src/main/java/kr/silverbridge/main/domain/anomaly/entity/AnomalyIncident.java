@@ -91,6 +91,25 @@ public class AnomalyIncident extends BaseTimeEntity {
     }
 
     /**
+     * 보호자 응답 집계 결과를 반영한다.
+     *
+     * <p><b>관리자가 확정한 건은 바뀌지 않는다</b> - 이 규칙이 없으면 관리자가 확인해 정정한 결과가
+     * 뒤늦은 보호자 응답 하나로 조용히 뒤집힌다. 호출부(서비스)도 확정 건은 응답 자체를 거부하지만,
+     * 상태 변경의 최종 방어선을 엔티티에 둔다.</p>
+     */
+    public void applyReviewStatus(AnomalyReviewStatus status) {
+        if (isAdminResolved()) {
+            return;
+        }
+        this.reviewStatus = status;
+    }
+
+    /** 관리자가 확인을 마친 건인지. 채워져 있으면 보호자 응답으로 상태가 재계산되지 않는다. */
+    public boolean isAdminResolved() {
+        return this.resolvedBy != null;
+    }
+
+    /**
      * 같은 상황으로 판정된 감지를 하나 더 반영한다.
      *
      * <p>판정 상태는 건드리지 않는다 - 보호자가 "오탐"이라고 답한 뒤 같은 상황에서 감지가 한 번 더 잡혀도

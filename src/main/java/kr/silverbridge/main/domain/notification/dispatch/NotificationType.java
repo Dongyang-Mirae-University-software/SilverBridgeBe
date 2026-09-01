@@ -1,5 +1,10 @@
 package kr.silverbridge.main.domain.notification.dispatch;
 
+import kr.silverbridge.main.domain.notification.channel.NotificationChannelType;
+
+import java.util.EnumSet;
+import java.util.Set;
+
 /**
  * 디스패처를 경유하는 알림 종류와 <b>채널 정책</b>({@link Policy}).
  *
@@ -68,7 +73,23 @@ public enum NotificationType {
      * 제재 사유다. 이 타입에는 {@code notification.alimtalk.templates} 매핑을 <b>두지 않으므로</b> 알림톡 채널이
      * 조용히 스킵되고, FCM·WebSocket·SMS는 그대로 나간다(화재 시 본인 대피 안내는 유지 — 설계 D-1).</p>
      */
-    ANOMALY_DETECTED_SELF(Policy.FORCED_PUSH_PLUS_SETTINGS);
+    ANOMALY_DETECTED_SELF(Policy.FORCED_PUSH_PLUS_SETTINGS),
+
+    /**
+     * 이상감지 판정 <b>미응답 재촉</b> → 보호자에게. 스케줄러가 보낸다.
+     *
+     * <p>판정은 관리자 운영 자료라 응답률이 곧 자료의 질이다. 그렇다고 답할 때까지 계속 쏘면 보호자가
+     * 앱 알림을 통째로 꺼버리고, <b>그 순간 그 집의 SOS·화재 알림까지 함께 죽는다</b>(복약 미복용 요약과
+     * 같은 판단). 그래서 상황이 닫힌 뒤 1회 + 이후 하루 1회 요약으로 절제하고, 보호자가 이것만 끌 수 있게 한다.</p>
+     *
+     * <p><b>채널은 FCM뿐이다</b> — 문자는 반복 과금이고, 재촉은 놓쳐도 사람이 다치지 않는 운영 편의라
+     * 사용자가 문자를 켰더라도 이 알림까지 문자로 보낼 이유가 없다. 알림톡은 다발성이라 승인 템플릿이
+     * 없으면 금지다({@code templates} 매핑을 두지 말 것 — 이상감지 2차 반려 사유).</p>
+     *
+     * <p>강제 발송이 아닌 이유 — 생명이 걸린 즉시 대응(SOS·화재)이 아니라 사후 확인 요청이다.
+     * {@code FORCED_PUSH_*}로 승격시키지 말 것.</p>
+     */
+    ANOMALY_REVIEW_REQUIRED(Policy.SETTINGS_ONLY, EnumSet.of(NotificationChannelType.FCM));
 
     /** 알림 종류별 채널 결정 규칙. */
     public enum Policy {
@@ -86,12 +107,33 @@ public enum NotificationType {
     }
 
     private final Policy policy;
+    private final Set<NotificationChannelType> allowedChannels;
 
     NotificationType(Policy policy) {
+        this(policy, EnumSet.allOf(NotificationChannelType.class));
+    }
+
+    NotificationType(Policy policy, Set<NotificationChannelType> allowedChannels) {
         this.policy = policy;
+        this.allowedChannels = allowedChannels;
     }
 
     public Policy policy() {
         return policy;
+    }
+
+    /**
+     * 이 알림이 <b>사용자 설정에 따라</b> 쓸 수 있는 채널. 기본값은 전 채널(제한 없음)이라 기존 타입의
+     * 동작은 그대로다.
+     *
+     * <p>디스패처는 사용자가 켠 채널과 이 집합의 <b>교집합</b>으로만 설정 기반 발송을 한다. 종류별로
+     * "문자까지 보낼 일은 아니다"를 표현하기 위한 것이며, <b>강제 채널(FCM)은 이 값으로 줄어들지 않는다</b> —
+     * 줄일 수 있게 만들면 필수 알림(SOS·화재)의 FCM 보장에 구멍이 생긴다.</p>
+     *
+     * <p>호출자가 넘기는 값이 아니라 <b>타입에 박힌 선언</b>이라는 점이 중요하다. 디스패처에 "제외 채널"
+     * 파라미터를 두는 방식은 호출자가 강제 발송을 우회할 수 있어 채택하지 않았다(2026-07-27 결정).</p>
+     */
+    public Set<NotificationChannelType> allowedChannels() {
+        return allowedChannels;
     }
 }

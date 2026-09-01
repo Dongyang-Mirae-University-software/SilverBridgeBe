@@ -69,9 +69,9 @@ public class NotificationDispatcher {
         }
     }
 
-    /** 사용자 설정의 활성 채널로만 발송(연결·문의 알림). */
+    /** 사용자 설정의 활성 채널로만 발송(연결·문의 알림). 종류별 허용 채널이 좁으면 그만큼 더 줄어든다. */
     private void dispatchBySettings(String userId, NotificationType type, NotificationContent content) {
-        Set<NotificationChannelType> targets = settingService.enabledChannels(userId);
+        Set<NotificationChannelType> targets = settingsChannels(userId, type);
         if (targets.isEmpty()) {
             log.debug("발송할 활성 채널 없음: userId={}, type={}", userId, type);
             return;
@@ -92,7 +92,7 @@ public class NotificationDispatcher {
      */
     private void dispatchForcedPushPlusSettings(String userId, NotificationType type, NotificationContent content) {
         Set<NotificationChannelType> targets = EnumSet.of(FORCED_PUSH);
-        targets.addAll(settingService.enabledChannels(userId));
+        targets.addAll(settingsChannels(userId, type));
 
         NotificationRecipient recipient = recipientResolver.resolve(userId);
 
@@ -109,6 +109,22 @@ public class NotificationDispatcher {
             log.warn("[NOTIFY-UNDELIVERED] 푸시 미전달(SMS 폴백 안 함 — 문자는 사용자 선택): userId={}, type={}",
                     userId, type);
         }
+    }
+
+    /**
+     * 설정 기반 발송에 쓸 채널 = <b>사용자가 켠 채널 ∩ 그 종류가 허용하는 채널</b>.
+     *
+     * <p>{@link NotificationType#allowedChannels()}는 기본이 전 채널이라 대부분의 종류는 사용자 설정
+     * 그대로다. 좁게 선언한 종류(재촉 = FCM만)만 여기서 걸러진다.</p>
+     *
+     * <p><b>강제 채널(FCM)에는 적용하지 않는다</b> — 호출부가 이 교집합을 강제 발송 경로에 끼워 넣으면
+     * SOS·화재의 푸시 보장이 깨진다. 그래서 이 메서드는 설정에서 나온 집합만 다룬다.</p>
+     */
+    private Set<NotificationChannelType> settingsChannels(String userId, NotificationType type) {
+        Set<NotificationChannelType> enabled = EnumSet.noneOf(NotificationChannelType.class);
+        enabled.addAll(settingService.enabledChannels(userId));
+        enabled.retainAll(type.allowedChannels());
+        return enabled;
     }
 
     /** 채널 1건 발송. 미구현 채널은 건너뛰고, 발송 실패는 격리한다. 실제 전달됐으면 true. */

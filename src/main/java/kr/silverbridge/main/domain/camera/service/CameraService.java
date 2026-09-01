@@ -22,6 +22,7 @@ import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.Collection;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -155,6 +156,22 @@ public class CameraService {
     public Optional<CameraOwner> findOwnerBySessionId(String sessionId) {
         return cameraRepository.findBySessionId(sessionId)
                 .map(camera -> new CameraOwner(camera.getWardId(), camera.getLabel()));
+    }
+
+    /**
+     * {@code sessionId} → 설치 위치 맵(anomaly 도메인 협력용). 이상감지 이력 목록에서 "어디서 감지됐는지"를
+     * 표시하는 데 쓴다.
+     *
+     * <p>삭제된 카메라의 세션은 맵에 없어 호출부에서 {@code null}(위치 미상)이 된다 - 카메라가 사라져도
+     * 과거 이력은 남아야 하므로 이력 쪽을 지우거나 빈 문자열로 채우지 않는다.</p>
+     */
+    @Transactional(readOnly = true)
+    public Map<String, String> findLabelsBySessionIds(Collection<String> sessionIds) {
+        if (sessionIds == null || sessionIds.isEmpty()) {
+            return Map.of();
+        }
+        return cameraRepository.findBySessionIdIn(sessionIds).stream()
+                .collect(Collectors.toMap(Camera::getSessionId, Camera::getLabel));
     }
 
     // 전달된 deviceId가 본인 소유일 때만 기존 카메라로 인정 (타인/무효 토큰은 신규 발급 경로로)

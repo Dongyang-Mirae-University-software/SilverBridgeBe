@@ -131,6 +131,15 @@ anomaly:
   # 연속 감지를 하나의 "상황"으로 묶는 최대 간격(분). 판정·통계의 단위가 이 상황이다 —
   # 이력 쿨다운(1분) 기준 최대 10건이 한 상황에 묶인다. 상황은 KST 자정을 넘기지 않는다(일자별 통계 기준).
   incident-merge-minutes: ${ANOMALY_INCIDENT_MERGE_MINUTES:10}
+  # 판정 미응답 재촉. 답할 때까지 계속 보내면 보호자가 앱 알림을 통째로 꺼버려
+  # SOS·화재 알림까지 함께 죽는다 — 절제가 기능의 일부다. 채널은 FCM뿐.
+  review-reminder:
+    enabled: ${ANOMALY_REVIEW_REMINDER_ENABLED:true}      # 킬 스위치. false면 재촉만 멈추고 이력 조회·오탐 응답은 그대로
+    delay-minutes: ${ANOMALY_REVIEW_REMINDER_DELAY_MINUTES:60}   # 상황이 닫힌 뒤 건별 재촉까지 대기(대응 중엔 묻지 않는다)
+    deadline-days: ${ANOMALY_REVIEW_REMINDER_DEADLINE_DAYS:3}    # 상황 시작 기준. 지나면 재촉 중단, PENDING 확정
+    summary-time: ${ANOMALY_REVIEW_SUMMARY_TIME:20:00}           # 하루 1회 요약(KST). 미복용 요약 21:00과 겹치지 않게
+    quiet-start: ${ANOMALY_REVIEW_QUIET_START:22:00}             # 야간 억제 시작(재촉만. 화재 알림 본체는 밤에도 나간다)
+    quiet-end: ${ANOMALY_REVIEW_QUIET_END:08:00}                 # 야간 억제 종료. 걸린 건은 버리지 않고 아침으로 미룬다
 
 notification:
   alimtalk:

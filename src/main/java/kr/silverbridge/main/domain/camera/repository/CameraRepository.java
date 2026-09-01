@@ -18,6 +18,9 @@ public interface CameraRepository extends JpaRepository<Camera, Long> {
     // AI 이상감지 신호(sessionId) → 소유 피보호자 매핑
     Optional<Camera> findBySessionId(String sessionId);
 
+    // 이상감지 이력 화면의 위치 표시 — sessionId 묶음으로 한 번에 조회(건별 조회로 인한 N+1 회피)
+    List<Camera> findBySessionIdIn(Collection<String> sessionIds);
+
     // 보호자 allowlist — 연결된 피보호자들의 활성 카메라 일괄 조회 (N+1 없이 단일 IN 쿼리)
     List<Camera> findByWardIdInAndIsActiveTrue(Collection<String> wardIds);
 
