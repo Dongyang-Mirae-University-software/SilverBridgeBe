@@ -114,11 +114,11 @@ SilverBridge는 노인(피보호자)과 그 가족(보호자)을 연결하는 �
                    ▶ 태그(그룹) 규칙 (2026-08-07 통일): "<역할> - <도메인>"
                      역할은 공통 / 피보호자 / 보호자 / 관리자 4가지뿐이며,
                      "누가 쓰는지 → 무슨 기능인지" 두 단계로 읽히게 했습니다.
-                     현재 15개 태그 / 22개 컨트롤러 / 78개 엔드포인트가 전부 분류돼 있고,
+                     현재 16개 태그 / 23개 컨트롤러 / 81개 엔드포인트가 전부 분류돼 있고,
                      표시 순서도 공통 → 피보호자 → 보호자 → 관리자로 고정입니다.
                      예) 공통 - 인증 / 공통 - 내 계정 / 공통 - 알림 설정 / 공통 - 공지사항 /
                          피보호자 - 연결·SOS·복약·카메라 /
-                         보호자 - 연결·SOS 이력·복약·카메라·문의 /
+                         보호자 - 연결·SOS 이력·복약·이상감지·카메라·문의 /
                          관리자 - 공지사항·문의
                      ⚠️ 태그 설명은 SwaggerConfig.tags()에 모아 둡니다 — 새 컨트롤러를 만들면
                        여기에 등록해야 설명 없는 태그가 뒤에 붙지 않습니다.
@@ -632,11 +632,17 @@ SilverBridge는 노인(피보호자)과 그 가족(보호자)을 연결하는 �
     시그니처는 send(알림종류, 수신자, 내용) — 알림톡이 종류별 승인 템플릿을 고르는 근거로 쓴다.
   - NotificationDispatcher: 알림 종류의 정책에 따라 채널을 정하고, 채널별 발송 실패를 격리
     (한 채널 실패가 다른 채널을 막지 않음), 미구현·미설정 채널은 조용히 건너뜀.
+  - 종류별 허용 채널 (2026-09-01 추가): 알림 종류가 "설정 기반 발송에 쓸 수 있는 채널"을 선언하면
+    디스패처가 [사용자가 켠 채널 ∩ 허용 채널]로 좁힙니다. 기본값은 전 채널이라 기존 종류는 무변경.
+    ⚠️ 강제 채널(FCM)은 이 값으로 줄어들지 않습니다 - 줄일 수 있게 만들면 SOS·화재의 푸시 보장에
+    구멍이 생깁니다. 현재 좁게 선언한 종류는 ANOMALY_REVIEW_REQUIRED(FCM만) 하나뿐입니다.
   - WebSocket 실시간 발송은 추상화에 포함하지 않고 항상 발송(온라인 사용자 실시간 동기화 보장).
 
   [알림 종류별 채널 정책 (NotificationType.Policy)]
   - SETTINGS_ONLY               사용자 설정의 활성 채널로만 발송
-                                → 연결 요청/수락/거절/해제, 문의 답변
+                                → 연결 요청/수락/거절/해제, 문의 답변,
+                                  복약 알림·미복용 요약·복약 중지 안내,
+                                  이상감지 판정 재촉(ANOMALY_REVIEW_REQUIRED, 허용 채널 FCM만)
   - FORCED_PUSH_WITH_SMS_FALLBACK  설정 무시 FCM 강제 + 실제 미전달 시 SMS 폴백
                                 → WARD_SOS (생명 관련이라 설정으로 끌 수 없음)
   - FORCED_PUSH_PLUS_SETTINGS   FCM은 항상 + 나머지 채널은 설정대로, SMS 폴백 없음
@@ -647,7 +653,7 @@ SilverBridge는 노인(피보호자)과 그 가족(보호자)을 연결하는 �
   - 필수(설정 무시): SMS 인증번호(가입·비밀번호 재설정) — 디스패처를 경유하지 않는 동기 발송이라
     설정으로 끌 수 없음이 구조적으로 보장됨. 그 외 WARD_SOS·ANOMALY_DETECTED의 FCM(위 정책 참고).
   - 선택(설정 따름): 연결 요청/수락/거절/해제·문의 답변·복약 알림(MEDICATION_REMINDER)·
-    미복용 요약(MEDICATION_MISSED)·복약 중지 안내,
+    미복용 요약(MEDICATION_MISSED)·복약 중지 안내·이상감지 판정 재촉(ANOMALY_REVIEW_REQUIRED),
     그리고 SOS·이상감지의 SMS·알림톡.
   ※ 복약 체크(medication-taken)는 WebSocket 전용이라 이 분류(디스패처 경유)에 들어가지 않습니다
     - 알림 설정과 무관하게 항상 발송됩니다.
@@ -764,11 +770,80 @@ SilverBridge는 노인(피보호자)과 그 가족(보호자)을 연결하는 �
   - 문구: 보호자 "OOO님 댁 거실에서 화재가 감지되었습니다." / 본인 "거실에서 화재가 감지되었습니다.
     안전한 곳으로 대피해 주세요."(현장 당사자에게는 대피 행동을 함께 지시)
   - 알림 data: type·wardId·wardName·location·sessionId·detectedType·detectedTypeLabel·
-    detectedAt(KST yyyy-MM-dd HH:mm)·anomalyEventId
+    detectedAt(KST yyyy-MM-dd HH:mm)·anomalyEventId·incidentId(2026-09-01 추가)
+    ※ incidentId는 판정 단위(상황) ID입니다. 보호자가 알림에서 바로 오탐 응답을 누르려면
+      이력 행 ID(anomalyEventId)가 아니라 이 값이 필요합니다. 기존 키는 이름·의미 그대로입니다.
   - 빈도(2026-07-28 조정): 이력 1분 / 보호자 알림 5분 / 본인 알림 3분.
     이력은 촘촘히 남겨 화재 지속 구간의 타임라인을 확보하고, 사람에게 가는 알림은 성기게 보냅니다
     (보호자는 알림톡·SMS가 같은 간격으로 나가 과금·카카오 신고 리스크가 함께 걸립니다).
   - 발송 실패·WS 연결 실패·AI_API_KEY 미설정은 앱 기동을 막지 않습니다(구독만 비활성).
+
+
+  [ 3-11-A. 이상감지 판정 (상황 묶음 → 보호자 오탐 응답 → 미응답 재촉) ]  (2026-09-01 추가)
+  ─────────────────────────────
+  AI가 danger=true로 올린 감지가 실제 위험이었는지 오탐이었는지 서버는 알 수 없습니다.
+  confidence는 "얼마나 불꽃처럼 보이는가"이지 "실제로 불이 났는가"가 아니기 때문입니다.
+  그래서 현장을 아는 보호자가 사후에 판정하고, 관리자는 응답이 엇갈린 건만 정정합니다.
+
+  ▶ 상황(incident) = 판정·통계의 단위
+    같은 카메라에서 화재가 3분 이어지면 이력(anomaly_event)은 쿨다운 1분 간격으로 3건이 쌓입니다.
+    그걸 보호자에게 3번 물을 수 없으므로 연속 감지를 하나의 "상황"으로 묶습니다.
+
+    - 같은 (피보호자, 세션, 감지유형)이고 직전 감지로부터 10분 이내면 승계
+      ⚠️ 고정 10분 구간이 아니라 "직전 감지 기준"입니다 - 1시간 이어진 화재는 상황 1건입니다.
+    - 다른 카메라·다른 유형은 섞지 않습니다(거실 화재와 주방 연기는 대응이 다른 별개 상황).
+    - KST 자정을 넘기지 않습니다(일자별 통계의 소속 날짜가 모호해지므로).
+    - 모든 통계의 단위는 상황 수입니다(이력 행 수가 아닙니다).
+
+  ▶ 보호자 API
+    → GET  /api/guardian/anomaly/history?wardId=&page=&size=
+                                → 상황 단위 최신순 페이징. wardId 생략 시 ACTIVE 연결 전원 합산
+    → POST /api/guardian/anomaly/{incidentId}/feedback   { "verdict": "REAL" | "FALSE_ALARM" }
+                                → 오탐 응답. 재호출 = 번복(1인 1표)
+    → GET·PUT /api/guardian/anomaly/reminder-setting     { "reviewReminderEnabled": true }
+                                → 재촉 알림 수신 ON/OFF (기본 ON, null=변경 안 함)
+
+    목록 항목: incidentId·wardId·wardName·cameraLabel(카메라 삭제 시 null)·detectedType·
+              detectedTypeLabel·startedAt·lastDetectedAt·eventCount(묶인 감지 횟수)·
+              maxConfidence·reviewStatus·myVerdict(미응답 시 null)·resolvedByAdmin
+
+  ▶ 판정 상태(reviewStatus)
+    PENDING(아무도 응답 안 함) / REAL(응답자 전원 실제 위험) / FALSE_ALARM(전원 오탐) /
+    CONFLICTED(보호자끼리 엇갈림 → 관리자 확인 대기)
+
+    ⚠️ 다수결이 아닙니다. 한 명은 실제 화재로, 다른 한 명은 요리 연기로 봤다면 그 불일치 자체가
+      관리자가 확인해야 할 정보라, 표를 세어 한쪽으로 정하면 그 정보가 사라집니다.
+    ⚠️ 관리자가 정정하면 그 상태가 최종이며 이후 보호자 응답으로 재계산되지 않습니다(409).
+      ※ 관리자 정정 API는 아직 없습니다(PR ④ 예정) - 현재 resolvedByAdmin은 항상 false입니다.
+    ⚠️ 판정은 이미 나간 알림을 되돌리지 않습니다 - 오탐으로 표시해도 정정 알림을 보내지 않습니다.
+
+  ▶ 인가
+    요청 시점 ACTIVE 연결이 유일한 열람 근거입니다(SOS 이력·복약과 동일). 연결이 해제되면 과거
+    이력도 즉시 비공개입니다. 위반은 403 ANOMALY_NOT_AUTHORIZED + [IDOR-ATTEMPT] WARN,
+    없는 상황은 404 ANOMALY_INCIDENT_NOT_FOUND, 관리자 확정 건은 409 ANOMALY_ALREADY_RESOLVED.
+
+  ▶ 미응답 재촉 (아무도 안 누르면 판정 데이터가 안 쌓이므로)
+    상황이 닫힌 뒤(마지막 감지 + 10분) 1시간이 지나도 PENDING이면 건별로 FCM 1회,
+    그 뒤로는 하루 1회 요약(20:00 KST)입니다. 마감은 상황 시작 + 3일.
+
+    - 채널은 FCM뿐입니다(문자는 반복 과금, 알림톡은 다발성이라 승인 템플릿 없이 금지).
+    - 야간 22:00~08:00(KST)에는 보내지 않고 다음 아침으로 미룹니다.
+      ⚠️ 이상감지 발생 알림 본체는 억제 대상이 아닙니다 - 화재는 밤에도 즉시 나갑니다.
+    - 보호자가 이 알림만 끌 수 있습니다(reminder-setting). 못 끄면 앱 알림을 통째로 꺼버려
+      SOS·화재 알림까지 함께 죽습니다.
+    - 한 명이라도 응답해 PENDING을 벗어나면 나머지 보호자에게는 재촉을 멈춥니다.
+      단 응답 API는 계속 열려 있어, 나중에 다른 보호자가 눌러 CONFLICTED가 되는 경로는 살아 있습니다.
+    - 문구는 단정하지 않습니다: "화재가 발생했습니다"가 아니라
+      "9월 1일 21:03 · 김영희님 거실에서 화재 감지가 있었습니다. 실제 상황이었는지 확인해 주세요."
+      실제 위험이었는지는 아직 아무도 모르고, 그걸 묻는 것이 이 알림의 목적입니다.
+    - 킬 스위치: ANOMALY_REVIEW_REMINDER_ENABLED=false → 재촉만 멈추고 이력 조회·응답은 그대로.
+
+  ▶ 프론트가 알아야 할 것
+    - 알림 payload에 incidentId가 추가됐습니다(기존 키는 그대로라 깨지지 않습니다).
+    - 보호자 앱에 "실제 상황이었나요 / 오탐이었나요" 응답 버튼이 필요합니다.
+      ⚠️ 이 화면이 안 붙으면 재촉을 받아도 누를 곳이 없고, 판정 데이터가 전건 PENDING으로 남습니다
+        (SOS 처리결과 ACK가 그렇게 전건 NULL이 되어 2026-08-26에 철회됐습니다).
+    - resolvedByAdmin=true인 항목은 응답 버튼을 비활성화하세요(누르면 409).
 
 
   [ 3-12. 피보호자 SOS 동작 설정 ]  (sos_setting, 2026-07-23 추가)
@@ -1051,6 +1126,9 @@ SilverBridge는 노인(피보호자)과 그 가족(보호자)을 연결하는 �
   danger        : AI 위험 판정 플래그 (판정 근거 기록 — CONFIDENCE 폴백 적재분은 false)
   detected_at   : AI 분석 시각(analyzedAt). NULL 허용 — AI 캐시 미스 페이로드엔 이 값이 없음
                   (NULL = 분석 시각 불명, 수신 시각은 created_at)
+  incident_id   : 이 이력이 속한 상황 (V44, 2026-09-01 추가. CASCADE)
+                  NULL = 상황 묶음 도입 이전 이력이라는 뜻이며 판정 대상이 아닙니다
+                  (사후에 채울 근거가 없어 백필하지 않았습니다)
   created_at    : 백엔드 수신·적재 일시
 
   ※ 적재 조건: AI WS(latest_analysis) 신호 중 danger=true (기본 DANGER 모드) 인 건만.
@@ -1058,6 +1136,78 @@ SilverBridge는 노인(피보호자)과 그 가족(보호자)을 연결하는 �
     (AI가 매 프레임 broadcast 하므로 쿨다운이 없으면 위험 1건에 이력 수백 개).
   ※ 보호자·본인 알림 발송은 2단계로 구현 완료(2026-07-14) — 3-11 참고.
     알림은 이력이 적재된 건에만 발행되므로, 이력 쿨다운이 알림 상한도 함께 정한다.
+
+
+  [ anomaly_incident — 이상감지 "상황" (판정 단위) ] (V44, 2026-09-01 추가)
+  ─────────────────────────────
+  id               : 고유 번호
+  ward_id          : 카메라 소유 피보호자 (CASCADE)
+  session_id       : 감지된 카메라 세션 (anomaly_event와 같은 이유로 비정규화)
+  detected_type    : FIRE / SMOKE
+  started_at       : 첫 감지 (수신 시각 기준 — AI analyzedAt은 NULL일 수 있어 묶음 기준이 못 됩니다)
+  last_detected_at : 마지막 감지. 여기서 10분 이내에 또 감지되면 같은 상황으로 승계됩니다
+  event_count      : 이 상황에 묶인 감지 횟수
+  max_confidence   : 묶인 감지 중 최고 신뢰도 (평균이 아닙니다)
+  review_status    : PENDING / REAL / FALSE_ALARM / CONFLICTED
+  resolved_by      : 정정한 관리자 (SET NULL — 관리자가 탈퇴해도 판정 결과는 남습니다)
+  resolved_at      : 관리자 정정 시각
+  review_note      : 관리자 정정 메모 (200자)
+
+  ※ 같은 (ward_id, session_id, detected_type)이고 직전 감지로부터 10분 이내면 같은 상황입니다.
+    고정 10분 구간이 아니라 "직전 감지 기준"이라, 1시간 이어진 화재는 상황 1건입니다.
+  ※ KST 자정을 넘기지 않습니다 — 일자별 통계의 소속 날짜가 모호해지기 때문입니다.
+  ※ resolved_by가 채워지면 관리자 확정이라 보호자 응답으로 상태가 재계산되지 않습니다.
+    (관리자 정정 API는 아직 없어 현재는 전건 NULL입니다.)
+
+
+  [ anomaly_incident_feedback — 보호자 오탐 응답 ] (V44, 2026-09-01 추가)
+  ─────────────────────────────
+  id          : 고유 번호
+  incident_id : 어느 상황에 대한 응답인지 (CASCADE)
+  guardian_id : 응답한 보호자 (CASCADE)
+  verdict     : REAL(실제 위험) / FALSE_ALARM(오탐)
+
+  ※ UNIQUE (incident_id, guardian_id) — 보호자 1인 1표입니다. 번복은 UPDATE라
+    "언제 마음을 바꿨는지"는 남기지 않습니다(필요한 것은 최종 판단뿐).
+  ※ 판정 주체는 보호자뿐입니다 — 피보호자 본인·관리자의 1차 판정은 없습니다.
+
+
+  [ anomaly_review_reminder_log — 건별 재촉 발송 기록 ] (V45, 2026-09-01 추가)
+  ─────────────────────────────
+  id          : 고유 번호
+  incident_id : 어느 상황에 대한 재촉인지 (CASCADE)
+  guardian_id : 받은 보호자 (CASCADE)
+  sent_at     : 발송(선점) 시각
+
+  ※ UNIQUE (incident_id, guardian_id) — 상황당 보호자당 1회뿐이라 회차 컬럼이 없습니다.
+  ※ 발송 "전"에 이 행을 먼저 커밋하고 보냅니다(선점 후 발송). 순서를 뒤집으면 발송 직후 앱이
+    죽었을 때 5분 주기 스케줄러가 마감(3일) 내내 같은 재촉을 반복합니다.
+
+
+  [ anomaly_review_summary_log — 하루 1회 미응답 요약 발송 기록 ] (V45, 2026-09-01 추가)
+  ─────────────────────────────
+  id            : 고유 번호
+  guardian_id   : 받은 보호자 (CASCADE)
+  summary_date  : KST 기준 날짜
+  pending_count : 그때 미응답이던 상황 수
+  sent_at       : 발송(선점) 시각
+
+  ※ UNIQUE (guardian_id, summary_date) — 보호자당 하루 1건입니다. 상황 단위로 쪼개
+    건별 발송으로 바꾸지 마세요 — 알림 피로로 보호자가 앱 알림을 통째로 끄면
+    SOS·이상감지 같은 필수 알림까지 함께 죽습니다.
+  ※ 건별 재촉과 축이 달라(상황×보호자 vs 보호자×날짜) 테이블을 나눴습니다.
+
+
+  [ guardian_anomaly_setting — 보호자별 재촉 수신 설정 ] (V45, 2026-09-01 추가)
+  ─────────────────────────────
+  id                      : 고유 번호
+  guardian_id             : 보호자 (CASCADE, UNIQUE)
+  review_reminder_enabled : 판정 재촉 알림을 받을지
+
+  ※ 행이 없으면 기본값 ON → 기존 사용자 백필 마이그레이션 불필요.
+  ※ 이상감지 발생 알림 자체는 이 설정과 무관하게 나갑니다 — 끄는 것은 "확인 요청"뿐입니다.
+  ※ 복약 설정(guardian_medication_setting)과 합치지 마세요 — 축(복약은 보호자×피보호자,
+    재촉은 보호자 단위)도 도메인도 다릅니다.
 
 
   [ camera — 이상감지 카메라 소유권 ] (2026-07-13 추가, V29)
@@ -1440,7 +1590,7 @@ SilverBridge는 노인(피보호자)과 그 가족(보호자)을 연결하는 �
 
   단위 테스트 중심으로 구성되어 있습니다 (JUnit 5 + Mockito + AssertJ).
   2026-08-07 기준 테스트 클래스 65개 / 407건, 실패 0.
-  ⚠️ 통합 테스트는 아직 없습니다 — 전부 목(mock) 기반이라 Flyway 마이그레이션(V1~V38),
+  ⚠️ 통합 테스트는 아직 없습니다 — 전부 목(mock) 기반이라 Flyway 마이그레이션(V1~V45),
     UNIQUE 제약(예: 복약 알림 중복 방지), 트랜잭션 전파는 테스트로 한 번도 실행되지 않았습니다.
     (2026-08-05 점검 M-1 — 가장 값어치 있는 후속 작업으로 기록돼 있습니다.
      현재는 Swagger 수동 확인 + 마이그레이션은 gosky의 스키마 복제본에 실적용해 검증합니다.)
