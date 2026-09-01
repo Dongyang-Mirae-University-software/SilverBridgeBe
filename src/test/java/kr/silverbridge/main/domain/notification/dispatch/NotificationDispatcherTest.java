@@ -233,4 +233,39 @@ class NotificationDispatcherTest {
         assertThat(NotificationType.INQUIRY_ANSWERED.policy())
                 .isEqualTo(NotificationType.Policy.SETTINGS_ONLY);
     }
+    @Test
+    @DisplayName("종류별 허용 채널이 좁으면 사용자가 켠 채널이어도 발송하지 않는다 (재촉 = FCM만)")
+    void 종류별_허용채널로_문자를_제외한다() {
+        given(settingService.enabledChannels(USER_ID))
+                .willReturn(EnumSet.of(NotificationChannelType.FCM, NotificationChannelType.SMS));
+
+        dispatcher.dispatch(USER_ID, NotificationType.ANOMALY_REVIEW_REQUIRED, content);
+
+        verify(fcmChannel).send(any(), any(), any());
+        // 문자를 켰지만 이 종류는 FCM만 허용한다 — 재촉은 반복되는 운영 편의라 문자로 과금할 일이 아니다
+        verify(smsChannel, never()).send(any(), any(), any());
+    }
+
+    @Test
+    @DisplayName("허용 채널을 선언하지 않은 기존 종류는 사용자 설정 그대로 나간다 (동작 변화 없음)")
+    void 허용채널_미선언_종류는_기존동작유지() {
+        given(settingService.enabledChannels(USER_ID))
+                .willReturn(EnumSet.of(NotificationChannelType.FCM, NotificationChannelType.SMS));
+
+        dispatcher.dispatch(USER_ID, NotificationType.MEDICATION_MISSED, content);
+
+        verify(fcmChannel).send(any(), any(), any());
+        verify(smsChannel).send(any(), any(), any());
+    }
+
+    @Test
+    @DisplayName("허용 채널은 강제 FCM을 줄이지 못한다 — 필수 알림의 푸시 보장에 구멍을 내면 안 된다")
+    void 허용채널이_강제FCM을_줄이지_못한다() {
+        // 사용자가 모든 채널을 꺼도 이상감지 FCM은 나간다(FORCED_PUSH_PLUS_SETTINGS)
+        given(settingService.enabledChannels(USER_ID)).willReturn(EnumSet.noneOf(NotificationChannelType.class));
+
+        dispatcher.dispatch(USER_ID, NotificationType.ANOMALY_DETECTED, content);
+
+        verify(fcmChannel).send(any(), any(), any());
+    }
 }
