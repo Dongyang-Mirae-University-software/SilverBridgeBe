@@ -2,6 +2,7 @@ package kr.silverbridge.main.domain.anomaly.service;
 
 import kr.silverbridge.main.domain.anomaly.dto.AnomalySignal;
 import kr.silverbridge.main.domain.anomaly.entity.AnomalyEvent;
+import kr.silverbridge.main.domain.anomaly.entity.AnomalyIncident;
 import kr.silverbridge.main.domain.anomaly.event.AnomalyDetectedEvent;
 import kr.silverbridge.main.domain.anomaly.repository.AnomalyEventRepository;
 import kr.silverbridge.main.domain.camera.dto.CameraOwner;
@@ -24,6 +25,8 @@ import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyDouble;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.*;
 
 /**
@@ -39,8 +42,10 @@ class AnomalyDetectionServiceTest {
     private static final String WARD_ID = "WD0001";
 
     private static final String CAMERA_LABEL = "거실";
+    private static final Long INCIDENT_ID = 37L;
 
     @Mock private AnomalyJudge judge;
+    @Mock private AnomalyIncidentService incidentService;
     @Mock private AnomalyEventCooldown cooldown;
     @Mock private CameraService cameraService;
     @Mock private AnomalyEventRepository anomalyEventRepository;
@@ -51,6 +56,14 @@ class AnomalyDetectionServiceTest {
 
     private AnomalySignal signal(OffsetDateTime analyzedAt) {
         return new AnomalySignal(SESSION_ID, DetectedType.FIRE, 0.84, true, analyzedAt);
+    }
+
+    /** 감지가 편입될 상황을 스터빙한다. id는 실제로는 DB가 채우므로 mock으로 대신한다. */
+    private void givenIncident() {
+        AnomalyIncident incident = mock(AnomalyIncident.class);
+        when(incident.getId()).thenReturn(INCIDENT_ID);
+        when(incidentService.resolveIncident(eq(WARD_ID), eq(SESSION_ID), eq(DetectedType.FIRE),
+                any(OffsetDateTime.class), anyDouble())).thenReturn(incident);
     }
 
     /** 소유 카메라(거실) + 피보호자 이름 조회를 성공 경로로 스터빙한다. */
@@ -70,6 +83,7 @@ class AnomalyDetectionServiceTest {
         when(judge.isAnomaly(signal)).thenReturn(true);
         when(cooldown.tryAcquire(SESSION_ID, DetectedType.FIRE)).thenReturn(true);
         givenRegisteredCamera();
+        givenIncident();
         when(anomalyEventRepository.save(any(AnomalyEvent.class))).thenAnswer(inv -> inv.getArgument(0));
 
         assertThat(detectionService.handle(signal)).isPresent();
@@ -83,6 +97,8 @@ class AnomalyDetectionServiceTest {
         assertThat(saved.getConfidence()).isEqualTo(0.84);
         assertThat(saved.isDanger()).isTrue();
         assertThat(saved.getDetectedAt()).isEqualTo(analyzedAt);
+        // 판정·통계의 단위는 상황이라 이력은 반드시 상황에 묶여 적재된다
+        assertThat(saved.getIncidentId()).isEqualTo(INCIDENT_ID);
     }
 
     @Test
@@ -92,6 +108,7 @@ class AnomalyDetectionServiceTest {
         when(judge.isAnomaly(signal)).thenReturn(true);
         when(cooldown.tryAcquire(SESSION_ID, DetectedType.FIRE)).thenReturn(true);
         givenRegisteredCamera();
+        givenIncident();
         when(anomalyEventRepository.save(any(AnomalyEvent.class))).thenAnswer(inv -> inv.getArgument(0));
 
         assertThat(detectionService.handle(signal)).isPresent();
@@ -109,6 +126,7 @@ class AnomalyDetectionServiceTest {
         when(judge.isAnomaly(signal)).thenReturn(true);
         when(cooldown.tryAcquire(SESSION_ID, DetectedType.FIRE)).thenReturn(true);
         givenRegisteredCamera();
+        givenIncident();
         when(anomalyEventRepository.save(any(AnomalyEvent.class))).thenAnswer(inv -> inv.getArgument(0));
 
         detectionService.handle(signal);
@@ -123,6 +141,8 @@ class AnomalyDetectionServiceTest {
         assertThat(published.detectedType()).isEqualTo(DetectedType.FIRE);
         // 알림톡 승인 템플릿의 #{detectedAt} 원천 — 리스너가 KST로 포맷해 쓴다
         assertThat(published.detectedAt()).isEqualTo(analyzedAt);
+        // 보호자가 알림에서 바로 오탐 응답을 하려면 판정 단위(상황) 식별자가 실려야 한다
+        assertThat(published.incidentId()).isEqualTo(INCIDENT_ID);
     }
 
     @Test
@@ -133,7 +153,7 @@ class AnomalyDetectionServiceTest {
 
         assertThat(detectionService.handle(signal)).isEmpty();
 
-        verifyNoInteractions(cooldown, cameraService, anomalyEventRepository, eventPublisher);
+        verifyNoInteractions(cooldown, cameraService, incidentService, anomalyEventRepository, eventPublisher);
     }
 
     @Test
@@ -146,7 +166,7 @@ class AnomalyDetectionServiceTest {
         assertThat(detectionService.handle(signal)).isEmpty();
 
         // 이력이 없으면 알림도 없다 — 쿨다운이 이력·알림을 함께 억제한다(2단계 알림은 이력 적재 건에만 발행)
-        verifyNoInteractions(cameraService, anomalyEventRepository, eventPublisher);
+        verifyNoInteractions(cameraService, incidentService, anomalyEventRepository, eventPublisher);
     }
 
     @Test
@@ -159,6 +179,7 @@ class AnomalyDetectionServiceTest {
 
         assertThat(detectionService.handle(signal)).isEmpty();
 
-        verifyNoInteractions(anomalyEventRepository, eventPublisher);
+        // 소유자를 모르면 상황도 열지 않는다 — 주인 없는 판정 대상을 만들지 않는다
+        verifyNoInteractions(incidentService, anomalyEventRepository, eventPublisher);
     }
 }
