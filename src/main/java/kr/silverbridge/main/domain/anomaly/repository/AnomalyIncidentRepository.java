@@ -6,6 +6,8 @@ import kr.silverbridge.main.global.enums.DetectedType;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 
 import java.time.OffsetDateTime;
 import java.util.Collection;
@@ -52,4 +54,22 @@ public interface AnomalyIncidentRepository extends JpaRepository<AnomalyIncident
      * (0을 보여주면 "안전하다"로 오독된다) group by 결과를 그대로 쓰면 그 규칙이 자연히 지켜진다.</p>
      */
     List<AnomalyIncident> findByStartedAtGreaterThanEqual(OffsetDateTime from);
+
+    /**
+     * 관리자 로그 목록 - 판정 상태·피보호자로 거르고 최신순.
+     *
+     * <p>보호자 조회와 달리 <b>연결 여부로 좁히지 않는다</b> - 관리자는 전체를 봐야 엇갈린 판정을
+     * 찾아낼 수 있다. 대신 개인 이력을 여는 경로라 호출부가 감사 로그를 남긴다.</p>
+     *
+     * <p>두 조건 모두 null이면 무시된다(문의 관리자 목록과 같은 동적 필터 방식).</p>
+     */
+    @Query("""
+            SELECT i FROM AnomalyIncident i
+            WHERE (:status IS NULL OR i.reviewStatus = :status)
+              AND (:wardId IS NULL OR i.wardId = :wardId)
+            ORDER BY i.startedAt DESC
+            """)
+    Page<AnomalyIncident> searchForAdmin(@Param("status") AnomalyReviewStatus status,
+                                         @Param("wardId") String wardId,
+                                         Pageable pageable);
 }

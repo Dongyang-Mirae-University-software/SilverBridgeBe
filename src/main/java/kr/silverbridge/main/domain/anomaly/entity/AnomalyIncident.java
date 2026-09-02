@@ -104,6 +104,25 @@ public class AnomalyIncident extends BaseTimeEntity {
         this.reviewStatus = status;
     }
 
+    /**
+     * 관리자 정정. 보호자 응답이 엇갈렸거나 잘못 판정된 건을 관리자가 확정한다.
+     *
+     * <p><b>보호자 응답 원본은 지우지 않는다</b> - 누가 무엇이라고 답했는지는 정정 후에도 그대로 남는다.
+     * 관리자가 무엇을 근거로 뒤집었는지 확인할 수 없게 되면 정정 자체를 검증할 방법이 사라진다.</p>
+     *
+     * <p>{@code resolvedBy}가 채워지는 순간부터 {@link #applyReviewStatus}가 막히므로, 뒤늦은 보호자
+     * 응답으로 이 결정이 조용히 뒤집히지 않는다. 이미 정정한 건을 다시 정정하는 것은 허용한다 -
+     * 관리자도 잘못 누를 수 있는데 막아 두면 되돌릴 방법이 없어진다(매 정정이 감사 로그에 남는다).</p>
+     *
+     * @param status REAL 또는 FALSE_ALARM. PENDING·CONFLICTED로는 되돌리지 않는다(호출부가 검증)
+     */
+    public void resolveByAdmin(AnomalyReviewStatus status, String adminId, String note, OffsetDateTime now) {
+        this.reviewStatus = status;
+        this.resolvedBy = adminId;
+        this.resolvedAt = now;
+        this.reviewNote = note;
+    }
+
     /** 관리자가 확인을 마친 건인지. 채워져 있으면 보호자 응답으로 상태가 재계산되지 않는다. */
     public boolean isAdminResolved() {
         return this.resolvedBy != null;
