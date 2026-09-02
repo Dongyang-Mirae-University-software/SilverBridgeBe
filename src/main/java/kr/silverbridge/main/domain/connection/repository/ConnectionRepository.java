@@ -6,6 +6,7 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
+import java.time.OffsetDateTime;
 import java.util.List;
 
 public interface ConnectionRepository extends JpaRepository<Connection, Long> {
@@ -30,4 +31,17 @@ public interface ConnectionRepository extends JpaRepository<Connection, Long> {
     @Query("SELECT c FROM Connection c WHERE (c.guardianId = :userId OR c.wardId = :userId) AND c.status IN :statuses")
     List<Connection> findByParticipantAndStatusIn(@Param("userId") String userId,
                                                   @Param("statuses") List<ConnectionStatus> statuses);
+
+    // ===== 관리자 대시보드 집계 =====
+
+    /** 상태별 연결 수(대기 중인 연결 요청 등). */
+    long countByStatus(ConnectionStatus status);
+
+    /**
+     * 오래 방치된 연결 요청 수. 기준 시각은 호출부가 계산해 넘긴다.
+     *
+     * <p>수락도 거절도 없이 오래 남은 요청은 보호자가 잊었거나 피보호자가 알림을 못 본 경우라,
+     * 관리자가 확인해야 할 사각지대 신호다.</p>
+     */
+    long countByStatusAndCreatedAtBefore(ConnectionStatus status, OffsetDateTime cutoff);
 }

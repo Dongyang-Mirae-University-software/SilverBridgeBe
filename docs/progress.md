@@ -1206,3 +1206,18 @@ REST API Key 단독 대비 보안 강화 — 인가코드 탈취 시 토큰 발�
 - **검증**: `./gradlew build` **461건 / 실패 0**(기존 426 + 신규 35). V45는 vkcs-linux dev DB에서 트랜잭션 실행 후 롤백으로 확인했고, 같은 (상황, 보호자)에 두 번 INSERT해 UNIQUE가 실제로 거부하는 것까지 봤다.
 - **함께 정리한 기존 Swagger 오류**: "보호자 - SOS 이력" 태그 설명과 `desiredOrder`에 2026-08-26 철회한 **ACK가 남아 있었다**(`/api/guardian/sos/{sosEventId}/ack` — 실제 엔드포인트는 없다). 설명은 발생 경로(V39) 안내로 교체했다. 복약 설정 경로도 V41 이전 값이라 `/api/guardian/ward/{wardId}/medication-alert-setting`으로 정정했다. **Swagger 문서만 뒤처져 있었고 코드 동작은 정상이었다.**
 - 상세: `docs/(2026-09-01) feature-anomaly-guardian-review.md`
+
+## [2026-09-02] 관리자 대시보드 집계 (PR ③)
+
+- **범위**: 계약 §5의 두 탭에 대응하는 `GET /api/admin/dashboard/safety`·`/operation`. **마이그레이션 없음**(전부 기존 테이블 집계). 탭마다 엔드포인트를 나눈 이유는 한쪽만 열어도 다른 쪽 쿼리가 돌지 않게 하기 위함이다.
+- **오래 막혀 있던 지표를 이제 만들 수 있게 됐다**: 2026-08-07 재설계 때 AI 오탐률 카드를 폐기했던 건 판정을 기록할 경로가 없어 분자를 만들 수 없었기 때문이다. PR ①②로 `anomaly_incident.review_status`와 보호자 응답이 생기면서 해소됐다.
+- 🔴 **PHASE 0에서 드러난 근거 부재**: `Camera`에 **스트리밍 상태 컬럼이 없다**(`is_active`는 사용자가 켜고 끄는 등록 플래그일 뿐). 계약서의 `streamingCameras`·`disconnectedCameras`를 DB만으로는 답할 수 없었다.
+  - **택한 방법**: `AiLiveStreamSubscriber`의 구독 집합에서 파생한다(구독에는 AI가 라이브로 보고했고 우리 `camera`에도 등록된 세션만 들어간다). **AI가 끊기면 0이 아니라 `null`**로 내린다 - 0을 주면 우리 수신기 장애가 현장 카메라 전멸로 표시된다. 거부안: `camera.last_seen_at` 컬럼 추가(V46)는 범위 초과라 보류.
+- **모르는 값을 0으로 채우지 않는다**가 이 PR의 핵심 정책이다. `streamingCameras`·`disconnectedCameras`(AI 미연결 시)와 `longestWaitingHours`(대기 문의 0건 시)만 `null`이고, 나머지는 0건이어도 **키가 항상 존재**한다(0 또는 빈 배열).
+- **오탐률은 응답률과 함께**: `todayAnomaly.review`의 네 값(pending·real·falseAlarm·conflicted)을 모두 내려 프론트가 "응답 3건 중 오탐 1건(전체 5건)"으로 분모를 밝힐 수 있게 했다. 오탐 건수만 단독으로 주면 분모가 거짓이 된다(SOS ACK 함정과 동일).
+- **0건인 유형은 항목을 만들지 않는다**: `byType`에는 실제로 집계된 유형만 담는다. "낙상 0건"은 안전하다는 뜻이 아니라 모델이 없다는 뜻이라 숫자로 보이면 정확히 반대로 읽힌다.
+- **날짜는 KST**(`AdminDashboardClock`). 서버가 UTC면 09:00 이전 데이터가 전날로 밀려 아침마다 지표가 되돌아간다. **서버 캐시는 두지 않는다**(폴링 30초 이상 권장) - 캐시가 있으면 "방금 처리했는데 안 줄어든다"가 생긴다.
+- **조회는 감사 로그에 남기지 않는다**: 집계 숫자만 반환해 개인 식별 정보가 없고, 폴링 화면이라 기록하면 실제 조작 이력이 묻힌다. 개인 이력을 여는 PR ④는 그때 별도로 남긴다.
+- **계획과 달라진 점 1개**: 경로 규칙(`SecurityConfig`)에만 맡기려던 것을 **클래스 레벨 `@PreAuthorize("hasRole('ADMIN')")` 추가**로 바꿨다. 경로 규칙은 컨트롤러 밖이라 "관리자 아닌 역할 차단"을 테스트로 고정할 수 없고, 경로 패턴이 바뀌면 조용히 열린다. 경로 규칙은 그대로 살아 있고 조이기만 한다.
+- **검증**: `./gradlew build` **480건 / 실패 0**(기존 461 + 신규 19). AI 미연결·상황 0건·KST 자정 경계·역할 차단을 테스트로 고정했다.
+- 상세: `docs/(2026-09-02) feature-admin-dashboard-aggregation.md`
