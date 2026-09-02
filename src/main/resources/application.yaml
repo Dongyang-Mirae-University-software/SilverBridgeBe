@@ -146,6 +146,13 @@ anomaly:
     quiet-end: ${ANOMALY_REVIEW_QUIET_END:08:00}                 # 야간 억제 종료. 걸린 건은 버리지 않고 아침으로 미룬다
 
 notification:
+  # FCM 토큰 보관 정책. 토큰은 기기 단위라 한 사람이 여러 개를 갖는 것이 정상이지만(폰·PC·태블릿),
+  # 브라우저 데이터 삭제·시크릿창·기기 교체로 생긴 것은 스스로 사라지지 않아 쓰지 않는 기기로 알림이 흩어진다.
+  # ⚠️ 삭제는 되돌릴 수 없다 — 지운 기기는 다시 접속할 때까지 푸시를 못 받는다(재접속 시 자동 복구).
+  fcm-token:
+    max-per-user: ${FCM_TOKEN_MAX_PER_USER:5}        # 초과 시 마지막 사용이 오래된 것부터 삭제
+    cleanup-enabled: ${FCM_TOKEN_CLEANUP_ENABLED:true} # 킬 스위치. false면 정리만 멈춘다(등록·발송은 그대로)
+    stale-days: ${FCM_TOKEN_STALE_DAYS:60}           # 이 기간 재등록이 없으면 유휴로 보고 정리(매일 04:00 KST)
   alimtalk:
     # 카카오 알림톡(Solapi 경유) — 카카오톡 채팅으로 도착하는 유일한 현실적 경로(전화번호 기반, 친구추가 불필요).
     # ⚠️ 승인된 템플릿 문구만 발송 가능(변수만 치환). 종류별 템플릿이 없으면 채널이 조용히 스킵된다.
