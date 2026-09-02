@@ -105,7 +105,10 @@ public enum ErrorCode {
     // 없는 자원은 404, 남의 자원은 403으로 그대로 안내한다(2026-07-14 정책). 문구는 수신자(보호자) 기준이다
     ANOMALY_NOT_AUTHORIZED(HttpStatus.FORBIDDEN, "연결된 피보호자의 이상감지 기록만 볼 수 있습니다."),
     // 관리자가 확정한 건은 보호자 응답으로 뒤집히지 않는다 - 거부 이유를 그대로 알린다
-    ANOMALY_ALREADY_RESOLVED(HttpStatus.CONFLICT, "관리자가 확인을 마친 기록이라 응답을 변경할 수 없습니다.");
+    ANOMALY_ALREADY_RESOLVED(HttpStatus.CONFLICT, "관리자가 확인을 마친 기록이라 응답을 변경할 수 없습니다."),
+    // 관리자 정정은 REAL·FALSE_ALARM으로만 확정한다. PENDING·CONFLICTED로 되돌리면 그 상태가
+    // "아직 아무도 안 봤다"인지 "관리자가 보고 되돌렸다"인지 구분되지 않는다(2026-09-02)
+    ANOMALY_INVALID_REVIEW_STATUS(HttpStatus.BAD_REQUEST, "판정은 실제 위험 또는 오탐으로만 확정할 수 있습니다.");
 
     private final HttpStatus status;
     private final String message;
