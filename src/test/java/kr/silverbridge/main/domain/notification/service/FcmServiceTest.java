@@ -6,15 +6,20 @@ import com.google.firebase.messaging.FirebaseMessagingException;
 import com.google.firebase.messaging.MessagingErrorCode;
 import com.google.firebase.messaging.MulticastMessage;
 import com.google.firebase.messaging.SendResponse;
+import kr.silverbridge.main.domain.notification.config.FcmTokenProperties;
 import kr.silverbridge.main.domain.notification.entity.FcmToken;
 import kr.silverbridge.main.domain.notification.repository.FcmTokenRepository;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
+import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
+import org.mockito.Spy;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.test.util.ReflectionTestUtils;
 
+import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -23,6 +28,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.eq;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
@@ -30,8 +36,17 @@ class FcmServiceTest {
 
     @Mock private FirebaseMessaging firebaseMessaging;
     @Mock private FcmTokenRepository fcmTokenRepository;
+    /** 기본값(상한 5 · 유휴 60일)을 그대로 쓰되 케이스별로 조정한다. */
+    @Spy private FcmTokenProperties tokenProperties = new FcmTokenProperties();
 
     @InjectMocks private FcmService fcmService;
+
+    /** updatedAt이 원하는 시각인 토큰. 상한 적용 순서를 확인하려면 이 값을 직접 정해야 한다. */
+    private FcmToken tokenAgedDays(String userId, String token, int daysAgo) {
+        FcmToken fcmToken = FcmToken.of(userId, token, "WEB");
+        ReflectionTestUtils.setField(fcmToken, "updatedAt", OffsetDateTime.now().minusDays(daysAgo));
+        return fcmToken;
+    }
 
     private BatchResponse batchWithSingleFailure(MessagingErrorCode errorCode) {
         FirebaseMessagingException exception = mock(FirebaseMessagingException.class);
@@ -141,5 +156,79 @@ class FcmServiceTest {
         fcmService.registerToken("GD0001", "tok-2", "ANDROID");
 
         verify(fcmTokenRepository).save(any(FcmToken.class));
+    }
+    @Test
+    @DisplayName("같은 사용자가 재등록하면 행을 늘리지 않고 마지막 사용 시각만 갱신한다")
+    void registerToken_재등록_시각갱신() {
+        when(fcmTokenRepository.findByToken("tok-1"))
+                .thenReturn(Optional.of(FcmToken.of("GD0001", "tok-1", "WEB")));
+
+        fcmService.registerToken("GD0001", "tok-1", "WEB");
+
+        // 갱신이 없으면 "아직 쓰이는 토큰"임을 알 방법이 없어 유휴 정리에 잘못 걸린다
+        verify(fcmTokenRepository).touch(eq("tok-1"), any(OffsetDateTime.class));
+        verify(fcmTokenRepository, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("상한을 넘으면 마지막 사용이 오래된 것부터 삭제한다")
+    void registerToken_상한초과_오래된것부터_삭제() {
+        tokenProperties.setMaxPerUser(2);
+        when(fcmTokenRepository.findByToken("tok-new")).thenReturn(Optional.empty());
+        when(fcmTokenRepository.findByUserIdOrderByUpdatedAtDesc("GD0001")).thenReturn(List.of(
+                tokenAgedDays("GD0001", "tok-new", 0),
+                tokenAgedDays("GD0001", "tok-recent", 3),
+                tokenAgedDays("GD0001", "tok-old", 40),
+                tokenAgedDays("GD0001", "tok-oldest", 90)));
+
+        fcmService.registerToken("GD0001", "tok-new", "WEB");
+
+        @SuppressWarnings("unchecked")
+        ArgumentCaptor<List<FcmToken>> captor = ArgumentCaptor.forClass(List.class);
+        verify(fcmTokenRepository).deleteAll(captor.capture());
+        org.assertj.core.api.Assertions.assertThat(captor.getValue())
+                .extracting(FcmToken::getToken)
+                .containsExactly("tok-old", "tok-oldest");
+    }
+
+    @Test
+    @DisplayName("상한 이내면 아무것도 지우지 않는다 - 폰·PC를 함께 쓰는 것은 정상이다")
+    void registerToken_상한이내_삭제없음() {
+        when(fcmTokenRepository.findByToken("tok-new")).thenReturn(Optional.empty());
+        when(fcmTokenRepository.findByUserIdOrderByUpdatedAtDesc("GD0001")).thenReturn(List.of(
+                tokenAgedDays("GD0001", "tok-new", 0),
+                tokenAgedDays("GD0001", "tok-phone", 5),
+                tokenAgedDays("GD0001", "tok-pc", 9)));
+
+        fcmService.registerToken("GD0001", "tok-new", "WEB");
+
+        verify(fcmTokenRepository, never()).deleteAll(any());
+    }
+
+    @Test
+    @DisplayName("재등록은 개수를 늘리지 않으므로 상한 검사를 하지 않는다")
+    void registerToken_재등록은_상한검사_안함() {
+        when(fcmTokenRepository.findByToken("tok-1"))
+                .thenReturn(Optional.of(FcmToken.of("GD0001", "tok-1", "WEB")));
+
+        fcmService.registerToken("GD0001", "tok-1", "WEB");
+
+        verify(fcmTokenRepository, never()).findByUserIdOrderByUpdatedAtDesc(any());
+    }
+
+    @Test
+    @DisplayName("유휴 정리는 설정한 일수 이전을 기준으로 삭제한다")
+    void cleanupStaleTokens_기준시각() {
+        tokenProperties.setStaleDays(60);
+        when(fcmTokenRepository.deleteStaleTokens(any(OffsetDateTime.class))).thenReturn(3);
+
+        org.assertj.core.api.Assertions.assertThat(fcmService.cleanupStaleTokens()).isEqualTo(3);
+
+        ArgumentCaptor<OffsetDateTime> captor = ArgumentCaptor.forClass(OffsetDateTime.class);
+        verify(fcmTokenRepository).deleteStaleTokens(captor.capture());
+        // 경계가 흔들리지 않게 하루 폭으로 검증한다(실행 시각에 의존하지 않도록)
+        org.assertj.core.api.Assertions.assertThat(captor.getValue())
+                .isBefore(OffsetDateTime.now().minusDays(59))
+                .isAfter(OffsetDateTime.now().minusDays(61));
     }
 }

@@ -1,6 +1,7 @@
 package kr.silverbridge.main.domain.notification.service;
 
 import com.google.firebase.messaging.*;
+import kr.silverbridge.main.domain.notification.config.FcmTokenProperties;
 import kr.silverbridge.main.domain.notification.entity.FcmToken;
 import kr.silverbridge.main.domain.notification.repository.FcmTokenRepository;
 import lombok.RequiredArgsConstructor;
@@ -8,6 +9,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.Map;
 
@@ -22,6 +24,7 @@ public class FcmService {
 
     private final FirebaseMessaging firebaseMessaging;
     private final FcmTokenRepository fcmTokenRepository;
+    private final FcmTokenProperties tokenProperties;
 
     // FCM 토큰 등록. 같은 토큰이 다른 사용자 소유로 남아 있으면(공유 디바이스에서 사용자 전환,
     // 이전 사용자가 로그아웃 시 삭제 API를 못 부른 경우) 소유자를 현재 사용자로 갱신한다 (M-S2-2)
@@ -30,15 +33,63 @@ public class FcmService {
     public void registerToken(String userId, String token, String platform) {
         fcmTokenRepository.findByToken(token).ifPresentOrElse(
                 existing -> {
-                    if (!existing.getUserId().equals(userId)) {
-                        existing.reassignTo(userId, platform);
-                        log.info("FCM 토큰 소유자 갱신(공유 디바이스): newUserId={}", userId);
+                    if (existing.getUserId().equals(userId)) {
+                        // 같은 사용자의 재등록(새 탭·재접속) — 바뀌는 필드가 없어 변경 감지로는 UPDATE가
+                        // 나가지 않는다. 명시적으로 시각을 갱신해야 "아직 쓰이는 토큰"임이 기록된다.
+                        fcmTokenRepository.touch(token, OffsetDateTime.now());
+                        return;
                     }
+                    existing.reassignTo(userId, platform);
+                    log.info("FCM 토큰 소유자 갱신(공유 디바이스): newUserId={}", userId);
                 },
                 () -> {
                     fcmTokenRepository.save(FcmToken.of(userId, token, platform));
                     log.info("FCM 토큰 등록: userId={}", userId);
+                    enforceMaxPerUser(userId);
                 });
+    }
+
+    /**
+     * 사용자당 토큰 수 상한을 적용한다. 넘치면 <b>마지막 사용이 가장 오래된 것부터</b> 지운다.
+     *
+     * <p>토큰은 기기 단위라 여러 개가 정상이지만(폰·PC·태블릿), 브라우저 데이터 삭제·시크릿창·기기
+     * 교체로 생긴 것은 스스로 사라지지 않는다. 그대로 두면 쓰지 않는 기기로 알림이 흩어져 나간다.</p>
+     *
+     * <p>신규 등록 직후에만 부른다 — 재등록은 개수를 늘리지 않으므로 검사할 이유가 없다.</p>
+     */
+    private void enforceMaxPerUser(String userId) {
+        int max = tokenProperties.getMaxPerUser();
+        if (max <= 0) {
+            return;
+        }
+        List<FcmToken> tokens = fcmTokenRepository.findByUserIdOrderByUpdatedAtDesc(userId);
+        if (tokens.size() <= max) {
+            return;
+        }
+        List<FcmToken> overflow = tokens.subList(max, tokens.size());
+        fcmTokenRepository.deleteAll(overflow);
+        log.info("[FCM-TOKEN] 상한 초과로 오래된 토큰 정리: userId={}, 삭제={}건, 상한={}",
+                userId, overflow.size(), max);
+    }
+
+    /**
+     * 유휴 토큰 정리. {@code staleDays} 동안 재등록되지 않은 토큰을 지운다.
+     *
+     * <p>⚠️ 되돌릴 수 없다. 지워진 기기는 <b>다시 접속할 때까지</b> 푸시를 받지 못한다(프론트가 보호
+     * 라우트 진입 시 재등록하므로 자동 복구되지만, 그 사이 이상감지 알림은 SMS 폴백이 없어 유실될 수
+     * 있다). 그래서 삭제 건수를 반드시 로그로 남긴다.</p>
+     *
+     * @return 삭제된 토큰 수
+     */
+    @Transactional
+    public int cleanupStaleTokens() {
+        OffsetDateTime threshold = OffsetDateTime.now().minusDays(tokenProperties.getStaleDays());
+        int deleted = fcmTokenRepository.deleteStaleTokens(threshold);
+        if (deleted > 0) {
+            log.info("[FCM-TOKEN-CLEANUP] 유휴 토큰 정리: {}건 (기준 {}일, threshold={})",
+                    deleted, tokenProperties.getStaleDays(), threshold);
+        }
+        return deleted;
     }
 
     // FCM 토큰 삭제 (로그아웃 시) — 본인 소유 토큰만 삭제 (L-S2-3: 타인 토큰 무단 삭제 차단)
