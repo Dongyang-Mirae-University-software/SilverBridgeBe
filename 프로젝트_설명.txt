@@ -545,7 +545,8 @@ SilverBridge는 노인(피보호자)과 그 가족(보호자)을 연결하는 �
                                             NotificationType.INQUIRY_ANSWERED, 기본 FCM ON). WebSocket 미발송.
 
     테이블 inquiry(V28): user_id FK CASCADE(탈퇴 시 함께 삭제), answered_by FK SET NULL(관리자 삭제 시 답변 보존).
-    ※ 관리자 대시보드 "미처리 문의" 통계: 대시보드 API 자체가 아직 미구현이라 이번 범위 밖.
+    ※ 관리자 대시보드 "미처리 문의" 통계: 2026-09-02 구현됨 - 3-11-B의 /api/admin/dashboard/operation
+    응답에 unansweredInquiries(count, longestWaitingHours)로 포함됩니다.
       InquiryRepository.countByStatus(WAITING) 를 제공하므로 대시보드 신설 시 즉시 연결 가능.
 
 
@@ -844,6 +845,74 @@ SilverBridge는 노인(피보호자)과 그 가족(보호자)을 연결하는 �
       ⚠️ 이 화면이 안 붙으면 재촉을 받아도 누를 곳이 없고, 판정 데이터가 전건 PENDING으로 남습니다
         (SOS 처리결과 ACK가 그렇게 전건 NULL이 되어 2026-08-26에 철회됐습니다).
     - resolvedByAdmin=true인 항목은 응답 버튼을 비활성화하세요(누르면 409).
+
+
+  [ 3-11-B. 관리자 대시보드 집계 (안전 현황 / 운영 현황) ]  (2026-09-02 추가)
+  ─────────────────────────────
+  관리자 콘솔 대시보드의 두 탭에 대응하는 집계 API입니다. 마이그레이션 없이 기존 테이블만 셉니다.
+  (Swagger 태그: "관리자 - 대시보드")
+
+    → GET /api/admin/dashboard/safety      → 안전 현황 탭
+    → GET /api/admin/dashboard/operation   → 운영 현황 탭
+
+  탭마다 엔드포인트를 나눈 이유는 한쪽 탭만 열어도 다른 쪽 쿼리가 돌지 않게 하기 위해서입니다.
+  ADMIN 전용이며(경로 규칙 + @PreAuthorize 이중), 다른 역할은 403입니다.
+
+  ▶ 왜 이제야 만들 수 있었나
+    2026-08-07 대시보드 재설계 때 "AI 오탐률" 카드를 폐기했었습니다. 오탐 판정을 기록하는 경로가
+    아예 없어 분자를 만들 데이터가 없었기 때문입니다. 3-11-A(보호자 오탐 응답)로 판정이 쌓이기
+    시작하면서 비로소 이 지표가 성립합니다.
+
+  ▶ 안전 현황 (/safety)
+    aiConnected           : AI WebSocket 구독 연결 상태
+    subscribedSessions    : 현재 구독 중인 세션 수 (AI 미연결이면 0)
+    totalCameras          : 등록된 카메라 대수
+    streamingCameras      : 스트리밍이 잡히는 카메라 대수  ※ AI 미연결이면 null
+    safetyEvents          : disconnectedCameras(※ AI 미연결이면 null) / wardsWithoutGuardian /
+                            wardsWithoutCamera / stalePendingConnections(7일 이상 방치된 연결 요청)
+    todayAnomaly          : 오늘(KST) 상황 수 total, 유형별 byType, 판정별 review 4종
+
+  ▶ 운영 현황 (/operation)
+    totalUsers            : 전체 회원 수 (ADMIN 제외, ACTIVE만)
+    newUsersToday         : 오늘(KST) 신규 가입
+    memberComposition     : wards / guardians
+    cameras               : registered(대수) / wards(카메라 보유 피보호자 수)
+    pendingConnections    : 수락 대기 연결 요청
+    unansweredInquiries   : count / longestWaitingHours(※ 대기 문의가 없으면 null)
+    signupTrend           : 최근 7일 가입 추이(KST). 0건인 날도 항목이 있습니다
+    pendingItems          : connectionRequests / todayInquiries / announcementDrafts
+
+  ▶ 모르는 값을 0으로 채우지 않습니다 (가장 중요)
+    Camera 테이블에는 스트리밍 상태 컬럼이 없습니다(is_active는 사용자가 켜고 끄는 등록 플래그일 뿐).
+    그래서 streamingCameras는 AI 구독 집합에서 파생합니다 - 구독에는 "AI가 라이브로 보고했고
+    우리 camera에도 등록된" 세션만 들어가므로 그 크기가 곧 스트리밍 대수입니다.
+    ⚠️ AI가 끊기면 이 값은 0이 아니라 null입니다. 0을 내려보내면 우리 수신기의 장애가
+      현장 카메라 전멸로 표시되기 때문입니다. 같은 이유로 대기 문의가 0건이면
+      longestWaitingHours도 0이 아닌 null입니다.
+    그 외 모든 필드는 데이터가 0건이어도 키가 항상 존재합니다(0 또는 빈 배열).
+
+  ▶ 오탐률은 응답률과 함께 표시해야 합니다
+    todayAnomaly.review는 pending/real/falseAlarm/conflicted 네 값을 모두 내려보냅니다.
+    응답 수 = total - pending 이므로 "응답 3건 중 오탐 1건(전체 5건, 응답률 60%)"처럼
+    분모를 밝혀 표시할 수 있습니다.
+    ⚠️ 오탐 건수만 단독으로 띄우면 분모가 거짓이 됩니다. 재촉을 해도 응답률은 100%가 되지 않기
+      때문입니다. SOS 처리결과(ACK)가 전건 NULL인 채 "무응답 100%"로 읽힐 뻔한 함정과 같습니다.
+
+  ▶ 그 밖의 규칙
+    - byType에는 실제로 집계된 유형만 담깁니다. "낙상 0건"은 안전하다는 뜻이 아니라 AI 모델이
+      없다는 뜻이라, 숫자로 보여주면 정확히 반대로 읽힙니다.
+    - CONFLICTED는 safetyEvents에 넣지 않습니다(관리자는 이상감지 로그의 상태 필터로 봅니다).
+      오늘치 건수는 todayAnomaly.review.conflicted로 확인됩니다.
+    - 날짜는 전부 KST입니다. 서버가 UTC로 돌면 09:00 이전 데이터가 전날로 밀려
+      아침마다 지표가 되돌아갑니다.
+    - 서버 캐시를 두지 않습니다. 폴링은 30초 이상을 권장합니다.
+      캐시를 넣으면 "방금 처리했는데 안 줄어든다"가 생겨 관리자가 화면을 믿지 못하게 됩니다.
+    - 대시보드 조회는 감사 로그에 남기지 않습니다(집계 숫자뿐이고 폴링이라 실제 조작 이력이 묻힘).
+      단 개인 이력을 여는 관리자 API(PR ④ 이상감지 로그)는 남깁니다.
+
+  ▶ 아직 없는 것
+    관리자 이상감지 로그·정정 API(PR ④)는 미구현입니다. 그래서 CONFLICTED 건을 정정할 수단이
+    아직 없고, 3-11-A의 resolvedByAdmin도 항상 false입니다.
 
 
   [ 3-12. 피보호자 SOS 동작 설정 ]  (sos_setting, 2026-07-23 추가)
