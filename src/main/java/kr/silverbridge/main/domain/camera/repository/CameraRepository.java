@@ -1,6 +1,7 @@
 package kr.silverbridge.main.domain.camera.repository;
 
 import kr.silverbridge.main.domain.camera.entity.Camera;
+import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.jpa.repository.JpaRepository;
 
 import java.util.Collection;
@@ -26,4 +27,10 @@ public interface CameraRepository extends JpaRepository<Camera, Long> {
 
     boolean existsBySessionId(String sessionId);   // SessionID 발급기 중복 검사
     boolean existsByDeviceId(String deviceId);      // DeviceID 발급기 중복 검사
+
+    // ===== 관리자 대시보드 집계 =====
+
+    /** 카메라를 1대 이상 등록한 피보호자 수. */
+    @Query("select count(distinct c.wardId) from Camera c")
+    long countDistinctWards();
 }

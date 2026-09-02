@@ -72,6 +72,27 @@ public class AiLiveStreamSubscriber extends TextWebSocketHandler {
     private volatile int reconnectAttempts;
     private volatile boolean shuttingDown;
 
+    /**
+     * 관리자 대시보드 조회용 - AI WS가 지금 붙어 있는가.
+     *
+     * <p>이 값이 {@code false}면 구독 세션 수는 "카메라가 없다"가 아니라 <b>"알 수 없다"</b>는 뜻이다.
+     * 대시보드가 두 경우를 섞으면 우리 쪽 수신기가 죽은 것을 현장 카메라가 전멸한 것으로 보여준다.</p>
+     */
+    public boolean isConnected() {
+        WebSocketSession current = this.session;
+        return current != null && current.isOpen();
+    }
+
+    /**
+     * 관리자 대시보드 조회용 - 현재 구독 중인 세션 수.
+     *
+     * <p>구독은 <b>AI가 라이브로 보고했고 우리 {@code camera} 테이블에도 등록된</b> 세션만 들어간다
+     * ({@code syncSubscriptions} 참조). 그래서 이 값이 곧 "지금 스트리밍이 잡히는 등록 카메라 대수"다.</p>
+     */
+    public int subscribedSessionCount() {
+        return subscribedSessions.size();
+    }
+
     @EventListener(ApplicationReadyEvent.class)
     public void start() {
         if (!properties.isEnabled()) {

@@ -43,4 +43,13 @@ public interface AnomalyIncidentRepository extends JpaRepository<AnomalyIncident
     /** 요약 후보 - 마감 전이고 아직 판정되지 않은 상황 전부(1차 재촉 여부는 호출부가 거른다). */
     List<AnomalyIncident> findByReviewStatusAndStartedAtGreaterThanEqual(
             AnomalyReviewStatus reviewStatus, OffsetDateTime deadlineFrom);
+
+    /**
+     * 관리자 대시보드 - 특정 시각 이후 <b>시작된</b> 상황 전부.
+     *
+     * <p>유형별·판정별 집계를 SQL group by로 나누지 않고 원본을 받아 애플리케이션에서 묶는다.
+     * 하루치 상황은 건수가 적고, 무엇보다 <b>0건인 유형은 항목 자체를 만들지 않아야</b> 하는데
+     * (0을 보여주면 "안전하다"로 오독된다) group by 결과를 그대로 쓰면 그 규칙이 자연히 지켜진다.</p>
+     */
+    List<AnomalyIncident> findByStartedAtGreaterThanEqual(OffsetDateTime from);
 }

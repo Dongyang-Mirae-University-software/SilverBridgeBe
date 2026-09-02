@@ -9,7 +9,9 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
+import java.time.OffsetDateTime;
 import java.util.List;
+import java.util.Optional;
 
 public interface InquiryRepository extends JpaRepository<Inquiry, Long> {
 
@@ -39,4 +41,18 @@ public interface InquiryRepository extends JpaRepository<Inquiry, Long> {
                                  @Param("status") InquiryStatus status,
                                  @Param("keyword") String keyword,
                                  Pageable pageable);
+
+    // ===== 관리자 대시보드 집계 =====
+
+    /** 오늘 접수된 문의 수. 기준 시각(KST 오늘 00:00)은 호출부가 계산해 넘긴다. */
+    long countByCreatedAtGreaterThanEqual(OffsetDateTime from);
+
+    /**
+     * 미답변 문의 중 <b>가장 오래 기다린</b> 건의 접수 시각.
+     *
+     * <p>대기 건수만으로는 "2건"이 방금 들어온 2건인지 한 달 묵은 2건인지 알 수 없다.
+     * 답변이 없으면 {@code Optional.empty()}이며, 이때 대기 시간은 0이 아니라 <b>없음</b>이다.</p>
+     */
+    @Query("select min(i.createdAt) from Inquiry i where i.status = :status")
+    Optional<OffsetDateTime> findOldestCreatedAtByStatus(@Param("status") InquiryStatus status);
 }
