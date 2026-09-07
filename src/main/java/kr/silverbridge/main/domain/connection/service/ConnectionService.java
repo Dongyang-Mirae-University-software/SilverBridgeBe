@@ -39,7 +39,7 @@ public class ConnectionService {
 
     // 보호자: 내 피보호자 목록 조회 (기본 ACTIVE + PENDING, 최신 요청순)
     // — 사이드바 "피보호자 리스트" 화면에서 활용. filter로 상태 탭을 서버에서 좁힌다(null = ALL, 하위호환).
-    // ⚠️ 인가 목록으로 쓰지 말 것 — status=ACTIVE로 좁혀도 이 메서드는 화면 조회용이다.
+    // ⚠️ 인가 목록으로 쓰지 말 것 - status=ACTIVE로 좁혀도 이 메서드는 화면 조회용이다.
     //    타 도메인의 IDOR 판정은 getActiveWardIds()·isActiveConnection()만 쓴다.
     @Transactional(readOnly = true)
     public List<ConnectionResponse> getMyWards(String guardianId, WardListFilter filter) {
