@@ -211,3 +211,12 @@
   - **정정해도 알림을 보내지 않는다**(불변 규칙 ④ 그대로).
   - ⚠️ **V46은 정정용 컬럼 때문이 아니다.** `resolved_by`·`resolved_at`·`review_note`는 V44가 이미 만들어 뒀다. V46이 필요한 이유는 **`admin_audit_log.action`의 CHECK 재정의**다 - `AdminAuditAction` enum에 값만 더하면 insert가 CHECK 위반으로 실패하고 **같은 트랜잭션의 정정까지 롤백돼 500**이 난다(V1↔V14의 C-S3-1과 같은 함정). `AdminAuditActionCheckSyncTest`가 enum 전수와 CHECK를 대조하므로, enum에 값을 더할 때는 **반드시 CHECK 재정의 마이그레이션을 함께** 넣을 것.
 - 상세: `docs/(2026-09-01) feature-anomaly-guardian-review.md`, `docs/(2026-09-02) feature-admin-anomaly-review.md`, `docs/(2026-08-31) api-contract-anomaly-dashboard.md` §4·§6.
+
+## 피보호자 목록 status 필터 - 좁혀도 인가 목록이 아니다 (2026-09-07)
+
+- **경위**: 프론트의 상태 탭이 클라이언트 필터링 대신 서버 기준으로 목록을 받도록 `GET /api/guardian/connection/select`에 `status`(ACTIVE·PENDING·ALL)를 추가했다(PR #242, 마이그레이션 없음).
+- **불변 규칙 ①(인가 목록 아님)**: `getMyWards(guardianId, ACTIVE)`가 결과적으로 ACTIVE 연결만 돌려주지만 **이것을 타 도메인의 IDOR 인가 근거로 쓰지 말 것**. 인가는 계속 `getActiveWardIds()`·`isActiveConnection()`만 쓴다. 이 메서드는 화면 조회용이라 표시 요건(정렬·상태 표기)에 따라 언제든 PENDING을 다시 포함하도록 바뀔 수 있고, 그때 인가가 조용히 넓어진다. SOS·복약·이상감지가 `getMyWards`를 금지해 온 이유가 "지금 PENDING이 섞여서"가 아니라 "이건 인가용 메서드가 아니라서"임을 잊지 말 것.
+- **불변 규칙 ②(전용 필터 enum 유지)**: 파라미터는 `ConnectionStatus`가 아니라 전용 `WardListFilter`(ACTIVE·PENDING·ALL)로 받는다. 전체 상태 enum을 받으면 `status=REFUSED`가 유효한 값이라 400이 아니라 **빈 배열**로 응답되고, 호출자는 "거절된 연결이 0건"으로 **정반대 해석**을 한다("0건인 유형은 항목을 만들지 말 것"·"모르는 값을 0으로 채우지 말 것"과 같은 판단이다). 종료된 이력(CANCELLED·REFUSED·DISCONNECTED)은 `/api/guardian/connection/requests`가 담당하며, 편의를 이유로 `/select`에 종료 상태를 열지 말 것.
+- **불변 규칙 ③(마스킹은 필터와 무관)**: 연락처·주소·이메일은 `ConnectionResponse`가 `status == ACTIVE`일 때만 채운다. `status=PENDING`으로 좁혀 조회해도 null이며, "이미 PENDING만 골라 왔으니 보여줘도 된다"는 식으로 필터를 근거 삼아 마스킹을 풀지 말 것 - 수락 전 피보호자의 연락처는 보호자에게 노출 대상이 아니다.
+- **하위호환**: 파라미터 생략 = 기존 동작(ACTIVE + PENDING). 기본값을 단일 상태로 바꾸면 파라미터 없이 호출하는 기존 프론트 화면이 조용히 비어 보인다.
+- 상세: `docs/(2026-09-07) feature-connection-select-status-filter.md`.
