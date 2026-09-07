@@ -3,6 +3,7 @@ package kr.silverbridge.main.domain.connection.service;
 import kr.silverbridge.main.domain.connection.dto.ConnectionRequestDto;
 import kr.silverbridge.main.domain.connection.dto.ConnectionResponse;
 import kr.silverbridge.main.domain.connection.dto.PendingConnectionResponse;
+import kr.silverbridge.main.domain.connection.dto.WardListFilter;
 import kr.silverbridge.main.domain.connection.entity.Connection;
 import kr.silverbridge.main.domain.connection.event.ConnectionAcceptedEvent;
 import kr.silverbridge.main.domain.connection.event.ConnectionDisconnectedEvent;
@@ -430,7 +431,7 @@ class ConnectionServiceTest {
         }
 
         @Test
-        @DisplayName("getMyWards → ACTIVE+PENDING guardian 관점, PENDING 항목은 전화번호 null")
+        @DisplayName("getMyWards(filter=null) → 파라미터 생략은 ACTIVE+PENDING (기존 FE 하위호환), PENDING 항목은 전화번호 null")
         void getMyWards_혼합상태_PENDING은_전화null() {
             Connection activeConn = Connection.builder()
                     .id(1L).guardianId(GUARDIAN_ID).wardId(WARD_ID)
@@ -444,7 +445,7 @@ class ConnectionServiceTest {
             when(userRepository.findAllById(anyList()))
                     .thenReturn(List.of(wardWithId(WARD_ID), wardWithId(OTHER_WARD_ID)));
 
-            List<ConnectionResponse> result = connectionService.getMyWards(GUARDIAN_ID);
+            List<ConnectionResponse> result = connectionService.getMyWards(GUARDIAN_ID, null);
 
             assertThat(result).hasSize(2);
             ConnectionResponse activeRes = result.stream()
@@ -453,6 +454,69 @@ class ConnectionServiceTest {
                     .filter(r -> r.getStatus().equals("PENDING")).findFirst().orElseThrow();
             assertThat(activeRes.getPartnerPhone()).isNotNull();   // ACTIVE → 노출
             assertThat(pendingRes.getPartnerPhone()).isNull();     // PENDING → 미노출
+        }
+
+        @Test
+        @DisplayName("getMyWards(ALL) → 생략과 같은 상태 집합을 조회한다")
+        void getMyWards_ALL은_생략과_동일() {
+            when(connectionRepository.findByGuardianIdAndStatusInOrderByCreatedAtDesc(
+                    GUARDIAN_ID, List.of(ConnectionStatus.ACTIVE, ConnectionStatus.PENDING)))
+                    .thenReturn(List.of());
+            when(userRepository.findAllById(anyList())).thenReturn(List.of());
+
+            connectionService.getMyWards(GUARDIAN_ID, WardListFilter.ALL);
+
+            verify(connectionRepository).findByGuardianIdAndStatusInOrderByCreatedAtDesc(
+                    GUARDIAN_ID, List.of(ConnectionStatus.ACTIVE, ConnectionStatus.PENDING));
+        }
+
+        @Test
+        @DisplayName("getMyWards(ACTIVE) → ACTIVE만 조회하고 PENDING은 목록에 섞이지 않는다")
+        void getMyWards_ACTIVE만_조회() {
+            Connection activeConn = Connection.builder()
+                    .id(1L).guardianId(GUARDIAN_ID).wardId(WARD_ID)
+                    .status(ConnectionStatus.ACTIVE).initiatedBy(GUARDIAN_ID).relation(RELATION).build();
+            when(connectionRepository.findByGuardianIdAndStatusInOrderByCreatedAtDesc(
+                    GUARDIAN_ID, List.of(ConnectionStatus.ACTIVE)))
+                    .thenReturn(List.of(activeConn));
+            when(userRepository.findAllById(anyList())).thenReturn(List.of(wardWithId(WARD_ID)));
+
+            List<ConnectionResponse> result = connectionService.getMyWards(GUARDIAN_ID, WardListFilter.ACTIVE);
+
+            assertThat(result).hasSize(1);
+            assertThat(result.get(0).getStatus()).isEqualTo("ACTIVE");
+            verify(connectionRepository).findByGuardianIdAndStatusInOrderByCreatedAtDesc(
+                    GUARDIAN_ID, List.of(ConnectionStatus.ACTIVE));
+        }
+
+        @Test
+        @DisplayName("getMyWards(PENDING) → PENDING만 조회하고 전화번호는 여전히 null (필터로 마스킹이 풀리지 않는다)")
+        void getMyWards_PENDING만_조회_전화번호는_여전히null() {
+            Connection pendingConn = Connection.builder()
+                    .id(2L).guardianId(GUARDIAN_ID).wardId(OTHER_WARD_ID)
+                    .status(ConnectionStatus.PENDING).initiatedBy(GUARDIAN_ID).relation("딸").build();
+            when(connectionRepository.findByGuardianIdAndStatusInOrderByCreatedAtDesc(
+                    GUARDIAN_ID, List.of(ConnectionStatus.PENDING)))
+                    .thenReturn(List.of(pendingConn));
+            when(userRepository.findAllById(anyList())).thenReturn(List.of(wardWithId(OTHER_WARD_ID)));
+
+            List<ConnectionResponse> result = connectionService.getMyWards(GUARDIAN_ID, WardListFilter.PENDING);
+
+            assertThat(result).hasSize(1);
+            assertThat(result.get(0).getStatus()).isEqualTo("PENDING");
+            assertThat(result.get(0).getPartnerPhone()).isNull();
+            assertThat(result.get(0).getPartnerAddress()).isNull();
+        }
+
+        @Test
+        @DisplayName("WardListFilter는 종료 상태(REFUSED·CANCELLED·DISCONNECTED)를 조회 대상으로 삼지 않는다")
+        void 필터는_종료상태를_포함하지_않는다() {
+            assertThat(WardListFilter.values())
+                    .allSatisfy(filter -> assertThat(filter.toStatuses())
+                            .containsAnyOf(ConnectionStatus.ACTIVE, ConnectionStatus.PENDING)
+                            .doesNotContain(ConnectionStatus.REFUSED,
+                                    ConnectionStatus.CANCELLED,
+                                    ConnectionStatus.DISCONNECTED));
         }
     }
 

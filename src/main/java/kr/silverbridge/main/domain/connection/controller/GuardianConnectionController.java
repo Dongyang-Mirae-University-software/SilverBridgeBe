@@ -1,12 +1,14 @@
 package kr.silverbridge.main.domain.connection.controller;
 
 import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import kr.silverbridge.main.domain.connection.dto.ConnectionRequestDto;
 import kr.silverbridge.main.domain.connection.dto.ConnectionResponse;
+import kr.silverbridge.main.domain.connection.dto.WardListFilter;
 import kr.silverbridge.main.domain.connection.service.ConnectionService;
 import kr.silverbridge.main.global.response.ApiResponse;
 import kr.silverbridge.main.global.security.RateLimitService;
@@ -34,19 +36,31 @@ public class GuardianConnectionController {
 
                     ACTIVE(연결됨) + PENDING(수락 대기) 상태 연결 목록을 최신 요청순으로 반환합니다.
                     status 필드로 상태를 구분하여 UI에서 "수락 대기 중" 표시에 활용하세요.
-                    거절·취소된 이력까지 함께 보려면 /api/guardian/connection/requests 를 사용하세요.
+
+                    [상태 탭 - status 쿼리 파라미터]
+                    status=ACTIVE  → 연결됨만
+                    status=PENDING → 수락 대기만
+                    status=ALL     → 진행 중인 연결 전부(ACTIVE + PENDING)
+                    생략하면 ALL과 동일합니다(기존 호출 그대로 동작).
+
+                    탭마다 이 API를 다시 호출하면 목록·카운트 기준이 서버와 일치합니다.
+                    거절·취소·해제된 이력은 이 API가 다루지 않습니다(status=REFUSED 등은 400).
+                    종료된 이력까지 보려면 /api/guardian/connection/requests 를 사용하세요.
 
                     상대방 전화번호·주소는 ACTIVE 상태에서만 채워지고, PENDING/CANCELLED에서는 null로 반환됩니다.
                     """)
     @ApiResponses({
-            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "ACTIVE + PENDING 상태 연결 목록 반환"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "요청한 상태의 연결 목록 반환 (생략 시 ACTIVE + PENDING)"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "status 값이 ACTIVE·PENDING·ALL 이 아님", content = @Content),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "인증 토큰 없음 또는 만료", content = @Content),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "보호자 권한 필요", content = @Content)
     })
     @GetMapping("/api/guardian/connection/select")
     public ResponseEntity<ApiResponse<List<ConnectionResponse>>> getMyWards(
-            @AuthenticationPrincipal String guardianId) {
-        return ResponseEntity.ok(ApiResponse.ok(connectionService.getMyWards(guardianId)));
+            @AuthenticationPrincipal String guardianId,
+            @Parameter(description = "상태 필터 (생략 시 ALL = ACTIVE + PENDING)")
+            @RequestParam(required = false) WardListFilter status) {
+        return ResponseEntity.ok(ApiResponse.ok(connectionService.getMyWards(guardianId, status)));
     }
 
     @Operation(summary = "내가 보낸 연결 요청 이력 조회",

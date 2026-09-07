@@ -1250,3 +1250,16 @@ REST API Key 단독 대비 보안 강화 — 인가코드 탈취 시 토큰 발�
 - **설계 판단 2가지**: `respondedAt`은 **마지막으로 답을 바꾼 시각**이다(번복 가능하므로 "지금 이 사람 의견이 언제 것인가"가 필요하다). 빈 페이지에서 일찍 반환하지 않고 조회만 건너뛴다(전체 건수 같은 페이징 정보를 살리기 위해).
 - **검증**: `./gradlew build` **504건 / 실패 0**(기존 488 + 신규 16). 되돌리기 거부 테스트는 상태를 건드리지도 감사 로그를 남기지도 않는 것까지 확인한다.
 - 상세: `docs/(2026-09-02) feature-admin-anomaly-review.md`
+
+## [2026-09-07] 보호자 피보호자 목록 status 필터 (마이그레이션 없음)
+
+- **발단**: FE가 "탭은 UI 상태지만 데이터 기준은 백엔드가 가져야 한다"며 `GET /api/guardian/connection/select`에 `status` 쿼리 파라미터를 요청했다. 착수 전 FE 리포(gosky `e160256`, 로컬 동일)를 확인한 결과 **지금 깨지고 있는 화면은 없었다** - 제안서가 말한 보호자 SOS 페이지와 상태 탭이 아직 없고(`GuardianWardsPanel`의 현재 탭은 목록/등록), 페이지네이션도 어디에도 없다. **앞으로 만들 화면을 위한 선반영**이다.
+- **FE 프록시가 쿼리스트링을 그대로 넘긴다**(`request.nextUrl.search`) - 백엔드 파라미터 추가만으로 끝나고 프록시 수정이 불필요했다. 캐시 지적은 사실이었다(`['guardian-connections']` 단일 키를 세 컴포넌트가 공유).
+- 🔴 **`ConnectionStatus`를 그대로 파라미터로 받지 않았다**: 전체 상태 enum을 받으면 `status=REFUSED`가 **유효한 enum이라 400이 아니라 빈 배열**로 응답돼, 호출자가 "거절된 연결이 0건"으로 **정확히 반대 해석**을 하게 된다. FE의 `sortGuardianConnections`에 이미 REFUSED·CANCELLED·DISCONNECTED 정렬 순서가 들어 있어(도달 불가한 분기) 이 오해의 소지가 실재했다. 전용 enum `WardListFilter`(ACTIVE·PENDING·ALL)로 받아 종료 상태를 **구조적으로 400**으로 만들고, 종료 이력은 `/requests`가 담당한다는 경계를 남겼다.
+- **`ALL`은 ACTIVE + PENDING이다**(종료 이력 제외 = 파라미터 생략과 동일). "전체"라는 이름이 `/requests`와 겹치지 않도록 Swagger에 명시했다.
+- **인가 경계는 그대로**: `getMyWards`는 `status=ACTIVE`로 좁혀도 화면 조회용이며 인가 목록이 아니다. 타 도메인 IDOR 판정은 여전히 `getActiveWardIds()`·`isActiveConnection()`만 쓴다(주석 명시). 착수 전 확인 결과 `getMyWards`의 운영 호출부는 컨트롤러 1곳뿐이었다.
+- **상태별 마스킹은 필터로 풀리지 않는다**: `PENDING` 단독 조회에서도 전화번호·주소가 null인 것을 테스트로 고정했다.
+- **탭 count는 범위 밖**: 헤더의 "연결됨 N명 · 대기 N건"은 지금 한 응답에서 둘 다 계산하므로, 탭별로 쪼개면 오히려 두 번 호출해야 한다. status 파라미터만으로 해결되지 않는 별건이다.
+- **하위호환**: 파라미터 생략 = 기존 동작(ACTIVE + PENDING). 기존 FE 호출 3곳 무변경으로 동작한다.
+- **검증**: `./gradlew build` **508건 / 실패 0**(기존 504 + 신규 4).
+- 상세: `docs/(2026-09-07) feature-connection-select-status-filter.md`
