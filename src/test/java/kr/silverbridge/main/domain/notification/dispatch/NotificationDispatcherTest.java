@@ -4,6 +4,7 @@ import kr.silverbridge.main.domain.notification.channel.NotificationChannel;
 import kr.silverbridge.main.domain.notification.channel.NotificationChannelType;
 import kr.silverbridge.main.domain.notification.channel.NotificationContent;
 import kr.silverbridge.main.domain.notification.channel.NotificationRecipient;
+import kr.silverbridge.main.global.enums.Status;
 import kr.silverbridge.main.domain.notification.service.NotificationSettingService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -56,7 +57,7 @@ class NotificationDispatcherTest {
         // KAKAO_ALIMTALK / EMAIL 구현체는 등록하지 않음(미구현 채널 시나리오 재현)
         dispatcher = new NotificationDispatcher(List.of(fcmChannel, smsChannel), settingService, recipientResolver);
         lenient().when(recipientResolver.resolve(USER_ID))
-                .thenReturn(new NotificationRecipient(USER_ID, "01012345678", "a@b.com"));
+                .thenReturn(new NotificationRecipient(USER_ID, "01012345678", "a@b.com", Status.ACTIVE));
     }
 
     @Test
@@ -118,6 +119,73 @@ class NotificationDispatcherTest {
         verifyNoInteractions(recipientResolver);
         verify(fcmChannel, never()).send(any(), any(), any());
         verify(smsChannel, never()).send(any(), any(), any());
+    }
+
+    // ─── 이용 제한 계정 차단 ──────────────────────────────────────
+
+    @Test
+    @DisplayName("이용 제한 계정에는 설정으로 켜 둔 채널에도 발송하지 않는다")
+    void 이용제한_설정채널_미발송() {
+        givenRestrictedRecipient();
+        given(settingService.enabledChannels(USER_ID))
+                .willReturn(EnumSet.of(NotificationChannelType.FCM, NotificationChannelType.SMS));
+
+        dispatcher.dispatch(USER_ID, NotificationType.CONNECTION_REQUEST, content);
+
+        verify(fcmChannel, never()).send(any(), any(), any());
+        verify(smsChannel, never()).send(any(), any(), any());
+    }
+
+    @Test
+    @DisplayName("이용 제한 계정에는 필수 알림(WARD_SOS)의 강제 FCM도, SMS 폴백도 나가지 않는다")
+    void 이용제한_필수알림도_미발송() {
+        givenRestrictedRecipient();
+
+        dispatcher.dispatch(USER_ID, NotificationType.WARD_SOS, content);
+
+        // 강제 채널이라고 예외를 두면 정지 계정을 쥔 사람에게 SOS 발생 시각이 계속 통보된다
+        verify(fcmChannel, never()).send(any(), any(), any());
+        verify(smsChannel, never()).send(any(), any(), any());
+    }
+
+    @Test
+    @DisplayName("이용 제한 계정에는 이상감지(FCM 고정) 알림도 나가지 않는다")
+    void 이용제한_이상감지도_미발송() {
+        givenRestrictedRecipient();
+
+        dispatcher.dispatch(USER_ID, NotificationType.ANOMALY_DETECTED, content);
+
+        verify(fcmChannel, never()).send(any(), any(), any());
+        verify(smsChannel, never()).send(any(), any(), any());
+        // 차단이 먼저라 사용자 설정을 읽는 일조차 없다
+        verifyNoInteractions(settingService);
+    }
+
+    @Test
+    @DisplayName("탈퇴 진행 중(INACTIVE) 계정에도 발송하지 않는다")
+    void 탈퇴진행_미발송() {
+        given(recipientResolver.resolve(USER_ID))
+                .willReturn(new NotificationRecipient(USER_ID, "01012345678", "a@b.com", Status.INACTIVE));
+
+        dispatcher.dispatch(USER_ID, NotificationType.WARD_SOS, content);
+
+        verify(fcmChannel, never()).send(any(), any(), any());
+    }
+
+    @Test
+    @DisplayName("사용자 행을 찾지 못해 상태를 모르면 막지 않는다 - 정지된 것이 아니라 알 수 없는 것이다")
+    void 상태불명은_기존대로_발송() {
+        given(recipientResolver.resolve(USER_ID))
+                .willReturn(new NotificationRecipient(USER_ID, null, null, null));
+
+        dispatcher.dispatch(USER_ID, NotificationType.WARD_SOS, content);
+
+        verify(fcmChannel).send(any(), any(), any());
+    }
+
+    private void givenRestrictedRecipient() {
+        given(recipientResolver.resolve(USER_ID))
+                .willReturn(new NotificationRecipient(USER_ID, "01012345678", "a@b.com", Status.RESTRICTED));
     }
 
     @Test

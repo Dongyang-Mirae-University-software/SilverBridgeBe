@@ -148,12 +148,24 @@ public class AdminUserController {
 
                     [계정 상태]
                     ACTIVE(이용 중) ↔ RESTRICTED(이용 제한)만 오갈 수 있습니다.
-                    이용 제한으로 바꾸면 로그인·토큰 재발급이 막히고 **이미 발급된 토큰도 즉시 무효화**됩니다.
+                    이용 제한으로 바꾸면 로그인·토큰 재발급이 막히고 **이미 발급된 토큰도 즉시 무효화**되며,
+                    **그 계정으로는 어떤 알림도 나가지 않습니다**(SOS·이상감지의 강제 푸시 포함).
                     INACTIVE 는 400 입니다 - 탈퇴는 상태 변경이 아니라 삭제(회원 강제 탈퇴)입니다.
+
+                    [피보호자는 이용 제한할 수 없습니다] (400)
+                    로그인이 막히면 긴급 도움 요청(SOS)을 보낼 수 없게 되기 때문입니다.
+                    피보호자 계정은 편의 기능이 아니라 안전망 그 자체라, 탈취가 의심되면
+                    정지 대신 비밀번호 재설정으로 세션만 끊는 것이 맞습니다.
+                    **정지된 보호자를 피보호자로 바꾸는 것도 같은 이유로 400**입니다(두 단계 우회 차단).
+                    다만 제한을 풀면서 동시에 역할을 바꾸는 요청은 정상 처리됩니다.
+
+                    [정지 사유]
+                    statusReason 은 선택이며 RESTRICTED 로 바꿀 때만 저장됩니다(최대 200자).
+                    ACTIVE 로 되돌리면 지워집니다. 목록·상세 응답의 statusReason 으로 확인할 수 있습니다.
                     """)
     @ApiResponses({
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "수정 완료"),
-            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "입력값 유효성 실패 / ADMIN 역할 지정 / INACTIVE 상태 지정", content = @Content),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "입력값 유효성 실패 / ADMIN 역할 지정 / INACTIVE 상태 지정 / 피보호자 이용 제한 시도", content = @Content),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "인증 토큰 없음 또는 만료", content = @Content),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "관리자 권한 없음 또는 관리자 계정 변경 시도", content = @Content),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "회원을 찾을 수 없음", content = @Content),

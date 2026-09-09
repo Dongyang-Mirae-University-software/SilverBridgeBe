@@ -223,7 +223,7 @@ class AdminUserServiceTest {
         void 이름_수정() {
             User user = givenUser(user(USER_ID, "홍길동", Role.GUARDIAN, Status.ACTIVE));
 
-            service().updateUser(USER_ID, new AdminUserUpdateRequest("홍길순", null, null), ADMIN_ID);
+            service().updateUser(USER_ID, new AdminUserUpdateRequest("홍길순", null, null, null), ADMIN_ID);
 
             assertThat(user.getName()).isEqualTo("홍길순");
             assertThat(user.getRole()).isEqualTo(Role.GUARDIAN);
@@ -240,7 +240,7 @@ class AdminUserServiceTest {
             givenUser(user(USER_ID, "홍길동", Role.GUARDIAN, Status.ACTIVE));
 
             service().updateUser(USER_ID,
-                    new AdminUserUpdateRequest("홍길동", Role.GUARDIAN, Status.ACTIVE), ADMIN_ID);
+                    new AdminUserUpdateRequest("홍길동", Role.GUARDIAN, Status.ACTIVE, null), ADMIN_ID);
 
             verify(auditLogService, never()).log(anyString(), any(), anyString(), anyString());
             verify(connectionService, never()).tearDownConnectionsOnRoleChange(anyString());
@@ -252,7 +252,7 @@ class AdminUserServiceTest {
             User user = givenUser(user(USER_ID, "홍길동", Role.GUARDIAN, Status.ACTIVE));
             when(connectionService.tearDownConnectionsOnRoleChange(USER_ID)).thenReturn(3);
 
-            service().updateUser(USER_ID, new AdminUserUpdateRequest(null, Role.WARD, null), ADMIN_ID);
+            service().updateUser(USER_ID, new AdminUserUpdateRequest(null, Role.WARD, null, null), ADMIN_ID);
 
             assertThat(user.getRole()).isEqualTo(Role.WARD);
             verify(connectionService).tearDownConnectionsOnRoleChange(USER_ID);
@@ -266,7 +266,7 @@ class AdminUserServiceTest {
             User user = givenUser(user(USER_ID, "홍길동", Role.GUARDIAN, Status.ACTIVE));
 
             assertThatThrownBy(() -> service().updateUser(USER_ID,
-                    new AdminUserUpdateRequest(null, Role.ADMIN, null), ADMIN_ID))
+                    new AdminUserUpdateRequest(null, Role.ADMIN, null, null), ADMIN_ID))
                     .isInstanceOf(CustomException.class)
                     .hasFieldOrPropertyWithValue("errorCode", ErrorCode.INVALID_ROLE);
 
@@ -280,7 +280,7 @@ class AdminUserServiceTest {
             User user = givenUser(user(USER_ID, "홍길동", Role.GUARDIAN, Status.ACTIVE));
 
             service().updateUser(USER_ID,
-                    new AdminUserUpdateRequest(null, null, Status.RESTRICTED), ADMIN_ID);
+                    new AdminUserUpdateRequest(null, null, Status.RESTRICTED, null), ADMIN_ID);
 
             assertThat(user.getStatus()).isEqualTo(Status.RESTRICTED);
             verify(eventPublisher).publishEvent(new UserRestrictedEvent(USER_ID));
@@ -289,11 +289,81 @@ class AdminUserServiceTest {
         }
 
         @Test
+        @DisplayName("정지 사유는 계정에 저장되고 감사 로그에도 함께 남는다")
+        void 정지_사유가_저장된다() {
+            User user = givenUser(user(USER_ID, "홍길동", Role.GUARDIAN, Status.ACTIVE));
+
+            service().updateUser(USER_ID,
+                    new AdminUserUpdateRequest(null, null, Status.RESTRICTED, "  본인 신고 - 탈취 의심  "),
+                    ADMIN_ID);
+
+            // 정지는 "본인 확인이 될 때까지의 임시 조치"라, 왜 잠갔는지가 없으면 해제 판단을 할 수 없다
+            assertThat(user.getStatusReason()).isEqualTo("본인 신고 - 탈취 의심");
+            verify(auditLogService).log(eq(ADMIN_ID), eq(AdminAuditAction.USER_STATUS_CHANGE), eq(USER_ID),
+                    eq("계정 상태 변경: 이용 중 → 이용 제한 (사유: 본인 신고 - 탈취 의심)"));
+        }
+
+        @Test
+        @DisplayName("이용 중으로 되돌리면 정지 사유가 지워진다 - 잠기지 않았는데 잠긴 이유가 남으면 안 된다")
+        void 해제하면_사유가_지워진다() {
+            User user = user(USER_ID, "홍길동", Role.GUARDIAN, Status.RESTRICTED);
+            user.restrict("본인 신고 - 탈취 의심");
+            givenUser(user);
+
+            service().updateUser(USER_ID, new AdminUserUpdateRequest(null, null, Status.ACTIVE, null), ADMIN_ID);
+
+            assertThat(user.getStatus()).isEqualTo(Status.ACTIVE);
+            assertThat(user.getStatusReason()).isNull();
+        }
+
+        @Test
+        @DisplayName("피보호자는 이용 제한할 수 없다 - 로그인이 막히면 SOS를 보낼 수 없게 된다")
+        void 피보호자는_정지할_수_없다() {
+            User ward = givenUser(user(WARD_ID, "박민수", Role.WARD, Status.ACTIVE));
+
+            assertThatThrownBy(() -> service().updateUser(WARD_ID,
+                    new AdminUserUpdateRequest(null, null, Status.RESTRICTED, "사유"), ADMIN_ID))
+                    .isInstanceOf(CustomException.class)
+                    .hasFieldOrPropertyWithValue("errorCode", ErrorCode.WARD_CANNOT_BE_RESTRICTED);
+
+            assertThat(ward.getStatus()).isEqualTo(Status.ACTIVE);
+            verify(auditLogService, never()).log(anyString(), any(), anyString(), anyString());
+        }
+
+        @Test
+        @DisplayName("정지된 보호자를 피보호자로 바꾸는 것도 막는다 - 두 단계로 우회하면 같은 상태가 된다")
+        void 정지상태에서_피보호자로_바꿀_수_없다() {
+            User user = user(USER_ID, "홍길동", Role.GUARDIAN, Status.RESTRICTED);
+            givenUser(user);
+
+            assertThatThrownBy(() -> service().updateUser(USER_ID,
+                    new AdminUserUpdateRequest(null, Role.WARD, null, null), ADMIN_ID))
+                    .isInstanceOf(CustomException.class)
+                    .hasFieldOrPropertyWithValue("errorCode", ErrorCode.WARD_CANNOT_BE_RESTRICTED);
+
+            assertThat(user.getRole()).isEqualTo(Role.GUARDIAN);
+            verify(connectionService, never()).tearDownConnectionsOnRoleChange(anyString());
+        }
+
+        @Test
+        @DisplayName("제한을 풀면서 동시에 피보호자로 바꾸는 것은 허용한다 - 결과 조합이 정상이다")
+        void 해제와_역할변경을_동시에_하면_통과() {
+            User user = user(USER_ID, "홍길동", Role.GUARDIAN, Status.RESTRICTED);
+            givenUser(user);
+
+            service().updateUser(USER_ID,
+                    new AdminUserUpdateRequest(null, Role.WARD, Status.ACTIVE, null), ADMIN_ID);
+
+            assertThat(user.getRole()).isEqualTo(Role.WARD);
+            assertThat(user.getStatus()).isEqualTo(Status.ACTIVE);
+        }
+
+        @Test
         @DisplayName("이용 중으로 되돌릴 때는 토큰 무효화 이벤트를 발행하지 않는다")
         void 해제는_이벤트를_발행하지_않는다() {
             User user = givenUser(user(USER_ID, "홍길동", Role.GUARDIAN, Status.RESTRICTED));
 
-            service().updateUser(USER_ID, new AdminUserUpdateRequest(null, null, Status.ACTIVE), ADMIN_ID);
+            service().updateUser(USER_ID, new AdminUserUpdateRequest(null, null, Status.ACTIVE, null), ADMIN_ID);
 
             assertThat(user.getStatus()).isEqualTo(Status.ACTIVE);
             verify(eventPublisher, never()).publishEvent(any(UserRestrictedEvent.class));
@@ -305,7 +375,7 @@ class AdminUserServiceTest {
             User user = givenUser(user(USER_ID, "홍길동", Role.GUARDIAN, Status.ACTIVE));
 
             assertThatThrownBy(() -> service().updateUser(USER_ID,
-                    new AdminUserUpdateRequest(null, null, Status.INACTIVE), ADMIN_ID))
+                    new AdminUserUpdateRequest(null, null, Status.INACTIVE, null), ADMIN_ID))
                     .isInstanceOf(CustomException.class)
                     .hasFieldOrPropertyWithValue("errorCode", ErrorCode.INVALID_STATUS);
 
@@ -319,7 +389,7 @@ class AdminUserServiceTest {
             User admin = givenUser(user("AD0002", "김철수", Role.ADMIN, Status.ACTIVE));
 
             assertThatThrownBy(() -> service().updateUser("AD0002",
-                    new AdminUserUpdateRequest("바뀐이름", null, Status.RESTRICTED), ADMIN_ID))
+                    new AdminUserUpdateRequest("바뀐이름", null, Status.RESTRICTED, null), ADMIN_ID))
                     .isInstanceOf(CustomException.class)
                     .hasFieldOrPropertyWithValue("errorCode", ErrorCode.CANNOT_MODIFY_ADMIN);
 
@@ -334,7 +404,7 @@ class AdminUserServiceTest {
             User user = givenUser(user(USER_ID, "홍길동", Role.GUARDIAN, Status.ACTIVE));
 
             assertThatThrownBy(() -> service().updateUser(USER_ID,
-                    new AdminUserUpdateRequest("   ", null, null), ADMIN_ID))
+                    new AdminUserUpdateRequest("   ", null, null, null), ADMIN_ID))
                     .isInstanceOf(CustomException.class)
                     .hasFieldOrPropertyWithValue("errorCode", ErrorCode.INVALID_INPUT);
 

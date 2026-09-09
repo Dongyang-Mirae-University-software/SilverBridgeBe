@@ -3,6 +3,7 @@ package kr.silverbridge.main.domain.notification.channel;
 import kr.silverbridge.main.domain.notification.dispatch.NotificationType;
 
 import kr.silverbridge.main.domain.notification.service.FcmService;
+import kr.silverbridge.main.global.enums.Status;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -31,7 +32,7 @@ class FcmNotificationChannelTest {
     @Test
     @DisplayName("send는 FcmService.sendToUser에 위임하고 전달 결과를 그대로 반환한다")
     void send_FcmService위임() {
-        NotificationRecipient recipient = new NotificationRecipient("WD0001", "01012345678", "a@b.com");
+        NotificationRecipient recipient = new NotificationRecipient("WD0001", "01012345678", "a@b.com", Status.ACTIVE);
         Map<String, String> data = Map.of("type", "CONNECTION_REQUEST", "connectionId", "100");
         NotificationContent content = NotificationContent.of("연결 요청", "요청이 도착했습니다.", data);
         when(fcmService.sendToUser("WD0001", "연결 요청", "요청이 도착했습니다.", data)).thenReturn(true);

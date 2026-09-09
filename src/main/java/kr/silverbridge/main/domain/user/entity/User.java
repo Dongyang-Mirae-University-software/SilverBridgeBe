@@ -42,6 +42,11 @@ public class User extends BaseTimeEntity {
     @Column(nullable = false, length = 20)
     private Status status;
 
+    // 관리자가 이용 제한한 사유. RESTRICTED일 때만 채워지고 해제하면 지운다.
+    // 변경 이력은 admin_audit_log가 담당하고, 이 컬럼은 "지금 왜 잠겨 있는가"만 답한다.
+    @Column(name = "status_reason", length = 200)
+    private String statusReason;
+
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 20)
     private Provider provider;
@@ -90,9 +95,11 @@ public class User extends BaseTimeEntity {
         this.status = Status.ACTIVE;
     }
 
-    // 계정 활성화
+    // 계정 활성화. 이용 제한을 푸는 경로이기도 하므로 사유도 함께 지운다
+    // (사유가 남아 있으면 "잠겨 있지 않은데 잠긴 이유가 있는" 상태가 된다).
     public void activate() {
         this.status = Status.ACTIVE;
+        this.statusReason = null;
     }
 
     // 계정 비활성화 (탈퇴 전용)
@@ -103,8 +110,10 @@ public class User extends BaseTimeEntity {
     }
 
     // 계정 이용 제한 (관리자 정지) - 로그인·토큰 재발급이 막히지만 데이터는 그대로 남는다.
-    public void restrict() {
+    // reason은 선택이며, 해제 시 activate()가 지운다.
+    public void restrict(String reason) {
         this.status = Status.RESTRICTED;
+        this.statusReason = reason;
     }
 
     // 이름만 수정 (관리자 회원관리) - 이메일·전화번호는 관리자가 바꿀 수 없다.
