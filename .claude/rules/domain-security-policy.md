@@ -220,3 +220,25 @@
 - **불변 규칙 ③(마스킹은 필터와 무관)**: 연락처·주소·이메일은 `ConnectionResponse`가 `status == ACTIVE`일 때만 채운다. `status=PENDING`으로 좁혀 조회해도 null이며, "이미 PENDING만 골라 왔으니 보여줘도 된다"는 식으로 필터를 근거 삼아 마스킹을 풀지 말 것 - 수락 전 피보호자의 연락처는 보호자에게 노출 대상이 아니다.
 - **하위호환**: 파라미터 생략 = 기존 동작(ACTIVE + PENDING). 기본값을 단일 상태로 바꾸면 파라미터 없이 호출하는 기존 프론트 화면이 조용히 비어 보인다.
 - 상세: `docs/(2026-09-07) feature-connection-select-status-filter.md`.
+
+## 관리자 회원관리 - 정지는 별도 상태, 삭제는 탈퇴 경로 (2026-09-09)
+
+- **경위**: 2026-05-15에 만들었다가 2026-06-11에 제거된 회원관리 API를 관리자 콘솔 프로토타입에 맞춰 복원했다(V47·V48). 옛 구현을 그대로 되살리면 안 되는 지점이 여섯 개 있었고, 그중 셋은 계정을 지우거나 정지를 무력화하는 것이었다.
+- **불변 규칙 ①(정지는 RESTRICTED, INACTIVE 재사용 금지)**: 계정 상태는 **이용 중(`ACTIVE`) / 이용 제한(`RESTRICTED`) / 삭제(강제 탈퇴)** 세 가지다. 정지를 `INACTIVE`로 표현하지 말 것 - `WithdrawnUserPurgeScheduler`가 `updated_at`이 10분 지난 INACTIVE 행을 좀비로 보고 **영구 삭제**하므로 정지시킨 계정이 20분 안에 사라진다(2026-06-11 INACTIVE 불변식이 예고한 바로 그 경우다). 수정 API가 `INACTIVE`를 받으면 400(`INVALID_STATUS`)이다 - 탈퇴는 상태 변경이 아니라 삭제다.
+  - "비활성화" 상태를 다시 만들지 말 것. 이미 삭제가 있어 의미가 없다고 판단해 넣지 않았다.
+  - ⚠️ **`Status` enum에 값을 더할 때는 반드시 `chk_users_status` 재정의 마이그레이션을 함께** 넣는다. V4가 허용 목록을 `ACTIVE`·`INACTIVE`로 좁혀 놔서 enum만 늘리면 UPDATE가 CHECK 위반(23514)으로 실패하고 본 작업까지 롤백돼 500이 난다(`admin_audit_log.action`의 C-S3-1·V46과 같은 함정). `UserStatusCheckSyncTest`가 enum 전수와 CHECK를 대조해 막는다.
+- **불변 규칙 ②(로그인 차단은 부등호로)**: 계정 상태 검사는 `status != Status.ACTIVE`로 한다. `== INACTIVE` 등호 비교로 되돌리지 말 것 - 새 상태값이 늘 때마다 조용히 로그인이 뚫린다(실제로 RESTRICTED 도입 시점에 `AuthService` 2곳·`KakaoAuthService` 1곳이 그 상태였다). 응답은 `INACTIVE_USER`(403)를 공용으로 쓴다.
+  - **정지는 토큰까지 끊어야 즉시 듣는다**: `JwtAuthenticationFilter`가 요청마다 DB를 읽지 않아 상태만 바꾸면 기존 access token이 만료(30분)까지 유효하다. `UserRestrictedEvent` → `UserAccountEventListener.handleRestricted`가 refresh 삭제 + Redis 무효화 키를 세운다(탈퇴·비밀번호 변경과 같은 경로). 이 이벤트를 떼지 말 것.
+- **불변 규칙 ③(강제 탈퇴도 탈퇴 파이프라인을 탄다)**: 관리자 삭제는 `UserService.forceWithdraw()`(본인 확인만 없는 일반 탈퇴) → AFTER_COMMIT 리스너 3종 → `purgeWithdrawnUser()` 2단계다. **`userRepository.delete()`를 직접 부르지 말 것** - 리스너를 건너뛰어 연결 상대 알림·FCM 토큰 정리·WITHDRAW 접속로그가 유실되는데, 행 정리는 FK CASCADE가 해버려 겉보기엔 성공한 것처럼 보인다.
+  - **감사 로그는 삭제보다 먼저 남긴다.** 뒤에 남기면 기록이 실패했을 때 계정만 사라지고 누가 지웠는지가 남지 않는다.
+- **불변 규칙 ④(관리자 계정은 조회만)**: 대상이 ADMIN이면 수정·삭제 모두 403(`CANNOT_MODIFY_ADMIN`)이고 `[ADMIN-MODIFY-BLOCKED]` WARN을 남긴다. 관리자가 관리자를 지울 수 있으면 서로를 지워 운영 주체가 사라진다. **역할 변경으로 ADMIN을 만들 수도 없다**(400 `INVALID_ROLE`) - 회원관리 화면 하나로 권한을 만들어낼 수 있게 된다.
+- **불변 규칙 ⑤(역할 변경은 연결을 정리하고 ACTIVE만 알린다)**: 역할이 뒤집히면 보호자-피보호자 방향이 어긋나 관계가 뜻을 잃으므로 기존 연결을 정리한다. **ACTIVE는 `disconnect()` + `ConnectionDisconnectedEvent`(상대 알림), PENDING은 `cancel()`(무알림)** - 탈퇴 정리와 같은 규칙이며 PENDING 무알림은 2026-05-28 알림 비대칭 정책 그대로다. ACTIVE를 `cancel()`로 끝내지 말 것(CANCELLED는 "수락 전 요청을 스스로 취소"라는 뜻이라 이력이 사실과 달라진다).
+- **불변 규칙 ⑥(관리자도 이메일·전화번호는 못 바꾼다)**: 수정 대상은 **이름·역할·계정 상태 3가지뿐**이다.
+  - **전화번호** - 본인 경로는 SMS 인증 nonce 소비가 필수라(H-5) 관리자 경로를 열면 그 인증을 통째로 우회한다. 게다가 전화번호는 SOS·복약 문자가 실제로 도착하는 곳이라 오입력이 긴급 알림을 남에게 보낸다.
+  - **이메일** - 본인조차 바꿀 수 없는 로그인 ID다. 관리자에게 열면 시스템에서 유일한 이메일 변경 경로가 된다.
+  - 이름 수정은 감사 로그(`USER_NAME_CHANGE`)를 남긴다. **`AdminAuditAction`에 값을 더할 때는 CHECK 재정의 마이그레이션을 함께** 넣는다(V48).
+- **관리자 계정의 연결 상태는 `null`이다**: 연결이 0건인 것이 아니라 **연결이라는 축 자체가 없는** 계정이라, NONE("미연결")으로 표시하면 "연결이 끊긴 회원"으로 정확히 반대로 읽힌다. 대시보드의 "모르는 값을 0으로 채우지 않는다"(2026-09-02)와 같은 판단이다.
+- **필터 enum과 요청 enum을 같게 만들지 말 것**: 목록 필터는 전용 `AdminUserStatusFilter`(ALL·ACTIVE·RESTRICTED)로 받는다 - `Status`를 그대로 열면 `status=INACTIVE`가 400이 아니라 **빈 배열**로 응답돼 "탈퇴 회원 0명"으로 정반대 해석을 낳는다(`WardListFilter` 2026-09-07과 같은 판단). 반면 수정 요청은 `Status`를 받아 `INACTIVE`를 분명히 400으로 거절한다 - 쓰기에서는 조용한 빈 결과가 아니라 명시적 거절이 필요하고, "탈퇴는 상태가 아니라 삭제"를 전달해야 하기 때문이다.
+- **정지 계정은 대시보드 "총 회원 수"에서 빠진다(알려진 한계)**: `AdminDashboardService`가 `Status.ACTIVE`만 센다. 대시보드는 계약이 따로 잡힌 화면이라 회원관리 PR에서 슬쩍 바꾸지 않았다. 정지 계정이 늘어 지표가 흔들리면 대시보드 계약으로 다룰 것.
+- **`connections.relation`은 한 방향뿐이다**: 값은 **보호자가 피보호자에게 어떤 사람인지**를 가리킨다("아들"). 반대 라벨(피보호자가 보호자에게 무엇인지)은 저장되지 않으며, 뒤집는 매핑은 성별·다의성 때문에 안전하지 않다. 화면에서 "{상대이름} ({relation})"으로 붙이면 relation이 상대를 가리키는 것처럼 읽히므로 문장으로 풀어 쓴다("이 회원은 박민수님의 아들"). 양방향 라벨이 필요하면 스키마 변경과 연결 요청 화면 수정이 선행되어야 한다.
+- 상세: `docs/(2026-09-09) feature-admin-user-management.md`.

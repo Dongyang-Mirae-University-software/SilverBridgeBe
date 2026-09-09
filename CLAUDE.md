@@ -126,7 +126,8 @@
 
 핵심 불변 규칙 (배경·상세는 위 파일):
 
-- **회원 탈퇴 = hard delete** (재가입 허용). 본인확인 유지 — 일반=비밀번호, 카카오=confirmation "탈퇴" 일치. 정리 로직은 `UserWithdrawnEvent` AFTER_COMMIT.
+- **회원 탈퇴 = hard delete** (재가입 허용). 본인확인 유지 — 일반=비밀번호, 카카오=confirmation "탈퇴" 일치. 정리 로직은 `UserWithdrawnEvent` AFTER_COMMIT. 관리자 강제 탈퇴도 **같은 파이프라인**(`forceWithdraw`)을 타야 한다 - `delete()` 직접 호출은 상대 알림·토큰 정리를 유실시킨다.
+- **계정 상태 3분법**(2026-09-09, V47): 이용 중(`ACTIVE`)·이용 제한(`RESTRICTED`)·탈퇴(`INACTIVE`). **정지에 `INACTIVE`를 재사용 금지** - 스윕이 영구 삭제한다. 상태 검사는 `!= ACTIVE`(등호 비교 금지). `Status`·`AdminAuditAction`에 값 추가 시 **CHECK 재정의 마이그레이션 필수**(`UserStatusCheckSyncTest`·`AdminAuditActionCheckSyncTest`가 막는다).
 - **연결 알림 비대칭(의도)**: 거절 → 보호자 알림O / 요청 취소·탈퇴 PENDING 종료 → 무알림. "일관성" 명목으로 ②③에 알림 추가 금지.
 - **비밀번호 재설정**: 미가입 404·카카오 400 명시(시니어 UX 우선) + IP/이메일 rate limit.
 - **카카오 OAuth**: `client_secret`는 `.env.dev`로만 주입(Git 평문 금지), 시작 시 fail-fast 검증.
@@ -142,4 +143,4 @@
 
 ---
 
-**최종 업데이트**: 2026-09-02 (관리자 대시보드 집계 / 이상감지 로그·정정) · 2026-09-01 (이상감지 판정·재촉 / 종류별 허용 채널) · 2026-05-30 (공식 Claude Code 가이드 기준 리팩터링 — 347→~140줄, 도메인 보안 정책을 `.claude/rules/`로 분리) · **Spring Boot** 4.0.5 / **Java** 21 / **빌드** Gradle
+**최종 업데이트**: 2026-09-09 (관리자 회원 관리 / 계정 상태 3분법) · 2026-09-02 (관리자 대시보드 집계 / 이상감지 로그·정정) · 2026-09-01 (이상감지 판정·재촉 / 종류별 허용 채널) · 2026-05-30 (공식 Claude Code 가이드 기준 리팩터링 — 347→~140줄, 도메인 보안 정책을 `.claude/rules/`로 분리) · **Spring Boot** 4.0.5 / **Java** 21 / **빌드** Gradle

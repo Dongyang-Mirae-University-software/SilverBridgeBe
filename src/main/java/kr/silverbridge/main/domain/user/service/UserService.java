@@ -182,6 +182,18 @@ public class UserService {
         eventPublisher.publishEvent(new UserWithdrawnEvent(userId, ipAddress, userAgent));
     }
 
+    // 관리자 강제 탈퇴 (1단계) - 본인 확인만 없고 나머지는 일반 탈퇴와 같은 경로를 탄다.
+    // userRepository.delete()를 직접 부르면 AFTER_COMMIT 리스너를 건너뛰어 연결 상대 알림·FCM 토큰 정리·
+    // WITHDRAW 접속로그가 통째로 유실된다(행 정리는 FK CASCADE가 하므로 겉보기엔 성공한 것처럼 보인다).
+    // 호출자(AdminUserService)가 커밋 후 purgeWithdrawnUser()로 이어 삭제한다.
+    // 접속로그의 주체는 탈퇴당한 회원 본인으로 남고, "누가 지웠는가"는 admin_audit_log가 답한다.
+    @Transactional
+    public void forceWithdraw(String userId, String ipAddress, String userAgent) {
+        User user = getUserOrThrow(userId);
+        user.deactivate();
+        eventPublisher.publishEvent(new UserWithdrawnEvent(userId, ipAddress, userAgent));
+    }
+
     // 회원 탈퇴 (2단계) — 사용자 행을 영구 삭제(hard delete)한다.
     // withdraw() 커밋 후, 그 AFTER_COMMIT 리스너(연결 해제+상대 알림, FCM·refresh 토큰 정리, WITHDRAW 로그)가
     // user 행이 살아있는 동안 모두 끝난 뒤 컨트롤러에서 이어 호출한다.

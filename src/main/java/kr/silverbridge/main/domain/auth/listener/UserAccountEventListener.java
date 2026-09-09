@@ -3,6 +3,7 @@ package kr.silverbridge.main.domain.auth.listener;
 import kr.silverbridge.main.domain.auth.repository.RefreshTokenRepository;
 import kr.silverbridge.main.domain.auth.service.AccessLogService;
 import kr.silverbridge.main.domain.user.event.PasswordChangedEvent;
+import kr.silverbridge.main.domain.user.event.UserRestrictedEvent;
 import kr.silverbridge.main.domain.user.event.UserWithdrawnEvent;
 import kr.silverbridge.main.global.enums.AccessAction;
 import kr.silverbridge.main.global.jwt.JwtProperties;
@@ -50,6 +51,22 @@ public class UserAccountEventListener {
             accessLogService.log(event.userId(), AccessAction.WITHDRAW, event.ipAddress(), event.userAgent());
         } catch (RuntimeException e) {
             log.error("[WITHDRAW] 토큰·접속로그 정리 실패 — purge/스윕이 회수 예정 userId={}", event.userId(), e);
+        }
+    }
+
+    // 관리자 정지 - 상태 변경만으로는 이미 발급된 access token이 만료까지 살아 있어
+    // 정지된 계정이 최대 30분간 그대로 API를 쓴다. 탈퇴·비밀번호 변경과 같은 무효화 경로를 태운다.
+    // best-effort - 여기서 예외가 새어 나가면 정지 자체는 이미 커밋된 뒤라 되돌릴 수 없고,
+    // 토큰은 만료로 자연 정리되며 재발급은 상태 검사에서 막힌다.
+    @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public void handleRestricted(UserRestrictedEvent event) {
+        try {
+            refreshTokenRepository.deleteByUserId(event.userId());
+            invalidatePreviousAccessTokens(event.userId());
+        } catch (RuntimeException e) {
+            log.error("[ADMIN-RESTRICT] 토큰 무효화 실패 - 기존 토큰이 만료까지 유효할 수 있음 userId={}",
+                    event.userId(), e);
         }
     }
 

@@ -5,6 +5,8 @@ import kr.silverbridge.main.global.enums.ConnectionStatus;
 import kr.silverbridge.main.global.enums.Provider;
 import kr.silverbridge.main.global.enums.Role;
 import kr.silverbridge.main.global.enums.Status;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
@@ -40,8 +42,70 @@ public interface UserRepository extends JpaRepository<User, String> {
     // 일정 시간 지난 INACTIVE 행은 purge 실패 잔여물이다 (WithdrawnUserPurgeScheduler, M-S1-1)
     List<User> findAllByStatusAndUpdatedAtBefore(Status status, OffsetDateTime cutoff);
 
-    // (관리자 회원관리 화면용 검색·역할 필터 쿼리 3종은 호출처 없는 dead code라 제거 — L-S3-5.
-    //  회원관리 기능 구현 시 git 이력(2026-06-11 이전)에서 복원할 것.)
+    // ===== 관리자 회원관리 =====
+
+    /**
+     * 회원관리 목록/검색의 공통 WHERE 절. 목록 쿼리와 count 쿼리가 같은 조건을 써야 페이징이 어긋나지 않아
+     * 상수로 뽑아 두 곳에서 이어 붙인다.
+     *
+     * <p>INACTIVE는 항상 제외한다 - 탈퇴 진행 중이거나 purge에 실패해 남은 좀비 행이라 관리자가 할 수 있는
+     * 일이 없고, 스윕이 곧 회수한다. "이용 중/이용 제한" 두 상태만 회원 목록의 대상이다.</p>
+     *
+     * <p>연결 상태는 우선순위로 하나를 고른다 - ACTIVE가 하나라도 있으면 "연결됨"(1),
+     * 없고 PENDING만 있으면 "수락 대기"(2), 둘 다 없으면 "미연결"(3). 관리자 계정도 연결이 없어 3에 들어가므로
+     * 연결 필터를 걸면 목록에서 빠진다(관리자는 연결 축이 없는 계정이다).</p>
+     *
+     * <p>키워드는 이름·이메일·전화번호에 더해 <b>연결된 상대의 이름</b>까지 훑는다. 상대 이름 검색은
+     * 인덱스(V15)를 타지 못하는 서브쿼리지만, 회원 수 규모에서 문제되지 않는다.</p>
+     */
+    String ADMIN_USER_SEARCH_WHERE =
+            " u.status <> :excludedStatus "
+            + " and (:role is null or u.role = :role) "
+            + " and (:status is null or u.status = :status) "
+            + " and (:keyword is null "
+            + "      or lower(u.name) like concat('%', :keyword, '%') escape '\\' "
+            + "      or lower(u.email) like concat('%', :keyword, '%') escape '\\' "
+            + "      or u.phone like concat('%', :keyword, '%') escape '\\' "
+            + "      or exists (select 1 from Connection cg, User w "
+            + "                 where cg.guardianId = u.id and w.id = cg.wardId "
+            + "                   and cg.status in :linkedStatuses "
+            + "                   and lower(w.name) like concat('%', :keyword, '%') escape '\\') "
+            + "      or exists (select 1 from Connection cw, User g "
+            + "                 where cw.wardId = u.id and g.id = cw.guardianId "
+            + "                   and cw.status in :linkedStatuses "
+            + "                   and lower(g.name) like concat('%', :keyword, '%') escape '\\')) "
+            + " and (:connectionFilter is null or :connectionFilter = "
+            + "      case when exists (select 1 from Connection ca "
+            + "                        where (ca.guardianId = u.id or ca.wardId = u.id) "
+            + "                          and ca.status = :activeStatus) then 1 "
+            + "           when exists (select 1 from Connection cp "
+            + "                        where (cp.guardianId = u.id or cp.wardId = u.id) "
+            + "                          and cp.status = :pendingStatus) then 2 "
+            + "           else 3 end) ";
+
+    /** 회원관리 목록 - 키워드·역할·계정 상태·연결 상태 필터, 가입일 역순은 호출부 Pageable이 정한다. */
+    @Query(value = "select u from User u where " + ADMIN_USER_SEARCH_WHERE,
+           countQuery = "select count(u) from User u where " + ADMIN_USER_SEARCH_WHERE)
+    Page<User> searchForAdmin(@Param("excludedStatus") Status excludedStatus,
+                              @Param("role") Role role,
+                              @Param("status") Status status,
+                              @Param("keyword") String keyword,
+                              @Param("connectionFilter") Integer connectionFilter,
+                              @Param("linkedStatuses") List<ConnectionStatus> linkedStatuses,
+                              @Param("activeStatus") ConnectionStatus activeStatus,
+                              @Param("pendingStatus") ConnectionStatus pendingStatus,
+                              Pageable pageable);
+
+    /** 회원관리 탭별 건수. 목록과 같은 모집단이어야 하므로 여기서도 INACTIVE를 제외한다. */
+    @Query("select u.role as role, count(u) as cnt from User u "
+            + "where u.status <> :excludedStatus group by u.role")
+    List<RoleCount> countByRoleExcludingStatus(@Param("excludedStatus") Status excludedStatus);
+
+    /** 탭별 건수 집계 결과. 0건인 역할은 행 자체가 없으므로 호출부가 0으로 채운다. */
+    interface RoleCount {
+        Role getRole();
+        long getCnt();
+    }
 
     // ===== 관리자 대시보드 집계 =====
 

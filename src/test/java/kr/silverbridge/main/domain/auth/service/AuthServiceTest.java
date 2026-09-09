@@ -127,6 +127,32 @@ class AuthServiceTest {
     }
 
     @Test
+    @DisplayName("관리자가 이용 제한한 계정(RESTRICTED)도 로그인이 막힌다 - INACTIVE 등호 비교로 두면 조용히 뚫린다")
+    void login_이용제한계정_INACTIVE_USER() {
+        LoginRequest req = loginRequest(TEST_EMAIL, "Password1!");
+        User restrictedUser = User.builder()
+                .id(TEST_USER_ID)
+                .email(TEST_EMAIL)
+                .password("encodedPassword")
+                .name("테스트")
+                .role(Role.WARD)
+                .status(Status.RESTRICTED)
+                .provider(Provider.LOCAL)
+                .build();
+
+        when(userRepository.findByEmail(TEST_EMAIL)).thenReturn(Optional.of(restrictedUser));
+        when(redisTemplate.hasKey(RedisKeys.LOGIN_LOCK + TEST_USER_ID)).thenReturn(false);
+        when(passwordEncoder.matches("Password1!", "encodedPassword")).thenReturn(true);
+
+        CustomException ex = assertThrows(CustomException.class,
+                () -> authService.login(req, TEST_IP, TEST_AGENT));
+
+        assertThat(ex.getErrorCode()).isEqualTo(ErrorCode.INACTIVE_USER);
+        // 남아 있는 refresh 토큰도 함께 끊는다
+        verify(refreshTokenRevocationService).revokeAll(TEST_USER_ID);
+    }
+
+    @Test
     @DisplayName("비활성 계정 + 비밀번호 틀림 → INVALID_CREDENTIALS (정지 사실 노출 안 됨)")
     void login_비활성계정_비밀번호틀림_INVALID_CREDENTIALS() {
         LoginRequest req = loginRequest(TEST_EMAIL, "WrongPass1!");

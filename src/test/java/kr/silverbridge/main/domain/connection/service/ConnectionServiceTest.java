@@ -520,6 +520,62 @@ class ConnectionServiceTest {
         }
     }
 
+    // ─── 역할 변경 연계 정리 (관리자 회원관리) ────────────────────────────────
+
+    @Nested
+    @DisplayName("tearDownConnectionsOnRoleChange")
+    class TearDownOnRoleChange {
+
+        @Test
+        @DisplayName("ACTIVE 연결은 DISCONNECTED가 되고 상대에게 알림이 나간다 - 실제로 연결돼 있던 사람은 알아야 한다")
+        void ACTIVE는_해제되고_상대에게_알린다() {
+            Connection active = Connection.builder()
+                    .id(1L).guardianId(GUARDIAN_ID).wardId(WARD_ID)
+                    .status(ConnectionStatus.ACTIVE).initiatedBy(GUARDIAN_ID).relation(RELATION).build();
+            when(connectionRepository.findByParticipantAndStatusIn(
+                    GUARDIAN_ID, List.of(ConnectionStatus.ACTIVE, ConnectionStatus.PENDING)))
+                    .thenReturn(List.of(active));
+
+            int cleared = connectionService.tearDownConnectionsOnRoleChange(GUARDIAN_ID);
+
+            assertThat(cleared).isEqualTo(1);
+            // CANCELLED가 아니라 DISCONNECTED여야 한다 - CANCELLED는 "보호자가 수락 전 요청을 스스로 취소"라는 뜻이다
+            assertThat(active.getStatus()).isEqualTo(ConnectionStatus.DISCONNECTED);
+            ArgumentCaptor<ConnectionDisconnectedEvent> captor =
+                    ArgumentCaptor.forClass(ConnectionDisconnectedEvent.class);
+            verify(eventPublisher).publishEvent(captor.capture());
+            assertThat(captor.getValue().notifyTargetId()).isEqualTo(WARD_ID);
+        }
+
+        @Test
+        @DisplayName("PENDING 연결은 CANCELLED가 되고 알림은 나가지 않는다 - 수락 전 요청 종료는 기존에도 무알림이다")
+        void PENDING은_조용히_취소된다() {
+            Connection pending = Connection.builder()
+                    .id(2L).guardianId(GUARDIAN_ID).wardId(WARD_ID)
+                    .status(ConnectionStatus.PENDING).initiatedBy(GUARDIAN_ID).relation(RELATION).build();
+            when(connectionRepository.findByParticipantAndStatusIn(
+                    WARD_ID, List.of(ConnectionStatus.ACTIVE, ConnectionStatus.PENDING)))
+                    .thenReturn(List.of(pending));
+
+            int cleared = connectionService.tearDownConnectionsOnRoleChange(WARD_ID);
+
+            assertThat(cleared).isEqualTo(1);
+            assertThat(pending.getStatus()).isEqualTo(ConnectionStatus.CANCELLED);
+            verify(eventPublisher, never()).publishEvent(any(ConnectionDisconnectedEvent.class));
+        }
+
+        @Test
+        @DisplayName("정리할 연결이 없으면 0을 반환하고 아무 이벤트도 발행하지 않는다")
+        void 연결이_없으면_0건() {
+            when(connectionRepository.findByParticipantAndStatusIn(
+                    WARD_ID, List.of(ConnectionStatus.ACTIVE, ConnectionStatus.PENDING)))
+                    .thenReturn(List.of());
+
+            assertThat(connectionService.tearDownConnectionsOnRoleChange(WARD_ID)).isZero();
+            verify(eventPublisher, never()).publishEvent(any(ConnectionDisconnectedEvent.class));
+        }
+    }
+
     // ─── 회원 탈퇴 연계 정리 (D-USER-3) ───────────────────────────────────────
 
     @Nested

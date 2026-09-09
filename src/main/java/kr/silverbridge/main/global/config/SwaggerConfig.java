@@ -117,6 +117,24 @@ public class SwaggerConfig {
                                         + "※ ADMIN 권한 계정만 호출 가능."),
                         new Tag().name("관리자 - 문의")
                                 .description("전체 문의 목록(탭 카운트·필터·검색·페이징)·상세 조회 및 답변 작성.\n"
+                                        + "※ ADMIN 권한 계정만 호출 가능."),
+                        new Tag().name("관리자 - 대시보드")
+                                .description("안전 현황·운영 현황 두 탭의 집계 지표(마이그레이션 없이 기존 테이블 집계).\n"
+                                        + "모르는 값은 0이 아니라 null입니다 - AI 수신기가 끊기면 streamingCameras·disconnectedCameras가, "
+                                        + "미답변 문의가 없으면 longestWaitingHours가 null입니다.\n"
+                                        + "날짜는 KST 기준이며 서버 캐시가 없습니다(30초 이상 간격 폴링 권장). 조회는 감사 로그에 남기지 않습니다.\n"
+                                        + "※ ADMIN 권한 계정만 호출 가능."),
+                        new Tag().name("관리자 - 이상감지")
+                                .description("이상감지 기록 목록(보호자 응답 내역 포함)과 엇갈린 판정(CONFLICTED)의 2차 정정.\n"
+                                        + "관리자는 1차 판정을 하지 않습니다 - 현장을 아는 보호자가 판정하고, 관리자는 갈린 것을 확정합니다.\n"
+                                        + "정정은 상태만 바꾸고 보호자 응답 원본은 남기며, 매 정정이 감사 로그에 쌓입니다.\n"
+                                        + "※ ADMIN 권한 계정만 호출 가능."),
+                        new Tag().name("관리자 - 회원관리")
+                                .description("회원 목록(검색·역할/계정/연결 상태 필터·페이징)·탭 건수·상세 조회, 정보 수정, 강제 탈퇴.\n"
+                                        + "수정 대상은 이름·역할·계정 상태 3가지뿐입니다 — 이메일은 로그인 ID라 본인도 바꿀 수 없고, "
+                                        + "전화번호는 본인 변경 시 SMS 인증이 필수여서 관리자 경로를 열면 그 인증을 우회하게 됩니다.\n"
+                                        + "계정 상태는 ACTIVE(이용 중) ↔ RESTRICTED(이용 제한)만 오갑니다. 탈퇴는 상태가 아니라 삭제입니다.\n"
+                                        + "※ 관리자 계정은 목록에는 나오지만 수정·삭제 대상이 아닙니다(403).\n"
                                         + "※ ADMIN 권한 계정만 호출 가능.")
                 ))
                 // 전역 JWT Bearer 인증 적용
@@ -203,7 +221,11 @@ public class SwaggerConfig {
                     // ── [관리자 - 문의] ──────────────────────────────
                     "/api/admin/inquiry",
                     "/api/admin/inquiry/{id}",
-                    "/api/admin/inquiry/{id}/answer"
+                    "/api/admin/inquiry/{id}/answer",
+                    // ── [관리자 - 회원관리] ──────────────────────────
+                    "/api/admin/user",
+                    "/api/admin/user/counts",
+                    "/api/admin/user/{userId}"
             );
 
             Map<String, PathItem> original = new LinkedHashMap<>(openApi.getPaths());
