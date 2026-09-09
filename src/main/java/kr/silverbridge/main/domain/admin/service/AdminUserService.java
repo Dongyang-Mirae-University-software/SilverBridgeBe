@@ -136,10 +136,28 @@ public class AdminUserService {
     public void updateUser(String userId, AdminUserUpdateRequest request, String adminId) {
         User user = getUserOrThrow(userId);
         validateNotAdmin(user, adminId);
+        validateResultingCombination(user, request);
 
         applyName(user, request.name(), adminId);
         applyRole(user, request.role(), adminId);
-        applyStatus(user, request.status(), adminId);
+        applyStatus(user, request.status(), request.statusReason(), adminId);
+    }
+
+    /**
+     * 축별로 따로 검사하지 않고 <b>바뀐 뒤의 조합</b>을 한 번에 본다.
+     *
+     * <p>피보호자는 이용 제한할 수 없는데, 축별 검사만 두면 "보호자를 정지시킨 뒤 역할을 피보호자로
+     * 바꾸는" 두 단계로 그 상태를 만들 수 있다. 반대로 순서를 정해 검사하면
+     * "제한을 풀면서 동시에 역할을 바꾸는" 정상 요청이 잘못 거부된다.</p>
+     */
+    private void validateResultingCombination(User user, AdminUserUpdateRequest request) {
+        Role resultingRole = request.role() != null ? request.role() : user.getRole();
+        Status resultingStatus = request.status() != null ? request.status() : user.getStatus();
+
+        if (resultingRole == Role.WARD && resultingStatus == Status.RESTRICTED) {
+            // 피보호자 계정은 편의 기능이 아니라 안전망 그 자체다 - 로그인이 막히면 SOS를 보낼 수 없다.
+            throw new CustomException(ErrorCode.WARD_CANNOT_BE_RESTRICTED);
+        }
     }
 
     /**
@@ -220,8 +238,12 @@ public class AdminUserService {
      *
      * <p>제한으로 바꾸면 {@link UserRestrictedEvent}로 토큰까지 끊는다. 상태만 바꾸면 이미 발급된
      * access token이 만료(30분)까지 살아 있어 정지가 즉시 듣지 않는다.</p>
+     *
+     * <p><b>피보호자는 이용 제한할 수 없다.</b> 로그인이 막히면 SOS를 보낼 수 없게 되는데,
+     * 피보호자 계정은 편의 기능이 아니라 안전망 그 자체다. 탈취가 의심되면 정지 대신
+     * 비밀번호 재설정으로 세션만 끊는 것이 맞다(안전망은 유지된다).</p>
      */
-    private void applyStatus(User user, Status status, String adminId) {
+    private void applyStatus(User user, Status status, String reason, String adminId) {
         if (status == null || status == user.getStatus()) {
             return;
         }
@@ -230,17 +252,19 @@ public class AdminUserService {
             // 스윕 스케줄러가 계정을 지워버린다(2026-06-11 INACTIVE 불변식).
             throw new CustomException(ErrorCode.INVALID_STATUS);
         }
-
         Status before = user.getStatus();
+        String trimmedReason = StringUtils.hasText(reason) ? reason.trim() : null;
         if (status == Status.RESTRICTED) {
-            user.restrict();
+            user.restrict(trimmedReason);
             eventPublisher.publishEvent(new UserRestrictedEvent(user.getId()));
         } else {
             user.activate();
         }
 
         auditLogService.log(adminId, AdminAuditAction.USER_STATUS_CHANGE, user.getId(),
-                String.format("계정 상태 변경: %s → %s", statusLabel(before), statusLabel(status)));
+                String.format("계정 상태 변경: %s → %s%s",
+                        statusLabel(before), statusLabel(status),
+                        trimmedReason == null ? "" : " (사유: " + trimmedReason + ")"));
     }
 
     // ─── 내부 헬퍼 ────────────────────────────────────────────────

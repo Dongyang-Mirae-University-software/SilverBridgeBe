@@ -35,6 +35,10 @@ public record AdminUserDetailResponse(
                 example = "ACTIVE", allowableValues = {"ACTIVE", "RESTRICTED"})
         Status status,
 
+        @Schema(description = "이용 제한 사유. 이용 중이면 null", nullable = true,
+                example = "본인 신고 - 계정 탈취 의심, 확인 중")
+        String statusReason,
+
         @Schema(description = "연결 상태. 관리자 계정은 null", nullable = true, example = "CONNECTED")
         AdminUserConnectionState connectionState,
 
@@ -57,6 +61,7 @@ public record AdminUserDetailResponse(
                 user.getPhone(),
                 user.getRole(),
                 user.getStatus(),
+                user.getStatusReason(),
                 hasConnectionAxis ? AdminUserConnectionStates.of(connections) : null,
                 connections,
                 user.getCreatedAt(),

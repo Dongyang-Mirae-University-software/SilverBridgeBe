@@ -3,6 +3,7 @@ package kr.silverbridge.main.domain.notification.channel;
 import kr.silverbridge.main.domain.notification.config.AlimtalkProperties;
 import kr.silverbridge.main.domain.notification.dispatch.NotificationType;
 import kr.silverbridge.main.domain.notification.service.AlimtalkSender;
+import kr.silverbridge.main.global.enums.Status;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -66,7 +67,7 @@ class KakaoAlimtalkNotificationChannelTest {
         givenAnomalyTemplate();
         when(alimtalkSender.send(anyString(), anyString(), any())).thenReturn(true);
 
-        boolean sent = channel.send(NotificationType.ANOMALY_DETECTED, new NotificationRecipient("GD0001", "01012345678", null), content);
+        boolean sent = channel.send(NotificationType.ANOMALY_DETECTED, new NotificationRecipient("GD0001", "01012345678", null, Status.ACTIVE), content);
 
         assertThat(sent).isTrue();
         @SuppressWarnings("unchecked")
@@ -82,7 +83,7 @@ class KakaoAlimtalkNotificationChannelTest {
     @DisplayName("해당 알림 종류의 승인 템플릿이 없으면 발송하지 않는다(자유 문구 발송은 불가)")
     void 템플릿없음_미발송() {
         // 템플릿 매핑 없음 — 승인 전에 다른 템플릿으로 억지 발송하면 문구가 어긋나 채널 제재 대상이 된다.
-        boolean sent = channel.send(NotificationType.ANOMALY_DETECTED, new NotificationRecipient("GD0001", "01012345678", null), content);
+        boolean sent = channel.send(NotificationType.ANOMALY_DETECTED, new NotificationRecipient("GD0001", "01012345678", null, Status.ACTIVE), content);
 
         assertThat(sent).isFalse();
         verifyNoInteractions(alimtalkSender);
@@ -96,7 +97,7 @@ class KakaoAlimtalkNotificationChannelTest {
         givenAnomalyTemplate();
 
         boolean sent = channel.send(NotificationType.ANOMALY_DETECTED_SELF,
-                new NotificationRecipient("WD0001", "01012345678", null), content);
+                new NotificationRecipient("WD0001", "01012345678", null, Status.ACTIVE), content);
 
         assertThat(sent).isFalse();
         verifyNoInteractions(alimtalkSender);
@@ -113,7 +114,7 @@ class KakaoAlimtalkNotificationChannelTest {
                 "이상 상황 감지", "본문", Map.of("wardName", "김순자", "location", "거실", "detectedTypeLabel", "화재"));
 
         boolean sent = channel.send(NotificationType.ANOMALY_DETECTED,
-                new NotificationRecipient("GD0001", "01012345678", null), noTypeKey);
+                new NotificationRecipient("GD0001", "01012345678", null, Status.ACTIVE), noTypeKey);
 
         assertThat(sent).isTrue();
         verify(alimtalkSender).send(eq("01012345678"), eq(TEMPLATE_ID), any());
@@ -125,7 +126,7 @@ class KakaoAlimtalkNotificationChannelTest {
         givenAnomalyTemplate();
         properties.setEnabled(false);
 
-        boolean sent = channel.send(NotificationType.ANOMALY_DETECTED, new NotificationRecipient("GD0001", "01012345678", null), content);
+        boolean sent = channel.send(NotificationType.ANOMALY_DETECTED, new NotificationRecipient("GD0001", "01012345678", null, Status.ACTIVE), content);
 
         assertThat(sent).isFalse();
         verifyNoInteractions(alimtalkSender);
@@ -136,7 +137,7 @@ class KakaoAlimtalkNotificationChannelTest {
     void 전화번호없음_미발송() {
         givenAnomalyTemplate();
 
-        boolean sent = channel.send(NotificationType.ANOMALY_DETECTED, new NotificationRecipient("GD0001", null, null), content);
+        boolean sent = channel.send(NotificationType.ANOMALY_DETECTED, new NotificationRecipient("GD0001", null, null, Status.ACTIVE), content);
 
         assertThat(sent).isFalse();
         verifyNoInteractions(alimtalkSender);

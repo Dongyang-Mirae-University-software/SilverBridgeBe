@@ -26,12 +26,13 @@ public class NotificationRecipientResolver {
         return userRepository.findById(userId)
                 .map(this::toRecipient)
                 .orElseGet(() -> {
-                    log.warn("알림 수신자 조회 실패(userId={}) — userId만으로 발송 시도", userId);
-                    return new NotificationRecipient(userId, null, null);
+                    log.warn("알림 수신자 조회 실패(userId={}) - userId만으로 발송 시도", userId);
+                    // 상태를 모르는 것이지 정지된 것이 아니므로 null로 두어 발송을 막지 않는다.
+                    return new NotificationRecipient(userId, null, null, null);
                 });
     }
 
     private NotificationRecipient toRecipient(User user) {
-        return new NotificationRecipient(user.getId(), user.getPhone(), user.getEmail());
+        return new NotificationRecipient(user.getId(), user.getPhone(), user.getEmail(), user.getStatus());
     }
 }

@@ -32,6 +32,8 @@ public enum ErrorCode {
     SAME_AS_CURRENT_PASSWORD(HttpStatus.BAD_REQUEST, "현재 비밀번호와 동일한 비밀번호는 사용할 수 없습니다."),
     WITHDRAW_CONFIRMATION_MISMATCH(HttpStatus.BAD_REQUEST, "탈퇴 확인 문구가 일치하지 않습니다. \"탈퇴\"를 정확히 입력해주세요."),
     INVALID_STATUS(HttpStatus.BAD_REQUEST, "유효하지 않은 상태값입니다."),
+    WARD_CANNOT_BE_RESTRICTED(HttpStatus.BAD_REQUEST,
+            "피보호자 계정은 이용 제한할 수 없습니다. 긴급 도움 요청(SOS)을 보낼 수 없게 됩니다."),
 
     // 인증
     INVALID_TOKEN(HttpStatus.UNAUTHORIZED, "로그인 정보가 유효하지 않습니다. 다시 로그인해주세요."),

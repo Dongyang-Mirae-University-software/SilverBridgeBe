@@ -3,6 +3,7 @@ package kr.silverbridge.main.domain.notification.channel;
 import kr.silverbridge.main.domain.notification.dispatch.NotificationType;
 
 import kr.silverbridge.main.domain.auth.service.SmsSender;
+import kr.silverbridge.main.global.enums.Status;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -31,7 +32,7 @@ class SmsNotificationChannelTest {
     @Test
     @DisplayName("전화번호가 있으면 '[제목] 본문' 형태로 SmsSender에 위임하고 true를 반환한다")
     void send_전화번호있음_위임() {
-        NotificationRecipient recipient = new NotificationRecipient("WD0001", "01012345678", null);
+        NotificationRecipient recipient = new NotificationRecipient("WD0001", "01012345678", null, Status.ACTIVE);
         NotificationContent content = NotificationContent.of("연결 요청", "요청이 도착했습니다.", Map.of());
 
         boolean delivered = channel.send(NotificationType.CONNECTION_REQUEST, recipient, content);
@@ -43,7 +44,7 @@ class SmsNotificationChannelTest {
     @Test
     @DisplayName("전화번호가 없으면 발송하지 않고 false를 반환한다(건너뜀)")
     void send_전화번호없음_미발송() {
-        NotificationRecipient recipient = new NotificationRecipient("WD0001", null, null);
+        NotificationRecipient recipient = new NotificationRecipient("WD0001", null, null, Status.ACTIVE);
         NotificationContent content = NotificationContent.of("연결 요청", "요청이 도착했습니다.", Map.of());
 
         boolean delivered = channel.send(NotificationType.CONNECTION_REQUEST, recipient, content);

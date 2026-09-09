@@ -12,6 +12,7 @@ import java.util.EnumMap;
 import java.util.EnumSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 
 /**
@@ -23,6 +24,9 @@ import java.util.Set;
  *   <li>{@link NotificationType.Policy#FORCED_PUSH_WITH_SMS_FALLBACK} → 설정 무시 FCM 강제 발송, <b>실제 전달 실패 시</b> SMS 폴백(결과 기반, M-S2-1).</li>
  *   <li>{@link NotificationType.Policy#FORCED_PUSH_PLUS_SETTINGS} → FCM은 항상 + 나머지 채널은 설정대로. <b>SMS 폴백 없음</b>(이상감지).</li>
  * </ol>
+ *
+ * <p><b>이용 제한·탈퇴 진행 계정에는 어떤 채널로도 보내지 않는다</b>(강제 FCM 포함) —
+ * {@code resolveIfAllowed()} 참조. 수신자 기준이며, 정지된 사람이 <i>원인</i>인 알림은 그대로 나간다.</p>
  *
  * <p>공통: <b>채널별 실패 격리</b>(한 채널 실패가 다른 채널을 막지 않음), <b>미구현 채널 무시</b>
  * (enabled여도 구현체 빈이 없거나 설정이 꺼져 있으면 — EMAIL·알림톡 템플릿 미승인 — 조용히 건너뜀).</p>
@@ -63,24 +67,49 @@ public class NotificationDispatcher {
      */
     public void dispatch(String userId, NotificationType type, NotificationContent content) {
         switch (type.policy()) {
-            case FORCED_PUSH_WITH_SMS_FALLBACK -> dispatchMandatory(userId, type, content);
-            case FORCED_PUSH_PLUS_SETTINGS -> dispatchForcedPushPlusSettings(userId, type, content);
+            case FORCED_PUSH_WITH_SMS_FALLBACK ->
+                    resolveIfAllowed(userId, type).ifPresent(r -> dispatchMandatory(r, type, content));
+            case FORCED_PUSH_PLUS_SETTINGS ->
+                    resolveIfAllowed(userId, type).ifPresent(r -> dispatchForcedPushPlusSettings(r, type, content));
             case SETTINGS_ONLY -> dispatchBySettings(userId, type, content);
         }
     }
 
+    /**
+     * 수신자를 조회하고 <b>받을 수 있는 상태인지</b> 확인한다. 못 받는 상태면 비어 있는 값을 돌려준다.
+     *
+     * <p>이용 제한(정지)·탈퇴 진행 계정에는 어떤 채널로도 보내지 않는다 - <b>강제 FCM도 예외가 아니다.</b>
+     * 정지는 대개 탈취가 의심돼 잠근 것이라, 알림을 계속 보내면 그 계정을 쥔 사람에게 피보호자의
+     * SOS 발생·화재 감지 같은 생활 상황을 계속 통보하는 셈이 된다.</p>
+     *
+     * <p>차단 판정을 이 한 곳에 모아 둔다 - 정책 분기마다 따로 적어 두면 하나를 고칠 때 나머지가 어긋난다.
+     * 다만 <b>정지된 사람이 원인인 알림은 막지 않는다</b>: 정지된 피보호자 집의 화재는 그 보호자들에게
+     * 그대로 발송된다(수신자가 다른 사람이므로). 계정 정지는 이용 제한이지 안전망 해제가 아니다.</p>
+     */
+    private Optional<NotificationRecipient> resolveIfAllowed(String userId, NotificationType type) {
+        NotificationRecipient recipient = recipientResolver.resolve(userId);
+        if (recipient.canReceive()) {
+            return Optional.of(recipient);
+        }
+        log.warn("[NOTIFY-BLOCKED] 이용 제한 계정이라 발송하지 않음: userId={}, type={}, status={}",
+                userId, type, recipient.status());
+        return Optional.empty();
+    }
+
     /** 사용자 설정의 활성 채널로만 발송(연결·문의 알림). 종류별 허용 채널이 좁으면 그만큼 더 줄어든다. */
     private void dispatchBySettings(String userId, NotificationType type, NotificationContent content) {
+        // 활성 채널 판단이 먼저다 - 보낼 채널이 하나도 없으면 수신자 조회(DB) 자체를 하지 않는다.
         Set<NotificationChannelType> targets = settingsChannels(userId, type);
         if (targets.isEmpty()) {
             log.debug("발송할 활성 채널 없음: userId={}, type={}", userId, type);
             return;
         }
 
-        NotificationRecipient recipient = recipientResolver.resolve(userId);
-        for (NotificationChannelType channelType : targets) {
-            sendQuietly(channelType, type, recipient, content);
-        }
+        resolveIfAllowed(userId, type).ifPresent(recipient -> {
+            for (NotificationChannelType channelType : targets) {
+                sendQuietly(channelType, type, recipient, content);
+            }
+        });
     }
 
     /**
@@ -90,11 +119,10 @@ public class NotificationDispatcher {
      * <b>푸시 전달 실패해도 SMS로 폴백하지 않는다</b>(D-2) — 문자는 사용자가 선택하는 채널이라 폴백이 그 선택을
      * 뒤집기 때문. 대신 미전달을 WARN으로 남겨 "아무에게도 안 갔는데 아무도 모르는" 침묵을 막는다.</p>
      */
-    private void dispatchForcedPushPlusSettings(String userId, NotificationType type, NotificationContent content) {
+    private void dispatchForcedPushPlusSettings(NotificationRecipient recipient, NotificationType type,
+                                               NotificationContent content) {
         Set<NotificationChannelType> targets = EnumSet.of(FORCED_PUSH);
-        targets.addAll(settingsChannels(userId, type));
-
-        NotificationRecipient recipient = recipientResolver.resolve(userId);
+        targets.addAll(settingsChannels(recipient.userId(), type));
 
         boolean pushDelivered = false;
         for (NotificationChannelType channelType : targets) {
@@ -106,8 +134,8 @@ public class NotificationDispatcher {
 
         if (!pushDelivered) {
             // 토큰 없음·전 토큰 만료·발송 예외 — SMS 폴백을 하지 않는 정책이라 로그가 유일한 감지 수단이다.
-            log.warn("[NOTIFY-UNDELIVERED] 푸시 미전달(SMS 폴백 안 함 — 문자는 사용자 선택): userId={}, type={}",
-                    userId, type);
+            log.warn("[NOTIFY-UNDELIVERED] 푸시 미전달(SMS 폴백 안 함 - 문자는 사용자 선택): userId={}, type={}",
+                    recipient.userId(), type);
         }
     }
 
@@ -154,8 +182,9 @@ public class NotificationDispatcher {
      * 푸시·SMS 모두 미발송되는 갭이 있었다. 토큰 없음·전 토큰 만료·발송 예외를 모두
      * "전달 실패"로 수렴시켜 SMS 폴백한다. 전달 성공 시엔 SMS 비용을 아낀다.
      */
-    private void dispatchMandatory(String userId, NotificationType type, NotificationContent content) {
-        NotificationRecipient recipient = recipientResolver.resolve(userId);
+    private void dispatchMandatory(NotificationRecipient recipient, NotificationType type,
+                                   NotificationContent content) {
+        String userId = recipient.userId();
 
         boolean delivered = false;
         NotificationChannel primary = channels.get(FORCED_PUSH);
