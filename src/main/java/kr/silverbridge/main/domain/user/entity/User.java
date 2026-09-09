@@ -95,9 +95,23 @@ public class User extends BaseTimeEntity {
         this.status = Status.ACTIVE;
     }
 
-    // 계정 비활성화
+    // 계정 비활성화 (탈퇴 전용)
+    // 스윕 스케줄러가 오래된 INACTIVE 행을 좀비로 보고 영구 삭제하므로, 관리자 정지 등
+    // 다른 용도로 이 메서드를 재사용하지 말 것 (2026-06-11 INACTIVE 불변식). 정지는 restrict().
     public void deactivate() {
         this.status = Status.INACTIVE;
+    }
+
+    // 계정 이용 제한 (관리자 정지) - 로그인·토큰 재발급이 막히지만 데이터는 그대로 남는다.
+    public void restrict() {
+        this.status = Status.RESTRICTED;
+    }
+
+    // 이름만 수정 (관리자 회원관리) - 이메일·전화번호는 관리자가 바꿀 수 없다.
+    // 전화번호는 본인 경로에서 SMS 인증 nonce 소비가 필수라(H-5) 관리자 경로를 열면 그 인증을 우회하고,
+    // 이메일은 본인조차 바꿀 수 없는 값이다.
+    public void changeName(String name) {
+        this.name = name;
     }
 
     // 프로필 정보 수정 (이름, 전화번호, 성별, 생년월일, 우편번호, 주소)

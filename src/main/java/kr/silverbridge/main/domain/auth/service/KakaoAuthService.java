@@ -69,7 +69,8 @@ public class KakaoAuthService {
         // 기존 카카오 사용자 → 바로 로그인
         return userRepository.findByProviderAndProviderId(Provider.KAKAO, kakaoId)
                 .map(user -> {
-                    if (user.getStatus() == Status.INACTIVE) {
+                    // ACTIVE가 아닌 모든 상태를 막는다 (INACTIVE 탈퇴 진행 / RESTRICTED 관리자 정지)
+                    if (user.getStatus() != Status.ACTIVE) {
                         // 정지 계정 차단 시 남아있는 refresh token 정리 (AuthService.refresh와 일관성 유지)
                         // REQUIRES_NEW로 분리 — 아래 throw 시 본 트랜잭션 롤백돼도 폐기는 유지
                         refreshTokenRevocationService.revokeAll(user.getId());

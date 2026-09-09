@@ -7,6 +7,7 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
 import java.time.OffsetDateTime;
+import java.util.Collection;
 import java.util.List;
 
 public interface ConnectionRepository extends JpaRepository<Connection, Long> {
@@ -31,6 +32,12 @@ public interface ConnectionRepository extends JpaRepository<Connection, Long> {
     @Query("SELECT c FROM Connection c WHERE (c.guardianId = :userId OR c.wardId = :userId) AND c.status IN :statuses")
     List<Connection> findByParticipantAndStatusIn(@Param("userId") String userId,
                                                   @Param("statuses") List<ConnectionStatus> statuses);
+
+    // 여러 회원의 연결을 한 번에 조회 (관리자 회원관리 목록 - 행마다 조회하면 N+1)
+    // 양쪽 참여자가 모두 조회 대상일 수 있으므로 호출부가 두 방향을 모두 확인해 배분한다.
+    @Query("SELECT c FROM Connection c WHERE (c.guardianId IN :userIds OR c.wardId IN :userIds) AND c.status IN :statuses")
+    List<Connection> findByParticipantsAndStatusIn(@Param("userIds") Collection<String> userIds,
+                                                   @Param("statuses") List<ConnectionStatus> statuses);
 
     // ===== 관리자 대시보드 집계 =====
 

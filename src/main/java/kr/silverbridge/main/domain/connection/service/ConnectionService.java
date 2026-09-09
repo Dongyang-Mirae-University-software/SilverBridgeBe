@@ -251,6 +251,46 @@ public class ConnectionService {
         }
     }
 
+    /**
+     * 역할 변경(WARD ↔ GUARDIAN)에 따른 기존 연결 정리. 관리자 회원관리에서만 호출한다.
+     *
+     * <p>역할이 바뀌면 기존 연결은 보호자-피보호자 방향이 뒤집혀 의미를 잃는다. 탈퇴 정리와 같은 규칙을
+     * 따른다 - <b>ACTIVE는 disconnect()하고 상대에게 알리고</b>, PENDING은 조용히 cancel()한다.
+     * 실제로 연결돼 있던 사람은 상대가 사라진 것을 알아야 하지만, 수락 전 요청이 취소되는 것은
+     * 기존 알림 비대칭 정책(2026-05-28)에서 무알림으로 정한 경우다.</p>
+     *
+     * <p>ACTIVE 연결을 cancel()로 끝내지 말 것 - CANCELLED는 "보호자가 PENDING 요청을 스스로 취소",
+     * DISCONNECTED는 "ACTIVE 연결이 해제됨"으로 뜻이 갈려 있어 이력이 사실과 달라진다.</p>
+     *
+     * @return 정리한 연결 건수 (감사 로그 detail에 남긴다)
+     */
+    @Transactional
+    public int tearDownConnectionsOnRoleChange(String userId) {
+        List<Connection> connections = connectionRepository.findByParticipantAndStatusIn(
+                userId, List.of(ConnectionStatus.ACTIVE, ConnectionStatus.PENDING));
+
+        for (Connection connection : connections) {
+            if (connection.getStatus() == ConnectionStatus.ACTIVE) {
+                boolean changedIsGuardian = connection.getGuardianId().equals(userId);
+                String notifyTargetId = changedIsGuardian ? connection.getWardId() : connection.getGuardianId();
+                ConnectionDisconnectedEvent.DisconnectedBy by = changedIsGuardian
+                        ? ConnectionDisconnectedEvent.DisconnectedBy.GUARDIAN
+                        : ConnectionDisconnectedEvent.DisconnectedBy.WARD;
+
+                connection.disconnect();
+                eventPublisher.publishEvent(new ConnectionDisconnectedEvent(
+                        connection.getId(), notifyTargetId, by));
+            } else { // PENDING - 수락 전 요청이라 상대 알림 없이 취소
+                connection.cancel();
+            }
+        }
+
+        if (!connections.isEmpty()) {
+            log.info("역할 변경 연결 정리: userId={}, 정리 건수={}", userId, connections.size());
+        }
+        return connections.size();
+    }
+
     // ─── 내부 헬퍼 ────────────────────────────────────────────────
 
     private void validateConnectionRequest(String requesterId, String targetId,

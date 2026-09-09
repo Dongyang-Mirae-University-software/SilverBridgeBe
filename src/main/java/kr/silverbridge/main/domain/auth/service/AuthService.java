@@ -142,7 +142,9 @@ public class AuthService {
         }
 
         // 비밀번호 검증 통과 후 계정 상태 확인 (본인에게만 정지 사실 노출)
-        if (user.getStatus() == Status.INACTIVE) {
+        // ACTIVE가 아닌 모든 상태를 막는다 - INACTIVE(탈퇴 진행) + RESTRICTED(관리자 정지).
+        // INACTIVE 등호 비교로 두면 새 상태값이 늘 때마다 조용히 로그인이 뚫린다.
+        if (user.getStatus() != Status.ACTIVE) {
             // 정지 계정 차단 시 남아있는 refresh token 정리 (refresh 메서드와 일관성 유지)
             // REQUIRES_NEW로 분리 — 아래 throw 시 본 트랜잭션 롤백돼도 폐기는 유지
             refreshTokenRevocationService.revokeAll(user.getId());
@@ -204,8 +206,8 @@ public class AuthService {
         User user = userRepository.findById(savedToken.getUserId())
                 .orElseThrow(() -> new CustomException(ErrorCode.USER_NOT_FOUND));
 
-        // 비활성화된 계정은 토큰 재발급 차단 (탈퇴 또는 관리자 제한 계정)
-        if (user.getStatus() == Status.INACTIVE) {
+        // ACTIVE가 아닌 계정은 토큰 재발급 차단 (탈퇴 진행 중이거나 관리자가 정지시킨 계정)
+        if (user.getStatus() != Status.ACTIVE) {
             // REQUIRES_NEW로 분리 — 아래 throw 시 본 트랜잭션 롤백돼도 폐기는 유지
             refreshTokenRevocationService.revokeOne(savedToken);
             throw new CustomException(ErrorCode.INACTIVE_USER);
