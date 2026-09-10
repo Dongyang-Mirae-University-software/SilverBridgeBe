@@ -129,6 +129,12 @@ public class SwaggerConfig {
                                         + "관리자는 1차 판정을 하지 않습니다 - 현장을 아는 보호자가 판정하고, 관리자는 갈린 것을 확정합니다.\n"
                                         + "정정은 상태만 바꾸고 보호자 응답 원본은 남기며, 매 정정이 감사 로그에 쌓입니다.\n"
                                         + "※ ADMIN 권한 계정만 호출 가능."),
+                        new Tag().name("관리자 - 연결 관리")
+                                .description("보호자-피보호자 강제 연결·해제. 고객센터 문의를 받아 관리자가 대신 처리하는 경로입니다.\n"
+                                        + "⚠️ 강제 연결은 피보호자의 수락(=동의) 없이 SOS·카메라·복약 정보를 열어 주는 조작이라 "
+                                        + "양쪽 모두에게 알림이 나가고 감사 로그가 남습니다.\n"
+                                        + "연결 조회는 [관리자 - 회원관리]의 회원 상세가 담당합니다.\n"
+                                        + "※ ADMIN 권한 계정만 호출 가능."),
                         new Tag().name("관리자 - 회원관리")
                                 .description("회원 목록(검색·역할/계정/연결 상태 필터·페이징)·탭 건수·상세 조회, 정보 수정, 강제 탈퇴.\n"
                                         + "수정 대상은 이름·역할·계정 상태 3가지뿐입니다 — 이메일은 로그인 ID라 본인도 바꿀 수 없고, "
@@ -227,7 +233,10 @@ public class SwaggerConfig {
                     // ── [관리자 - 회원관리] ──────────────────────────
                     "/api/admin/user",
                     "/api/admin/user/counts",
-                    "/api/admin/user/{userId}"
+                    "/api/admin/user/{userId}",
+                    // ── [관리자 - 연결 관리] ──────────────────────────
+                    "/api/admin/connection",
+                    "/api/admin/connection/{connectionId}"
             );
 
             Map<String, PathItem> original = new LinkedHashMap<>(openApi.getPaths());

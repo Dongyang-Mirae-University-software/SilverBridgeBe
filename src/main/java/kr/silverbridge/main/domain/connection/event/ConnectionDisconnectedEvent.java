@@ -9,9 +9,11 @@ public record ConnectionDisconnectedEvent(
         String notifyTargetId,
         DisconnectedBy disconnectedBy
 ) {
-    /** 연결을 해제한 당사자 역할 — 수신자에게 표시할 메시지 분기에 사용 */
+    /** 연결을 해제한 주체 - 수신자에게 표시할 메시지 분기에 사용 */
     public enum DisconnectedBy {
         GUARDIAN,
-        WARD
+        WARD,
+        /** 관리자가 강제 해제. "보호자가 해제했습니다"로 내보내면 사실과 다르다. */
+        ADMIN
     }
 }
