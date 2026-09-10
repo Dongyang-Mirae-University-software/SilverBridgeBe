@@ -6,11 +6,13 @@ import kr.silverbridge.main.domain.inquiry.dto.AdminInquiryResponse;
 import kr.silverbridge.main.domain.inquiry.dto.InquiryAnswerRequest;
 import kr.silverbridge.main.domain.inquiry.entity.Inquiry;
 import kr.silverbridge.main.domain.inquiry.event.InquiryAnsweredEvent;
+import kr.silverbridge.main.domain.admin.service.AdminAuditLogService;
 import kr.silverbridge.main.domain.inquiry.repository.InquiryRepository;
 import kr.silverbridge.main.domain.user.entity.User;
 import kr.silverbridge.main.domain.user.repository.UserRepository;
 import kr.silverbridge.main.global.enums.InquiryCategory;
 import kr.silverbridge.main.global.enums.InquiryStatus;
+import kr.silverbridge.main.global.enums.AdminAuditAction;
 import kr.silverbridge.main.global.exception.CustomException;
 import kr.silverbridge.main.global.exception.ErrorCode;
 import kr.silverbridge.main.global.response.PageResponse;
@@ -41,6 +43,7 @@ public class AdminInquiryService {
     private final InquiryRepository inquiryRepository;
     private final UserRepository userRepository;
     private final ApplicationEventPublisher eventPublisher;
+    private final AdminAuditLogService auditLogService;
 
     /**
      * 관리자 문의 목록 조회. 탭 카운트(전체/대기/완료)는 필터·검색과 무관한 전역 카운트이며,
@@ -90,6 +93,11 @@ public class AdminInquiryService {
         }
 
         inquiry.answer(request.getAnswer(), adminId);
+
+        // 보호자 개인 문의를 열어 답하는 쓰기 조작이라 감사 로그를 남긴다(2026-09-10 횡단 점검 A-2).
+        // 같은 트랜잭션이라 CHECK 위반이면 답변까지 롤백된다 - enum 추가 시 V50 같은 CHECK 재정의가 필수.
+        auditLogService.log(adminId, AdminAuditAction.INQUIRY_ANSWER, String.valueOf(inquiry.getId()),
+                String.format("문의 답변: 작성자=%s, 분류=%s", inquiry.getUserId(), inquiry.getCategory()));
 
         // 커밋 후 작성자(보호자)에게 답변 완료 알림 발송 (선택 알림 — 사용자 설정 따름)
         eventPublisher.publishEvent(new InquiryAnsweredEvent(inquiry.getId(), inquiry.getUserId()));
