@@ -206,7 +206,19 @@ class FcmServiceTest {
     }
 
     @Test
-    @DisplayName("재등록은 개수를 늘리지 않으므로 상한 검사를 하지 않는다")
+    @DisplayName("소유자 이전(공유 디바이스)은 새 소유자의 토큰이 하나 늘어난 것이라 상한을 다시 본다 (2026-09-10 L-2)")
+    void registerToken_소유자이전은_상한검사() {
+        when(fcmTokenRepository.findByToken("tok-1"))
+                .thenReturn(Optional.of(FcmToken.of("GD0001", "tok-1", "ANDROID")));
+        when(fcmTokenRepository.findByUserIdOrderByUpdatedAtDesc("WD0002")).thenReturn(List.of());
+
+        fcmService.registerToken("WD0002", "tok-1", "IOS");
+
+        verify(fcmTokenRepository).findByUserIdOrderByUpdatedAtDesc("WD0002");
+    }
+
+    @Test
+    @DisplayName("같은 사용자의 재등록은 개수를 늘리지 않으므로 상한 검사를 하지 않는다")
     void registerToken_재등록은_상한검사_안함() {
         when(fcmTokenRepository.findByToken("tok-1"))
                 .thenReturn(Optional.of(FcmToken.of("GD0001", "tok-1", "WEB")));

@@ -166,6 +166,31 @@ class AdminAnomalyServiceTest {
         }
 
         @Test
+        @DisplayName("재정정 때 메모를 생략하면 이전 메모를 지우지 않는다 (2026-09-10 L-1)")
+        void 재정정_메모_생략은_유지() {
+            AnomalyIncident target = incident(AnomalyReviewStatus.CONFLICTED);
+            when(incidentRepository.findById(INCIDENT_ID)).thenReturn(Optional.of(target));
+
+            service.resolve(ADMIN_ID, INCIDENT_ID, AnomalyReviewStatus.FALSE_ALARM, "요리 연기");
+            AdminAnomalyIncidentItem second = service.resolve("AD0002", INCIDENT_ID, AnomalyReviewStatus.REAL, null);
+
+            assertThat(second.reviewNote()).isEqualTo("요리 연기");
+        }
+
+        @Test
+        @DisplayName("정정한 관리자 행이 사라져 resolvedBy가 비어도 확정은 유지된다 - 시각으로 판정한다 (2026-09-10 L-4)")
+        void 관리자_삭제되어도_확정_유지() {
+            AnomalyIncident target = incident(AnomalyReviewStatus.CONFLICTED);
+            target.resolveByAdmin(AnomalyReviewStatus.FALSE_ALARM, ADMIN_ID, null, OffsetDateTime.now(KST));
+            // FK ON DELETE SET NULL이 하는 일을 흉내 낸다
+            org.springframework.test.util.ReflectionTestUtils.setField(target, "resolvedBy", null);
+
+            assertThat(target.isAdminResolved()).isTrue();
+            target.applyReviewStatus(AnomalyReviewStatus.REAL);
+            assertThat(target.getReviewStatus()).isEqualTo(AnomalyReviewStatus.FALSE_ALARM);
+        }
+
+        @Test
         @DisplayName("정정할 때마다 감사 로그를 남긴다 - 개인 이력을 뒤집는 조작이라 추적이 필요하다")
         void 감사로그_기록() {
             AnomalyIncident target = incident(AnomalyReviewStatus.CONFLICTED);

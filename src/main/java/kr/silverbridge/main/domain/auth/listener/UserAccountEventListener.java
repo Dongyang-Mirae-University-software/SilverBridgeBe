@@ -4,6 +4,7 @@ import kr.silverbridge.main.domain.auth.repository.RefreshTokenRepository;
 import kr.silverbridge.main.domain.auth.service.AccessLogService;
 import kr.silverbridge.main.domain.user.event.PasswordChangedEvent;
 import kr.silverbridge.main.domain.user.event.UserRestrictedEvent;
+import kr.silverbridge.main.domain.user.event.UserRoleChangedEvent;
 import kr.silverbridge.main.domain.user.event.UserWithdrawnEvent;
 import kr.silverbridge.main.global.enums.AccessAction;
 import kr.silverbridge.main.global.jwt.JwtProperties;
@@ -66,6 +67,21 @@ public class UserAccountEventListener {
             invalidatePreviousAccessTokens(event.userId());
         } catch (RuntimeException e) {
             log.error("[ADMIN-RESTRICT] 토큰 무효화 실패 - 기존 토큰이 만료까지 유효할 수 있음 userId={}",
+                    event.userId(), e);
+        }
+    }
+
+    // 관리자 역할 변경 - access token은 발급 시점의 role 클레임으로 권한을 만들어, 역할만 바꾸면 옛 역할의
+    // 토큰이 만료까지 @PreAuthorize를 그대로 통과한다. 정지와 같은 무효화 경로를 태운다(2026-09-10 점검 M-1).
+    // refresh 재발급은 DB 역할을 읽으므로 새 토큰은 바로 새 역할이 된다.
+    @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public void handleRoleChanged(UserRoleChangedEvent event) {
+        try {
+            refreshTokenRepository.deleteByUserId(event.userId());
+            invalidatePreviousAccessTokens(event.userId());
+        } catch (RuntimeException e) {
+            log.error("[ADMIN-ROLE-CHANGE] 토큰 무효화 실패 - 옛 역할 토큰이 만료까지 유효할 수 있음 userId={}",
                     event.userId(), e);
         }
     }

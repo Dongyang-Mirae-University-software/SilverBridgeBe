@@ -26,6 +26,9 @@ public interface CameraRepository extends JpaRepository<Camera, Long> {
     List<Camera> findByWardIdInAndIsActiveTrue(Collection<String> wardIds);
 
     boolean existsBySessionId(String sessionId);   // SessionID 발급기 중복 검사
+
+    // 회원의 카메라 전부 삭제 - 관리자 역할 변경(WARD → GUARDIAN) 시 고아 방지. 삭제 건수를 돌려준다.
+    long deleteByWardId(String wardId);
     boolean existsByDeviceId(String deviceId);      // DeviceID 발급기 중복 검사
 
     // ===== 관리자 대시보드 집계 =====

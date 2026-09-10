@@ -17,8 +17,9 @@ import java.util.List;
 /**
  * 보호자용 문의 서비스. 작성·본인 목록·본인 상세를 담당한다.
  *
- * <p>조회는 모두 "본인 문의만" 검증한다(IDOR 차단) — 타인 문의는 존재 노출 방지를 위해
- * {@link ErrorCode#INQUIRY_NOT_AUTHORIZED}(404 위장)로 응답한다.</p>
+ * <p>조회는 모두 "본인 문의만" 검증한다(IDOR 차단) - 타인 문의는
+ * {@link ErrorCode#INQUIRY_NOT_AUTHORIZED}(403 + [IDOR-ATTEMPT] WARN)로 응답한다.
+ * 404 위장은 2026-07-14에 "무슨 일이 일어났는지 그대로 안내" 정책으로 버렸다.</p>
  */
 @Slf4j
 @Service

@@ -41,6 +41,8 @@ public class FcmService {
                     }
                     existing.reassignTo(userId, platform);
                     log.info("FCM 토큰 소유자 갱신(공유 디바이스): newUserId={}", userId);
+                    // 새 소유자 입장에서는 토큰이 하나 늘어난 것이라 상한을 다시 본다(2026-09-10 점검 L-2).
+                    enforceMaxPerUser(userId);
                 },
                 () -> {
                     fcmTokenRepository.save(FcmToken.of(userId, token, platform));
@@ -55,7 +57,7 @@ public class FcmService {
      * <p>토큰은 기기 단위라 여러 개가 정상이지만(폰·PC·태블릿), 브라우저 데이터 삭제·시크릿창·기기
      * 교체로 생긴 것은 스스로 사라지지 않는다. 그대로 두면 쓰지 않는 기기로 알림이 흩어져 나간다.</p>
      *
-     * <p>신규 등록 직후에만 부른다 — 재등록은 개수를 늘리지 않으므로 검사할 이유가 없다.</p>
+     * <p>신규 등록과 소유자 이전 직후에 부른다 - 같은 사용자의 재등록은 개수를 늘리지 않으므로 검사하지 않는다.</p>
      */
     private void enforceMaxPerUser(String userId) {
         int max = tokenProperties.getMaxPerUser();

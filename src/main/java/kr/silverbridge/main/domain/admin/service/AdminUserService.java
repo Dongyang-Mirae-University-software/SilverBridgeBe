@@ -7,11 +7,13 @@ import kr.silverbridge.main.domain.admin.dto.AdminUserDetailResponse;
 import kr.silverbridge.main.domain.admin.dto.AdminUserListItem;
 import kr.silverbridge.main.domain.admin.dto.AdminUserStatusFilter;
 import kr.silverbridge.main.domain.admin.dto.AdminUserUpdateRequest;
+import kr.silverbridge.main.domain.camera.service.CameraService;
 import kr.silverbridge.main.domain.connection.entity.Connection;
 import kr.silverbridge.main.domain.connection.repository.ConnectionRepository;
 import kr.silverbridge.main.domain.connection.service.ConnectionService;
 import kr.silverbridge.main.domain.user.entity.User;
 import kr.silverbridge.main.domain.user.event.UserRestrictedEvent;
+import kr.silverbridge.main.domain.user.event.UserRoleChangedEvent;
 import kr.silverbridge.main.domain.user.repository.UserRepository;
 import kr.silverbridge.main.domain.user.service.UserService;
 import kr.silverbridge.main.global.enums.AdminAuditAction;
@@ -67,6 +69,7 @@ public class AdminUserService {
     private final UserRepository userRepository;
     private final ConnectionRepository connectionRepository;
     private final ConnectionService connectionService;
+    private final CameraService cameraService;
     private final UserService userService;
     private final AdminAuditLogService auditLogService;
     private final ApplicationEventPublisher eventPublisher;
@@ -214,6 +217,13 @@ public class AdminUserService {
     /**
      * 역할 변경. 바뀌면 기존 연결을 정리한다 - 역할이 뒤집히면 보호자-피보호자 방향이 어긋나 관계가 뜻을 잃는다.
      * ACTIVE 연결의 상대에게는 해제 알림이 나가고, 수락 전(PENDING) 요청은 조용히 취소된다.
+     *
+     * <p><b>카메라도 함께 삭제한다.</b> 카메라는 피보호자 자산이라 보호자가 된 뒤에는 카메라 API(WARD 전용)를
+     * 쓸 수 없어 아무도 지울 수 없는 고아가 되고, AI 구독과 본인 화재 알림은 계속된다. 역할을 되돌려 쓰려면
+     * 피보호자 계정으로 다시 등록해야 한다(장치의 sessionId 재설정 포함).</p>
+     *
+     * <p><b>토큰도 끊는다.</b> access token은 발급 시점의 role 클레임으로 권한을 만들어, 상태 변경과 달리
+     * 역할만 바꾸면 옛 역할의 토큰이 만료까지 {@code @PreAuthorize}를 통과한다({@link UserRoleChangedEvent}).</p>
      */
     private void applyRole(User user, Role role, String adminId) {
         if (role == null || role == user.getRole()) {
@@ -227,10 +237,13 @@ public class AdminUserService {
         Role before = user.getRole();
         user.updateRole(role);
         int clearedConnections = connectionService.tearDownConnectionsOnRoleChange(user.getId());
+        int deletedCameras = cameraService.deleteAllByWard(user.getId());
+        eventPublisher.publishEvent(new UserRoleChangedEvent(user.getId()));
 
         auditLogService.log(adminId, AdminAuditAction.USER_ROLE_CHANGE, user.getId(),
-                String.format("역할 변경: %s → %s (연결 %d건 해제)",
-                        roleLabel(before), roleLabel(role), clearedConnections));
+                String.format("역할 변경: %s → %s (연결 %d건 해제%s)",
+                        roleLabel(before), roleLabel(role), clearedConnections,
+                        deletedCameras > 0 ? ", 카메라 " + deletedCameras + "대 삭제" : ""));
     }
 
     /**
@@ -326,8 +339,14 @@ public class AdminUserService {
                         connection.getStatus()));
     }
 
+    /**
+     * 탈퇴 진행 중(INACTIVE)인 계정은 목록·탭 건수와 같은 이유로 상세·수정·삭제에서도 없는 것으로 다룬다.
+     * 목록에서만 빼면 ID를 아는 관리자가 {@code status=ACTIVE}로 되돌려 이미 토큰·연결·FCM이 정리된
+     * 반쪽 계정을 되살릴 수 있고, 스윕(INACTIVE만 회수)도 더는 지우지 않는다(2026-09-10 점검 M-2).
+     */
     private User getUserOrThrow(String userId) {
         return userRepository.findById(userId)
+                .filter(user -> user.getStatus() != Status.INACTIVE)
                 .orElseThrow(() -> new CustomException(ErrorCode.USER_NOT_FOUND));
     }
 

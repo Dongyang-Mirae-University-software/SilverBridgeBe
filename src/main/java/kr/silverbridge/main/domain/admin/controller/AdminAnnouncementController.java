@@ -13,6 +13,7 @@ import kr.silverbridge.main.domain.admin.dto.AnnouncementUpdateRequest;
 import kr.silverbridge.main.domain.admin.service.AdminAnnouncementService;
 import kr.silverbridge.main.global.response.ApiResponse;
 import lombok.RequiredArgsConstructor;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -30,6 +31,8 @@ import java.util.List;
 @RequestMapping("/api/admin/announcement")
 @RequiredArgsConstructor
 @SecurityRequirement(name = "Bearer Authentication")
+// 경로 규칙(/api/admin/**)과 이중 게이트 - 경로 규칙만 두면 테스트로 고정할 수 없고 경로가 바뀌면 조용히 열린다(신규 관리자 컨트롤러와 동일 기준).
+@PreAuthorize("hasRole('ADMIN')")
 public class AdminAnnouncementController {
 
     private final AdminAnnouncementService adminAnnouncementService;

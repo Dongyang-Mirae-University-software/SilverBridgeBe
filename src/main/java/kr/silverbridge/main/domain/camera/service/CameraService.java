@@ -8,11 +8,9 @@ import kr.silverbridge.main.domain.camera.dto.GuardianCameraView;
 import kr.silverbridge.main.domain.camera.entity.Camera;
 import kr.silverbridge.main.domain.camera.event.CameraRegisteredEvent;
 import kr.silverbridge.main.domain.camera.repository.CameraRepository;
-import kr.silverbridge.main.domain.connection.entity.Connection;
-import kr.silverbridge.main.domain.connection.repository.ConnectionRepository;
+import kr.silverbridge.main.domain.connection.service.ConnectionService;
 import kr.silverbridge.main.domain.user.entity.User;
 import kr.silverbridge.main.domain.user.repository.UserRepository;
-import kr.silverbridge.main.global.enums.ConnectionStatus;
 import kr.silverbridge.main.global.exception.CustomException;
 import kr.silverbridge.main.global.exception.ErrorCode;
 import lombok.RequiredArgsConstructor;
@@ -31,7 +29,7 @@ import java.util.stream.Collectors;
 /**
  * 이상감지 카메라 서비스.
  *
- * <p>피보호자는 본인 카메라만 CRUD 하고(타인 것은 404 위장으로 IDOR 차단),
+ * <p>피보호자는 본인 카메라만 CRUD 하고(타인 것은 403 + [IDOR-ATTEMPT]로 차단),
  * 보호자는 ACTIVE 연결된 피보호자들의 활성 카메라만 allowlist로 조회한다 —
  * 별도 카메라-보호자 매핑 없이 기존 {@code connections}를 재사용하므로 연결이 끊기면 접근도 자동 소멸한다.</p>
  */
@@ -41,7 +39,7 @@ import java.util.stream.Collectors;
 public class CameraService {
 
     private final CameraRepository cameraRepository;
-    private final ConnectionRepository connectionRepository;
+    private final ConnectionService connectionService;
     private final UserRepository userRepository;
     private final CameraIdentifierFactory identifierFactory;
     private final ApplicationEventPublisher eventPublisher;
@@ -120,17 +118,34 @@ public class CameraService {
     }
 
     /**
+     * 회원의 카메라를 전부 삭제한다 - 관리자 역할 변경(WARD → GUARDIAN)용.
+     *
+     * <p>카메라는 피보호자 자산이라 보호자가 된 뒤에는 카메라 API를 쓸 수 없어 아무도 지울 수 없는
+     * 고아가 되고, AI 구독과 본인 화재 알림은 계속된다. 다시 쓰려면 피보호자 계정으로 재등록해야 한다.</p>
+     *
+     * <p>AI 구독은 여기서 따로 끊지 않는다 - 피보호자 본인의 삭제와 같은 방식이다. 삭제된 세션은 AI가
+     * 목록을 갱신할 때 정리되고, 그 사이 들어오는 신호는 "등록된 카메라 없음"으로 이력이 스킵된다.</p>
+     *
+     * @return 삭제한 카메라 수
+     */
+    @Transactional
+    public int deleteAllByWard(String wardId) {
+        long deleted = cameraRepository.deleteByWardId(wardId);
+        if (deleted > 0) {
+            log.info("[CAMERA] 역할 변경으로 카메라 일괄 삭제: wardId={}, {}대", wardId, deleted);
+        }
+        return (int) deleted;
+    }
+
+    /**
      * 보호자 allowlist — ACTIVE 연결된 피보호자들의 활성 카메라.
      * 피보호자 이름은 배치 조회로 채운다(N+1 회피, ConnectionService.getMyWards 동일 패턴).
      */
     @Transactional(readOnly = true)
     public List<GuardianCameraView> getConnectedWardCameras(String guardianId) {
-        List<String> wardIds = connectionRepository
-                .findByGuardianIdAndStatusInOrderByCreatedAtDesc(guardianId, List.of(ConnectionStatus.ACTIVE))
-                .stream()
-                .map(Connection::getWardId)
-                .distinct()
-                .toList();
+        // 인가 목록은 connection 도메인의 getActiveWardIds만 쓴다 - 연결 판정 로직을 밖에서 복제하면
+        // 정책이 바뀔 때 이 한 곳만 따라오지 않는다(2026-09-10 점검 G-1).
+        List<String> wardIds = connectionService.getActiveWardIds(guardianId);
 
         if (wardIds.isEmpty()) {
             return List.of();
