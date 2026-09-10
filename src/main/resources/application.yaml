@@ -48,9 +48,23 @@ spring:
           auth: true
           starttls:
             enable: true
+          # SMTP가 응답을 늦추면 비밀번호 재설정 메일 발송이 요청 스레드를 붙든다(2026-09-11 기술 점검 C-1).
+          # 카카오·파일서버 클라이언트와 같은 이유로 각 10초.
+          connectiontimeout: 10000
+          timeout: 10000
+          writetimeout: 10000
+
+  task:
+    scheduling:
+      pool:
+        # 기본 1스레드에 스케줄러 5종 + AI WS 재접속 예약이 함께 줄을 선다 - 복약 Planner가 느려지면
+        # AI 재접속까지 밀려 그 사이 화재 신호를 놓친다(2026-09-11 기술 점검 B-1).
+        size: 3
 
 server:
   port: 6511
+  # 배포마다 컨테이너가 교체된다. 진행 중인 요청과 알림 executor 큐(SOS 포함)를 끝낼 시간을 준다(B-3).
+  shutdown: graceful
   # nginx가 HTTPS 종료 후 HTTP로 프록시 → X-Forwarded-Proto 헤더 신뢰
   # Swagger UI 등에서 요청 URL 생성 시 https 스킴 유지 (Mixed-Content 방지)
   forward-headers-strategy: framework

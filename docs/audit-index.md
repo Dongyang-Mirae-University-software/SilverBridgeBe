@@ -54,13 +54,13 @@
 | 이상감지 **통합 경로**(카메라 등록 ↔ AI sessionId) | ❌ | FE가 발급 sessionId로 스트리밍하도록 수정된 뒤 검증 예정. 현재 gosky `camera` 0행 |
 | 카카오 알림톡 채널 | ✅ | 템플릿 **승인(2026-07-27)**·두 서버 `ALIMTALK_ENABLED=true`로 실발송 중(2026-07-31 확인). 카카오 푸시는 검토 후 미채택(앱 푸시=FCM 중복) |
 | **역할 경계 횡단**(보호자/피보호자/관리자) | ✅ | `(2026-09-10) audit-role-boundary-guardian-ward-admin.md` - 보호자·피보호자 PASS. 보호자 G-1·관리자 A-1 수정 완료(2026-09-10). A-2(문의 답변 감사 로그)는 V50 PR ②. 역할 게이트 테스트 미커버는 8개 → 5개(연결 2·문의 2·공지 1, 다음 변경 때) |
-| **기점검 도메인 회귀 재점검** (auth~anomaly 1·2단계) | ✅ | `(2026-09-10) audit-regression-pre-230.md` - 2026-06-11 미해결 4건 전부 닫힘·회귀 없음. 신규 축(생명주기×데이터)에서 R-1(피보호자 수락 시 보호자 상태 미검사) 🟡, Low 5 |
+| **기점검 도메인 회귀 재점검** (auth~anomaly 1·2단계) | ✅ | `(2026-09-10) audit-regression-pre-230.md` - 2026-06-11 미해결 4건 전부 닫힘·회귀 없음. R-1·R-3(문서)·R-5·R-6 수정 완료 2026-09-11(`(2026-09-11) fix-audit-findings-2.md`). R-2(정지 중 선점 유실)·R-4(문의 CASCADE)는 수용 |
 | **의존성 취약점 스캔** | ⏳ | `(2026-09-11) audit-technical-cross-cutting.md` PHASE A - NVD 키 없이 실행 중. **한 번도 완주된 적 없음**(A-1) |
-| **동시성**(스케줄러·executor·선점) | ⚠️ | 〃 PHASE B - 스케줄러 단일 스레드(B-1)·포화 시 CallerRuns(B-2)·우아한 종료 없음(B-3) |
-| **외부 연동 회복력**(FCM·Solapi·SMTP·카카오·AI WS) | ⚠️ | 〃 PHASE C - SMTP(C-1)·파일서버(C-2) 타임아웃 없음. 필수 알림 보장 결론 기록 |
-| **성능·JPA** | ✅ | 〃 PHASE D - OSIV off·관계 매핑 0·인덱스 커버. Low 3 |
-| **운영 설정·로깅** | ⚠️ | 〃 PHASE E - **실사용 도메인 Swagger 무인증 공개(E-1, 결정 필요)**·감사 로그 PII INFO 출력(E-2) |
-| **아키텍처 경계** | ✅ | 〃 PHASE F - admin↔anomaly·inquiry 패키지 순환, global→domain 1건, notification→auth 1건 (전부 Low) |
+| **동시성**(스케줄러·executor·선점) | ✅ | 〃 PHASE B - B-1·B-2·B-3 수정 완료 2026-09-11 |
+| **외부 연동 회복력**(FCM·Solapi·SMTP·카카오·AI WS) | ✅ | 〃 PHASE C - C-1·C-2 수정 완료 2026-09-11. 필수 알림 보장 결론 기록 |
+| **성능·JPA** | ✅ | 〃 PHASE D - D-1·D-2 인덱스 V51(2026-09-11). D-3 수용 |
+| **운영 설정·로깅** | ✅ | 〃 PHASE E - E-2·E-4·E-5 수정 완료. **E-1은 관리 밖 인프라라 수용한 한계**(정책 파일 기록) |
+| **아키텍처 경계** | ✅ | 〃 PHASE F - F-1~F-3 Low, 별도 refactor PR 대상(미착수) |
 | 프론트엔드(SilverBridgeFe) | ➖ | 별도 저장소 — 이 대장의 범위 밖 |
 
 ## 다음 점검 트리거

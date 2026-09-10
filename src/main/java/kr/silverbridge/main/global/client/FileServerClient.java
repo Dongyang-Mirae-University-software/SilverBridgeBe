@@ -6,6 +6,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.core.io.ByteArrayResource;
 import org.springframework.http.MediaType;
+import org.springframework.http.client.SimpleClientHttpRequestFactory;
 import org.springframework.stereotype.Component;
 import org.springframework.util.LinkedMultiValueMap;
 import org.springframework.util.MultiValueMap;
@@ -15,6 +16,7 @@ import org.springframework.web.multipart.MultipartFile;
 import org.springframework.web.client.RestClientException;
 
 import java.io.IOException;
+import java.time.Duration;
 import java.util.Map;
 
 @Slf4j
@@ -24,8 +26,14 @@ public class FileServerClient {
     private final RestClient restClient;
 
     public FileServerClient(@Value("${file-server.base-url}") String baseUrl) {
+        // 파일 서버가 응답을 늦추면 프로필 이미지 업로드·삭제가 요청 스레드를 붙든다 - 카카오 클라이언트와 같은
+        // 이유로 타임아웃을 둔다(2026-09-11 기술 점검 C-2). 업로드는 5MB 상한이라 read 10초면 충분하다.
+        SimpleClientHttpRequestFactory factory = new SimpleClientHttpRequestFactory();
+        factory.setConnectTimeout(Duration.ofSeconds(3));
+        factory.setReadTimeout(Duration.ofSeconds(10));
         this.restClient = RestClient.builder()
                 .baseUrl(baseUrl)
+                .requestFactory(factory)
                 .build();
     }
 

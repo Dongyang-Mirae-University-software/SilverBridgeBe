@@ -178,6 +178,13 @@ public class ConnectionService {
         if (wardId.equals(connection.getInitiatedBy())) {
             throw new CustomException(ErrorCode.CONNECTION_NOT_AUTHORIZED);
         }
+        // 요청 뒤 보호자가 정지·탈퇴 진행 상태가 됐을 수 있다. 그대로 수락하면 알림은 막히지만 연결은
+        // 살아 있어 정지 해제 즉시 SOS·카메라·복약 이력이 열린다. 관리자 강제 연결과 같은 기준으로 막는다
+        // (2026-09-11 회귀 재점검 R-1).
+        User guardian = requireUser(connection.getGuardianId());
+        if (guardian.getStatus() != Status.ACTIVE) {
+            throw new CustomException(ErrorCode.CONNECTION_TARGET_NOT_ACTIVE);
+        }
         connection.activate();
 
         eventPublisher.publishEvent(new ConnectionAcceptedEvent(
