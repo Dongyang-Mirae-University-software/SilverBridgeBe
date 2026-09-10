@@ -34,6 +34,7 @@
 - **연관 데이터**: users 참조 FK가 이미 `CASCADE`/`SET NULL`이라 **DB 마이그레이션 불필요**.
   - CASCADE 삭제: `connections`·`fcm_tokens`·`refresh_tokens`.
   - `SET NULL`: `access_logs`·`announcements`·`announcement_drafts` — **접속로그는 보안 감사용으로 익명 보존**(완전 삭제 아님). 업로드 프로필 이미지 파일은 커밋 후 제거(카카오 CDN 등 외부 URL이면 파일서버가 무시).
+  - **안전 이력의 보존 정책은 둘로 갈린다 (2026-09-11 회귀 재점검 R-3, 의도된 차이)**: `sos_event`는 SET NULL로 **익명 보존**(보호자 이력에 이름 없이 남음), `anomaly_event`·`anomaly_incident`(+응답·재촉 로그)는 V30·V44에서 **CASCADE 삭제**로 확정했다. 문의(`inquiry`)도 CASCADE다. "탈퇴자가 남긴 데이터를 붙들지 않는다"가 기본이고 SOS만 감사 목적 예외다 - 한쪽에 맞추자고 FK를 바꾸지 말 것. 전체 표는 `docs/(2026-09-10) audit-regression-pre-230.md` PHASE B.
 - **본인 확인 유지(H-6)**: 일반=비밀번호, 카카오=confirmation "탈퇴" 일치 확인. access token 단독 탈취로 인한 임의 삭제를 차단(soft→hard 전환에도 동일 적용).
 - **비가역**: 복구 불가 — 기존 soft delete의 복구·전수 감사 이점은 포기(접속로그 익명 기록만 잔존).
 - 상세: PR #181.
@@ -266,5 +267,15 @@
 - **불변 규칙 ③(강제 해제는 양쪽에)**: 당사자가 끊을 때는 반대편에게만 알리지만, 관리자가 끊으면 **둘 다 자기가 끊지 않았다**. 한쪽만 알리면 나머지는 연결이 사라진 것을 모른다. "기존 해제와 같으니 한쪽만"으로 되돌리지 말 것.
 - **수락 대기 요청은 승격시킨다**: 같은 쌍의 PENDING이 있으면 새로 만들지 않고 `activate()`한다. 실제 시나리오가 "요청은 갔는데 수락을 못 누른 상태"라 관리자가 대신 수락해 주는 셈이고, 새로 만들면 같은 쌍의 연결이 둘이 된다.
 - **이용 제한·탈퇴 진행 계정은 연결 대상이 아니다**(400 `CONNECTION_TARGET_NOT_ACTIVE`) - 로그인도 알림도 되지 않는 계정이라 연결해 두어도 아무것도 동작하지 않는다.
+  - **피보호자의 일반 수락 경로도 같은 기준이다 (2026-09-11 회귀 재점검 R-1)**: 요청 뒤 보호자가 정지·탈퇴 진행 상태가 되면 `acceptConnectionAsWard`가 같은 400으로 막는다. 그대로 수락하면 알림은 디스패처가 막지만 연결은 살아 있어 **정지 해제 즉시 SOS·카메라·복약 이력이 열린다.** 요청 시점 검사(`validateConnectionRequest`)만으로는 요청과 수락 사이의 상태 변화를 못 본다.
 - **연결 조회 API를 따로 만들지 않았다** - 회원 상세(`GET /api/admin/user/{userId}`)가 이미 그 회원의 연결 전체를 준다. 별도 "연결 관리" 화면이 생기면 그때 판단한다.
+
+## 운영 설정 - 수용한 한계와 보강 (2026-09-11)
+
+- **실사용 도메인(`api.devdmu.gosky.kr`)의 Swagger·api-docs 무인증 공개는 수용한 한계다** (기술 점검 E-1): 그 서버는 우리가 관리하는 인프라가 아니라 `SWAGGER_ENABLED`를 끌 권한이 없다. 전 엔드포인트·DTO·에러 문구가 보이는 것을 알고 둔다. 관리 권한이 생기면 `SWAGGER_ENABLED=false`로 끄고 vkcs(도메인 없음)에서만 켠다. Swagger 설명문에 **시크릿·내부 호스트·계정 정보를 적지 말 것**(정책 근거 설명은 이미 공개돼 있다).
+- **알림 executor는 포화 시 폐기한다** (B-2): `CallerRunsPolicy`를 버렸다 - 포화 시 AI WS 수신 스레드·HTTP 요청 스레드가 FCM·SMS 응답을 기다리게 되어 `@Async`를 둔 이유가 사라진다. 큐 500, 넘치면 `[NOTIFY-REJECTED]` ERROR 로그 후 폐기. "알림을 버리면 안 되니 CallerRuns로"로 되돌리지 말 것 - 화재 다발 시점에 정확히 AI 수신이 멈춘다.
+- **우아한 종료** (B-3): `server.shutdown=graceful` + executor 종료 대기 20초. 배포마다 컨테이너가 교체되므로 이것이 없으면 그 순간 큐에 있던 SOS 알림이 사라진다.
+- **스케줄러 풀 3스레드** (B-1): 기본 1스레드에 스케줄러 5종과 AI WS 재접속 예약이 함께 줄을 선다. 복약 Planner가 느려지면 AI 재접속이 밀려 그 사이 화재 신호를 놓친다. 스케줄러를 추가하면 이 값을 다시 본다.
+- **외부 연동 타임아웃**: 카카오(기존)·SMTP(C-1, 각 10초)·파일서버(C-2, connect 3초·read 10초). 새 HTTP 클라이언트를 추가할 때 타임아웃 없이 두지 말 것 - 요청 스레드를 붙든다.
+- **감사 로그 detail은 DB에만** (E-2): `AdminAuditLogService`의 SLF4J 출력에는 adminId·action·targetId까지만 적는다. detail에는 이름·이메일이 들어가고 컨테이너 stdout은 로그 수집 경로다.
 - 상세: `docs/(2026-09-10) feature-admin-force-connection.md`.

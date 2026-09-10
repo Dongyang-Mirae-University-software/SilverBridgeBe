@@ -6,7 +6,8 @@ import lombok.*;
 
 @Entity
 @Table(name = "fcm_token", indexes = {
-        @Index(name = "idx_fcm_tokens_user_id", columnList = "user_id")
+        @Index(name = "idx_fcm_tokens_user_id", columnList = "user_id"),
+        @Index(name = "idx_fcm_token_updated_at", columnList = "updated_at")   // 유휴 토큰 정리(V51)
 })
 @Getter
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
