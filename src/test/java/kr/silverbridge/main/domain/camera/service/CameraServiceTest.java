@@ -6,11 +6,9 @@ import kr.silverbridge.main.domain.camera.dto.CameraUpdateRequest;
 import kr.silverbridge.main.domain.camera.dto.GuardianCameraView;
 import kr.silverbridge.main.domain.camera.entity.Camera;
 import kr.silverbridge.main.domain.camera.repository.CameraRepository;
-import kr.silverbridge.main.domain.connection.entity.Connection;
-import kr.silverbridge.main.domain.connection.repository.ConnectionRepository;
+import kr.silverbridge.main.domain.connection.service.ConnectionService;
 import kr.silverbridge.main.domain.user.entity.User;
 import kr.silverbridge.main.domain.user.repository.UserRepository;
-import kr.silverbridge.main.global.enums.ConnectionStatus;
 import kr.silverbridge.main.global.enums.Role;
 import kr.silverbridge.main.global.exception.CustomException;
 import kr.silverbridge.main.global.exception.ErrorCode;
@@ -50,7 +48,7 @@ import static org.mockito.Mockito.when;
 class CameraServiceTest {
 
     @Mock private CameraRepository cameraRepository;
-    @Mock private ConnectionRepository connectionRepository;
+    @Mock private ConnectionService connectionService;
     @Mock private UserRepository userRepository;
     @Mock private CameraIdentifierFactory identifierFactory;
     @Mock private ApplicationEventPublisher eventPublisher;
@@ -203,10 +201,8 @@ class CameraServiceTest {
         @Test
         @DisplayName("ACTIVE 연결 피보호자들의 활성 카메라만 방별로 반환 (피보호자 이름 포함)")
         void 연결된_피보호자_카메라만_반환() {
-            Connection conn = Connection.builder()
-                    .guardianId(GUARDIAN_ID).wardId(WARD_ID).status(ConnectionStatus.ACTIVE).build();
-            when(connectionRepository.findByGuardianIdAndStatusInOrderByCreatedAtDesc(eq(GUARDIAN_ID), anyList()))
-                    .thenReturn(List.of(conn));
+            // 인가 목록은 connection 도메인의 getActiveWardIds만 쓴다(G-1) - 리포지토리를 직접 읽지 않는다
+            when(connectionService.getActiveWardIds(GUARDIAN_ID)).thenReturn(List.of(WARD_ID));
 
             User ward = User.builder().id(WARD_ID).name("남궁명진").role(Role.WARD).build();
             when(userRepository.findAllById(anyList())).thenReturn(List.of(ward));
@@ -228,8 +224,7 @@ class CameraServiceTest {
         @Test
         @DisplayName("ACTIVE 연결이 없으면 빈 목록 — 카메라 조회조차 하지 않음")
         void 연결없으면_빈목록() {
-            when(connectionRepository.findByGuardianIdAndStatusInOrderByCreatedAtDesc(eq(GUARDIAN_ID), anyList()))
-                    .thenReturn(List.of());
+            when(connectionService.getActiveWardIds(GUARDIAN_ID)).thenReturn(List.of());
 
             List<GuardianCameraView> views = cameraService.getConnectedWardCameras(GUARDIAN_ID);
 

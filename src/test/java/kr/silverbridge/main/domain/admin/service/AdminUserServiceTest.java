@@ -5,11 +5,13 @@ import kr.silverbridge.main.domain.admin.dto.AdminUserCountsResponse;
 import kr.silverbridge.main.domain.admin.dto.AdminUserDetailResponse;
 import kr.silverbridge.main.domain.admin.dto.AdminUserListItem;
 import kr.silverbridge.main.domain.admin.dto.AdminUserUpdateRequest;
+import kr.silverbridge.main.domain.camera.service.CameraService;
 import kr.silverbridge.main.domain.connection.entity.Connection;
 import kr.silverbridge.main.domain.connection.repository.ConnectionRepository;
 import kr.silverbridge.main.domain.connection.service.ConnectionService;
 import kr.silverbridge.main.domain.user.entity.User;
 import kr.silverbridge.main.domain.user.event.UserRestrictedEvent;
+import kr.silverbridge.main.domain.user.event.UserRoleChangedEvent;
 import kr.silverbridge.main.domain.user.repository.UserRepository;
 import kr.silverbridge.main.domain.user.service.UserService;
 import kr.silverbridge.main.global.enums.AdminAuditAction;
@@ -66,6 +68,7 @@ class AdminUserServiceTest {
     @Mock private UserRepository userRepository;
     @Mock private ConnectionRepository connectionRepository;
     @Mock private ConnectionService connectionService;
+    @Mock private CameraService cameraService;
     @Mock private UserService userService;
     @Mock private AdminAuditLogService auditLogService;
     @Mock private ApplicationEventPublisher eventPublisher;
@@ -75,7 +78,7 @@ class AdminUserServiceTest {
     private AdminUserService service() {
         if (adminUserService == null) {
             adminUserService = new AdminUserService(userRepository, connectionRepository,
-                    connectionService, userService, auditLogService, eventPublisher);
+                    connectionService, cameraService, userService, auditLogService, eventPublisher);
         }
         return adminUserService;
     }
@@ -191,6 +194,16 @@ class AdminUserServiceTest {
                     .hasFieldOrPropertyWithValue("errorCode", ErrorCode.USER_NOT_FOUND);
         }
 
+        @Test
+        @DisplayName("탈퇴 진행 중(INACTIVE) 계정 상세도 404 - 목록과 같은 모집단이어야 한다")
+        void 탈퇴_진행_계정_상세는_404() {
+            givenUser(user(USER_ID, "홍길동", Role.GUARDIAN, Status.INACTIVE));
+
+            assertThatThrownBy(() -> service().getUser(USER_ID))
+                    .isInstanceOf(CustomException.class)
+                    .hasFieldOrPropertyWithValue("errorCode", ErrorCode.USER_NOT_FOUND);
+        }
+
         private void givenPage(User user) {
             when(userRepository.searchForAdmin(any(), any(), any(), any(), any(), anyList(),
                     any(), any(), any(Pageable.class)))
@@ -258,6 +271,56 @@ class AdminUserServiceTest {
             verify(connectionService).tearDownConnectionsOnRoleChange(USER_ID);
             verify(auditLogService).log(eq(ADMIN_ID), eq(AdminAuditAction.USER_ROLE_CHANGE), eq(USER_ID),
                     eq("역할 변경: 보호자 → 피보호자 (연결 3건 해제)"));
+        }
+
+        @Test
+        @DisplayName("역할이 바뀌면 옛 역할의 토큰을 끊는 이벤트를 발행한다 - role 클레임이 만료까지 @PreAuthorize를 통과하면 안 된다")
+        void 역할_변경은_토큰을_끊는다() {
+            givenUser(user(USER_ID, "홍길동", Role.GUARDIAN, Status.ACTIVE));
+
+            service().updateUser(USER_ID, new AdminUserUpdateRequest(null, Role.WARD, null, null), ADMIN_ID);
+
+            verify(eventPublisher).publishEvent(new UserRoleChangedEvent(USER_ID));
+        }
+
+        @Test
+        @DisplayName("피보호자를 보호자로 바꾸면 카메라를 함께 지우고 건수를 감사 로그에 남긴다 - 보호자는 카메라 API를 못 써 고아가 된다")
+        void 역할_변경은_카메라를_지운다() {
+            User user = givenUser(user(WARD_ID, "박민수", Role.WARD, Status.ACTIVE));
+            when(connectionService.tearDownConnectionsOnRoleChange(WARD_ID)).thenReturn(1);
+            when(cameraService.deleteAllByWard(WARD_ID)).thenReturn(2);
+
+            service().updateUser(WARD_ID, new AdminUserUpdateRequest(null, Role.GUARDIAN, null, null), ADMIN_ID);
+
+            assertThat(user.getRole()).isEqualTo(Role.GUARDIAN);
+            verify(cameraService).deleteAllByWard(WARD_ID);
+            verify(auditLogService).log(eq(ADMIN_ID), eq(AdminAuditAction.USER_ROLE_CHANGE), eq(WARD_ID),
+                    eq("역할 변경: 피보호자 → 보호자 (연결 1건 해제, 카메라 2대 삭제)"));
+        }
+
+        @Test
+        @DisplayName("역할이 그대로면 카메라도 토큰도 건드리지 않는다")
+        void 역할_유지면_부수효과_없음() {
+            givenUser(user(USER_ID, "홍길동", Role.GUARDIAN, Status.ACTIVE));
+
+            service().updateUser(USER_ID, new AdminUserUpdateRequest("홍길순", null, null, null), ADMIN_ID);
+
+            verify(cameraService, never()).deleteAllByWard(anyString());
+            verify(eventPublisher, never()).publishEvent(any(UserRoleChangedEvent.class));
+        }
+
+        @Test
+        @DisplayName("탈퇴 진행 중(INACTIVE) 계정은 수정 대상이 아니다(404) - ACTIVE로 되돌리면 정리된 반쪽 계정이 되살아난다")
+        void 탈퇴_진행_계정은_수정할_수_없다() {
+            User zombie = givenUser(user(USER_ID, "홍길동", Role.GUARDIAN, Status.INACTIVE));
+
+            assertThatThrownBy(() -> service().updateUser(USER_ID,
+                    new AdminUserUpdateRequest(null, null, Status.ACTIVE, null), ADMIN_ID))
+                    .isInstanceOf(CustomException.class)
+                    .hasFieldOrPropertyWithValue("errorCode", ErrorCode.USER_NOT_FOUND);
+
+            assertThat(zombie.getStatus()).isEqualTo(Status.INACTIVE);
+            verify(auditLogService, never()).log(anyString(), any(), anyString(), anyString());
         }
 
         @Test
@@ -453,6 +516,19 @@ class AdminUserServiceTest {
             service().forceDelete(USER_ID, ADMIN_ID, "1.2.3.4", "UA");
 
             verify(userService, org.mockito.Mockito.times(2)).purgeWithdrawnUser(USER_ID);
+        }
+
+        @Test
+        @DisplayName("탈퇴 진행 중(INACTIVE) 계정은 다시 탈퇴시킬 수 없다(404) - 탈퇴 이벤트가 중복 발행되면 안 된다")
+        void 탈퇴_진행_계정은_다시_지우지_않는다() {
+            givenUser(user(USER_ID, "홍길동", Role.GUARDIAN, Status.INACTIVE));
+
+            assertThatThrownBy(() -> service().forceDelete(USER_ID, ADMIN_ID, "1.2.3.4", "UA"))
+                    .isInstanceOf(CustomException.class)
+                    .hasFieldOrPropertyWithValue("errorCode", ErrorCode.USER_NOT_FOUND);
+
+            verify(auditLogService, never()).log(anyString(), any(), anyString(), anyString());
+            verify(userService, never()).forceWithdraw(anyString(), anyString(), anyString());
         }
 
         @Test

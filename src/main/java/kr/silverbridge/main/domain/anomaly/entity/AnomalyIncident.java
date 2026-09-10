@@ -120,12 +120,20 @@ public class AnomalyIncident extends BaseTimeEntity {
         this.reviewStatus = status;
         this.resolvedBy = adminId;
         this.resolvedAt = now;
-        this.reviewNote = note;
+        if (note != null) {
+            // 재정정 때 메모를 생략하면 이전 메모를 지우지 않는다 - 감사 로그에는 남지만 화면에서 사라진다(L-1).
+            this.reviewNote = note;
+        }
     }
 
-    /** 관리자가 확인을 마친 건인지. 채워져 있으면 보호자 응답으로 상태가 재계산되지 않는다. */
+    /**
+     * 관리자가 확인을 마친 건인지. 채워져 있으면 보호자 응답으로 상태가 재계산되지 않는다.
+     *
+     * <p>{@code resolvedBy}가 아니라 {@code resolvedAt}으로 판정한다 - {@code resolved_by}는 관리자 행이
+     * 삭제되면 FK {@code ON DELETE SET NULL}로 비워져 확정이 조용히 풀리지만, 시각은 남는다(L-4).</p>
+     */
     public boolean isAdminResolved() {
-        return this.resolvedBy != null;
+        return this.resolvedAt != null;
     }
 
     /**

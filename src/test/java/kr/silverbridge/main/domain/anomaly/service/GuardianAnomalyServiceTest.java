@@ -20,7 +20,6 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
-import org.springframework.test.util.ReflectionTestUtils;
 
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
@@ -226,9 +225,9 @@ class GuardianAnomalyServiceTest {
     @DisplayName("관리자가 확정한 건은 409 - 뒤늦은 보호자 응답으로 조용히 뒤집히지 않는다")
     void adminResolvedIncidentRejectsFeedback() {
         AnomalyIncident incident = incident();
-        // 관리자 정정 API는 PR ④ 범위라 아직 없다. 여기서 검증할 것은 "resolvedBy가 차 있으면 거부한다"는
-        // 규칙 자체이므로, 그 상태를 직접 만들어 확인한다.
-        ReflectionTestUtils.setField(incident, "resolvedBy", "AD0001");
+        // 관리자 정정을 실제 경로로 만든다. 확정 판정은 resolvedBy가 아니라 resolvedAt으로 한다 -
+        // resolved_by는 관리자 행이 삭제되면 FK SET NULL로 비워지지만 시각은 남는다(2026-09-10 L-4).
+        incident.resolveByAdmin(AnomalyReviewStatus.FALSE_ALARM, "AD0001", null, java.time.OffsetDateTime.now());
         when(incidentRepository.findById(INCIDENT_ID)).thenReturn(Optional.of(incident));
         when(connectionService.isActiveConnection(GUARDIAN_ID, WARD_ID)).thenReturn(true);
 

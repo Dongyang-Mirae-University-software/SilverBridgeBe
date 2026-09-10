@@ -3,6 +3,7 @@ package kr.silverbridge.main.domain.auth.listener;
 import kr.silverbridge.main.domain.auth.repository.RefreshTokenRepository;
 import kr.silverbridge.main.domain.auth.service.AccessLogService;
 import kr.silverbridge.main.domain.user.event.PasswordChangedEvent;
+import kr.silverbridge.main.domain.user.event.UserRoleChangedEvent;
 import kr.silverbridge.main.domain.user.event.UserWithdrawnEvent;
 import kr.silverbridge.main.global.enums.AccessAction;
 import kr.silverbridge.main.global.jwt.JwtProperties;
@@ -57,6 +58,24 @@ class UserAccountEventListenerTest {
                 eq(TimeUnit.MILLISECONDS)
         );
         verify(accessLogService).log("user-1", AccessAction.WITHDRAW, "127.0.0.1", "test-agent");
+    }
+
+    @Test
+    @DisplayName("UserRoleChangedEvent 수신 시 토큰 삭제 + access token 무효화 도장 - 옛 역할 토큰이 만료까지 살아 있으면 안 된다 (2026-09-10 M-1)")
+    void handleRoleChanged_토큰삭제_및_무효화도장() {
+        when(jwtProperties.getAccessTokenExpiration()).thenReturn(1_800_000L);
+        when(redisTemplate.opsForValue()).thenReturn(valueOperations);
+
+        listener.handleRoleChanged(new UserRoleChangedEvent("user-4"));
+
+        verify(refreshTokenRepository).deleteByUserId("user-4");
+        verify(valueOperations).set(
+                eq(RedisKeys.PASSWORD_INVALIDATE + "user-4"),
+                anyString(),
+                eq(1_800_000L),
+                eq(TimeUnit.MILLISECONDS)
+        );
+        verify(accessLogService, never()).log(anyString(), org.mockito.ArgumentMatchers.any());
     }
 
     @Test
