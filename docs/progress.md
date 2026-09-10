@@ -1348,3 +1348,9 @@ REST API Key 단독 대비 보안 강화 — 인가코드 탈취 시 토큰 발�
 - **V50이 필요한 이유는 enum이 아니라 CHECK다**: `AdminAuditAction.INQUIRY_ANSWER`만 더하면 insert가 `chk_admin_audit_action` 위반으로 실패하고 같은 트랜잭션의 답변까지 롤백돼 500이 난다(C-S3-1·V46·V48과 같은 함정). `AdminAuditActionCheckSyncTest`가 enum 전수와 마지막 CHECK를 대조한다.
 - detail은 `"문의 답변: 작성자=<userId>, 분류=<category>"` - 문의 본문·답변 본문은 넣지 않는다(감사 로그는 "누가 무엇을 했는가"까지).
 - 상세: `docs/(2026-09-10) fix-audit-findings.md`
+
+## [2026-09-11] 기점검 도메인 회귀 재점검 + 기술 횡단 점검 (코드 미수정)
+
+- **회귀 재점검**(`(2026-09-10) audit-regression-pre-230.md`): 2026-06-11 리포트의 미해결 4건(C-S3-1·M-S2-1·M-S2-2·M-S3-1) 전부 닫혀 있고, 이후 횡단 변경(상태 3분법·디스패처·FCM 정리·역할 변경·태그 재편)이 옛 도메인을 깨뜨린 곳 없음. 신규 축 "계정 생명주기 × 데이터 잔존" 매트릭스에서 **R-1** 피보호자 수락 경로가 보호자 계정 상태를 보지 않아 정지된 보호자와 ACTIVE 연결이 생길 수 있음(🟡). Low: 정지 중 선점된 재촉 유실 / 탈퇴 시 이상감지 CASCADE vs SOS 익명 보존 불일치 / 문의 CASCADE / 공지 서비스 테스트 0건 / cron zone.
+- **기술 횡단 점검**(`(2026-09-11) audit-technical-cross-cutting.md`, 6축 최초): 코드 결함보다 **설정 부재**. 스케줄러 풀 1스레드에 AI 재접속까지 공유(B-1) / 알림 executor 포화 시 AI 수신 스레드가 발송 동기 실행(B-2) / 우아한 종료 없어 배포 시 큐 유실(B-3) / SMTP·파일서버 타임아웃 없음(C-1·C-2) / **실사용 도메인 Swagger 무인증 공개(E-1, 결정 필요)** / 감사 로그 detail 이름·이메일 INFO 출력(E-2). 의존성 스캔은 NVD 키 없이 실행 중 - **한 번도 완주된 적 없음**(A-1). 아키텍처는 admin↔anomaly·inquiry 순환 등 Low 3.
+- 상세: 위 두 문서, 대장 `docs/audit-index.md`
