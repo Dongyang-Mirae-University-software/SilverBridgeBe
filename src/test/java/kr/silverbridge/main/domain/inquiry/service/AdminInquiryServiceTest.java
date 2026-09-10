@@ -5,6 +5,7 @@ import kr.silverbridge.main.domain.inquiry.dto.AdminInquiryListResponse;
 import kr.silverbridge.main.domain.inquiry.dto.InquiryAnswerRequest;
 import kr.silverbridge.main.domain.inquiry.entity.Inquiry;
 import kr.silverbridge.main.domain.inquiry.event.InquiryAnsweredEvent;
+import kr.silverbridge.main.domain.admin.service.AdminAuditLogService;
 import kr.silverbridge.main.domain.inquiry.repository.InquiryRepository;
 import kr.silverbridge.main.domain.user.entity.User;
 import kr.silverbridge.main.domain.user.repository.UserRepository;
@@ -13,6 +14,7 @@ import kr.silverbridge.main.global.enums.InquiryStatus;
 import kr.silverbridge.main.global.enums.Provider;
 import kr.silverbridge.main.global.enums.Role;
 import kr.silverbridge.main.global.enums.Status;
+import kr.silverbridge.main.global.enums.AdminAuditAction;
 import kr.silverbridge.main.global.exception.CustomException;
 import kr.silverbridge.main.global.exception.ErrorCode;
 import org.junit.jupiter.api.DisplayName;
@@ -37,6 +39,8 @@ import java.util.Optional;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.contains;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -53,6 +57,7 @@ class AdminInquiryServiceTest {
     @Mock private InquiryRepository inquiryRepository;
     @Mock private UserRepository userRepository;
     @Mock private ApplicationEventPublisher eventPublisher;
+    @Mock private AdminAuditLogService auditLogService;
 
     @InjectMocks private AdminInquiryService adminInquiryService;
 
@@ -133,6 +138,20 @@ class AdminInquiryServiceTest {
                 .isEqualTo(ErrorCode.INQUIRY_ALREADY_ANSWERED);
 
         verify(eventPublisher, never()).publishEvent(any());
+        verify(auditLogService, never()).log(anyString(), any(), anyString(), anyString());
+    }
+
+    @Test
+    @DisplayName("답변은 감사 로그를 남긴다 - 보호자 개인 문의를 열어 답하는 쓰기 조작이다 (2026-09-10 A-2, V50)")
+    void answer_감사로그() {
+        Inquiry inquiry = inquiry(INQUIRY_ID, GUARDIAN_ID, InquiryStatus.WAITING);
+        when(inquiryRepository.findById(INQUIRY_ID)).thenReturn(Optional.of(inquiry));
+        when(userRepository.findById(anyString())).thenReturn(Optional.empty());
+
+        adminInquiryService.answer(INQUIRY_ID, answerRequest("확인했습니다."), ADMIN_ID);
+
+        verify(auditLogService).log(eq(ADMIN_ID), eq(AdminAuditAction.INQUIRY_ANSWER),
+                eq(String.valueOf(INQUIRY_ID)), contains(GUARDIAN_ID));
     }
 
     @Test

@@ -1341,3 +1341,10 @@ REST API Key 단독 대비 보안 강화 — 인가코드 탈취 시 토큰 발�
 - **G-1 카메라 목록 인가를 `connectionService.getActiveWardIds`로** - 연결 판정을 리포지토리에서 복제하던 유일한 곳.
 - **Low**: L-1 재정정 시 메모 생략은 유지 / L-2 FCM 소유자 이전도 상한 검사 / L-3 InquiryService 주석 403으로 / **L-4는 코드로 닫았다** - `isAdminResolved()`를 `resolvedAt != null`로(FK SET NULL은 시각을 안 지운다). FK를 RESTRICT로 바꾸는 안은 정정한 관리자의 탈퇴 purge를 막아 좀비를 만들므로 버렸다.
 - 상세: `docs/(2026-09-10) fix-audit-findings.md`
+
+## [2026-09-10] 점검 이슈 반영 ② - 문의 답변 감사 로그 (V50)
+
+- **범위**: 횡단 점검 A-2. `AdminInquiryService.answer`가 보호자 개인 문의를 열어 답하는 쓰기 조작인데 감사 로그가 없었다 - 2026-09-02에 세운 "개인 이력을 변경하는 관리자 API는 반드시 남긴다"에 기존 경로가 따라오지 않은 것.
+- **V50이 필요한 이유는 enum이 아니라 CHECK다**: `AdminAuditAction.INQUIRY_ANSWER`만 더하면 insert가 `chk_admin_audit_action` 위반으로 실패하고 같은 트랜잭션의 답변까지 롤백돼 500이 난다(C-S3-1·V46·V48과 같은 함정). `AdminAuditActionCheckSyncTest`가 enum 전수와 마지막 CHECK를 대조한다.
+- detail은 `"문의 답변: 작성자=<userId>, 분류=<category>"` - 문의 본문·답변 본문은 넣지 않는다(감사 로그는 "누가 무엇을 했는가"까지).
+- 상세: `docs/(2026-09-10) fix-audit-findings.md`

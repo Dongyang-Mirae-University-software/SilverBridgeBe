@@ -69,4 +69,4 @@
 | PR ① `./gradlew clean build --no-daemon` | **통과**(exit 0) |
 | 테스트 | 110개 클래스 / **574 tests / 0 failures / 1 skipped**(기존 555 + 신규 19) |
 | 회귀 | `GuardianAnomalyServiceTest`의 "관리자 확정 건 409" 테스트가 `resolvedBy`만 리플렉션으로 세워 L-4 변경 직후 실패 → 실제 경로 `resolveByAdmin`으로 바꿔 통과 |
-| PR ② | 아래 별도 기록 |
+| PR ② `./gradlew clean build --no-daemon` | **통과** - **575 tests / 0 failures / 1 skipped**(PR ① + 1). `AdminAuditActionCheckSyncTest`가 V50 CHECK와 enum 일치 확인 |
