@@ -1314,3 +1314,17 @@ REST API Key 단독 대비 보안 강화 — 인가코드 탈취 시 토큰 발�
 - **구조**: 상태 전이는 `ConnectionService`, 검증·감사 로그는 `AdminConnectionService`. 연결 도메인이 자기 상태를 소유하도록 나눴다(`tearDownConnectionsOnRoleChange` 위임과 같은 방식).
 - **검증**: `./gradlew build` **555건 / 실패 0**(기존 543 + 신규 12).
 - 상세: `docs/(2026-09-10) feature-admin-force-connection.md`
+
+## [2026-09-10] 미점검 API 전수 점검 (#230~#245) + 역할 영역별 횡단 점검
+
+- **범위**: 마지막 점검(#227, 2026-08-05) 이후 머지된 16개 PR(V38~V49)을 세로로, 이어서 보호자/피보호자/관리자 영역을 가로로 점검했다. 코드 미수정. 빌드 통과, **555 tests / 0 failures / 1 skipped**(`BackendApplicationTests` @Disabled).
+- **세로 점검 판정: ⚠️ 잔여 이슈** - Critical·High 없음. IDOR(신규 22개 엔드포인트 전부)·정지 차단·감사 로그·CHECK 동기화·재촉 절제·대시보드 null 정책 PASS. Medium 6건:
+  - **M-1** 역할 변경이 access token을 안 끊는다(JWT role 클레임이 30분간 옛 역할) - `UserRoleChangedEvent`로 정지와 같은 경로 태우면 끝
+  - **M-2** 관리자 수정·상세·강제탈퇴가 INACTIVE(탈퇴 진행·좀비) 계정을 대상으로 허용 - `{status: ACTIVE}`로 탈퇴 중인 계정이 되살아난다. `getUserOrThrow`에서 404
+  - **M-3** WARD→GUARDIAN 역할 변경 시 카메라가 고아로 남는다(AI 구독 계속, 본인은 삭제 불가). 함께 삭제 vs 400 - **결정 필요**
+  - **M-4** 정책 문서 "관리자 열람 API는 감사 로그 필수"와 구현("변경만 기록") drift - 문서 정정 권고
+  - **M-5** 정지 시 이미 열린 WS 세션은 유지된다(핸드셰이크에서만 검사) - progress.md 2026-09-09의 "세션 없음"은 틀렸다
+  - **M-6** AdminUser·AdminConnection·GuardianAnomaly 컨트롤러 역할 게이트 테스트 없음
+- **횡단 점검 판정**: 보호자 PASS / 피보호자 PASS / 관리자 ⚠️(기존 3종 컨트롤러가 경로 규칙만 게이트 A-1, 문의 답변 감사 로그 없음 A-2 - 추가 시 V50 CHECK 필수) / 횡단 PASS(STOMP·403 문구·DTO 노출 범위 일관).
+- **이전 잔여 이슈**: H-1(탈퇴 리스너 전파)·M-1(실 DB 통합 테스트) 둘 다 변경 없음.
+- 상세: `docs/(2026-09-10) audit-unaudited-prs-230-245.md`, `docs/(2026-09-10) audit-role-boundary-guardian-ward-admin.md`, 대장 `docs/audit-index.md`

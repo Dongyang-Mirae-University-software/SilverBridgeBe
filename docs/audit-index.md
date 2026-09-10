@@ -9,6 +9,20 @@
 
 | 머지 | 기능 | 상태 | 점검 문서 | 잔여 이슈 |
 |---|---|---|---|---|
+| #245 (2026-09-10) | 관리자 강제 연결·해제 | ⚠️ | `(2026-09-10) audit-unaudited-prs-230-245.md` · 역할별 `(2026-09-10) audit-role-boundary-guardian-ward-admin.md` | L-5(WS 이벤트명 재사용, FE 확인) |
+| #244 (2026-09-09) | 정지 계정 알림 차단·정지 사유 (V49) | ⚠️ | 〃 | M-5(정지 시 열린 WS 세션 유지 - 문서 한계 명시 또는 세션 close) |
+| #243 (2026-09-09) | 관리자 회원관리 (V47·V48) | ⚠️ | 〃 | **M-1**(역할 변경 시 토큰 미무효화) · **M-2**(INACTIVE 대상 수정·삭제 허용) · **M-3**(역할 변경 시 카메라 잔존, 결정 필요) · M-6(게이트 테스트) |
+| #242 (2026-09-07) | 피보호자 목록 status 필터 | ✅ | 〃 | - |
+| #241 (2026-09-02) | 관리자 이상감지 로그·정정 (V46) | ⚠️ | 〃 | M-4(열람 감사 문서 drift) · L-1(재정정 시 메모 덮임) · M-6(GuardianAnomaly 게이트 테스트) |
+| #240 (2026-09-02) | FCM 토큰 상한·유휴 정리 | ✅ | 〃 | L-2(reassign 경로 상한 미검사) |
+| #239 (2026-09-02) | 관리자 대시보드 집계 | ✅ | 〃 | - |
+| #238 (2026-09-01) | WebSocket Origin (yaml) | ✅ | 〃 | - |
+| #237 (2026-09-01) | 이상감지 보호자 판정 + 재촉 (V45) | ✅ | 〃 | L-4(resolved_by SET NULL, 이론상) |
+| #234~#236 (2026-08-31~09-01) | 상황(incident) 스키마 도입→롤백→복원 (V42~V44) | ✅ | 〃 | - |
+| #232·#233 (2026-08-27) | 미복용 요약 시각 선택·피보호자별 축 (V40·V41) | ✅ | 〃 | - |
+| #231 (2026-08-27) | SOS ACK 철회 + 발생 경로 (V39) | ✅ | 〃 | - |
+| #230 (2026-08-07) | Swagger 태그 재편 | ✅ | 〃 | - |
+| #229 (2026-08-06) | 점검 이슈 반영 (V38) | ✅ | 〃 | - |
 | #227 (2026-08-05) | 복약 4차 — 약 수정 PATCH | ✅ | `(2026-08-05) audit-medication-sos-notification.md` | — (L-3은 오탐, 이미 커버됨 — `(2026-08-06) fix-audit-findings.md`) |
 | #226 (2026-08-05) | 복약 3차 — 미복용 보호자 요약 (V37) | ✅ | 〃 | — (L-2 수정 완료 2026-08-06) |
 | #225 (2026-08-05) | 복약 2차 — 스케줄러 발송 (V36) | ✅ | 〃 | — (M-2·L-1 수정 완료 2026-08-06, V38) |
@@ -35,10 +49,11 @@
 | 영역 | 상태 | 메모 |
 |---|---|---|
 | `global/websocket` (STOMP 리스너) | ✅ | M-1 STOMP NPE 수정 완료(2026-07-14, null-safe) |
-| **탈퇴 리스너 트랜잭션 전파** | ⚠️ | H-1 — AFTER_COMMIT에서 `@Transactional`(REQUIRED) 쓰기(`MedicationWithdrawalService`·`ConnectionService.tearDownConnectionsOnWithdrawal`). 리포의 다른 AFTER_COMMIT 경로는 `REQUIRES_NEW`. 현재는 purge FK CASCADE가 가려 무해. **미검증 — 실측 필요** |
-| **실 DB 통합 테스트** | ❌ | M-1 — 407개 테스트가 전부 목 기반(H2·Testcontainers 없음). Flyway V1~V38, `uq_medication_reminder` UNIQUE, 트랜잭션 전파가 한 번도 실행 검증되지 않음. **2026-08-06 착수했으나 작업 환경에 Docker 미가용(Docker Desktop 미실행)으로 보류** — 재개 절차는 `(2026-08-06) fix-audit-findings.md` |
+| **탈퇴 리스너 트랜잭션 전파** | ⚠️ | H-1 — AFTER_COMMIT에서 `@Transactional`(REQUIRED) 쓰기(`MedicationWithdrawalService`·`ConnectionService.tearDownConnectionsOnWithdrawal`). 리포의 다른 AFTER_COMMIT 경로는 `REQUIRES_NEW`. 현재는 purge FK CASCADE가 가려 무해. **미검증 — 실측 필요**(2026-09-10 재확인: 변경 없음) |
+| **실 DB 통합 테스트** | ❌ | M-1 — 407개 테스트가 전부 목 기반(H2·Testcontainers 없음). Flyway V1~V49, `uq_medication_reminder` UNIQUE, 트랜잭션 전파가 한 번도 실행 검증되지 않음. **2026-08-06 착수했으나 작업 환경에 Docker 미가용(Docker Desktop 미실행)으로 보류** — 재개 절차는 `(2026-08-06) fix-audit-findings.md`. **2026-09-10 재확인: 여전히 미도입**, V39~V49도 목으로만 검증 |
 | 이상감지 **통합 경로**(카메라 등록 ↔ AI sessionId) | ❌ | FE가 발급 sessionId로 스트리밍하도록 수정된 뒤 검증 예정. 현재 gosky `camera` 0행 |
-| 카카오 알림톡 채널 | ⚠️ | **구현 완료(2026-07-15)** — 이상감지 템플릿 `KA01TP2607...my9` **검수중**. 승인 후 `.env.dev`에 `ALIMTALK_*` 주입 시 발송(현재 스킵). 카카오 푸시는 검토 후 미채택(앱 푸시=FCM 중복) |
+| 카카오 알림톡 채널 | ✅ | 템플릿 **승인(2026-07-27)**·두 서버 `ALIMTALK_ENABLED=true`로 실발송 중(2026-07-31 확인). 카카오 푸시는 검토 후 미채택(앱 푸시=FCM 중복) |
+| **역할 경계 횡단**(보호자/피보호자/관리자) | ⚠️ | `(2026-09-10) audit-role-boundary-guardian-ward-admin.md` - 보호자·피보호자 PASS. 관리자: 기존 3종 컨트롤러 경로 규칙만(A-1) · 문의 답변 감사 로그 없음(A-2, V50 필요). 역할 게이트 MockMvc 테스트 미커버 8개 |
 | 프론트엔드(SilverBridgeFe) | ➖ | 별도 저장소 — 이 대장의 범위 밖 |
 
 ## 다음 점검 트리거
