@@ -52,6 +52,8 @@ public enum ErrorCode {
     CONNECTION_NOT_PENDING(HttpStatus.CONFLICT, "수락 대기 중인 연결 관계가 아닙니다."),
     INVALID_CONNECTION_ROLE(HttpStatus.BAD_REQUEST, "보호자와 피보호자 역할이 맞지 않습니다."),
     CONNECTION_NOT_AUTHORIZED(HttpStatus.FORBIDDEN, "해당 연결에 대한 권한이 없습니다."),
+    CONNECTION_TARGET_NOT_ACTIVE(HttpStatus.BAD_REQUEST,
+            "이용 중인 회원만 연결할 수 있습니다. 이용 제한·탈퇴 처리 중인 계정은 연결할 수 없습니다."),
     CANNOT_CONNECT_SELF(HttpStatus.BAD_REQUEST, "자기 자신과 연결할 수 없습니다."),
 
     // 공지

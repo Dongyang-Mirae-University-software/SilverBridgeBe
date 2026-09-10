@@ -2,6 +2,7 @@ package kr.silverbridge.main.domain.connection.listener;
 
 import kr.silverbridge.main.domain.connection.event.ConnectionAcceptedEvent;
 import kr.silverbridge.main.domain.connection.event.ConnectionDisconnectedEvent;
+import kr.silverbridge.main.domain.connection.event.ConnectionForcedEvent;
 import kr.silverbridge.main.domain.connection.event.ConnectionRefusedEvent;
 import kr.silverbridge.main.domain.connection.event.ConnectionRequestedEvent;
 import kr.silverbridge.main.domain.notification.channel.NotificationContent;
@@ -68,6 +69,33 @@ public class ConnectionNotificationListener {
                                 "connectionId", String.valueOf(event.connectionId()))));
     }
 
+    /**
+     * 관리자 강제 연결 → <b>양쪽 모두</b>에게 알린다.
+     *
+     * <p>일반 연결은 피보호자가 수락하므로 본인이 이미 알지만, 강제 연결은 <b>모르는 채로 생긴다.</b>
+     * 그 수락이 곧 동의였으므로, 동의 없이 생긴 관계는 최소한 당사자가 알아야 한다.</p>
+     *
+     * <p>문구를 {@code CONNECTION_ACCEPTED}와 나눈 이유도 같다 - "수락했습니다"는 거짓이다.</p>
+     */
+    @Async("notificationExecutor")
+    @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
+    public void handleForced(ConnectionForcedEvent event) {
+        Map<String, String> data = Map.of("type", "CONNECTION_FORCED",
+                "connectionId", String.valueOf(event.connectionId()));
+
+        webSocketEventPublisher.sendToUser(event.guardianId(), "connection-accepted",
+                Map.of("connectionId", event.connectionId()));
+        notificationDispatcher.dispatch(event.guardianId(), NotificationType.CONNECTION_FORCED,
+                NotificationContent.of("연결 완료",
+                        "관리자가 " + event.wardName() + "님과의 연결을 완료했습니다.", data));
+
+        webSocketEventPublisher.sendToUser(event.wardId(), "connection-accepted",
+                Map.of("connectionId", event.connectionId()));
+        notificationDispatcher.dispatch(event.wardId(), NotificationType.CONNECTION_FORCED,
+                NotificationContent.of("보호자 연결",
+                        "관리자가 " + event.guardianName() + "님을 보호자로 연결했습니다.", data));
+    }
+
     @Async("notificationExecutor")
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
     public void handleRefused(ConnectionRefusedEvent event) {
@@ -83,9 +111,12 @@ public class ConnectionNotificationListener {
     @Async("notificationExecutor")
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
     public void handleDisconnected(ConnectionDisconnectedEvent event) {
-        String body = (event.disconnectedBy() == ConnectionDisconnectedEvent.DisconnectedBy.GUARDIAN)
-                ? "보호자가 연결을 해제했습니다."
-                : "피보호자가 연결을 해제했습니다.";
+        String body = switch (event.disconnectedBy()) {
+            case GUARDIAN -> "보호자가 연결을 해제했습니다.";
+            case WARD -> "피보호자가 연결을 해제했습니다.";
+            // 관리자가 끊은 것을 "보호자가 해제했습니다"로 내보내면 사실과 다르다
+            case ADMIN -> "관리자가 연결을 해제했습니다.";
+        };
 
         webSocketEventPublisher.sendToUser(event.notifyTargetId(), "connection-cancelled",
                 Map.of("connectionId", event.connectionId()));

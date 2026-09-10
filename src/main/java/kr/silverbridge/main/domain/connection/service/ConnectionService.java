@@ -7,6 +7,7 @@ import kr.silverbridge.main.domain.connection.dto.WardListFilter;
 import kr.silverbridge.main.domain.connection.entity.Connection;
 import kr.silverbridge.main.domain.connection.event.ConnectionAcceptedEvent;
 import kr.silverbridge.main.domain.connection.event.ConnectionDisconnectedEvent;
+import kr.silverbridge.main.domain.connection.event.ConnectionForcedEvent;
 import kr.silverbridge.main.domain.connection.event.ConnectionRefusedEvent;
 import kr.silverbridge.main.domain.connection.event.ConnectionRequestedEvent;
 import kr.silverbridge.main.domain.connection.repository.ConnectionRepository;
@@ -289,6 +290,62 @@ public class ConnectionService {
             log.info("역할 변경 연결 정리: userId={}, 정리 건수={}", userId, connections.size());
         }
         return connections.size();
+    }
+
+    // ─── 관리자 강제 조작 ─────────────────────────────────────────
+
+    /**
+     * 관리자 강제 연결. 검증·감사 로그는 호출자(admin 도메인)가 맡고, 여기서는 상태 전이만 한다.
+     *
+     * <p><b>수락 대기(PENDING) 요청이 이미 있으면 그것을 승격시킨다.</b> 실제 시나리오가 정확히
+     * 이 경우다 - 시니어가 수락 버튼을 누르지 못해 요청만 떠 있고, 관리자가 대신 수락해 주는 것이다.
+     * 새 행을 만들면 중복 검사에 걸리고, 걸리지 않더라도 같은 쌍의 연결이 둘이 된다.</p>
+     *
+     * <p>{@code relation}은 비워 둔다 - 관리자는 두 사람의 가족 관계를 알 수 없다. 보호자가 직접
+     * 요청할 때만 입력되는 값이다.</p>
+     */
+    @Transactional
+    public Connection forceConnect(String guardianId, String wardId, String adminId,
+                                   String guardianName, String wardName) {
+        Connection connection = connectionRepository
+                .findByParticipantAndStatusIn(guardianId, List.of(ConnectionStatus.PENDING)).stream()
+                .filter(c -> c.getWardId().equals(wardId))
+                .findFirst()
+                .orElseGet(() -> connectionRepository.save(Connection.builder()
+                        .guardianId(guardianId)
+                        .wardId(wardId)
+                        .status(ConnectionStatus.PENDING)
+                        .initiatedBy(adminId)
+                        .build()));
+
+        connection.activate();
+        eventPublisher.publishEvent(new ConnectionForcedEvent(
+                connection.getId(), guardianId, wardId, guardianName, wardName));
+
+        log.info("강제 연결: connectionId={}, guardianId={}, wardId={}, adminId={}",
+                connection.getId(), guardianId, wardId, adminId);
+        return connection;
+    }
+
+    /**
+     * 관리자 강제 해제. ACTIVE 연결만 대상이며 <b>양쪽 모두</b>에게 알린다 - 둘 다 자기가 끊지 않았으므로
+     * 한쪽만 알리면 나머지 한 명은 연결이 사라진 것을 모른다(당사자가 끊는 경우와 다른 지점이다).
+     */
+    @Transactional
+    public void forceDisconnect(Long connectionId, String adminId) {
+        Connection connection = connectionRepository.findById(connectionId)
+                .orElseThrow(() -> new CustomException(ErrorCode.CONNECTION_NOT_FOUND));
+        if (connection.getStatus() != ConnectionStatus.ACTIVE) {
+            throw new CustomException(ErrorCode.CONNECTION_NOT_ACTIVE);
+        }
+
+        connection.disconnect();
+        for (String targetId : List.of(connection.getGuardianId(), connection.getWardId())) {
+            eventPublisher.publishEvent(new ConnectionDisconnectedEvent(
+                    connectionId, targetId, ConnectionDisconnectedEvent.DisconnectedBy.ADMIN));
+        }
+
+        log.info("강제 연결 해제: connectionId={}, adminId={}", connectionId, adminId);
     }
 
     // ─── 내부 헬퍼 ────────────────────────────────────────────────

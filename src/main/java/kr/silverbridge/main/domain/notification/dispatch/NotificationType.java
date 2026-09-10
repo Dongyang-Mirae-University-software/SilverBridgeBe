@@ -20,6 +20,15 @@ public enum NotificationType {
     CONNECTION_REFUSED(Policy.SETTINGS_ONLY),
     CONNECTION_DISCONNECTED(Policy.SETTINGS_ONLY),
 
+    /**
+     * 관리자가 강제로 연결함 → <b>보호자·피보호자 양쪽</b>에게 알림.
+     *
+     * <p>기존 {@code CONNECTION_ACCEPTED}를 재사용하지 않는 이유는 문구가 거짓이 되기 때문이다 -
+     * 강제 연결은 피보호자가 수락한 적이 없는데 "수락했습니다"로 나간다. 특히 <b>피보호자는 자기도 모르게
+     * 연결된 것</b>이라 반드시 알아야 하고, 원래 수락하는 쪽이라 "연결됨" 알림 경로 자체가 없었다.</p>
+     */
+    CONNECTION_FORCED(Policy.SETTINGS_ONLY),
+
     // 문의 답변 완료 → 작성자(보호자)에게 알림. 긴급하지 않으므로 사용자 설정을 따른다.
     INQUIRY_ANSWERED(Policy.SETTINGS_ONLY),
 

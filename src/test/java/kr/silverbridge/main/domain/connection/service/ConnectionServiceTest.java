@@ -7,6 +7,7 @@ import kr.silverbridge.main.domain.connection.dto.WardListFilter;
 import kr.silverbridge.main.domain.connection.entity.Connection;
 import kr.silverbridge.main.domain.connection.event.ConnectionAcceptedEvent;
 import kr.silverbridge.main.domain.connection.event.ConnectionDisconnectedEvent;
+import kr.silverbridge.main.domain.connection.event.ConnectionForcedEvent;
 import kr.silverbridge.main.domain.connection.event.ConnectionRefusedEvent;
 import kr.silverbridge.main.domain.connection.event.ConnectionRequestedEvent;
 import kr.silverbridge.main.domain.connection.repository.ConnectionRepository;
@@ -31,12 +32,14 @@ import org.mockito.quality.Strictness;
 import org.springframework.context.ApplicationEventPublisher;
 
 import java.util.List;
+import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -517,6 +520,97 @@ class ConnectionServiceTest {
                             .doesNotContain(ConnectionStatus.REFUSED,
                                     ConnectionStatus.CANCELLED,
                                     ConnectionStatus.DISCONNECTED));
+        }
+    }
+
+    // ─── 관리자 강제 연결·해제 ────────────────────────────────────
+
+    @Nested
+    @DisplayName("forceConnect / forceDisconnect")
+    class AdminForce {
+
+        @Test
+        @DisplayName("수락 대기 중인 요청이 있으면 새로 만들지 않고 그것을 승격시킨다")
+        void PENDING이_있으면_승격시킨다() {
+            Connection pending = Connection.builder()
+                    .id(7L).guardianId(GUARDIAN_ID).wardId(WARD_ID)
+                    .status(ConnectionStatus.PENDING).initiatedBy(GUARDIAN_ID).relation(RELATION).build();
+            when(connectionRepository.findByParticipantAndStatusIn(
+                    GUARDIAN_ID, List.of(ConnectionStatus.PENDING))).thenReturn(List.of(pending));
+
+            Connection result = connectionService.forceConnect(
+                    GUARDIAN_ID, WARD_ID, "AD0001", "홍길동", "박민수");
+
+            // 시니어가 수락 버튼을 못 눌러 요청만 떠 있는 경우 - 관리자가 대신 수락해 주는 셈이다
+            assertThat(result.getId()).isEqualTo(7L);
+            assertThat(pending.getStatus()).isEqualTo(ConnectionStatus.ACTIVE);
+            verify(connectionRepository, never()).save(any(Connection.class));
+        }
+
+        @Test
+        @DisplayName("수락 대기 요청이 없으면 새로 만들어 바로 연결한다")
+        void PENDING이_없으면_새로_만든다() {
+            when(connectionRepository.findByParticipantAndStatusIn(
+                    GUARDIAN_ID, List.of(ConnectionStatus.PENDING))).thenReturn(List.of());
+            when(connectionRepository.save(any(Connection.class))).thenAnswer(inv -> inv.getArgument(0));
+
+            Connection result = connectionService.forceConnect(
+                    GUARDIAN_ID, WARD_ID, "AD0001", "홍길동", "박민수");
+
+            assertThat(result.getStatus()).isEqualTo(ConnectionStatus.ACTIVE);
+            verify(connectionRepository).save(any(Connection.class));
+        }
+
+        @Test
+        @DisplayName("강제 연결은 양쪽 모두에게 알리는 이벤트를 발행한다")
+        void 강제연결_양쪽_알림() {
+            when(connectionRepository.findByParticipantAndStatusIn(
+                    GUARDIAN_ID, List.of(ConnectionStatus.PENDING))).thenReturn(List.of());
+            when(connectionRepository.save(any(Connection.class))).thenAnswer(inv -> inv.getArgument(0));
+
+            connectionService.forceConnect(GUARDIAN_ID, WARD_ID, "AD0001", "홍길동", "박민수");
+
+            ArgumentCaptor<ConnectionForcedEvent> captor =
+                    ArgumentCaptor.forClass(ConnectionForcedEvent.class);
+            verify(eventPublisher).publishEvent(captor.capture());
+            // 피보호자는 수락한 적이 없어 자기도 모르게 연결된 것이라 반드시 알아야 한다
+            assertThat(captor.getValue().guardianId()).isEqualTo(GUARDIAN_ID);
+            assertThat(captor.getValue().wardId()).isEqualTo(WARD_ID);
+            assertThat(captor.getValue().wardName()).isEqualTo("박민수");
+        }
+
+        @Test
+        @DisplayName("강제 해제는 DISCONNECTED로 바꾸고 양쪽에 ADMIN 주체로 알린다")
+        void 강제해제_양쪽_알림() {
+            Connection active = Connection.builder()
+                    .id(9L).guardianId(GUARDIAN_ID).wardId(WARD_ID)
+                    .status(ConnectionStatus.ACTIVE).initiatedBy(GUARDIAN_ID).relation(RELATION).build();
+            when(connectionRepository.findById(9L)).thenReturn(Optional.of(active));
+
+            connectionService.forceDisconnect(9L, "AD0001");
+
+            assertThat(active.getStatus()).isEqualTo(ConnectionStatus.DISCONNECTED);
+            ArgumentCaptor<ConnectionDisconnectedEvent> captor =
+                    ArgumentCaptor.forClass(ConnectionDisconnectedEvent.class);
+            verify(eventPublisher, times(2)).publishEvent(captor.capture());
+            // 둘 다 자기가 끊지 않았으므로 한쪽만 알리면 나머지는 모른다
+            assertThat(captor.getAllValues()).extracting(ConnectionDisconnectedEvent::notifyTargetId)
+                    .containsExactlyInAnyOrder(GUARDIAN_ID, WARD_ID);
+            assertThat(captor.getAllValues()).allSatisfy(e ->
+                    assertThat(e.disconnectedBy())
+                            .isEqualTo(ConnectionDisconnectedEvent.DisconnectedBy.ADMIN));
+        }
+
+        @Test
+        @DisplayName("ACTIVE가 아닌 연결은 강제 해제할 수 없다")
+        void 비활성_연결은_해제_불가() {
+            Connection pending = Connection.builder()
+                    .id(9L).guardianId(GUARDIAN_ID).wardId(WARD_ID)
+                    .status(ConnectionStatus.PENDING).initiatedBy(GUARDIAN_ID).build();
+            when(connectionRepository.findById(9L)).thenReturn(Optional.of(pending));
+
+            assertThrows(CustomException.class, () -> connectionService.forceDisconnect(9L, "AD0001"));
+            assertThat(pending.getStatus()).isEqualTo(ConnectionStatus.PENDING);
         }
     }
 
