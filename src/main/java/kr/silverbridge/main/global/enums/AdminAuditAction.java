@@ -14,6 +14,8 @@ public enum AdminAuditAction {
     ANNOUNCEMENT_DRAFT_UPDATE,  // 공지 임시저장 수정
     ANNOUNCEMENT_DRAFT_DELETE,  // 공지 임시저장 삭제
     ANNOUNCEMENT_DRAFT_PUBLISH, // 공지 임시저장 게시
-    ANOMALY_REVIEW_RESOLVE,     // 이상감지 판정 정정 (보호자 응답이 엇갈린 건을 관리자가 확정)
+    // 이상감지 판정 정정 - 2026-09-21 관리자 정정 폐지로 새로 기록되지 않는다. 폐지 전 감사 로그 행이
+    // 이 값을 담고 있어 enum과 CHECK(V50)에서 지우지 않는다(지우면 CHECK 재정의가 기존 행 때문에 실패한다).
+    ANOMALY_REVIEW_RESOLVE,
     INQUIRY_ANSWER              // 문의 답변 (보호자 개인 문의를 열어 답하는 쓰기 조작 - V50 CHECK 재정의)
 }

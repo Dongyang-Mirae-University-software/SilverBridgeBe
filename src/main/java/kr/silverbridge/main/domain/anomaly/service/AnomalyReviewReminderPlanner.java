@@ -2,12 +2,15 @@ package kr.silverbridge.main.domain.anomaly.service;
 
 import kr.silverbridge.main.domain.anomaly.config.AnomalyProperties;
 import kr.silverbridge.main.domain.anomaly.entity.AnomalyIncident;
+import kr.silverbridge.main.domain.anomaly.entity.AnomalyIncidentFeedback;
+import kr.silverbridge.main.domain.anomaly.entity.AnomalyReviewConflictLog;
 import kr.silverbridge.main.domain.anomaly.entity.AnomalyReviewReminderLog;
 import kr.silverbridge.main.domain.anomaly.entity.AnomalyReviewStatus;
 import kr.silverbridge.main.domain.anomaly.entity.AnomalyReviewSummaryLog;
 import kr.silverbridge.main.domain.anomaly.entity.GuardianAnomalySetting;
 import kr.silverbridge.main.domain.anomaly.repository.AnomalyIncidentFeedbackRepository;
 import kr.silverbridge.main.domain.anomaly.repository.AnomalyIncidentRepository;
+import kr.silverbridge.main.domain.anomaly.repository.AnomalyReviewConflictLogRepository;
 import kr.silverbridge.main.domain.anomaly.repository.AnomalyReviewReminderLogRepository;
 import kr.silverbridge.main.domain.anomaly.repository.AnomalyReviewSummaryLogRepository;
 import kr.silverbridge.main.domain.anomaly.repository.GuardianAnomalySettingRepository;
@@ -39,11 +42,14 @@ import java.util.stream.Collectors;
  * 다음 주기에 또 보내고, 스케줄러가 5분마다 돌기 때문에 마감(3일) 내내 같은 재촉이 반복된다.</p>
  *
  * <p><b>재촉하지 않는 경우</b>는 다섯이다 - ① 이미 응답한 보호자 ② 누군가 응답해 상황이 PENDING을
- * 벗어난 경우(응답 API는 계속 열려 있어 나중에 다른 보호자가 눌러 CONFLICTED가 되는 경로는 살아 있다)
+ * 벗어난 경우(응답 API는 계속 열려 있어 나중에 다른 보호자가 눌러 다수결이 바뀌거나 동수가 되는 경로는 살아 있다)
  * ③ 연결이 ACTIVE가 아닌 보호자 ④ 수신 설정을 끈 보호자 ⑤ 마감(상황 시작 + 3일)을 지난 상황.</p>
  *
  * <p><b>야간 억제</b>는 건너뛰기가 아니라 미루기다 - 조건이 그대로 남아 아침 첫 주기에 다시 잡힌다.
  * 화재 알림 본체는 억제 대상이 아니다(그건 밤에도 즉시 나가야 한다).</p>
+ *
+ * <p><b>동수 재확인 안내</b>({@link #claimConflicts})도 같은 원칙이다 - 상황당 보호자당 1회, 선점 후 발송,
+ * 야간은 미루기, 수신 설정 존중, ACTIVE 연결만.</p>
  */
 @Slf4j
 @Service
@@ -57,6 +63,7 @@ public class AnomalyReviewReminderPlanner {
     private final AnomalyIncidentFeedbackRepository feedbackRepository;
     private final AnomalyReviewReminderLogRepository reminderLogRepository;
     private final AnomalyReviewSummaryLogRepository summaryLogRepository;
+    private final AnomalyReviewConflictLogRepository conflictLogRepository;
     private final GuardianAnomalySettingRepository settingRepository;
     private final ConnectionService connectionService;
     private final CameraService cameraService;
@@ -126,21 +133,7 @@ public class AnomalyReviewReminderPlanner {
         }
         reminderLogRepository.saveAll(logs);
 
-        Map<String, String> wardNames = wardNames(claims.stream()
-                .map(claim -> claim.incident().getWardId()).collect(Collectors.toCollection(LinkedHashSet::new)));
-        Map<String, String> cameraLabels = cameraService.findLabelsBySessionIds(claims.stream()
-                .map(claim -> claim.incident().getSessionId()).collect(Collectors.toSet()));
-
-        return claims.stream()
-                .map(claim -> new AnomalyReviewReminderTarget(
-                        claim.guardianId(),
-                        claim.incident().getId(),
-                        claim.incident().getWardId(),
-                        wardNames.getOrDefault(claim.incident().getWardId(), FALLBACK_WARD_NAME),
-                        cameraLabels.get(claim.incident().getSessionId()),
-                        claim.incident().getDetectedType(),
-                        claim.incident().getStartedAt()))
-                .toList();
+        return toTargets(claims);
     }
 
     /**
@@ -215,6 +208,89 @@ public class AnomalyReviewReminderPlanner {
         }
         summaryLogRepository.saveAll(logs);
         return targets;
+    }
+
+    /**
+     * 동수(CONFLICTED) 재확인 안내를 선점한다. 상황당 보호자당 한 번이다.
+     *
+     * <p>대상은 <b>그 상황에 이미 응답한 보호자</b>뿐이다 - 아직 답하지 않은 보호자에게는 건별 재촉이 따로 간다.
+     * 방금 답해 동수를 만든 보호자는 응답 트랜잭션이 {@code sent=false} 기록을 먼저 남겨 두므로 여기서 빠진다.</p>
+     *
+     * <p>동수가 풀리지 않은 채 마감(상황 시작 + 3일)이 지나면 더 보내지 않는다 - 추가 재촉은 없다.</p>
+     *
+     * @return 보낼 대상. 야간이거나 후보가 없으면 빈 목록
+     */
+    @Transactional
+    public List<AnomalyReviewReminderTarget> claimConflicts() {
+        OffsetDateTime now = AnomalyReviewClock.now();
+        if (isQuietHours(now)) {
+            return List.of();
+        }
+
+        List<AnomalyIncident> candidates = incidentRepository.findByReviewStatusAndStartedAtGreaterThanEqual(
+                AnomalyReviewStatus.CONFLICTED, now.minusDays(properties.getReviewReminder().getDeadlineDays()));
+        if (candidates.isEmpty()) {
+            return List.of();
+        }
+
+        List<Long> incidentIds = candidates.stream().map(AnomalyIncident::getId).toList();
+        Map<Long, List<String>> respondentsByIncident = feedbackRepository.findByIncidentIdIn(incidentIds).stream()
+                .collect(Collectors.groupingBy(AnomalyIncidentFeedback::getIncidentId,
+                        Collectors.mapping(AnomalyIncidentFeedback::getGuardianId, Collectors.toList())));
+        Set<String> handled = conflictLogRepository.findByIncidentIdIn(incidentIds).stream()
+                .map(log -> key(log.getIncidentId(), log.getGuardianId()))
+                .collect(Collectors.toSet());
+        Map<String, List<String>> guardiansByWard = activeGuardiansByWard(candidates);
+
+        List<Claim> claims = new ArrayList<>();
+        for (AnomalyIncident incident : candidates) {
+            List<String> active = guardiansByWard.getOrDefault(incident.getWardId(), List.of());
+            for (String guardianId : respondentsByIncident.getOrDefault(incident.getId(), List.of())) {
+                if (!active.contains(guardianId) || handled.contains(key(incident.getId(), guardianId))) {
+                    continue;
+                }
+                claims.add(new Claim(guardianId, incident));
+            }
+        }
+        if (claims.isEmpty()) {
+            return List.of();
+        }
+
+        Set<String> disabled = disabledGuardians(claims.stream().map(Claim::guardianId).collect(Collectors.toSet()));
+        claims.removeIf(claim -> disabled.contains(claim.guardianId()));
+        if (claims.isEmpty()) {
+            return List.of();
+        }
+
+        conflictLogRepository.saveAll(claims.stream()
+                .map(claim -> AnomalyReviewConflictLog.builder()
+                        .incidentId(claim.incident().getId())
+                        .guardianId(claim.guardianId())
+                        .sent(true)
+                        .createdAt(now)
+                        .build())
+                .toList());
+
+        return toTargets(claims);
+    }
+
+    /** 선점한 건에 문구 재료(피보호자 이름·카메라 위치)를 한 번에 붙인다. */
+    private List<AnomalyReviewReminderTarget> toTargets(List<Claim> claims) {
+        Map<String, String> wardNames = wardNames(claims.stream()
+                .map(claim -> claim.incident().getWardId()).collect(Collectors.toCollection(LinkedHashSet::new)));
+        Map<String, String> cameraLabels = cameraService.findLabelsBySessionIds(claims.stream()
+                .map(claim -> claim.incident().getSessionId()).collect(Collectors.toSet()));
+
+        return claims.stream()
+                .map(claim -> new AnomalyReviewReminderTarget(
+                        claim.guardianId(),
+                        claim.incident().getId(),
+                        claim.incident().getWardId(),
+                        wardNames.getOrDefault(claim.incident().getWardId(), FALLBACK_WARD_NAME),
+                        cameraLabels.get(claim.incident().getSessionId()),
+                        claim.incident().getDetectedType(),
+                        claim.incident().getStartedAt()))
+                .toList();
     }
 
     private boolean isQuietHours(OffsetDateTime now) {

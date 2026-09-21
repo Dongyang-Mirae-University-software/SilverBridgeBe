@@ -98,7 +98,19 @@ public enum NotificationType {
      * <p>강제 발송이 아닌 이유 — 생명이 걸린 즉시 대응(SOS·화재)이 아니라 사후 확인 요청이다.
      * {@code FORCED_PUSH_*}로 승격시키지 말 것.</p>
      */
-    ANOMALY_REVIEW_REQUIRED(Policy.SETTINGS_ONLY, EnumSet.of(NotificationChannelType.FCM));
+    ANOMALY_REVIEW_REQUIRED(Policy.SETTINGS_ONLY, EnumSet.of(NotificationChannelType.FCM)),
+
+    /**
+     * 이상감지 판정 <b>동수 재확인 안내</b> → 응답한 보호자에게. 스케줄러가 보낸다(2026-09-21).
+     *
+     * <p>판정은 응답한 보호자의 다수결이고, 동수(CONFLICTED)는 보호자들이 다시 응답해 합의해야 풀린다 -
+     * 관리자가 대신 정하지 않는다. 그 사실을 알리는 안내라 상황당 보호자당 한 번뿐이며, 방금 답해 동수를
+     * 만든 보호자는 응답 API가 이미 알려 줬으므로 받지 않는다.</p>
+     *
+     * <p>채널·정책은 {@link #ANOMALY_REVIEW_REQUIRED}와 같다 - FCM만, 설정 기반(재촉 끄기 설정을 따른다),
+     * 알림톡 매핑 금지, 강제 채널로 승격 금지. 누가 무엇이라 답했는지는 문구에 싣지 않는다.</p>
+     */
+    ANOMALY_REVIEW_CONFLICTED(Policy.SETTINGS_ONLY, EnumSet.of(NotificationChannelType.FCM));
 
     /** 알림 종류별 채널 결정 규칙. */
     public enum Policy {

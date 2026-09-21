@@ -68,6 +68,24 @@ public class AnomalyReviewReminderService {
         return sent;
     }
 
+    /** 동수 재확인 안내(상황당 보호자당 1회). @return 실제로 발송한 건수 */
+    public int sendConflictNotices() {
+        List<AnomalyReviewReminderTarget> targets = planner.claimConflicts();
+        int sent = 0;
+        for (AnomalyReviewReminderTarget target : targets) {
+            try {
+                notificationDispatcher.dispatch(
+                        target.guardianId(), NotificationType.ANOMALY_REVIEW_CONFLICTED, conflictContent(target));
+                sent++;
+            } catch (RuntimeException e) {
+                // 선점했으므로 재시도하지 않는다. 안내를 놓쳐도 응답 API와 이력 화면의 CONFLICTED 표시는 그대로다.
+                log.error("[ANOMALY-REVIEW] 동수 재확인 안내 발송 실패 guardianId={}, incidentId={}",
+                        target.guardianId(), target.incidentId(), e);
+            }
+        }
+        return sent;
+    }
+
     /**
      * 건별 재촉 문구.
      *
@@ -99,5 +117,27 @@ public class AnomalyReviewReminderService {
                 "type", "ANOMALY_REVIEW_SUMMARY",
                 "pendingCount", String.valueOf(target.pendingCount()),
                 "summaryDate", target.summaryDate().toString()));
+    }
+
+    /**
+     * 동수 재확인 안내 문구.
+     *
+     * <p>누가 무엇이라고 답했는지는 싣지 않는다 - "다른 보호자와 판정이 다르다"는 사실까지만 알리고,
+     * 다시 확인해 합의해 달라고 요청한다. 위험 여부도 단정하지 않는다(재촉 문구와 같은 판단).</p>
+     */
+    private NotificationContent conflictContent(AnomalyReviewReminderTarget target) {
+        String label = DetectedTypeLabel.of(target.detectedType());
+        String location = target.cameraLabel() != null ? target.cameraLabel() : FALLBACK_LOCATION;
+        String detectedAt = target.startedAt().atZoneSameInstant(AnomalyReviewClock.KST).format(DETECTED_AT_FORMAT);
+        String body = "%s · %s님 %s의 %s 감지에 대해 다른 보호자와 판정이 다릅니다. 다시 확인해 주세요."
+                .formatted(detectedAt, target.wardName(), location, label);
+
+        return NotificationContent.of("판정 확인 요청", body, Map.of(
+                "type", "ANOMALY_REVIEW_CONFLICTED",
+                "incidentId", String.valueOf(target.incidentId()),
+                "wardId", target.wardId(),
+                "wardName", target.wardName(),
+                "detectedType", target.detectedType().name(),
+                "detectedTypeLabel", label));
     }
 }

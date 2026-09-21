@@ -1401,3 +1401,13 @@ REST API Key 단독 대비 보안 강화 — 인가코드 탈취 시 토큰 발�
 - `SosNotificationListenerTest` 10/0 실패, `./gradlew build -x test` 통과.
 - 대장: `audit-index.md`에 #246~#251 행 보충(점검 이후 머지분이 누락돼 있었다).
 - 상세: `docs/(2026-09-21) audit-sos-repeat-count.md`
+
+## [2026-09-21] 이상감지 판정 다수결 전환 · 동수 재확인 안내 · 관리자 정정 폐지 (V52)
+
+- **정책 변경(사용자 결정)**: 판정은 응답한 보호자의 **다수결**, 동수만 `CONFLICTED`이며 동수는 **보호자 재응답으로 합의**한다. 관리자 정정 `PATCH /api/admin/anomaly/{incidentId}/review`(2026-09-02) **폐지** - 관리자 이상감지 화면은 조회 전용.
+- **신규 알림** `ANOMALY_REVIEW_CONFLICTED`: 동수가 되면 응답한 다른 보호자에게 FCM 1회(보호자당). 동수를 만든 본인은 제외(`sent=false` 기록), 재촉 스케줄러에 얹어 야간 미루기·선점 후 발송·수신 끄기 존중.
+- **V52**: `anomaly_review_conflict_log` 신설 + 기존 판정을 관리자 정정 건까지 재계산(비가역). `resolved_*` 컬럼·`ANOMALY_REVIEW_RESOLVE`(enum·CHECK)는 과거 기록 보존용으로 남김.
+- 응답 필드 제거: 보호자 `resolvedByAdmin`, 관리자 `resolvedBy`·`resolvedAt`·`reviewNote`. 에러 `ANOMALY_ALREADY_RESOLVED`·`ANOMALY_INVALID_REVIEW_STATUS` 제거.
+- `./gradlew test` 593 / 0 실패. ⚠️ V52 실 DB 미실행(첫 실행은 CD Flyway).
+- **영향 범위 점검(템플릿 C) PASS** - 🔴·🟠 없음. E-1(동수 제외 기록 경합 → `ON CONFLICT DO NOTHING`)·B-1(FCM 전용 테스트) 반영, E-2·E-3(기존 동시성·해제 보호자 표)은 후속. `(2026-09-21) audit-impact-anomaly-majority-review.md`
+- 상세: `docs/(2026-09-21) policy-change-anomaly-majority-review.md`

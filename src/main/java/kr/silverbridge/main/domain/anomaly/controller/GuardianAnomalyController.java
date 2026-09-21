@@ -53,9 +53,8 @@ public class GuardianAnomalyController {
                     - 생략: ACTIVE 연결된 피보호자 전원의 이력을 합쳐서 최신순 (연결이 없으면 빈 페이지)
 
                     [응답] data: PageResponse<AnomalyIncidentItem>
-                    - reviewStatus: PENDING(확인 필요) · REAL(실제 위험) · FALSE_ALARM(오탐) · CONFLICTED(보호자 응답 엇갈림)
+                    - reviewStatus: PENDING(확인 필요) · REAL(실제 위험) · FALSE_ALARM(오탐) · CONFLICTED(보호자 응답 동수 - 다시 확인 필요)
                     - myVerdict: 내가 낸 응답. 아직 응답하지 않았으면 null
-                    - resolvedByAdmin: true면 관리자가 확정한 건이라 응답을 바꿀 수 없습니다(응답 버튼 비활성화 권장)
                     - cameraLabel: 카메라가 삭제되면 null입니다(이력 자체는 남습니다)
 
                     [주의]
@@ -90,13 +89,14 @@ public class GuardianAnomalyController {
 
                     [상태 재계산]
                     응답할 때마다 그 상황의 응답 전체를 다시 집계합니다.
-                    - 응답한 보호자 전원이 같은 답 → REAL 또는 FALSE_ALARM
-                    - 답이 갈리면 → CONFLICTED (다수결로 정하지 않습니다. 관리자가 확인합니다)
-                    응답 결과로 CONFLICTED가 돌아와도 내 응답이 거부된 것이 아닙니다.
+                    - 응답한 보호자의 다수결입니다(미응답은 세지 않습니다).
+                    - 다수가 REAL → REAL, 다수가 FALSE_ALARM → FALSE_ALARM (예: 2:1)
+                    - 동수(1:1, 2:2) → CONFLICTED. 보호자들이 다시 응답해 합의하면 풀립니다(관리자가 정하지 않습니다).
+                    응답 결과로 CONFLICTED가 돌아와도 내 응답은 저장된 것입니다.
+                    동수가 되면 먼저 응답한 다른 보호자들에게 재확인 안내(FCM, type=ANOMALY_REVIEW_CONFLICTED)가 한 번 갑니다.
 
                     [주의]
                     - 이 응답은 이미 나간 알림을 되돌리지 않습니다(정정 알림을 발송하지 않습니다).
-                    - 관리자가 확정한 건(resolvedByAdmin=true)은 409입니다.
                     """)
     @ApiResponses({
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "응답 저장 + 재계산된 판정 상태 반환"),

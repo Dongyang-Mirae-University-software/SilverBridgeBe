@@ -315,6 +315,20 @@ class NotificationDispatcherTest {
     }
 
     @Test
+    @DisplayName("동수 재확인 안내도 FCM만 - 사용자가 문자를 켰어도 보내지 않는다")
+    void 동수_재확인_안내는_FCM만() {
+        given(settingService.enabledChannels(USER_ID))
+                .willReturn(EnumSet.of(NotificationChannelType.FCM, NotificationChannelType.SMS));
+
+        dispatcher.dispatch(USER_ID, NotificationType.ANOMALY_REVIEW_CONFLICTED, content);
+
+        verify(fcmChannel).send(any(), any(), any());
+        verify(smsChannel, never()).send(any(), any(), any());
+        assertThat(NotificationType.ANOMALY_REVIEW_CONFLICTED.policy())
+                .isEqualTo(NotificationType.Policy.SETTINGS_ONLY);
+    }
+
+    @Test
     @DisplayName("허용 채널을 선언하지 않은 기존 종류는 사용자 설정 그대로 나간다 (동작 변화 없음)")
     void 허용채널_미선언_종류는_기존동작유지() {
         given(settingService.enabledChannels(USER_ID))

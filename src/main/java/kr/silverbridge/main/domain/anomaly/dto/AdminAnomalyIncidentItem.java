@@ -13,13 +13,12 @@ import java.util.List;
  *
  * <p>보호자용({@link AnomalyIncidentItem})과 두 가지가 다르다.</p>
  * <ul>
- *   <li><b>보호자 응답 내역이 통째로 붙는다</b> - 관리자가 해야 할 일은 "누가 무엇이라고 답했는지"를
- *       보고 엇갈린 건을 정리하는 것이라, 집계된 상태값만으로는 판단할 수 없다.</li>
- *   <li>내 응답({@code myVerdict})이 없다 - 관리자는 1차 판정을 하지 않는다.</li>
+ *   <li><b>보호자 응답 내역이 통째로 붙는다</b> - 다수결로 정해진 상태값만으로는 소수 의견(2:1의 1)이
+ *       보이지 않아, 누가 무엇이라고 답했는지를 함께 준다.</li>
+ *   <li>내 응답({@code myVerdict})이 없다 - 관리자는 판정하지 않는다.</li>
  * </ul>
  *
  * @param feedbacks  보호자 응답 목록. 아무도 답하지 않았으면 빈 배열이다(null이 아니다)
- * @param resolvedBy 정정한 관리자 ID. 정정 전이면 null이며, 채워져 있으면 확정된 건이다
  */
 @Schema(description = "관리자용 이상감지 기록 항목(상황 단위)")
 public record AdminAnomalyIncidentItem(
@@ -59,16 +58,7 @@ public record AdminAnomalyIncidentItem(
         AnomalyReviewStatus reviewStatus,
 
         @Schema(description = "보호자 응답 내역. 아무도 답하지 않았으면 빈 배열")
-        List<AdminAnomalyFeedbackItem> feedbacks,
-
-        @Schema(description = "정정한 관리자 ID (정정 전이면 null)", example = "AD0001")
-        String resolvedBy,
-
-        @Schema(description = "정정 시각 (정정 전이면 null)")
-        OffsetDateTime resolvedAt,
-
-        @Schema(description = "정정 사유 메모 (없으면 null)", example = "보호자 통화 확인 - 요리 연기")
-        String reviewNote
+        List<AdminAnomalyFeedbackItem> feedbacks
 ) {
     public static AdminAnomalyIncidentItem of(AnomalyIncident incident, String wardName, String cameraLabel,
                                               List<AdminAnomalyFeedbackItem> feedbacks) {
@@ -84,10 +74,7 @@ public record AdminAnomalyIncidentItem(
                 incident.getEventCount(),
                 incident.getMaxConfidence(),
                 incident.getReviewStatus(),
-                feedbacks,
-                incident.getResolvedBy(),
-                incident.getResolvedAt(),
-                incident.getReviewNote()
+                feedbacks
         );
     }
 }

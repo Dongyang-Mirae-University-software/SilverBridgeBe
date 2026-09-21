@@ -6,6 +6,7 @@ import kr.silverbridge.main.domain.anomaly.entity.AnomalyIncidentFeedback;
 import kr.silverbridge.main.domain.anomaly.entity.AnomalyReviewStatus;
 import kr.silverbridge.main.domain.anomaly.entity.AnomalyVerdict;
 import kr.silverbridge.main.domain.anomaly.repository.AnomalyIncidentFeedbackRepository;
+import kr.silverbridge.main.domain.anomaly.repository.AnomalyReviewConflictLogRepository;
 import kr.silverbridge.main.domain.anomaly.repository.AnomalyIncidentRepository;
 import kr.silverbridge.main.domain.camera.service.CameraService;
 import kr.silverbridge.main.domain.connection.service.ConnectionService;
@@ -29,6 +30,7 @@ import java.util.Optional;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -37,8 +39,8 @@ import static org.mockito.Mockito.when;
 /**
  * 보호자 이상감지 이력·오탐 응답 검증.
  *
- * <p>핵심은 둘이다 - <b>인가</b>(ACTIVE 연결이 유일한 열람 근거)와 <b>상태 재계산</b>(다수결이 아니라
- * 불일치 자체를 보존한다). 둘 다 코드만 봐서는 의도가 드러나지 않아 테스트로 고정한다.</p>
+ * <p>핵심은 둘이다 - <b>인가</b>(ACTIVE 연결이 유일한 열람 근거)와 <b>상태 재계산</b>(응답한 보호자의
+ * 다수결, 동수만 CONFLICTED - 2026-09-21). 둘 다 코드만 봐서는 의도가 드러나지 않아 테스트로 고정한다.</p>
  */
 @ExtendWith(MockitoExtension.class)
 class GuardianAnomalyServiceTest {
@@ -51,6 +53,7 @@ class GuardianAnomalyServiceTest {
 
     @Mock private AnomalyIncidentRepository incidentRepository;
     @Mock private AnomalyIncidentFeedbackRepository feedbackRepository;
+    @Mock private AnomalyReviewConflictLogRepository conflictLogRepository;
     @Mock private ConnectionService connectionService;
     @Mock private CameraService cameraService;
     @Mock private UserRepository userRepository;
@@ -60,7 +63,7 @@ class GuardianAnomalyServiceTest {
     @BeforeEach
     void setUp() {
         service = new GuardianAnomalyService(
-                incidentRepository, feedbackRepository, connectionService, cameraService, userRepository);
+                incidentRepository, feedbackRepository, conflictLogRepository, connectionService, cameraService, userRepository);
     }
 
     private AnomalyIncident incident() {
@@ -131,36 +134,37 @@ class GuardianAnomalyServiceTest {
     }
 
     @Nested
-    @DisplayName("상태 재계산 - 다수결이 아니다")
+    @DisplayName("상태 재계산 - 응답한 보호자의 다수결, 동수만 CONFLICTED")
     class StatusCalculation {
 
+        private static final AnomalyVerdict R = AnomalyVerdict.REAL;
+        private static final AnomalyVerdict F = AnomalyVerdict.FALSE_ALARM;
+
         @Test
-        @DisplayName("응답이 없으면 PENDING")
+        @DisplayName("응답이 없으면 PENDING - 미응답은 어느 쪽으로도 세지 않는다")
         void emptyIsPending() {
             assertThat(GuardianAnomalyService.calculateStatus(List.of())).isEqualTo(AnomalyReviewStatus.PENDING);
         }
 
         @Test
-        @DisplayName("응답자 전원이 실제 위험이면 REAL")
-        void allRealIsReal() {
-            assertThat(GuardianAnomalyService.calculateStatus(List.of(AnomalyVerdict.REAL, AnomalyVerdict.REAL)))
-                    .isEqualTo(AnomalyReviewStatus.REAL);
+        @DisplayName("한 명만 답하면 그 답이 곧 결과다")
+        void singleVoteDecides() {
+            assertThat(GuardianAnomalyService.calculateStatus(List.of(R))).isEqualTo(AnomalyReviewStatus.REAL);
+            assertThat(GuardianAnomalyService.calculateStatus(List.of(F))).isEqualTo(AnomalyReviewStatus.FALSE_ALARM);
         }
 
         @Test
-        @DisplayName("응답자 전원이 오탐이면 FALSE_ALARM")
-        void allFalseAlarmIsFalseAlarm() {
-            assertThat(GuardianAnomalyService.calculateStatus(
-                    List.of(AnomalyVerdict.FALSE_ALARM, AnomalyVerdict.FALSE_ALARM)))
-                    .isEqualTo(AnomalyReviewStatus.FALSE_ALARM);
+        @DisplayName("2:1이면 다수 쪽으로 정해진다")
+        void majorityDecides() {
+            assertThat(GuardianAnomalyService.calculateStatus(List.of(R, R, F))).isEqualTo(AnomalyReviewStatus.REAL);
+            assertThat(GuardianAnomalyService.calculateStatus(List.of(R, F, F))).isEqualTo(AnomalyReviewStatus.FALSE_ALARM);
         }
 
         @Test
-        @DisplayName("답이 갈리면 CONFLICTED - 표를 세어 한쪽으로 정하면 불일치 정보가 사라진다")
-        void mixedIsConflicted() {
-            assertThat(GuardianAnomalyService.calculateStatus(
-                    List.of(AnomalyVerdict.REAL, AnomalyVerdict.FALSE_ALARM, AnomalyVerdict.FALSE_ALARM)))
-                    .isEqualTo(AnomalyReviewStatus.CONFLICTED);
+        @DisplayName("동수(1:1, 2:2)면 CONFLICTED - 보호자들이 다시 응답해 풀어야 한다")
+        void tieIsConflicted() {
+            assertThat(GuardianAnomalyService.calculateStatus(List.of(R, F))).isEqualTo(AnomalyReviewStatus.CONFLICTED);
+            assertThat(GuardianAnomalyService.calculateStatus(List.of(R, F, R, F))).isEqualTo(AnomalyReviewStatus.CONFLICTED);
         }
     }
 
@@ -205,8 +209,8 @@ class GuardianAnomalyServiceTest {
         }
 
         @Test
-        @DisplayName("다른 보호자와 답이 갈리면 CONFLICTED가 되고 내 응답은 거부되지 않는다")
-        void disagreementBecomesConflicted() {
+        @DisplayName("동수를 만든 응답은 CONFLICTED를 돌려받고, 재확인 안내 대상에서는 빠진다(sent=false 기록)")
+        void tieBecomesConflictedAndSkipsNoticeForMe() {
             AnomalyIncident incident = incident();
             when(incidentRepository.findById(INCIDENT_ID)).thenReturn(Optional.of(incident));
             when(feedbackRepository.findByIncidentId(INCIDENT_ID))
@@ -218,23 +222,26 @@ class GuardianAnomalyServiceTest {
             assertThat(response.reviewStatus()).isEqualTo(AnomalyReviewStatus.CONFLICTED);
             assertThat(response.myVerdict()).isEqualTo(AnomalyVerdict.FALSE_ALARM);
             assertThat(incident.getReviewStatus()).isEqualTo(AnomalyReviewStatus.CONFLICTED);
+            // 이미 기록이 있으면 DB가 무시한다(ON CONFLICT DO NOTHING) - 보호자당 한 번, 동시 응답에도 실패하지 않는다
+            verify(conflictLogRepository).insertSkipIfAbsent(eq(INCIDENT_ID), eq(GUARDIAN_ID), any());
         }
-    }
 
-    @Test
-    @DisplayName("관리자가 확정한 건은 409 - 뒤늦은 보호자 응답으로 조용히 뒤집히지 않는다")
-    void adminResolvedIncidentRejectsFeedback() {
-        AnomalyIncident incident = incident();
-        // 관리자 정정을 실제 경로로 만든다. 확정 판정은 resolvedBy가 아니라 resolvedAt으로 한다 -
-        // resolved_by는 관리자 행이 삭제되면 FK SET NULL로 비워지지만 시각은 남는다(2026-09-10 L-4).
-        incident.resolveByAdmin(AnomalyReviewStatus.FALSE_ALARM, "AD0001", null, java.time.OffsetDateTime.now());
-        when(incidentRepository.findById(INCIDENT_ID)).thenReturn(Optional.of(incident));
-        when(connectionService.isActiveConnection(GUARDIAN_ID, WARD_ID)).thenReturn(true);
+        @Test
+        @DisplayName("번복으로 동수가 풀리면 다수 쪽으로 재계산되고 안내 기록은 남기지 않는다")
+        void revoteResolvesTie() {
+            AnomalyIncident incident = incident();
+            incident.applyReviewStatus(AnomalyReviewStatus.CONFLICTED);
+            AnomalyIncidentFeedback mine = feedback(GUARDIAN_ID, AnomalyVerdict.FALSE_ALARM);
+            when(incidentRepository.findById(INCIDENT_ID)).thenReturn(Optional.of(incident));
+            when(feedbackRepository.findByIncidentId(INCIDENT_ID))
+                    .thenReturn(List.of(feedback(OTHER_GUARDIAN_ID, AnomalyVerdict.REAL), mine));
 
-        assertThatThrownBy(() -> service.submitFeedback(GUARDIAN_ID, INCIDENT_ID, AnomalyVerdict.REAL))
-                .isInstanceOf(CustomException.class)
-                .hasFieldOrPropertyWithValue("errorCode", ErrorCode.ANOMALY_ALREADY_RESOLVED);
+            AnomalyFeedbackResponse response =
+                    service.submitFeedback(GUARDIAN_ID, INCIDENT_ID, AnomalyVerdict.REAL);
 
-        verify(feedbackRepository, never()).save(any());
+            assertThat(response.reviewStatus()).isEqualTo(AnomalyReviewStatus.REAL);
+            assertThat(incident.getReviewStatus()).isEqualTo(AnomalyReviewStatus.REAL);
+            verify(conflictLogRepository, never()).insertSkipIfAbsent(any(), any(), any());
+        }
     }
 }

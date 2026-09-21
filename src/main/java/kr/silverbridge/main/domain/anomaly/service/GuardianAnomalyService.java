@@ -8,6 +8,7 @@ import kr.silverbridge.main.domain.anomaly.entity.AnomalyReviewStatus;
 import kr.silverbridge.main.domain.anomaly.entity.AnomalyVerdict;
 import kr.silverbridge.main.domain.anomaly.repository.AnomalyIncidentFeedbackRepository;
 import kr.silverbridge.main.domain.anomaly.repository.AnomalyIncidentRepository;
+import kr.silverbridge.main.domain.anomaly.repository.AnomalyReviewConflictLogRepository;
 import kr.silverbridge.main.domain.camera.service.CameraService;
 import kr.silverbridge.main.domain.connection.service.ConnectionService;
 import kr.silverbridge.main.domain.user.entity.User;
@@ -35,8 +36,9 @@ import java.util.stream.Collectors;
  * 보호자용 이상감지 이력 조회 + 오탐 응답.
  *
  * <p><b>왜 보호자가 판정하는가</b>: AI는 "얼마나 불꽃처럼 보이는가"(confidence)까지만 답할 수 있고
- * "실제로 불이 났는가"는 현장을 아는 사람만 안다. 그래서 1차 판정 주체는 보호자뿐이며,
- * <b>피보호자 본인·관리자용 1차 판정 API는 만들지 않는다</b>(관리자는 엇갈린 건을 정정만 한다).</p>
+ * "실제로 불이 났는가"는 현장을 아는 사람만 안다. 그래서 판정 주체는 보호자뿐이며,
+ * <b>피보호자 본인·관리자용 판정 API는 만들지 않는다</b>. 보호자끼리 답이 동수로 갈리면 보호자들이
+ * 다시 응답해 합의한다 - 관리자가 대신 정하지 않는다(2026-09-21 관리자 정정 폐지).</p>
  *
  * <p><b>인가 원칙</b>은 SOS 이력·복약과 같다 - <b>요청 시점 ACTIVE 연결</b>인 피보호자의 기록만 보이고,
  * 연결이 해제되면 과거 기록도 즉시 비공개다. 목록 인가는 {@code getActiveWardIds}, 단건 인가는
@@ -56,6 +58,7 @@ public class GuardianAnomalyService {
 
     private final AnomalyIncidentRepository anomalyIncidentRepository;
     private final AnomalyIncidentFeedbackRepository feedbackRepository;
+    private final AnomalyReviewConflictLogRepository conflictLogRepository;
     private final ConnectionService connectionService;
     private final CameraService cameraService;
     private final UserRepository userRepository;
@@ -94,8 +97,7 @@ public class GuardianAnomalyService {
      * 상황의 판정 상태를 재계산한다.
      *
      * @throws CustomException {@code ANOMALY_INCIDENT_NOT_FOUND}(없는 상황) /
-     *                         {@code ANOMALY_NOT_AUTHORIZED}(연결되지 않은 피보호자) /
-     *                         {@code ANOMALY_ALREADY_RESOLVED}(관리자 확정 건)
+     *                         {@code ANOMALY_NOT_AUTHORIZED}(연결되지 않은 피보호자)
      */
     @Transactional
     public AnomalyFeedbackResponse submitFeedback(String guardianId, Long incidentId, AnomalyVerdict verdict) {
@@ -106,11 +108,6 @@ public class GuardianAnomalyService {
             log.warn("[IDOR-ATTEMPT] 연결되지 않은 피보호자 이상감지 응답 시도: guardianId={}, incidentId={}",
                     guardianId, incidentId);
             throw new CustomException(ErrorCode.ANOMALY_NOT_AUTHORIZED);
-        }
-
-        // 관리자가 확인을 마친 건은 보호자 응답으로 뒤집지 않는다. 조용히 무시하지 않고 이유를 알린다.
-        if (incident.isAdminResolved()) {
-            throw new CustomException(ErrorCode.ANOMALY_ALREADY_RESOLVED);
         }
 
         List<AnomalyIncidentFeedback> feedbacks = feedbackRepository.findByIncidentId(incidentId);
@@ -125,6 +122,9 @@ public class GuardianAnomalyService {
 
         AnomalyReviewStatus status = calculateStatus(verdicts);
         incident.applyReviewStatus(status);
+        if (status == AnomalyReviewStatus.CONFLICTED) {
+            skipConflictNoticeFor(incidentId, guardianId);
+        }
 
         log.info("[ANOMALY] 보호자 오탐 응답: incidentId={}, guardianId={}, verdict={}, reviewStatus={}",
                 incidentId, guardianId, verdict, status);
@@ -135,20 +135,32 @@ public class GuardianAnomalyService {
     /**
      * 보호자 응답들로 상황의 판정 상태를 정한다. 시각·저장소에 의존하지 않는 순수 함수다.
      *
-     * <p><b>다수결이 아니다.</b> 한 명은 실제 화재로, 다른 한 명은 요리 연기로 봤다면 그 불일치 자체가
-     * 관리자가 확인해야 할 정보다. 서버가 표를 세어 한쪽으로 정하면 그 정보가 사라진다.</p>
+     * <p><b>응답한 보호자의 다수결</b>이다(2026-09-21). 미응답은 표에 넣지 않는다 - 아직 모르는 사람을
+     * 어느 쪽으로도 세지 않는다. 2:1이면 다수 쪽으로 정해지고, <b>동수(1:1, 2:2)만 CONFLICTED</b>다.
+     * 동수는 보호자들이 다시 응답해 풀어야 하며, 그 사실을 알리는 안내는 재촉 스케줄러가 보낸다.</p>
      */
     static AnomalyReviewStatus calculateStatus(Collection<AnomalyVerdict> verdicts) {
         if (verdicts.isEmpty()) {
             return AnomalyReviewStatus.PENDING;
         }
-        Set<AnomalyVerdict> distinct = Set.copyOf(verdicts);
-        if (distinct.size() > 1) {
+        long real = verdicts.stream().filter(verdict -> verdict == AnomalyVerdict.REAL).count();
+        long falseAlarm = verdicts.size() - real;
+        if (real == falseAlarm) {
             return AnomalyReviewStatus.CONFLICTED;
         }
-        return distinct.contains(AnomalyVerdict.REAL)
+        return real > falseAlarm
                 ? AnomalyReviewStatus.REAL
                 : AnomalyReviewStatus.FALSE_ALARM;
+    }
+
+    /**
+     * 방금 답해 동수를 만든 보호자는 재확인 안내 대상에서 뺀다 - 이 응답의 결과로 이미 CONFLICTED를 받았다.
+     * 보내지 않았다는 기록({@code sent=false})만 남겨, 스케줄러가 나머지 응답자에게만 안내하게 한다.
+     * 이미 기록이 있으면(앞서 안내를 받았거나 제외됐으면) 그대로 둔다 - 안내는 보호자당 한 번뿐이다.
+     * 기록은 원자적 insert-if-absent라 동시 응답·스케줄러 선점과 겹쳐도 응답이 실패하지 않는다.
+     */
+    private void skipConflictNoticeFor(Long incidentId, String guardianId) {
+        conflictLogRepository.insertSkipIfAbsent(incidentId, guardianId, AnomalyReviewClock.now());
     }
 
     /** 이미 응답한 적이 있으면 갱신(번복), 없으면 새로 저장한다. */

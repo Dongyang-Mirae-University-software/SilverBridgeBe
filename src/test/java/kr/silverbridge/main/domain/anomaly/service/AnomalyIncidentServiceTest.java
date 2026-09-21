@@ -161,7 +161,6 @@ class AnomalyIncidentServiceTest {
         assertThat(saved.getLastDetectedAt()).isEqualTo(kst(9, 30));
         assertThat(saved.getEventCount()).isEqualTo(1);
         assertThat(saved.getReviewStatus()).isEqualTo(AnomalyReviewStatus.PENDING);
-        assertThat(saved.getResolvedBy()).isNull();
         assertThat(opened).isSameAs(saved);
     }
 
