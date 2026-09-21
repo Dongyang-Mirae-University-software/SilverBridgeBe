@@ -216,7 +216,12 @@
   - **남겨 둔 것**: DB 컬럼 `resolved_by`·`resolved_at`·`review_note`(매핑만 해제, DROP은 비가역이라 별도 후속) / `AdminAuditAction.ANOMALY_REVIEW_RESOLVE`와 CHECK(폐지 전 감사 로그 행 보존 - 빼면 CHECK 재정의가 기존 행 때문에 실패한다. 새로 기록되지는 않는다).
   - V52가 기존 판정을 **관리자 정정 건까지 포함해** 보호자 응답만으로 재계산했다(비가역).
   - `AdminAnomalyControllerSecurityTest`가 이 컨트롤러에 쓰기 매핑이 없음을 고정한다 - 관리자 판정 API를 되살리려면 이 정책부터 바꿀 것.
-- 상세: `docs/(2026-09-01) feature-anomaly-guardian-review.md`, `docs/(2026-09-02) feature-admin-anomaly-review.md`, `docs/(2026-08-31) api-contract-anomaly-dashboard.md` §4·§6, `docs/(2026-09-21) policy-change-anomaly-majority-review.md`(다수결 전환·정정 폐지).
+- **알려진 한계 - 판정 집계 (2026-09-21 보류 결정)**: 다수결 전환 영향 범위 점검의 E-2·E-3이다. 둘 다 다수결 전환 **이전부터 있던** 드문 경우이고, 운영 데이터가 0건이며 스스로 바로잡히거나 영향이 작아 **코드를 고치지 않고 수용**했다. 실사용 데이터에서 문제가 보이면 다시 판단한다.
+  - **E-2 동시 응답 덮어쓰기**: 두 보호자가 같은 순간(1초 안팎) 반대로 응답하면 각자 자기 표만 보고 판정을 확정해, 실제로는 동수인데 `REAL`·`FALSE_ALARM`으로 남고 동수 안내도 나가지 않는다. 다음 응답(번복 포함)에서 바로잡힌다. 원인은 `AnomalyIncident`에 잠금·버전이 없고 `submitFeedback`이 자기가 읽은 응답으로 상태를 다시 조립하기 때문이다. 고친다면 상황 행 비관적 잠금(`SELECT … FOR UPDATE`)이 1순위다 - 낙관적 잠금(`@Version`)은 진 쪽 응답이 실패해 보호자에게 재시도를 요구한다.
+  - **E-3 연결이 끝난 보호자의 표**: 연결을 해제한 보호자의 응답은 지워지지 않아 계속 표에 들어가고, 탈퇴로 응답이 CASCADE 삭제돼도 판정은 다시 계산되지 않는다(예: 1:1 동수에서 한 명이 끊어도 `CONFLICTED`가 그대로 남는다).
+    - 고친다면 정해 둔 방향: "지금 ACTIVE인 보호자 표만 센다", **이미 `REAL`·`FALSE_ALARM`으로 확정된 판정은 연결이 바뀌어도 유지**하고 `PENDING`·`CONFLICTED`만 다시 계산한다(사용자 결정 2026-09-21). 연결 종료 경로는 다섯(보호자 해제·피보호자 해제·탈퇴 정리·역할 변경 정리·관리자 강제 해제)이며 모두 `ConnectionDisconnectedEvent`를 발행하지만, 이 이벤트에는 보호자·피보호자 ID가 없어 추가가 선행돼야 한다(탈퇴는 연결 행이 곧 purge된다).
+  - 이 한계를 이유로 다수결을 폐기하거나 관리자 정정을 되살리지 말 것 - 둘 다 이번에 명시적으로 버린 선택이다.
+- 상세: `docs/(2026-09-01) feature-anomaly-guardian-review.md`, `docs/(2026-09-02) feature-admin-anomaly-review.md`, `docs/(2026-08-31) api-contract-anomaly-dashboard.md` §4·§6, `docs/(2026-09-21) policy-change-anomaly-majority-review.md`(다수결 전환·정정 폐지), `docs/(2026-09-21) audit-impact-anomaly-majority-review.md`(E-2·E-3).
 
 ## 피보호자 목록 status 필터 - 좁혀도 인가 목록이 아니다 (2026-09-07)
 
