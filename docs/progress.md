@@ -1392,3 +1392,12 @@ REST API Key 단독 대비 보안 강화 — 인가코드 탈취 시 토큰 발�
 - **왜 핀이 필요했나**: Boot 4.0.8이 관리하는 Tomcat 11.0.24·netty 4.2.17·httpcore 5.3.6에 각각 9·1·2건이 남았다. Boot가 따라오면 핀을 지운다(각 줄 주석).
 - **springdoc 3.x**: `SwaggerConfig` 무수정으로 컴파일·테스트 통과. 실제 문서 노출은 배포 후 `/v3/api-docs` 태그 27종으로 확인.
 - 상세: `docs/(2026-09-11) audit-technical-cross-cutting.md` PHASE A "반영 결과".
+
+## [2026-09-21] PR #249 SOS 반복 횟수 알림 기능 점검 (코드 미수정)
+
+- **판정 PASS (Low 3건)**. 필수 알림 fail-open·쿨다운→집계 순서·wardId 한정 집계·로그 PII·정지 수신자 차단(dispatch 단일 경로)·알림톡 미매핑 모두 유지. 공용 규칙(디스패처·NotificationType·enum·연결 인가)을 건드리지 않아 영향 범위 점검(템플릿 C) 불요.
+- **L-1** 이름 12자 이상이면 반복 문구 문자가 90바이트 초과(20자 최대 109바이트) - Solapi 자동 판별로 LMS 전환 추정. 기능 문서의 "단문 한도 안"을 이름 11자 이하로 한정하는 문서 정정 대상.
+- **L-2** "N번째"는 비동기 집계 시점까지의 누적 건수(정보, 수정 불요). **L-3** 경계값 2·0 보정 테스트 없음, 파생 쿼리 실 DB 미실행(Testcontainers 부재).
+- `SosNotificationListenerTest` 10/0 실패, `./gradlew build -x test` 통과.
+- 대장: `audit-index.md`에 #246~#251 행 보충(점검 이후 머지분이 누락돼 있었다).
+- 상세: `docs/(2026-09-21) audit-sos-repeat-count.md`
