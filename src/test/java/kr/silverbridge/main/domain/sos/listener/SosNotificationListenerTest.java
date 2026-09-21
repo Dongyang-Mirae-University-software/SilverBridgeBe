@@ -5,6 +5,7 @@ import kr.silverbridge.main.domain.notification.channel.NotificationContent;
 import kr.silverbridge.main.domain.notification.dispatch.NotificationDispatcher;
 import kr.silverbridge.main.domain.notification.dispatch.NotificationType;
 import kr.silverbridge.main.domain.sos.event.SosTriggeredEvent;
+import kr.silverbridge.main.domain.sos.repository.SosEventRepository;
 import kr.silverbridge.main.domain.sos.service.SosNotificationCooldown;
 import kr.silverbridge.main.global.websocket.WebSocketEventPublisher;
 import org.junit.jupiter.api.DisplayName;
@@ -15,7 +16,9 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
+import java.time.OffsetDateTime;
 import java.util.List;
+import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.*;
@@ -25,7 +28,8 @@ import static org.mockito.Mockito.*;
  * SosNotificationListener 단위 테스트.
  *
  * AFTER_COMMIT 핸들러를 직접 호출하여 ① ACTIVE 보호자 전원 발송 ② 필수 타입(WARD_SOS) 디스패치(설정 무시)
- * ③ 보호자 0명 처리 ④ 한 보호자 실패가 나머지를 막지 않는 실패 격리 ⑤ 쿨다운 내 재요청 시 알림 생략을 검증한다.
+ * ③ 보호자 0명 처리 ④ 한 보호자 실패가 나머지를 막지 않는 실패 격리 ⑤ 쿨다운 내 재요청 시 알림 생략
+ * ⑥ 연타 반복 횟수의 문구·페이로드 반영과 집계 실패 시 폴백을 검증한다.
  */
 @ExtendWith(MockitoExtension.class)
 class SosNotificationListenerTest {
@@ -34,6 +38,7 @@ class SosNotificationListenerTest {
     @Mock private WebSocketEventPublisher webSocketEventPublisher;
     @Mock private NotificationDispatcher notificationDispatcher;
     @Mock private SosNotificationCooldown cooldown;
+    @Mock private SosEventRepository sosEventRepository;
 
     @InjectMocks private SosNotificationListener listener;
 
@@ -110,5 +115,92 @@ class SosNotificationListenerTest {
 
         // 알림만 생략 — 보호자에게 WS/디스패처 발송 없음. (sos_events 이력은 SosService 책임이라 여기서 영향 없음)
         verifyNoInteractions(webSocketEventPublisher, notificationDispatcher);
+    }
+
+    @Test
+    @DisplayName("최근 창 안에 여러 건이면 반복 횟수를 문구와 페이로드에 담는다")
+    void handleSosTriggered_반복횟수_문구반영() {
+        when(connectionService.getActiveGuardianIds(WARD_ID)).thenReturn(List.of("GD0001"));
+        when(cooldown.tryAcquire(WARD_ID)).thenReturn(true);
+        when(sosEventRepository.countByWardIdAndCreatedAtGreaterThanEqual(eq(WARD_ID), any()))
+                .thenReturn(3L);
+
+        listener.handleSosTriggered(event);
+
+        ArgumentCaptor<NotificationContent> captor = ArgumentCaptor.forClass(NotificationContent.class);
+        verify(notificationDispatcher).dispatch(eq("GD0001"), eq(NotificationType.WARD_SOS), captor.capture());
+        // 위급도를 단정하지 않고 "계속 요청 중"이라는 사실만 알린다.
+        assertThat(captor.getValue().body()).isEqualTo("김순자님이 계속 도움을 요청하고 있습니다. (최근 10분 내 3번째)");
+        assertThat(captor.getValue().title()).isEqualTo("긴급 SOS");
+        assertThat(captor.getValue().data()).containsEntry("repeatCount", "3");
+
+        ArgumentCaptor<Object> wsCaptor = ArgumentCaptor.forClass(Object.class);
+        verify(webSocketEventPublisher).sendToUser(eq("GD0001"), eq("sos-triggered"), wsCaptor.capture());
+        @SuppressWarnings("unchecked")
+        Map<String, String> wsPayload = (Map<String, String>) wsCaptor.getValue();
+        assertThat(wsPayload)
+                .containsEntry("repeatCount", "3")
+                .containsEntry("sosEventId", String.valueOf(SOS_EVENT_ID));
+    }
+
+    @Test
+    @DisplayName("단건이면 기존 문구를 글자 그대로 유지한다 (하위호환)")
+    void handleSosTriggered_단건_기존문구유지() {
+        when(connectionService.getActiveGuardianIds(WARD_ID)).thenReturn(List.of("GD0001"));
+        when(cooldown.tryAcquire(WARD_ID)).thenReturn(true);
+        when(sosEventRepository.countByWardIdAndCreatedAtGreaterThanEqual(eq(WARD_ID), any()))
+                .thenReturn(1L);
+
+        listener.handleSosTriggered(event);
+
+        ArgumentCaptor<NotificationContent> captor = ArgumentCaptor.forClass(NotificationContent.class);
+        verify(notificationDispatcher).dispatch(eq("GD0001"), eq(NotificationType.WARD_SOS), captor.capture());
+        assertThat(captor.getValue().body()).isEqualTo("김순자님이 긴급 도움을 요청했습니다.");
+        assertThat(captor.getValue().data()).containsEntry("repeatCount", "1");
+    }
+
+    @Test
+    @DisplayName("집계 창은 최근 10분 — 그보다 오래된 이력은 세지 않는다")
+    void handleSosTriggered_집계창_10분() {
+        when(connectionService.getActiveGuardianIds(WARD_ID)).thenReturn(List.of("GD0001"));
+        when(cooldown.tryAcquire(WARD_ID)).thenReturn(true);
+
+        OffsetDateTime before = OffsetDateTime.now();
+        listener.handleSosTriggered(event);
+        OffsetDateTime after = OffsetDateTime.now();
+
+        ArgumentCaptor<OffsetDateTime> fromCaptor = ArgumentCaptor.forClass(OffsetDateTime.class);
+        verify(sosEventRepository).countByWardIdAndCreatedAtGreaterThanEqual(eq(WARD_ID), fromCaptor.capture());
+        assertThat(fromCaptor.getValue())
+                .isAfterOrEqualTo(before.minusMinutes(10))
+                .isBeforeOrEqualTo(after.minusMinutes(10));
+    }
+
+    @Test
+    @DisplayName("집계 조회가 실패해도 알림은 기본 문구로 발송한다 (fail-open)")
+    void handleSosTriggered_집계실패_기본문구발송() {
+        when(connectionService.getActiveGuardianIds(WARD_ID)).thenReturn(List.of("GD0001"));
+        when(cooldown.tryAcquire(WARD_ID)).thenReturn(true);
+        when(sosEventRepository.countByWardIdAndCreatedAtGreaterThanEqual(eq(WARD_ID), any()))
+                .thenThrow(new RuntimeException("DB down"));
+
+        listener.handleSosTriggered(event);
+
+        // 집계 인프라 문제가 긴급 알림을 막아선 안 된다 — 쿨다운 fail-open과 같은 원칙
+        ArgumentCaptor<NotificationContent> captor = ArgumentCaptor.forClass(NotificationContent.class);
+        verify(notificationDispatcher).dispatch(eq("GD0001"), eq(NotificationType.WARD_SOS), captor.capture());
+        assertThat(captor.getValue().body()).isEqualTo("김순자님이 긴급 도움을 요청했습니다.");
+        verify(webSocketEventPublisher).sendToUser(eq("GD0001"), eq("sos-triggered"), any());
+    }
+
+    @Test
+    @DisplayName("쿨다운에 막힌 연타는 집계 쿼리조차 실행하지 않는다")
+    void handleSosTriggered_쿨다운시_집계미조회() {
+        when(connectionService.getActiveGuardianIds(WARD_ID)).thenReturn(List.of("GD0001"));
+        when(cooldown.tryAcquire(WARD_ID)).thenReturn(false);
+
+        listener.handleSosTriggered(event);
+
+        verifyNoInteractions(sosEventRepository);
     }
 }
