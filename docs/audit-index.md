@@ -55,7 +55,7 @@
 | 카카오 알림톡 채널 | ✅ | 템플릿 **승인(2026-07-27)**·두 서버 `ALIMTALK_ENABLED=true`로 실발송 중(2026-07-31 확인). 카카오 푸시는 검토 후 미채택(앱 푸시=FCM 중복) |
 | **역할 경계 횡단**(보호자/피보호자/관리자) | ✅ | `(2026-09-10) audit-role-boundary-guardian-ward-admin.md` - 보호자·피보호자 PASS. 보호자 G-1·관리자 A-1 수정 완료(2026-09-10). A-2(문의 답변 감사 로그)는 V50 PR ②. 역할 게이트 테스트 미커버는 8개 → 5개(연결 2·문의 2·공지 1, 다음 변경 때) |
 | **기점검 도메인 회귀 재점검** (auth~anomaly 1·2단계) | ✅ | `(2026-09-10) audit-regression-pre-230.md` - 2026-06-11 미해결 4건 전부 닫힘·회귀 없음. R-1·R-3(문서)·R-5·R-6 수정 완료 2026-09-11(`(2026-09-11) fix-audit-findings-2.md`). R-2(정지 중 선점 유실)·R-4(문의 CASCADE)는 수용 |
-| **의존성 취약점 스캔** | ⚠️ | `(2026-09-11) audit-technical-cross-cutting.md` PHASE A(2026-09-21 완주) - **A-1 🟠** Boot 4.0.5 관리 버전(Framework 7.0.6·Security 7.0.4·Tomcat 11.0.20·netty 4.2.12)에 2026-03 이후 Critical 다수. 제안: Boot 4.0.8 + Tomcat 11.0.26 + firebase-admin 9.10.0 + springdoc 3.1.1, 오탐 억제 파일 |
+| **의존성 취약점 스캔** | ✅ | `(2026-09-11) audit-technical-cross-cutting.md` PHASE A(2026-09-21 완주) - **A-1 🟠** Boot 4.0.5 관리 버전(Framework 7.0.6·Security 7.0.4·Tomcat 11.0.20·netty 4.2.12)에 2026-03 이후 Critical 다수. **반영 완료 2026-09-21**: Boot 4.0.8 + Tomcat 11.0.26 + firebase 9.10.0 + springdoc 3.1.1 + httpclient/core·kotlin·netty 핀 + 억제 5종 → 1879건 → 2건(5.3 오탐), 스캔 빌드 통과. 재실행 `./gradlew dependencyCheckAnalyze`(OSS Index 비활성 반영) |
 | **동시성**(스케줄러·executor·선점) | ✅ | 〃 PHASE B - B-1·B-2·B-3 수정 완료 2026-09-11 |
 | **외부 연동 회복력**(FCM·Solapi·SMTP·카카오·AI WS) | ✅ | 〃 PHASE C - C-1·C-2 수정 완료 2026-09-11. 필수 알림 보장 결론 기록 |
 | **성능·JPA** | ✅ | 〃 PHASE D - D-1·D-2 인덱스 V51(2026-09-11). D-3 수용 |

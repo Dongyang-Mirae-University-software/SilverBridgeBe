@@ -1384,3 +1384,11 @@ REST API Key 단독 대비 보안 강화 — 인가코드 탈취 시 토큰 발�
 - 2026-09-10 시작한 스캔이 NVD 동기화(키 없음)·메모리 부족으로 두 번 죽었고, 재실행에서는 **Sonatype OSS Index 익명 401**로 `Analysis failed`. init 스크립트로 그 분석기만 끄고 완주(1분 30초). 리포 무변경.
 - **A-1을 🟡→🟠으로 상향**: 오탐(gRPC-Go·OTel-Go·protobuf-Python·log4j-core 매칭)을 걷어내도 Spring Security 7.0.4 `securityMatchers` 우회(CVE-2026-22753)·Spring Boot 4.0.5 기본 웹 보안 무력화(CVE-2026-40976)·Tomcat 11.0.20 DIGEST 인증 우회(CVE-2026-65905)·netty 4.2.12 Critical 42건이 **우리 구성에 직접 닿는다.** 원인은 Boot 4.0.5 관리 버전이 2026-02 수준에 멈춘 것.
 - 제안(승인 대기): Boot 4.0.8 + `tomcat.version=11.0.26` + firebase-admin 9.10.0 + springdoc 3.1.1 + 오탐 억제 파일 + `ossIndex.enabled=false`. 상세 표는 기술 점검 문서 PHASE A.
+
+## [2026-09-21] 의존성 업그레이드 - 스캔 A-1 대응 (마이그레이션 없음)
+
+- **범위**: Spring Boot 4.0.5 → **4.0.8**(Framework 7.0.9·Security 7.0.7·jackson 3.1.5·pg 42.7.13), firebase-admin 9.4.3 → 9.10.0, springdoc 2.8.6 → **3.1.1**, `ext` 핀 5종(tomcat 11.0.26·httpclient5 5.6.4·httpcore5 5.4.3·kotlin 2.4.20·netty 4.2.18), 억제 파일 신설(gRPC-Go·OTel-Go·protobuf-Python·log4j-core·angus-activation 오탐), OSS Index 분석기 비활성.
+- **결과**: 스캔 매칭 **1879 → 2**(둘 다 5.3 오탐), CVSS 7+ 0건으로 `dependencyCheckAnalyze` 통과. `./gradlew clean build` 589 tests / 0 failures. 코드 변경 없음(build.gradle·억제 파일만).
+- **왜 핀이 필요했나**: Boot 4.0.8이 관리하는 Tomcat 11.0.24·netty 4.2.17·httpcore 5.3.6에 각각 9·1·2건이 남았다. Boot가 따라오면 핀을 지운다(각 줄 주석).
+- **springdoc 3.x**: `SwaggerConfig` 무수정으로 컴파일·테스트 통과. 실제 문서 노출은 배포 후 `/v3/api-docs` 태그 27종으로 확인.
+- 상세: `docs/(2026-09-11) audit-technical-cross-cutting.md` PHASE A "반영 결과".

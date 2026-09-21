@@ -1,6 +1,6 @@
 plugins {
     id 'java'
-    id 'org.springframework.boot' version '4.0.5'
+    id 'org.springframework.boot' version '4.0.8'
     id 'io.spring.dependency-management' version '1.1.7'
     // OWASP 의존성 취약점 스캔 (`./gradlew dependencyCheckAnalyze`)
     id 'org.owasp.dependencycheck' version '10.0.4'
@@ -20,12 +20,25 @@ repositories {
     mavenCentral()
 }
 
+// Spring Boot 4.0.8이 관리하는 Tomcat 11.0.24에는 DIGEST 인증 우회(CVE-2026-65905) 등 9건이 남아 있어
+// 11.0.26으로 올린다(2026-09-21 의존성 스캔 A-1). Boot가 Tomcat을 11.0.26 이상으로 관리하기 시작하면 이 줄은 지운다.
+ext['tomcat.version'] = '11.0.26'
+// firebase-admin이 끌어오는 Apache HttpComponents(Boot 4.0.8 관리 5.5.2/5.3.6)에 TLS 호스트명 검증 우회
+// (CVE-2026-71290)·HTTP/2 HPACK 자원 고갈(CVE-2026-54428)이 남아 있다. Google API 호출 경로라 올린다.
+ext['httpclient5.version'] = '5.6.4'
+ext['httpcore5.version'] = '5.4.3'
+// solapi SDK가 끌어오는 Kotlin 런타임(2.2.21)에 CVE-2026-53914(< 2.4.20)가 매칭된다. stdlib은 상위 호환이라
+// 2.4.20으로 올려도 2.1로 컴파일된 SDK가 그대로 동작한다.
+ext['kotlin.version'] = '2.4.20'
+// netty 4.2.17(Boot 4.0.8 관리)에는 Transfer-Encoding 검증 결함 CVE-2026-89044(6.5, < 4.2.18)가 남는다.
+ext['netty.version'] = '4.2.18.Final'
+
 dependencies {
     implementation 'org.aspectj:aspectjweaver'
     implementation 'com.solapi:sdk:1.0.3'
     implementation 'org.springframework.boot:spring-boot-starter-data-jpa'
     implementation 'org.springframework.boot:spring-boot-starter-websocket'
-    implementation 'com.google.firebase:firebase-admin:9.4.3'
+    implementation 'com.google.firebase:firebase-admin:9.10.0'
     implementation 'org.springframework.boot:spring-boot-starter-data-redis'
     implementation 'org.springframework.boot:spring-boot-starter-mail'
     implementation 'org.springframework.boot:spring-boot-starter-security'
@@ -33,7 +46,7 @@ dependencies {
     implementation 'org.springframework.boot:spring-boot-starter-validation'
     implementation 'org.springframework.boot:spring-boot-starter-webmvc'
     implementation 'org.springframework.boot:spring-boot-starter-actuator'
-    implementation 'org.springdoc:springdoc-openapi-starter-webmvc-ui:2.8.6'
+    implementation 'org.springdoc:springdoc-openapi-starter-webmvc-ui:3.1.1'
     implementation 'io.jsonwebtoken:jjwt-api:0.12.6'
     runtimeOnly 'io.jsonwebtoken:jjwt-impl:0.12.6'
     runtimeOnly 'io.jsonwebtoken:jjwt-jackson:0.12.6'
@@ -77,4 +90,11 @@ dependencyCheck {
     suppressionFile = file('dependency-check-suppressions.xml').exists()
             ? 'dependency-check-suppressions.xml'
             : null
+    // Sonatype OSS Index가 익명 요청을 401로 거부해 "Analysis failed"로 전체 스캔이 끝나 버린다(2026-09-21).
+    // NVD 기반 분석만으로 충분하므로 끈다. 계정을 만들면 analyzers.ossIndex.username/password로 다시 켤 수 있다.
+    analyzers {
+        ossIndex {
+            enabled = false
+        }
+    }
 }
