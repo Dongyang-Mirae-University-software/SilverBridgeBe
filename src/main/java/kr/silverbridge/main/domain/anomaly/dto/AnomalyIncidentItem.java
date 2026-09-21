@@ -35,7 +35,7 @@ public record AnomalyIncidentItem(
         @Schema(description = "카메라 설치 위치 (카메라 삭제 시 null)", example = "거실")
         String cameraLabel,
 
-        @Schema(description = "감지 종류", example = "FIRE", allowableValues = {"FIRE", "SMOKE"})
+        @Schema(description = "감지 종류", example = "FIRE", allowableValues = {"FIRE", "FALL", "WEAPON"})
         DetectedType detectedType,
 
         @Schema(description = "감지 종류 표시 문구", example = "화재")

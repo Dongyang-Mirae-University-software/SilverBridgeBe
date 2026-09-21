@@ -48,7 +48,7 @@ class AnomalySignalParserTest {
     }
 
     @Test
-    @DisplayName("캐시 미스 fallback 페이로드(analyzedAt·detections 없음)도 파싱하고 analyzedAt은 null로 둔다")
+    @DisplayName("캐시 미스 fallback 페이로드(analyzedAt·detections 없음)도 파싱하고 analyzedAt은 null로 둔다 - smoke는 화재로 받는다")
     void parsesFallbackPayload() throws Exception {
         Optional<AnomalySignal> parsed = parse("""
                 {"type":"latest_analysis","sessionId":"ward_a9cC5f_k3m",
@@ -56,8 +56,21 @@ class AnomalySignalParserTest {
                 """);
 
         assertThat(parsed).isPresent();
-        assertThat(parsed.get().detectedType()).isEqualTo(DetectedType.SMOKE);
+        assertThat(parsed.get().detectedType()).isEqualTo(DetectedType.FIRE);
         assertThat(parsed.get().analyzedAt()).isNull();
+    }
+
+    @Test
+    @DisplayName("AI 클래스명과 다른 값은 파싱에서 옮긴다 - smoke → FIRE(연기는 화재), knife → WEAPON")
+    void aiClassNamesAreMapped() {
+        assertThat(DetectedType.fromAi("smoke")).isEqualTo(DetectedType.FIRE);
+        assertThat(DetectedType.fromAi(" Smoke ")).isEqualTo(DetectedType.FIRE);
+        assertThat(DetectedType.fromAi("knife")).isEqualTo(DetectedType.WEAPON);
+        assertThat(DetectedType.fromAi("fire")).isEqualTo(DetectedType.FIRE);
+        assertThat(DetectedType.fromAi("fall")).isEqualTo(DetectedType.FALL);
+        assertThat(DetectedType.fromAi("flood")).isEqualTo(DetectedType.UNKNOWN);
+        // 흉기는 라이브 탑재 전이라 아직 이상감지 대상이 아니다
+        assertThat(DetectedType.WEAPON.isDetectable()).isFalse();
     }
 
     @Test

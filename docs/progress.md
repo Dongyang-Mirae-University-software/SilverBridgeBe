@@ -1411,3 +1411,12 @@ REST API Key 단독 대비 보안 강화 — 인가코드 탈취 시 토큰 발�
 - `./gradlew test` 593 / 0 실패. ⚠️ V52 실 DB 미실행(첫 실행은 CD Flyway).
 - **영향 범위 점검(템플릿 C) PASS** - 🔴·🟠 없음. E-1(동수 제외 기록 경합 → `ON CONFLICT DO NOTHING`)·B-1(FCM 전용 테스트) 반영, E-2·E-3(기존 동시성·해제 보호자 표)은 후속. `(2026-09-21) audit-impact-anomaly-majority-review.md`
 - 상세: `docs/(2026-09-21) policy-change-anomaly-majority-review.md`
+
+## [2026-09-21] 관리자 이상감지 로그 v2 - 필터·집계 API + 연기=화재 통합 (V53)
+
+- **목록 확장** `GET /api/admin/anomaly`: `period`(TODAY·THIS_WEEK·THIS_MONTH·ALL, KST, 주=월요일)·`type`(FIRE·FALL·WEAPON 전용 enum)·`keyword`(피보호자 이름·카메라 위치 부분일치) + 항목 `durationMinutes`. 파라미터 생략 시 기존과 동일.
+- **집계 신설** `GET /api/admin/anomaly/summary`: 유형 탭 건수(유형 필터 무시, 0건 유형 없음) · 판정 4값 · 응답률 · AI 신뢰도(= 위험÷(위험+오탐), 미판정·동수 제외, 분모 0이면 null). DB는 (유형, 판정)별 GROUP BY만.
+- **연기 = 화재(사용자 결정, 전체 적용)**: `fromAi`가 `smoke`→FIRE, `knife`→WEAPON. enum에서 SMOKE 삭제, V53이 과거 SMOKE 행을 FIRE로(비가역). 알림 리스너의 라벨 복사본을 `DetectedTypeLabel`로 일원화, FALL=낙상·WEAPON=흉기 라벨 추가.
+- `./gradlew test` 609 / 0 실패. ⚠️ 새 JPQL은 목 검증만 - 배포 기동 로그로 확인.
+- **영향 범위 점검(템플릿 C) PASS** - 🔴·🟠·🟡 없음, 주석 2건 반영. `(2026-09-21) audit-impact-admin-anomaly-log-v2.md`
+- 상세: `docs/(2026-09-21) feature-admin-anomaly-log-v2.md`

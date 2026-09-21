@@ -149,4 +149,12 @@ public interface UserRepository extends JpaRepository<User, String> {
             + "where u.role = :ward and u.status = :active "
             + "and not exists (select 1 from Camera cam where cam.wardId = u.id)")
     long countWardsWithoutCamera(@Param("ward") Role ward, @Param("active") Status active);
+
+    /**
+     * 관리자 이상감지 로그 검색 - 이름 부분일치로 회원 ID만 모은다(피보호자 이름 검색용).
+     * {@code keyword}는 호출부가 소문자화·LIKE 메타문자 이스케이프를 마친 값이다({@code escape '\'}와 짝).
+     * 탈퇴해 행이 지워진 회원은 이름을 알 수 없어 검색되지 않는다.
+     */
+    @Query("select u.id from User u where lower(u.name) like concat('%', :keyword, '%') escape '\\'")
+    List<String> findIdsByNameContaining(@Param("keyword") String keyword);
 }

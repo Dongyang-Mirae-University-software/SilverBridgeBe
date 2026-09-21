@@ -17,8 +17,9 @@ public final class DetectedTypeLabel {
     /** 시니어/4050 대상이라 완곡어법 없이 그대로 부른다(설계 D-3). */
     public static String of(DetectedType detectedType) {
         return switch (detectedType) {
-            case FIRE -> "화재";
-            case SMOKE -> "연기";
+            case FIRE -> "화재";      // 연기도 화재로 받는다(DetectedType.fromAi)
+            case FALL -> "낙상";
+            case WEAPON -> "흉기";
             default -> "이상 상황";
         };
     }

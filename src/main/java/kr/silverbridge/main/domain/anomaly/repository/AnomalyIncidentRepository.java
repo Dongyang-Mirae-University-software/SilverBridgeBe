@@ -56,20 +56,66 @@ public interface AnomalyIncidentRepository extends JpaRepository<AnomalyIncident
     List<AnomalyIncident> findByStartedAtGreaterThanEqual(OffsetDateTime from);
 
     /**
-     * 관리자 로그 목록 - 판정 상태·피보호자로 거르고 최신순.
+     * 관리자 로그 목록 - 판정 상태·피보호자·기간·유형·검색어로 거르고 최신순.
      *
      * <p>보호자 조회와 달리 <b>연결 여부로 좁히지 않는다</b> - 운영 현황은 전체를 봐야 한다.
      * 조회 전용이라 감사 로그는 남기지 않는다.</p>
      *
-     * <p>두 조건 모두 null이면 무시된다(문의 관리자 목록과 같은 동적 필터 방식).</p>
+     * <p>{@code status}·{@code wardId}·{@code type}은 null이면 무시된다(문의 관리자 목록과 같은 동적 필터 방식).
+     * 기간은 null 대신 하한 시각을 항상 받는다 - "전체"는 호출부가 충분히 이른 시각을 넘긴다
+     * (null 시각 파라미터는 PostgreSQL에서 타입 추론이 흔들린다).</p>
+     *
+     * <p>검색어는 이 쿼리가 아니라 호출부가 먼저 피보호자 ID·카메라 sessionId 목록으로 바꿔 넘긴다 - 상황 행에는
+     * 이름·위치가 없다. {@code keywordApplied=false}면 두 목록은 무시되며, 목록이 비면 호출부가 매칭 불가능한
+     * 값 하나를 넣는다(빈 IN 절 회피).</p>
      */
     @Query("""
             SELECT i FROM AnomalyIncident i
             WHERE (:status IS NULL OR i.reviewStatus = :status)
               AND (:wardId IS NULL OR i.wardId = :wardId)
+              AND i.startedAt >= :from
+              AND (:type IS NULL OR i.detectedType = :type)
+              AND (:keywordApplied = false
+                   OR i.wardId IN :keywordWardIds
+                   OR i.sessionId IN :keywordSessionIds)
             ORDER BY i.startedAt DESC
             """)
     Page<AnomalyIncident> searchForAdmin(@Param("status") AnomalyReviewStatus status,
                                          @Param("wardId") String wardId,
+                                         @Param("from") OffsetDateTime from,
+                                         @Param("type") DetectedType type,
+                                         @Param("keywordApplied") boolean keywordApplied,
+                                         @Param("keywordWardIds") Collection<String> keywordWardIds,
+                                         @Param("keywordSessionIds") Collection<String> keywordSessionIds,
                                          Pageable pageable);
+
+    /**
+     * 관리자 로그 집계 - 기간·검색어 안의 상황을 (유형, 판정 상태)별로 센다.
+     *
+     * <p>원본 행이 아니라 묶인 건수만 받는다 - "전체" 기간이어도 결과는 (유형 수 × 판정 4값) 행을 넘지 않는다.
+     * 유형 필터는 일부러 받지 않는다: 유형 탭의 건수는 탭을 골라도 그대로여야 하므로 호출부가 전체를 받아
+     * 탭 건수와 선택 유형의 판정 집계를 나눠 계산한다. 조건 규칙은 {@link #searchForAdmin}과 같다.</p>
+     */
+    @Query("""
+            SELECT i.detectedType AS detectedType, i.reviewStatus AS reviewStatus, COUNT(i) AS total
+            FROM AnomalyIncident i
+            WHERE i.startedAt >= :from
+              AND (:keywordApplied = false
+                   OR i.wardId IN :keywordWardIds
+                   OR i.sessionId IN :keywordSessionIds)
+            GROUP BY i.detectedType, i.reviewStatus
+            """)
+    List<TypeStatusCount> countForAdminSummary(@Param("from") OffsetDateTime from,
+                                               @Param("keywordApplied") boolean keywordApplied,
+                                               @Param("keywordWardIds") Collection<String> keywordWardIds,
+                                               @Param("keywordSessionIds") Collection<String> keywordSessionIds);
+
+    /** {@link #countForAdminSummary} 한 행. */
+    interface TypeStatusCount {
+        DetectedType getDetectedType();
+
+        AnomalyReviewStatus getReviewStatus();
+
+        long getTotal();
+    }
 }
