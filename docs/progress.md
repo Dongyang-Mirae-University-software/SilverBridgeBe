@@ -1365,3 +1365,9 @@ REST API Key 단독 대비 보안 강화 — 인가코드 탈취 시 토큰 발�
 - **R-5** `AdminAnnouncementServiceTest`(5)·`AnnouncementServiceTest`(4) 신설 - 2026-06-11 Critical이 나온 도메인의 테스트 공백.
 - **문서**: 정책 파일에 R-1 규칙·R-3 보존 정책 차이·운영 설정 절(E-1 수용 포함), CLAUDE.md §8 2줄.
 - 상세: `docs/(2026-09-11) fix-audit-findings-2.md`
+
+## [2026-09-21] 의존성 취약점 스캔 첫 완주 (문서만)
+
+- 2026-09-10 시작한 스캔이 NVD 동기화(키 없음)·메모리 부족으로 두 번 죽었고, 재실행에서는 **Sonatype OSS Index 익명 401**로 `Analysis failed`. init 스크립트로 그 분석기만 끄고 완주(1분 30초). 리포 무변경.
+- **A-1을 🟡→🟠으로 상향**: 오탐(gRPC-Go·OTel-Go·protobuf-Python·log4j-core 매칭)을 걷어내도 Spring Security 7.0.4 `securityMatchers` 우회(CVE-2026-22753)·Spring Boot 4.0.5 기본 웹 보안 무력화(CVE-2026-40976)·Tomcat 11.0.20 DIGEST 인증 우회(CVE-2026-65905)·netty 4.2.12 Critical 42건이 **우리 구성에 직접 닿는다.** 원인은 Boot 4.0.5 관리 버전이 2026-02 수준에 멈춘 것.
+- 제안(승인 대기): Boot 4.0.8 + `tomcat.version=11.0.26` + firebase-admin 9.10.0 + springdoc 3.1.1 + 오탐 억제 파일 + `ossIndex.enabled=false`. 상세 표는 기술 점검 문서 PHASE A.

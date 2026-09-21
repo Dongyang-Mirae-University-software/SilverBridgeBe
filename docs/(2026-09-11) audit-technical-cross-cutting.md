@@ -17,14 +17,53 @@
 
 ---
 
-## PHASE A. 의존성 취약점  - ⏳ 실행 중
+## PHASE A. 의존성 취약점 - 완주 (2026-09-21 갱신)
 
-- `./gradlew dependencyCheckAnalyze`를 2026-09-10 23:5x에 시작했으나 **`NVD_API_KEY`가 없어 NVD 동기화가 수십 분~수 시간** 걸린다(플러그인 경고 그대로). 리포트가 만들어지면 이 절을 갱신한다.
-- 플러그인 설정은 적절: CVSS 7.0+ 빌드 실패, 테스트 클래스패스 제외, HTML·JSON 출력, suppress 파일 분리.
-- **A-1 🟡 스캔이 한 번도 완주된 적이 없다.** `build/reports/dependency-check-report.*`가 없고 docs에도 결과 기록이 없다. `NVD_API_KEY`(무료 발급)를 `.env.dev`가 아닌 개발자 셸 환경변수로 넣고 월 1회 돌리는 루틴이 필요하다.
-- 버전 격차(스캔 결과와 함께 갱신 예정): Spring Boot 4.0.5 · firebase-admin 9.4.3 · solapi 1.0.3 · dependencycheck 플러그인 10.0.4.
+### 실행 경위
 
----
+- 2026-09-10 23:5x 첫 실행: `NVD_API_KEY` 없이 NVD 동기화 수 시간 → 시스템 메모리 부족 정리에 두 번 종료(리포트 없음).
+- 2026-09-21 재실행: 부분 동기화된 캐시 덕에 NVD 갱신 4분. 그러나 **Sonatype OSS Index 분석기가 익명 요청을 401로 거부**해 `Analysis failed`. init 스크립트(`~/depcheck-init.gradle`)로 `analyzers.ossIndex.enabled=false`만 끄고 재실행 → **1분 30초 완주**. 리포 파일 변경 없음.
+- 결과: 의존성 290개 중 131개에 매칭, 총 1879건, **CVSS 7.0+ 미해결로 빌드 실패**(정책대로).
+
+### 실제 위험 (우리 코드 경로에서 도달 가능한 것)
+
+전부 **Spring Boot 4.0.5 → 4.0.8 관리 버전 격차**다. 2026-03 이후 스프링·톰캣·네티 CVE가 연달아 나왔는데 버전이 2026-02 수준에 멈춰 있었다.
+
+| 라이브러리 | 현재 | CVSS 7+ | 대표 CVE | 4.0.8이 주는 버전 | 남는 것 |
+|---|---|---|---|---|---|
+| netty (firebase·gRPC 경유) | 4.2.12 | 42 | CVE-2026-45674 10.0 (< 4.2.15) | **4.2.17** | 0 |
+| Apache Tomcat embed | 11.0.20 | 23 | CVE-2026-41293 9.8, DIGEST 인증 우회 CVE-2026-65905 | 11.0.24 | **9건 잔존**(< 11.0.25 요구) → `tomcat.version=11.0.26` 오버라이드 필요 |
+| Spring Framework | 7.0.6 | 18 | CVE-2026-47890 9.8 SSE 스트림 손상 (< 7.0.8.1) | **7.0.9** | 0 |
+| Spring Security | 7.0.4 | 8 | CVE-2026-22753 7.5 `securityMatchers` 우회 (< 7.0.5) - **우리 SecurityConfig가 쓰는 API** | **7.0.7** | 0 |
+| Spring Boot | 4.0.5 | 6 | CVE-2026-40976 9.1 기본 웹 보안 무력화 (< 4.0.6) | **4.0.8** | 0 |
+| jackson-databind 3 | 3.1.0 | 2 | CVE-2026-54512 8.1 | 3.1.5 | 0 |
+| postgresql JDBC | 42.7.10 | 1 | CVE-2026-42198 7.5 (< 42.7.11) | 42.7.13 | 0 |
+| log4j-api (to-slf4j 브리지) | 2.25.3 | 4 | Layout 계열 - **log4j-core 전용, 우리는 logback** | 2.25.5 | 0 (오탐이었음) |
+
+### 오탐·도달 불가 (억제 대상)
+
+| 항목 | 이유 |
+|---|---|
+| grpc-* 1.69.0 (16개) CVE-2026-33186 9.1 | **gRPC-Go** CVE가 CPE `grpc:grpc`로 Java에 매칭. firebase-admin 9.4.3 경유 |
+| opentelemetry-* alpha (3건) | **OpenTelemetry-Go** CVE. firebase-admin 경유, 우리 코드 미사용 |
+| protobuf-java 3.25.5 CVE-2026-0994 | **Python** `json_format` CVE |
+| kotlin-stdlib 2.2.21 CVE-2026-53914 9.8 | solapi SDK 경유. "unsafe deserialization"은 Kotlin 컴파일러/스크립팅 경로, 런타임 stdlib 비해당. 단 2.4.20으로 올릴 수 있으면 올림 |
+| httpclient5 5.5.2 / httpcore5 5.3.6 | firebase-admin 경유. Boot 4.0.8도 같은 버전 관리(5.6.4 미출시). TLS 호스트명 검증 CVE-2026-71290은 Google API 호출에 해당 - firebase-admin 9.10.0 갱신으로 확인 |
+| jackson-databind **2**.21.2 | springdoc 2.8.6 경유(Boot 4에서는 springdoc 3.x가 맞음). 3.x 전환 시 사라짐 |
+| angus-activation 2.0.3 CVE-2025-7962 | Jakarta Mail SMTP 인젝션 - **우리는 angus-mail 2.0.5(Boot 4.0.8)**, activation은 별개 아티팩트라 CPE 오매칭 |
+| swagger-ui 5.20.1 DOMPurify 7.2 | springdoc 3.x가 최신 swagger-ui 동봉 |
+
+### 결론·제안
+
+**A-1 🟠 (🟡에서 상향)**: 오탐을 걷어내도 Spring Security `securityMatchers` 우회·Spring Boot 기본 웹 보안 무력화·Tomcat DIGEST 인증 우회처럼 **우리 구성에 직접 닿는 High/Critical이 있다.** 대응은 아래 순서.
+
+1. **Spring Boot 4.0.5 → 4.0.8** + `ext['tomcat.version'] = '11.0.26'` (Tomcat 9건 마감) - 패치 버전이라 API 변경 없음. `./gradlew build`로 회귀 확인
+2. **firebase-admin 9.4.3 → 9.10.0** (netty 4.2.15 요구, gRPC 갱신)
+3. **springdoc 2.8.6 → 3.1.1** (Boot 4 정식 지원, jackson 2.x 제거, swagger-ui 갱신) - `SwaggerConfig` 호환 확인 필요
+4. `dependency-check-suppressions.xml`에 gRPC-Go·OTel-Go·protobuf-Python·log4j-core 오탐 억제(근거 주석 필수)
+5. `build.gradle`에 `analyzers { ossIndex { enabled = false } }` 반영(익명 401), `NVD_API_KEY`는 개발자 셸 환경변수로
+
+리포트: `build/reports/dependency-check-report.html`(로컬, git 미추적). 재실행: `./gradlew dependencyCheckAnalyze --init-script ~/depcheck-init.gradle`(5번 반영 전까지).
 
 ## PHASE B. 동시성  [concurrency-review]
 
@@ -124,7 +163,7 @@ notification → auth (SmsSender)             ← F-3
 
 | ID | 등급 | 축 | 내용 | 시점 |
 |---|---|---|---|---|
-| A-1 | 🟡 | 의존성 | 취약점 스캔 미완주(NVD 키 없음) - 결과 대기 | 발표 전 |
+| A-1 | 🟠 | 의존성 | 스캔 완주(2026-09-21). Boot 4.0.5 관리 버전이 2026-03 이후 CVE 다수에 해당 - Security `securityMatchers` 우회·Tomcat DIGEST 우회 등 | **발표 전** (Boot 4.0.8 + Tomcat 11.0.26) |
 | B-1 | 🟡 | 동시성 | 스케줄러 단일 스레드에 AI 재접속까지 공유 | 발표 전(설정 1줄) |
 | B-2 | 🟡 | 동시성 | 알림 executor 포화 시 AI 수신 스레드가 발송을 동기 실행 | 이후 |
 | B-3 | 🟡 | 동시성 | 종료 시 알림 큐 유실(우아한 종료 없음) | 발표 전(설정 3줄) |
