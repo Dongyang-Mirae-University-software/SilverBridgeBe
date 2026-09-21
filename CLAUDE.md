@@ -6,7 +6,7 @@
 
 ## 1. 프로젝트 핵심
 
-- **빌드**: Gradle (`./gradlew`) — ❗Maven 아님 / **Java 21**(toolchain) / **Spring Boot 4.0.5**
+- **빌드**: Gradle (`./gradlew`) — ❗Maven 아님 / **Java 21**(toolchain) / **Spring Boot 4.0.8**
 - **인프라**: PostgreSQL + Flyway / Redis(캐시·세션) / WebSocket(실시간)
 - **보안·연동**: Spring Security, OAuth2(카카오), JWT(jjwt) / Firebase(FCM), Solapi(SMS), SMTP / springdoc-openapi(Swagger) / OWASP DependencyCheck
 - **메인 브랜치**: `dev` — push 시 CD 자동 배포 (§3 참조)
@@ -94,7 +94,7 @@
 ./gradlew dependencyCheckAnalyze --info  # OWASP 스캔 → build/reports/dependency-check-report.html
 ```
 
-- OWASP: CVSS 7.0+ 발견 시 빌드 실패. `NVD_API_KEY` 설정 시 동기화 빠름. suppress는 `dependency-check-suppressions.xml`.
+- OWASP: CVSS 7.0+ 발견 시 빌드 실패. `NVD_API_KEY` 설정 시 동기화 빠름(없으면 첫 실행 수 시간). suppress는 `dependency-check-suppressions.xml`(근거 주석 필수). Sonatype OSS Index 분석기는 익명 401 때문에 **비활성**(2026-09-21). `build.gradle`의 `ext['*.version']` 핀 5종은 Boot가 그 이상을 관리하면 제거.
 - **테스트**: JUnit 5 + AssertJ + Spring Security Test. 핵심 비즈니스·정책 로직 80%+ (보일러플레이트 제외). AI 작성 테스트 검토는 `test-quality` 스킬.
 
 ---
@@ -148,4 +148,4 @@
 
 ---
 
-**최종 업데이트**: 2026-09-11 (회귀·기술 점검 반영 - 수락 시 보호자 상태·운영 설정) · 2026-09-10 (점검 이슈 반영 - 역할 변경 카메라·토큰 / 관리자 강제 연결·해제) · 2026-09-09 (관리자 회원 관리 / 계정 상태 3분법) · 2026-09-02 (관리자 대시보드 집계 / 이상감지 로그·정정) · 2026-09-01 (이상감지 판정·재촉 / 종류별 허용 채널) · 2026-05-30 (공식 Claude Code 가이드 기준 리팩터링 — 347→~140줄, 도메인 보안 정책을 `.claude/rules/`로 분리) · **Spring Boot** 4.0.5 / **Java** 21 / **빌드** Gradle
+**최종 업데이트**: 2026-09-21 (의존성 업그레이드 - Boot 4.0.8·Tomcat 11.0.26·springdoc 3.1.1, 스캔 CVSS 7+ 0건) · 2026-09-11 (회귀·기술 점검 반영 - 수락 시 보호자 상태·운영 설정) · 2026-09-10 (점검 이슈 반영 - 역할 변경 카메라·토큰 / 관리자 강제 연결·해제) · 2026-09-09 (관리자 회원 관리 / 계정 상태 3분법) · 2026-09-02 (관리자 대시보드 집계 / 이상감지 로그·정정) · 2026-09-01 (이상감지 판정·재촉 / 종류별 허용 채널) · 2026-05-30 (공식 Claude Code 가이드 기준 리팩터링 — 347→~140줄, 도메인 보안 정책을 `.claude/rules/`로 분리) · **Spring Boot** 4.0.8 / **Java** 21 / **빌드** Gradle

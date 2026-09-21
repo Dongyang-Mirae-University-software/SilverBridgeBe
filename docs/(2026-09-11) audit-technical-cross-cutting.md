@@ -63,7 +63,21 @@
 4. `dependency-check-suppressions.xml`에 gRPC-Go·OTel-Go·protobuf-Python·log4j-core 오탐 억제(근거 주석 필수)
 5. `build.gradle`에 `analyzers { ossIndex { enabled = false } }` 반영(익명 401), `NVD_API_KEY`는 개발자 셸 환경변수로
 
-리포트: `build/reports/dependency-check-report.html`(로컬, git 미추적). 재실행: `./gradlew dependencyCheckAnalyze --init-script ~/depcheck-init.gradle`(5번 반영 전까지).
+리포트: `build/reports/dependency-check-report.html`(로컬, git 미추적).
+
+### 반영 결과 (2026-09-21, PR `chore/dependency-upgrade-2026-09`)
+
+| 단계 | 매칭 총계 | CVSS 7+ |
+|---|---|---|
+| 업그레이드 전 (Boot 4.0.5) | 1879 | 다수 (빌드 실패) |
+| Boot 4.0.8 + Tomcat 11.0.26 + firebase-admin 9.10.0 + springdoc 3.1.1 + 억제 5종 | 23 | 4 (httpclient5·httpcore5·kotlin) |
+| + httpclient5 5.6.4 · httpcore5 5.4.3 · kotlin 2.4.20 · netty 4.2.18 | **2** | **0 - 빌드 통과** |
+
+남은 2건은 CVSS 5.3이며 둘 다 CPE 오매칭이다(`grpc-opentelemetry`에 **opentelemetry-js** CVE, `hibernate-validator`에 **validator.nu** CVE). 억제하지 않고 두었다 - 실패 기준(7.0) 아래라 빌드를 막지 않고, 목록에 보이는 편이 다음 스캔 때 판단에 낫다.
+
+springdoc 2.8.6 → 3.1.1은 `SwaggerConfig`(`OpenAPI`·`Tag`·`OpenApiCustomizer`)가 그대로 컴파일·동작해 이번 PR에 포함했다. 기동 후 `/v3/api-docs`·태그 27종 노출을 배포 검증 항목으로 둔다.
+
+`build.gradle`의 `ext[...]` 오버라이드 5종(tomcat·httpclient5·httpcore5·kotlin·netty)은 **Boot가 그 이상을 관리하기 시작하면 지운다** - 남겨 두면 Boot 상향 때 오히려 구버전에 고정된다. 각 줄에 이유 주석이 있다.
 
 ## PHASE B. 동시성  [concurrency-review]
 
@@ -163,7 +177,7 @@ notification → auth (SmsSender)             ← F-3
 
 | ID | 등급 | 축 | 내용 | 시점 |
 |---|---|---|---|---|
-| A-1 | 🟠 | 의존성 | 스캔 완주(2026-09-21). Boot 4.0.5 관리 버전이 2026-03 이후 CVE 다수에 해당 - Security `securityMatchers` 우회·Tomcat DIGEST 우회 등 | **발표 전** (Boot 4.0.8 + Tomcat 11.0.26) |
+| A-1 | ✅ | 의존성 | 스캔 완주 후 업그레이드 반영(2026-09-21). 1879 → 2(CVSS 5.3 오탐), 빌드 통과 | 완료 |
 | B-1 | 🟡 | 동시성 | 스케줄러 단일 스레드에 AI 재접속까지 공유 | 발표 전(설정 1줄) |
 | B-2 | 🟡 | 동시성 | 알림 executor 포화 시 AI 수신 스레드가 발송을 동기 실행 | 이후 |
 | B-3 | 🟡 | 동시성 | 종료 시 알림 큐 유실(우아한 종료 없음) | 발표 전(설정 3줄) |
