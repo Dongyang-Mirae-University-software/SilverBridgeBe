@@ -3,6 +3,7 @@ package kr.silverbridge.main.domain.camera.repository;
 import kr.silverbridge.main.domain.camera.entity.Camera;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.repository.query.Param;
 
 import java.util.Collection;
 import java.util.List;
@@ -30,6 +31,13 @@ public interface CameraRepository extends JpaRepository<Camera, Long> {
     // 회원의 카메라 전부 삭제 - 관리자 역할 변경(WARD → GUARDIAN) 시 고아 방지. 삭제 건수를 돌려준다.
     long deleteByWardId(String wardId);
     boolean existsByDeviceId(String deviceId);      // DeviceID 발급기 중복 검사
+
+    /**
+     * 관리자 이상감지 로그 검색 - 설치 위치(label) 부분일치로 sessionId만 모은다.
+     * {@code keyword}는 호출부가 소문자화·LIKE 메타문자 이스케이프를 마친 값이다({@code escape '\'}와 짝).
+     */
+    @Query("select c.sessionId from Camera c where lower(c.label) like concat('%', :keyword, '%') escape '\\'")
+    List<String> findSessionIdsByLabelContaining(@Param("keyword") String keyword);
 
     // ===== 관리자 대시보드 집계 =====
 

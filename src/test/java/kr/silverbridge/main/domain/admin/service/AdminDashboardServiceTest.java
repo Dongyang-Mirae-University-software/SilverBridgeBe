@@ -150,14 +150,14 @@ class AdminDashboardServiceTest {
             when(anomalyIncidentRepository.findByStartedAtGreaterThanEqual(any())).thenReturn(List.of(
                     incident(DetectedType.FIRE, AnomalyReviewStatus.PENDING),
                     incident(DetectedType.FIRE, AnomalyReviewStatus.REAL),
-                    incident(DetectedType.SMOKE, AnomalyReviewStatus.FALSE_ALARM)));
+                    incident(DetectedType.FALL, AnomalyReviewStatus.FALSE_ALARM)));
 
             AdminSafetyDashboardResponse response = service.getSafetyDashboard();
 
             assertThat(response.todayAnomaly().byType())
                     .extracting(AdminSafetyDashboardResponse.TypeCount::detectedType)
-                    .containsExactly(DetectedType.FIRE, DetectedType.SMOKE)
-                    .doesNotContain(DetectedType.FALL, DetectedType.WEAPON);
+                    .containsExactly(DetectedType.FIRE, DetectedType.FALL)
+                    .doesNotContain(DetectedType.WEAPON);
             assertThat(response.todayAnomaly().byType().get(0).count()).isEqualTo(2L);
         }
 
@@ -169,8 +169,8 @@ class AdminDashboardServiceTest {
                     incident(DetectedType.FIRE, AnomalyReviewStatus.PENDING),
                     incident(DetectedType.FIRE, AnomalyReviewStatus.PENDING),
                     incident(DetectedType.FIRE, AnomalyReviewStatus.REAL),
-                    incident(DetectedType.SMOKE, AnomalyReviewStatus.FALSE_ALARM),
-                    incident(DetectedType.SMOKE, AnomalyReviewStatus.CONFLICTED)));
+                    incident(DetectedType.FIRE, AnomalyReviewStatus.FALSE_ALARM),
+                    incident(DetectedType.FIRE, AnomalyReviewStatus.CONFLICTED)));
 
             AdminSafetyDashboardResponse.ReviewCount review = service.getSafetyDashboard().todayAnomaly().review();
 

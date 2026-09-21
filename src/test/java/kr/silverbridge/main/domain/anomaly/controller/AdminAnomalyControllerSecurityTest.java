@@ -60,17 +60,17 @@ class AdminAnomalyControllerSecurityTest {
     @WithMockUser(roles = "ADMIN")
     @DisplayName("ADMIN → 목록 조회 허용")
     void admin_목록_허용() {
-        when(adminAnomalyService.getIncidents(any(), any(), anyInt(), anyInt()))
+        when(adminAnomalyService.getIncidents(any(), any(), any(), any(), any(), anyInt(), anyInt()))
                 .thenReturn(new PageResponse<>(List.of(), 0, 20, 0, 0, true));
 
-        assertThatNoException().isThrownBy(() -> controller.getIncidents(null, null, 0, 20));
+        assertThatNoException().isThrownBy(() -> controller.getIncidents(null, null, null, null, null, 0, 20));
     }
 
     @Test
     @WithMockUser(roles = "GUARDIAN")
     @DisplayName("보호자(GUARDIAN) → 403")
     void guardian_거부() {
-        assertThatThrownBy(() -> controller.getIncidents(null, null, 0, 20))
+        assertThatThrownBy(() -> controller.getIncidents(null, null, null, null, null, 0, 20))
                 .isInstanceOf(AccessDeniedException.class);
     }
 
@@ -78,7 +78,7 @@ class AdminAnomalyControllerSecurityTest {
     @WithMockUser(roles = "WARD")
     @DisplayName("피보호자(WARD) → 403")
     void ward_거부() {
-        assertThatThrownBy(() -> controller.getIncidents(null, null, 0, 20))
+        assertThatThrownBy(() -> controller.getIncidents(null, null, null, null, null, 0, 20))
                 .isInstanceOf(AccessDeniedException.class);
     }
 

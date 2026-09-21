@@ -56,7 +56,7 @@ public class AnomalyJudge {
     }
 
     /**
-     * "감지 종류는 fire/smoke이고 신뢰도도 충분히 높은데 danger만 false"가 계속되면 AI의 danger 정식화가
+     * "감지 종류는 화재(연기 포함)이고 신뢰도도 충분히 높은데 danger만 false"가 계속되면 AI의 danger 정식화가
      * 배포되지 않았을 가능성이 크다. 이 경우 이상감지가 **한 건도 적재되지 않는데 아무 에러도 나지 않으므로**,
      * 조용한 침묵 대신 로그로 드러낸다(운영자가 CONFIDENCE 폴백 전환 여부를 판단할 근거).
      */

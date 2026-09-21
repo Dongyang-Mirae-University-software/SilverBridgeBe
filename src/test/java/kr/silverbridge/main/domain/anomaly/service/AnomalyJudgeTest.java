@@ -87,7 +87,7 @@ class AnomalyJudgeTest {
         @Test
         @DisplayName("임계 이상이면 danger=false 여도 이상감지로 인정한다 (AI danger 미배포 공백 대응)")
         void aboveThreshold_isAnomalyEvenWhenDangerFalse() {
-            assertThat(judge.isAnomaly(signal(DetectedType.SMOKE, 0.6, false))).isTrue();
+            assertThat(judge.isAnomaly(signal(DetectedType.FIRE, 0.6, false))).isTrue();
             assertThat(judge.isAnomaly(signal(DetectedType.FIRE, 0.84, false))).isTrue();
         }
 

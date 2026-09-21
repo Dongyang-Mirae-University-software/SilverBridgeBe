@@ -7,6 +7,9 @@ import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import kr.silverbridge.main.domain.anomaly.dto.AdminAnomalyIncidentItem;
+import kr.silverbridge.main.domain.anomaly.dto.AdminAnomalyPeriod;
+import kr.silverbridge.main.domain.anomaly.dto.AdminAnomalySummaryResponse;
+import kr.silverbridge.main.domain.anomaly.dto.AdminAnomalyTypeFilter;
 import kr.silverbridge.main.domain.anomaly.entity.AnomalyReviewStatus;
 import kr.silverbridge.main.domain.anomaly.service.AdminAnomalyService;
 import kr.silverbridge.main.global.response.ApiResponse;
@@ -51,9 +54,19 @@ public class AdminAnomalyController {
                     [판정 상태]
                     응답한 보호자의 다수결입니다. status=CONFLICTED 는 응답이 **동수**로 갈린 건입니다
                     (보호자들에게 재확인 안내가 나가며, 다시 응답하면 풀립니다).
+
+                    [필터 - 모두 선택, 생략하면 조건 없음]
+                    - period: TODAY · THIS_WEEK(월요일 시작) · THIS_MONTH · ALL. 첫 감지 시각 기준, KST
+                    - type: FIRE(연기 포함) · FALL · WEAPON. 연기는 화재로 받아 따로 없습니다
+                    - keyword: 피보호자 이름 또는 카메라 위치 부분일치. 탈퇴한 피보호자·삭제된 카메라는 검색되지 않습니다
+                    - 잘못된 period·type 값은 400입니다(빈 목록으로 오독되지 않게)
+
+                    [감지 지속]
+                    durationMinutes = 마지막 감지 - 첫 감지(분). 한 번만 잡힌 상황은 0이며 화면에서는 "순간"으로 표시합니다.
                     """)
     @ApiResponses({
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "목록 반환"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "잘못된 period·type 값", content = @Content),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "인증 토큰 없음 또는 만료", content = @Content),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "관리자 권한 없음", content = @Content),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "500", description = "서버 내부 오류", content = @Content)
@@ -66,9 +79,61 @@ public class AdminAnomalyController {
             @Parameter(description = "피보호자 ID 필터 (생략 시 전체)")
             @RequestParam(required = false) String wardId,
 
+            @Parameter(description = "기간 (생략 시 ALL)")
+            @RequestParam(required = false) AdminAnomalyPeriod period,
+
+            @Parameter(description = "감지 유형 (생략 시 전체)")
+            @RequestParam(required = false) AdminAnomalyTypeFilter type,
+
+            @Parameter(description = "피보호자 이름 또는 카메라 위치 검색어 (부분일치)")
+            @RequestParam(required = false) String keyword,
+
             @Parameter(description = "페이지 번호 (0-based)") @RequestParam(defaultValue = "0") int page,
             @Parameter(description = "페이지 크기 (최대 50)") @RequestParam(defaultValue = "20") int size) {
 
-        return ApiResponse.ok(adminAnomalyService.getIncidents(status, wardId, page, size));
+        return ApiResponse.ok(adminAnomalyService.getIncidents(status, wardId, period, type, keyword, page, size));
+    }
+
+    @Operation(summary = "이상감지 로그 집계",
+            description = """
+                    이상감지 로그 화면의 탭 건수·응답률·판정별 현황·AI 신뢰도를 한 번에 줍니다.
+                    목록과 같은 period·type·keyword 조건을 받습니다.
+
+                    [유형 탭 건수]
+                    byType 은 **type 조건을 무시**합니다 - 탭을 골라도 탭 옆 숫자는 그대로입니다.
+                    집계된 유형만 담습니다(0건 유형은 항목이 없습니다. "낙상 0건"은 안전이 아니라 모델이 없다는 뜻이라서요).
+                    나머지(total·review·responseRate·accuracy)는 고른 type으로 좁혀 계산합니다.
+
+                    [판정별 현황 - review]
+                    pending(미판정) · real(위험) · falseAlarm(오탐) · conflicted(동수 - 보호자 재확인 대기). 네 값을 모두 줍니다.
+
+                    [사용자 응답률 - responseRate]
+                    (total - pending) / total, 0.0~1.0. total이 0이면 null입니다(0%로 표시하지 마세요).
+
+                    [AI 신뢰도 - accuracy]
+                    rate = 위험 / (위험 + 오탐), 0.0~1.0. 판정이 난 건 중 AI 경보가 실제 위험이었던 비율입니다.
+                    미판정·동수는 분모에서 뺍니다. rate가 곧 위험 비율이고 falseAlarmRate = 1 - rate 입니다.
+                    basis(= 위험 + 오탐)가 0이면 두 비율 모두 null입니다.
+                    AI가 프레임마다 보내는 confidence(얼마나 불처럼 보이는가)와는 다른 값입니다.
+                    """)
+    @ApiResponses({
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "집계 반환"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "잘못된 period·type 값", content = @Content),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "인증 토큰 없음 또는 만료", content = @Content),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "관리자 권한 없음", content = @Content),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "500", description = "서버 내부 오류", content = @Content)
+    })
+    @GetMapping("/summary")
+    public ApiResponse<AdminAnomalySummaryResponse> getSummary(
+            @Parameter(description = "기간 (생략 시 ALL)")
+            @RequestParam(required = false) AdminAnomalyPeriod period,
+
+            @Parameter(description = "감지 유형 (생략 시 전체) - byType 탭 건수에는 적용되지 않습니다")
+            @RequestParam(required = false) AdminAnomalyTypeFilter type,
+
+            @Parameter(description = "피보호자 이름 또는 카메라 위치 검색어 (부분일치)")
+            @RequestParam(required = false) String keyword) {
+
+        return ApiResponse.ok(adminAnomalyService.getSummary(period, type, keyword));
     }
 }

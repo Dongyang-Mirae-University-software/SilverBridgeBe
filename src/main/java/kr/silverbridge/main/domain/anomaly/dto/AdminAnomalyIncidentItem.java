@@ -5,6 +5,7 @@ import kr.silverbridge.main.domain.anomaly.entity.AnomalyIncident;
 import kr.silverbridge.main.domain.anomaly.entity.AnomalyReviewStatus;
 import kr.silverbridge.main.global.enums.DetectedType;
 
+import java.time.Duration;
 import java.time.OffsetDateTime;
 import java.util.List;
 
@@ -35,7 +36,7 @@ public record AdminAnomalyIncidentItem(
         @Schema(description = "카메라 설치 위치 (카메라 삭제 시 null)", example = "거실")
         String cameraLabel,
 
-        @Schema(description = "감지 종류", example = "FIRE", allowableValues = {"FIRE", "SMOKE"})
+        @Schema(description = "감지 종류", example = "FIRE", allowableValues = {"FIRE", "FALL", "WEAPON"})
         DetectedType detectedType,
 
         @Schema(description = "감지 종류 표시 문구", example = "화재")
@@ -46,6 +47,9 @@ public record AdminAnomalyIncidentItem(
 
         @Schema(description = "마지막 감지 시각")
         OffsetDateTime lastDetectedAt,
+
+        @Schema(description = "감지 지속(분) = 마지막 감지 - 첫 감지. 한 번만 잡힌 상황은 0(화면 표기 \"순간\")", example = "46")
+        long durationMinutes,
 
         @Schema(description = "묶인 감지 횟수", example = "4")
         int eventCount,
@@ -71,6 +75,7 @@ public record AdminAnomalyIncidentItem(
                 DetectedTypeLabel.of(incident.getDetectedType()),
                 incident.getStartedAt(),
                 incident.getLastDetectedAt(),
+                Duration.between(incident.getStartedAt(), incident.getLastDetectedAt()).toMinutes(),
                 incident.getEventCount(),
                 incident.getMaxConfidence(),
                 incident.getReviewStatus(),

@@ -144,19 +144,19 @@ class AnomalyIncidentServiceTest {
     @DisplayName("직전 상황이 없으면 새 상황을 PENDING으로 연다")
     void opensNewIncidentWhenNonePrevious() {
         when(anomalyIncidentRepository
-                .findFirstByWardIdAndSessionIdAndDetectedTypeOrderByLastDetectedAtDesc(WARD_ID, SESSION_ID, DetectedType.SMOKE))
+                .findFirstByWardIdAndSessionIdAndDetectedTypeOrderByLastDetectedAtDesc(WARD_ID, SESSION_ID, DetectedType.FIRE))
                 .thenReturn(Optional.empty());
         when(anomalyIncidentRepository.save(any(AnomalyIncident.class))).thenAnswer(inv -> inv.getArgument(0));
 
         AnomalyIncident opened = incidentService.resolveIncident(
-                WARD_ID, SESSION_ID, DetectedType.SMOKE, kst(9, 30), 0.66);
+                WARD_ID, SESSION_ID, DetectedType.FIRE, kst(9, 30), 0.66);
 
         ArgumentCaptor<AnomalyIncident> captor = ArgumentCaptor.forClass(AnomalyIncident.class);
         verify(anomalyIncidentRepository).save(captor.capture());
         AnomalyIncident saved = captor.getValue();
         assertThat(saved.getWardId()).isEqualTo(WARD_ID);
         assertThat(saved.getSessionId()).isEqualTo(SESSION_ID);
-        assertThat(saved.getDetectedType()).isEqualTo(DetectedType.SMOKE);
+        assertThat(saved.getDetectedType()).isEqualTo(DetectedType.FIRE);
         assertThat(saved.getStartedAt()).isEqualTo(kst(9, 30));
         assertThat(saved.getLastDetectedAt()).isEqualTo(kst(9, 30));
         assertThat(saved.getEventCount()).isEqualTo(1);

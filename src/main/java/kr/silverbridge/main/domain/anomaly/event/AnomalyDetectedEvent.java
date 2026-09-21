@@ -20,7 +20,7 @@ import java.time.OffsetDateTime;
  * @param wardName       피보호자 이름 (비어 있으면 발행 측에서 "보호 대상자"로 폴백)
  * @param sessionId      감지된 카메라 SessionID
  * @param cameraLabel    카메라 설치 위치(방 이름 — 거실·안방 등)
- * @param detectedType   감지 종류(FIRE·SMOKE)
+ * @param detectedType   감지 종류(현재 FIRE - 연기도 화재로 받는다)
  * @param detectedAt     AI 분석 시각({@code analyzedAt}). AI 캐시 미스 fallback 페이로드엔 없어 <b>null 가능</b> —
  *                       이력({@code anomaly_event.detected_at})과 동일하게 수신 시각을 몰래 채우지 않는다.
  *                       알림 문구에 빈 칸이 나가지 않게 하는 대체는 리스너가 표시 단계에서만 한다.

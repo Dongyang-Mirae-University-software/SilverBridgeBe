@@ -1,5 +1,6 @@
 package kr.silverbridge.main.domain.anomaly.listener;
 
+import kr.silverbridge.main.domain.anomaly.dto.DetectedTypeLabel;
 import kr.silverbridge.main.domain.anomaly.event.AnomalyDetectedEvent;
 import kr.silverbridge.main.domain.anomaly.service.AnomalyNotificationCooldown;
 import kr.silverbridge.main.domain.connection.service.ConnectionService;
@@ -132,11 +133,8 @@ public class AnomalyNotificationListener {
     }
 
     // 알림 문구용 표기. DetectedType(global enum)은 AI 계약을 표현하는 값이라 UI 문자열을 넣지 않는다.
+    /** 이력·재촉 화면과 같은 단어를 쓰도록 표시 문구는 한 곳({@link DetectedTypeLabel})에서만 정한다. */
     private String label(DetectedType detectedType) {
-        return switch (detectedType) {
-            case FIRE -> "화재";
-            case SMOKE -> "연기";
-            default -> "이상 상황";
-        };
+        return DetectedTypeLabel.of(detectedType);
     }
 }

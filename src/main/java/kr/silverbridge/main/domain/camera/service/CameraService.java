@@ -189,6 +189,17 @@ public class CameraService {
                 .collect(Collectors.toMap(Camera::getSessionId, Camera::getLabel));
     }
 
+    /**
+     * 설치 위치 부분일치 → {@code sessionId} 목록(anomaly 도메인 협력용, 관리자 이상감지 로그 검색).
+     * 삭제된 카메라는 위치를 알 수 없어 검색되지 않는다.
+     *
+     * @param escapedKeyword 소문자화·LIKE 메타문자 이스케이프를 마친 검색어
+     */
+    @Transactional(readOnly = true)
+    public List<String> findSessionIdsByLabelKeyword(String escapedKeyword) {
+        return cameraRepository.findSessionIdsByLabelContaining(escapedKeyword);
+    }
+
     // 전달된 deviceId가 본인 소유일 때만 기존 카메라로 인정 (타인/무효 토큰은 신규 발급 경로로)
     private Optional<Camera> findOwnedByDeviceId(String wardId, String deviceId) {
         if (deviceId == null || deviceId.isBlank()) {
