@@ -27,7 +27,8 @@ import java.time.OffsetDateTime;
 @Table(name = "anomaly_incident", indexes = {
         @Index(name = "idx_anomaly_incident_ward_started", columnList = "ward_id, started_at DESC"),
         @Index(name = "idx_anomaly_incident_status_started", columnList = "review_status, started_at DESC"),
-        @Index(name = "idx_anomaly_incident_merge", columnList = "ward_id, session_id, detected_type, last_detected_at DESC")
+        @Index(name = "idx_anomaly_incident_merge", columnList = "ward_id, session_id, detected_type, last_detected_at DESC"),
+        @Index(name = "idx_anomaly_incident_started_at", columnList = "started_at DESC")   // 대시보드 오늘치(V51)
 })
 @Getter
 @NoArgsConstructor(access = AccessLevel.PROTECTED)

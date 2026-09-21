@@ -200,6 +200,7 @@ class ConnectionServiceTest {
         void 정상수락_ACTIVE전환_및_이벤트() {
             Connection connection = connection(ConnectionStatus.PENDING);
             when(connectionRepository.findById(CONNECTION_ID)).thenReturn(java.util.Optional.of(connection));
+            when(userRepository.findById(GUARDIAN_ID)).thenReturn(java.util.Optional.of(guardian()));
 
             connectionService.acceptConnectionAsWard(WARD_ID, CONNECTION_ID);
 
@@ -210,6 +211,39 @@ class ConnectionServiceTest {
                     ArgumentCaptor.forClass(ConnectionAcceptedEvent.class);
             verify(eventPublisher).publishEvent(captor.capture());
             assertThat(captor.getValue().guardianId()).isEqualTo(GUARDIAN_ID);
+        }
+
+        @Test
+        @DisplayName("요청 뒤 보호자가 이용 제한된 상태면 수락할 수 없다(400) - 정지 해제 즉시 이력이 열리는 연결을 만들지 않는다 (2026-09-11 R-1)")
+        void 정지된_보호자_요청은_수락_불가() {
+            Connection connection = connection(ConnectionStatus.PENDING);
+            when(connectionRepository.findById(CONNECTION_ID)).thenReturn(java.util.Optional.of(connection));
+            when(userRepository.findById(GUARDIAN_ID)).thenReturn(java.util.Optional.of(User.builder()
+                    .id(GUARDIAN_ID).email("g@example.com").name("정지보호자")
+                    .role(Role.GUARDIAN).status(Status.RESTRICTED).provider(Provider.LOCAL).build()));
+
+            CustomException ex = assertThrows(CustomException.class,
+                    () -> connectionService.acceptConnectionAsWard(WARD_ID, CONNECTION_ID));
+
+            assertThat(ex.getErrorCode()).isEqualTo(ErrorCode.CONNECTION_TARGET_NOT_ACTIVE);
+            assertThat(connection.getStatus()).isEqualTo(ConnectionStatus.PENDING);
+            verify(eventPublisher, never()).publishEvent(any());
+        }
+
+        @Test
+        @DisplayName("요청 뒤 보호자가 탈퇴 진행(INACTIVE) 상태여도 같은 400 - 관리자 강제 연결과 같은 기준")
+        void 탈퇴_진행_보호자_요청은_수락_불가() {
+            Connection connection = connection(ConnectionStatus.PENDING);
+            when(connectionRepository.findById(CONNECTION_ID)).thenReturn(java.util.Optional.of(connection));
+            when(userRepository.findById(GUARDIAN_ID)).thenReturn(java.util.Optional.of(User.builder()
+                    .id(GUARDIAN_ID).email("g@example.com").name("탈퇴보호자")
+                    .role(Role.GUARDIAN).status(Status.INACTIVE).provider(Provider.LOCAL).build()));
+
+            CustomException ex = assertThrows(CustomException.class,
+                    () -> connectionService.acceptConnectionAsWard(WARD_ID, CONNECTION_ID));
+
+            assertThat(ex.getErrorCode()).isEqualTo(ErrorCode.CONNECTION_TARGET_NOT_ACTIVE);
+            assertThat(connection.getStatus()).isEqualTo(ConnectionStatus.PENDING);
         }
 
         @Test

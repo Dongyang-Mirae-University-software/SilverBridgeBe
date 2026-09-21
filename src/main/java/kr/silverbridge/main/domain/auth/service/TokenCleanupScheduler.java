@@ -21,7 +21,7 @@ public class TokenCleanupScheduler {
     private final RefreshTokenRepository refreshTokenRepository;
 
     // 매일 새벽 3시에 만료된 Refresh Token 삭제
-    @Scheduled(cron = "0 0 3 * * *")
+    @Scheduled(cron = "0 0 3 * * *", zone = "Asia/Seoul")
     @Transactional
     public void deleteExpiredTokens() {
         refreshTokenRepository.deleteByExpiresAtBefore(OffsetDateTime.now());

@@ -26,7 +26,8 @@ public class AdminAuditLogService {
                 .detail(detail)
                 .build());
 
-        log.info("[AdminAudit] adminId={} action={} targetId={} detail={}",
-                adminId, action, targetId, detail);
+        // detail(이름·이메일 등 PII 포함)은 DB에만 남긴다. 컨테이너 stdout으로 나가면 로그 수집 경로로
+        // 개인정보가 새므로 SLF4J에는 "누가 무엇을 어디에" 까지만 적는다(2026-09-11 기술 점검 E-2).
+        log.info("[AdminAudit] adminId={} action={} targetId={}", adminId, action, targetId);
     }
 }

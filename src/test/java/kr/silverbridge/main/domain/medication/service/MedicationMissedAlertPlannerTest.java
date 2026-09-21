@@ -12,6 +12,7 @@ import kr.silverbridge.main.domain.medication.repository.MedicationMissedAlertLo
 import kr.silverbridge.main.domain.medication.repository.MedicationRepository;
 import kr.silverbridge.main.domain.user.entity.User;
 import kr.silverbridge.main.domain.user.repository.UserRepository;
+import org.junit.jupiter.api.Assumptions;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -64,6 +65,15 @@ class MedicationMissedAlertPlannerTest {
 
     @BeforeEach
     void setUp() {
+        // 이 클래스는 MedicationClock.now()(실시간)에 상대 시각(-90분 ~ +1시간, 마감 +120분)을 더해 시나리오를 만든다.
+        // 자정 근처에서는 상대 시각이 날짜를 넘어 되감겨 시나리오 자체가 성립하지 않는다
+        // (2026-09-11 00:1x KST 빌드에서 "집계상한_보호자별"이 실패). MedicationClock이 정적이라 시각을 주입할 수
+        // 없으므로 그 구간에서는 실패가 아니라 "미실행"으로 처리한다 - Planner의 자정 경계 동작은 자정을 넘기지
+        // 않는다는 별도 테스트(마감이 지나면 그날은 보내지 않는다)가 담당한다.
+        LocalTime nowKst = MedicationClock.now().toLocalTime();
+        Assumptions.assumeTrue(!nowKst.isBefore(LocalTime.of(2, 0)) && nowKst.isBefore(LocalTime.of(22, 0)),
+                "자정 근처(22:00~02:00 KST)에는 상대 시각이 되감겨 시나리오가 성립하지 않아 건너뜀: now=" + nowKst);
+
         properties = new MedicationProperties();
         // 지금이 기본 발송 시각이 되도록 맞춘다 → 발송 창 안(마감 120분)
         setDefaultAlertTime(MedicationClock.now().toLocalTime());

@@ -1355,6 +1355,17 @@ REST API Key 단독 대비 보안 강화 — 인가코드 탈취 시 토큰 발�
 - **기술 횡단 점검**(`(2026-09-11) audit-technical-cross-cutting.md`, 6축 최초): 코드 결함보다 **설정 부재**. 스케줄러 풀 1스레드에 AI 재접속까지 공유(B-1) / 알림 executor 포화 시 AI 수신 스레드가 발송 동기 실행(B-2) / 우아한 종료 없어 배포 시 큐 유실(B-3) / SMTP·파일서버 타임아웃 없음(C-1·C-2) / **실사용 도메인 Swagger 무인증 공개(E-1, 결정 필요)** / 감사 로그 detail 이름·이메일 INFO 출력(E-2). 의존성 스캔은 NVD 키 없이 실행 중 - **한 번도 완주된 적 없음**(A-1). 아키텍처는 admin↔anomaly·inquiry 순환 등 Low 3.
 - 상세: 위 두 문서, 대장 `docs/audit-index.md`
 
+## [2026-09-11] 회귀·기술 점검 이슈 반영 (V51 인덱스 2종)
+
+- **범위**: 회귀 재점검 R-1·R-3·R-5·R-6 + 기술 점검 B-1·B-2·B-3·C-1·C-2·D-1·D-2·E-2·E-4. 사용자 결정: E-1(실사용 Swagger 공개)은 관리 밖 인프라라 수용한 한계로 기록 / R-1은 400 / 한 PR. F-1~F-3(패키지 이동)은 별도 refactor PR로 미룸.
+- **R-1** `acceptConnectionAsWard`가 보호자 `status != ACTIVE`면 `CONNECTION_TARGET_NOT_ACTIVE`(400). 요청 시점 검사만으로는 요청~수락 사이의 정지를 못 봤다. 문구가 수신자 중립이라 ErrorCode 재사용.
+- **B-2 executor 정책 전환**: `CallerRunsPolicy` → 큐 500 + 거부 시 `[NOTIFY-REJECTED]` ERROR 후 폐기. 포화 시 AI WS 수신 스레드가 발송을 동기 실행하던 구조를 끊었다(`AsyncConfigTest`가 "호출 스레드에서 실행되지 않는다"를 고정). **B-3** 종료 대기 20초 + `server.shutdown: graceful`. **B-1** `spring.task.scheduling.pool.size: 3`.
+- **C-1·C-2** SMTP 10초·파일서버 connect 3/read 10초. **E-2** 감사 로그 SLF4J 출력에서 detail 제거(`AdminAuditLogServiceTest`가 ListAppender로 고정). **E-4** 미사용 Redis 키 2개 삭제. **R-6** refresh 정리 cron zone.
+- **V51** `idx_fcm_token_updated_at`·`idx_anomaly_incident_started_at`(비가역 아님, 엔티티 `@Index` 동기화).
+- **R-5** `AdminAnnouncementServiceTest`(5)·`AnnouncementServiceTest`(4) 신설 - 2026-06-11 Critical이 나온 도메인의 테스트 공백.
+- **문서**: 정책 파일에 R-1 규칙·R-3 보존 정책 차이·운영 설정 절(E-1 수용 포함), CLAUDE.md §8 2줄.
+- 상세: `docs/(2026-09-11) fix-audit-findings-2.md`
+
 ## [2026-09-11] SOS 연타 알림에 반복 횟수 반영 (마이그레이션 없음)
 
 - **문제**: 이력은 연타를 전부 남기는데 알림은 쿨다운(30초)으로 합쳐지고, 합쳐진 뒤 나가는 두 번째 알림이 첫 번째와 문구가 글자 그대로 같았다. 보호자가 "새 상황이 또 생겼다"와 "아까 그 상황이 아직 안 끝났다"를 구분할 수 없어, 생략된 연타가 아무 정보도 남기지 못하고 사라졌다.
@@ -1367,3 +1378,9 @@ REST API Key 단독 대비 보안 강화 — 인가코드 탈취 시 토큰 발�
 - **마이그레이션 없음** - 기존 `idx_sos_events_ward_created (ward_id, created_at DESC)`가 카운트를 그대로 커버한다.
 - **범위 밖**: 이력 화면을 상황 단위로 묶는 보강은 프론트 계약이 선행되어야 해 착수하지 않았다.
 - 상세: `docs/(2026-09-11) feature-sos-repeat-count-notification.md`
+
+## [2026-09-21] 의존성 취약점 스캔 첫 완주 (문서만)
+
+- 2026-09-10 시작한 스캔이 NVD 동기화(키 없음)·메모리 부족으로 두 번 죽었고, 재실행에서는 **Sonatype OSS Index 익명 401**로 `Analysis failed`. init 스크립트로 그 분석기만 끄고 완주(1분 30초). 리포 무변경.
+- **A-1을 🟡→🟠으로 상향**: 오탐(gRPC-Go·OTel-Go·protobuf-Python·log4j-core 매칭)을 걷어내도 Spring Security 7.0.4 `securityMatchers` 우회(CVE-2026-22753)·Spring Boot 4.0.5 기본 웹 보안 무력화(CVE-2026-40976)·Tomcat 11.0.20 DIGEST 인증 우회(CVE-2026-65905)·netty 4.2.12 Critical 42건이 **우리 구성에 직접 닿는다.** 원인은 Boot 4.0.5 관리 버전이 2026-02 수준에 멈춘 것.
+- 제안(승인 대기): Boot 4.0.8 + `tomcat.version=11.0.26` + firebase-admin 9.10.0 + springdoc 3.1.1 + 오탐 억제 파일 + `ossIndex.enabled=false`. 상세 표는 기술 점검 문서 PHASE A.
