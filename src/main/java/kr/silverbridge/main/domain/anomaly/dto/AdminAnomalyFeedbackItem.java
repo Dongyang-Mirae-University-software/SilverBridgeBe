@@ -7,7 +7,7 @@ import kr.silverbridge.main.domain.anomaly.entity.AnomalyVerdict;
 import java.time.OffsetDateTime;
 
 /**
- * 보호자 한 명의 응답. 관리자가 엇갈린 판정을 정리할 때 근거가 된다.
+ * 보호자 한 명의 응답. 다수결 상태값만으로는 보이지 않는 소수 의견을 관리자 화면에 보여 준다.
  *
  * @param respondedAt <b>마지막으로 답을 낸 시각</b>이다(처음 답한 시각이 아니다). 보호자는 응답을
  *                    번복할 수 있으므로, 관리자에게 필요한 것은 "지금 이 사람의 의견이 언제 것인가"다.

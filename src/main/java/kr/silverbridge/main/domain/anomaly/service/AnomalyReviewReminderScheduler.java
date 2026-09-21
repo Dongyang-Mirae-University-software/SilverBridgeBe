@@ -42,6 +42,15 @@ public class AnomalyReviewReminderScheduler {
         }
 
         try {
+            int conflicts = reminderService.sendConflictNotices();
+            if (conflicts > 0) {
+                log.info("[ANOMALY-REVIEW] 동수 재확인 안내 발송 {}건", conflicts);
+            }
+        } catch (RuntimeException e) {
+            log.error("[ANOMALY-REVIEW] 동수 재확인 안내 발송 실패, 다음 주기에 재시도", e);
+        }
+
+        try {
             int summaries = reminderService.sendSummaries();
             if (summaries > 0) {
                 log.info("[ANOMALY-REVIEW] 미응답 요약 발송 {}건", summaries);

@@ -102,7 +102,7 @@ public record AdminSafetyDashboardResponse(
             @Schema(description = "미응답", example = "2") long pending,
             @Schema(description = "실제 위험", example = "1") long real,
             @Schema(description = "오탐", example = "1") long falseAlarm,
-            @Schema(description = "보호자 응답이 엇갈림", example = "0") long conflicted
+            @Schema(description = "보호자 응답이 동수로 갈림(보호자 재확인 대기)", example = "0") long conflicted
     ) {
     }
 }

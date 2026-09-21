@@ -1,7 +1,5 @@
 package kr.silverbridge.main.domain.anomaly.controller;
 
-import kr.silverbridge.main.domain.anomaly.dto.AdminAnomalyReviewRequest;
-import kr.silverbridge.main.domain.anomaly.entity.AnomalyReviewStatus;
 import kr.silverbridge.main.domain.anomaly.service.AdminAnomalyService;
 import kr.silverbridge.main.global.response.PageResponse;
 import org.junit.jupiter.api.DisplayName;
@@ -15,24 +13,30 @@ import org.springframework.security.test.context.support.WithMockUser;
 import org.springframework.test.context.ContextConfiguration;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.context.junit.jupiter.SpringExtension;
+import org.springframework.web.bind.annotation.DeleteMapping;
+import org.springframework.web.bind.annotation.PatchMapping;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
 
+import java.lang.reflect.Method;
+import java.util.Arrays;
 import java.util.List;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatNoException;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
-import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.when;
 
 /**
  * AdminAnomalyController 권한 테스트.
  *
- * <p>이상감지 로그·정정은 관리자(ADMIN) 전용이다. 경로 규칙({@code /api/admin/**})은 컨트롤러 밖에
+ * <p>이상감지 로그는 관리자(ADMIN) 전용이다. 경로 규칙({@code /api/admin/**})은 컨트롤러 밖에
  * 있어 이 테스트로 고정되지 않으므로, 클래스 레벨 {@code @PreAuthorize}를 메서드 시큐리티로 검증한다.</p>
  *
- * <p>특히 <b>보호자가 정정 API를 부를 수 없어야</b> 한다 - 판정은 보호자, 정정은 관리자라는
- * 역할 분리가 무너지면 보호자가 스스로 확정해 버릴 수 있다.</p>
+ * <p>2026-09-21 관리자 정정을 폐지해 이 컨트롤러는 <b>조회 전용</b>이다. 판정을 바꾸는 엔드포인트가
+ * 다시 생기지 않도록 매핑 종류까지 고정한다.</p>
  */
 @ExtendWith(SpringExtension.class)
 @ContextConfiguration(classes = {
@@ -52,10 +56,6 @@ class AdminAnomalyControllerSecurityTest {
     @Autowired
     private AdminAnomalyController controller;
 
-    private AdminAnomalyReviewRequest request() {
-        return new AdminAnomalyReviewRequest(AnomalyReviewStatus.FALSE_ALARM, "요리 연기");
-    }
-
     @Test
     @WithMockUser(roles = "ADMIN")
     @DisplayName("ADMIN → 목록 조회 허용")
@@ -67,21 +67,10 @@ class AdminAnomalyControllerSecurityTest {
     }
 
     @Test
-    @WithMockUser(roles = "ADMIN")
-    @DisplayName("ADMIN → 정정 허용")
-    void admin_정정_허용() {
-        when(adminAnomalyService.resolve(anyString(), any(), any(), any())).thenReturn(null);
-
-        assertThatNoException().isThrownBy(() -> controller.resolve("AD0001", 37L, request()));
-    }
-
-    @Test
     @WithMockUser(roles = "GUARDIAN")
-    @DisplayName("보호자(GUARDIAN) → 403 (판정은 하되 정정은 못 한다)")
+    @DisplayName("보호자(GUARDIAN) → 403")
     void guardian_거부() {
         assertThatThrownBy(() -> controller.getIncidents(null, null, 0, 20))
-                .isInstanceOf(AccessDeniedException.class);
-        assertThatThrownBy(() -> controller.resolve("GD0001", 37L, request()))
                 .isInstanceOf(AccessDeniedException.class);
     }
 
@@ -91,7 +80,19 @@ class AdminAnomalyControllerSecurityTest {
     void ward_거부() {
         assertThatThrownBy(() -> controller.getIncidents(null, null, 0, 20))
                 .isInstanceOf(AccessDeniedException.class);
-        assertThatThrownBy(() -> controller.resolve("WD0001", 37L, request()))
-                .isInstanceOf(AccessDeniedException.class);
+    }
+
+    @Test
+    @DisplayName("관리자 이상감지 API는 조회 전용 - 판정을 바꾸는 쓰기 매핑이 없다")
+    void 쓰기_매핑_없음() {
+        List<String> writeMappings = Arrays.stream(AdminAnomalyController.class.getDeclaredMethods())
+                .filter(method -> method.isAnnotationPresent(PatchMapping.class)
+                        || method.isAnnotationPresent(PostMapping.class)
+                        || method.isAnnotationPresent(PutMapping.class)
+                        || method.isAnnotationPresent(DeleteMapping.class))
+                .map(Method::getName)
+                .toList();
+
+        assertThat(writeMappings).isEmpty();
     }
 }

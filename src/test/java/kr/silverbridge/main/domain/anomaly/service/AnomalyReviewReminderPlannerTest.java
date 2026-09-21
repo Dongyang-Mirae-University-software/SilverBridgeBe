@@ -6,9 +6,11 @@ import kr.silverbridge.main.domain.anomaly.entity.AnomalyIncidentFeedback;
 import kr.silverbridge.main.domain.anomaly.entity.AnomalyReviewReminderLog;
 import kr.silverbridge.main.domain.anomaly.entity.AnomalyReviewStatus;
 import kr.silverbridge.main.domain.anomaly.entity.AnomalyVerdict;
+import kr.silverbridge.main.domain.anomaly.entity.AnomalyReviewConflictLog;
 import kr.silverbridge.main.domain.anomaly.entity.GuardianAnomalySetting;
 import kr.silverbridge.main.domain.anomaly.repository.AnomalyIncidentFeedbackRepository;
 import kr.silverbridge.main.domain.anomaly.repository.AnomalyIncidentRepository;
+import kr.silverbridge.main.domain.anomaly.repository.AnomalyReviewConflictLogRepository;
 import kr.silverbridge.main.domain.anomaly.repository.AnomalyReviewReminderLogRepository;
 import kr.silverbridge.main.domain.anomaly.repository.AnomalyReviewSummaryLogRepository;
 import kr.silverbridge.main.domain.anomaly.repository.GuardianAnomalySettingRepository;
@@ -23,6 +25,7 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.mockito.junit.jupiter.MockitoSettings;
@@ -38,6 +41,7 @@ import java.util.Map;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyCollection;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -66,6 +70,7 @@ class AnomalyReviewReminderPlannerTest {
     @Mock private AnomalyIncidentFeedbackRepository feedbackRepository;
     @Mock private AnomalyReviewReminderLogRepository reminderLogRepository;
     @Mock private AnomalyReviewSummaryLogRepository summaryLogRepository;
+    @Mock private AnomalyReviewConflictLogRepository conflictLogRepository;
     @Mock private GuardianAnomalySettingRepository settingRepository;
     @Mock private ConnectionService connectionService;
     @Mock private CameraService cameraService;
@@ -84,7 +89,7 @@ class AnomalyReviewReminderPlannerTest {
 
         planner = new AnomalyReviewReminderPlanner(
                 incidentRepository, feedbackRepository, reminderLogRepository, summaryLogRepository,
-                settingRepository, connectionService, cameraService, userRepository, properties);
+                conflictLogRepository, settingRepository, connectionService, cameraService, userRepository, properties);
 
         when(cameraService.findLabelsBySessionIds(anyCollection())).thenReturn(Map.of("ward_a9cC5f_k3m", "거실"));
         when(userRepository.findAllById(anyCollection())).thenReturn(List.of(ward()));
@@ -287,6 +292,107 @@ class AnomalyReviewReminderPlannerTest {
             properties.getReviewReminder().setSummaryTime(LocalTime.of(23, 59));
 
             assertThat(planner.claimSummaries()).isEmpty();
+            verify(incidentRepository, never()).findByReviewStatusAndStartedAtGreaterThanEqual(any(), any());
+        }
+    }
+
+    @Nested
+    @DisplayName("동수 재확인 안내 대상 선정")
+    class ClaimConflicts {
+
+        private static final String NOT_ANSWERED_GUARDIAN_ID = "GD0003";
+
+        private AnomalyIncident conflicted() {
+            AnomalyIncident incident = incident();
+            incident.applyReviewStatus(AnomalyReviewStatus.CONFLICTED);
+            return incident;
+        }
+
+        private AnomalyIncidentFeedback answer(String guardianId, AnomalyVerdict verdict) {
+            return AnomalyIncidentFeedback.builder()
+                    .incidentId(INCIDENT_ID).guardianId(guardianId).verdict(verdict).build();
+        }
+
+        /** 동수 상황 하나 + 응답자 둘(GUARDIAN·OTHER) + 미응답 보호자 하나가 ACTIVE로 연결된 기본 상태. */
+        private void tieWithTwoRespondents() {
+            when(incidentRepository.findByReviewStatusAndStartedAtGreaterThanEqual(
+                    eq(AnomalyReviewStatus.CONFLICTED), any())).thenReturn(List.of(conflicted()));
+            when(feedbackRepository.findByIncidentIdIn(anyCollection())).thenReturn(List.of(
+                    answer(GUARDIAN_ID, AnomalyVerdict.REAL), answer(OTHER_GUARDIAN_ID, AnomalyVerdict.FALSE_ALARM)));
+            when(connectionService.getActiveGuardianIds(WARD_ID))
+                    .thenReturn(List.of(GUARDIAN_ID, OTHER_GUARDIAN_ID, NOT_ANSWERED_GUARDIAN_ID));
+            when(settingRepository.findByGuardianIdIn(anyCollection())).thenReturn(List.of());
+        }
+
+        @Test
+        @DisplayName("응답한 보호자에게만 안내한다 - 동수를 만든 보호자(sent=false 기록)는 빠지고, 미응답 보호자는 건별 재촉 몫이다")
+        void onlyOtherRespondentsAreClaimed() {
+            tieWithTwoRespondents();
+            // 동수를 만든 GUARDIAN은 응답 트랜잭션이 이미 sent=false로 기록해 두었다.
+            when(conflictLogRepository.findByIncidentIdIn(anyCollection())).thenReturn(List.of(
+                    AnomalyReviewConflictLog.builder().incidentId(INCIDENT_ID).guardianId(GUARDIAN_ID)
+                            .sent(false).createdAt(OffsetDateTime.now(KST)).build()));
+
+            List<AnomalyReviewReminderTarget> targets = planner.claimConflicts();
+
+            assertThat(targets).extracting(AnomalyReviewReminderTarget::guardianId).containsExactly(OTHER_GUARDIAN_ID);
+            assertThat(targets.getFirst().wardName()).isEqualTo("김영희");
+
+            // 선점 후 발송 - 반환 전에 sent=true 기록이 저장돼야 한다
+            @SuppressWarnings("unchecked")
+            ArgumentCaptor<List<AnomalyReviewConflictLog>> captor = ArgumentCaptor.forClass(List.class);
+            verify(conflictLogRepository).saveAll(captor.capture());
+            assertThat(captor.getValue()).singleElement()
+                    .satisfies(log -> {
+                        assertThat(log.getGuardianId()).isEqualTo(OTHER_GUARDIAN_ID);
+                        assertThat(log.isSent()).isTrue();
+                    });
+        }
+
+        @Test
+        @DisplayName("이미 처리한 보호자에게는 다시 보내지 않는다 - 동수를 오가도 보호자당 한 번")
+        void alreadyHandledIsSkipped() {
+            tieWithTwoRespondents();
+            when(conflictLogRepository.findByIncidentIdIn(anyCollection())).thenReturn(List.of(
+                    AnomalyReviewConflictLog.builder().incidentId(INCIDENT_ID).guardianId(GUARDIAN_ID)
+                            .sent(false).createdAt(OffsetDateTime.now(KST)).build(),
+                    AnomalyReviewConflictLog.builder().incidentId(INCIDENT_ID).guardianId(OTHER_GUARDIAN_ID)
+                            .sent(true).createdAt(OffsetDateTime.now(KST)).build()));
+
+            assertThat(planner.claimConflicts()).isEmpty();
+            verify(conflictLogRepository, never()).saveAll(anyCollection());
+        }
+
+        @Test
+        @DisplayName("연결이 해제된 응답자에게는 보내지 않는다 - ACTIVE 연결이 유일한 열람 근거다")
+        void disconnectedRespondentIsSkipped() {
+            tieWithTwoRespondents();
+            when(connectionService.getActiveGuardianIds(WARD_ID)).thenReturn(List.of());
+            when(conflictLogRepository.findByIncidentIdIn(anyCollection())).thenReturn(List.of());
+
+            assertThat(planner.claimConflicts()).isEmpty();
+        }
+
+        @Test
+        @DisplayName("재촉 수신 설정을 끈 응답자에게는 보내지 않는다")
+        void disabledRespondentIsSkipped() {
+            tieWithTwoRespondents();
+            when(conflictLogRepository.findByIncidentIdIn(anyCollection())).thenReturn(List.of());
+            when(settingRepository.findByGuardianIdIn(anyCollection())).thenReturn(List.of(
+                    GuardianAnomalySetting.builder().guardianId(GUARDIAN_ID).reviewReminderEnabled(false).build(),
+                    GuardianAnomalySetting.builder().guardianId(OTHER_GUARDIAN_ID).reviewReminderEnabled(false).build()));
+
+            assertThat(planner.claimConflicts()).isEmpty();
+            verify(conflictLogRepository, never()).saveAll(anyCollection());
+        }
+
+        @Test
+        @DisplayName("야간에는 선점하지 않는다 - 다음 아침으로 미룬다")
+        void quietHoursClaimNothing() {
+            properties.getReviewReminder().setQuietStart(LocalTime.MIDNIGHT);
+            properties.getReviewReminder().setQuietEnd(LocalTime.of(23, 59));   // 사실상 하루 종일 억제
+
+            assertThat(planner.claimConflicts()).isEmpty();
             verify(incidentRepository, never()).findByReviewStatusAndStartedAtGreaterThanEqual(any(), any());
         }
     }

@@ -18,8 +18,7 @@ import java.time.OffsetDateTime;
  * @param cameraLabel      감지된 카메라의 설치 위치. <b>카메라가 삭제되면 null</b>이다(상황 이력은 남는다)
  * @param eventCount       이 상황에 묶인 감지 횟수. "몇 번 잡혔는지"가 보호자 판단의 근거가 된다
  * @param maxConfidence    묶인 감지 중 최고 신뢰도(0.0~1.0). 평균이 아니라 최고값이다
- * @param myVerdict        내가 낸 응답. 아직 응답하지 않았으면 null
- * @param resolvedByAdmin  관리자가 확정한 건이면 true - 프론트는 응답 버튼을 비활성화한다(누르면 409)
+ * @param myVerdict        내가 낸 응답. 아직 응답하지 않았으면 null. 언제든 번복할 수 있다
  */
 @Schema(description = "보호자용 이상감지 이력 항목(상황 단위)")
 public record AnomalyIncidentItem(
@@ -60,10 +59,7 @@ public record AnomalyIncidentItem(
 
         @Schema(description = "내가 낸 응답 (미응답 시 null)", example = "FALSE_ALARM",
                 allowableValues = {"REAL", "FALSE_ALARM"})
-        AnomalyVerdict myVerdict,
-
-        @Schema(description = "관리자 확정 여부 (true면 응답 변경 불가)", example = "false")
-        boolean resolvedByAdmin
+        AnomalyVerdict myVerdict
 ) {
     public static AnomalyIncidentItem of(AnomalyIncident incident, String wardName,
                                          String cameraLabel, AnomalyVerdict myVerdict) {
@@ -79,8 +75,7 @@ public record AnomalyIncidentItem(
                 incident.getEventCount(),
                 incident.getMaxConfidence(),
                 incident.getReviewStatus(),
-                myVerdict,
-                incident.isAdminResolved()
+                myVerdict
         );
     }
 }

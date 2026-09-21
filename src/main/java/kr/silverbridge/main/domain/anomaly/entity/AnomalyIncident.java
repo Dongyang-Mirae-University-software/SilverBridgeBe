@@ -20,8 +20,9 @@ import java.time.OffsetDateTime;
  * <p><b>모든 이상감지 통계의 단위는 이 상황</b>이다 - 이력 행 수가 아니다. 보호자 화면과 관리자 대시보드가
  * 같은 숫자를 보게 하려면 기준이 하나여야 한다.</p>
  *
- * <p>{@code resolvedBy}가 채워지면 <b>관리자 확정</b>이며 이후 보호자 응답으로 상태가 재계산되지 않는다.
- * 이 규칙이 없으면 관리자가 확인해 정정한 결과가 뒤늦은 보호자 응답 하나로 조용히 뒤집힌다.</p>
+ * <p><b>판정은 보호자 응답만으로 정해진다</b>(2026-09-21 관리자 정정 폐지). 테이블에 남아 있는
+ * {@code resolved_by}·{@code resolved_at}·{@code review_note} 컬럼은 폐지 전 정정 기록으로, 엔티티에 매핑하지 않는다.
+ * DROP은 비가역이라 별도 후속으로 미뤘다.</p>
  */
 @Entity
 @Table(name = "anomaly_incident", indexes = {
@@ -68,16 +69,6 @@ public class AnomalyIncident extends BaseTimeEntity {
     @Column(name = "review_status", nullable = false, length = 20)
     private AnomalyReviewStatus reviewStatus;
 
-    /** 정정한 관리자. 채워져 있으면 관리자 확정 상태다. */
-    @Column(name = "resolved_by", length = 6)
-    private String resolvedBy;
-
-    @Column(name = "resolved_at")
-    private OffsetDateTime resolvedAt;
-
-    @Column(name = "review_note", length = 200)
-    private String reviewNote;
-
     @Builder
     private AnomalyIncident(String wardId, String sessionId, DetectedType detectedType,
                             OffsetDateTime detectedAt, double confidence) {
@@ -91,50 +82,9 @@ public class AnomalyIncident extends BaseTimeEntity {
         this.reviewStatus = AnomalyReviewStatus.PENDING;
     }
 
-    /**
-     * 보호자 응답 집계 결과를 반영한다.
-     *
-     * <p><b>관리자가 확정한 건은 바뀌지 않는다</b> - 이 규칙이 없으면 관리자가 확인해 정정한 결과가
-     * 뒤늦은 보호자 응답 하나로 조용히 뒤집힌다. 호출부(서비스)도 확정 건은 응답 자체를 거부하지만,
-     * 상태 변경의 최종 방어선을 엔티티에 둔다.</p>
-     */
+    /** 보호자 응답 집계 결과(다수결)를 반영한다. 번복될 때마다 다시 호출된다. */
     public void applyReviewStatus(AnomalyReviewStatus status) {
-        if (isAdminResolved()) {
-            return;
-        }
         this.reviewStatus = status;
-    }
-
-    /**
-     * 관리자 정정. 보호자 응답이 엇갈렸거나 잘못 판정된 건을 관리자가 확정한다.
-     *
-     * <p><b>보호자 응답 원본은 지우지 않는다</b> - 누가 무엇이라고 답했는지는 정정 후에도 그대로 남는다.
-     * 관리자가 무엇을 근거로 뒤집었는지 확인할 수 없게 되면 정정 자체를 검증할 방법이 사라진다.</p>
-     *
-     * <p>{@code resolvedBy}가 채워지는 순간부터 {@link #applyReviewStatus}가 막히므로, 뒤늦은 보호자
-     * 응답으로 이 결정이 조용히 뒤집히지 않는다. 이미 정정한 건을 다시 정정하는 것은 허용한다 -
-     * 관리자도 잘못 누를 수 있는데 막아 두면 되돌릴 방법이 없어진다(매 정정이 감사 로그에 남는다).</p>
-     *
-     * @param status REAL 또는 FALSE_ALARM. PENDING·CONFLICTED로는 되돌리지 않는다(호출부가 검증)
-     */
-    public void resolveByAdmin(AnomalyReviewStatus status, String adminId, String note, OffsetDateTime now) {
-        this.reviewStatus = status;
-        this.resolvedBy = adminId;
-        this.resolvedAt = now;
-        if (note != null) {
-            // 재정정 때 메모를 생략하면 이전 메모를 지우지 않는다 - 감사 로그에는 남지만 화면에서 사라진다(L-1).
-            this.reviewNote = note;
-        }
-    }
-
-    /**
-     * 관리자가 확인을 마친 건인지. 채워져 있으면 보호자 응답으로 상태가 재계산되지 않는다.
-     *
-     * <p>{@code resolvedBy}가 아니라 {@code resolvedAt}으로 판정한다 - {@code resolved_by}는 관리자 행이
-     * 삭제되면 FK {@code ON DELETE SET NULL}로 비워져 확정이 조용히 풀리지만, 시각은 남는다(L-4).</p>
-     */
-    public boolean isAdminResolved() {
-        return this.resolvedAt != null;
     }
 
     /**

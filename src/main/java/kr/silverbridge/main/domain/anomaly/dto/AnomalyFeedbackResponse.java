@@ -7,8 +7,8 @@ import kr.silverbridge.main.domain.anomaly.entity.AnomalyVerdict;
 /**
  * 응답 직후의 상황 상태. 재계산 결과를 돌려주므로 프론트가 목록을 다시 부르지 않아도 화면을 갱신할 수 있다.
  *
- * <p>{@code reviewStatus}가 {@code CONFLICTED}로 돌아올 수 있다 - 내 응답이 다른 보호자와 갈렸다는 뜻이며,
- * 내 응답이 거부된 것이 아니다.</p>
+ * <p>{@code reviewStatus}가 {@code CONFLICTED}로 돌아올 수 있다 - 응답이 동수로 갈렸다는 뜻이며,
+ * 내 응답이 거부된 것이 아니다. 이 경우 나는 재확인 안내를 따로 받지 않는다(이 응답이 곧 안내다).</p>
  */
 @Schema(description = "이상감지 오탐 응답 결과")
 public record AnomalyFeedbackResponse(
