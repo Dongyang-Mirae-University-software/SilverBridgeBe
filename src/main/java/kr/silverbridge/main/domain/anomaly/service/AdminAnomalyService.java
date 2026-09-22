@@ -136,13 +136,16 @@ public class AdminAnomalyService {
         // 유형 탭: 유형 필터를 무시하고 집계된 유형만(0건 유형은 항목이 생기지 않는다)
         Map<DetectedType, Long> byType = new EnumMap<>(DetectedType.class);
         Map<AnomalyReviewStatus, Long> byReview = new EnumMap<>(AnomalyReviewStatus.class);
-        Map<AnomalyReviewStatus, Double> confidenceSums = new EnumMap<>(AnomalyReviewStatus.class);
+        double judgedConfidenceSum = 0.0;
         DetectedType selected = type == null ? null : type.toDetectedType();
         for (AnomalyIncidentRepository.TypeStatusCount row : rows) {
             byType.merge(row.getDetectedType(), row.getTotal(), Long::sum);
             if (selected == null || selected == row.getDetectedType()) {
                 byReview.merge(row.getReviewStatus(), row.getTotal(), Long::sum);
-                confidenceSums.merge(row.getReviewStatus(), row.getConfidenceSum(), Double::sum);
+                if (row.getReviewStatus() == AnomalyReviewStatus.REAL
+                        || row.getReviewStatus() == AnomalyReviewStatus.FALSE_ALARM) {
+                    judgedConfidenceSum += row.getConfidenceSum();
+                }
             }
         }
 
@@ -158,8 +161,6 @@ public class AdminAnomalyService {
         long conflicted = byReview.getOrDefault(AnomalyReviewStatus.CONFLICTED, 0L);
         long total = pending + real + falseAlarm + conflicted;
         long judged = real + falseAlarm;
-        double realSum = confidenceSums.getOrDefault(AnomalyReviewStatus.REAL, 0.0);
-        double falseAlarmSum = confidenceSums.getOrDefault(AnomalyReviewStatus.FALSE_ALARM, 0.0);
 
         return new AdminAnomalySummaryResponse(
                 AdminAnomalyPeriod.orDefault(period),
@@ -167,9 +168,7 @@ public class AdminAnomalyService {
                 typeCounts,
                 new AdminAnomalySummaryResponse.ReviewCount(pending, real, falseAlarm, conflicted),
                 ratio(total - pending, total),
-                new AdminAnomalySummaryResponse.AiConfidence(
-                        average(realSum + falseAlarmSum, judged), average(realSum, real),
-                        average(falseAlarmSum, falseAlarm), judged));
+                new AdminAnomalySummaryResponse.AiConfidence(average(judgedConfidenceSum, judged), judged));
     }
 
     /** 응답이 없는 상황은 null이 아니라 빈 목록으로 준다(프론트가 존재 여부를 분기하지 않게). */

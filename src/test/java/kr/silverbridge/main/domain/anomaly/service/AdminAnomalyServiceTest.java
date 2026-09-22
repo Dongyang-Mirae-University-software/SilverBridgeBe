@@ -280,8 +280,6 @@ class AdminAnomalyServiceTest {
             assertThat(summary.review()).isEqualTo(new AdminAnomalySummaryResponse.ReviewCount(12, 16, 24, 2));
             assertThat(summary.responseRate()).isEqualTo(0.7778);      // 42 / 54
             assertThat(summary.aiConfidence().average()).isEqualTo(0.806);  // 미판정·동수(0.3)가 섞이지 않았다
-            assertThat(summary.aiConfidence().real()).isEqualTo(0.83);
-            assertThat(summary.aiConfidence().falseAlarm()).isEqualTo(0.79);
             assertThat(summary.aiConfidence().basis()).isEqualTo(40);
         }
 
@@ -295,8 +293,6 @@ class AdminAnomalyServiceTest {
             assertThat(summary.period()).isEqualTo(AdminAnomalyPeriod.ALL);
             assertThat(summary.responseRate()).isEqualTo(0.0);          // 응답 0 / 전체 3 - 알 수 있는 값
             assertThat(summary.aiConfidence().average()).isNull();      // 판정 0건 - 알 수 없는 값
-            assertThat(summary.aiConfidence().real()).isNull();
-            assertThat(summary.aiConfidence().falseAlarm()).isNull();
             assertThat(summary.aiConfidence().basis()).isZero();
 
             rows();
@@ -326,15 +322,14 @@ class AdminAnomalyServiceTest {
         }
 
         @Test
-        @DisplayName("한쪽 판정만 있으면 다른 쪽 평균만 null이다")
+        @DisplayName("한쪽 판정만 있어도 평균은 그 판정 건으로 계산된다")
         void 한쪽_판정만() {
             rows(row(DetectedType.FIRE, AnomalyReviewStatus.REAL, 2, 1.8));
 
             AdminAnomalySummaryResponse.AiConfidence confidence = service.getSummary(null, null, null).aiConfidence();
 
             assertThat(confidence.average()).isEqualTo(0.9);
-            assertThat(confidence.real()).isEqualTo(0.9);
-            assertThat(confidence.falseAlarm()).isNull();               // 오탐 0건 - 0%가 아니다
+            assertThat(confidence.basis()).isEqualTo(2);
         }
 
         @Test
@@ -344,7 +339,7 @@ class AdminAnomalyServiceTest {
                     row(DetectedType.FALL, AnomalyReviewStatus.REAL, 3, 1.5));
 
             // (0.9 + 1.5) / 4 = 0.6 - 유형별 평균(0.9, 0.5)의 평균 0.7이 아니다
-            assertThat(service.getSummary(null, null, null).aiConfidence().real()).isEqualTo(0.6);
+            assertThat(service.getSummary(null, null, null).aiConfidence().average()).isEqualTo(0.6);
         }
 
         @Test
