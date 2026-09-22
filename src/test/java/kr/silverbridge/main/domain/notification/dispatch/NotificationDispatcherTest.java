@@ -17,6 +17,9 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.MethodSource;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -26,6 +29,7 @@ import java.util.EnumSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.stream.Stream;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
@@ -531,5 +535,35 @@ class NotificationDispatcherTest {
         verify(smsChannel).send(any(), any(), any());
         assertThat(recordedLog().getChannelResults()).first()
                 .extracting(ChannelAttempt::reason).isEqualTo(ChannelFailureReason.UNEXPECTED_ERROR);
+    }
+
+    // ─── [가드] 기록 누락 방지 (2026-09-22 영향 범위 점검 L-4) ────────────
+
+    static Stream<Arguments> 전종류_x_수신자상태() {
+        return Arrays.stream(NotificationType.values())
+                .flatMap(type -> Stream.of(Status.ACTIVE, Status.RESTRICTED)
+                        .map(status -> Arguments.of(type, status)));
+    }
+
+    @ParameterizedTest(name = "{0} / 수신자 {1}")
+    @MethodSource("전종류_x_수신자상태")
+    @DisplayName("[가드] 어떤 종류·정책·수신자 상태든 dispatch 한 번에 이력은 정확히 한 건 남는다")
+    void 모든_종류는_이력을_정확히_한번_남긴다(NotificationType type, Status status) {
+        // 새 알림 종류나 정책이 기록 경로를 빠뜨리거나 두 번 남기면 여기서 깨진다
+        lenient().when(settingService.enabledChannels(USER_ID)).thenReturn(EnumSet.of(NotificationChannelType.FCM));
+        given(recipientResolver.resolve(USER_ID))
+                .willReturn(new NotificationRecipient(USER_ID, "01012345678", "a@b.com", status));
+
+        dispatcher.dispatch(USER_ID, WARD_ID, type, content);
+
+        NotificationLog log = recordedLog();
+        assertThat(log.getType()).isEqualTo(type);
+        assertThat(log.getWardId()).isEqualTo(WARD_ID);
+        if (status == Status.RESTRICTED) {
+            assertThat(log.getResult()).isEqualTo(NotificationLogResult.NOT_SENT);
+            assertThat(log.getNotSentReason()).isEqualTo(NotificationNotSentReason.RESTRICTED_ACCOUNT);
+        } else {
+            assertThat(log.getResult()).isEqualTo(NotificationLogResult.DELIVERED);
+        }
     }
 }

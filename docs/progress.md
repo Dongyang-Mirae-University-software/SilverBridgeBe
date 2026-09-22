@@ -1478,3 +1478,12 @@ REST API Key 단독 대비 보안 강화 — 인가코드 탈취 시 토큰 발�
 - SOS 폴백 조건·강제 FCM·정지 차단·인증번호 문자·알림톡 OFF(가짜 실패 없음)·기록 실패 격리 모두 PASS. 비동기·스케줄러 경로는 바깥 트랜잭션이 없어 기록이 커넥션을 더 잡지 않는다(동기 AFTER_COMMIT 1곳만 탈퇴 시 순간 2개).
 - 🟡 M-1: vkcs 배포 후 발송이 없어 `notification_log` 0건 - 실서버 기록 미확인(로그 `NOTIFY-LOG-FAILED`·`ERROR` 0건). 🟢 L-1 채널 꺼 둠도 INSERT(수용) · L-2 스케줄러 6/풀 3(수용) · L-3 연결 수락·거절·해제 wardId 공란 · L-4 기록 누락 가드 테스트 제안.
 - 상세: `docs/(2026-09-22) audit-impact-notification-channel-result.md`
+
+## [2026-09-22] 알림 이력 점검 이슈 반영 (M-1·L-1~L-4, 마이그레이션 없음)
+
+- **L-3**: 연결 이벤트에 당사자 ID 추가(`Accepted`·`Refused`에 `wardId`, `Disconnected`에 `guardianId`·`wardId`) → 수락·거절·해제 알림 이력에도 피보호자 칸이 찬다. 알림 대상·문구 불변. 해제 이벤트 필드는 이상감지 E-3 선행 작업을 겸한다(로직은 미구현).
+- **M-1**: `NotificationLogAfterCommitIntegrationTest` - AFTER_COMMIT 안의 기록은 REQUIRES_NEW라야 남는다(대조군 포함). 실서버 확인은 배포 후 dev 연결 요청 1회로.
+- **L-4**: 디스패처 가드 28건(전 종류 × ACTIVE·RESTRICTED → 이력 정확히 1건).
+- **L-1·L-2**: 코드 변경 없음(수용). 정책 파일·`application.yaml` 주석에 근거와 스케줄러 6종 목록.
+- `./gradlew test` 681 / 0 실패 · `build -x test` 통과.
+- 상세: `docs/(2026-09-22) fix-admin-notification-audit-findings.md`
