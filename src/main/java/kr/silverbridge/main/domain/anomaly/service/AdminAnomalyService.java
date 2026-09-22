@@ -119,7 +119,7 @@ public class AdminAnomalyService {
     /**
      * 이상감지 로그 화면 집계 - 유형 탭 건수 · 응답률 · 판정별 현황 · AI 신뢰도.
      *
-     * <p>DB에서는 (유형, 판정 상태)별 건수만 받고 나머지는 여기서 합산한다. 유형 탭 건수는 유형 필터를 무시하고,
+     * <p>DB에서는 (유형, 판정 상태)별 건수·confidence 합계만 받고 나머지는 여기서 합산한다. 유형 탭 건수는 유형 필터를 무시하고,
      * 나머지는 고른 유형으로 좁힌다 - 탭을 골라도 탭 옆 숫자는 그대로여야 하기 때문이다.</p>
      *
      * @param period  기간(첫 감지 시각 기준, KST). null이면 전체
@@ -136,11 +136,13 @@ public class AdminAnomalyService {
         // 유형 탭: 유형 필터를 무시하고 집계된 유형만(0건 유형은 항목이 생기지 않는다)
         Map<DetectedType, Long> byType = new EnumMap<>(DetectedType.class);
         Map<AnomalyReviewStatus, Long> byReview = new EnumMap<>(AnomalyReviewStatus.class);
+        Map<AnomalyReviewStatus, Double> confidenceSums = new EnumMap<>(AnomalyReviewStatus.class);
         DetectedType selected = type == null ? null : type.toDetectedType();
         for (AnomalyIncidentRepository.TypeStatusCount row : rows) {
             byType.merge(row.getDetectedType(), row.getTotal(), Long::sum);
             if (selected == null || selected == row.getDetectedType()) {
                 byReview.merge(row.getReviewStatus(), row.getTotal(), Long::sum);
+                confidenceSums.merge(row.getReviewStatus(), row.getConfidenceSum(), Double::sum);
             }
         }
 
@@ -156,6 +158,8 @@ public class AdminAnomalyService {
         long conflicted = byReview.getOrDefault(AnomalyReviewStatus.CONFLICTED, 0L);
         long total = pending + real + falseAlarm + conflicted;
         long judged = real + falseAlarm;
+        double realSum = confidenceSums.getOrDefault(AnomalyReviewStatus.REAL, 0.0);
+        double falseAlarmSum = confidenceSums.getOrDefault(AnomalyReviewStatus.FALSE_ALARM, 0.0);
 
         return new AdminAnomalySummaryResponse(
                 AdminAnomalyPeriod.orDefault(period),
@@ -163,7 +167,9 @@ public class AdminAnomalyService {
                 typeCounts,
                 new AdminAnomalySummaryResponse.ReviewCount(pending, real, falseAlarm, conflicted),
                 ratio(total - pending, total),
-                new AdminAnomalySummaryResponse.Accuracy(ratio(real, judged), ratio(falseAlarm, judged), judged));
+                new AdminAnomalySummaryResponse.AiConfidence(
+                        average(realSum + falseAlarmSum, judged), average(realSum, real),
+                        average(falseAlarmSum, falseAlarm), judged));
     }
 
     /** 응답이 없는 상황은 null이 아니라 빈 목록으로 준다(프론트가 존재 여부를 분기하지 않게). */
@@ -239,6 +245,14 @@ public class AdminAnomalyService {
             return null;
         }
         return Math.round((double) numerator / denominator * 10_000) / 10_000.0;
+    }
+
+    /** 평균(0.0~1.0, 소수 넷째 자리). 건수가 0이면 null - 모르는 값을 0으로 채우지 않는다. */
+    private static Double average(double sum, long count) {
+        if (count == 0) {
+            return null;
+        }
+        return Math.round(sum / count * 10_000) / 10_000.0;
     }
 
     /** 검색어 적용 여부와 그 결과로 좁힐 피보호자·카메라. */

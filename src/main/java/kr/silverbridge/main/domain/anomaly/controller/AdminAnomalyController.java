@@ -102,7 +102,7 @@ public class AdminAnomalyController {
                     [유형 탭 건수]
                     byType 은 **type 조건을 무시**합니다 - 탭을 골라도 탭 옆 숫자는 그대로입니다.
                     집계된 유형만 담습니다(0건 유형은 항목이 없습니다. "낙상 0건"은 안전이 아니라 모델이 없다는 뜻이라서요).
-                    나머지(total·review·responseRate·accuracy)는 고른 type으로 좁혀 계산합니다.
+                    나머지(total·review·responseRate·aiConfidence)는 고른 type으로 좁혀 계산합니다.
 
                     [판정별 현황 - review]
                     pending(미판정) · real(위험) · falseAlarm(오탐) · conflicted(동수 - 보호자 재확인 대기). 네 값을 모두 줍니다.
@@ -110,11 +110,13 @@ public class AdminAnomalyController {
                     [사용자 응답률 - responseRate]
                     (total - pending) / total, 0.0~1.0. total이 0이면 null입니다(0%로 표시하지 마세요).
 
-                    [AI 신뢰도 - accuracy]
-                    rate = 위험 / (위험 + 오탐), 0.0~1.0. 판정이 난 건 중 AI 경보가 실제 위험이었던 비율입니다.
-                    미판정·동수는 분모에서 뺍니다. rate가 곧 위험 비율이고 falseAlarmRate = 1 - rate 입니다.
-                    basis(= 위험 + 오탐)가 0이면 두 비율 모두 null입니다.
-                    AI가 프레임마다 보내는 confidence(얼마나 불처럼 보이는가)와는 다른 값입니다.
+                    [AI 신뢰도 - aiConfidence]
+                    판정이 난 상황(위험 + 오탐)의 AI confidence(상황별 최고값) 평균입니다. 0.0~1.0.
+                    - average: 위험 + 오탐 전체 평균 (= real·falseAlarm의 가중평균)
+                    - real: 위험으로 판정된 상황의 평균 / falseAlarm: 오탐으로 판정된 상황의 평균
+                    - basis: 분모(위험 + 오탐 건수). 미판정·동수는 뺍니다
+                    건수가 0이면 해당 값은 null입니다(0%로 표시하지 마세요).
+                    "AI가 얼마나 확신했는가"이지 "맞았는가"가 아닙니다 - falseAlarm이 높으면 확신했는데 틀린 경보가 많다는 뜻입니다.
                     """)
     @ApiResponses({
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "집계 반환"),

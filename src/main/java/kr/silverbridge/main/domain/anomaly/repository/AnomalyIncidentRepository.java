@@ -92,12 +92,16 @@ public interface AnomalyIncidentRepository extends JpaRepository<AnomalyIncident
     /**
      * 관리자 로그 집계 - 기간·검색어 안의 상황을 (유형, 판정 상태)별로 센다.
      *
+     * <p>AI 신뢰도(confidence 평균)용으로 {@code max_confidence} 합계도 함께 받는다. 평균이 아니라 합계인 이유는
+     * 호출부가 여러 유형을 합칠 때 평균의 평균이 되지 않게 하기 위해서다(가중평균은 합계 ÷ 건수로 낸다).</p>
+     *
      * <p>원본 행이 아니라 묶인 건수만 받는다 - "전체" 기간이어도 결과는 (유형 수 × 판정 4값) 행을 넘지 않는다.
      * 유형 필터는 일부러 받지 않는다: 유형 탭의 건수는 탭을 골라도 그대로여야 하므로 호출부가 전체를 받아
      * 탭 건수와 선택 유형의 판정 집계를 나눠 계산한다. 조건 규칙은 {@link #searchForAdmin}과 같다.</p>
      */
     @Query("""
-            SELECT i.detectedType AS detectedType, i.reviewStatus AS reviewStatus, COUNT(i) AS total
+            SELECT i.detectedType AS detectedType, i.reviewStatus AS reviewStatus, COUNT(i) AS total,
+                   SUM(i.maxConfidence) AS confidenceSum
             FROM AnomalyIncident i
             WHERE i.startedAt >= :from
               AND (:keywordApplied = false
@@ -117,5 +121,8 @@ public interface AnomalyIncidentRepository extends JpaRepository<AnomalyIncident
         AnomalyReviewStatus getReviewStatus();
 
         long getTotal();
+
+        /** 이 묶음 상황들의 {@code max_confidence} 합계. 묶음마다 1건 이상이라 null이 아니다. */
+        double getConfidenceSum();
     }
 }

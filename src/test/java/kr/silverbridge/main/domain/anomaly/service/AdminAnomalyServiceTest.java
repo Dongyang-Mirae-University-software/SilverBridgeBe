@@ -245,11 +245,18 @@ class AdminAnomalyServiceTest {
     @DisplayName("집계 - 탭 건수·응답률·판정별 현황·AI 신뢰도")
     class Summary {
 
+        /** confidence 합계는 건수 × 0.8 - AI 신뢰도를 보지 않는 테스트용. */
         private AnomalyIncidentRepository.TypeStatusCount row(DetectedType type, AnomalyReviewStatus status, long total) {
+            return row(type, status, total, total * 0.8);
+        }
+
+        private AnomalyIncidentRepository.TypeStatusCount row(DetectedType type, AnomalyReviewStatus status, long total,
+                                                             double confidenceSum) {
             return new AnomalyIncidentRepository.TypeStatusCount() {
                 public DetectedType getDetectedType() { return type; }
                 public AnomalyReviewStatus getReviewStatus() { return status; }
                 public long getTotal() { return total; }
+                public double getConfidenceSum() { return confidenceSum; }
             };
         }
 
@@ -258,12 +265,13 @@ class AdminAnomalyServiceTest {
         }
 
         @Test
-        @DisplayName("응답률 = (전체 - 미판정) / 전체, AI 신뢰도 = 위험 / (위험 + 오탐) - 동수·미판정은 분모에서 뺀다")
+        @DisplayName("응답률 = (전체 - 미판정) / 전체, AI 신뢰도 = 위험·오탐 상황의 confidence 평균 - 동수·미판정은 분모에서 뺀다")
         void 비율_계산() {
-            rows(row(DetectedType.FIRE, AnomalyReviewStatus.PENDING, 12),
-                    row(DetectedType.FIRE, AnomalyReviewStatus.REAL, 16),
-                    row(DetectedType.FIRE, AnomalyReviewStatus.FALSE_ALARM, 24),
-                    row(DetectedType.FIRE, AnomalyReviewStatus.CONFLICTED, 2));
+            // 시안 숫자: 위험 평균 83% · 오탐 평균 79% → 전체 평균 (16×0.83 + 24×0.79) / 40 = 80.6%
+            rows(row(DetectedType.FIRE, AnomalyReviewStatus.PENDING, 12, 12 * 0.3),
+                    row(DetectedType.FIRE, AnomalyReviewStatus.REAL, 16, 16 * 0.83),
+                    row(DetectedType.FIRE, AnomalyReviewStatus.FALSE_ALARM, 24, 24 * 0.79),
+                    row(DetectedType.FIRE, AnomalyReviewStatus.CONFLICTED, 2, 2 * 0.3));
 
             AdminAnomalySummaryResponse summary = service.getSummary(AdminAnomalyPeriod.THIS_WEEK, null, null);
 
@@ -271,9 +279,10 @@ class AdminAnomalyServiceTest {
             assertThat(summary.total()).isEqualTo(54);
             assertThat(summary.review()).isEqualTo(new AdminAnomalySummaryResponse.ReviewCount(12, 16, 24, 2));
             assertThat(summary.responseRate()).isEqualTo(0.7778);      // 42 / 54
-            assertThat(summary.accuracy().rate()).isEqualTo(0.4);       // 16 / 40
-            assertThat(summary.accuracy().falseAlarmRate()).isEqualTo(0.6);
-            assertThat(summary.accuracy().basis()).isEqualTo(40);
+            assertThat(summary.aiConfidence().average()).isEqualTo(0.806);  // 미판정·동수(0.3)가 섞이지 않았다
+            assertThat(summary.aiConfidence().real()).isEqualTo(0.83);
+            assertThat(summary.aiConfidence().falseAlarm()).isEqualTo(0.79);
+            assertThat(summary.aiConfidence().basis()).isEqualTo(40);
         }
 
         @Test
@@ -285,8 +294,10 @@ class AdminAnomalyServiceTest {
 
             assertThat(summary.period()).isEqualTo(AdminAnomalyPeriod.ALL);
             assertThat(summary.responseRate()).isEqualTo(0.0);          // 응답 0 / 전체 3 - 알 수 있는 값
-            assertThat(summary.accuracy().rate()).isNull();             // 판정 0건 - 알 수 없는 값
-            assertThat(summary.accuracy().falseAlarmRate()).isNull();
+            assertThat(summary.aiConfidence().average()).isNull();      // 판정 0건 - 알 수 없는 값
+            assertThat(summary.aiConfidence().real()).isNull();
+            assertThat(summary.aiConfidence().falseAlarm()).isNull();
+            assertThat(summary.aiConfidence().basis()).isZero();
 
             rows();
             AdminAnomalySummaryResponse empty = service.getSummary(null, null, null);
@@ -311,7 +322,29 @@ class AdminAnomalyServiceTest {
                     .containsExactly(tuple(DetectedType.FALL, "낙상", 25L), tuple(DetectedType.FIRE, "화재", 10L));
             assertThat(summary.total()).isEqualTo(10);
             assertThat(summary.review()).isEqualTo(new AdminAnomalySummaryResponse.ReviewCount(0, 5, 5, 0));
-            assertThat(summary.accuracy().rate()).isEqualTo(0.5);
+            assertThat(summary.aiConfidence().basis()).isEqualTo(10);  // 낙상 위험 20건은 빠진다
+        }
+
+        @Test
+        @DisplayName("한쪽 판정만 있으면 다른 쪽 평균만 null이다")
+        void 한쪽_판정만() {
+            rows(row(DetectedType.FIRE, AnomalyReviewStatus.REAL, 2, 1.8));
+
+            AdminAnomalySummaryResponse.AiConfidence confidence = service.getSummary(null, null, null).aiConfidence();
+
+            assertThat(confidence.average()).isEqualTo(0.9);
+            assertThat(confidence.real()).isEqualTo(0.9);
+            assertThat(confidence.falseAlarm()).isNull();               // 오탐 0건 - 0%가 아니다
+        }
+
+        @Test
+        @DisplayName("여러 유형을 합칠 때 평균의 평균이 아니라 건수 가중평균이다")
+        void 유형_합산_가중평균() {
+            rows(row(DetectedType.FIRE, AnomalyReviewStatus.REAL, 1, 0.9),
+                    row(DetectedType.FALL, AnomalyReviewStatus.REAL, 3, 1.5));
+
+            // (0.9 + 1.5) / 4 = 0.6 - 유형별 평균(0.9, 0.5)의 평균 0.7이 아니다
+            assertThat(service.getSummary(null, null, null).aiConfidence().real()).isEqualTo(0.6);
         }
 
         @Test

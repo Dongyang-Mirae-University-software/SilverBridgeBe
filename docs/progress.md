@@ -1442,3 +1442,11 @@ REST API Key 단독 대비 보안 강화 — 인가코드 탈취 시 토큰 발�
 - PR #254 머지(`23d4ff2`), CD success, vkcs 앱 healthy(17초 기동), 테스트 임시 폴더·컨테이너 잔존 0.
 - 단, 이번 CD의 통합 테스트는 `> Task :integrationTest FROM-CACHE`(16초) - 머지 전 vkcs 수동 검증과 입력이 같아 Gradle 빌드 캐시가 결과를 재사용했다.
 - **결정: 캐시 허용 유지(A)**. 코드·테스트·마이그레이션이 바뀌면 입력이 달라져 반드시 실제로 돌므로 게이트는 유지된다. 알려진 빈틈은 `postgres:17` 이미지 갱신이 입력이 아니라는 점. 항상 실행으로 바꾸는 방법·확인법은 기능 문서 "Gradle 빌드 캐시" 절.
+
+## [2026-09-22] 관리자 이상감지 로그 - AI 신뢰도를 confidence 평균으로 교체
+
+- 시안 대조: v2(#253)가 시안을 거의 다 채웠고 **AI 신뢰도 카드만 정의가 달랐다** - 시안 81%/83%/79%는 판정 난 상황의 confidence 평균(가중평균 0.806)과 일치.
+- **변경**: `/summary`의 `accuracy`(위험÷(위험+오탐)) 제거 → `aiConfidence { average, real, falseAlarm, basis }`. 분모 = 위험+오탐, 0이면 null. 같은 GROUP BY에 `SUM(max_confidence)` 추가(평균의 평균 방지). 마이그레이션 없음.
+- **동수는 관리자 화면에 표시하지 않기로**(사용자 결정) - 백엔드 무변경, FE 칩은 시안대로 4개.
+- `./gradlew test` 611 / 0 실패.
+- 상세: `docs/(2026-09-22) feature-admin-anomaly-ai-confidence.md`
