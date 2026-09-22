@@ -219,7 +219,7 @@
 - **알려진 한계 - 판정 집계 (2026-09-21 보류 결정)**: 다수결 전환 영향 범위 점검의 E-2·E-3이다. 둘 다 다수결 전환 **이전부터 있던** 드문 경우이고, 운영 데이터가 0건이며 스스로 바로잡히거나 영향이 작아 **코드를 고치지 않고 수용**했다. 실사용 데이터에서 문제가 보이면 다시 판단한다.
   - **E-2 동시 응답 덮어쓰기**: 두 보호자가 같은 순간(1초 안팎) 반대로 응답하면 각자 자기 표만 보고 판정을 확정해, 실제로는 동수인데 `REAL`·`FALSE_ALARM`으로 남고 동수 안내도 나가지 않는다. 다음 응답(번복 포함)에서 바로잡힌다. 원인은 `AnomalyIncident`에 잠금·버전이 없고 `submitFeedback`이 자기가 읽은 응답으로 상태를 다시 조립하기 때문이다. 고친다면 상황 행 비관적 잠금(`SELECT … FOR UPDATE`)이 1순위다 - 낙관적 잠금(`@Version`)은 진 쪽 응답이 실패해 보호자에게 재시도를 요구한다.
   - **E-3 연결이 끝난 보호자의 표**: 연결을 해제한 보호자의 응답은 지워지지 않아 계속 표에 들어가고, 탈퇴로 응답이 CASCADE 삭제돼도 판정은 다시 계산되지 않는다(예: 1:1 동수에서 한 명이 끊어도 `CONFLICTED`가 그대로 남는다).
-    - 고친다면 정해 둔 방향: "지금 ACTIVE인 보호자 표만 센다", **이미 `REAL`·`FALSE_ALARM`으로 확정된 판정은 연결이 바뀌어도 유지**하고 `PENDING`·`CONFLICTED`만 다시 계산한다(사용자 결정 2026-09-21). 연결 종료 경로는 다섯(보호자 해제·피보호자 해제·탈퇴 정리·역할 변경 정리·관리자 강제 해제)이며 모두 `ConnectionDisconnectedEvent`를 발행하지만, 이 이벤트에는 보호자·피보호자 ID가 없어 추가가 선행돼야 한다(탈퇴는 연결 행이 곧 purge된다).
+    - 고친다면 정해 둔 방향: "지금 ACTIVE인 보호자 표만 센다", **이미 `REAL`·`FALSE_ALARM`으로 확정된 판정은 연결이 바뀌어도 유지**하고 `PENDING`·`CONFLICTED`만 다시 계산한다(사용자 결정 2026-09-21). 연결 종료 경로는 다섯(보호자 해제·피보호자 해제·탈퇴 정리·역할 변경 정리·관리자 강제 해제)이며 모두 `ConnectionDisconnectedEvent`를 발행한다. 이 이벤트에 보호자·피보호자 ID를 싣는 선행 작업은 **2026-09-22에 끝났다**(`guardianId`·`wardId`, 알림 이력 점검 L-3) - 탈퇴는 연결 행이 곧 purge되므로 소비자는 연결을 다시 조회하지 말고 이 필드를 쓸 것.
   - 이 한계를 이유로 다수결을 폐기하거나 관리자 정정을 되살리지 말 것 - 둘 다 이번에 명시적으로 버린 선택이다.
 - 상세: `docs/(2026-09-01) feature-anomaly-guardian-review.md`, `docs/(2026-09-02) feature-admin-anomaly-review.md`, `docs/(2026-08-31) api-contract-anomaly-dashboard.md` §4·§6, `docs/(2026-09-21) policy-change-anomaly-majority-review.md`(다수결 전환·정정 폐지), `docs/(2026-09-21) audit-impact-anomaly-majority-review.md`(E-2·E-3).
 
@@ -285,7 +285,8 @@
 - **실사용 도메인(`api.devdmu.gosky.kr`)의 Swagger·api-docs 무인증 공개는 수용한 한계다** (기술 점검 E-1): 그 서버는 우리가 관리하는 인프라가 아니라 `SWAGGER_ENABLED`를 끌 권한이 없다. 전 엔드포인트·DTO·에러 문구가 보이는 것을 알고 둔다. 관리 권한이 생기면 `SWAGGER_ENABLED=false`로 끄고 vkcs(도메인 없음)에서만 켠다. Swagger 설명문에 **시크릿·내부 호스트·계정 정보를 적지 말 것**(정책 근거 설명은 이미 공개돼 있다).
 - **알림 executor는 포화 시 폐기한다** (B-2): `CallerRunsPolicy`를 버렸다 - 포화 시 AI WS 수신 스레드·HTTP 요청 스레드가 FCM·SMS 응답을 기다리게 되어 `@Async`를 둔 이유가 사라진다. 큐 500, 넘치면 `[NOTIFY-REJECTED]` ERROR 로그 후 폐기. "알림을 버리면 안 되니 CallerRuns로"로 되돌리지 말 것 - 화재 다발 시점에 정확히 AI 수신이 멈춘다.
 - **우아한 종료** (B-3): `server.shutdown=graceful` + executor 종료 대기 20초. 배포마다 컨테이너가 교체되므로 이것이 없으면 그 순간 큐에 있던 SOS 알림이 사라진다.
-- **스케줄러 풀 3스레드** (B-1): 기본 1스레드에 스케줄러 5종과 AI WS 재접속 예약이 함께 줄을 선다. 복약 Planner가 느려지면 AI 재접속이 밀려 그 사이 화재 신호를 놓친다. 스케줄러를 추가하면 이 값을 다시 본다.
+- **스케줄러 풀 3스레드** (B-1): 기본 1스레드에 스케줄러와 AI WS 재접속 예약이 함께 줄을 선다. 복약 Planner가 느려지면 AI 재접속이 밀려 그 사이 화재 신호를 놓친다. 스케줄러를 추가하면 이 값을 다시 본다.
+  - **재검토 (2026-09-22, 알림 이력 점검 L-2)**: 6종이 됐다 - 주기형 3종(복약 1분·판정 재촉 5분·탈퇴 스윕 10분) + 일일 정리 3종(토큰 03:00·FCM 토큰 04:00·알림 이력 04:30). 일일 정리는 시각을 비껴 두어 주기형과만 겹칠 수 있고, 3스레드로 감당된다고 보고 **3을 유지**했다. 일일 작업을 같은 시각에 몰아 넣지 말 것.
 - **외부 연동 타임아웃**: 카카오(기존)·SMTP(C-1, 각 10초)·파일서버(C-2, connect 3초·read 10초). 새 HTTP 클라이언트를 추가할 때 타임아웃 없이 두지 말 것 - 요청 스레드를 붙든다.
 - **감사 로그 detail은 DB에만** (E-2): `AdminAuditLogService`의 SLF4J 출력에는 adminId·action·targetId까지만 적는다. detail에는 이름·이메일이 들어가고 컨테이너 stdout은 로그 수집 경로다.
 - 상세: `docs/(2026-09-10) feature-admin-force-connection.md`.
@@ -296,7 +297,11 @@
 - **불변 규칙 ①(아는 것만 기록한다)**: 실패 사유는 `ChannelFailureReason` 고정 코드만이다. FCM·Solapi는 **접수했는지**까지만 알려준다 - 기기 표시·통신사 도달·"응답 없음"은 서버가 알 수 없으므로 사유로 만들지 말 것. "전송 완료"는 **발송 서버 접수 기준**이며 화면에도 그렇게 밝힌다.
 - **불변 규칙 ②(예외 원문 저장 금지)**: 채널 예외 메시지·Solapi 실패 목록에는 토큰·전화번호가 섞일 수 있다. 이력에는 코드만, 로그(`[NOTIFY-LOG-FAILED]`)에는 userId·type·결과·예외 클래스명만 남긴다. 본문(이름·장소)은 DB에만 있고 stdout에 찍지 않는다.
 - **불변 규칙 ③(보내지 않음은 실패가 아니다)**: 정지·탈퇴 진행 계정 차단, 사용자가 채널을 꺼 둔 것, 알림톡 템플릿이 없는 종류는 의도대로 동작한 것이다. `NOT_SENT` 또는 "대상 아님"(`NOT_APPLICABLE`, 기록 안 함)으로 두고 실패율에 섞지 말 것 - 실패율이 부풀면 진짜 장애가 묻힌다(대시보드 "모르는 값을 0으로 채우지 않는다"와 같은 판단).
+  - **채널을 꺼 둔 경우도 `NOT_SENT`로 기록한다 (2026-09-22 점검 L-1, 수용)**: 이 때문에 "켠 채널이 없으면 DB를 건드리지 않는다"던 경로에 INSERT가 1건 생겼다(수신자 조회는 여전히 생략). 관리자 화면의 "발송 안 함 · 수신자가 알림을 꺼 둠"이 이 행이다. 양은 보관 90일로 다스린다 - "쓸데없는 행"이라며 기록을 빼면 관리자가 "왜 안 갔지"에 답할 수 없게 된다.
 - **불변 규칙 ④(기록이 발송을 막지 않는다)**: 기록은 발송 **후**, `REQUIRES_NEW`로 한 번만 하고 실패는 삼킨다. 발송 전에 기록하거나 기록 실패를 전파하면 SOS·화재 알림이 이력 테이블 장애에 묶인다. `REQUIRES_NEW`를 기본 전파로 바꾸지 말 것 - AFTER_COMMIT 리스너 안에서 이미 커밋된 트랜잭션에 합류해 **기록이 조용히 사라진다**.
 - **불변 규칙 ⑤(붙들지 않는다)**: 수신자·피보호자 탈퇴 시 CASCADE 삭제, 보관 기본 90일(`notification.log.retention-days`). SOS 이력(`sos_event`)의 익명 보존은 감사 목적의 예외이고 알림 이력에는 적용하지 않는다.
 - **조회 전용·감사 로그 없음**: 관리자 조회 공통 규칙대로다. `AdminNotificationControllerSecurityTest`가 쓰기 매핑이 없음을 고정한다.
-- 상세: `docs/(2026-09-22) feature-admin-notification-history.md`.
+- **테스트로 고정한 것 (2026-09-22 점검 반영)**: `NotificationLogAfterCommitIntegrationTest`(AFTER_COMMIT 안의 기록은 REQUIRES_NEW라야 남는다 - 대조군 포함) · `NotificationDispatcherTest` 가드(모든 알림 종류 × 수신자 상태에서 이력이 정확히 1건).
+- **연결 이벤트는 당사자를 싣는다 (2026-09-22 점검 L-3)**: `ConnectionAcceptedEvent`·`ConnectionRefusedEvent`에 `wardId`, `ConnectionDisconnectedEvent`에 `guardianId`·`wardId`를 더했다. 알림 대상(`notifyTargetId`)과 다른 값이며 **알림 대상·문구를 바꾸는 데 쓰지 말 것**(연결 알림 비대칭 정책 그대로). 해제 이벤트의 당사자 필드는 이상감지 E-3(해제·탈퇴 보호자 표 재계산)을 고칠 때 쓰려고 미리 실어 둔 것이다.
+  - 피보호자 탈퇴 경로에서는 비동기 해제 알림보다 purge가 먼저 끝나 FK 때문에 그 이력만 남지 않을 수 있다(`[NOTIFY-LOG-FAILED]` WARN, 발송 무영향). 어차피 CASCADE로 지워질 행이라 수용했다.
+- 상세: `docs/(2026-09-22) feature-admin-notification-history.md`, `docs/(2026-09-22) fix-admin-notification-audit-findings.md`.

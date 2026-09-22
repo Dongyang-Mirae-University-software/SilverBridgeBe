@@ -211,6 +211,7 @@ class ConnectionServiceTest {
                     ArgumentCaptor.forClass(ConnectionAcceptedEvent.class);
             verify(eventPublisher).publishEvent(captor.capture());
             assertThat(captor.getValue().guardianId()).isEqualTo(GUARDIAN_ID);
+            assertThat(captor.getValue().wardId()).isEqualTo(WARD_ID);
         }
 
         @Test
@@ -306,6 +307,7 @@ class ConnectionServiceTest {
             verify(eventPublisher).publishEvent(captor.capture());
             assertThat(captor.getValue().connectionId()).isEqualTo(CONNECTION_ID);
             assertThat(captor.getValue().guardianId()).isEqualTo(GUARDIAN_ID);
+            assertThat(captor.getValue().wardId()).isEqualTo(WARD_ID);
         }
 
         @Test
@@ -372,6 +374,8 @@ class ConnectionServiceTest {
                     ArgumentCaptor.forClass(ConnectionDisconnectedEvent.class);
             verify(eventPublisher).publishEvent(captor.capture());
             assertThat(captor.getValue().notifyTargetId()).isEqualTo(WARD_ID);
+            assertThat(captor.getValue()).extracting(ConnectionDisconnectedEvent::guardianId,
+                    ConnectionDisconnectedEvent::wardId).containsExactly(GUARDIAN_ID, WARD_ID);
             assertThat(captor.getValue().disconnectedBy())
                     .isEqualTo(ConnectionDisconnectedEvent.DisconnectedBy.GUARDIAN);
         }
@@ -402,6 +406,9 @@ class ConnectionServiceTest {
                     ArgumentCaptor.forClass(ConnectionDisconnectedEvent.class);
             verify(eventPublisher).publishEvent(captor.capture());
             assertThat(captor.getValue().notifyTargetId()).isEqualTo(GUARDIAN_ID);
+            // 알림 대상은 보호자여도 당사자 필드는 연결 그대로다
+            assertThat(captor.getValue()).extracting(ConnectionDisconnectedEvent::guardianId,
+                    ConnectionDisconnectedEvent::wardId).containsExactly(GUARDIAN_ID, WARD_ID);
             assertThat(captor.getValue().disconnectedBy())
                     .isEqualTo(ConnectionDisconnectedEvent.DisconnectedBy.WARD);
         }
@@ -633,6 +640,9 @@ class ConnectionServiceTest {
             assertThat(captor.getAllValues()).allSatisfy(e ->
                     assertThat(e.disconnectedBy())
                             .isEqualTo(ConnectionDisconnectedEvent.DisconnectedBy.ADMIN));
+            assertThat(captor.getAllValues()).allSatisfy(e -> assertThat(e)
+                    .extracting(ConnectionDisconnectedEvent::guardianId, ConnectionDisconnectedEvent::wardId)
+                    .containsExactly(GUARDIAN_ID, WARD_ID));
         }
 
         @Test
@@ -673,6 +683,8 @@ class ConnectionServiceTest {
                     ArgumentCaptor.forClass(ConnectionDisconnectedEvent.class);
             verify(eventPublisher).publishEvent(captor.capture());
             assertThat(captor.getValue().notifyTargetId()).isEqualTo(WARD_ID);
+            assertThat(captor.getValue()).extracting(ConnectionDisconnectedEvent::guardianId,
+                    ConnectionDisconnectedEvent::wardId).containsExactly(GUARDIAN_ID, WARD_ID);
         }
 
         @Test
@@ -727,6 +739,9 @@ class ConnectionServiceTest {
                     ArgumentCaptor.forClass(ConnectionDisconnectedEvent.class);
             verify(eventPublisher).publishEvent(captor.capture());
             assertThat(captor.getValue().notifyTargetId()).isEqualTo(WARD_ID);
+            // 탈퇴 경로는 연결 행이 곧 purge되므로 당사자를 이벤트에 실어 보내야 한다
+            assertThat(captor.getValue()).extracting(ConnectionDisconnectedEvent::guardianId,
+                    ConnectionDisconnectedEvent::wardId).containsExactly(GUARDIAN_ID, WARD_ID);
             assertThat(captor.getValue().disconnectedBy())
                     .isEqualTo(ConnectionDisconnectedEvent.DisconnectedBy.GUARDIAN);
         }
@@ -748,6 +763,8 @@ class ConnectionServiceTest {
                     ArgumentCaptor.forClass(ConnectionDisconnectedEvent.class);
             verify(eventPublisher).publishEvent(captor.capture());
             assertThat(captor.getValue().notifyTargetId()).isEqualTo(GUARDIAN_ID);
+            assertThat(captor.getValue()).extracting(ConnectionDisconnectedEvent::guardianId,
+                    ConnectionDisconnectedEvent::wardId).containsExactly(GUARDIAN_ID, WARD_ID);
             assertThat(captor.getValue().disconnectedBy())
                     .isEqualTo(ConnectionDisconnectedEvent.DisconnectedBy.WARD);
         }

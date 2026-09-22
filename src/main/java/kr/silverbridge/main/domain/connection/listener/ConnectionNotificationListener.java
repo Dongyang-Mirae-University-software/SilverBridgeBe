@@ -63,7 +63,7 @@ public class ConnectionNotificationListener {
         webSocketEventPublisher.sendToUser(event.guardianId(), "connection-accepted",
                 Map.of("connectionId", event.connectionId()));
 
-        notificationDispatcher.dispatch(event.guardianId(), NotificationType.CONNECTION_ACCEPTED,
+        notificationDispatcher.dispatch(event.guardianId(), event.wardId(), NotificationType.CONNECTION_ACCEPTED,
                 NotificationContent.of("연결 수락", "피보호자가 연결 요청을 수락했습니다.",
                         Map.of("type", "CONNECTION_ACCEPTED",
                                 "connectionId", String.valueOf(event.connectionId()))));
@@ -102,7 +102,7 @@ public class ConnectionNotificationListener {
         webSocketEventPublisher.sendToUser(event.guardianId(), "connection-refused",
                 Map.of("connectionId", event.connectionId()));
 
-        notificationDispatcher.dispatch(event.guardianId(), NotificationType.CONNECTION_REFUSED,
+        notificationDispatcher.dispatch(event.guardianId(), event.wardId(), NotificationType.CONNECTION_REFUSED,
                 NotificationContent.of("연결 거절", "연결 요청이 거절되었습니다.",
                         Map.of("type", "CONNECTION_REFUSED",
                                 "connectionId", String.valueOf(event.connectionId()))));
@@ -121,7 +121,9 @@ public class ConnectionNotificationListener {
         webSocketEventPublisher.sendToUser(event.notifyTargetId(), "connection-cancelled",
                 Map.of("connectionId", event.connectionId()));
 
-        notificationDispatcher.dispatch(event.notifyTargetId(), NotificationType.CONNECTION_DISCONNECTED,
+        // 두 번째 인자는 이력 표시용 피보호자. 피보호자 탈퇴 경로에서는 이 비동기 리스너보다 purge가 먼저 끝나
+        // FK 때문에 이력만 남지 않을 수 있다(발송은 그대로, [NOTIFY-LOG-FAILED] WARN) - 어차피 CASCADE로 지워질 행이다.
+        notificationDispatcher.dispatch(event.notifyTargetId(), event.wardId(), NotificationType.CONNECTION_DISCONNECTED,
                 NotificationContent.of("연결 해제", body,
                         Map.of("type", "CONNECTION_CANCELLED",
                                 "connectionId", String.valueOf(event.connectionId()))));

@@ -9,7 +9,7 @@
 
 | 머지 | 기능 | 상태 | 점검 문서 | 잔여 이슈 |
 |---|---|---|---|---|
-| #257 (2026-09-22) | 관리자 알림 이력 - 채널 결과 코드·`notification_log` 기록·조회 API (V54) | ⚠️ | `(2026-09-22) audit-impact-notification-channel-result.md` (템플릿 C) | M-1 실서버 기록 미확인(vkcs 0건 - 첫 발송 후 조회) / L-3 연결 수락·거절·해제 wardId 공란 · L-4 기록 누락 가드 테스트 제안 (L-1·L-2 수용) / 통합 테스트 vkcs 통과·V54 vkcs 적용 확인 |
+| #257 (2026-09-22) | 관리자 알림 이력 - 채널 결과 코드·`notification_log` 기록·조회 API (V54) | ⚠️ | `(2026-09-22) audit-impact-notification-channel-result.md` (템플릿 C) | M-1 실서버 기록 확인만 남음(AFTER_COMMIT 경로는 통합 테스트로 고정, 배포 후 dev 연결 요청 1회로 조회) - L-3·L-4 반영, L-1·L-2 수용·문서화 (`(2026-09-22) fix-admin-notification-audit-findings.md`) / 통합 테스트 vkcs 통과·V54 vkcs 적용 확인 |
 | #255 (2026-09-22) | 관리자 이상감지 AI 신뢰도 = confidence 평균 (`accuracy` → `aiConfidence`, 마이그레이션 없음) | ✅ | `(2026-09-22) audit-admin-anomaly-ai-confidence.md` (템플릿 B) | - (M-1·L-1~L-4 전부 반영 2026-09-22: 응답률 문구·`/summary` 403 테스트·`real`/`falseAlarm` 제거·confidence 0~1 보정·최고값 치우침 명시) |
 | (PR 예정, 2026-09-21) | 관리자 이상감지 로그 v2 - 필터·집계 API + 연기=화재 통합 (V53) | ✅ | `(2026-09-21) audit-impact-admin-anomaly-log-v2.md` (템플릿 C) | - (E-1·E-2 주석 반영, E-3 쿨다운 키 1회성 수용) / 새 JPQL은 배포 기동으로 확인 |
 | #252 (2026-09-21) | 이상감지 판정 다수결 전환·동수 재확인 안내·관리자 정정 폐지 (V52) | ✅ | `(2026-09-21) audit-impact-anomaly-majority-review.md` (템플릿 C) | E-2(동시 응답 상태 덮어쓰기)·E-3(해제·탈퇴 보호자 표)은 기존 결함 - **보류·수용**(2026-09-21 결정, 정책 파일 "알려진 한계 - 판정 집계"에 기록) / V52 gosky 적용 확인(2026-09-21, Flyway v52·기동·health 200) - (E-1·B-1 반영 완료) · FE Notion 3페이지 갱신 2026-09-21 |

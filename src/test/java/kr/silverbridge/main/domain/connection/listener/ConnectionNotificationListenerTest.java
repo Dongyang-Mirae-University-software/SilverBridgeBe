@@ -74,13 +74,14 @@ class ConnectionNotificationListenerTest {
     @Test
     @DisplayName("연결 수락 이벤트 → 보호자에게 WS + 수락 알림 디스패치")
     void handleAccepted_보호자에게_수락알림() {
-        ConnectionAcceptedEvent event = new ConnectionAcceptedEvent(CONNECTION_ID, GUARDIAN_ID);
+        ConnectionAcceptedEvent event = new ConnectionAcceptedEvent(CONNECTION_ID, GUARDIAN_ID, WARD_ID);
 
         listener.handleAccepted(event);
 
         verify(webSocketEventPublisher).sendToUser(eq(GUARDIAN_ID), eq("connection-accepted"), anyMap());
+        // 수신자는 보호자, 두 번째 인자는 이력 표시용 피보호자
         verify(notificationDispatcher).dispatch(
-                eq(GUARDIAN_ID), eq(NotificationType.CONNECTION_ACCEPTED),
+                eq(GUARDIAN_ID), eq(WARD_ID), eq(NotificationType.CONNECTION_ACCEPTED),
                 eq(NotificationContent.of("연결 수락", "피보호자가 연결 요청을 수락했습니다.",
                         java.util.Map.of("type", "CONNECTION_ACCEPTED",
                                 "connectionId", String.valueOf(CONNECTION_ID)))));
@@ -89,13 +90,13 @@ class ConnectionNotificationListenerTest {
     @Test
     @DisplayName("연결 거절 이벤트 → 보호자에게 WS + '연결 요청이 거절되었습니다' 디스패치")
     void handleRefused_보호자에게_거절알림() {
-        ConnectionRefusedEvent event = new ConnectionRefusedEvent(CONNECTION_ID, GUARDIAN_ID);
+        ConnectionRefusedEvent event = new ConnectionRefusedEvent(CONNECTION_ID, GUARDIAN_ID, WARD_ID);
 
         listener.handleRefused(event);
 
         verify(webSocketEventPublisher).sendToUser(eq(GUARDIAN_ID), eq("connection-refused"), anyMap());
         ArgumentCaptor<NotificationContent> captor = ArgumentCaptor.forClass(NotificationContent.class);
-        verify(notificationDispatcher).dispatch(eq(GUARDIAN_ID), eq(NotificationType.CONNECTION_REFUSED), captor.capture());
+        verify(notificationDispatcher).dispatch(eq(GUARDIAN_ID), eq(WARD_ID), eq(NotificationType.CONNECTION_REFUSED), captor.capture());
         assertThat(captor.getValue().body()).isEqualTo("연결 요청이 거절되었습니다.");
         // FE가 포그라운드에서 문구를 렌더링하는 키. 해제(CONNECTION_CANCELLED)와 절대 섞이면 안 됨.
         assertThat(captor.getValue().data()).containsEntry("type", "CONNECTION_REFUSED");
@@ -105,13 +106,13 @@ class ConnectionNotificationListenerTest {
     @DisplayName("보호자가 해제 → 피보호자에게 '보호자가 연결을 해제했습니다' 디스패치")
     void handleDisconnected_보호자해제_문구() {
         ConnectionDisconnectedEvent event = new ConnectionDisconnectedEvent(
-                CONNECTION_ID, WARD_ID, ConnectionDisconnectedEvent.DisconnectedBy.GUARDIAN);
+                CONNECTION_ID, WARD_ID, ConnectionDisconnectedEvent.DisconnectedBy.GUARDIAN, GUARDIAN_ID, WARD_ID);
 
         listener.handleDisconnected(event);
 
         verify(webSocketEventPublisher).sendToUser(eq(WARD_ID), eq("connection-cancelled"), anyMap());
         ArgumentCaptor<NotificationContent> captor = ArgumentCaptor.forClass(NotificationContent.class);
-        verify(notificationDispatcher).dispatch(eq(WARD_ID), eq(NotificationType.CONNECTION_DISCONNECTED), captor.capture());
+        verify(notificationDispatcher).dispatch(eq(WARD_ID), eq(WARD_ID), eq(NotificationType.CONNECTION_DISCONNECTED), captor.capture());
         assertThat(captor.getValue().body()).isEqualTo("보호자가 연결을 해제했습니다.");
         // 해제 와이어 식별자는 CONNECTION_CANCELLED(레거시 호환). 거절(CONNECTION_REFUSED)과 섞이지 않음을 고정.
         assertThat(captor.getValue().data()).containsEntry("type", "CONNECTION_CANCELLED");
@@ -121,13 +122,14 @@ class ConnectionNotificationListenerTest {
     @DisplayName("피보호자가 해제 → 보호자에게 '피보호자가 연결을 해제했습니다' 디스패치")
     void handleDisconnected_피보호자해제_문구() {
         ConnectionDisconnectedEvent event = new ConnectionDisconnectedEvent(
-                CONNECTION_ID, GUARDIAN_ID, ConnectionDisconnectedEvent.DisconnectedBy.WARD);
+                CONNECTION_ID, GUARDIAN_ID, ConnectionDisconnectedEvent.DisconnectedBy.WARD, GUARDIAN_ID, WARD_ID);
 
         listener.handleDisconnected(event);
 
         verify(webSocketEventPublisher).sendToUser(eq(GUARDIAN_ID), eq("connection-cancelled"), anyMap());
         ArgumentCaptor<NotificationContent> captor = ArgumentCaptor.forClass(NotificationContent.class);
-        verify(notificationDispatcher).dispatch(eq(GUARDIAN_ID), eq(NotificationType.CONNECTION_DISCONNECTED), captor.capture());
+        // 알림은 보호자에게 가도 이력의 피보호자 칸은 연결의 피보호자다
+        verify(notificationDispatcher).dispatch(eq(GUARDIAN_ID), eq(WARD_ID), eq(NotificationType.CONNECTION_DISCONNECTED), captor.capture());
         assertThat(captor.getValue().body()).isEqualTo("피보호자가 연결을 해제했습니다.");
         assertThat(captor.getValue().data()).containsEntry("type", "CONNECTION_CANCELLED");
     }

@@ -127,7 +127,7 @@ public class ConnectionService {
         connection.disconnect();
 
         eventPublisher.publishEvent(new ConnectionDisconnectedEvent(
-                connectionId, wardId, ConnectionDisconnectedEvent.DisconnectedBy.GUARDIAN
+                connectionId, wardId, ConnectionDisconnectedEvent.DisconnectedBy.GUARDIAN, guardianId, wardId
         ));
         log.info("연결 해제(보호자): connectionId={}, guardianId={}, wardId={}",
                 connectionId, guardianId, wardId);
@@ -188,7 +188,7 @@ public class ConnectionService {
         connection.activate();
 
         eventPublisher.publishEvent(new ConnectionAcceptedEvent(
-                connectionId, connection.getGuardianId()
+                connectionId, connection.getGuardianId(), wardId
         ));
         log.info("연결 수락(피보호자): connectionId={}, wardId={}, guardianId={}",
                 connectionId, wardId, connection.getGuardianId());
@@ -204,7 +204,7 @@ public class ConnectionService {
         connection.refuse();
 
         eventPublisher.publishEvent(new ConnectionRefusedEvent(
-                connectionId, connection.getGuardianId()
+                connectionId, connection.getGuardianId(), wardId
         ));
         log.info("연결 거절(피보호자): connectionId={}, wardId={}, guardianId={}",
                 connectionId, wardId, connection.getGuardianId());
@@ -222,7 +222,7 @@ public class ConnectionService {
         connection.disconnect();
 
         eventPublisher.publishEvent(new ConnectionDisconnectedEvent(
-                connectionId, guardianId, ConnectionDisconnectedEvent.DisconnectedBy.WARD
+                connectionId, guardianId, ConnectionDisconnectedEvent.DisconnectedBy.WARD, guardianId, wardId
         ));
         log.info("연결 해제(피보호자): connectionId={}, wardId={}, guardianId={}",
                 connectionId, wardId, guardianId);
@@ -248,7 +248,7 @@ public class ConnectionService {
 
                 connection.disconnect();
                 eventPublisher.publishEvent(new ConnectionDisconnectedEvent(
-                        connection.getId(), notifyTargetId, by));
+                        connection.getId(), notifyTargetId, by, connection.getGuardianId(), connection.getWardId()));
             } else { // PENDING — 상대 알림 없이 취소 (기존 cancel/refuse 와 동일)
                 connection.cancel();
             }
@@ -287,7 +287,7 @@ public class ConnectionService {
 
                 connection.disconnect();
                 eventPublisher.publishEvent(new ConnectionDisconnectedEvent(
-                        connection.getId(), notifyTargetId, by));
+                        connection.getId(), notifyTargetId, by, connection.getGuardianId(), connection.getWardId()));
             } else { // PENDING - 수락 전 요청이라 상대 알림 없이 취소
                 connection.cancel();
             }
@@ -349,7 +349,8 @@ public class ConnectionService {
         connection.disconnect();
         for (String targetId : List.of(connection.getGuardianId(), connection.getWardId())) {
             eventPublisher.publishEvent(new ConnectionDisconnectedEvent(
-                    connectionId, targetId, ConnectionDisconnectedEvent.DisconnectedBy.ADMIN));
+                    connectionId, targetId, ConnectionDisconnectedEvent.DisconnectedBy.ADMIN,
+                    connection.getGuardianId(), connection.getWardId()));
         }
 
         log.info("강제 연결 해제: connectionId={}, adminId={}", connectionId, adminId);
