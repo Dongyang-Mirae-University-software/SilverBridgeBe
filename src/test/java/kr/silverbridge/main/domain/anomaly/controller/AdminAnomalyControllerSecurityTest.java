@@ -83,6 +83,29 @@ class AdminAnomalyControllerSecurityTest {
     }
 
     @Test
+    @WithMockUser(roles = "ADMIN")
+    @DisplayName("ADMIN → 집계 조회 허용")
+    void admin_집계_허용() {
+        assertThatNoException().isThrownBy(() -> controller.getSummary(null, null, null));
+    }
+
+    @Test
+    @WithMockUser(roles = "GUARDIAN")
+    @DisplayName("보호자(GUARDIAN) → 집계도 403")
+    void guardian_집계_거부() {
+        assertThatThrownBy(() -> controller.getSummary(null, null, null))
+                .isInstanceOf(AccessDeniedException.class);
+    }
+
+    @Test
+    @WithMockUser(roles = "WARD")
+    @DisplayName("피보호자(WARD) → 집계도 403")
+    void ward_집계_거부() {
+        assertThatThrownBy(() -> controller.getSummary(null, null, null))
+                .isInstanceOf(AccessDeniedException.class);
+    }
+
+    @Test
     @DisplayName("관리자 이상감지 API는 조회 전용 - 판정을 바꾸는 쓰기 매핑이 없다")
     void 쓰기_매핑_없음() {
         List<String> writeMappings = Arrays.stream(AdminAnomalyController.class.getDeclaredMethods())

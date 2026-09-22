@@ -9,7 +9,7 @@
 
 | 머지 | 기능 | 상태 | 점검 문서 | 잔여 이슈 |
 |---|---|---|---|---|
-| #255 (2026-09-22) | 관리자 이상감지 AI 신뢰도 = confidence 평균 (`accuracy` → `aiConfidence`, 마이그레이션 없음) | ⚠️ | `(2026-09-22) audit-admin-anomaly-ai-confidence.md` (템플릿 B) | 🟡 M-1(동수 있을 때 응답률 바 문구 불일치 - Notion 문구 수정) · 🟢 L-1(`/summary` 역할별 403 테스트 없음) · L-2(미사용 필드 real·falseAlarm 판단 보류) · L-3·L-4 수용 |
+| #255 (2026-09-22) | 관리자 이상감지 AI 신뢰도 = confidence 평균 (`accuracy` → `aiConfidence`, 마이그레이션 없음) | ✅ | `(2026-09-22) audit-admin-anomaly-ai-confidence.md` (템플릿 B) | - (M-1·L-1~L-4 전부 반영 2026-09-22: 응답률 문구·`/summary` 403 테스트·`real`/`falseAlarm` 제거·confidence 0~1 보정·최고값 치우침 명시) |
 | (PR 예정, 2026-09-21) | 관리자 이상감지 로그 v2 - 필터·집계 API + 연기=화재 통합 (V53) | ✅ | `(2026-09-21) audit-impact-admin-anomaly-log-v2.md` (템플릿 C) | - (E-1·E-2 주석 반영, E-3 쿨다운 키 1회성 수용) / 새 JPQL은 배포 기동으로 확인 |
 | #252 (2026-09-21) | 이상감지 판정 다수결 전환·동수 재확인 안내·관리자 정정 폐지 (V52) | ✅ | `(2026-09-21) audit-impact-anomaly-majority-review.md` (템플릿 C) | E-2(동시 응답 상태 덮어쓰기)·E-3(해제·탈퇴 보호자 표)은 기존 결함 - **보류·수용**(2026-09-21 결정, 정책 파일 "알려진 한계 - 판정 집계"에 기록) / V52 gosky 적용 확인(2026-09-21, Flyway v52·기동·health 200) - (E-1·B-1 반영 완료) · FE Notion 3페이지 갱신 2026-09-21 |
 | #251 (2026-09-21) | 의존성 업그레이드 - Boot 4.0.8·Tomcat 11.0.26·springdoc 3.1.1 (코드 무변경) | ➖ | 스캔 결과 `(2026-09-11) audit-technical-cross-cutting.md` PHASE A "반영 결과" | - (CVSS 7+ 0건, 남은 2건은 5.3 오탐) |

@@ -31,15 +31,16 @@
 ## API 변경 - `GET /api/admin/anomaly/summary`
 
 ```json
-"aiConfidence": { "average": 0.806, "real": 0.83, "falseAlarm": 0.79, "basis": 40 }
+"aiConfidence": { "average": 0.88, "basis": 7 }
 ```
 
 | 필드 | 뜻 | null 조건 |
 |---|---|---|
-| `average` | 위험 + 오탐 상황의 confidence 평균 (0.0~1.0, 소수 넷째 자리) | basis 0 |
-| `real` | 위험 판정 상황의 평균 | 위험 0건 |
-| `falseAlarm` | 오탐 판정 상황의 평균 | 오탐 0건 |
-| `basis` | 위험 + 오탐 건수 | - |
+| `average` | 위험 + 오탐 상황의 confidence 평균 (0.0~1.0, 소수 넷째 자리) - 카드 큰 숫자 | basis 0 |
+| `basis` | 위험 + 오탐 건수 - 카드 하위 칸 비율의 분모 | - |
+
+> 2026-09-22 점검 반영: 처음 넣었던 `real`·`falseAlarm`(칸별 confidence 평균)은 최종 시안 카드가 쓰지 않아 **제거**했다(L-2).
+> 카드 하위 칸은 `review.real / basis`·`review.falseAlarm / basis`(합 100%)와 그 건수다.
 
 - **제거**: `accuracy { rate, falseAlarmRate, basis }`. v2는 2026-09-21 배포라 FE 연동 전이었다(로컬 FE 리포에 사용처 없음).
 - 유형 필터를 따른다(D-7 그대로 - 탭 건수만 유형 무시). 기간·검색어도 같다.
@@ -66,3 +67,12 @@
 - `./gradlew test` **611 tests / 0 failures / 0 errors** (skipped 1). 추가·수정: 시안 숫자 재현(0.806·0.83·0.79, 미판정·동수 미혼입) / 분모 0 null / 한쪽 판정만 있으면 그쪽만 값 / 유형 합산은 가중평균(평균의 평균 아님) / 유형 필터 적용.
 - 통합 테스트 `AdminAnomalyQueryIntegrationTest.집계_GROUP_BY`에 SUM 프로젝션 단언 추가 - **vkcs `tools/integration-test.sh` 통과**(2026-09-22, `781b48a`, 41초, 캐시 아닌 실제 실행).
 - 운영 DB `anomaly_incident` 0행(2026-09-22 확인) - 실데이터 검증은 AI 경보가 쌓인 뒤.
+
+## 점검 반영 (2026-09-22, `(2026-09-22) audit-admin-anomaly-ai-confidence.md`)
+
+- M-1: Notion 응답률 문구 "판정 완료 M건"의 M을 `total - pending`으로 정정(동수가 있어도 바·문구 일치).
+- L-1: `AdminAnomalyControllerSecurityTest`에 `/summary` ADMIN 허용·GUARDIAN/WARD 403 추가.
+- L-2: `aiConfidence.real`·`falseAlarm` 제거 → `{ average, basis }`.
+- L-3: `AnomalySignalParser`가 confidence 0~1 밖(퍼센트 87·음수·NaN)을 잘라 넣고 `[ANOMALY-CONFIDENCE-OUT-OF-RANGE]` WARN. 신호는 버리지 않는다(화재 알림 유실 방지), 판정 결과도 그대로.
+- L-4: Swagger·DTO·Notion에 "상황별 최고값 평균이라 높게 나오는 경향" 명시.
+- `./gradlew test` 615 / 0 실패.

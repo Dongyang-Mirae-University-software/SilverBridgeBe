@@ -63,19 +63,16 @@ public record AdminAnomalySummaryResponse(
     /**
      * AI 신뢰도 = 판정이 난 상황들의 AI confidence 평균(상황별 {@code max_confidence}).
      *
-     * <p>미판정·동수는 뺀다 - 시안의 "평균"이 위험 평균과 오탐 평균의 가중평균이 되도록 분모를 판정 난 건으로 맞춘다.
-     * 이 값은 "AI가 얼마나 확신했는가"이지 "AI가 맞았는가"가 아니다: 오탐 평균이 높다는 것은 AI가 확신했는데
-     * 틀렸다는 뜻이다. 분모가 0이면 null - 0%로 채우지 않는다(2026-09-22, 위험÷(위험+오탐) 비율을 대체).</p>
+     * <p>미판정·동수는 뺀다 - 화면 카드의 하위 칸(위험 판정·오탐 비율)이 {@code review.real / basis}·
+     * {@code review.falseAlarm / basis}라 분모를 같게 맞춘다. 이 값은 "AI가 얼마나 확신했는가"이지 "AI가 맞았는가"가 아니다.
+     * 상황별 <b>최고값</b>의 평균이라 오래 이어진 상황일수록 값이 올라가 실제 프레임 평균보다 높게 나오는 경향이 있다.
+     * 분모가 0이면 null - 0%로 채우지 않는다(2026-09-22).</p>
      */
     @Schema(description = "AI 신뢰도 = 판정 난 상황들의 AI confidence 평균")
     public record AiConfidence(
-            @Schema(description = "위험 + 오탐 상황의 confidence 평균 0.0~1.0. basis가 0이면 null", example = "0.806")
+            @Schema(description = "위험 + 오탐 상황의 confidence(상황별 최고값) 평균 0.0~1.0. basis가 0이면 null", example = "0.88")
             Double average,
-            @Schema(description = "위험 판정 상황의 confidence 평균 0.0~1.0. 위험 0건이면 null", example = "0.83")
-            Double real,
-            @Schema(description = "오탐 판정 상황의 confidence 평균 0.0~1.0. 오탐 0건이면 null", example = "0.79")
-            Double falseAlarm,
-            @Schema(description = "분모 = 위험 + 오탐 상황 수", example = "40")
+            @Schema(description = "분모 = 위험 + 오탐 상황 수. 화면 하위 칸 비율(review.real / basis)의 분모이기도 하다", example = "7")
             long basis
     ) {
     }

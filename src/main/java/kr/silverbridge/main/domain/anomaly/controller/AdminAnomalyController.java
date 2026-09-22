@@ -111,12 +111,12 @@ public class AdminAnomalyController {
                     (total - pending) / total, 0.0~1.0. total이 0이면 null입니다(0%로 표시하지 마세요).
 
                     [AI 신뢰도 - aiConfidence]
-                    판정이 난 상황(위험 + 오탐)의 AI confidence(상황별 최고값) 평균입니다. 0.0~1.0.
-                    - average: 위험 + 오탐 전체 평균 (= real·falseAlarm의 가중평균)
-                    - real: 위험으로 판정된 상황의 평균 / falseAlarm: 오탐으로 판정된 상황의 평균
+                    - average: 판정이 난 상황(위험 + 오탐)의 AI confidence 평균, 0.0~1.0. 화면 카드의 큰 숫자입니다
                     - basis: 분모(위험 + 오탐 건수). 미판정·동수는 뺍니다
-                    건수가 0이면 해당 값은 null입니다(0%로 표시하지 마세요).
-                    "AI가 얼마나 확신했는가"이지 "맞았는가"가 아닙니다 - falseAlarm이 높으면 확신했는데 틀린 경보가 많다는 뜻입니다.
+                    basis가 0이면 average는 null입니다(0%로 표시하지 마세요).
+                    카드 하위 칸(위험 판정·오탐)은 confidence가 아니라 비율입니다 - review.real / basis, review.falseAlarm / basis (합 100%).
+                    "AI가 얼마나 확신했는가"이지 "맞았는가"가 아닙니다. confidence는 상황별 최고값이라
+                    오래 이어진 상황일수록 커져, 프레임 평균보다 높게 나오는 경향이 있습니다.
                     """)
     @ApiResponses({
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "집계 반환"),

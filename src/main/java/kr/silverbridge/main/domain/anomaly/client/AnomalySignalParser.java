@@ -41,11 +41,28 @@ public class AnomalySignalParser {
         }
 
         DetectedType detectedType = DetectedType.fromAi(data.path("detectedType").asText(null));
-        double confidence = data.path("confidence").asDouble(0.0);
+        double confidence = normalizeConfidence(sessionId, data.path("confidence").asDouble(0.0));
         boolean danger = data.path("danger").asBoolean(false);
 
         return Optional.of(new AnomalySignal(
                 sessionId, detectedType, confidence, danger, parseAnalyzedAt(data.path("analyzedAt").asText(null))));
+    }
+
+    /**
+     * confidence는 AI 계약상 0.0~1.0이다. 범위를 벗어나면(퍼센트로 87을 보내는 형식 변경, 음수, NaN) 0~1로 잘라 넣고
+     * WARN을 남긴다 - 관리자 화면의 평균 AI 신뢰도가 "8700%"처럼 깨지지 않게 하기 위해서다.
+     *
+     * <p><b>신호를 버리지 않는다</b>: 버리면 그 사이 화재 알림이 빠진다. 자르기는 판정도 바꾸지 않는다
+     * (87 → 1.0은 여전히 임계 이상, 음수·NaN → 0.0은 기존처럼 임계 미달).</p>
+     */
+    private double normalizeConfidence(String sessionId, double raw) {
+        if (raw >= 0.0 && raw <= 1.0) {
+            return raw;
+        }
+        double clamped = Double.isNaN(raw) ? 0.0 : Math.max(0.0, Math.min(1.0, raw));
+        log.warn("[ANOMALY-CONFIDENCE-OUT-OF-RANGE] confidence가 0~1 밖이라 {}로 보정: sessionId={}, raw={}",
+                clamped, sessionId, raw);
+        return clamped;
     }
 
     /** AI {@code analyzedAt}은 naive UTC(예 {@code 2026-05-30T10:20:22.939247}) — UTC 오프셋을 부여한다. */

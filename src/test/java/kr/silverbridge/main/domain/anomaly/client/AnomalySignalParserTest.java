@@ -90,4 +90,21 @@ class AnomalySignalParserTest {
         assertThat(parse("{\"type\":\"latest_analysis\"}")).isEmpty();
         assertThat(parse("{\"type\":\"latest_analysis\",\"sessionId\":\"s1\"}")).isEmpty();
     }
+
+    @Test
+    @DisplayName("confidence가 0~1 밖이면 버리지 않고 0~1로 잘라 넣는다 - 퍼센트 형식(87)·음수·NaN")
+    void confidenceOutOfRangeIsClamped() throws Exception {
+        assertThat(confidenceOf("87")).isEqualTo(1.0);          // 신호는 살아 있고 판정도 그대로(임계 이상)
+        assertThat(confidenceOf("-0.2")).isEqualTo(0.0);
+        assertThat(confidenceOf("\"NaN\"")).isEqualTo(0.0);
+        assertThat(confidenceOf("1.0")).isEqualTo(1.0);          // 경계값은 그대로
+        assertThat(confidenceOf("0.0")).isEqualTo(0.0);
+    }
+
+    private double confidenceOf(String rawJsonValue) throws Exception {
+        return parse("""
+                {"type":"latest_analysis","sessionId":"s1",
+                 "data":{"detectedType":"fire","confidence":%s,"danger":true}}
+                """.formatted(rawJsonValue)).orElseThrow().confidence();
+    }
 }

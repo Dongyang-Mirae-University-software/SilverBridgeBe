@@ -1457,3 +1457,8 @@ REST API Key 단독 대비 보안 강화 — 인가코드 탈취 시 토큰 발�
 - 🟡 M-1: 동수가 있으면 응답률 바(77%)와 "판정 완료 M건"(real+falseAlarm) 문구가 어긋난다 - M을 `total - pending`으로 바꾸도록 Notion 수정 권고(백엔드 무변경).
 - 🟢 L-1 `/summary` 역할별 403 테스트 없음 · L-2 미사용 필드 `aiConfidence.real`·`falseAlarm` 판단 보류 · L-3 confidence 0~1 검증 없음(기존, 수용) · L-4 최고값 평균이라 위로 치우침(정보).
 - 상세: `docs/(2026-09-22) audit-admin-anomaly-ai-confidence.md`
+
+## [2026-09-22] AI 신뢰도 점검 이슈 전부 반영
+
+- M-1 Notion 응답률 문구(M = `total - pending`) · L-1 `/summary` 403 테스트 · L-2 `aiConfidence`를 `{average, basis}`로 축소 · L-3 파서 confidence 0~1 보정 + `[ANOMALY-CONFIDENCE-OUT-OF-RANGE]` WARN(신호 유지) · L-4 최고값 평균 치우침 명시.
+- `./gradlew test` 615 / 0 실패. 점검 대장 #255 ⚠️ → ✅.
