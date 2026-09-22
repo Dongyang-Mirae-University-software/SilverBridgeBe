@@ -69,13 +69,13 @@ class MedicationWithdrawalListenerTest {
 
         ArgumentCaptor<NotificationContent> contentCaptor = ArgumentCaptor.forClass(NotificationContent.class);
         verify(notificationDispatcher).dispatch(
-                eq(REMAINING_GUARDIAN_ID), eq(NotificationType.MEDICATION_STOPPED), contentCaptor.capture());
+                eq(REMAINING_GUARDIAN_ID), any(), eq(NotificationType.MEDICATION_STOPPED), contentCaptor.capture());
         assertThat(contentCaptor.getValue().body()).contains("김영희", "3건");
         assertThat(contentCaptor.getValue().data()).containsEntry("wardId", WARD_ID);
 
         verify(webSocketEventPublisher).sendToUser(eq(REMAINING_GUARDIAN_ID), eq("medication-stopped"), any());
         // 탈퇴자에게는 보내지 않는다.
-        verify(notificationDispatcher, never()).dispatch(eq(WITHDRAWN_GUARDIAN_ID), any(), any());
+        verify(notificationDispatcher, never()).dispatch(eq(WITHDRAWN_GUARDIAN_ID), any(), any(), any());
     }
 
     @Test
@@ -87,7 +87,7 @@ class MedicationWithdrawalListenerTest {
 
         listener.handleWithdrawn(withdrawnEvent());
 
-        verify(notificationDispatcher, never()).dispatch(anyString(), any(), any());
+        verify(notificationDispatcher, never()).dispatch(anyString(), any(), any(), any());
         verify(webSocketEventPublisher, never()).sendToUser(anyString(), anyString(), any());
         // 수신자가 없으면 이름 조회도 하지 않는다.
         verify(userRepository, never()).findById(anyString());
@@ -102,7 +102,7 @@ class MedicationWithdrawalListenerTest {
         listener.handleWithdrawn(withdrawnEvent());
 
         verify(connectionService, never()).getActiveGuardianIds(anyString());
-        verify(notificationDispatcher, never()).dispatch(anyString(), any(), any());
+        verify(notificationDispatcher, never()).dispatch(anyString(), any(), any(), any());
     }
 
     @Test

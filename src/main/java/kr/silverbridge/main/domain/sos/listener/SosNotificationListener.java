@@ -98,7 +98,7 @@ public class SosNotificationListener {
                                 // 기존 키는 그대로 두고 추가만 한다 - 쓰지 않는 프론트는 영향받지 않는다.
                                 "repeatCount", repeatCountValue));
 
-                notificationDispatcher.dispatch(guardianId, NotificationType.WARD_SOS,
+                notificationDispatcher.dispatch(guardianId, event.wardId(), NotificationType.WARD_SOS,
                         NotificationContent.of("긴급 SOS", body,
                                 Map.of("type", "WARD_SOS",
                                         "wardId", event.wardId(),

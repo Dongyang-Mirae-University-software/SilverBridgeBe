@@ -167,6 +167,10 @@ notification:
     max-per-user: ${FCM_TOKEN_MAX_PER_USER:5}        # 초과 시 마지막 사용이 오래된 것부터 삭제
     cleanup-enabled: ${FCM_TOKEN_CLEANUP_ENABLED:true} # 킬 스위치. false면 정리만 멈춘다(등록·발송은 그대로)
     stale-days: ${FCM_TOKEN_STALE_DAYS:60}           # 이 기간 재등록이 없으면 유휴로 보고 정리(매일 04:00 KST)
+  # 관리자 알림 이력(notification_log) 보관. 본문에 이름·장소가 들어 있어 무기한 두지 않는다.
+  log:
+    retention-days: ${NOTIFICATION_LOG_RETENTION_DAYS:90}          # 이보다 오래된 이력 삭제(매일 04:30 KST)
+    cleanup-enabled: ${NOTIFICATION_LOG_CLEANUP_ENABLED:true}      # 킬 스위치. false면 정리만 멈춘다(기록·조회는 그대로)
   alimtalk:
     # 카카오 알림톡(Solapi 경유) — 카카오톡 채팅으로 도착하는 유일한 현실적 경로(전화번호 기반, 친구추가 불필요).
     # ⚠️ 승인된 템플릿 문구만 발송 가능(변수만 치환). 종류별 템플릿이 없으면 채널이 조용히 스킵된다.

@@ -40,7 +40,8 @@ public class AnomalyReviewReminderService {
         for (AnomalyReviewReminderTarget target : targets) {
             try {
                 notificationDispatcher.dispatch(
-                        target.guardianId(), NotificationType.ANOMALY_REVIEW_REQUIRED, reminderContent(target));
+                        target.guardianId(), target.wardId(), NotificationType.ANOMALY_REVIEW_REQUIRED,
+                        reminderContent(target));
                 sent++;
             } catch (RuntimeException e) {
                 // 발송 기록을 이미 선점했으므로 재시도하지 않는다(중복 발송 방지 우선).
@@ -75,7 +76,8 @@ public class AnomalyReviewReminderService {
         for (AnomalyReviewReminderTarget target : targets) {
             try {
                 notificationDispatcher.dispatch(
-                        target.guardianId(), NotificationType.ANOMALY_REVIEW_CONFLICTED, conflictContent(target));
+                        target.guardianId(), target.wardId(), NotificationType.ANOMALY_REVIEW_CONFLICTED,
+                        conflictContent(target));
                 sent++;
             } catch (RuntimeException e) {
                 // 선점했으므로 재시도하지 않는다. 안내를 놓쳐도 응답 API와 이력 화면의 CONFLICTED 표시는 그대로다.

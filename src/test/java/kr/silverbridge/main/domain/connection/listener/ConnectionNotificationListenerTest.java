@@ -51,7 +51,8 @@ class ConnectionNotificationListenerTest {
         verify(webSocketEventPublisher).sendToUser(eq(WARD_ID), eq("connection-request"), anyMap());
 
         ArgumentCaptor<NotificationContent> captor = ArgumentCaptor.forClass(NotificationContent.class);
-        verify(notificationDispatcher).dispatch(eq(WARD_ID), eq(NotificationType.CONNECTION_REQUEST), captor.capture());
+        // 두 번째 인자 = 관련 피보호자(관리자 알림 이력). 연결 요청은 수신자가 곧 피보호자다
+        verify(notificationDispatcher).dispatch(eq(WARD_ID), eq(WARD_ID), eq(NotificationType.CONNECTION_REQUEST), captor.capture());
         assertThat(captor.getValue().title()).isEqualTo("연결 요청");
         assertThat(captor.getValue().body()).isEqualTo("아들 박보호님이 연결을 요청했어요.");
         assertThat(captor.getValue().data()).containsEntry("type", "CONNECTION_REQUEST");
@@ -66,7 +67,7 @@ class ConnectionNotificationListenerTest {
         listener.handleRequested(event);
 
         ArgumentCaptor<NotificationContent> captor = ArgumentCaptor.forClass(NotificationContent.class);
-        verify(notificationDispatcher).dispatch(eq(WARD_ID), eq(NotificationType.CONNECTION_REQUEST), captor.capture());
+        verify(notificationDispatcher).dispatch(eq(WARD_ID), eq(WARD_ID), eq(NotificationType.CONNECTION_REQUEST), captor.capture());
         assertThat(captor.getValue().body()).isEqualTo("박보호 보호자가 연결을 요청했습니다.");
     }
 

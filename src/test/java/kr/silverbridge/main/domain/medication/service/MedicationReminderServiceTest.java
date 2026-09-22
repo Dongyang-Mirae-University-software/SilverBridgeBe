@@ -46,7 +46,7 @@ class MedicationReminderServiceTest {
 
         ArgumentCaptor<NotificationContent> captor = ArgumentCaptor.forClass(NotificationContent.class);
         verify(notificationDispatcher).dispatch(
-                eq(WARD_ID), eq(NotificationType.MEDICATION_REMINDER), captor.capture());
+                eq(WARD_ID), any(), eq(NotificationType.MEDICATION_REMINDER), captor.capture());
         NotificationContent content = captor.getValue();
         assertThat(content.title()).isEqualTo("복약 시간이에요");
         assertThat(content.body()).contains("혈압약", "아침", "08:00", "1정");
@@ -63,7 +63,7 @@ class MedicationReminderServiceTest {
         assertThat(reminderService.sendRetryReminders()).isEqualTo(1);
 
         ArgumentCaptor<NotificationContent> captor = ArgumentCaptor.forClass(NotificationContent.class);
-        verify(notificationDispatcher).dispatch(any(), eq(NotificationType.MEDICATION_REMINDER), captor.capture());
+        verify(notificationDispatcher).dispatch(any(), any(), eq(NotificationType.MEDICATION_REMINDER), captor.capture());
         assertThat(captor.getValue().title()).isEqualTo("약 드셨나요?");
         assertThat(captor.getValue().body()).contains("혈압약", "체크");
         assertThat(captor.getValue().data()).containsEntry("attempt", "2");
@@ -75,7 +75,7 @@ class MedicationReminderServiceTest {
         when(planner.claimFirstReminders()).thenReturn(List.of());
 
         assertThat(reminderService.sendFirstReminders()).isZero();
-        verify(notificationDispatcher, never()).dispatch(any(), any(), any());
+        verify(notificationDispatcher, never()).dispatch(any(), any(), any(), any());
     }
 
     @Test
@@ -86,12 +86,12 @@ class MedicationReminderServiceTest {
                 target(MedicationReminderLog.ATTEMPT_FIRST, 2L)));
         doThrow(new IllegalStateException("FCM 오류"))
                 .doNothing()
-                .when(notificationDispatcher).dispatch(any(), any(), any());
+                .when(notificationDispatcher).dispatch(any(), any(), any(), any());
 
         int sent = reminderService.sendFirstReminders();
 
         assertThat(sent).isEqualTo(1);
-        verify(notificationDispatcher, times(2)).dispatch(any(), any(), any());
+        verify(notificationDispatcher, times(2)).dispatch(any(), any(), any(), any());
         assertThatNoException().isThrownBy(() -> reminderService.sendRetryReminders());
     }
 

@@ -1,15 +1,23 @@
 package kr.silverbridge.main.domain.notification.dispatch;
 
+import kr.silverbridge.main.domain.notification.channel.ChannelFailureReason;
+import kr.silverbridge.main.domain.notification.channel.ChannelResult;
 import kr.silverbridge.main.domain.notification.channel.NotificationChannel;
 import kr.silverbridge.main.domain.notification.channel.NotificationChannelType;
 import kr.silverbridge.main.domain.notification.channel.NotificationContent;
 import kr.silverbridge.main.domain.notification.channel.NotificationRecipient;
+import kr.silverbridge.main.domain.notification.entity.ChannelAttempt;
+import kr.silverbridge.main.domain.notification.entity.NotificationLog;
+import kr.silverbridge.main.domain.notification.entity.NotificationLogResult;
+import kr.silverbridge.main.domain.notification.entity.NotificationNotSentReason;
+import kr.silverbridge.main.domain.notification.service.NotificationLogService;
 import kr.silverbridge.main.global.enums.Status;
 import kr.silverbridge.main.domain.notification.service.NotificationSettingService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
@@ -43,10 +51,12 @@ class NotificationDispatcherTest {
     @Mock private NotificationChannel smsChannel;
     @Mock private NotificationSettingService settingService;
     @Mock private NotificationRecipientResolver recipientResolver;
+    @Mock private NotificationLogService notificationLogService;
 
     private NotificationDispatcher dispatcher;
 
     private static final String USER_ID = "WD0001";
+    private static final String WARD_ID = "WD0009";
     private final NotificationContent content =
             NotificationContent.of("제목", "본문", Map.of("type", "CONNECTION_REQUEST"));
 
@@ -54,10 +64,21 @@ class NotificationDispatcherTest {
     void setUp() {
         lenient().when(fcmChannel.getType()).thenReturn(NotificationChannelType.FCM);
         lenient().when(smsChannel.getType()).thenReturn(NotificationChannelType.SMS);
+        // 기본은 두 채널 모두 접수 성공. 실패 시나리오는 테스트마다 덮어쓴다.
+        lenient().when(fcmChannel.send(any(), any(), any())).thenReturn(ChannelResult.delivered());
+        lenient().when(smsChannel.send(any(), any(), any())).thenReturn(ChannelResult.delivered());
         // KAKAO_ALIMTALK / EMAIL 구현체는 등록하지 않음(미구현 채널 시나리오 재현)
-        dispatcher = new NotificationDispatcher(List.of(fcmChannel, smsChannel), settingService, recipientResolver);
+        dispatcher = new NotificationDispatcher(List.of(fcmChannel, smsChannel), settingService, recipientResolver,
+                notificationLogService);
         lenient().when(recipientResolver.resolve(USER_ID))
                 .thenReturn(new NotificationRecipient(USER_ID, "01012345678", "a@b.com", Status.ACTIVE));
+    }
+
+    /** 디스패처가 남긴 이력 1건. */
+    private NotificationLog recordedLog() {
+        ArgumentCaptor<NotificationLog> captor = ArgumentCaptor.forClass(NotificationLog.class);
+        verify(notificationLogService).record(captor.capture());
+        return captor.getValue();
     }
 
     @Test
@@ -192,8 +213,8 @@ class NotificationDispatcherTest {
     @DisplayName("필수 알림(WARD_SOS) + FCM 전달 성공 → 설정 무시하고 FCM만 발송(SMS 미발송)")
     void 필수알림_FCM전달성공_SMS미발송() {
         // mandatory=true 타입은 settingService를 조회하지 않고 강제 발송한다.
-        // FCM이 실제로 전달됐으면(true) SMS 비용을 아끼고 폴백하지 않는다 (결과 기반, M-S2-1).
-        when(fcmChannel.send(any(), any(), any())).thenReturn(true);
+        // FCM이 실제로 전달됐으면 SMS 비용을 아끼고 폴백하지 않는다 (결과 기반, M-S2-1).
+        when(fcmChannel.send(any(), any(), any())).thenReturn(ChannelResult.delivered());
 
         dispatcher.dispatch(USER_ID, NotificationType.WARD_SOS, content);
 
@@ -205,8 +226,8 @@ class NotificationDispatcherTest {
     @Test
     @DisplayName("필수 알림(WARD_SOS) + FCM 전달 실패(토큰 없음/전부 만료) → SMS로 폴백 발송")
     void 필수알림_FCM전달실패_SMS폴백() {
-        // 토큰 부재·전 토큰 만료 등 "실제 전달 실패"(false)면 SMS를 폴백으로 발송한다 (M-S2-1).
-        when(fcmChannel.send(any(), any(), any())).thenReturn(false);
+        // 토큰 부재·전 토큰 만료 등 "실제 전달 실패"면 SMS를 폴백으로 발송한다 (M-S2-1).
+        when(fcmChannel.send(any(), any(), any())).thenReturn(ChannelResult.failed(ChannelFailureReason.NO_DEVICE));
 
         dispatcher.dispatch(USER_ID, NotificationType.WARD_SOS, content);
 
@@ -229,7 +250,6 @@ class NotificationDispatcherTest {
     void 이상감지_FCM고정_SMS선택() {
         // FORCED_PUSH_PLUS_SETTINGS: FCM은 설정 무시(고정), 나머지 채널은 설정대로.
         given(settingService.enabledChannels(USER_ID)).willReturn(EnumSet.noneOf(NotificationChannelType.class));
-        when(fcmChannel.send(any(), any(), any())).thenReturn(true);
 
         dispatcher.dispatch(USER_ID, NotificationType.ANOMALY_DETECTED, content);
 
@@ -241,7 +261,6 @@ class NotificationDispatcherTest {
     @DisplayName("이상감지: SMS를 켠 사용자에게는 FCM + SMS 모두 발송한다")
     void 이상감지_SMS켜짐_추가발송() {
         given(settingService.enabledChannels(USER_ID)).willReturn(EnumSet.of(NotificationChannelType.SMS));
-        when(fcmChannel.send(any(), any(), any())).thenReturn(true);
 
         dispatcher.dispatch(USER_ID, NotificationType.ANOMALY_DETECTED, content);
 
@@ -254,7 +273,7 @@ class NotificationDispatcherTest {
     void 이상감지_FCM미전달_SMS폴백없음() {
         // WARD_SOS와 결정적으로 다른 지점(D-2). 폴백하면 문자를 선택하지 않은 사용자에게 과금·발송이 발생한다.
         given(settingService.enabledChannels(USER_ID)).willReturn(EnumSet.noneOf(NotificationChannelType.class));
-        when(fcmChannel.send(any(), any(), any())).thenReturn(false);
+        when(fcmChannel.send(any(), any(), any())).thenReturn(ChannelResult.failed(ChannelFailureReason.NO_DEVICE));
 
         dispatcher.dispatch(USER_ID, NotificationType.ANOMALY_DETECTED, content);
 
@@ -265,7 +284,6 @@ class NotificationDispatcherTest {
     @DisplayName("채널에 알림 종류를 그대로 전달한다(알림톡이 승인 템플릿을 고르는 근거)")
     void 채널에_알림종류_전달() {
         given(settingService.enabledChannels(USER_ID)).willReturn(EnumSet.noneOf(NotificationChannelType.class));
-        when(fcmChannel.send(any(), any(), any())).thenReturn(true);
 
         dispatcher.dispatch(USER_ID, NotificationType.ANOMALY_DETECTED_SELF, content);
 
@@ -349,5 +367,169 @@ class NotificationDispatcherTest {
         dispatcher.dispatch(USER_ID, NotificationType.ANOMALY_DETECTED, content);
 
         verify(fcmChannel).send(any(), any(), any());
+    }
+
+    // ─── 발송 이력(notification_log) ──────────────────────────────
+
+    @Test
+    @DisplayName("이력: 전달되면 DELIVERED, 시도한 채널별 결과와 피보호자 ID가 함께 남는다")
+    void 이력_전달성공() {
+        given(settingService.enabledChannels(USER_ID))
+                .willReturn(EnumSet.of(NotificationChannelType.FCM, NotificationChannelType.SMS));
+        when(smsChannel.send(any(), any(), any())).thenReturn(ChannelResult.failed(ChannelFailureReason.NO_PHONE));
+
+        dispatcher.dispatch(USER_ID, WARD_ID, NotificationType.MEDICATION_MISSED, content);
+
+        NotificationLog log = recordedLog();
+        assertThat(log.getResult()).isEqualTo(NotificationLogResult.DELIVERED);
+        assertThat(log.getNotSentReason()).isNull();
+        assertThat(log.getRecipientId()).isEqualTo(USER_ID);
+        assertThat(log.getWardId()).isEqualTo(WARD_ID);
+        assertThat(log.getType()).isEqualTo(NotificationType.MEDICATION_MISSED);
+        assertThat(log.getTitle()).isEqualTo("제목");
+        assertThat(log.getBody()).isEqualTo("본문");
+        assertThat(log.getChannelResults()).containsExactlyInAnyOrder(
+                new ChannelAttempt(NotificationChannelType.FCM, ChannelResult.Status.DELIVERED, null),
+                new ChannelAttempt(NotificationChannelType.SMS, ChannelResult.Status.FAILED, ChannelFailureReason.NO_PHONE));
+    }
+
+    @Test
+    @DisplayName("이력: 피보호자 없는 3인자 호출은 wardId가 null로 남는다")
+    void 이력_피보호자없음() {
+        given(settingService.enabledChannels(USER_ID)).willReturn(EnumSet.of(NotificationChannelType.FCM));
+
+        dispatcher.dispatch(USER_ID, NotificationType.INQUIRY_ANSWERED, content);
+
+        assertThat(recordedLog().getWardId()).isNull();
+    }
+
+    @Test
+    @DisplayName("이력: 시도한 채널이 모두 실패하면 FAILED")
+    void 이력_전부실패() {
+        given(settingService.enabledChannels(USER_ID)).willReturn(EnumSet.of(NotificationChannelType.FCM));
+        when(fcmChannel.send(any(), any(), any()))
+                .thenReturn(ChannelResult.failed(ChannelFailureReason.ALL_TOKENS_EXPIRED));
+
+        dispatcher.dispatch(USER_ID, NotificationType.CONNECTION_REQUEST, content);
+
+        NotificationLog log = recordedLog();
+        assertThat(log.getResult()).isEqualTo(NotificationLogResult.FAILED);
+        assertThat(log.getChannelResults()).containsExactly(new ChannelAttempt(
+                NotificationChannelType.FCM, ChannelResult.Status.FAILED, ChannelFailureReason.ALL_TOKENS_EXPIRED));
+    }
+
+    @Test
+    @DisplayName("이력: 채널이 예외를 던지면 UNEXPECTED_ERROR 실패로 남는다(예외 원문은 남기지 않는다)")
+    void 이력_채널예외() {
+        given(settingService.enabledChannels(USER_ID)).willReturn(EnumSet.of(NotificationChannelType.FCM));
+        doThrow(new RuntimeException("token=abc 010-1234-5678")).when(fcmChannel).send(any(), any(), any());
+
+        dispatcher.dispatch(USER_ID, NotificationType.CONNECTION_REQUEST, content);
+
+        NotificationLog log = recordedLog();
+        assertThat(log.getResult()).isEqualTo(NotificationLogResult.FAILED);
+        assertThat(log.getChannelResults()).extracting(ChannelAttempt::reason)
+                .containsExactly(ChannelFailureReason.UNEXPECTED_ERROR);
+    }
+
+    @Test
+    @DisplayName("이력: 활성 채널이 없으면 실패가 아니라 NOT_SENT(NO_ENABLED_CHANNEL)")
+    void 이력_채널꺼둠() {
+        given(settingService.enabledChannels(USER_ID)).willReturn(EnumSet.noneOf(NotificationChannelType.class));
+
+        dispatcher.dispatch(USER_ID, NotificationType.CONNECTION_REQUEST, content);
+
+        NotificationLog log = recordedLog();
+        assertThat(log.getResult()).isEqualTo(NotificationLogResult.NOT_SENT);
+        assertThat(log.getNotSentReason()).isEqualTo(NotificationNotSentReason.NO_ENABLED_CHANNEL);
+        assertThat(log.getChannelResults()).isEmpty();
+    }
+
+    @Test
+    @DisplayName("이력: 켠 채널이 모두 대상 아님(미구현 EMAIL)이면 NOT_SENT - 실패로 세지 않는다")
+    void 이력_대상아님만() {
+        given(settingService.enabledChannels(USER_ID)).willReturn(EnumSet.of(NotificationChannelType.EMAIL));
+
+        dispatcher.dispatch(USER_ID, NotificationType.CONNECTION_REQUEST, content);
+
+        NotificationLog log = recordedLog();
+        assertThat(log.getResult()).isEqualTo(NotificationLogResult.NOT_SENT);
+        assertThat(log.getNotSentReason()).isEqualTo(NotificationNotSentReason.NO_ENABLED_CHANNEL);
+    }
+
+    @Test
+    @DisplayName("이력: 이용 제한 계정은 NOT_SENT(RESTRICTED_ACCOUNT), 탈퇴 진행은 WITHDRAWING_ACCOUNT")
+    void 이력_차단사유() {
+        givenRestrictedRecipient();
+        dispatcher.dispatch(USER_ID, NotificationType.WARD_SOS, content);
+        NotificationLog restricted = recordedLog();
+        assertThat(restricted.getResult()).isEqualTo(NotificationLogResult.NOT_SENT);
+        assertThat(restricted.getNotSentReason()).isEqualTo(NotificationNotSentReason.RESTRICTED_ACCOUNT);
+
+        org.mockito.Mockito.clearInvocations(notificationLogService);
+        given(recipientResolver.resolve(USER_ID))
+                .willReturn(new NotificationRecipient(USER_ID, "01012345678", "a@b.com", Status.INACTIVE));
+        dispatcher.dispatch(USER_ID, NotificationType.WARD_SOS, content);
+        assertThat(recordedLog().getNotSentReason()).isEqualTo(NotificationNotSentReason.WITHDRAWING_ACCOUNT);
+    }
+
+    @Test
+    @DisplayName("이력: SOS 푸시 실패 후 문자가 접수되면 SMS_FALLBACK - 푸시 실패 사유도 함께 남는다(팝업 근거)")
+    void 이력_SOS_문자대체() {
+        when(fcmChannel.send(any(), any(), any())).thenReturn(ChannelResult.failed(ChannelFailureReason.NO_DEVICE));
+
+        dispatcher.dispatch(USER_ID, WARD_ID, NotificationType.WARD_SOS, content);
+
+        NotificationLog log = recordedLog();
+        assertThat(log.getResult()).isEqualTo(NotificationLogResult.SMS_FALLBACK);
+        assertThat(log.getChannelResults()).containsExactly(
+                new ChannelAttempt(NotificationChannelType.FCM, ChannelResult.Status.FAILED, ChannelFailureReason.NO_DEVICE),
+                new ChannelAttempt(NotificationChannelType.SMS, ChannelResult.Status.DELIVERED, null));
+    }
+
+    @Test
+    @DisplayName("이력: SOS 푸시·문자 모두 실패하면 FAILED")
+    void 이력_SOS_전부실패() {
+        when(fcmChannel.send(any(), any(), any())).thenReturn(ChannelResult.failed(ChannelFailureReason.NO_DEVICE));
+        when(smsChannel.send(any(), any(), any())).thenReturn(ChannelResult.failed(ChannelFailureReason.NO_PHONE));
+
+        dispatcher.dispatch(USER_ID, WARD_ID, NotificationType.WARD_SOS, content);
+
+        assertThat(recordedLog().getResult()).isEqualTo(NotificationLogResult.FAILED);
+    }
+
+    @Test
+    @DisplayName("이력: 이상감지는 푸시가 실패하고 켜 둔 문자가 나가면 SMS_FALLBACK이 아니라 DELIVERED다(폴백이 아니다)")
+    void 이력_이상감지_문자는_폴백아님() {
+        given(settingService.enabledChannels(USER_ID)).willReturn(EnumSet.of(NotificationChannelType.SMS));
+        when(fcmChannel.send(any(), any(), any())).thenReturn(ChannelResult.failed(ChannelFailureReason.NO_DEVICE));
+
+        dispatcher.dispatch(USER_ID, WARD_ID, NotificationType.ANOMALY_DETECTED, content);
+
+        assertThat(recordedLog().getResult()).isEqualTo(NotificationLogResult.DELIVERED);
+    }
+
+    @Test
+    @DisplayName("이력 기록이 실패해도 발송은 이미 끝났고 예외가 밖으로 나가지 않는다")
+    void 이력_기록실패_발송무영향() {
+        given(settingService.enabledChannels(USER_ID)).willReturn(EnumSet.of(NotificationChannelType.FCM));
+        doThrow(new RuntimeException("DB 장애")).when(notificationLogService).record(any());
+
+        org.assertj.core.api.Assertions.assertThatNoException().isThrownBy(
+                () -> dispatcher.dispatch(USER_ID, NotificationType.CONNECTION_REQUEST, content));
+
+        verify(fcmChannel).send(any(), any(), any());
+    }
+
+    @Test
+    @DisplayName("채널이 결과 없이(null) 반환하면 실패로 본다 - 필수 알림은 문자 폴백으로 이어진다")
+    void 채널_null반환_실패취급() {
+        when(fcmChannel.send(any(), any(), any())).thenReturn(null);
+
+        dispatcher.dispatch(USER_ID, NotificationType.WARD_SOS, content);
+
+        verify(smsChannel).send(any(), any(), any());
+        assertThat(recordedLog().getChannelResults()).first()
+                .extracting(ChannelAttempt::reason).isEqualTo(ChannelFailureReason.UNEXPECTED_ERROR);
     }
 }

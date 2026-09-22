@@ -46,7 +46,7 @@ class MedicationMissedAlertServiceTest {
 
         ArgumentCaptor<NotificationContent> captor = ArgumentCaptor.forClass(NotificationContent.class);
         verify(notificationDispatcher).dispatch(
-                eq(GUARDIAN_ID), eq(NotificationType.MEDICATION_MISSED), captor.capture());
+                eq(GUARDIAN_ID), any(), eq(NotificationType.MEDICATION_MISSED), captor.capture());
 
         NotificationContent content = captor.getValue();
         assertThat(content.title()).isEqualTo("복약 확인이 필요해요");
@@ -66,7 +66,7 @@ class MedicationMissedAlertServiceTest {
         when(planner.claimMissedAlerts()).thenReturn(List.of());
 
         assertThat(missedAlertService.sendMissedAlerts()).isZero();
-        verify(notificationDispatcher, never()).dispatch(any(), any(), any());
+        verify(notificationDispatcher, never()).dispatch(any(), any(), any(), any());
     }
 
     @Test
@@ -74,12 +74,12 @@ class MedicationMissedAlertServiceTest {
     void 발송실패_격리() {
         when(planner.claimMissedAlerts()).thenReturn(List.of(target(2, 1), target(2, 2)));
         doThrow(new IllegalStateException("FCM 오류")).doNothing()
-                .when(notificationDispatcher).dispatch(any(), any(), any());
+                .when(notificationDispatcher).dispatch(any(), any(), any(), any());
 
         assertThatNoException().isThrownBy(() -> {
             assertThat(missedAlertService.sendMissedAlerts()).isEqualTo(1);
         });
-        verify(notificationDispatcher, times(2)).dispatch(any(), any(), any());
+        verify(notificationDispatcher, times(2)).dispatch(any(), any(), any(), any());
     }
 
     @Test
@@ -90,7 +90,7 @@ class MedicationMissedAlertServiceTest {
         missedAlertService.sendMissedAlerts();
 
         ArgumentCaptor<NotificationContent> captor = ArgumentCaptor.forClass(NotificationContent.class);
-        verify(notificationDispatcher).dispatch(any(), any(), captor.capture());
+        verify(notificationDispatcher).dispatch(any(), any(), any(), captor.capture());
 
         assertThat(captor.getValue().body()).contains("19:30까지 예정된");
         assertThat(captor.getValue().data()).containsEntry("alertTime", "19:30");

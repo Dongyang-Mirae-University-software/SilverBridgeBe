@@ -51,4 +51,14 @@ public interface ConnectionRepository extends JpaRepository<Connection, Long> {
      * 관리자가 확인해야 할 사각지대 신호다.</p>
      */
     long countByStatusAndCreatedAtBefore(ConnectionStatus status, OffsetDateTime cutoff);
+
+    /**
+     * 보호자·피보호자 후보 집합 사이의 연결(관리자 알림 이력의 관계 라벨 표시용).
+     *
+     * <p>⚠️ 표시 전용이다 - 인가 근거로 쓰지 말 것. 인가는 {@code ConnectionService.getActiveWardIds()}·
+     * {@code isActiveConnection()}만 쓴다. 두 집합의 곱이라 원하지 않는 쌍도 섞일 수 있어 호출부가 쌍으로 다시 고른다.</p>
+     */
+    List<Connection> findByGuardianIdInAndWardIdInAndStatus(Collection<String> guardianIds,
+                                                            Collection<String> wardIds,
+                                                            ConnectionStatus status);
 }

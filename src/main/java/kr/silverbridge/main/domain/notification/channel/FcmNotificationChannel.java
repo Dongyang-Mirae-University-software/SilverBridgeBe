@@ -23,7 +23,7 @@ public class FcmNotificationChannel implements NotificationChannel {
     }
 
     @Override
-    public boolean send(NotificationType type, NotificationRecipient recipient, NotificationContent content) {
+    public ChannelResult send(NotificationType type, NotificationRecipient recipient, NotificationContent content) {
         // 푸시는 문구·data를 그대로 싣는다 — 종류(type)는 클라이언트가 data["type"]으로 이미 받는다.
         return fcmService.sendToUser(recipient.userId(), content.title(), content.body(), content.data());
     }

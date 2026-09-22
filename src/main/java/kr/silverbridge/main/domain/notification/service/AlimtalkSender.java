@@ -7,6 +7,8 @@ import com.solapi.sdk.message.exception.SolapiUnknownException;
 import com.solapi.sdk.message.model.Message;
 import com.solapi.sdk.message.model.kakao.KakaoOption;
 import com.solapi.sdk.message.service.DefaultMessageService;
+import kr.silverbridge.main.domain.notification.channel.ChannelFailureReason;
+import kr.silverbridge.main.domain.notification.channel.ChannelResult;
 import kr.silverbridge.main.domain.notification.config.AlimtalkProperties;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -24,7 +26,7 @@ import java.util.Map;
  * <p><b>{@code disableSms=true}</b>로 Solapi의 SMS 대체발송을 끈다: 알림톡 실패를 문자로 메우면 문자를
  * 선택하지 않은 사용자에게 과금·발송이 발생해 "문자는 사용자 선택"이라는 정책(이상감지 D-2)을 뒤집는다.</p>
  *
- * <p>발송 실패는 예외를 던지지 않고 {@code false}를 돌려준다 — 알림톡은 부가 채널이라 실패가 FCM 발송이나
+ * <p>발송 실패는 예외를 던지지 않고 실패 결과를 돌려준다 — 알림톡은 부가 채널이라 실패가 FCM 발송이나
  * 이력 저장에 영향을 주면 안 된다(디스패처의 채널 격리와 이중 방어).</p>
  */
 @Slf4j
@@ -49,9 +51,9 @@ public class AlimtalkSender {
      * @param phone      수신 번호(카카오톡 계정에 등록된 번호로 전달된다)
      * @param templateId 승인된 템플릿 ID
      * @param variables  {@code "#{변수}" → 값}
-     * @return 발송 요청이 접수되면 true, 실패하면 false
+     * @return 발송 요청이 접수되면 성공, 실패하면 사유(접수 거부 / 통신 오류)
      */
-    public boolean send(String phone, String templateId, Map<String, String> variables) {
+    public ChannelResult send(String phone, String templateId, Map<String, String> variables) {
         KakaoOption kakaoOption = new KakaoOption();
         kakaoOption.setPfId(properties.getPfId());
         kakaoOption.setTemplateId(templateId);
@@ -66,13 +68,13 @@ public class AlimtalkSender {
         DefaultMessageService messageService = SolapiClient.INSTANCE.createInstance(apiKey, apiSecret);
         try {
             messageService.send(message);
-            return true;
+            return ChannelResult.delivered();
         } catch (SolapiMessageNotReceivedException e) {
             log.error("알림톡 발송 실패: templateId={}, failed={}", templateId, e.getFailedMessageList());
-            return false;
+            return ChannelResult.failed(ChannelFailureReason.PROVIDER_REJECTED);
         } catch (SolapiEmptyResponseException | SolapiUnknownException e) {
             log.error("알림톡 오류: templateId={}, error={}", templateId, e.getMessage());
-            return false;
+            return ChannelResult.failed(ChannelFailureReason.PROVIDER_ERROR);
         }
     }
 }
