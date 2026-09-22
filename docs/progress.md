@@ -1471,3 +1471,10 @@ REST API Key 단독 대비 보안 강화 — 인가코드 탈취 시 토큰 발�
 - **기존 동작 보존**: 강제 FCM·정지 수신자 차단·허용 채널 교집합·SOS 문자 폴백 그대로. `SmsSender.send()`(인증번호)는 동작 불변 - `trySend()` 추가. 알림톡은 템플릿 검사를 번호 검사 앞으로(대상 아닌 알림을 실패로 기록하지 않게).
 - `./gradlew test` 653 / 0 실패 · `build -x test` 통과. 통합 테스트(`NotificationLogIntegrationTest`)는 **push 후 vkcs 실행 필요**.
 - 상세: `docs/(2026-09-22) feature-admin-notification-history.md`
+
+## [2026-09-22] 관리자 알림 이력 영향 범위 점검 (템플릿 C) - PASS(잔여 확인 1건)
+
+- 대상 #257(V54). 공용 계약 `NotificationChannel.send()`·`NotificationDispatcher` 변경의 전 도메인 사용처(채널 3 · `dispatch` 14곳 · `SmsSender` 인증번호 공용)를 판정. 🔴·🟠 0건.
+- SOS 폴백 조건·강제 FCM·정지 차단·인증번호 문자·알림톡 OFF(가짜 실패 없음)·기록 실패 격리 모두 PASS. 비동기·스케줄러 경로는 바깥 트랜잭션이 없어 기록이 커넥션을 더 잡지 않는다(동기 AFTER_COMMIT 1곳만 탈퇴 시 순간 2개).
+- 🟡 M-1: vkcs 배포 후 발송이 없어 `notification_log` 0건 - 실서버 기록 미확인(로그 `NOTIFY-LOG-FAILED`·`ERROR` 0건). 🟢 L-1 채널 꺼 둠도 INSERT(수용) · L-2 스케줄러 6/풀 3(수용) · L-3 연결 수락·거절·해제 wardId 공란 · L-4 기록 누락 가드 테스트 제안.
+- 상세: `docs/(2026-09-22) audit-impact-notification-channel-result.md`
