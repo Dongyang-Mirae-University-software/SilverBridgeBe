@@ -23,12 +23,13 @@ import java.util.Map;
 import java.util.stream.Collectors;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.within;
 
 /**
  * 관리자 이상감지 로그 v2 쿼리(2026-09-21, PR #253)를 실제 PostgreSQL에서 실행한다.
  *
  * <p>단위 테스트는 리포지토리를 목으로 바꿔 서비스 로직만 봤다. 여기서는 JPQL 자체 - 불린 파라미터 비교,
- * IN 절 두 개, enum null 조건, GROUP BY 인터페이스 프로젝션, LIKE {@code escape '\'} - 가 PostgreSQL에서
+ * IN 절 두 개, enum null 조건, GROUP BY 인터페이스 프로젝션(SUM 포함), LIKE {@code escape '\'} - 가 PostgreSQL에서
  * 기대대로 동작하는지를 본다.</p>
  */
 class AdminAnomalyQueryIntegrationTest extends PostgresIntegrationTest {
@@ -115,6 +116,8 @@ class AdminAnomalyQueryIntegrationTest extends PostgresIntegrationTest {
                 "FIRE/FALSE_ALARM", 1L,
                 "FIRE/CONFLICTED", 1L,
                 "FALL/PENDING", 1L));
+        // max_confidence 합계도 같은 GROUP BY에서 채워진다(각 상황 0.8 한 건씩)
+        assertThat(rows).allSatisfy(row -> assertThat(row.getConfidenceSum()).isCloseTo(0.8, within(1e-9)));
     }
 
     private Page<AnomalyIncident> search(AnomalyReviewStatus status, OffsetDateTime from, DetectedType type,

@@ -9,7 +9,7 @@ import java.util.List;
  * 관리자 이상감지 로그 화면의 집계(유형 탭 건수 · 응답률 · 판정별 현황 · AI 신뢰도).
  *
  * <p><b>유형 탭 건수({@code byType})만 유형 필터를 무시</b>한다 - 탭을 골라도 탭 옆 숫자는 그대로여야 한다.
- * 나머지({@code total}·{@code review}·{@code responseRate}·{@code accuracy})는 고른 유형으로 좁혀 계산한다.</p>
+ * 나머지({@code total}·{@code review}·{@code responseRate}·{@code aiConfidence})는 고른 유형으로 좁혀 계산한다.</p>
  *
  * <p><b>모르는 값을 0으로 채우지 않는다</b> - 분모가 0이면 비율은 null이다(대시보드 2026-09-02 규칙).
  * 오탐 비율은 응답률과 함께 내려간다(오탐만 단독 노출 금지).</p>
@@ -32,8 +32,8 @@ public record AdminAnomalySummaryResponse(
         @Schema(description = "사용자 응답률 0.0~1.0 = (total - pending) / total. total이 0이면 null", example = "0.7692")
         Double responseRate,
 
-        @Schema(description = "AI 신뢰도 (유형 필터 적용)")
-        Accuracy accuracy
+        @Schema(description = "AI 신뢰도 - 판정 난 상황의 confidence 평균 (유형 필터 적용)")
+        AiConfidence aiConfidence
 ) {
 
     @Schema(description = "유형별 건수")
@@ -61,19 +61,21 @@ public record AdminAnomalySummaryResponse(
     }
 
     /**
-     * AI 신뢰도 = 위험 / (위험 + 오탐). 판정이 난 건 중 AI 경보가 실제 위험이었던 비율이다.
+     * AI 신뢰도 = 판정이 난 상황들의 AI confidence 평균(상황별 {@code max_confidence}).
      *
-     * <p>미판정·동수는 분모에서 뺀다 - 아직 모르는 건을 어느 쪽으로도 세지 않는다. 그래서 {@code rate}가 곧 위험 비율이고
-     * {@code falseAlarmRate}는 {@code 1 - rate}다. AI가 매 프레임 보내는 {@code confidence}(얼마나 불처럼 보이는가)와는
-     * 다른 값이다.</p>
+     * <p>미판정·동수는 뺀다 - 시안의 "평균"이 위험 평균과 오탐 평균의 가중평균이 되도록 분모를 판정 난 건으로 맞춘다.
+     * 이 값은 "AI가 얼마나 확신했는가"이지 "AI가 맞았는가"가 아니다: 오탐 평균이 높다는 것은 AI가 확신했는데
+     * 틀렸다는 뜻이다. 분모가 0이면 null - 0%로 채우지 않는다(2026-09-22, 위험÷(위험+오탐) 비율을 대체).</p>
      */
-    @Schema(description = "AI 신뢰도 = 위험 / (위험 + 오탐)")
-    public record Accuracy(
-            @Schema(description = "AI 신뢰도(= 위험 비율) 0.0~1.0. basis가 0이면 null", example = "0.4")
-            Double rate,
-            @Schema(description = "오탐 비율 0.0~1.0 (= 1 - rate). basis가 0이면 null", example = "0.6")
-            Double falseAlarmRate,
-            @Schema(description = "분모 = 위험 + 오탐 건수", example = "40")
+    @Schema(description = "AI 신뢰도 = 판정 난 상황들의 AI confidence 평균")
+    public record AiConfidence(
+            @Schema(description = "위험 + 오탐 상황의 confidence 평균 0.0~1.0. basis가 0이면 null", example = "0.806")
+            Double average,
+            @Schema(description = "위험 판정 상황의 confidence 평균 0.0~1.0. 위험 0건이면 null", example = "0.83")
+            Double real,
+            @Schema(description = "오탐 판정 상황의 confidence 평균 0.0~1.0. 오탐 0건이면 null", example = "0.79")
+            Double falseAlarm,
+            @Schema(description = "분모 = 위험 + 오탐 상황 수", example = "40")
             long basis
     ) {
     }
