@@ -1450,3 +1450,10 @@ REST API Key 단독 대비 보안 강화 — 인가코드 탈취 시 토큰 발�
 - **동수는 관리자 화면에 표시하지 않기로**(사용자 결정) - 백엔드 무변경, FE 칩은 시안대로 4개.
 - `./gradlew test` 611 / 0 실패.
 - 상세: `docs/(2026-09-22) feature-admin-anomaly-ai-confidence.md`
+
+## [2026-09-22] 관리자 이상감지 AI 신뢰도 기능 점검 (템플릿 B) - PASS
+
+- 대상 #255. 🔴·🟠 0건. 인가 이중 게이트·쓰기 매핑 없음 유지, 가중평균·null 규칙·유형 필터·실 DB SUM 프로젝션 모두 PASS.
+- 🟡 M-1: 동수가 있으면 응답률 바(77%)와 "판정 완료 M건"(real+falseAlarm) 문구가 어긋난다 - M을 `total - pending`으로 바꾸도록 Notion 수정 권고(백엔드 무변경).
+- 🟢 L-1 `/summary` 역할별 403 테스트 없음 · L-2 미사용 필드 `aiConfidence.real`·`falseAlarm` 판단 보류 · L-3 confidence 0~1 검증 없음(기존, 수용) · L-4 최고값 평균이라 위로 치우침(정보).
+- 상세: `docs/(2026-09-22) audit-admin-anomaly-ai-confidence.md`
