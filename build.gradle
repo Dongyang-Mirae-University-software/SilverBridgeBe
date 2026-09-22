@@ -69,6 +69,31 @@ tasks.named('test') {
 }
 
 // =============================================
+// 통합 테스트 (실제 PostgreSQL - Testcontainers)
+// 실행: ./gradlew integrationTest   (Docker 필요 - vkcs에서는 tools/integration-test.sh)
+//
+// 단위 테스트(`test`)와 분리한 이유: 로컬 개발 환경에는 Docker가 없어도 `test`·`build`가 지금처럼 돌아야 한다.
+// 그래서 check·build에 연결하지 않는다 - 배포 전 검증은 CD가 이 태스크를 직접 부른다.
+// 마이그레이션(V1~)·JPQL·DB 제약(UNIQUE·CHECK·ON CONFLICT)처럼 목으로는 실행되지 않는 것을 여기서 검증한다.
+// =============================================
+testing {
+    suites {
+        integrationTest(JvmTestSuite) {
+            useJUnitJupiter()
+            dependencies {
+                implementation project()
+                implementation 'org.springframework.boot:spring-boot-starter-data-jpa-test'
+                implementation 'org.springframework.boot:spring-boot-starter-flyway-test'
+                implementation 'org.testcontainers:testcontainers-postgresql'
+                implementation 'org.testcontainers:testcontainers-junit-jupiter'
+                runtimeOnly 'org.postgresql:postgresql'
+                runtimeOnly 'org.flywaydb:flyway-database-postgresql'
+            }
+        }
+    }
+}
+
+// =============================================
 // OWASP Dependency Check 설정
 // 실행: ./gradlew dependencyCheckAnalyze --info
 // 결과: build/reports/dependency-check-report.html
@@ -81,7 +106,8 @@ dependencyCheck {
     // CVSS 7.0(High) 이상 발견 시 빌드 실패 — 로컬 실행 기준, CI에선 조정 가능
     failBuildOnCVSS = 7.0f
     // 테스트 전용 의존성은 런타임 위험 적어 스캔 대상에서 제외
-    skipConfigurations = ['testCompileClasspath', 'testRuntimeClasspath']
+    skipConfigurations = ['testCompileClasspath', 'testRuntimeClasspath',
+                          'integrationTestCompileClasspath', 'integrationTestRuntimeClasspath']
     // NVD API key가 있으면 동기화 속도 크게 향상 (optional)
     nvd {
         apiKey = System.getenv('NVD_API_KEY') ?: ''

@@ -58,7 +58,7 @@
 |---|---|---|
 | `global/websocket` (STOMP 리스너) | ✅ | M-1 STOMP NPE 수정 완료(2026-07-14, null-safe) |
 | **탈퇴 리스너 트랜잭션 전파** | ⚠️ | H-1 — AFTER_COMMIT에서 `@Transactional`(REQUIRED) 쓰기(`MedicationWithdrawalService`·`ConnectionService.tearDownConnectionsOnWithdrawal`). 리포의 다른 AFTER_COMMIT 경로는 `REQUIRES_NEW`. 현재는 purge FK CASCADE가 가려 무해. **미검증 — 실측 필요**(2026-09-10 재확인: 변경 없음) |
-| **실 DB 통합 테스트** | ❌ | M-1 — 407개 테스트가 전부 목 기반(H2·Testcontainers 없음). Flyway V1~V49, `uq_medication_reminder` UNIQUE, 트랜잭션 전파가 한 번도 실행 검증되지 않음. **2026-08-06 착수했으나 작업 환경에 Docker 미가용(Docker Desktop 미실행)으로 보류** — 재개 절차는 `(2026-08-06) fix-audit-findings.md`. **2026-09-10 재확인: 여전히 미도입**, V39~V49도 목으로만 검증 |
+| **실 DB 통합 테스트** | ⚠️ | **1단계 도입(2026-09-21)** - `src/integrationTest`(Testcontainers `postgres:17`, `@DataJpaTest`) 10건: Flyway V1~V53 전체 적용·엔티티 validate, 이상감지 v2 JPQL, ON CONFLICT, enum↔CHECK. vkcs `tools/integration-test.sh`로 실행, **CD가 배포 전 자동 실행·실패 시 중단**. 남은 것: 서비스·트랜잭션 전파·리스너(전체 컨텍스트) - H-1 판정은 여기서 가능해진다. `(2026-09-21) feature-testcontainers-integration-test.md` |
 | 이상감지 **통합 경로**(카메라 등록 ↔ AI sessionId) | ❌ | FE가 발급 sessionId로 스트리밍하도록 수정된 뒤 검증 예정. 현재 gosky `camera` 0행 |
 | 카카오 알림톡 채널 | ✅ | 템플릿 **승인(2026-07-27)**·두 서버 `ALIMTALK_ENABLED=true`로 실발송 중(2026-07-31 확인). 카카오 푸시는 검토 후 미채택(앱 푸시=FCM 중복) |
 | **역할 경계 횡단**(보호자/피보호자/관리자) | ✅ | `(2026-09-10) audit-role-boundary-guardian-ward-admin.md` - 보호자·피보호자 PASS. 보호자 G-1·관리자 A-1 수정 완료(2026-09-10). A-2(문의 답변 감사 로그)는 V50 PR ②. 역할 게이트 테스트 미커버는 8개 → 5개(연결 2·문의 2·공지 1, 다음 변경 때) |

@@ -1427,3 +1427,12 @@ REST API Key 단독 대비 보안 강화 — 인가코드 탈취 시 토큰 발�
 - 설계를 해 보니 E-3을 제대로 고치려면 연결 종료 경로 5곳 × 이벤트 구조 변경 × 새 리스너가 필요해, 드문 경우 하나에 비해 변경 위험이 크다고 판단했다.
 - 고칠 때의 방향은 정책 파일에 남겼다: E-2 = 상황 행 비관적 잠금, E-3 = ACTIVE 보호자 표만 세되 **확정된 판정(REAL·FALSE_ALARM)은 유지**하고 PENDING·CONFLICTED만 재계산.
 - 기록: `.claude/rules/domain-security-policy.md` 이상감지 절 "알려진 한계 - 판정 집계", `docs/audit-index.md` #252 행.
+
+## [2026-09-21] Testcontainers 통합 테스트 도입 - vkcs 실행 + CD 배포 전 자동 실행
+
+- **구성**: 로컬 `./gradlew test`(목, Docker 불필요)는 그대로. 새 `./gradlew integrationTest`(`src/integrationTest`, `@DataJpaTest` + 실제 `postgres:17`)는 Docker가 있는 vkcs에서 `tools/integration-test.sh`로 돈다 - JDK 21 gradle 컨테이너 + 호스트 docker 소켓, 배포 폴더 미접촉.
+- **첫 테스트 10건**: Flyway V1~V53 전체 적용·엔티티 validate / 이상감지 v2 JPQL 5건 / 동수 안내 ON CONFLICT / enum↔CHECK 3건.
+- **CD**: `docker compose build` 직전에 통합 테스트 - 실패하면 배포 중단(우회 없음). PR 자동 실행은 안 함(public 저장소 + self-hosted 러너 위험).
+- **실측(vkcs)**: 10/10 통과, "Successfully applied 53 migrations", 컨테이너 잔존 0. 첫 실행 14분 18초 / 캐시 후 31초. 일부러 깨뜨린 단언 → exit=1로 잡힘 확인.
+- 점검 대장 "실 DB 통합 테스트" ❌ → ⚠️(1단계). 남은 것은 서비스·트랜잭션·리스너 수준(H-1).
+- 상세: `docs/(2026-09-21) feature-testcontainers-integration-test.md`
