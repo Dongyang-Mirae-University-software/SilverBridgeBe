@@ -63,5 +63,5 @@
 ## 검증
 
 - `./gradlew test` **611 tests / 0 failures / 0 errors** (skipped 1). 추가·수정: 시안 숫자 재현(0.806·0.83·0.79, 미판정·동수 미혼입) / 분모 0 null / 한쪽 판정만 있으면 그쪽만 값 / 유형 합산은 가중평균(평균의 평균 아님) / 유형 필터 적용.
-- 통합 테스트 `AdminAnomalyQueryIntegrationTest.집계_GROUP_BY`에 SUM 프로젝션 단언 추가 - vkcs `tools/integration-test.sh` 결과는 아래.
+- 통합 테스트 `AdminAnomalyQueryIntegrationTest.집계_GROUP_BY`에 SUM 프로젝션 단언 추가 - **vkcs `tools/integration-test.sh` 통과**(2026-09-22, `781b48a`, 41초, 캐시 아닌 실제 실행).
 - 운영 DB `anomaly_incident` 0행(2026-09-22 확인) - 실데이터 검증은 AI 경보가 쌓인 뒤.
