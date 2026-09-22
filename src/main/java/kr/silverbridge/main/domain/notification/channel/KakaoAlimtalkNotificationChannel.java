@@ -20,7 +20,7 @@ import java.util.Map;
  * 채운다. 따라서 알림 종류마다 승인 템플릿이 하나씩 있어야 하며, 매핑은 {@link AlimtalkProperties#getTemplates()}
  * ({@code notification.alimtalk.templates.<TYPE>})에 둔다.</p>
  *
- * <p><b>템플릿이 없으면 발송하지 않는다</b>(스킵 후 {@code false}). 승인 전에 다른 용도의 템플릿으로 억지로 보내면
+ * <p><b>템플릿이 없으면 발송하지 않는다</b>(스킵 후 {@link ChannelResult#notApplicable()} - 실패가 아니라 대상이 아님). 승인 전에 다른 용도의 템플릿으로 억지로 보내면
  * 문구가 어긋나 카카오 채널 제재 대상이 된다. 즉 이 빈이 있어도 미승인 종류는 조용히 스킵되어 기존 동작이 유지된다.</p>
  */
 @Slf4j
@@ -37,12 +37,9 @@ public class KakaoAlimtalkNotificationChannel implements NotificationChannel {
     }
 
     @Override
-    public boolean send(NotificationType type, NotificationRecipient recipient, NotificationContent content) {
-        if (recipient.phone() == null || recipient.phone().isBlank()) {
-            log.warn("알림톡 건너뜀(전화번호 없음): userId={}", recipient.userId());
-            return false;
-        }
-
+    public ChannelResult send(NotificationType type, NotificationRecipient recipient, NotificationContent content) {
+        // 템플릿 검사가 전화번호 검사보다 먼저다 - 원래 알림톡 대상이 아닌 알림(복약 등)을 번호가 없다는 이유로
+        // "실패"로 기록하지 않기 위해서다(관리자 알림 이력). 대상이 아니면 번호 유무는 상관이 없다.
         // 템플릿은 발송 종류(type)로 고른다 — data["type"]은 클라이언트가 파싱하는 FE 계약 값이라
         // 발송 라우팅을 거기에 묶으면 FE 계약이 바뀔 때 엉뚱한 템플릿이 선택될 수 있다.
         AlimtalkProperties.Template template = properties.templateFor(type != null ? type.name() : null);
@@ -50,7 +47,12 @@ public class KakaoAlimtalkNotificationChannel implements NotificationChannel {
             // 승인된 템플릿이 없는 알림 종류 — 발송 수단이 없으므로 스킵(설정을 켜도 아무 일도 일어나지 않는다).
             // 승인 문구와 수신자가 어긋나는 발송을 막는 지점이기도 하다(예: 보호자용 문구를 피보호자에게).
             log.debug("알림톡 템플릿 미설정 — 건너뜀: userId={}, type={}", recipient.userId(), type);
-            return false;
+            return ChannelResult.notApplicable();
+        }
+
+        if (recipient.phone() == null || recipient.phone().isBlank()) {
+            log.warn("알림톡 건너뜀(전화번호 없음): userId={}", recipient.userId());
+            return ChannelResult.failed(ChannelFailureReason.NO_PHONE);
         }
 
         Map<String, String> variables = template.bindVariables(content);

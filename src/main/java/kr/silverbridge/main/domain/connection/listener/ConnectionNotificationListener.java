@@ -51,7 +51,7 @@ public class ConnectionNotificationListener {
                 ? event.relation() + " " + event.guardianName() + "님이 연결을 요청했어요."
                 : event.guardianName() + " 보호자가 연결을 요청했습니다.";
 
-        notificationDispatcher.dispatch(event.wardId(), NotificationType.CONNECTION_REQUEST,
+        notificationDispatcher.dispatch(event.wardId(), event.wardId(), NotificationType.CONNECTION_REQUEST,
                 NotificationContent.of("연결 요청", body,
                         Map.of("type", "CONNECTION_REQUEST",
                                 "connectionId", String.valueOf(event.connectionId()))));
@@ -85,13 +85,13 @@ public class ConnectionNotificationListener {
 
         webSocketEventPublisher.sendToUser(event.guardianId(), "connection-accepted",
                 Map.of("connectionId", event.connectionId()));
-        notificationDispatcher.dispatch(event.guardianId(), NotificationType.CONNECTION_FORCED,
+        notificationDispatcher.dispatch(event.guardianId(), event.wardId(), NotificationType.CONNECTION_FORCED,
                 NotificationContent.of("연결 완료",
                         "관리자가 " + event.wardName() + "님과의 연결을 완료했습니다.", data));
 
         webSocketEventPublisher.sendToUser(event.wardId(), "connection-accepted",
                 Map.of("connectionId", event.connectionId()));
-        notificationDispatcher.dispatch(event.wardId(), NotificationType.CONNECTION_FORCED,
+        notificationDispatcher.dispatch(event.wardId(), event.wardId(), NotificationType.CONNECTION_FORCED,
                 NotificationContent.of("보호자 연결",
                         "관리자가 " + event.guardianName() + "님을 보호자로 연결했습니다.", data));
     }

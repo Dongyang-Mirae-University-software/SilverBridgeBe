@@ -37,7 +37,7 @@ public class MedicationMissedAlertService {
         for (MedicationMissedAlertTarget target : targets) {
             try {
                 notificationDispatcher.dispatch(
-                        target.guardianId(), NotificationType.MEDICATION_MISSED, content(target));
+                        target.guardianId(), target.wardId(), NotificationType.MEDICATION_MISSED, content(target));
                 sent++;
             } catch (RuntimeException e) {
                 // 이미 발송 기록을 선점했으므로 재시도하지 않는다(중복 발송 방지 우선, 2차와 동일한 방침).

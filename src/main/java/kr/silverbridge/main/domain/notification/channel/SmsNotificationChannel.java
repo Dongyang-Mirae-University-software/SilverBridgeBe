@@ -30,14 +30,17 @@ public class SmsNotificationChannel implements NotificationChannel {
     }
 
     @Override
-    public boolean send(NotificationType type, NotificationRecipient recipient, NotificationContent content) {
+    public ChannelResult send(NotificationType type, NotificationRecipient recipient, NotificationContent content) {
         // 문자는 종류와 무관하게 title/body 한 줄로 나간다(승인 템플릿 같은 종류별 제약이 없다).
         if (recipient.phone() == null || recipient.phone().isBlank()) {
             log.warn("SMS 알림 건너뜀(전화번호 없음): userId={}", recipient.userId());
-            return false;
+            return ChannelResult.failed(ChannelFailureReason.NO_PHONE);
         }
-        smsSender.send(recipient.phone(), buildText(content));
-        return true;
+        return switch (smsSender.trySend(recipient.phone(), buildText(content))) {
+            case SENT -> ChannelResult.delivered();
+            case REJECTED -> ChannelResult.failed(ChannelFailureReason.PROVIDER_REJECTED);
+            case ERROR -> ChannelResult.failed(ChannelFailureReason.PROVIDER_ERROR);
+        };
     }
 
     // SMS는 title/body 구분이 없어 한 줄로 합친다. body만 있으면 body만 발송.

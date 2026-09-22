@@ -46,7 +46,8 @@ public class MedicationReminderService {
         int sent = 0;
         for (MedicationReminderTarget target : targets) {
             try {
-                notificationDispatcher.dispatch(target.wardId(), NotificationType.MEDICATION_REMINDER, content(target));
+                notificationDispatcher.dispatch(target.wardId(), target.wardId(), NotificationType.MEDICATION_REMINDER,
+                        content(target));
                 sent++;
             } catch (RuntimeException e) {
                 // 이미 발송 기록을 선점했으므로 이 회차는 재시도하지 않는다(중복 발송 방지 우선).

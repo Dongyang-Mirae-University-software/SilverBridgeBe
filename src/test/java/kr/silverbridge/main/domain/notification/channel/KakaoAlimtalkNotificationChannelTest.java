@@ -27,7 +27,8 @@ import static org.mockito.Mockito.when;
  * KakaoAlimtalkNotificationChannel 단위 테스트.
  *
  * 알림톡은 승인된 템플릿 문구만 보낼 수 있으므로, 검증의 핵심은 "템플릿이 없으면 보내지 않는다"와
- * "템플릿 변수를 알림 data에서 정확히 바인딩한다"이다.
+ * "템플릿 변수를 알림 data에서 정확히 바인딩한다"이다. 템플릿이 없는 것은 실패가 아니라 "대상 아님"이다
+ * (관리자 알림 이력에 실패로 남으면 본인 화재 알림마다 가짜 실패가 쌓인다).
  */
 @ExtendWith(MockitoExtension.class)
 class KakaoAlimtalkNotificationChannelTest {
@@ -65,11 +66,11 @@ class KakaoAlimtalkNotificationChannelTest {
     @DisplayName("승인 템플릿이 있으면 알림 data에서 변수를 바인딩해 발송한다")
     void 템플릿있음_변수바인딩_발송() {
         givenAnomalyTemplate();
-        when(alimtalkSender.send(anyString(), anyString(), any())).thenReturn(true);
+        when(alimtalkSender.send(anyString(), anyString(), any())).thenReturn(ChannelResult.delivered());
 
-        boolean sent = channel.send(NotificationType.ANOMALY_DETECTED, new NotificationRecipient("GD0001", "01012345678", null, Status.ACTIVE), content);
+        ChannelResult result = channel.send(NotificationType.ANOMALY_DETECTED, new NotificationRecipient("GD0001", "01012345678", null, Status.ACTIVE), content);
 
-        assertThat(sent).isTrue();
+        assertThat(result.isDelivered()).isTrue();
         @SuppressWarnings("unchecked")
         ArgumentCaptor<Map<String, String>> vars = ArgumentCaptor.forClass(Map.class);
         verify(alimtalkSender).send(eq("01012345678"), eq(TEMPLATE_ID), vars.capture());
@@ -80,12 +81,24 @@ class KakaoAlimtalkNotificationChannelTest {
     }
 
     @Test
-    @DisplayName("해당 알림 종류의 승인 템플릿이 없으면 발송하지 않는다(자유 문구 발송은 불가)")
+    @DisplayName("발송사 실패 사유는 그대로 돌려준다")
+    void 발송사실패_사유전달() {
+        givenAnomalyTemplate();
+        when(alimtalkSender.send(anyString(), anyString(), any()))
+                .thenReturn(ChannelResult.failed(ChannelFailureReason.PROVIDER_REJECTED));
+
+        ChannelResult result = channel.send(NotificationType.ANOMALY_DETECTED, new NotificationRecipient("GD0001", "01012345678", null, Status.ACTIVE), content);
+
+        assertThat(result).isEqualTo(ChannelResult.failed(ChannelFailureReason.PROVIDER_REJECTED));
+    }
+
+    @Test
+    @DisplayName("해당 알림 종류의 승인 템플릿이 없으면 발송하지 않는다 - 실패가 아니라 대상 아님")
     void 템플릿없음_미발송() {
         // 템플릿 매핑 없음 — 승인 전에 다른 템플릿으로 억지 발송하면 문구가 어긋나 채널 제재 대상이 된다.
-        boolean sent = channel.send(NotificationType.ANOMALY_DETECTED, new NotificationRecipient("GD0001", "01012345678", null, Status.ACTIVE), content);
+        ChannelResult result = channel.send(NotificationType.ANOMALY_DETECTED, new NotificationRecipient("GD0001", "01012345678", null, Status.ACTIVE), content);
 
-        assertThat(sent).isFalse();
+        assertThat(result).isEqualTo(ChannelResult.notApplicable());
         verifyNoInteractions(alimtalkSender);
     }
 
@@ -96,10 +109,10 @@ class KakaoAlimtalkNotificationChannelTest {
         // 본인에게 나가면 사실과 어긋난다 = 카카오 채널 제재 사유. 템플릿 매핑을 두지 않아 스킵되어야 한다.
         givenAnomalyTemplate();
 
-        boolean sent = channel.send(NotificationType.ANOMALY_DETECTED_SELF,
+        ChannelResult result = channel.send(NotificationType.ANOMALY_DETECTED_SELF,
                 new NotificationRecipient("WD0001", "01012345678", null, Status.ACTIVE), content);
 
-        assertThat(sent).isFalse();
+        assertThat(result).isEqualTo(ChannelResult.notApplicable());
         verifyNoInteractions(alimtalkSender);
     }
 
@@ -107,39 +120,39 @@ class KakaoAlimtalkNotificationChannelTest {
     @DisplayName("템플릿은 알림 종류로 고른다 — data[\"type\"](FE 계약)이 달라도 영향받지 않는다")
     void 템플릿선택_data타입에_의존하지않음() {
         givenAnomalyTemplate();
-        when(alimtalkSender.send(anyString(), anyString(), any())).thenReturn(true);
+        when(alimtalkSender.send(anyString(), anyString(), any())).thenReturn(ChannelResult.delivered());
 
         // FE 계약값이 바뀌거나 비어 있어도 발송 종류(type) 기준으로 승인 템플릿이 선택돼야 한다
         NotificationContent noTypeKey = NotificationContent.of(
                 "이상 상황 감지", "본문", Map.of("wardName", "김순자", "location", "거실", "detectedTypeLabel", "화재"));
 
-        boolean sent = channel.send(NotificationType.ANOMALY_DETECTED,
+        ChannelResult result = channel.send(NotificationType.ANOMALY_DETECTED,
                 new NotificationRecipient("GD0001", "01012345678", null, Status.ACTIVE), noTypeKey);
 
-        assertThat(sent).isTrue();
+        assertThat(result.isDelivered()).isTrue();
         verify(alimtalkSender).send(eq("01012345678"), eq(TEMPLATE_ID), any());
     }
 
     @Test
-    @DisplayName("설정이 꺼져 있으면 발송하지 않는다")
+    @DisplayName("설정이 꺼져 있으면 발송하지 않는다 - 대상 아님")
     void 설정OFF_미발송() {
         givenAnomalyTemplate();
         properties.setEnabled(false);
 
-        boolean sent = channel.send(NotificationType.ANOMALY_DETECTED, new NotificationRecipient("GD0001", "01012345678", null, Status.ACTIVE), content);
+        ChannelResult result = channel.send(NotificationType.ANOMALY_DETECTED, new NotificationRecipient("GD0001", "01012345678", null, Status.ACTIVE), content);
 
-        assertThat(sent).isFalse();
+        assertThat(result).isEqualTo(ChannelResult.notApplicable());
         verifyNoInteractions(alimtalkSender);
     }
 
     @Test
-    @DisplayName("전화번호가 없으면 발송하지 않는다(알림톡은 번호로 수신자를 찾는다)")
+    @DisplayName("전화번호가 없으면 발송하지 않고 NO_PHONE 실패로 돌려준다(알림톡은 번호로 수신자를 찾는다)")
     void 전화번호없음_미발송() {
         givenAnomalyTemplate();
 
-        boolean sent = channel.send(NotificationType.ANOMALY_DETECTED, new NotificationRecipient("GD0001", null, null, Status.ACTIVE), content);
+        ChannelResult result = channel.send(NotificationType.ANOMALY_DETECTED, new NotificationRecipient("GD0001", null, null, Status.ACTIVE), content);
 
-        assertThat(sent).isFalse();
+        assertThat(result).isEqualTo(ChannelResult.failed(ChannelFailureReason.NO_PHONE));
         verifyNoInteractions(alimtalkSender);
     }
 }

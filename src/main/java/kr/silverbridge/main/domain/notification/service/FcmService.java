@@ -1,6 +1,8 @@
 package kr.silverbridge.main.domain.notification.service;
 
 import com.google.firebase.messaging.*;
+import kr.silverbridge.main.domain.notification.channel.ChannelFailureReason;
+import kr.silverbridge.main.domain.notification.channel.ChannelResult;
 import kr.silverbridge.main.domain.notification.config.FcmTokenProperties;
 import kr.silverbridge.main.domain.notification.entity.FcmToken;
 import kr.silverbridge.main.domain.notification.repository.FcmTokenRepository;
@@ -109,21 +111,21 @@ public class FcmService {
     }
 
     // 특정 사용자에게 푸시 알림 발송 (등록된 모든 디바이스).
-    // 반환: 1건 이상 실제 전달 성공 여부 — 토큰 없음/전 토큰 만료/발송 예외는 모두 false.
-    // 필수(긴급) 알림의 결과 기반 SMS 폴백 판단에 사용한다 (M-S2-1).
-    public boolean sendToUser(String userId, String title, String body, Map<String, String> data) {
+    // 반환: 1건 이상 전달되면 성공. 실패면 사유(토큰 없음 / 전 토큰 만료 / 서버 오류)를 담는다.
+    // 필수(긴급) 알림의 결과 기반 SMS 폴백 판단(M-S2-1)과 관리자 알림 이력의 실패 사유에 쓰인다.
+    public ChannelResult sendToUser(String userId, String title, String body, Map<String, String> data) {
         List<FcmToken> tokens = fcmTokenRepository.findByUserId(userId);
         if (tokens.isEmpty()) {
             log.debug("FCM 토큰 없음: userId={}", userId);
-            return false;
+            return ChannelResult.failed(ChannelFailureReason.NO_DEVICE);
         }
 
         List<String> tokenStrings = tokens.stream().map(FcmToken::getToken).toList();
         return sendMulticast(tokenStrings, title, body, data);
     }
 
-    // MulticastMessage로 최대 500개 토큰에 동시 발송. 반환: 성공 1건 이상 여부.
-    private boolean sendMulticast(List<String> tokens, String title, String body, Map<String, String> data) {
+    // MulticastMessage로 최대 500개 토큰에 동시 발송. 반환: 성공 1건 이상이면 성공.
+    private ChannelResult sendMulticast(List<String> tokens, String title, String body, Map<String, String> data) {
         MulticastMessage.Builder builder = MulticastMessage.builder()
                 .setNotification(Notification.builder()
                         .setTitle(title)
@@ -140,18 +142,23 @@ public class FcmService {
             log.info("FCM 발송 완료: 성공={}, 실패={}", response.getSuccessCount(), response.getFailureCount());
 
             // 만료된 토큰 정리
-            if (response.getFailureCount() > 0) {
-                cleanupInvalidTokens(tokens, response);
+            int expired = response.getFailureCount() > 0 ? cleanupInvalidTokens(tokens, response) : 0;
+            if (response.getSuccessCount() > 0) {
+                return ChannelResult.delivered();
             }
-            return response.getSuccessCount() > 0;
+            // 전부 실패 - 모두 만료였을 때만 "만료"라고 말할 수 있다. 하나라도 다른 오류가 섞이면 서버 오류로 본다.
+            return ChannelResult.failed(expired == tokens.size()
+                    ? ChannelFailureReason.ALL_TOKENS_EXPIRED
+                    : ChannelFailureReason.PUSH_SERVER_ERROR);
         } catch (FirebaseMessagingException e) {
             log.error("FCM 발송 실패", e);
-            return false;
+            return ChannelResult.failed(ChannelFailureReason.PUSH_SERVER_ERROR);
         }
     }
 
-    // 유효하지 않은 토큰 DB에서 삭제
-    private void cleanupInvalidTokens(List<String> tokens, BatchResponse response) {
+    // 유효하지 않은 토큰 DB에서 삭제. 반환: 만료·무효로 삭제한 토큰 수.
+    private int cleanupInvalidTokens(List<String> tokens, BatchResponse response) {
+        int expired = 0;
         List<SendResponse> responses = response.getResponses();
         for (int i = 0; i < responses.size(); i++) {
             SendResponse sendResponse = responses.get(i);
@@ -163,9 +170,11 @@ public class FcmService {
                 if ("UNREGISTERED".equals(errorCode) || "INVALID_ARGUMENT".equals(errorCode)) {
                     String invalidToken = tokens.get(i);
                     fcmTokenRepository.deleteByToken(invalidToken);
+                    expired++;
                     log.info("만료된 FCM 토큰 삭제: {}", invalidToken.substring(0, Math.min(20, invalidToken.length())));
                 }
             }
         }
+        return expired;
     }
 }

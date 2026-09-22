@@ -85,7 +85,7 @@ public class MedicationWithdrawalListener {
         recipients.forEach(guardianId -> {
             webSocketEventPublisher.sendToUser(guardianId, "medication-stopped",
                     Map.of("wardId", wardId, "stoppedCount", String.valueOf(stoppedCount)));
-            notificationDispatcher.dispatch(guardianId, NotificationType.MEDICATION_STOPPED, content);
+            notificationDispatcher.dispatch(guardianId, wardId, NotificationType.MEDICATION_STOPPED, content);
         });
 
         log.info("[WITHDRAW] 복약 중지 안내: wardId={}, 중지={}건, 수신 보호자={}명",

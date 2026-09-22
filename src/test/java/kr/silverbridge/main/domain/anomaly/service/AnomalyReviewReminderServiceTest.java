@@ -58,7 +58,7 @@ class AnomalyReviewReminderServiceTest {
         int sent = service.sendConflictNotices();
 
         ArgumentCaptor<NotificationContent> captor = ArgumentCaptor.forClass(NotificationContent.class);
-        verify(notificationDispatcher).dispatch(eq("GD0002"), eq(NotificationType.ANOMALY_REVIEW_CONFLICTED), captor.capture());
+        verify(notificationDispatcher).dispatch(eq("GD0002"), any(), eq(NotificationType.ANOMALY_REVIEW_CONFLICTED), captor.capture());
         NotificationContent content = captor.getValue();
 
         assertThat(sent).isEqualTo(1);
@@ -76,11 +76,11 @@ class AnomalyReviewReminderServiceTest {
     void failureDoesNotStopOthers() {
         when(planner.claimConflicts()).thenReturn(List.of(target("GD0002"), target("GD0003")));
         doThrow(new IllegalStateException("FCM down"))
-                .when(notificationDispatcher).dispatch(eq("GD0002"), any(), any());
+                .when(notificationDispatcher).dispatch(eq("GD0002"), any(), any(), any());
 
         int sent = service.sendConflictNotices();
 
         assertThat(sent).isEqualTo(1);
-        verify(notificationDispatcher, times(2)).dispatch(any(), eq(NotificationType.ANOMALY_REVIEW_CONFLICTED), any());
+        verify(notificationDispatcher, times(2)).dispatch(any(), any(), eq(NotificationType.ANOMALY_REVIEW_CONFLICTED), any());
     }
 }

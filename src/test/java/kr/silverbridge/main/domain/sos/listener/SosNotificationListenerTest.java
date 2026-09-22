@@ -56,8 +56,9 @@ class SosNotificationListenerTest {
 
         for (String guardianId : List.of("GD0001", "GD0002")) {
             verify(webSocketEventPublisher).sendToUser(eq(guardianId), eq("sos-triggered"), anyMap());
+            // 두 번째 인자 = 관련 피보호자(관리자 알림 이력의 "피보호자" 칸)
             verify(notificationDispatcher).dispatch(
-                    eq(guardianId), eq(NotificationType.WARD_SOS), any(NotificationContent.class));
+                    eq(guardianId), eq(WARD_ID), eq(NotificationType.WARD_SOS), any(NotificationContent.class));
         }
     }
 
@@ -70,7 +71,7 @@ class SosNotificationListenerTest {
         listener.handleSosTriggered(event);
 
         ArgumentCaptor<NotificationContent> captor = ArgumentCaptor.forClass(NotificationContent.class);
-        verify(notificationDispatcher).dispatch(eq("GD0001"), eq(NotificationType.WARD_SOS), captor.capture());
+        verify(notificationDispatcher).dispatch(eq("GD0001"), any(), eq(NotificationType.WARD_SOS), captor.capture());
         assertThat(captor.getValue().title()).isEqualTo("긴급 SOS");
         assertThat(captor.getValue().body()).isEqualTo("김순자님이 긴급 도움을 요청했습니다.");
         assertThat(captor.getValue().data()).containsEntry("type", "WARD_SOS");
@@ -96,13 +97,13 @@ class SosNotificationListenerTest {
         when(connectionService.getActiveGuardianIds(WARD_ID)).thenReturn(List.of("GD0001", "GD0002"));
         when(cooldown.tryAcquire(WARD_ID)).thenReturn(true);
         doThrow(new RuntimeException("FCM down"))
-                .when(notificationDispatcher).dispatch(eq("GD0001"), eq(NotificationType.WARD_SOS), any());
+                .when(notificationDispatcher).dispatch(eq("GD0001"), any(), eq(NotificationType.WARD_SOS), any());
 
         listener.handleSosTriggered(event);
 
         // GD0001 발송 실패에도 GD0002는 정상 발송됨
         verify(webSocketEventPublisher).sendToUser(eq("GD0002"), eq("sos-triggered"), anyMap());
-        verify(notificationDispatcher).dispatch(eq("GD0002"), eq(NotificationType.WARD_SOS), any());
+        verify(notificationDispatcher).dispatch(eq("GD0002"), any(), eq(NotificationType.WARD_SOS), any());
     }
 
     @Test
@@ -128,7 +129,7 @@ class SosNotificationListenerTest {
         listener.handleSosTriggered(event);
 
         ArgumentCaptor<NotificationContent> captor = ArgumentCaptor.forClass(NotificationContent.class);
-        verify(notificationDispatcher).dispatch(eq("GD0001"), eq(NotificationType.WARD_SOS), captor.capture());
+        verify(notificationDispatcher).dispatch(eq("GD0001"), any(), eq(NotificationType.WARD_SOS), captor.capture());
         // 위급도를 단정하지 않고 "계속 요청 중"이라는 사실만 알린다.
         assertThat(captor.getValue().body()).isEqualTo("김순자님이 계속 도움을 요청하고 있습니다. (최근 10분 내 3번째)");
         assertThat(captor.getValue().title()).isEqualTo("긴급 SOS");
@@ -154,7 +155,7 @@ class SosNotificationListenerTest {
         listener.handleSosTriggered(event);
 
         ArgumentCaptor<NotificationContent> captor = ArgumentCaptor.forClass(NotificationContent.class);
-        verify(notificationDispatcher).dispatch(eq("GD0001"), eq(NotificationType.WARD_SOS), captor.capture());
+        verify(notificationDispatcher).dispatch(eq("GD0001"), any(), eq(NotificationType.WARD_SOS), captor.capture());
         assertThat(captor.getValue().body()).isEqualTo("김순자님이 긴급 도움을 요청했습니다.");
         assertThat(captor.getValue().data()).containsEntry("repeatCount", "1");
     }
@@ -188,7 +189,7 @@ class SosNotificationListenerTest {
 
         // 집계 인프라 문제가 긴급 알림을 막아선 안 된다 — 쿨다운 fail-open과 같은 원칙
         ArgumentCaptor<NotificationContent> captor = ArgumentCaptor.forClass(NotificationContent.class);
-        verify(notificationDispatcher).dispatch(eq("GD0001"), eq(NotificationType.WARD_SOS), captor.capture());
+        verify(notificationDispatcher).dispatch(eq("GD0001"), any(), eq(NotificationType.WARD_SOS), captor.capture());
         assertThat(captor.getValue().body()).isEqualTo("김순자님이 긴급 도움을 요청했습니다.");
         verify(webSocketEventPublisher).sendToUser(eq("GD0001"), eq("sos-triggered"), any());
     }

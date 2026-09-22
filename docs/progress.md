@@ -1462,3 +1462,12 @@ REST API Key 단독 대비 보안 강화 — 인가코드 탈취 시 토큰 발�
 
 - M-1 Notion 응답률 문구(M = `total - pending`) · L-1 `/summary` 403 테스트 · L-2 `aiConfidence`를 `{average, basis}`로 축소 · L-3 파서 confidence 0~1 보정 + `[ANOMALY-CONFIDENCE-OUT-OF-RANGE]` WARN(신호 유지) · L-4 최고값 평균 치우침 명시.
 - `./gradlew test` 615 / 0 실패. 점검 대장 #255 ⚠️ → ✅.
+
+## [2026-09-22] 관리자 알림 이력 - 발송 결과 기록·실패 사유·조회 API (V54)
+
+- **왜**: 발송 결과가 stdout 로그에만 있고, 채널 `send()`가 `boolean`만 돌려줘 실패 사유가 디스패처까지 오지 않았다.
+- **변경**: `send()` → `ChannelResult(status, reason)`, 사유 7종(서버가 구분할 수 있는 것만 - "기기 응답 없음"은 알 수 없음). `NotificationDispatcher`가 수신자 1명당 1행을 `notification_log`에 기록(`REQUIRES_NEW` - AFTER_COMMIT 안에서도 불리므로, 실패는 WARN만). 결과 4종 `DELIVERED`·`SMS_FALLBACK`(전달로 셈)·`FAILED`·`NOT_SENT`(실패 아님). 관련 피보호자는 4인자 `dispatch`로 받는다(표시 전용).
+- **API**: `GET /api/admin/notification`(category·result·period·keyword) · `/summary`. 조회 전용·ADMIN·감사 로그 없음. 보관 90일(04:30 KST 정리, 킬 스위치).
+- **기존 동작 보존**: 강제 FCM·정지 수신자 차단·허용 채널 교집합·SOS 문자 폴백 그대로. `SmsSender.send()`(인증번호)는 동작 불변 - `trySend()` 추가. 알림톡은 템플릿 검사를 번호 검사 앞으로(대상 아닌 알림을 실패로 기록하지 않게).
+- `./gradlew test` 653 / 0 실패 · `build -x test` 통과. 통합 테스트(`NotificationLogIntegrationTest`)는 **push 후 vkcs 실행 필요**.
+- 상세: `docs/(2026-09-22) feature-admin-notification-history.md`

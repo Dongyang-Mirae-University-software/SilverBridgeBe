@@ -67,9 +67,10 @@ class AnomalyNotificationListenerTest {
 
         listener.handleAnomalyDetected(event);
 
-        verify(notificationDispatcher).dispatch(eq("GD0001"), eq(NotificationType.ANOMALY_DETECTED), any());
-        verify(notificationDispatcher).dispatch(eq("GD0002"), eq(NotificationType.ANOMALY_DETECTED), any());
-        verify(notificationDispatcher).dispatch(eq(WARD_ID), eq(NotificationType.ANOMALY_DETECTED_SELF), any());
+        // 두 번째 인자 = 관련 피보호자(관리자 알림 이력의 "피보호자" 칸). 본인 수신분은 수신자 = 피보호자
+        verify(notificationDispatcher).dispatch(eq("GD0001"), eq(WARD_ID), eq(NotificationType.ANOMALY_DETECTED), any());
+        verify(notificationDispatcher).dispatch(eq("GD0002"), eq(WARD_ID), eq(NotificationType.ANOMALY_DETECTED), any());
+        verify(notificationDispatcher).dispatch(eq(WARD_ID), eq(WARD_ID), eq(NotificationType.ANOMALY_DETECTED_SELF), any());
         verify(webSocketEventPublisher).sendToUser(eq(WARD_ID), eq("anomaly-detected"), any());
     }
 
@@ -82,13 +83,13 @@ class AnomalyNotificationListenerTest {
         listener.handleAnomalyDetected(event);
 
         // 본인에게 ANOMALY_DETECTED(보호자용)로 나가면 알림톡 문구가 어긋난다 = 카카오 채널 제재 사유
-        verify(notificationDispatcher, never()).dispatch(eq(WARD_ID), eq(NotificationType.ANOMALY_DETECTED), any());
+        verify(notificationDispatcher, never()).dispatch(eq(WARD_ID), any(), eq(NotificationType.ANOMALY_DETECTED), any());
         verify(notificationDispatcher, never())
-                .dispatch(eq("GD0001"), eq(NotificationType.ANOMALY_DETECTED_SELF), any());
+                .dispatch(eq("GD0001"), any(), eq(NotificationType.ANOMALY_DETECTED_SELF), any());
 
         // 클라이언트 계약(data["type"])은 수신자와 무관하게 그대로 유지한다
         ArgumentCaptor<NotificationContent> self = ArgumentCaptor.forClass(NotificationContent.class);
-        verify(notificationDispatcher).dispatch(eq(WARD_ID), eq(NotificationType.ANOMALY_DETECTED_SELF), self.capture());
+        verify(notificationDispatcher).dispatch(eq(WARD_ID), any(), eq(NotificationType.ANOMALY_DETECTED_SELF), self.capture());
         assertThat(self.getValue().data()).containsEntry("type", "ANOMALY_DETECTED");
     }
 
@@ -101,7 +102,7 @@ class AnomalyNotificationListenerTest {
         listener.handleAnomalyDetected(event);
 
         ArgumentCaptor<NotificationContent> guardian = ArgumentCaptor.forClass(NotificationContent.class);
-        verify(notificationDispatcher).dispatch(eq("GD0001"), any(), guardian.capture());
+        verify(notificationDispatcher).dispatch(eq("GD0001"), any(), any(), guardian.capture());
         assertThat(guardian.getValue().title()).isEqualTo("이상 상황 감지");
         assertThat(guardian.getValue().body()).isEqualTo("김순자님 댁 거실에서 화재가 감지되었습니다.");
         assertThat(guardian.getValue().data())
@@ -110,7 +111,7 @@ class AnomalyNotificationListenerTest {
                 .containsEntry("detectedAt", "2026-07-23 14:20");   // UTC 05:20 → KST 14:20
 
         ArgumentCaptor<NotificationContent> self = ArgumentCaptor.forClass(NotificationContent.class);
-        verify(notificationDispatcher).dispatch(eq(WARD_ID), any(), self.capture());
+        verify(notificationDispatcher).dispatch(eq(WARD_ID), any(), any(), self.capture());
         assertThat(self.getValue().body()).isEqualTo("거실에서 화재가 감지되었습니다. 안전한 곳으로 대피해 주세요.");
     }
 
@@ -123,9 +124,9 @@ class AnomalyNotificationListenerTest {
 
         listener.handleAnomalyDetected(event);
 
-        verify(notificationDispatcher, never()).dispatch(eq("GD0001"), any(), any());
+        verify(notificationDispatcher, never()).dispatch(eq("GD0001"), any(), any(), any());
         verify(webSocketEventPublisher, never()).sendToUser(eq("GD0001"), anyString(), any());
-        verify(notificationDispatcher).dispatch(eq(WARD_ID), any(), any());
+        verify(notificationDispatcher).dispatch(eq(WARD_ID), any(), any(), any());
     }
 
     @Test
@@ -134,11 +135,11 @@ class AnomalyNotificationListenerTest {
         when(connectionService.getActiveGuardianIds(WARD_ID)).thenReturn(List.of("GD0001"));
         when(cooldown.tryAcquire(anyString(), eq(SESSION_ID), eq(DetectedType.FIRE), anyBoolean())).thenReturn(true);
         doThrow(new RuntimeException("FCM 장애"))
-                .when(notificationDispatcher).dispatch(eq("GD0001"), any(), any());
+                .when(notificationDispatcher).dispatch(eq("GD0001"), any(), any(), any());
 
         listener.handleAnomalyDetected(event);
 
-        verify(notificationDispatcher).dispatch(eq(WARD_ID), any(), any());
+        verify(notificationDispatcher).dispatch(eq(WARD_ID), any(), any(), any());
     }
 
     @Test
@@ -152,7 +153,7 @@ class AnomalyNotificationListenerTest {
         listener.handleAnomalyDetected(noAnalyzedAt);
 
         ArgumentCaptor<NotificationContent> captor = ArgumentCaptor.forClass(NotificationContent.class);
-        verify(notificationDispatcher).dispatch(eq(WARD_ID), any(), captor.capture());
+        verify(notificationDispatcher).dispatch(eq(WARD_ID), any(), any(), captor.capture());
         // 승인 템플릿의 #{detectedAt}이 빈 문자열로 나가면 "감지 시각: "만 발송된다 (분 경계 flaky 방지로 형식만 검증)
         assertThat(captor.getValue().data().get("detectedAt")).matches("\\d{4}-\\d{2}-\\d{2} \\d{2}:\\d{2}");
     }
@@ -165,7 +166,7 @@ class AnomalyNotificationListenerTest {
 
         listener.handleAnomalyDetected(event);
 
-        verify(notificationDispatcher).dispatch(eq(WARD_ID), eq(NotificationType.ANOMALY_DETECTED_SELF), any());
+        verify(notificationDispatcher).dispatch(eq(WARD_ID), any(), eq(NotificationType.ANOMALY_DETECTED_SELF), any());
     }
 
     @Test
@@ -177,7 +178,7 @@ class AnomalyNotificationListenerTest {
         listener.handleAnomalyDetected(event);
 
         ArgumentCaptor<NotificationContent> captor = ArgumentCaptor.forClass(NotificationContent.class);
-        verify(notificationDispatcher).dispatch(eq("GD0001"), eq(NotificationType.ANOMALY_DETECTED), captor.capture());
+        verify(notificationDispatcher).dispatch(eq("GD0001"), any(), eq(NotificationType.ANOMALY_DETECTED), captor.capture());
         Map<String, String> data = captor.getValue().data();
 
         assertThat(data.get("incidentId")).isEqualTo("37");

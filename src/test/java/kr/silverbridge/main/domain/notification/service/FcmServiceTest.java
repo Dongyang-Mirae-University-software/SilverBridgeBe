@@ -6,6 +6,8 @@ import com.google.firebase.messaging.FirebaseMessagingException;
 import com.google.firebase.messaging.MessagingErrorCode;
 import com.google.firebase.messaging.MulticastMessage;
 import com.google.firebase.messaging.SendResponse;
+import kr.silverbridge.main.domain.notification.channel.ChannelFailureReason;
+import kr.silverbridge.main.domain.notification.channel.ChannelResult;
 import kr.silverbridge.main.domain.notification.config.FcmTokenProperties;
 import kr.silverbridge.main.domain.notification.entity.FcmToken;
 import kr.silverbridge.main.domain.notification.repository.FcmTokenRepository;
@@ -24,6 +26,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
@@ -63,22 +66,22 @@ class FcmServiceTest {
     }
 
     @Test
-    @DisplayName("UNREGISTERED 실패 토큰은 DB에서 삭제 + 전달 실패(false) 반환 — SMS 폴백 판단 근거 (H-S2-1/M-S2-1)")
+    @DisplayName("UNREGISTERED 실패 토큰은 DB에서 삭제 + 전 토큰 만료(ALL_TOKENS_EXPIRED) 실패 — SMS 폴백 판단 근거 (H-S2-1/M-S2-1)")
     void sendToUser_만료토큰_정리_및_실패반환() throws FirebaseMessagingException {
         BatchResponse batch = batchWithSingleFailure(MessagingErrorCode.UNREGISTERED);
         when(fcmTokenRepository.findByUserId("GD0001"))
                 .thenReturn(List.of(FcmToken.of("GD0001", "expired-token", "ANDROID")));
         when(firebaseMessaging.sendEachForMulticast(any(MulticastMessage.class))).thenReturn(batch);
 
-        boolean delivered = fcmService.sendToUser("GD0001", "긴급 SOS", "도움 요청", Map.of("type", "WARD_SOS"));
+        ChannelResult result = fcmService.sendToUser("GD0001", "긴급 SOS", "도움 요청", Map.of("type", "WARD_SOS"));
 
-        org.assertj.core.api.Assertions.assertThat(delivered).isFalse();
+        assertThat(result).isEqualTo(ChannelResult.failed(ChannelFailureReason.ALL_TOKENS_EXPIRED));
         verify(fcmTokenRepository).deleteByToken("expired-token");
     }
 
     @Test
-    @DisplayName("1건 이상 전달 성공 시 true 반환 — SMS 폴백 생략 근거 (M-S2-1)")
-    void sendToUser_전달성공_true() throws FirebaseMessagingException {
+    @DisplayName("1건 이상 전달 성공 시 전달 — SMS 폴백 생략 근거 (M-S2-1)")
+    void sendToUser_전달성공() throws FirebaseMessagingException {
         BatchResponse batch = mock(BatchResponse.class);
         when(batch.getSuccessCount()).thenReturn(1);
         when(batch.getFailureCount()).thenReturn(0);
@@ -86,32 +89,73 @@ class FcmServiceTest {
                 .thenReturn(List.of(FcmToken.of("GD0001", "live-token", "ANDROID")));
         when(firebaseMessaging.sendEachForMulticast(any(MulticastMessage.class))).thenReturn(batch);
 
-        boolean delivered = fcmService.sendToUser("GD0001", "긴급 SOS", "도움 요청", null);
+        ChannelResult result = fcmService.sendToUser("GD0001", "긴급 SOS", "도움 요청", null);
 
-        org.assertj.core.api.Assertions.assertThat(delivered).isTrue();
+        assertThat(result.isDelivered()).isTrue();
     }
 
     @Test
-    @DisplayName("일시 오류(UNAVAILABLE)는 복구 가능하므로 토큰을 삭제하지 않는다")
+    @DisplayName("일시 오류(UNAVAILABLE)는 복구 가능하므로 토큰을 삭제하지 않고, 만료가 아니라 서버 오류로 돌려준다")
     void sendToUser_일시오류_토큰보존() throws FirebaseMessagingException {
         BatchResponse batch = batchWithSingleFailure(MessagingErrorCode.UNAVAILABLE);
         when(fcmTokenRepository.findByUserId("GD0001"))
                 .thenReturn(List.of(FcmToken.of("GD0001", "live-token", "ANDROID")));
         when(firebaseMessaging.sendEachForMulticast(any(MulticastMessage.class))).thenReturn(batch);
 
-        fcmService.sendToUser("GD0001", "제목", "본문", null);
+        ChannelResult result = fcmService.sendToUser("GD0001", "제목", "본문", null);
 
+        assertThat(result).isEqualTo(ChannelResult.failed(ChannelFailureReason.PUSH_SERVER_ERROR));
         verify(fcmTokenRepository, never()).deleteByToken(any());
     }
 
     @Test
-    @DisplayName("등록 토큰이 없으면 FCM 발송을 시도하지 않고 false 반환 — SMS 폴백으로 이어진다")
+    @DisplayName("만료와 일시 오류가 섞여 전부 실패하면 '만료'라고 말할 수 없어 서버 오류다")
+    void sendToUser_만료와일시오류_혼합() throws FirebaseMessagingException {
+        FirebaseMessagingException expired = mock(FirebaseMessagingException.class);
+        when(expired.getMessagingErrorCode()).thenReturn(MessagingErrorCode.UNREGISTERED);
+        FirebaseMessagingException unavailable = mock(FirebaseMessagingException.class);
+        when(unavailable.getMessagingErrorCode()).thenReturn(MessagingErrorCode.UNAVAILABLE);
+        SendResponse first = mock(SendResponse.class);
+        when(first.isSuccessful()).thenReturn(false);
+        when(first.getException()).thenReturn(expired);
+        SendResponse second = mock(SendResponse.class);
+        when(second.isSuccessful()).thenReturn(false);
+        when(second.getException()).thenReturn(unavailable);
+        BatchResponse batch = mock(BatchResponse.class);
+        when(batch.getFailureCount()).thenReturn(2);
+        when(batch.getResponses()).thenReturn(List.of(first, second));
+        when(fcmTokenRepository.findByUserId("GD0001")).thenReturn(List.of(
+                FcmToken.of("GD0001", "expired-token", "ANDROID"),
+                FcmToken.of("GD0001", "live-token", "WEB")));
+        when(firebaseMessaging.sendEachForMulticast(any(MulticastMessage.class))).thenReturn(batch);
+
+        ChannelResult result = fcmService.sendToUser("GD0001", "제목", "본문", null);
+
+        assertThat(result).isEqualTo(ChannelResult.failed(ChannelFailureReason.PUSH_SERVER_ERROR));
+        verify(fcmTokenRepository).deleteByToken("expired-token");
+    }
+
+    @Test
+    @DisplayName("FCM 호출 자체가 예외를 던지면 서버 오류로 돌려준다(예외를 밖으로 내보내지 않는다)")
+    void sendToUser_FCM예외_서버오류() throws FirebaseMessagingException {
+        when(fcmTokenRepository.findByUserId("GD0001"))
+                .thenReturn(List.of(FcmToken.of("GD0001", "live-token", "ANDROID")));
+        when(firebaseMessaging.sendEachForMulticast(any(MulticastMessage.class)))
+                .thenThrow(mock(FirebaseMessagingException.class));
+
+        ChannelResult result = fcmService.sendToUser("GD0001", "제목", "본문", null);
+
+        assertThat(result).isEqualTo(ChannelResult.failed(ChannelFailureReason.PUSH_SERVER_ERROR));
+    }
+
+    @Test
+    @DisplayName("등록 토큰이 없으면 FCM 발송을 시도하지 않고 NO_DEVICE 실패 — SMS 폴백으로 이어진다")
     void sendToUser_토큰없음_미발송() throws FirebaseMessagingException {
         when(fcmTokenRepository.findByUserId("GD0001")).thenReturn(List.of());
 
-        boolean delivered = fcmService.sendToUser("GD0001", "제목", "본문", null);
+        ChannelResult result = fcmService.sendToUser("GD0001", "제목", "본문", null);
 
-        org.assertj.core.api.Assertions.assertThat(delivered).isFalse();
+        assertThat(result).isEqualTo(ChannelResult.failed(ChannelFailureReason.NO_DEVICE));
         verify(firebaseMessaging, never()).sendEachForMulticast(any(MulticastMessage.class));
     }
 
