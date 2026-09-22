@@ -56,7 +56,8 @@
 
 ## FE 요청
 
-- AI 신뢰도 카드: 메인 = `aiConfidence.average`, 하위 = `real`(위험 판정)·`falseAlarm`(오탐). null이면 "-"(0% 아님). `basis`(판정 N건 기준)를 함께 보여 주면 좋다.
+- AI 신뢰도 카드(**최종 시안, 2026-09-22 확정**): 큰 숫자 = `aiConfidence.average`(confidence 평균). 하위 두 칸 = 판정 난 건 중 **비율 + 건수** - 위험 판정 `review.real / aiConfidence.basis`·`review.real`건, 오탐 `review.falseAlarm / aiConfidence.basis`·`review.falseAlarm`건(합 100%). null·basis 0이면 "-"(0% 아님).
+  - `aiConfidence.real`·`falseAlarm`(칸별 confidence 평균)은 중간 시안(83%/79%)용으로 만든 값이라 최종 카드에는 쓰지 않는다. 응답에는 남겨 둔다(하위호환, 제거는 FE 연동 후 판단).
 - 판정 칩은 시안대로 4개. 동수는 따로 그리지 않는다. 표의 판정 배지가 드물게 `CONFLICTED`로 오면 "확인 중" 같은 중립 표기로.
 - "판정 완료 N건"은 `review.real + review.falseAlarm`으로 계산한다(칩 숫자와 맞도록).
 
