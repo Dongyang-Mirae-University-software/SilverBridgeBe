@@ -93,12 +93,14 @@
 
 ```bash
 ./gradlew clean build                    # 전체 빌드
-./gradlew test                           # 테스트만
+./gradlew test                           # 단위 테스트 (목 기반, Docker 불필요)
+./gradlew integrationTest                # 통합 테스트 (실제 PostgreSQL - Testcontainers, Docker 필요 → vkcs에서)
 ./gradlew test --tests "kr.silverbridge.main.domain.auth.AuthServiceTest"   # 단일 클래스
 ./gradlew bootRun                        # 실행
 ./gradlew dependencyCheckAnalyze --info  # OWASP 스캔 → build/reports/dependency-check-report.html
 ```
 
+- **통합 테스트**(2026-09-21): `src/integrationTest/java`, `@DataJpaTest` + 실제 `postgres:17`로 마이그레이션·JPQL·DB 제약을 검증. 로컬에는 Docker가 없어 **vkcs에서 `~/SilverBridgeBe/tools/integration-test.sh [브랜치]`** 로 돌리고(첫 실행 14분·이후 약 30초), **CD가 배포 직전에 자동 실행해 실패하면 배포를 멈춘다**. 마이그레이션·JPQL을 바꾸는 PR은 머지 전에 브랜치로 한 번 돌릴 것. `check`·`build`에는 연결하지 않는다.
 - OWASP: CVSS 7.0+ 발견 시 빌드 실패. `NVD_API_KEY` 설정 시 동기화 빠름(없으면 첫 실행 수 시간). suppress는 `dependency-check-suppressions.xml`(근거 주석 필수). Sonatype OSS Index 분석기는 익명 401 때문에 **비활성**(2026-09-21). `build.gradle`의 `ext['*.version']` 핀 5종은 Boot가 그 이상을 관리하면 제거.
 - **테스트**: JUnit 5 + AssertJ + Spring Security Test. 핵심 비즈니스·정책 로직 80%+ (보일러플레이트 제외). AI 작성 테스트 검토는 `test-quality` 스킬.
 
@@ -153,4 +155,4 @@
 
 ---
 
-**최종 업데이트**: 2026-09-21 (관리자 이상감지 로그 v2·연기=화재 통합, V53) · 2026-09-21 (이상감지 판정 다수결 전환·동수 재확인 안내·관리자 정정 폐지, V52) · 2026-09-21 (점검 제안 시점 §2-6 - 기능·영향 범위·전체 점검) · 2026-09-21 (의존성 업그레이드 - Boot 4.0.8·Tomcat 11.0.26·springdoc 3.1.1, 스캔 CVSS 7+ 0건) · 2026-09-11 (회귀·기술 점검 반영 - 수락 시 보호자 상태·운영 설정) · 2026-09-10 (점검 이슈 반영 - 역할 변경 카메라·토큰 / 관리자 강제 연결·해제) · 2026-09-09 (관리자 회원 관리 / 계정 상태 3분법) · 2026-09-02 (관리자 대시보드 집계 / 이상감지 로그·정정) · 2026-09-01 (이상감지 판정·재촉 / 종류별 허용 채널) · 2026-05-30 (공식 Claude Code 가이드 기준 리팩터링 — 347→~140줄, 도메인 보안 정책을 `.claude/rules/`로 분리) · **Spring Boot** 4.0.8 / **Java** 21 / **빌드** Gradle
+**최종 업데이트**: 2026-09-21 (Testcontainers 통합 테스트·CD 배포 전 실행) · 2026-09-21 (관리자 이상감지 로그 v2·연기=화재 통합, V53) · 2026-09-21 (이상감지 판정 다수결 전환·동수 재확인 안내·관리자 정정 폐지, V52) · 2026-09-21 (점검 제안 시점 §2-6 - 기능·영향 범위·전체 점검) · 2026-09-21 (의존성 업그레이드 - Boot 4.0.8·Tomcat 11.0.26·springdoc 3.1.1, 스캔 CVSS 7+ 0건) · 2026-09-11 (회귀·기술 점검 반영 - 수락 시 보호자 상태·운영 설정) · 2026-09-10 (점검 이슈 반영 - 역할 변경 카메라·토큰 / 관리자 강제 연결·해제) · 2026-09-09 (관리자 회원 관리 / 계정 상태 3분법) · 2026-09-02 (관리자 대시보드 집계 / 이상감지 로그·정정) · 2026-09-01 (이상감지 판정·재촉 / 종류별 허용 채널) · 2026-05-30 (공식 Claude Code 가이드 기준 리팩터링 — 347→~140줄, 도메인 보안 정책을 `.claude/rules/`로 분리) · **Spring Boot** 4.0.8 / **Java** 21 / **빌드** Gradle

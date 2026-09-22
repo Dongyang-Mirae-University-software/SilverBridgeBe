@@ -36,6 +36,11 @@ jobs:
             exit 1
           fi
 
+          # 배포 전 통합 테스트(실제 PostgreSQL - Testcontainers). 실패하면 set -e로 여기서 배포가 멈춘다.
+          # 마이그레이션·JPQL·DB 제약을 배포 "전에" 확인한다 - 예전에는 기동 로그로만 알 수 있었다(2026-09-21).
+          # 스크립트는 현재 커밋을 임시 폴더에 풀어 JDK 21 gradle 컨테이너에서 돌리므로 이 폴더는 건드리지 않는다.
+          bash tools/integration-test.sh HEAD
+
           docker compose -f docker-compose.dev.yml build api
 
           docker compose -f docker-compose.dev.yml up -d api
