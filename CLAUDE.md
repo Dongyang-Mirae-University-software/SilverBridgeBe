@@ -100,7 +100,7 @@
 ./gradlew dependencyCheckAnalyze --info  # OWASP 스캔 → build/reports/dependency-check-report.html
 ```
 
-- **통합 테스트**(2026-09-21): `src/integrationTest/java`, `@DataJpaTest` + 실제 `postgres:17`로 마이그레이션·JPQL·DB 제약을 검증. 로컬에는 Docker가 없어 **vkcs에서 `~/SilverBridgeBe/tools/integration-test.sh [브랜치]`** 로 돌리고(첫 실행 14분·이후 약 30초), **CD가 배포 직전에 자동 실행해 실패하면 배포를 멈춘다**. 마이그레이션·JPQL을 바꾸는 PR은 머지 전에 브랜치로 한 번 돌릴 것. `check`·`build`에는 연결하지 않는다.
+- **통합 테스트**(2026-09-21): `src/integrationTest/java`, `@DataJpaTest` + 실제 `postgres:17`로 마이그레이션·JPQL·DB 제약을 검증. 로컬에는 Docker가 없어 **vkcs에서 `~/SilverBridgeBe/tools/integration-test.sh [브랜치]`** 로 돌리고(첫 실행 14분·이후 약 30초), **CD가 배포 직전에 자동 실행해 실패하면 배포를 멈춘다**. Gradle 빌드 캐시가 켜져 있어 **입력이 이전 통과 실행과 같으면 `FROM-CACHE`로 건너뛴다**(코드·마이그레이션이 바뀌면 실제로 돈다 - 2026-09-22 그대로 두기로 결정). 마이그레이션·JPQL을 바꾸는 PR은 머지 전에 브랜치로 한 번 돌릴 것. `check`·`build`에는 연결하지 않는다.
 - OWASP: CVSS 7.0+ 발견 시 빌드 실패. `NVD_API_KEY` 설정 시 동기화 빠름(없으면 첫 실행 수 시간). suppress는 `dependency-check-suppressions.xml`(근거 주석 필수). Sonatype OSS Index 분석기는 익명 401 때문에 **비활성**(2026-09-21). `build.gradle`의 `ext['*.version']` 핀 5종은 Boot가 그 이상을 관리하면 제거.
 - **테스트**: JUnit 5 + AssertJ + Spring Security Test. 핵심 비즈니스·정책 로직 80%+ (보일러플레이트 제외). AI 작성 테스트 검토는 `test-quality` 스킬.
 
