@@ -9,6 +9,7 @@
 
 | 머지 | 기능 | 상태 | 점검 문서 | 잔여 이슈 |
 |---|---|---|---|---|
+| #261 (2026-09-30) | 탈퇴 FCM 토큰 삭제 REQUIRES_NEW(M-1)·탈퇴 `WITHDRAWN`/역할 변경 `ADMIN` 해제 문구(M-2) (마이그레이션 없음) | ➖ | 점검 불요 - 사용처 전수(`DisconnectedBy` 이벤트 생성 5경로·알림 분기·FE)는 구현 PHASE 0에서 수행, `(2026-09-30) fix-withdrawal-fcm-and-disconnect-copy.md` | - (M-1 실 DB 재현·고정, M-2 단위 테스트 5건. 별도 템플릿 C는 사용자 결정으로 생략 2026-09-30) |
 | #260 (2026-09-30) | 아키텍처 경계 정리 F-1~F-3 - 감사 로그·SMS 발송기 → global, ID 생성기 → user (동작 불변) | ✅ | `(2026-09-30) audit-impact-remaining-audit-items.md` (템플릿 C) | - |
 | #259 (2026-09-30) | 점검 잔여 이슈 - 탈퇴 리스너 REQUIRES_NEW(H-1)·판정 쓰기 잠금+`@DynamicUpdate`(E-2)·SOS 경계값 | ✅ | `(2026-09-30) audit-impact-remaining-audit-items.md` (템플릿 C + B) | - (M-1 `deleteAllTokens` REQUIRES_NEW·M-2 탈퇴 `WITHDRAWN`/역할 변경 `ADMIN` 문구 반영 2026-09-30 `(2026-09-30) fix-withdrawal-fcm-and-disconnect-copy.md`) · L-1~L-3 기록 |
 | #258 (2026-09-23) | 알림 이력 점검 이슈 반영 - 연결 이벤트 당사자 ID·AFTER_COMMIT 기록 테스트 (마이그레이션 없음) | ➖ | 점검 반영분 `(2026-09-22) fix-admin-notification-audit-findings.md` | - |
