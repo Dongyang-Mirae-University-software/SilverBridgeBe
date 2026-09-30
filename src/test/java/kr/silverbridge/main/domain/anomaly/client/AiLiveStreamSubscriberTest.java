@@ -12,11 +12,14 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.scheduling.TaskScheduler;
+import org.springframework.transaction.event.TransactionPhase;
+import org.springframework.transaction.event.TransactionalEventListener;
 import org.springframework.web.socket.TextMessage;
 import org.springframework.web.socket.WebSocketSession;
 
 import java.util.Optional;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.Mockito.lenient;
@@ -108,6 +111,17 @@ class AiLiveStreamSubscriberTest {
 
         // 연결 시 1회 + 등록 시 1회
         verify(session, times(2)).sendMessage(argThat(m -> ((TextMessage) m).getPayload().contains("\"list\"")));
+    }
+
+    @Test
+    @DisplayName("카메라 등록 이벤트는 커밋 후에 처리한다 - 커밋 전에 요청하면 AI 응답이 먼저 와 방금 등록한 카메라를 미등록으로 본다")
+    void 카메라등록_이벤트는_커밋후에_처리한다() throws Exception {
+        TransactionalEventListener listener = AiLiveStreamSubscriber.class
+                .getMethod("onCameraRegistered", kr.silverbridge.main.domain.camera.event.CameraRegisteredEvent.class)
+                .getAnnotation(TransactionalEventListener.class);
+
+        assertThat(listener).isNotNull();
+        assertThat(listener.phase()).isEqualTo(TransactionPhase.AFTER_COMMIT);
     }
 
     @Test

@@ -9,6 +9,7 @@ import kr.silverbridge.main.domain.camera.service.CameraService;
 import kr.silverbridge.main.domain.connection.entity.Connection;
 import kr.silverbridge.main.domain.connection.repository.ConnectionRepository;
 import kr.silverbridge.main.domain.connection.service.ConnectionService;
+import kr.silverbridge.main.domain.medication.service.MedicationRoleChangeService;
 import kr.silverbridge.main.domain.user.entity.User;
 import kr.silverbridge.main.domain.user.event.UserRestrictedEvent;
 import kr.silverbridge.main.domain.user.event.UserRoleChangedEvent;
@@ -70,6 +71,7 @@ class AdminUserServiceTest {
     @Mock private ConnectionRepository connectionRepository;
     @Mock private ConnectionService connectionService;
     @Mock private CameraService cameraService;
+    @Mock private MedicationRoleChangeService medicationRoleChangeService;
     @Mock private UserService userService;
     @Mock private AdminAuditLogService auditLogService;
     @Mock private ApplicationEventPublisher eventPublisher;
@@ -79,7 +81,8 @@ class AdminUserServiceTest {
     private AdminUserService service() {
         if (adminUserService == null) {
             adminUserService = new AdminUserService(userRepository, connectionRepository,
-                    connectionService, cameraService, userService, auditLogService, eventPublisher);
+                    connectionService, cameraService, medicationRoleChangeService, userService, auditLogService,
+                    eventPublisher);
         }
         return adminUserService;
     }
@@ -297,6 +300,20 @@ class AdminUserServiceTest {
             verify(cameraService).deleteAllByWard(WARD_ID);
             verify(auditLogService).log(eq(ADMIN_ID), eq(AdminAuditAction.USER_ROLE_CHANGE), eq(WARD_ID),
                     eq("역할 변경: 피보호자 → 보호자 (연결 1건 해제, 카메라 2대 삭제)"));
+        }
+
+        @Test
+        @DisplayName("피보호자를 보호자로 바꾸면 그 사람 앞으로 등록된 약을 중지하고 건수를 감사 로그에 남긴다 - 남기면 체크도 삭제도 못 하는 복약 알림이 계속 간다")
+        void 역할_변경은_복약을_중지한다() {
+            givenUser(user(WARD_ID, "박민수", Role.WARD, Status.ACTIVE));
+            when(connectionService.tearDownConnectionsOnRoleChange(WARD_ID)).thenReturn(1);
+            when(medicationRoleChangeService.stopAllOwnedByWard(WARD_ID)).thenReturn(3);
+
+            service().updateUser(WARD_ID, new AdminUserUpdateRequest(null, Role.GUARDIAN, null, null), ADMIN_ID);
+
+            verify(medicationRoleChangeService).stopAllOwnedByWard(WARD_ID);
+            verify(auditLogService).log(eq(ADMIN_ID), eq(AdminAuditAction.USER_ROLE_CHANGE), eq(WARD_ID),
+                    eq("역할 변경: 피보호자 → 보호자 (연결 1건 해제, 복약 3건 중지)"));
         }
 
         @Test

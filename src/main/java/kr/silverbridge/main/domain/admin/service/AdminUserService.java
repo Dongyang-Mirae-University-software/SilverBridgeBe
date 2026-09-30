@@ -11,6 +11,7 @@ import kr.silverbridge.main.domain.camera.service.CameraService;
 import kr.silverbridge.main.domain.connection.entity.Connection;
 import kr.silverbridge.main.domain.connection.repository.ConnectionRepository;
 import kr.silverbridge.main.domain.connection.service.ConnectionService;
+import kr.silverbridge.main.domain.medication.service.MedicationRoleChangeService;
 import kr.silverbridge.main.domain.user.entity.User;
 import kr.silverbridge.main.domain.user.event.UserRestrictedEvent;
 import kr.silverbridge.main.domain.user.event.UserRoleChangedEvent;
@@ -71,6 +72,7 @@ public class AdminUserService {
     private final ConnectionRepository connectionRepository;
     private final ConnectionService connectionService;
     private final CameraService cameraService;
+    private final MedicationRoleChangeService medicationRoleChangeService;
     private final UserService userService;
     private final AdminAuditLogService auditLogService;
     private final ApplicationEventPublisher eventPublisher;
@@ -239,12 +241,15 @@ public class AdminUserService {
         user.updateRole(role);
         int clearedConnections = connectionService.tearDownConnectionsOnRoleChange(user.getId());
         int deletedCameras = cameraService.deleteAllByWard(user.getId());
+        // 피보호자로서 갖고 있던 약도 중지한다 - 남겨 두면 체크도 삭제도 못 하는 복약 알림이 계속 간다(M-1)
+        int stoppedMedications = medicationRoleChangeService.stopAllOwnedByWard(user.getId());
         eventPublisher.publishEvent(new UserRoleChangedEvent(user.getId()));
 
         auditLogService.log(adminId, AdminAuditAction.USER_ROLE_CHANGE, user.getId(),
-                String.format("역할 변경: %s → %s (연결 %d건 해제%s)",
+                String.format("역할 변경: %s → %s (연결 %d건 해제%s%s)",
                         roleLabel(before), roleLabel(role), clearedConnections,
-                        deletedCameras > 0 ? ", 카메라 " + deletedCameras + "대 삭제" : ""));
+                        deletedCameras > 0 ? ", 카메라 " + deletedCameras + "대 삭제" : "",
+                        stoppedMedications > 0 ? ", 복약 " + stoppedMedications + "건 중지" : ""));
     }
 
     /**

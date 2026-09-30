@@ -18,6 +18,9 @@ import java.util.Base64;
 @Configuration
 public class FcmConfig {
 
+    private static final int CONNECT_TIMEOUT_MILLIS = 3_000;
+    private static final int READ_TIMEOUT_MILLIS = 10_000;
+
     // 서비스 계정 JSON을 base64로 인코딩해 환경변수에 보관한다.
     // 원본 JSON을 그대로 .env에 넣으면 docker compose의 env_file 파서가 private_key 내부의
     // \n 이스케이프를 실제 newline으로 변환해 JSON이 깨지는 문제가 있어, 영숫자+`+/=`만 있는
@@ -45,8 +48,12 @@ public class FcmConfig {
         }
         if (FirebaseApp.getApps().isEmpty()) {
             try (InputStream in = new ByteArrayInputStream(decoded)) {
+                // 외부 호출에는 시간 제한을 둔다(2026-09-30 M-2) - 없으면 FCM이 느려질 때 알림 executor 스레드가
+                // 전부 묶여 뒤따르는 SOS·화재 알림이 큐에서 밀리거나 폐기된다.
                 FirebaseOptions options = FirebaseOptions.builder()
                         .setCredentials(GoogleCredentials.fromStream(in))
+                        .setConnectTimeout(CONNECT_TIMEOUT_MILLIS)
+                        .setReadTimeout(READ_TIMEOUT_MILLIS)
                         .build();
                 FirebaseApp.initializeApp(options);
                 log.info("Firebase 초기화 완료 (env base64 기반, decoded={} bytes)", decoded.length);
