@@ -1508,3 +1508,10 @@ REST API Key 단독 대비 보안 강화 — 인가코드 탈취 시 토큰 발�
 - 결과: 도메인 간 순환 0, `global → domain` import 0. 로그 설정·yaml에 패키지 참조 없음(로거는 클래스 기준).
 - `./gradlew test` 683 / 0 실패 · vkcs 통합 26 / 0 실패(엔티티 패키지 이동 후 스키마 validate 포함).
 - `fix/remaining-audit-items` 위에 쌓은 브랜치 - **그 PR이 먼저 머지돼야 한다**(E-2 통합 테스트가 옮긴 `UserIdGenerator`를 import).
+
+## [2026-09-30] #259·#260 머지·배포 + 영향 범위 점검 (템플릿 C + B) - PASS(🟡 2)
+
+- **머지·배포**: #259(`e2a579b`)·#260(`8800166`) 머지, vkcs CD 2회 success(배포 전 통합 테스트는 머지 전 실측 결과 캐시 재사용), **gosky 수동 배포**(`reset --hard origin/dev` → build → up, untracked 파일 보존) - 두 서버 V54·healthy·AI WS 연결. feat 브랜치는 GitHub 자동 삭제, 로컬 정리.
+- **점검**: 🔴·🟠 0. 동기 AFTER_COMMIT 리스너 전수 - H-1과 같은 결함이 **`UserWithdrawalFcmListener`에 한 곳 더**(M-1, purge CASCADE·디스패처 차단으로 현재 무해). 탈퇴 시 새로 나가는 해제 알림의 문구가 "상대가 연결을 해제했습니다"(M-2, 결정 필요). 판정 잠금 교착 없음, `@DynamicUpdate` 두 경로 분리 확인, 패키지 이동 동작 불변.
+- **문서 정정**: 이상감지 카메라 연동은 2026-07-31에 FE 안내가 끝난 설계 - "합의 필요"가 아니라 "FE 반영 대기". Notion FE 확인 요청 페이지 작성.
+- 상세: `docs/(2026-09-30) audit-impact-remaining-audit-items.md`
