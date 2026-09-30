@@ -74,7 +74,9 @@ public class WardMedicationService {
      */
     @Transactional
     public MedicationItem markTaken(String wardId, Long medicationId) {
-        Medication medication = findOwnMedication(wardId, medicationId);
+        // 약 행을 잠그고 읽는다 - 더블탭으로 두 요청이 동시에 오면 둘 다 "미체크"를 보고 저장을 시도해
+        // 진 쪽이 UNIQUE 위반(409)으로 끝났다. 뒤에 온 쪽이 앞 커밋을 보고 기존 기록을 돌려주게 한다(멱등, L-9).
+        Medication medication = requireOwn(wardId, medicationId, medicationRepository.findByIdForUpdate(medicationId));
         LocalDate today = MedicationClock.today();
 
         Optional<MedicationIntake> existing = intakeRepository.findByMedicationIdAndDoseDate(medicationId, today);
@@ -119,8 +121,12 @@ public class WardMedicationService {
 
     /** 본인의 삭제되지 않은 약을 찾는다. */
     private Medication findOwnMedication(String wardId, Long medicationId) {
-        Medication medication = medicationRepository.findById(medicationId)
-                .filter(found -> !found.isDeleted())
+        return requireOwn(wardId, medicationId, medicationRepository.findById(medicationId));
+    }
+
+    private Medication requireOwn(String wardId, Long medicationId, Optional<Medication> found) {
+        Medication medication = found
+                .filter(candidate -> !candidate.isDeleted())
                 .orElseThrow(() -> new CustomException(ErrorCode.MEDICATION_NOT_FOUND));
 
         if (!medication.getWardId().equals(wardId)) {

@@ -1,11 +1,13 @@
 package kr.silverbridge.main.domain.inquiry.repository;
 
+import jakarta.persistence.LockModeType;
 import kr.silverbridge.main.domain.inquiry.entity.Inquiry;
 import kr.silverbridge.main.global.enums.InquiryCategory;
 import kr.silverbridge.main.global.enums.InquiryStatus;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
@@ -14,6 +16,11 @@ import java.util.List;
 import java.util.Optional;
 
 public interface InquiryRepository extends JpaRepository<Inquiry, Long> {
+
+    /** 답변 등록용 - 문의 행을 쓰기 잠금으로 읽어 동시 답변을 한 줄로 세운다. */
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("SELECT i FROM Inquiry i WHERE i.id = :id")
+    Optional<Inquiry> findByIdForUpdate(@Param("id") Long id);
 
     // 보호자 본인 문의 목록 (최신순)
     List<Inquiry> findByUserIdOrderByCreatedAtDesc(String userId);

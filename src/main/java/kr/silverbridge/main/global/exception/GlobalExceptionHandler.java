@@ -206,7 +206,7 @@ public class GlobalExceptionHandler {
         log.warn("MaxUploadSizeExceededException: {}", e.getMessage());
         return ResponseEntity
                 .badRequest()
-                .body(ApiResponse.fail(ErrorCode.FILE_SIZE_EXCEEDED.getMessage()));
+                .body(ApiResponse.fail(ErrorCode.FILE_TOO_LARGE.getMessage()));
     }
 
     // 예상치 못한 서버 오류 (최종 안전망)

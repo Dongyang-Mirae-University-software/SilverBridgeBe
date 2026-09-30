@@ -393,6 +393,7 @@ public class ConnectionService {
         Connection connection = connectionRepository.findById(connectionId)
                 .orElseThrow(() -> new CustomException(ErrorCode.CONNECTION_NOT_FOUND));
         if (!connection.getGuardianId().equals(guardianId)) {
+            log.warn("[IDOR-ATTEMPT] 타인 연결 접근 시도(보호자): guardianId={}, connectionId={}", guardianId, connectionId);
             throw new CustomException(ErrorCode.CONNECTION_NOT_AUTHORIZED);
         }
         return connection;
@@ -402,6 +403,7 @@ public class ConnectionService {
         Connection connection = connectionRepository.findById(connectionId)
                 .orElseThrow(() -> new CustomException(ErrorCode.CONNECTION_NOT_FOUND));
         if (!connection.getWardId().equals(wardId)) {
+            log.warn("[IDOR-ATTEMPT] 타인 연결 접근 시도(피보호자): wardId={}, connectionId={}", wardId, connectionId);
             throw new CustomException(ErrorCode.CONNECTION_NOT_AUTHORIZED);
         }
         return connection;

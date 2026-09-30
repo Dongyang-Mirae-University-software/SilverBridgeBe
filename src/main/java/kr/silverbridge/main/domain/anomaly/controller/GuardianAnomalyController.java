@@ -103,8 +103,7 @@ public class GuardianAnomalyController {
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "판단(verdict) 누락", content = @Content),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "인증 토큰 없음 또는 만료", content = @Content),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "보호자 권한 필요 / 연결되지 않은 피보호자의 기록", content = @Content),
-            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "이상감지 기록 없음", content = @Content),
-            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "409", description = "관리자가 확정한 기록이라 응답 변경 불가", content = @Content)
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "이상감지 기록 없음", content = @Content)
     })
     @PostMapping("/api/guardian/anomaly/{incidentId}/feedback")
     public ResponseEntity<ApiResponse<AnomalyFeedbackResponse>> submitFeedback(

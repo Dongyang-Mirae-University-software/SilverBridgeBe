@@ -20,8 +20,9 @@ import org.springframework.transaction.event.TransactionalEventListener;
  *
  * <p>{@code @Async("notificationExecutor")}로 커밋 후 별도 스레드에서 기록해
  * 접속로그 insert 지연이 가입 HTTP 응답 시간에 포함되지 않게 한다
- * (ConnectionNotificationListener와 동일 패턴). 큐 포화 시 CallerRunsPolicy로
- * 호출 스레드에서 직접 실행되어 로그 유실은 없다.
+ * (ConnectionNotificationListener와 동일 패턴). 큐가 포화되면 작업을 폐기하고
+ * {@code [NOTIFY-REJECTED]} ERROR 로그를 남기므로(2026-09-11 B-2, CallerRunsPolicy 폐기) 그때는
+ * 이 접속로그도 유실될 수 있다 - 알림 executor 공용 정책이다.
  *
  * <p>접속로그 기록 자체는 REQUIRES_NEW 독립 트랜잭션으로 처리한다
  * (로그 실패가 가입 응답에 영향을 주지 않도록 — AccessLogService 공유 정책과 동일).

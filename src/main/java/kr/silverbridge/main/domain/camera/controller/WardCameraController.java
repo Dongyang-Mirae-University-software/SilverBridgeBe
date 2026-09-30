@@ -90,13 +90,13 @@ public class WardCameraController {
                     Authorization: Bearer {accessToken}
 
                     전달한 필드만 갱신합니다(null 필드는 미변경).
-                    타인 카메라 ID로 요청 시 404로 응답합니다(IDOR 차단).
+                    타인 카메라 ID로 요청하면 403("본인이 등록한 카메라만 사용할 수 있습니다.")으로 응답합니다.
                     """)
     @ApiResponses({
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "수정된 카메라 반환"),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "인증 토큰 없음 또는 만료", content = @Content),
-            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "피보호자 권한 필요", content = @Content),
-            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "존재하지 않거나 본인 카메라가 아님", content = @Content)
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "피보호자 권한 필요 / 본인이 등록한 카메라가 아님", content = @Content),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "존재하지 않는 카메라", content = @Content)
     })
     @PatchMapping("/api/ward/camera/{id}")
     public ResponseEntity<ApiResponse<CameraResponse>> update(
@@ -111,13 +111,13 @@ public class WardCameraController {
                     [요청 헤더]
                     Authorization: Bearer {accessToken}
 
-                    본인 카메라를 삭제합니다. 타인 카메라 ID로 요청 시 404로 응답합니다(IDOR 차단).
+                    본인 카메라를 삭제합니다. 타인 카메라 ID로 요청하면 403으로 응답합니다.
                     """)
     @ApiResponses({
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "삭제 완료"),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "인증 토큰 없음 또는 만료", content = @Content),
-            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "피보호자 권한 필요", content = @Content),
-            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "존재하지 않거나 본인 카메라가 아님", content = @Content)
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "피보호자 권한 필요 / 본인이 등록한 카메라가 아님", content = @Content),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "존재하지 않는 카메라", content = @Content)
     })
     @DeleteMapping("/api/ward/camera/{id}")
     public ResponseEntity<ApiResponse<Void>> delete(
