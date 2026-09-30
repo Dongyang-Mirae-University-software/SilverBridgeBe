@@ -685,6 +685,9 @@ class ConnectionServiceTest {
             assertThat(captor.getValue().notifyTargetId()).isEqualTo(WARD_ID);
             assertThat(captor.getValue()).extracting(ConnectionDisconnectedEvent::guardianId,
                     ConnectionDisconnectedEvent::wardId).containsExactly(GUARDIAN_ID, WARD_ID);
+            // 역할 변경은 관리자 조작 - "보호자가 해제했습니다"로 알리면 사실과 다르다(2026-09-30)
+            assertThat(captor.getValue().disconnectedBy())
+                    .isEqualTo(ConnectionDisconnectedEvent.DisconnectedBy.ADMIN);
         }
 
         @Test
@@ -723,7 +726,7 @@ class ConnectionServiceTest {
     class TearDownOnWithdrawal {
 
         @Test
-        @DisplayName("탈퇴자가 보호자인 ACTIVE 연결 → DISCONNECTED + 피보호자에게 알림(GUARDIAN)")
+        @DisplayName("탈퇴자가 보호자인 ACTIVE 연결 → DISCONNECTED + 피보호자에게 알림(WITHDRAWN)")
         void 보호자탈퇴_ACTIVE해제_피보호자알림() {
             Connection active = Connection.builder()
                     .id(1L).guardianId(GUARDIAN_ID).wardId(WARD_ID)
@@ -742,12 +745,13 @@ class ConnectionServiceTest {
             // 탈퇴 경로는 연결 행이 곧 purge되므로 당사자를 이벤트에 실어 보내야 한다
             assertThat(captor.getValue()).extracting(ConnectionDisconnectedEvent::guardianId,
                     ConnectionDisconnectedEvent::wardId).containsExactly(GUARDIAN_ID, WARD_ID);
+            // 탈퇴를 "상대가 해제했습니다"로 알리지 않는다(M-2)
             assertThat(captor.getValue().disconnectedBy())
-                    .isEqualTo(ConnectionDisconnectedEvent.DisconnectedBy.GUARDIAN);
+                    .isEqualTo(ConnectionDisconnectedEvent.DisconnectedBy.WITHDRAWN);
         }
 
         @Test
-        @DisplayName("탈퇴자가 피보호자인 ACTIVE 연결 → DISCONNECTED + 보호자에게 알림(WARD)")
+        @DisplayName("탈퇴자가 피보호자인 ACTIVE 연결 → DISCONNECTED + 보호자에게 알림(WITHDRAWN)")
         void 피보호자탈퇴_ACTIVE해제_보호자알림() {
             Connection active = Connection.builder()
                     .id(1L).guardianId(GUARDIAN_ID).wardId(WARD_ID)
@@ -765,8 +769,9 @@ class ConnectionServiceTest {
             assertThat(captor.getValue().notifyTargetId()).isEqualTo(GUARDIAN_ID);
             assertThat(captor.getValue()).extracting(ConnectionDisconnectedEvent::guardianId,
                     ConnectionDisconnectedEvent::wardId).containsExactly(GUARDIAN_ID, WARD_ID);
+            // 탈퇴를 "상대가 해제했습니다"로 알리지 않는다(M-2)
             assertThat(captor.getValue().disconnectedBy())
-                    .isEqualTo(ConnectionDisconnectedEvent.DisconnectedBy.WARD);
+                    .isEqualTo(ConnectionDisconnectedEvent.DisconnectedBy.WITHDRAWN);
         }
 
         @Test

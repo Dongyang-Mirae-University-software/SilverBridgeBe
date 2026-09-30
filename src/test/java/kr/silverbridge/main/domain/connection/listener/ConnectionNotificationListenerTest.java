@@ -133,4 +133,32 @@ class ConnectionNotificationListenerTest {
         assertThat(captor.getValue().body()).isEqualTo("피보호자가 연결을 해제했습니다.");
         assertThat(captor.getValue().data()).containsEntry("type", "CONNECTION_CANCELLED");
     }
+
+    @Test
+    @DisplayName("보호자 탈퇴 → 피보호자에게 '보호자가 탈퇴해 연결이 종료되었습니다' (M-2)")
+    void handleDisconnected_보호자탈퇴_문구() {
+        ConnectionDisconnectedEvent event = new ConnectionDisconnectedEvent(
+                CONNECTION_ID, WARD_ID, ConnectionDisconnectedEvent.DisconnectedBy.WITHDRAWN, GUARDIAN_ID, WARD_ID);
+
+        listener.handleDisconnected(event);
+
+        ArgumentCaptor<NotificationContent> captor = ArgumentCaptor.forClass(NotificationContent.class);
+        verify(notificationDispatcher).dispatch(eq(WARD_ID), eq(WARD_ID), eq(NotificationType.CONNECTION_DISCONNECTED), captor.capture());
+        // "보호자가 연결을 해제했습니다"로 나가면 남은 쪽은 "나를 끊었다"로 읽는다
+        assertThat(captor.getValue().body()).isEqualTo("보호자가 탈퇴해 연결이 종료되었습니다.");
+        assertThat(captor.getValue().data()).containsEntry("type", "CONNECTION_CANCELLED");
+    }
+
+    @Test
+    @DisplayName("피보호자 탈퇴 → 보호자에게 '피보호자가 탈퇴해 연결이 종료되었습니다' (M-2)")
+    void handleDisconnected_피보호자탈퇴_문구() {
+        ConnectionDisconnectedEvent event = new ConnectionDisconnectedEvent(
+                CONNECTION_ID, GUARDIAN_ID, ConnectionDisconnectedEvent.DisconnectedBy.WITHDRAWN, GUARDIAN_ID, WARD_ID);
+
+        listener.handleDisconnected(event);
+
+        ArgumentCaptor<NotificationContent> captor = ArgumentCaptor.forClass(NotificationContent.class);
+        verify(notificationDispatcher).dispatch(eq(GUARDIAN_ID), eq(WARD_ID), eq(NotificationType.CONNECTION_DISCONNECTED), captor.capture());
+        assertThat(captor.getValue().body()).isEqualTo("피보호자가 탈퇴해 연결이 종료되었습니다.");
+    }
 }

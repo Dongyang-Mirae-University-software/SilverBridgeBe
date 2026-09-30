@@ -1515,3 +1515,10 @@ REST API Key 단독 대비 보안 강화 — 인가코드 탈취 시 토큰 발�
 - **점검**: 🔴·🟠 0. 동기 AFTER_COMMIT 리스너 전수 - H-1과 같은 결함이 **`UserWithdrawalFcmListener`에 한 곳 더**(M-1, purge CASCADE·디스패처 차단으로 현재 무해). 탈퇴 시 새로 나가는 해제 알림의 문구가 "상대가 연결을 해제했습니다"(M-2, 결정 필요). 판정 잠금 교착 없음, `@DynamicUpdate` 두 경로 분리 확인, 패키지 이동 동작 불변.
 - **문서 정정**: 이상감지 카메라 연동은 2026-07-31에 FE 안내가 끝난 설계 - "합의 필요"가 아니라 "FE 반영 대기". Notion FE 확인 요청 페이지 작성.
 - 상세: `docs/(2026-09-30) audit-impact-remaining-audit-items.md`
+
+## [2026-09-30] 영향 범위 점검 M-1·M-2 반영 - 탈퇴 FCM 토큰 전파, 탈퇴·역할 변경 해제 문구
+
+- **M-1**: `FcmService.deleteAllTokens` → REQUIRES_NEW(H-1과 같은 결함의 마지막 한 곳). 실 DB 재현(수정 전 1건 실패) → 통과. 동기 AFTER_COMMIT 리스너 7개 모두 규칙 준수.
+- **M-2**: `DisconnectedBy.WITHDRAWN` 추가 - 탈퇴는 "보호자/피보호자가 탈퇴해 연결이 종료되었습니다.". 사용자 결정으로 **역할 변경 정리도 `ADMIN`**("관리자가 연결을 해제했습니다.") - 이 경로는 예전부터 "보호자가 연결을 해제했습니다"로 나가고 있었다. FE 영향 없음(서버 body 그대로 표시).
+- `./gradlew test` 685 / 0 실패 · vkcs 통합 27 / 0 실패.
+- 상세: `docs/(2026-09-30) fix-withdrawal-fcm-and-disconnect-copy.md`

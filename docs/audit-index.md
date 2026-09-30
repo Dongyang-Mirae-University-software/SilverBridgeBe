@@ -10,7 +10,7 @@
 | 머지 | 기능 | 상태 | 점검 문서 | 잔여 이슈 |
 |---|---|---|---|---|
 | #260 (2026-09-30) | 아키텍처 경계 정리 F-1~F-3 - 감사 로그·SMS 발송기 → global, ID 생성기 → user (동작 불변) | ✅ | `(2026-09-30) audit-impact-remaining-audit-items.md` (템플릿 C) | - |
-| #259 (2026-09-30) | 점검 잔여 이슈 - 탈퇴 리스너 REQUIRES_NEW(H-1)·판정 쓰기 잠금+`@DynamicUpdate`(E-2)·SOS 경계값 | ⚠️ | `(2026-09-30) audit-impact-remaining-audit-items.md` (템플릿 C + B) | **M-1** 탈퇴 FCM 토큰 삭제도 같은 결함(현재 무해, `deleteAllTokens` REQUIRES_NEW 제안) · **M-2** 탈퇴를 "상대가 연결을 해제했습니다"로 알림(결정 필요, `DisconnectedBy.WITHDRAWN` 권장) · L-1~L-3 기록 |
+| #259 (2026-09-30) | 점검 잔여 이슈 - 탈퇴 리스너 REQUIRES_NEW(H-1)·판정 쓰기 잠금+`@DynamicUpdate`(E-2)·SOS 경계값 | ✅ | `(2026-09-30) audit-impact-remaining-audit-items.md` (템플릿 C + B) | - (M-1 `deleteAllTokens` REQUIRES_NEW·M-2 탈퇴 `WITHDRAWN`/역할 변경 `ADMIN` 문구 반영 2026-09-30 `(2026-09-30) fix-withdrawal-fcm-and-disconnect-copy.md`) · L-1~L-3 기록 |
 | #258 (2026-09-23) | 알림 이력 점검 이슈 반영 - 연결 이벤트 당사자 ID·AFTER_COMMIT 기록 테스트 (마이그레이션 없음) | ➖ | 점검 반영분 `(2026-09-22) fix-admin-notification-audit-findings.md` | - |
 | #257 (2026-09-22) | 관리자 알림 이력 - 채널 결과 코드·`notification_log` 기록·조회 API (V54) | ✅ | `(2026-09-22) audit-impact-notification-channel-result.md` (템플릿 C) | - (M-1 실서버 확인 2026-09-30: gosky `notification_log`에 요청·수락·해제·SOS 행이 1건씩 `DELIVERED`, 연결 알림 `ward_id` 채워짐, 배포 후 `[NOTIFY-LOG-FAILED]` 0건) - L-3·L-4 반영, L-1·L-2 수용·문서화 (`(2026-09-22) fix-admin-notification-audit-findings.md`) / 통합 테스트 vkcs 통과·V54 vkcs 적용 확인 |
 | #255 (2026-09-22) | 관리자 이상감지 AI 신뢰도 = confidence 평균 (`accuracy` → `aiConfidence`, 마이그레이션 없음) | ✅ | `(2026-09-22) audit-admin-anomaly-ai-confidence.md` (템플릿 B) | - (M-1·L-1~L-4 전부 반영 2026-09-22: 응답률 문구·`/summary` 403 테스트·`real`/`falseAlarm` 제거·confidence 0~1 보정·최고값 치우침 명시) |

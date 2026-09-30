@@ -9,6 +9,7 @@ import kr.silverbridge.main.domain.notification.repository.FcmTokenRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.OffsetDateTime;
@@ -103,8 +104,11 @@ public class FcmService {
     }
 
     // 사용자의 모든 FCM 토큰 삭제 (회원 탈퇴 시, D-USER-3)
-    // 탈퇴는 soft delete(status=INACTIVE)라 user 행이 남아 FK CASCADE가 발동하지 않으므로 명시적으로 삭제한다.
-    @Transactional
+    // 행은 뒤이은 purge(hard delete)의 FK CASCADE로도 지워지지만, purge가 실패해 계정이 남는 동안에도 토큰이 먼저
+    // 정리되도록 명시적으로 지운다.
+    // REQUIRES_NEW 필수(M-1, 2026-09-30): 동기 AFTER_COMMIT 리스너에서 불려 기본 전파면 이미 커밋된 탈퇴 트랜잭션에
+    // 합류해 삭제가 커밋되지 않는다(H-1과 같은 결함).
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
     public void deleteAllTokens(String userId) {
         fcmTokenRepository.deleteByUserId(userId);
         log.info("FCM 토큰 일괄 삭제(탈퇴): userId={}", userId);
