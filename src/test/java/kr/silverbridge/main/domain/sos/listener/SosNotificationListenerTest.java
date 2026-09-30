@@ -161,6 +161,38 @@ class SosNotificationListenerTest {
     }
 
     @Test
+    @DisplayName("경계값: 2번째부터 반복 문구로 바뀐다 (#249 L-3)")
+    void handleSosTriggered_두번째부터_반복문구() {
+        when(connectionService.getActiveGuardianIds(WARD_ID)).thenReturn(List.of("GD0001"));
+        when(cooldown.tryAcquire(WARD_ID)).thenReturn(true);
+        when(sosEventRepository.countByWardIdAndCreatedAtGreaterThanEqual(eq(WARD_ID), any()))
+                .thenReturn(2L);
+
+        listener.handleSosTriggered(event);
+
+        ArgumentCaptor<NotificationContent> captor = ArgumentCaptor.forClass(NotificationContent.class);
+        verify(notificationDispatcher).dispatch(eq("GD0001"), any(), eq(NotificationType.WARD_SOS), captor.capture());
+        assertThat(captor.getValue().body()).isEqualTo("김순자님이 계속 도움을 요청하고 있습니다. (최근 10분 내 2번째)");
+        assertThat(captor.getValue().data()).containsEntry("repeatCount", "2");
+    }
+
+    @Test
+    @DisplayName("집계가 0건이어도(이력 커밋 전 조회 등) 1회로 보정해 기존 문구로 보낸다 (#249 L-3)")
+    void handleSosTriggered_0건은_1회로_보정() {
+        when(connectionService.getActiveGuardianIds(WARD_ID)).thenReturn(List.of("GD0001"));
+        when(cooldown.tryAcquire(WARD_ID)).thenReturn(true);
+        when(sosEventRepository.countByWardIdAndCreatedAtGreaterThanEqual(eq(WARD_ID), any()))
+                .thenReturn(0L);
+
+        listener.handleSosTriggered(event);
+
+        ArgumentCaptor<NotificationContent> captor = ArgumentCaptor.forClass(NotificationContent.class);
+        verify(notificationDispatcher).dispatch(eq("GD0001"), any(), eq(NotificationType.WARD_SOS), captor.capture());
+        assertThat(captor.getValue().body()).isEqualTo("김순자님이 긴급 도움을 요청했습니다.");
+        assertThat(captor.getValue().data()).containsEntry("repeatCount", "1");
+    }
+
+    @Test
     @DisplayName("집계 창은 최근 10분 — 그보다 오래된 이력은 세지 않는다")
     void handleSosTriggered_집계창_10분() {
         when(connectionService.getActiveGuardianIds(WARD_ID)).thenReturn(List.of("GD0001"));

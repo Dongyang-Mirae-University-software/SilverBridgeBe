@@ -101,7 +101,8 @@ public class GuardianAnomalyService {
      */
     @Transactional
     public AnomalyFeedbackResponse submitFeedback(String guardianId, Long incidentId, AnomalyVerdict verdict) {
-        AnomalyIncident incident = anomalyIncidentRepository.findById(incidentId)
+        // 같은 상황의 응답을 한 줄로 세운다(E-2) - 아래 집계가 앞선 응답의 커밋을 보게 한다
+        AnomalyIncident incident = anomalyIncidentRepository.findByIdForUpdate(incidentId)
                 .orElseThrow(() -> new CustomException(ErrorCode.ANOMALY_INCIDENT_NOT_FOUND));
 
         if (!connectionService.isActiveConnection(guardianId, incident.getWardId())) {

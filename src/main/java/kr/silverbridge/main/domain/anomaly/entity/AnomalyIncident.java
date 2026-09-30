@@ -7,6 +7,7 @@ import lombok.AccessLevel;
 import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
+import org.hibernate.annotations.DynamicUpdate;
 
 import java.time.OffsetDateTime;
 
@@ -23,8 +24,13 @@ import java.time.OffsetDateTime;
  * <p><b>판정은 보호자 응답만으로 정해진다</b>(2026-09-21 관리자 정정 폐지). 테이블에 남아 있는
  * {@code resolved_by}·{@code resolved_at}·{@code review_note} 컬럼은 폐지 전 정정 기록으로, 엔티티에 매핑하지 않는다.
  * DROP은 비가역이라 별도 후속으로 미뤘다.</p>
+ *
+ * <p><b>{@code @DynamicUpdate}</b>(2026-09-30): 이 행은 두 경로가 따로 고친다 - AI 감지 승계({@link #addDetection})와
+ * 보호자 응답({@link #applyReviewStatus}). 전체 컬럼 UPDATE면 감지 쪽이 읽어 둔 옛 {@code review_status}를 다시 써서
+ * 방금 확정된 판정을 되돌린다. 바뀐 컬럼만 쓰게 해 두 경로가 서로의 컬럼을 건드리지 않게 한다. 떼지 말 것.</p>
  */
 @Entity
+@DynamicUpdate
 @Table(name = "anomaly_incident", indexes = {
         @Index(name = "idx_anomaly_incident_ward_started", columnList = "ward_id, started_at DESC"),
         @Index(name = "idx_anomaly_incident_status_started", columnList = "review_status, started_at DESC"),

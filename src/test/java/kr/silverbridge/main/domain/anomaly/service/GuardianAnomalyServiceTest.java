@@ -103,7 +103,7 @@ class GuardianAnomalyServiceTest {
         @Test
         @DisplayName("연결되지 않은 피보호자의 상황에 응답하면 403이고, 응답은 저장되지 않는다")
         void feedbackOnUnconnectedWardIsForbidden() {
-            when(incidentRepository.findById(INCIDENT_ID)).thenReturn(Optional.of(incident()));
+            when(incidentRepository.findByIdForUpdate(INCIDENT_ID)).thenReturn(Optional.of(incident()));
             when(connectionService.isActiveConnection(GUARDIAN_ID, WARD_ID)).thenReturn(false);
 
             assertThatThrownBy(() -> service.submitFeedback(GUARDIAN_ID, INCIDENT_ID, AnomalyVerdict.REAL))
@@ -125,7 +125,7 @@ class GuardianAnomalyServiceTest {
         @Test
         @DisplayName("없는 상황에 응답하면 404다 - 남의 것이 아니라 존재하지 않는 것이다")
         void feedbackOnMissingIncidentIsNotFound() {
-            when(incidentRepository.findById(INCIDENT_ID)).thenReturn(Optional.empty());
+            when(incidentRepository.findByIdForUpdate(INCIDENT_ID)).thenReturn(Optional.empty());
 
             assertThatThrownBy(() -> service.submitFeedback(GUARDIAN_ID, INCIDENT_ID, AnomalyVerdict.REAL))
                     .isInstanceOf(CustomException.class)
@@ -181,7 +181,7 @@ class GuardianAnomalyServiceTest {
         @DisplayName("첫 응답은 저장되고 상황 상태가 그 답으로 재계산된다")
         void firstFeedbackIsSavedAndRecalculated() {
             AnomalyIncident incident = incident();
-            when(incidentRepository.findById(INCIDENT_ID)).thenReturn(Optional.of(incident));
+            when(incidentRepository.findByIdForUpdate(INCIDENT_ID)).thenReturn(Optional.of(incident));
             when(feedbackRepository.findByIncidentId(INCIDENT_ID)).thenReturn(List.of());
 
             AnomalyFeedbackResponse response =
@@ -197,7 +197,7 @@ class GuardianAnomalyServiceTest {
         void secondFeedbackOverwritesInsteadOfAdding() {
             AnomalyIncident incident = incident();
             AnomalyIncidentFeedback mine = feedback(GUARDIAN_ID, AnomalyVerdict.REAL);
-            when(incidentRepository.findById(INCIDENT_ID)).thenReturn(Optional.of(incident));
+            when(incidentRepository.findByIdForUpdate(INCIDENT_ID)).thenReturn(Optional.of(incident));
             when(feedbackRepository.findByIncidentId(INCIDENT_ID)).thenReturn(List.of(mine));
 
             AnomalyFeedbackResponse response =
@@ -212,7 +212,7 @@ class GuardianAnomalyServiceTest {
         @DisplayName("동수를 만든 응답은 CONFLICTED를 돌려받고, 재확인 안내 대상에서는 빠진다(sent=false 기록)")
         void tieBecomesConflictedAndSkipsNoticeForMe() {
             AnomalyIncident incident = incident();
-            when(incidentRepository.findById(INCIDENT_ID)).thenReturn(Optional.of(incident));
+            when(incidentRepository.findByIdForUpdate(INCIDENT_ID)).thenReturn(Optional.of(incident));
             when(feedbackRepository.findByIncidentId(INCIDENT_ID))
                     .thenReturn(List.of(feedback(OTHER_GUARDIAN_ID, AnomalyVerdict.REAL)));
 
@@ -232,7 +232,7 @@ class GuardianAnomalyServiceTest {
             AnomalyIncident incident = incident();
             incident.applyReviewStatus(AnomalyReviewStatus.CONFLICTED);
             AnomalyIncidentFeedback mine = feedback(GUARDIAN_ID, AnomalyVerdict.FALSE_ALARM);
-            when(incidentRepository.findById(INCIDENT_ID)).thenReturn(Optional.of(incident));
+            when(incidentRepository.findByIdForUpdate(INCIDENT_ID)).thenReturn(Optional.of(incident));
             when(feedbackRepository.findByIncidentId(INCIDENT_ID))
                     .thenReturn(List.of(feedback(OTHER_GUARDIAN_ID, AnomalyVerdict.REAL), mine));
 

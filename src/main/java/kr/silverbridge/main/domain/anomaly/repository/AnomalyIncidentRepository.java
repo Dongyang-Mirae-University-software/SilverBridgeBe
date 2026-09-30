@@ -1,11 +1,13 @@
 package kr.silverbridge.main.domain.anomaly.repository;
 
+import jakarta.persistence.LockModeType;
 import kr.silverbridge.main.domain.anomaly.entity.AnomalyIncident;
 import kr.silverbridge.main.domain.anomaly.entity.AnomalyReviewStatus;
 import kr.silverbridge.main.global.enums.DetectedType;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
@@ -15,6 +17,18 @@ import java.util.List;
 import java.util.Optional;
 
 public interface AnomalyIncidentRepository extends JpaRepository<AnomalyIncident, Long> {
+
+    /**
+     * 보호자 응답용 - 상황 행을 <b>쓰기 잠금</b>(SELECT … FOR UPDATE)으로 읽는다(E-2, 2026-09-30).
+     *
+     * <p>응답은 "다른 보호자들의 응답을 읽고 → 내 표를 더해 → 판정을 덮어쓴다"라, 두 보호자가 같은 순간 반대로 답하면
+     * 각자 상대의 표를 못 본 채 확정해 동수가 {@code REAL}·{@code FALSE_ALARM}으로 남는다. 상황 행을 잠가 같은 상황의
+     * 응답을 한 줄로 세운다 - 뒤에 온 응답은 앞 응답의 커밋을 본 뒤에 집계한다. 낙관적 잠금({@code @Version})은
+     * 진 쪽 보호자에게 재시도를 요구하므로 쓰지 않는다.</p>
+     */
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("SELECT i FROM AnomalyIncident i WHERE i.id = :id")
+    Optional<AnomalyIncident> findByIdForUpdate(@Param("id") Long id);
 
     /**
      * 상황 승계 판정용 - 같은 카메라·같은 유형의 <b>가장 최근 상황</b> 1건.

@@ -9,17 +9,18 @@
 
 | 머지 | 기능 | 상태 | 점검 문서 | 잔여 이슈 |
 |---|---|---|---|---|
-| #257 (2026-09-22) | 관리자 알림 이력 - 채널 결과 코드·`notification_log` 기록·조회 API (V54) | ⚠️ | `(2026-09-22) audit-impact-notification-channel-result.md` (템플릿 C) | M-1 실서버 기록 확인만 남음(AFTER_COMMIT 경로는 통합 테스트로 고정, 배포 후 dev 연결 요청 1회로 조회) - L-3·L-4 반영, L-1·L-2 수용·문서화 (`(2026-09-22) fix-admin-notification-audit-findings.md`) / 통합 테스트 vkcs 통과·V54 vkcs 적용 확인 |
+| #258 (2026-09-23) | 알림 이력 점검 이슈 반영 - 연결 이벤트 당사자 ID·AFTER_COMMIT 기록 테스트 (마이그레이션 없음) | ➖ | 점검 반영분 `(2026-09-22) fix-admin-notification-audit-findings.md` | - |
+| #257 (2026-09-22) | 관리자 알림 이력 - 채널 결과 코드·`notification_log` 기록·조회 API (V54) | ✅ | `(2026-09-22) audit-impact-notification-channel-result.md` (템플릿 C) | - (M-1 실서버 확인 2026-09-30: gosky `notification_log`에 요청·수락·해제·SOS 행이 1건씩 `DELIVERED`, 연결 알림 `ward_id` 채워짐, 배포 후 `[NOTIFY-LOG-FAILED]` 0건) - L-3·L-4 반영, L-1·L-2 수용·문서화 (`(2026-09-22) fix-admin-notification-audit-findings.md`) / 통합 테스트 vkcs 통과·V54 vkcs 적용 확인 |
 | #255 (2026-09-22) | 관리자 이상감지 AI 신뢰도 = confidence 평균 (`accuracy` → `aiConfidence`, 마이그레이션 없음) | ✅ | `(2026-09-22) audit-admin-anomaly-ai-confidence.md` (템플릿 B) | - (M-1·L-1~L-4 전부 반영 2026-09-22: 응답률 문구·`/summary` 403 테스트·`real`/`falseAlarm` 제거·confidence 0~1 보정·최고값 치우침 명시) |
-| (PR 예정, 2026-09-21) | 관리자 이상감지 로그 v2 - 필터·집계 API + 연기=화재 통합 (V53) | ✅ | `(2026-09-21) audit-impact-admin-anomaly-log-v2.md` (템플릿 C) | - (E-1·E-2 주석 반영, E-3 쿨다운 키 1회성 수용) / 새 JPQL은 배포 기동으로 확인 |
-| #252 (2026-09-21) | 이상감지 판정 다수결 전환·동수 재확인 안내·관리자 정정 폐지 (V52) | ✅ | `(2026-09-21) audit-impact-anomaly-majority-review.md` (템플릿 C) | E-2(동시 응답 상태 덮어쓰기)·E-3(해제·탈퇴 보호자 표)은 기존 결함 - **보류·수용**(2026-09-21 결정, 정책 파일 "알려진 한계 - 판정 집계"에 기록) / V52 gosky 적용 확인(2026-09-21, Flyway v52·기동·health 200) - (E-1·B-1 반영 완료) · FE Notion 3페이지 갱신 2026-09-21 |
+| #253 (2026-09-21) | 관리자 이상감지 로그 v2 - 필터·집계 API + 연기=화재 통합 (V53) | ✅ | `(2026-09-21) audit-impact-admin-anomaly-log-v2.md` (템플릿 C) | - (E-1·E-2 주석 반영, E-3 쿨다운 키 1회성 수용) / 새 JPQL은 배포 기동으로 확인 |
+| #252 (2026-09-21) | 이상감지 판정 다수결 전환·동수 재확인 안내·관리자 정정 폐지 (V52) | ✅ | `(2026-09-21) audit-impact-anomaly-majority-review.md` (템플릿 C) | E-2(동시 응답 상태 덮어쓰기)는 **해결 2026-09-30**(쓰기 잠금 + 감지 승계 덮어쓰기 `@DynamicUpdate`, `(2026-09-30) fix-remaining-audit-items.md`) / E-3(해제·탈퇴 보호자 표)은 **보류·수용**(2026-09-21 결정, 정책 파일 "알려진 한계 - 판정 집계") / V52 gosky 적용 확인(2026-09-21, Flyway v52·기동·health 200) - (E-1·B-1 반영 완료) · FE Notion 3페이지 갱신 2026-09-21 |
 | #251 (2026-09-21) | 의존성 업그레이드 - Boot 4.0.8·Tomcat 11.0.26·springdoc 3.1.1 (코드 무변경) | ➖ | 스캔 결과 `(2026-09-11) audit-technical-cross-cutting.md` PHASE A "반영 결과" | - (CVSS 7+ 0건, 남은 2건은 5.3 오탐) |
 | #250 (2026-09-11) | 테스트 - 미복용 요약 Planner 자정 근처 미실행 가드 | ➖ | 테스트만 | - |
-| #249 (2026-09-21) | SOS 연타 알림 반복 횟수 (`repeatCount`) | ⚠️ | `(2026-09-21) audit-sos-repeat-count.md` | L-3(경계값 2·0 보정 테스트, 실 DB 미실행) - (L-1 기능 문서 정정 완료 2026-09-21) |
+| #249 (2026-09-21) | SOS 연타 알림 반복 횟수 (`repeatCount`) | ✅ | `(2026-09-21) audit-sos-repeat-count.md` | - (L-1 기능 문서 정정 2026-09-21 / L-3 경계값 2·0 단위 테스트 + 집계 쿼리 실 DB 통합 테스트 2026-09-30 `(2026-09-30) fix-remaining-audit-items.md`) |
 | #248 (2026-09-11) | 회귀·기술 점검 이슈 반영 (V51) - 수락 시 보호자 상태·executor·종료·타임아웃·감사 로그 PII | ➖ | 점검 반영분 `(2026-09-11) fix-audit-findings-2.md` | - |
 | #247 (2026-09-10) | 문의 답변 감사 로그 (V50) - 역할 경계 점검 A-2 반영 | ➖ | 점검 반영분 `(2026-09-10) audit-role-boundary-guardian-ward-admin.md` A-2 | - |
 | #246 (2026-09-10) | 점검 이슈 반영 - 역할 변경 카메라·토큰, INACTIVE 404, 관리자 게이트 | ➖ | 점검 반영분 `(2026-09-10) fix-audit-findings.md` | - |
-| #245 (2026-09-10) | 관리자 강제 연결·해제 | ⚠️ | `(2026-09-10) audit-unaudited-prs-230-245.md` · 역할별 `(2026-09-10) audit-role-boundary-guardian-ward-admin.md` | L-5(WS 이벤트명 재사용, FE 확인) |
+| #245 (2026-09-10) | 관리자 강제 연결·해제 | ⚠️ | `(2026-09-10) audit-unaudited-prs-230-245.md` · 역할별 `(2026-09-10) audit-role-boundary-guardian-ward-admin.md` | L-5 FE 확인 완료(2026-09-30): 피보호자 토픽에 `connection-accepted`가 없어 강제 연결 시 실시간 갱신 누락(FCM은 도착). **백엔드 무변경 - FE에 구독 1줄 추가 요청** `(2026-09-30) fix-remaining-audit-items.md` |
 | #244 (2026-09-09) | 정지 계정 알림 차단·정지 사유 (V49) | ✅ | 〃 | M-5는 수용한 한계로 정책 문서에 명시(2026-09-10) |
 | #243 (2026-09-09) | 관리자 회원관리 (V47·V48) | ✅ | 〃 | - (M-1·M-2·M-3·M-6 수정 완료 2026-09-10 - `(2026-09-10) fix-audit-findings.md`) |
 | #242 (2026-09-07) | 피보호자 목록 status 필터 | ✅ | 〃 | - |
@@ -59,9 +60,9 @@
 | 영역 | 상태 | 메모 |
 |---|---|---|
 | `global/websocket` (STOMP 리스너) | ✅ | M-1 STOMP NPE 수정 완료(2026-07-14, null-safe) |
-| **탈퇴 리스너 트랜잭션 전파** | ⚠️ | H-1 — AFTER_COMMIT에서 `@Transactional`(REQUIRED) 쓰기(`MedicationWithdrawalService`·`ConnectionService.tearDownConnectionsOnWithdrawal`). 리포의 다른 AFTER_COMMIT 경로는 `REQUIRES_NEW`. 현재는 purge FK CASCADE가 가려 무해. **미검증 — 실측 필요**(2026-09-10 재확인: 변경 없음) |
+| **탈퇴 리스너 트랜잭션 전파** | ✅ | H-1 **실제 결함으로 판정·수정(2026-09-30)** - 실 DB에서 연결 정리·약 삭제가 커밋되지 않고, **연결 정리 중 발행한 해제 이벤트가 AFTER_COMMIT을 맞지 못해 탈퇴 시 상대 해제 알림이 나가지 않음**을 재현. 두 메서드를 `REQUIRES_NEW`로 바꿔 통과. `WithdrawalListenerCommitIntegrationTest` · `(2026-09-30) fix-remaining-audit-items.md` |
 | **실 DB 통합 테스트** | ⚠️ | **1단계 도입(2026-09-21)** - `src/integrationTest`(Testcontainers `postgres:17`, `@DataJpaTest`) 10건: Flyway V1~V53 전체 적용·엔티티 validate, 이상감지 v2 JPQL, ON CONFLICT, enum↔CHECK. vkcs `tools/integration-test.sh`로 실행, **CD가 배포 전 자동 실행·실패 시 중단**. 남은 것: 서비스·트랜잭션 전파·리스너(전체 컨텍스트) - H-1 판정은 여기서 가능해진다. `(2026-09-21) feature-testcontainers-integration-test.md` |
-| 이상감지 **통합 경로**(카메라 등록 ↔ AI sessionId) | ❌ | FE가 발급 sessionId로 스트리밍하도록 수정된 뒤 검증 예정. 현재 gosky `camera` 0행 |
+| 이상감지 **통합 경로**(카메라 등록 ↔ AI sessionId) | ❌ | **FE가 백엔드 카메라 등록을 거치지 않는다(2026-09-30 확인)** - AI 서버에 직접 등록·송출해 백엔드 `camera`가 비고, 백엔드는 등록된 세션만 구독하므로 실송출 화재 알림이 0건. 권장안(A: 피보호자가 `/api/ward/camera` 등록 후 발급 `sessionId`로 송출)과 합의 항목은 `(2026-09-30) issue-anomaly-camera-integration-gap.md`. FE·AI 합의 대기 |
 | 카카오 알림톡 채널 | ✅ | 템플릿 **승인(2026-07-27)**·두 서버 `ALIMTALK_ENABLED=true`로 실발송 중(2026-07-31 확인). 카카오 푸시는 검토 후 미채택(앱 푸시=FCM 중복) |
 | **역할 경계 횡단**(보호자/피보호자/관리자) | ✅ | `(2026-09-10) audit-role-boundary-guardian-ward-admin.md` - 보호자·피보호자 PASS. 보호자 G-1·관리자 A-1 수정 완료(2026-09-10). A-2(문의 답변 감사 로그)는 V50 PR ②. 역할 게이트 테스트 미커버는 8개 → 5개(연결 2·문의 2·공지 1, 다음 변경 때) |
 | **기점검 도메인 회귀 재점검** (auth~anomaly 1·2단계) | ✅ | `(2026-09-10) audit-regression-pre-230.md` - 2026-06-11 미해결 4건 전부 닫힘·회귀 없음. R-1·R-3(문서)·R-5·R-6 수정 완료 2026-09-11(`(2026-09-11) fix-audit-findings-2.md`). R-2(정지 중 선점 유실)·R-4(문의 CASCADE)는 수용 |
@@ -75,8 +76,6 @@
 
 ## 다음 점검 트리거
 
-- **Testcontainers 도입 시** → H-1(탈퇴 리스너 커밋 여부) 실측 판정
-- **`medication.created_by`를 SET NULL로 바꿀 때** → H-1이 즉시 실제 결함이 되므로 먼저 전파 속성 수정
-- **FE 카메라 연동 완료 시** → 이상감지 통합 검증(H-1 수정이 실제로 재구독을 살리는지 확인)
-- **알림톡 템플릿 승인 시** → `.env.dev`에 `ALIMTALK_ENABLED=true`·`ALIMTALK_PF_ID`·`ALIMTALK_TEMPLATE_ANOMALY` 주입 후 실발송 검증
+- **새 동기 AFTER_COMMIT 리스너를 추가할 때** → 부르는 쓰기가 `REQUIRES_NEW`인지 확인(H-1, 2026-09-30 수정 - 실 DB 테스트 `WithdrawalListenerCommitIntegrationTest` 형태로 고정)
+- **FE 카메라 연동 완료 시** → 이상감지 통합 검증(`(2026-09-30) issue-anomaly-camera-integration-gap.md` "검증 방법")
 - **AI danger 정식 배포 시** → DANGER 모드 실동작·오탐률 확인(임계 조정 판단)
