@@ -46,7 +46,9 @@ services:
     env_file:
       - .env.dev
     ports:
-      - "6513:5432"
+      # 로컬 전용(2026-09-30 C-1) - 전 인터페이스에 열면 방화벽 없는 서버에서 인터넷에 그대로 노출된다.
+      # api는 도커 네트워크(app-net)로 붙으므로 영향 없다. 외부에서 볼 때는 SSH 터널을 쓴다.
+      - "127.0.0.1:6513:5432"
     # Docker 루트가 NTFS/FUSE 등인 경우 named volume에서 initdb chmod 실패함.
     # 프로젝트 경로(ext4)에 바인드 마운트하여 PostgreSQL 데이터 디렉터리 권한 문제 회피.
     # 스키마는 Flyway가 단일 관리(앱 부팅 시 V1~ 순차 적용).
@@ -87,7 +89,8 @@ services:
       - --maxmemory-policy
       - allkeys-lru
     ports:
-      - "6514:6379"
+      # 로컬 전용(2026-09-30 C-1) - Redis는 비밀번호가 없고 인증코드·토큰 무효화 키를 담는다. 절대 공개 금지.
+      - "127.0.0.1:6514:6379"
     # postgres와 동일하게 프로젝트 경로(ext4)에 bind mount.
     # named volume 위치(/var/lib/docker/volumes/...)에서 외부 권한 문제로 RDB 저장이 막혀
     # MISCONF로 모든 쓰기가 거부됐던 사고 재발 방지 — 권한 관리·백업·삭제가 단순.
