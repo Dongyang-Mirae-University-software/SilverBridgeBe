@@ -23,7 +23,7 @@ import kr.silverbridge.main.global.jwt.JwtTokenProvider;
 import kr.silverbridge.main.global.util.MaskingUtil;
 import kr.silverbridge.main.global.util.RedisCounter;
 import kr.silverbridge.main.global.util.RedisKeys;
-import kr.silverbridge.main.global.util.UserIdGenerator;
+import kr.silverbridge.main.domain.user.service.UserIdGenerator;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.redis.core.StringRedisTemplate;

@@ -7,6 +7,7 @@ import kr.silverbridge.main.domain.announcement.entity.Announcement;
 import kr.silverbridge.main.domain.announcement.repository.AnnouncementRepository;
 import kr.silverbridge.main.domain.user.entity.User;
 import kr.silverbridge.main.domain.user.repository.UserRepository;
+import kr.silverbridge.main.global.audit.AdminAuditLogService;
 import kr.silverbridge.main.global.enums.AdminAuditAction;
 import kr.silverbridge.main.global.enums.Role;
 import kr.silverbridge.main.global.exception.CustomException;

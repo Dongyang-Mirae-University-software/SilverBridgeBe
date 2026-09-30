@@ -1,4 +1,4 @@
-package kr.silverbridge.main.global.util;
+package kr.silverbridge.main.domain.user.service;
 
 import kr.silverbridge.main.domain.user.repository.UserRepository;
 import lombok.RequiredArgsConstructor;

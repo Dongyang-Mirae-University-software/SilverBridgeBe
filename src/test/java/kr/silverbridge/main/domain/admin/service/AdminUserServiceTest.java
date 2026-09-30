@@ -14,6 +14,7 @@ import kr.silverbridge.main.domain.user.event.UserRestrictedEvent;
 import kr.silverbridge.main.domain.user.event.UserRoleChangedEvent;
 import kr.silverbridge.main.domain.user.repository.UserRepository;
 import kr.silverbridge.main.domain.user.service.UserService;
+import kr.silverbridge.main.global.audit.AdminAuditLogService;
 import kr.silverbridge.main.global.enums.AdminAuditAction;
 import kr.silverbridge.main.global.enums.ConnectionStatus;
 import kr.silverbridge.main.global.enums.Provider;

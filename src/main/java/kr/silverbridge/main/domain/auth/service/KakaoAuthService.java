@@ -20,7 +20,7 @@ import kr.silverbridge.main.global.exception.CustomException;
 import kr.silverbridge.main.global.exception.ErrorCode;
 import kr.silverbridge.main.global.jwt.JwtTokenProvider;
 import kr.silverbridge.main.global.util.RedisKeys;
-import kr.silverbridge.main.global.util.UserIdGenerator;
+import kr.silverbridge.main.domain.user.service.UserIdGenerator;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.ApplicationEventPublisher;

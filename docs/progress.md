@@ -1498,3 +1498,13 @@ REST API Key 단독 대비 보안 강화 — 인가코드 탈취 시 토큰 발�
 - **이상감지 통합 경로(신규 문제)**: FE가 카메라를 AI 서버에만 등록·송출해 백엔드가 구독할 세션이 없다 → 실송출 화재 알림 0건. 권장안 A(피보호자가 백엔드 등록 후 발급 sessionId로 송출) 문서화, FE·AI 합의 대기.
 - `./gradlew test` 683 / 0 실패 · vkcs 통합 26 / 0 실패.
 - 상세: `docs/(2026-09-30) fix-remaining-audit-items.md`, `docs/(2026-09-30) issue-anomaly-camera-integration-gap.md`
+
+## [2026-09-30] 아키텍처 경계 정리 (F-1~F-3, 동작 불변 refactor)
+
+- 2026-09-11 기술 점검 PHASE F의 Low 3건. 파일 이동·package·import만 바꿨다(로직 무변경, 25개 파일).
+  - **F-1** `AdminAuditLog`·`AdminAuditLogRepository`·`AdminAuditLogService` → `global/audit` - admin↔inquiry 패키지 순환 해소(anomaly 쪽은 2026-09-21 관리자 정정 폐지로 이미 풀려 있었다).
+  - **F-2** `UserIdGenerator` → `domain/user/service` - `global`이 `UserRepository`에 의존하던 경계 위반 해소.
+  - **F-3** `SmsSender` → `global/client` - 알림 도메인이 인증 도메인을 import하던 방향 해소(인증번호·알림 채널 공용 인프라 어댑터).
+- 결과: 도메인 간 순환 0, `global → domain` import 0. 로그 설정·yaml에 패키지 참조 없음(로거는 클래스 기준).
+- `./gradlew test` 683 / 0 실패 · vkcs 통합 26 / 0 실패(엔티티 패키지 이동 후 스키마 validate 포함).
+- `fix/remaining-audit-items` 위에 쌓은 브랜치 - **그 PR이 먼저 머지돼야 한다**(E-2 통합 테스트가 옮긴 `UserIdGenerator`를 import).

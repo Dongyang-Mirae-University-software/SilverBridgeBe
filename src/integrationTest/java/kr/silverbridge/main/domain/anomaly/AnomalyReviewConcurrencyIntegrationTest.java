@@ -14,7 +14,7 @@ import kr.silverbridge.main.domain.user.repository.UserRepository;
 import kr.silverbridge.main.global.enums.ConnectionStatus;
 import kr.silverbridge.main.global.enums.DetectedType;
 import kr.silverbridge.main.global.enums.Role;
-import kr.silverbridge.main.global.util.UserIdGenerator;
+import kr.silverbridge.main.domain.user.service.UserIdGenerator;
 import kr.silverbridge.main.support.PostgresIntegrationTest;
 import kr.silverbridge.main.support.TestData;
 import org.junit.jupiter.api.AfterEach;

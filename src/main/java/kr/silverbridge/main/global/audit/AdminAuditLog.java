@@ -1,4 +1,4 @@
-package kr.silverbridge.main.domain.admin.entity;
+package kr.silverbridge.main.global.audit;
 
 import jakarta.persistence.*;
 import kr.silverbridge.main.global.enums.AdminAuditAction;
