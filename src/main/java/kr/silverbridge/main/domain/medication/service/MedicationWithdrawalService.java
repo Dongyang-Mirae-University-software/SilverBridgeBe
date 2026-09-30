@@ -5,6 +5,7 @@ import kr.silverbridge.main.domain.medication.repository.MedicationRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.LinkedHashMap;
@@ -37,9 +38,12 @@ public class MedicationWithdrawalService {
      * 이전에 이미 없어진 약이라 안내 문구의 숫자에 들어가면 사실과 다르다. 다만 <b>삭제 대상</b>에는 포함해
      * 등록자가 사라진 잔여 행을 남기지 않는다.</p>
      *
+     * <p><b>REQUIRES_NEW 필수</b>(H-1, 2026-09-30): 동기 AFTER_COMMIT 리스너에서 불려 기본 전파면 이미 커밋된
+     * 탈퇴 트랜잭션에 합류해 삭제가 커밋되지 않는다.</p>
+     *
      * @return 피보호자 ID → 중지된 약 건수. 정리할 약이 없으면 빈 맵
      */
-    @Transactional
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
     public Map<String, Integer> removeMedicationsRegisteredBy(String guardianId) {
         List<Medication> medications = medicationRepository.findByCreatedBy(guardianId);
         if (medications.isEmpty()) {

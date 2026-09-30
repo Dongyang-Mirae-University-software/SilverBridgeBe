@@ -22,6 +22,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
@@ -233,7 +234,9 @@ public class ConnectionService {
     // 회원 탈퇴 시 본인이 참여(보호자/피보호자)한 live 연결을 정리한다 (D-USER-3).
     // ACTIVE → DISCONNECTED(상대에게 해제 알림) / PENDING → CANCELLED(무알림, 기존 취소·거절과 동일).
     // UserWithdrawnEvent 를 받은 UserWithdrawalConnectionListener 가 탈퇴 커밋 후 호출한다.
-    @Transactional
+    // REQUIRES_NEW 필수(H-1, 2026-09-30): 동기 AFTER_COMMIT에서 불려 기본 전파면 이미 커밋된 탈퇴 트랜잭션에 합류해
+    // 상태 변경이 커밋되지 않고, 여기서 발행한 해제 이벤트도 AFTER_COMMIT을 맞지 못해 상대 알림이 사라진다.
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
     public void tearDownConnectionsOnWithdrawal(String withdrawnUserId) {
         List<Connection> connections = connectionRepository.findByParticipantAndStatusIn(
                 withdrawnUserId, List.of(ConnectionStatus.ACTIVE, ConnectionStatus.PENDING));
