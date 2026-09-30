@@ -114,12 +114,12 @@ SilverBridge는 노인(피보호자)과 그 가족(보호자)을 연결하는 �
                    ▶ 태그(그룹) 규칙 (2026-08-07 통일): "<역할> - <도메인>"
                      역할은 공통 / 피보호자 / 보호자 / 관리자 4가지뿐이며,
                      "누가 쓰는지 → 무슨 기능인지" 두 단계로 읽히게 했습니다.
-                     현재 16개 태그 / 23개 컨트롤러 / 81개 엔드포인트가 전부 분류돼 있고,
+                     현재(2026-09-30) 21개 태그 / 28개 컨트롤러 / 94개 엔드포인트가 전부 분류돼 있고,
                      표시 순서도 공통 → 피보호자 → 보호자 → 관리자로 고정입니다.
                      예) 공통 - 인증 / 공통 - 내 계정 / 공통 - 알림 설정 / 공통 - 공지사항 /
                          피보호자 - 연결·SOS·복약·카메라 /
                          보호자 - 연결·SOS 이력·복약·이상감지·카메라·문의 /
-                         관리자 - 공지사항·문의
+                         관리자 - 공지사항·문의·대시보드·회원관리·연결 관리·이상감지·알림 이력
                      ⚠️ 태그 설명은 SwaggerConfig.tags()에 모아 둡니다 — 새 컨트롤러를 만들면
                        여기에 등록해야 설명 없는 태그가 뒤에 붙지 않습니다.
 
@@ -231,9 +231,10 @@ SilverBridge는 노인(피보호자)과 그 가족(보호자)을 연결하는 �
                          (같은 집·같은 카메라·같은 종류이고, 마지막 감지에서 10분 안이면 같은 상황)
                          → 보호자에게 "진짜 위험이었나요, 잘못 본 건가요?"를 묻습니다
                          → 답은 보호자만 합니다. 한 사람당 한 표이고 나중에 바꿀 수 있습니다.
-                         → 보호자끼리 답이 다르면? 다수결로 정하지 않고 "엇갈림"으로 남깁니다.
-                            (한 명은 진짜 불로, 한 명은 요리 연기로 봤다는 사실 자체가
-                             관리자가 확인해야 할 정보이기 때문입니다)
+                         → 보호자끼리 답이 다르면? 답한 사람끼리 많은 쪽으로 정합니다(다수결).
+                            똑같이 갈리면(1:1, 2:2) "엇갈림"으로 두고, 답한 보호자에게
+                            "다른 보호자와 판정이 다릅니다. 다시 확인해 주세요"를 한 번 보냅니다.
+                            관리자가 대신 정하지 않습니다 - 가족끼리 다시 맞춥니다(2026-09-21 변경).
                             |
                          아무도 답을 안 하면:
                            상황이 끝나고 1시간 뒤에 한 번 더 물어봅니다
@@ -249,7 +250,9 @@ SilverBridge는 노인(피보호자)과 그 가족(보호자)을 연결하는 �
     ⚠️ "잘못 봤다"고 답해도 이미 보낸 알림을 취소하지 않습니다.
       "아까 그건 아니었어요"를 또 보내면 알림만 두 배가 되고, 정작 다음에 진짜 불이 났을 때
       사람들이 안 믿게 됩니다.
-    ⚠️ 관리자가 "엇갈림"을 정리하는 화면은 아직 없습니다(다음 작업 예정).
+    ⚠️ 관리자는 판정하지 않습니다. 관리자 이상감지 화면(3-11-C)은 보기만 합니다
+      (2026-09-02에 만든 "관리자 정정"은 2026-09-21에 없앴습니다 - 현장을 모르는 운영자가
+       가족의 판정을 확정하는 구조가 맞지 않다고 판단했습니다).
 
 
   ▶ ④ 복약 알림 - 등록은 보호자, 체크는 피보호자     (자세히: 3-6 안의 "복약")
@@ -326,6 +329,10 @@ SilverBridge는 노인(피보호자)과 그 가족(보호자)을 연결하는 �
       → [2걸음] 계정을 완전히 삭제합니다
            (남겨두면 같은 이메일·전화번호로 다시 가입할 수 없어서 완전히 지웁니다)
 
+    ※ 연결이 끊긴 상대에게는 "보호자(피보호자)가 탈퇴해 연결이 종료되었습니다"가 갑니다.
+      "상대가 연결을 해제했습니다"로 보내면 "나를 끊었다"로 읽히기 때문입니다(2026-09-30).
+      ⚠️ 2026-09-30 전까지는 이 알림이 실제로는 한 번도 나가지 않았습니다(아래 7장
+        "커밋 직후 정리 작업" 참고). 정리 작업이 기록한 내용도 저장되지 않고 있었습니다.
     ※ 두 걸음 사이에 서버가 재시작되면 "탈퇴 중"으로 멈춘 계정이 남습니다.
       그래서 10분마다 도는 청소 작업이 오래 멈춰 있는 계정을 찾아 마저 지웁니다.
     ⚠️ "탈퇴 중" 상태는 오직 탈퇴할 때만 써야 합니다.
@@ -336,11 +343,14 @@ SilverBridge는 노인(피보호자)과 그 가족(보호자)을 연결하는 �
   ▶ ⑧ 관리자가 하는 일                            (자세히: 3-8, 3-11-B)
 
     공지사항 쓰기·수정         → 누가 언제 고쳤는지 기록이 남습니다
-    문의 답변                  → 위 ⑤
+    문의 답변                  → 위 ⑤. 누가 언제 답했는지 기록이 남습니다(2026-09-10)
     대시보드 보기 (2개 탭)     → 그냥 숫자만 보는 거라 기록을 남기지 않습니다
                                  (30초마다 새로 보는 화면이라 기록하면 진짜 중요한
                                   수정 기록이 파묻힙니다)
-    이상감지 엇갈린 건 정리    → 보호자들 답이 갈린 건을 관리자가 확정합니다 (3-11-C)
+    이상감지 로그 보기         → 기간·종류·이름으로 찾아보고 응답률·AI 신뢰도를 봅니다.
+                                 보기만 합니다 - 판정은 보호자만 합니다 (3-11-C)
+    알림 이력 보기             → 어떤 알림이 누구에게 어떤 방법으로 갔는지, 안 갔다면 왜인지
+                                 봅니다. 보기만 합니다 (3-14)
     회원 관리                  → 회원 찾기, 이름·역할 고치기, 계정 정지, 강제 탈퇴 (3-13)
                                  숫자만 보는 대시보드와 달리 개인 정보를 여는 곳이라
                                  고치거나 지울 때마다 기록을 남깁니다
@@ -643,8 +653,16 @@ SilverBridge는 노인(피보호자)과 그 가족(보호자)을 연결하는 �
         푸시가 실제로 전달되지 않으면(등록된 기기가 없거나, 만료됐거나, 보내다 실패)
         문자로 대신 보냅니다. 이 "안 가면 문자로" 장치는 SOS에만 있습니다.
       · 보호자가 여러 명이면 전원에게 보냅니다. 한 명에게 실패해도 나머지는 그대로 갑니다.
-      · 짧은 시간에 여러 번 눌러도 알림은 한 번만 갑니다(놀라게 하지 않으려고).
+      · 짧은 시간(30초)에 여러 번 눌러도 알림은 한 번만 갑니다(놀라게 하지 않으려고).
         이 억제 장치에 문제가 생기면 억제를 포기하고 알림을 보냅니다 - 안 가는 것보다 낫기 때문입니다.
+        ※ 기록은 누를 때마다 남습니다. 억제되는 건 알림뿐입니다.
+      · 계속 누르면 몇 번째인지 알려줍니다 (2026-09-11 추가).
+        30초가 지나 다시 알림이 나갈 때, 최근 10분 안에 누른 횟수가 2번 이상이면
+          "OOO님이 계속 도움을 요청하고 있습니다. (최근 10분 내 N번째)"
+        로 보냅니다. 처음 한 번은 예전 문구("OOO님이 긴급 도움을 요청했습니다.") 그대로입니다.
+        알림 data와 화면 알림(sos-triggered)에 repeatCount(문자열)가 같이 갑니다.
+        ⚠️ 위급도를 단정하지 않습니다. 횟수는 확인된 사실이지만 얼마나 위험한지는 아직 모릅니다.
+        ※ 횟수를 세다 실패해도 알림은 기본 문구로 그대로 갑니다.
       · 환경설정의 "SOS 동작 설정"(GET·PUT /api/ward/sos-setting)은 119 화면을 어떻게
         보여줄지만 정합니다. 어떤 값으로 해도 보호자 알림은 항상 갑니다 (3-12 참고)
       · 보낼 내용은 전부 선택입니다.
@@ -811,6 +829,8 @@ SilverBridge는 노인(피보호자)과 그 가족(보호자)을 연결하는 �
                                           · 이미 답한 문의에 또 답하려 하면 거부합니다
                                           · 답변이 끝나면 작성자에게 앱 푸시 알림이 갑니다
                                             (본인이 알림을 켜 둔 경우에만. 화면 알림은 안 보냅니다.)
+                                          · 답변은 관리자 활동 기록(admin_audit_log,
+                                            INQUIRY_ANSWER)에 남습니다 (2026-09-10, V50)
 
     ※ 문의를 쓴 사람이 탈퇴하면 그 문의도 함께 지워집니다.
       답변한 관리자가 없어져도 답변 내용은 남습니다.
@@ -1045,6 +1065,13 @@ SilverBridge는 노인(피보호자)과 그 가족(보호자)을 연결하는 �
     → AnomalyDetectedEvent → (커밋 후) 리스너가 ACTIVE 보호자 전원 + 피보호자 본인에게 발송
 
   - 구독 대상: 등록된 camera.session_id만 subscribe(미등록 세션은 애초에 구독하지 않음)
+    ⚠️ 카메라를 백엔드(POST /api/ward/camera)에 등록하지 않고 AI 서버에만 등록하면 구독되지 않아
+      화재 알림이 한 건도 나가지 않습니다. 2026-09-30 기준 FE가 이 상태라 FE 반영 대기 중입니다
+      (docs/(2026-09-30) issue-anomaly-camera-integration-gap.md).
+  - 종류: AI의 fire와 smoke(연기)는 둘 다 "화재"(FIRE)로 받습니다 (2026-09-21, V53).
+    연기는 따로 셀 이유가 없어 합쳤고, 예전 SMOKE 기록도 FIRE로 바꿨습니다.
+    흉기(knife → WEAPON)·낙상(FALL)은 이름만 있고 AI 라이브에 아직 없습니다.
+    AI confidence가 0~1 밖으로 오면 범위 안으로 잘라 넣고 WARN을 남깁니다(신호는 버리지 않습니다).
   - 판정: ANOMALY_TRIGGER_MODE=DANGER(기본) — AI가 채운 danger 플래그만 신뢰(위험 판정 책임=AI).
     CONFIDENCE는 폴백 모드(confidence >= 0.6). ※ 배포된 AI가 danger를 항상 false로 내리는 동안은
     이력 0건이 정상이며 [ANOMALY-DANGER-MISMATCH] WARN으로 드러납니다.
@@ -1069,7 +1096,7 @@ SilverBridge는 노인(피보호자)과 그 가족(보호자)을 연결하는 �
   AI가 주는 숫자는 "얼마나 불꽃처럼 보이는가"이지 "정말 불이 났는가"가 아니기 때문입니다.
 
   그래서 집 사정을 아는 보호자에게 나중에 물어봅니다.
-  관리자는 보호자들 답이 서로 다를 때만 나서서 정리합니다.
+  판정은 보호자만 합니다. 관리자는 결과를 보기만 합니다(2026-09-21 변경).
 
   ▶ 여러 번 감지돼도 한 번만 물어봅니다 ("상황"으로 묶기)
     같은 카메라에서 불이 3분 이어지면 기록은 1분에 하나씩 3개가 쌓입니다.
@@ -1079,7 +1106,7 @@ SilverBridge는 노인(피보호자)과 그 가족(보호자)을 연결하는 �
     - 같은 집·같은 카메라·같은 종류이고, 마지막 감지에서 10분 안이면 같은 상황으로 잇습니다.
       ⚠️ "10분짜리 토막"이 아니라 "마지막 감지 기준"입니다.
         불이 1시간 이어져도 계속 이어지기만 하면 상황은 1건입니다.
-    - 거실 화재와 주방 연기는 따로 셉니다. 대응하는 방법이 다르기 때문입니다.
+    - 카메라가 다르거나 종류가 다르면 따로 셉니다. (연기는 2026-09-21부터 화재로 합쳐 셉니다)
     - 밤 12시(한국 시간)를 넘기면 새 상황으로 나눕니다.
       안 그러면 이 사건이 어느 날짜에 속하는지 애매해집니다.
     - 화면과 통계에 나오는 숫자는 전부 "상황 몇 건"입니다. 기록 몇 줄이 아닙니다.
@@ -1098,29 +1125,36 @@ SilverBridge는 노인(피보호자)과 그 가족(보호자)을 연결하는 �
       incidentId          이 상황의 번호 (답할 때 이 번호를 씁니다)
       wardId · wardName   누구 집인지
       cameraLabel         어느 카메라인지 ("거실"). 카메라를 지웠으면 null
-      detectedType        FIRE(화재) / SMOKE(연기)
-      detectedTypeLabel   "화재" / "연기" - 알림 문구와 같은 단어를 서버가 줍니다
+      detectedType        FIRE(화재). 연기도 화재로 옵니다(2026-09-21)
+      detectedTypeLabel   "화재" - 알림 문구와 같은 단어를 서버가 줍니다
       startedAt           처음 감지된 시각
       lastDetectedAt      마지막으로 감지된 시각
       eventCount          이 상황에서 몇 번 잡혔는지 (보호자가 판단할 근거가 됩니다)
       maxConfidence       가장 확실해 보였던 정도 (0~1)
       reviewStatus        지금 판정 상태 (아래 참고)
       myVerdict           내가 뭐라고 답했는지. 아직 안 했으면 null
-      resolvedByAdmin     관리자가 이미 정리한 건이면 true → 답변 버튼을 막아야 합니다
+      (resolvedByAdmin은 관리자 정정 폐지와 함께 2026-09-21에 없어졌습니다)
 
   ▶ 판정 상태 4가지 (reviewStatus)
     PENDING       아직 아무도 답하지 않음
-    REAL          답한 보호자 모두가 "진짜 위험이었다"
-    FALSE_ALARM   답한 보호자 모두가 "잘못 본 것이다"
-    CONFLICTED    보호자끼리 답이 서로 다름 → 관리자가 확인할 차례
+    REAL          답한 보호자 중 "진짜 위험이었다"가 더 많음
+    FALSE_ALARM   답한 보호자 중 "잘못 본 것이다"가 더 많음
+    CONFLICTED    똑같이 갈림(1:1, 2:2) → 보호자들이 다시 답해서 맞춰야 풀립니다
 
-    ⚠️ 많은 쪽으로 정하지 않습니다.
-      3명 중 2명이 "잘못 봤다"고 해도 "엇갈림"으로 남깁니다.
-      한 명은 진짜 불로, 한 명은 요리 연기로 봤다는 그 사실 자체가 관리자가 확인해야 할
-      정보인데, 표를 세어 한쪽으로 정해 버리면 그 정보가 사라지기 때문입니다.
-    ⚠️ 관리자가 정리한 건은 그걸로 끝입니다.
-      나중에 다른 보호자가 답해도 관리자 결정이 바뀌지 않습니다(그런 시도는 409로 막습니다).
-      ※ 관리자가 정리하는 기능은 3-11-C에 있습니다(2026-09-02 추가).
+    ▶ 답한 사람끼리 다수결입니다 (2026-09-21 변경, V52)
+      답하지 않은 보호자는 세지 않습니다. 2:1이면 많은 쪽으로 정해지고,
+      똑같이 갈린 경우만 "엇갈림"입니다. 답을 바꿀 때마다 다시 셉니다.
+      ※ 예전(2026-09-01~09-21)에는 "하나라도 다르면 엇갈림, 관리자가 정정"이었습니다.
+        현장을 모르는 운영자가 가족의 판정을 확정하는 게 맞지 않아 가족 합의로 바꿨습니다.
+        2:1일 때 소수 의견은 상태값에는 안 남지만, 누가 뭐라고 답했는지는 지우지 않아
+        관리자 화면(3-11-C)의 응답 내역에서 보입니다.
+      ※ 똑같이 갈리면 그 상황에 답한 다른 보호자에게 "다른 보호자와 판정이 다릅니다.
+        다시 확인해 주세요."를 앱 푸시로 한 번 보냅니다(보호자당 1번, 밤에는 아침으로 미룸).
+        방금 답해서 동수를 만든 본인은 받지 않습니다 - 응답 결과로 이미 알았기 때문입니다.
+        누가 뭐라고 답했는지는 문구에 넣지 않습니다(가족 사이 의견 차이를 푸시로 드러내지 않으려고).
+      ※ 두 보호자가 같은 순간에 반대로 답해도 동수로 정확히 남습니다. 같은 상황의 답은
+        한 줄로 세워 처리합니다(2026-09-30). 화재가 이어지는 중에 답해도 다음 감지가
+        판정을 되돌리지 않습니다(2026-09-30 수정 - 전에는 "답 없음"으로 되돌아가는 일이 있었습니다).
     ⚠️ "잘못 봤다"고 답해도 이미 보낸 알림을 취소하지 않습니다.
       "아까 그건 아니었어요"를 또 보내면 알림만 두 배가 되고,
       정작 다음에 진짜 불이 났을 때 사람들이 안 믿게 됩니다.
@@ -1132,7 +1166,6 @@ SilverBridge는 노인(피보호자)과 그 가족(보호자)을 연결하는 �
     - 연결되지 않은 사람의 기록을 보려고 하면 → 403 "연결된 피보호자의 기록만 볼 수 있습니다"
       (그런 시도는 로그에 남깁니다)
     - 없는 번호를 부르면 → 404
-    - 관리자가 이미 정리한 건에 답하려 하면 → 409
 
   ▶ 아무도 안 누르면 다시 물어봅니다
     답을 안 하면 판정 자료가 하나도 안 쌓이기 때문에, 서버가 한 번 더 물어봅니다.
@@ -1150,8 +1183,8 @@ SilverBridge는 노인(피보호자)과 그 가족(보호자)을 연결하는 �
     - 보호자가 이 "확인해 주세요" 알림만 따로 끌 수 있어야 합니다.
       못 끄면 귀찮아서 앱 알림을 통째로 꺼 버리고, 그러면 그 집의 SOS·화재 알림까지 같이 죽습니다.
     - 보호자 중 한 명이라도 답하면 나머지에게는 더 묻지 않습니다.
-      다만 답하는 창구는 계속 열려 있어서, 나중에 다른 보호자가 다르게 답하면
-      그때 "엇갈림"이 됩니다.
+      다만 답하는 창구는 계속 열려 있어서, 나중에 다른 보호자가 답하면
+      다수결이 바뀌거나 동수("엇갈림")가 될 수 있습니다.
     - 문구는 단정하지 않습니다.
       "화재가 발생했습니다"(X)
       "9월 1일 21:03 · 김영희님 거실에서 화재 감지가 있었습니다. 실제 상황이었는지 확인해 주세요."(O)
@@ -1167,8 +1200,8 @@ SilverBridge는 노인(피보호자)과 그 가족(보호자)을 연결하는 �
         판정 자료가 전부 "답 없음"으로만 쌓입니다.
         예전에 SOS에도 "처리했어요" 기능을 만들었다가 화면이 끝내 안 붙어서 기록이 전부 비었고,
         결국 2026-08-26에 그 기능을 없앴습니다. 같은 일을 반복하지 마세요.
-    - resolvedByAdmin이 true면 답변 버튼을 눌리지 않게 해 주세요(누르면 409가 납니다).
-      관리자가 정정한 건이라는 뜻입니다(3-11-C).
+    - 응답 결과로 CONFLICTED가 오면 "다른 보호자와 판정이 다릅니다"를 화면에 보여 주세요.
+      (resolvedByAdmin·409는 관리자 정정 폐지로 없어졌습니다)
 
 
   [ 3-11-B. 관리자 대시보드 - 안전 현황 / 운영 현황 ]  (2026-09-02 추가)
@@ -1246,7 +1279,8 @@ SilverBridge는 노인(피보호자)과 그 가족(보호자)을 연결하는 �
       "낙상 0건"은 안전했다는 뜻이 아니라 AI가 아직 낙상을 못 본다는 뜻인데,
       0이라고 적어두면 정확히 반대로 읽힙니다.
     - 보호자끼리 답이 엇갈린 건은 "위험 신호" 목록에 넣지 않았습니다.
-      그건 지금 조치할 일이 아니라 관리자가 따로 확인할 일이라 성격이 다릅니다.
+      그건 지금 조치할 일이 아니라 보호자들이 다시 맞출 일이라 성격이 다릅니다
+      (2026-09-21부터 관리자는 판정하지 않습니다).
       오늘 몇 건인지는 판정 결과 숫자에서 볼 수 있습니다.
     - 날짜는 전부 한국 시간 기준입니다.
     - 숫자를 미리 저장해 두지 않고 볼 때마다 새로 셉니다.
@@ -1254,86 +1288,70 @@ SilverBridge는 노인(피보호자)과 그 가족(보호자)을 연결하는 �
       관리자가 화면을 믿지 못하게 됩니다. 대신 화면 갱신은 30초에 한 번 이상으로 권했습니다.
     - 대시보드를 본 기록은 남기지 않습니다. 숫자만 보는 데다 계속 새로고침되는 화면이라,
       기록하면 정작 중요한 "누가 공지를 고쳤다" 같은 기록이 파묻힙니다.
-      단, 개인 기록을 들여다보는 화면(다음에 만들 이상감지 로그)은 반드시 남깁니다.
+      ※ 이상감지 로그·알림 이력 같은 다른 관리자 조회 화면도 기록하지 않습니다(2026-09-10 정리).
+        기록은 회원 수정·강제 연결·공지·문의 답변처럼 무언가를 "바꾸는" 조작에만 남깁니다.
 
   ▶ 이어지는 것
-    엇갈린 판정을 관리자가 정리하는 기능은 3-11-C에 있습니다(2026-09-02 추가).
+    이상감지 기록을 자세히 보는 관리자 화면은 3-11-C에 있습니다(보기 전용).
 
 
-  [ 3-11-C. 관리자 이상감지 로그 - 엇갈린 판정 정리하기 ]  (2026-09-02 추가)
+  [ 3-11-C. 관리자 이상감지 로그 - 보기 전용 ]  (2026-09-02 추가 / v2·정정 폐지 2026-09-21 / AI 신뢰도 2026-09-22)
   ─────────────────────────────
-  보호자들 답이 서로 다를 때(3-11-A의 "엇갈림") 관리자가 확인해서 결론을 내리는 기능입니다.
+  관리자가 이상감지 기록 전체를 찾아보고, 보호자 응답률과 AI 신뢰도를 보는 화면입니다.
   (Swagger 태그: "관리자 - 이상감지")
 
-    → GET   /api/admin/anomaly?status=&wardId=&page=&size=   → 이상감지 기록 목록
-    → PATCH /api/admin/anomaly/{incidentId}/review           → 판정 정정
+    → GET /api/admin/anomaly           → 이상감지 목록 (상황 단위, 최신순)
+    → GET /api/admin/anomaly/summary   → 위쪽 카드·탭에 쓸 숫자 모음
 
   관리자만 쓸 수 있고, 다른 사람이 부르면 거부(403)합니다.
 
-  ▶ 이제야 엇갈린 판정을 풀 수 있게 됐습니다
-    그전까지는 관리자가 결론을 내릴 방법이 아예 없어서, 보호자들 답이 갈린 건은 영원히
-    "엇갈림"으로 남았습니다. 3-11-A의 resolvedByAdmin도 항상 false였습니다.
-    이 기능이 그 자리를 채웁니다.
+  ▶ 판정은 하지 않습니다 (2026-09-21)
+    2026-09-02에 만든 "관리자 정정"(PATCH /api/admin/anomaly/{incidentId}/review)은 없앴습니다.
+    판정은 보호자만 하고, 동수는 보호자들이 다시 답해서 맞춥니다(3-11-A).
+    ⚠️ 이 화면에 쓰기 API를 다시 붙이지 마세요. 쓰기 주소가 없다는 걸 테스트로 고정해 뒀습니다
+      (AdminAnomalyControllerSecurityTest). 되살리려면 정책부터 바꿔야 합니다.
+    ※ 예전 정정 기록을 담던 칸(resolved_by·resolved_at·review_note)과 활동 종류
+      ANOMALY_REVIEW_RESOLVE는 과거 기록 보존용으로 DB에 남겨 두었습니다(새로 쓰이지 않음).
 
-  ▶ 목록 보기 (GET /api/admin/anomaly)
-    status : 판정 상태로 거르기. 안 보내면 전체
-             PENDING(답 없음) / REAL(진짜 위험) / FALSE_ALARM(잘못 봄) / CONFLICTED(엇갈림)
-             → 정리할 대상만 보려면 status=CONFLICTED
-    wardId : 특정 피보호자만. 안 보내면 전체
+  ▶ 목록에서 거를 수 있는 것 (전부 선택, 안 보내면 전체)
+    status  : PENDING(답 없음) / REAL(진짜 위험) / FALSE_ALARM(잘못 봄) / CONFLICTED(동수)
+    wardId  : 특정 피보호자만
+    period  : TODAY / THIS_WEEK / THIS_MONTH / ALL  (한국 시간, 한 주는 월요일부터)
+    type    : FIRE / FALL / WEAPON
+    keyword : 피보호자 이름이나 카메라 위치("거실")의 일부
     page / size : 여러 쪽으로 나눠서 (기본 0쪽, 20건, 최대 50건)
 
-    한 건에 들어 있는 것은 보호자 화면(3-11-A)과 거의 같고, 두 가지가 다릅니다.
-
+    한 건에 들어 있는 것:
+      incidentId · wardId · wardName · cameraLabel
+      detectedType · detectedTypeLabel
+      startedAt · lastDetectedAt · durationMinutes(감지가 이어진 시간, 분)
+      eventCount · maxConfidence · reviewStatus
       feedbacks    보호자들이 각각 뭐라고 답했는지 전부
                    { guardianId, guardianName, verdict, respondedAt }
                    아무도 답하지 않았으면 빈 목록입니다(null이 아닙니다)
-      resolvedBy   정정한 관리자. 아직 정정 전이면 null
-      resolvedAt   정정한 시각
-      reviewNote   정정 사유 메모
+                   ※ 2:1 다수결에서 소수 의견은 여기서만 보입니다.
 
-      ※ 보호자 화면에 있는 "내 응답(myVerdict)"은 없습니다. 관리자는 답하는 사람이 아니기 때문입니다.
-      ※ respondedAt은 그 보호자가 마지막으로 답을 바꾼 시각입니다.
-        보호자는 답을 번복할 수 있어서, 관리자에게 필요한 건 "지금 이 사람 의견이 언제 것인가"입니다.
+    ※ 연결 여부로 걸러내지 않고 전체를 봅니다(관리자 화면이라서).
+    ※ 조회만 하는 화면이라 관리자 활동 기록을 남기지 않습니다.
 
-    ▶ 보호자 조회와 다른 점
-      연결 여부로 걸러내지 않고 전체를 봅니다. 연결된 것만 보면 엇갈린 판정을 찾아낼 수 없습니다.
-      대신 개인 기록을 들여다보는 것이라 정정할 때 기록을 남깁니다(아래 참고).
+  ▶ 숫자 모음 (GET /api/admin/anomaly/summary?period=&type=&keyword=)
+    total        : 조건에 맞는 상황 수
+    byType       : 종류별 탭 숫자. ⚠️ 탭 숫자는 type 조건을 무시하고 셉니다(탭을 눌러도
+                   다른 탭 숫자가 0이 되지 않게). 0건인 종류는 항목을 만들지 않습니다
+                   ("낙상 0건"은 안전하다는 뜻이 아니라 AI 모델이 없다는 뜻이라서요).
+    review       : pending · real · falseAlarm · conflicted 4가지를 전부 줍니다
+    responseRate : 응답률 = (total - pending) / total. 0건이면 null
+    aiConfidence : { average, basis }
+                   average = 판정이 난 상황(진짜 위험 + 잘못 봄)의 AI 확신도(maxConfidence) 평균
+                   basis   = 평균에 쓴 상황 수. 0이면 average는 null
+                   ※ 2026-09-22에 "진짜 비율"에서 이 정의로 바꿨습니다(시안의 숫자와 일치).
+                     카드 아래 칸의 비율은 프론트가 review.real / basis로 계산합니다.
+                   ※ 상황마다 "가장 높았던 확신도"를 쓰므로 실제 평균보다 조금 높게 나옵니다.
 
-  ▶ 정정하기 (PATCH /api/admin/anomaly/{incidentId}/review)
-    보낼 것: { "reviewStatus": "FALSE_ALARM", "note": "보호자 통화 확인 - 요리 연기" }
-             note는 선택이고 200자까지입니다.
-
-    ⚠️ 넣을 수 있는 값은 REAL(진짜 위험)과 FALSE_ALARM(잘못 봄) 둘뿐입니다.
-      PENDING이나 CONFLICTED로 되돌리려 하면 거부합니다(400).
-      확인을 마친 뒤에 "아직 아무도 안 봤음"으로 되돌리면 그 상태가 무슨 뜻인지 알 수 없게 됩니다.
-      판단이 안 서면 그냥 두면 됩니다.
-
-    ※ 정정해도 보호자들이 답한 내용은 지워지지 않습니다.
-      누가 뭐라고 했는지가 남아 있어야 "관리자가 무엇을 보고 뒤집었는지"를 나중에 확인할 수 있습니다.
-    ※ 정정한 뒤에는 보호자가 나중에 답해도 이 결정이 바뀌지 않습니다(보호자 쪽은 409로 막힙니다).
-    ※ 이미 정정한 건을 다시 정정하는 것은 됩니다.
-      관리자도 잘못 누를 수 있는데 막아 두면 되돌릴 방법이 없기 때문입니다.
-      대신 정정할 때마다 기록이 쌓여서 누가 언제 무엇에서 무엇으로 바꿨는지 추적됩니다.
-    ※ 정정했다고 알림을 다시 보내지 않습니다.
-      "아까 그건 아니었어요"를 또 보내면 알림만 두 배가 되고,
-      정작 다음에 진짜 불이 났을 때 사람들이 안 믿게 됩니다.
-
-  ▶ 관리자가 한 일은 기록에 남습니다
-    정정할 때마다 관리자 활동 기록(admin_audit_log)에 남깁니다.
-    개인 기록을 뒤집는 조작이기 때문입니다.
-    3-11-B의 대시보드는 숫자만 보는 화면이라 기록을 남기지 않는데, 이쪽은 반대입니다.
-
-  ▶ 마이그레이션 V46이 필요했던 이유 (헷갈리기 쉬운 부분)
-    정정에 쓰는 칸(resolved_by·resolved_at·review_note)은 V44가 이미 만들어 뒀습니다.
-    V46이 필요했던 건 다른 이유입니다.
-
-    관리자 활동 기록 테이블에는 "허용된 활동 종류"만 넣을 수 있게 검사 장치가 걸려 있습니다.
-    코드에만 새 종류를 추가하고 이 장치를 안 고치면, 기록을 넣다가 실패하면서
-    같은 작업으로 묶인 정정까지 통째로 취소되어 500이 납니다.
-
-    이 함정은 예전에 실제로 터졌습니다. 공지 임시저장 기능이 이 이유로 통째로 죽은 적이 있습니다.
-    그래서 지금은 코드의 종류 목록과 DB의 허용 목록이 어긋나면 테스트가 먼저 실패하도록 해 뒀습니다.
-    ⚠️ 앞으로 관리자 활동 종류를 추가할 때는 반드시 마이그레이션도 같이 넣으세요.
+    ⚠️ 오탐 건수만 따로 보여주지 마세요. 응답률과 함께 봐야 합니다.
+      답이 적으면 오탐 숫자는 분모가 거짓이 됩니다(대시보드와 같은 원칙).
+    ⚠️ "판정 완료 N건"을 쓸 때는 real + falseAlarm이 아니라 total - pending을 쓰세요.
+      동수(conflicted)도 답은 받은 것이라 빠지면 응답률 바와 숫자가 어긋납니다.
 
   ▶ 아직 없는 것
     관리자 화면(프론트)은 별도입니다. 서버는 준비됐습니다.
@@ -1425,7 +1443,8 @@ SilverBridge는 노인(피보호자)과 그 가족(보호자)을 연결하는 �
   ▶ 역할을 바꾸면 연결이 끊깁니다
 
     보호자였던 사람이 피보호자가 되면 기존 연결의 방향이 뒤집혀 뜻이 없어집니다.
-    그래서 연결을 정리하는데, 실제로 연결돼 있던 상대에게는 "연결이 해제되었습니다" 알림이 갑니다.
+    그래서 연결을 정리하는데, 실제로 연결돼 있던 상대에게는 "관리자가 연결을 해제했습니다" 알림이
+    갑니다(2026-09-30 - 전에는 "보호자가 연결을 해제했습니다"로 나가 사실과 달랐습니다).
     아직 수락 전인 요청은 조용히 취소됩니다(수락 전 요청 취소는 원래도 알리지 않습니다).
 
     관리자로는 바꿀 수 없습니다. 이 화면 하나로 관리자 권한을 만들어낼 수 있게 되기 때문입니다.
@@ -1501,6 +1520,69 @@ SilverBridge는 노인(피보호자)과 그 가족(보호자)을 연결하는 �
       화면이라 이번에 건드리지 않았습니다.
 
 
+  [ 3-14. 관리자 알림 이력 - 어떤 알림이 누구에게 갔나 ]  (2026-09-22 추가, V54)
+  ─────────────────────────────
+  "알림이 안 왔어요" 문의가 오면 서버 로그를 뒤지는 대신 이 화면에서 확인합니다.
+  (Swagger 태그: "관리자 - 알림 이력")
+
+    → GET /api/admin/notification           → 알림 이력 목록 (최신순)
+    → GET /api/admin/notification/summary   → 위쪽 카드 숫자
+
+  관리자만 쓸 수 있고 조회만 합니다(쓰기 주소 없음 - 테스트로 고정). 활동 기록은 남기지 않습니다.
+
+  ▶ 어떻게 쌓이나
+    알림은 전부 "알림 보내는 곳" 한 군데(3-7-A)를 지나므로, 거기서 보낸 뒤에
+    받는 사람 1명당 1줄씩 notification_log에 남깁니다.
+    ⚠️ 기록은 보낸 "뒤에" 남기고, 기록이 실패해도 알림은 막지 않습니다.
+      기록 때문에 SOS·화재 알림이 멈추면 안 되기 때문입니다(실패하면 로그 WARN만 남음).
+    ※ 보관 기간은 90일입니다. 매일 새벽 4시 30분(한국 시간)에 오래된 것을 지웁니다.
+    ※ 받는 사람이나 관련 피보호자가 탈퇴하면 그 사람 이력도 함께 지워집니다.
+
+  ▶ 결과 4가지 (result)
+    DELIVERED     전달됨 (푸시·문자·알림톡 중 하나 이상이 발송 서버에 접수됨)
+    SMS_FALLBACK  푸시가 안 가서 문자로 대신 보냄 (SOS만) → 전달로 칩니다
+    FAILED        켜 둔 방법이 전부 실패
+    NOT_SENT      일부러 안 보냄 - 실패가 아닙니다
+                  RESTRICTED_ACCOUNT 이용 제한 계정 / WITHDRAWING_ACCOUNT 탈퇴 중 /
+                  NO_ENABLED_CHANNEL 받는 사람이 알림을 전부 꺼 둠
+
+    ⚠️ "전달됨"은 발송 서버(FCM·Solapi)가 받았다는 뜻입니다. 휴대폰 화면에 떴는지까지는
+      서버가 알 수 없습니다. 그래서 "기기 응답 없음" 같은 사유는 만들지 않았습니다.
+    ⚠️ NOT_SENT를 실패에 섞지 마세요. 섞으면 실패율이 부풀어 진짜 장애가 묻힙니다.
+
+  ▶ 방법별 실패 사유 (정해진 코드만 씁니다)
+    NO_DEVICE(등록된 기기 없음) / ALL_TOKENS_EXPIRED(기기 토큰이 전부 만료) /
+    PUSH_SERVER_ERROR / NO_PHONE(전화번호 없음) / PROVIDER_REJECTED(문자 업체가 거부) /
+    PROVIDER_ERROR / UNEXPECTED_ERROR
+    ※ 오류 원문은 저장하지 않습니다. 토큰이나 전화번호가 섞여 있을 수 있기 때문입니다.
+
+  ▶ 목록에서 거를 수 있는 것 (전부 선택)
+    category : SOS / ANOMALY(이상감지) / MEDICATION(복약) / OTHER(연결·문의 등)
+    result   : 위 결과 4가지
+    period   : TODAY / LAST_7_DAYS(기본) / LAST_30_DAYS  (한국 시간)
+               ※ "전체"는 없습니다. 90일이 지나면 지워지므로 "전체"가 곧 "최근 90일"이라 헷갈립니다.
+    keyword  : 피보호자 또는 받는 사람 이름의 일부
+    page / size : 기본 0쪽, 20건, 최대 50건
+
+    한 줄에 들어 있는 것: 보낸 시각 · 알림 종류(한글 이름) · 분류 · 관련 피보호자 ·
+      제목·본문 · 받는 사람(이름·역할·피보호자인지·관계) · 실제로 간 방법 ·
+      결과 · 안 보낸 이유 · 방법별 결과({channel, status, reason})
+
+  ▶ 숫자 모음 (summary)
+    total / delivered / smsFallback / failed / notSent
+
+  ▶ 알아 둘 것
+    - 관련 피보호자(wardId)는 표시용입니다. 알림 대상이나 문구를 정하는 데 쓰지 않습니다.
+    - 피보호자가 탈퇴하는 순간 나가는 "연결 해제" 알림은, 계정이 먼저 지워지면
+      그 한 줄만 기록되지 않을 수 있습니다(알림은 정상 발송). 어차피 지워질 기록이라 수용했습니다.
+    - 사용자가 채널을 꺼 둬서 안 보낸 것도 NOT_SENT로 한 줄 남깁니다.
+      관리자가 "왜 안 갔지?"에 답하려면 필요합니다.
+    - 2026-09-30에 실서버(gosky)에서 연결 요청·수락·해제·SOS가 모두 1줄씩 기록되는 것을 확인했습니다.
+
+  ▶ 아직 없는 것
+    관리자 화면(프론트)은 별도입니다. 서버는 준비됐습니다.
+
+
 --------------------------------------------------------------------------------
   4. WebSocket(실시간 알림) 사용 가이드
 --------------------------------------------------------------------------------
@@ -1523,9 +1605,14 @@ SilverBridge는 노인(피보호자)과 그 가족(보호자)을 연결하는 �
   ▶ 구독 가능 토픽 (본인의 userId만 허용 — 타인 토픽 구독 시 거부됨)
     /topic/{userId}/connection-request     피보호자가 받는 보호자의 연결 요청
     /topic/{userId}/connection-accepted    보호자가 받는 피보호자의 수락 알림
+                                           ※ 관리자 강제 연결(2026-09-10) 때는 피보호자에게도 갑니다.
+                                             2026-09-30 기준 FE 피보호자 화면은 이 토픽을 구독하지 않아
+                                             새로고침 전까지 갱신되지 않습니다(FE에 추가 요청함).
     /topic/{userId}/connection-refused     보호자가 받는 피보호자의 거절 알림 (2026-05-28 추가)
-    /topic/{userId}/connection-cancelled   연결 해제 알림
+    /topic/{userId}/connection-cancelled   연결 해제 알림 (당사자 해제·관리자 해제·역할 변경·탈퇴 모두)
     /topic/{userId}/sos-triggered          보호자가 받는 피보호자의 긴급 SOS 알림 (2026-06-09 추가)
+                                           payload에 repeatCount(최근 10분 내 몇 번째, 문자열) 포함
+                                           (2026-09-11 추가, 3-6 긴급 SOS 참고)
     (sos-acknowledged 토픽은 처리 결과(ACK) 기능 철회로 제거됨 - 2026-08-26, V39)
     /topic/{userId}/anomaly-detected       이상감지 알림 — 보호자·피보호자 본인 모두 (2026-07-14 추가)
                                            payload = wardId·wardName·location·detectedType·
@@ -1737,9 +1824,13 @@ SilverBridge는 노인(피보호자)과 그 가족(보호자)을 연결하는 �
   ─────────────────────────────
   id         : 고유 번호
   admin_id   : 작업 수행 관리자 ID (FK 없음, 이력 보존)
-  action     : ANNOUNCEMENT_CREATE, ANNOUNCEMENT_UPDATE, ANNOUNCEMENT_PUBLISH,
-               ANNOUNCEMENT_DELETE, ANNOUNCEMENT_DRAFT_*
-  target_id  : 작업 대상 ID (공지/임시저장 ID)
+  action     : 공지 ANNOUNCEMENT_CREATE·UPDATE·DELETE, ANNOUNCEMENT_DRAFT_CREATE·UPDATE·DELETE·PUBLISH
+               회원 USER_STATUS_CHANGE·USER_ROLE_CHANGE·USER_NAME_CHANGE·USER_FORCE_DELETE
+               연결 FORCE_CONNECT·FORCE_DISCONNECT / 문의 INQUIRY_ANSWER (V50)
+               (ANOMALY_REVIEW_RESOLVE는 관리자 정정 폐지로 더 이상 쓰이지 않지만 옛 기록 보존용으로 남음)
+               ⚠️ 허용 목록이 DB CHECK로 걸려 있어, 값을 추가하면 CHECK 재정의 마이그레이션이 필수
+                 (AdminAuditActionCheckSyncTest가 어긋남을 잡습니다)
+  target_id  : 작업 대상 ID (공지/임시저장/회원/연결/문의 ID)
   detail     : 변경 내용 요약 (예: 공지 제목/본문 변경)
   created_at : 작업 일시
 
@@ -1770,7 +1861,8 @@ SilverBridge는 노인(피보호자)과 그 가족(보호자)을 연결하는 �
   id            : 고유 번호
   ward_id       : 카메라 소유 피보호자 (CASCADE — 탈퇴 시 이력도 삭제)
   session_id    : 감지된 카메라 세션 (camera.session_id 비정규화 — 카메라 삭제 후에도 판독)
-  detected_type : FIRE / SMOKE  (fall·weapon 은 AI 라이브 미탑재)
+  detected_type : FIRE  (AI smoke도 FIRE로 적재. 옛 SMOKE 행은 V53에서 FIRE로 변경 /
+                         FALL·WEAPON은 AI 라이브 미탑재)
   confidence    : 신뢰도
   danger        : AI 위험 판정 플래그 (판정 근거 기록 — CONFIDENCE 폴백 적재분은 false)
   detected_at   : AI 분석 시각(analyzedAt). NULL 허용 — AI 캐시 미스 페이로드엔 이 값이 없음
@@ -1792,21 +1884,22 @@ SilverBridge는 노인(피보호자)과 그 가족(보호자)을 연결하는 �
   id               : 고유 번호
   ward_id          : 카메라 소유 피보호자 (CASCADE)
   session_id       : 감지된 카메라 세션 (anomaly_event와 같은 이유로 비정규화)
-  detected_type    : FIRE / SMOKE
+  detected_type    : FIRE (V53부터 SMOKE 없음)
   started_at       : 첫 감지 (수신 시각 기준 — AI analyzedAt은 NULL일 수 있어 묶음 기준이 못 됩니다)
   last_detected_at : 마지막 감지. 여기서 10분 이내에 또 감지되면 같은 상황으로 승계됩니다
   event_count      : 이 상황에 묶인 감지 횟수
   max_confidence   : 묶인 감지 중 최고 신뢰도 (평균이 아닙니다)
   review_status    : PENDING / REAL / FALSE_ALARM / CONFLICTED
-  resolved_by      : 정정한 관리자 (SET NULL — 관리자가 탈퇴해도 판정 결과는 남습니다)
-  resolved_at      : 관리자 정정 시각
-  review_note      : 관리자 정정 메모 (200자)
+                     (응답한 보호자 다수결, 동수만 CONFLICTED - V52에서 기존 판정을 이 규칙으로 재계산)
+  resolved_by·resolved_at·review_note : 관리자 정정용이었으나 정정 폐지(2026-09-21)로 코드에서
+                     쓰지 않습니다. 옛 기록 보존용으로 칸만 남겼습니다(DROP은 되돌릴 수 없어 보류).
 
   ※ 같은 (ward_id, session_id, detected_type)이고 직전 감지로부터 10분 이내면 같은 상황입니다.
     고정 10분 구간이 아니라 "직전 감지 기준"이라, 1시간 이어진 화재는 상황 1건입니다.
   ※ KST 자정을 넘기지 않습니다 — 일자별 통계의 소속 날짜가 모호해지기 때문입니다.
-  ※ resolved_by가 채워지면 관리자 확정이라 보호자 응답으로 상태가 재계산되지 않습니다.
-    (관리자 정정 API는 아직 없어 현재는 전건 NULL입니다.)
+  ※ 보호자 응답은 이 행을 쓰기 잠금으로 읽고 처리합니다 - 동시에 들어온 응답이 서로를 못 보고
+    판정을 덮어쓰지 않게 합니다(2026-09-30). 감지 승계와 응답은 각자 바꾼 칸만 저장합니다
+    (@DynamicUpdate) - 감지가 읽어 둔 옛 판정으로 되돌리지 않게 합니다.
 
 
   [ anomaly_incident_feedback — 보호자 오탐 응답 ] (V44, 2026-09-01 추가)
@@ -1857,6 +1950,34 @@ SilverBridge는 노인(피보호자)과 그 가족(보호자)을 연결하는 �
   ※ 이상감지 발생 알림 자체는 이 설정과 무관하게 나갑니다 — 끄는 것은 "확인 요청"뿐입니다.
   ※ 복약 설정(guardian_medication_setting)과 합치지 마세요 — 축(복약은 보호자×피보호자,
     재촉은 보호자 단위)도 도메인도 다릅니다.
+
+
+  [ anomaly_review_conflict_log — 동수 재확인 안내 발송 기록 ] (V52, 2026-09-21 추가)
+  ─────────────────────────────
+  id          : 고유 번호
+  incident_id : 상황 (CASCADE)
+  guardian_id : 안내 대상 보호자 (CASCADE)
+  sent        : true = 안내를 보냄 / false = 보내지 않음으로 확정
+                (방금 답해 동수를 만든 본인, 또는 V52 배포 시점에 이미 동수였던 옛 건)
+  created_at  : 기록 시각
+
+  ※ UNIQUE (incident_id, guardian_id) - 보호자당 한 번만. 기록을 먼저 남기고 보냅니다(선점 후 발송).
+
+
+  [ notification_log — 알림 발송 이력 ] (V54, 2026-09-22 추가, 3-14)
+  ─────────────────────────────
+  id              : 고유 번호
+  created_at      : 발송 시각
+  type            : 알림 종류(NotificationType 이름). 종류가 계속 늘어 CHECK를 걸지 않았습니다
+  recipient_id    : 받는 사람 (CASCADE)
+  ward_id         : 관련 피보호자 (CASCADE). 특정할 수 없는 알림은 NULL - 표시 전용
+  title · body    : 보낸 제목·본문
+  result          : DELIVERED / SMS_FALLBACK / FAILED / NOT_SENT
+  not_sent_reason : NOT_SENT일 때 이유 (RESTRICTED_ACCOUNT / WITHDRAWING_ACCOUNT / NO_ENABLED_CHANNEL)
+  channel_results : 방법별 결과 목록(JSON) - 채널·결과·정해진 실패 코드
+
+  ※ 받는 사람 1명당 1줄. 보낸 뒤 별도 트랜잭션(REQUIRES_NEW)으로 남기며, 실패해도 발송을 막지 않습니다.
+  ※ 보관 90일 (notification.log.retention-days), 매일 04:30 KST 정리.
 
 
   [ camera — 이상감지 카메라 소유권 ] (2026-07-13 추가, V29)
@@ -1996,7 +2117,9 @@ SilverBridge는 노인(피보호자)과 그 가족(보호자)을 연결하는 �
     (login·kakaoLogin·refresh 세 경로 일관, H-4)
 
   [ 관리자 보호 ]
-  - 공지사항 쓰기 작업은 admin_audit_log 자동 기록 (AdminAuditLogService)
+  - 무언가를 바꾸는 관리자 작업(공지·회원 수정·강제 연결/해제·강제 탈퇴·문의 답변)은
+    admin_audit_log에 자동 기록 (AdminAuditLogService, global/audit). 조회는 기록하지 않습니다.
+  - 기록의 detail(이름·이메일 포함)은 DB에만 남기고 로그 출력에는 적지 않습니다(2026-09-11).
 
   [ 전화번호 변경 시 SMS 인증 필수 ]
   - PUT /api/user/me 에서 phone 변경 시 sms:verified 키 + nonce 확인
@@ -2082,6 +2205,28 @@ SilverBridge는 노인(피보호자)과 그 가족(보호자)을 연결하는 �
   - 기본값: https://devdmu.gosky.kr, http://localhost:3000/5173/8080
   - 목록에 없는 origin은 브라우저가 차단 (preflight OPTIONS 실패)
 
+  [ 커밋 직후 정리 작업은 새 트랜잭션에서 (2026-09-30) ]
+  - 회원 탈퇴처럼 "저장이 끝난 직후 바로(같은 스레드에서)" 도는 정리 작업은, 그 안에서 쓰는
+    것을 반드시 새 트랜잭션(REQUIRES_NEW)으로 저장해야 합니다. 그냥 두면 이미 끝난 트랜잭션에
+    붙어서 저장이 조용히 사라집니다.
+  - 실제로 탈퇴 시 연결 정리·약 삭제·FCM 토큰 삭제가 저장되지 않았고, 그 때문에
+    "상대가 탈퇴해 연결이 종료되었습니다" 알림이 한 번도 나가지 않았습니다(2026-09-30 수정).
+    계정이 곧바로 완전 삭제되며 함께 지워져서 겉으로는 드러나지 않았습니다.
+  - 실제 DB로 확인하는 테스트: WithdrawalListenerCommitIntegrationTest (9-2 통합 테스트)
+
+
+  [ 운영 설정 (2026-09-11) ]
+  - 알림 보내는 작업 대기열(500)이 넘치면 버리고 ERROR 로그를 남깁니다.
+    요청을 받은 스레드가 대신 보내게 하면(CallerRuns) 화재가 몰릴 때 AI 수신이 멈춥니다.
+  - 배포로 서버가 내려갈 때 하던 일을 마치고 내려갑니다(graceful, 알림 대기열 최대 20초 대기).
+  - 예약 작업 스레드 3개 - 복약 1분·판정 재촉 5분·탈퇴 청소 10분 + 새벽 정리 3종
+    (토큰 03:00·FCM 토큰 04:00·알림 이력 04:30, 시각을 비껴 둠)
+  - 외부 연결에는 시간 제한이 있습니다: 카카오 로그인(연결 3초/응답 5초)·메일(연결·응답·쓰기 각 10초)·
+    파일 서버(연결 3초/응답 10초).
+    새 외부 연동을 붙일 때 시간 제한 없이 두지 마세요 - 느린 상대 때문에 요청 스레드가 붙잡힙니다.
+  - 실사용 주소(api.devdmu.gosky.kr)의 Swagger 공개는 관리 권한 밖이라 알고 둡니다.
+
+
   [ 예외 처리 ]
   - GlobalExceptionHandler가 CustomException 및 Spring 표준 예외를 한국어 메시지로 변환
   - 400/401/403/404/405/409/413/415/429/500 한국어 안내
@@ -2105,8 +2250,8 @@ SilverBridge는 노인(피보호자)과 그 가족(보호자)을 연결하는 �
     id 'org.springframework.boot'         → Spring Boot 패키징
     id 'io.spring.dependency-management'  → 버전 관리 자동화
 
-  ▶ java toolchain
-    Java 21 사용
+  ▶ java toolchain / 버전
+    Java 21 사용 / Spring Boot 4.0.8 (2026-09-21 업그레이드 - Tomcat 11.0.26·springdoc 3.1.1)
 
   ▶ repositories
     mavenCentral() → 공개 라이브러리 저장소
@@ -2134,20 +2279,36 @@ SilverBridge는 노인(피보호자)과 그 가족(보호자)을 연결하는 �
   ▶ plugins 추가
     org.owasp.dependencycheck             : 의존성 취약점(CVE) 스캔
                                             CVSS 7.0(High) 이상 발견 시 빌드 실패
+                                            (2026-09-21 기준 7.0 이상 0건. 예외 처리는
+                                             dependency-check-suppressions.xml에 근거와 함께)
+
+  ▶ 통합 테스트 스위트 (2026-09-21 추가)
+    integrationTest                       : src/integrationTest - 실제 PostgreSQL 17(Testcontainers)
+                                            로 마이그레이션·쿼리·DB 제약·트랜잭션을 확인
+                                            check·build에는 연결하지 않았습니다(로컬에 Docker가 없어서)
 
   ▶ 주요 Gradle 명령어
     ./gradlew build -x test --no-daemon       → 테스트 제외 빌드 (푸시 전 검증)
     ./gradlew bootJar --no-daemon             → JAR 파일 생성
-    ./gradlew test                            → 테스트 실행
+    ./gradlew test                            → 단위 테스트 실행 (Docker 불필요)
+    ./gradlew integrationTest                 → 통합 테스트 (Docker 필요 - vkcs에서
+                                                tools/integration-test.sh [브랜치]로 실행)
     ./gradlew dependencyCheckAnalyze --info   → 의존성 취약점 스캔
                                                 결과: build/reports/dependency-check-report.html
     ./gradlew dependencies                    → 의존성 트리
 
-  ※ CI(테스트 자동 실행)는 없습니다 — 로컬에서 ./gradlew build 검증 후 푸시.
+  ※ PR마다 도는 CI는 없습니다 — 로컬에서 ./gradlew build 검증 후 푸시.
+    (공개 저장소 + 자체 러너라 PR에서 남의 코드를 돌리지 않으려고 PR 자동 실행은 두지 않았습니다)
   ※ CD는 GitHub Actions(.github/workflows/cd.yml)에 구성되어 있어,
-    dev 브랜치 push 또는 수동 workflow_dispatch 시 self-hosted 러너(label: dev)가
-    git pull → docker compose up -d --build api → 이미지 정리를 자동 수행합니다.
-    배포 직전에 .env.dev 존재 여부를 확인하고, 없으면 친화적 에러로 즉시 중단합니다.
+    dev 브랜치 push 또는 수동 workflow_dispatch 시 self-hosted 러너(label: dev, vkcs-linux)가
+    git fetch + reset --hard origin/dev → .env.dev 확인 → 통합 테스트(실패하면 배포 중단)
+    → docker compose build / up -d api → 이미지 정리를 자동 수행합니다.
+    ※ 통합 테스트는 입력이 이전 통과 실행과 같으면 Gradle 캐시 결과를 재사용합니다(FROM-CACHE).
+    ※ 문서만 바뀐 push(.md·docs/** 등)는 배포를 건너뜁니다.
+  ※ 실사용 서버(gosky, api.devdmu.gosky.kr)는 CD 대상이 아니라 수동 배포입니다.
+    /home/apps/SilverBridgeSky/SilverBridgeBe 에서 git fetch origin dev && git reset --hard origin/dev
+    → docker compose -f docker-compose.dev.yml build api → up -d api → docker image prune -f
+    (pull 금지 - 이력이 갈라지면 실패합니다. 서버의 추적되지 않는 파일은 reset으로 지워지지 않습니다)
 
 
 --------------------------------------------------------------------------------
@@ -2237,12 +2398,20 @@ SilverBridge는 노인(피보호자)과 그 가족(보호자)을 연결하는 �
   9-2. 테스트
 --------------------------------------------------------------------------------
 
-  단위 테스트 중심으로 구성되어 있습니다 (JUnit 5 + Mockito + AssertJ).
-  2026-08-07 기준 테스트 클래스 65개 / 407건, 실패 0.
-  ⚠️ 통합 테스트는 아직 없습니다 — 전부 목(mock) 기반이라 Flyway 마이그레이션(V1~V45),
-    UNIQUE 제약(예: 복약 알림 중복 방지), 트랜잭션 전파는 테스트로 한 번도 실행되지 않았습니다.
-    (2026-08-05 점검 M-1 — 가장 값어치 있는 후속 작업으로 기록돼 있습니다.
-     현재는 Swagger 수동 확인 + 마이그레이션은 gosky의 스키마 복제본에 실적용해 검증합니다.)
+  단위 테스트(목 기반) + 통합 테스트(실제 DB) 두 층입니다 (JUnit 5 + Mockito + AssertJ).
+  2026-09-30 기준 단위 테스트 클래스 93개 / 685건, 통합 테스트 클래스 9개 / 27건, 실패 0.
+
+  ▶ 통합 테스트 (src/integrationTest, 2026-09-21 도입)
+    실제 PostgreSQL 17(Testcontainers)을 띄워 목으로는 실행되지 않는 것을 확인합니다.
+    - Flyway V1~V54 전체 적용 + 엔티티와 스키마 일치
+    - enum ↔ DB CHECK 동기화, ON CONFLICT·UNIQUE 같은 DB 제약
+    - 관리자 이상감지 쿼리, 알림 이력 쿼리, SOS 반복 횟수 집계
+    - 커밋 직후 정리 작업이 실제로 저장되는가(탈퇴 연결·약·FCM 토큰, 알림 이력)
+    - 이상감지 판정 동시 응답(20회 반복)·감지 승계와 응답의 덮어쓰기
+    실행: vkcs에서 ~/SilverBridgeBe/tools/integration-test.sh [브랜치]
+          (첫 실행 약 14분, 이후 약 30초. 배포 폴더는 건드리지 않습니다)
+    CD가 배포 직전에 자동으로 돌리고 실패하면 배포를 멈춥니다.
+    ⚠️ 마이그레이션·쿼리를 바꾸는 PR은 머지 전에 브랜치로 한 번 돌리세요.
 
   ▶ 테스트 대상 (도메인별)
     global/jwt/JwtTokenProviderTest           JWT 발급/검증/만료/위조/typ 구분
@@ -2278,13 +2447,15 @@ SilverBridge는 노인(피보호자)과 그 가족(보호자)을 연결하는 �
   ├── domain
   │   ├── auth           로그인, 회원가입, 토큰, SMS 인증, 카카오 OAuth, 비밀번호 재설정
   │   │   └── listener   user 도메인 이벤트 수신 → 토큰 정리·접속 로그 (AFTER_COMMIT)
-  │   ├── user           회원 프로필, 비밀번호 변경, 프로필 이미지
+  │   ├── user           회원 프로필, 비밀번호 변경, 프로필 이미지, 회원 ID 생성(UserIdGenerator)
   │   │   ├── event      UserWithdrawnEvent, PasswordChangedEvent (auth로 부수 효과 위임)
   │   │   └── port       PhoneVerificationPort (auth가 구현 — user→auth 직접 의존 제거, B-1)
-  │   ├── admin          관리자 공지사항 — 컨트롤러 2 + 서비스 3
-  │   │   ├── controller AdminAnnouncement / AdminAnnouncementDraft
-  │   │   ├── service    AdminAnnouncement / AdminAnnouncementDraft / AdminAuditLog(쓰기)
-  │   │   └── dto        AdminAnnouncementResponse / AnnouncementCreateRequest 등
+  │   ├── admin          관리자 — 공지사항·대시보드·회원관리·강제 연결
+  │   │   ├── controller AdminAnnouncement / AdminAnnouncementDraft / AdminDashboard /
+  │   │   │              AdminUser / AdminConnection
+  │   │   └── service    위 기능별 서비스 + AdminDashboardClock
+  │   │   ※ 관리자 이상감지·문의·알림 이력은 각 도메인(anomaly·inquiry·notification) 안의
+  │   │     Admin* 컨트롤러에 있습니다. 감사 로그 기록기는 global/audit.
   │   ├── connection     보호자-피보호자 연결
   │   │   ├── event      연결 상태 변경 이벤트 (Requested/Accepted/Refused/Disconnected)
   │   │   └── listener   이벤트 수신 후 WebSocket + FCM 알림 (AFTER_COMMIT)
@@ -2301,14 +2472,16 @@ SilverBridge는 노인(피보호자)과 그 가족(보호자)을 연결하는 �
   │   │   └── listener   MedicationWithdrawalListener (등록 보호자 탈퇴 → 중지 안내)
   │   ├── inquiry        문의하기 / 고객센터 (보호자 작성 + 관리자 답변)
   │   └── notification   알림 채널 추상화 — 채널(FCM·SMS·카카오 알림톡)·디스패처·수신 설정
-  │       ├── channel    NotificationChannel 전략 + 구현체 3종
+  │       ├── channel    NotificationChannel 전략 + 구현체 3종, 발송 결과(ChannelResult)
   │       ├── dispatch   NotificationDispatcher / NotificationType(정책)
-  │       └── config     AlimtalkProperties (알림 종류 → 승인 템플릿 매핑)
+  │       ├── service    FcmService · 알림 이력 기록(NotificationLogService)·조회·정리 스케줄러
+  │       └── config     AlimtalkProperties (알림 종류 → 승인 템플릿 매핑) 등
   └── global
       ├── config         Redis/메일/Web/보안 설정, SecurityConfigValidator
       ├── security       Spring Security, RateLimitService
       ├── jwt            JWT 발급/검증, 인증 필터
-      ├── client         파일 서버 HTTP 통신
+      ├── audit          관리자 감사 로그 (AdminAuditLog 엔티티·저장소·기록 서비스, 2026-09-30 이동)
+      ├── client         외부 연동 - 파일 서버 HTTP, SmsSender(Solapi 문자, 2026-09-30 이동)
       ├── enums          Role, Status, Provider, ConnectionStatus 등
       ├── entity         공통 BaseTimeEntity
       ├── response       ApiResponse 공통 응답 포맷
@@ -2318,6 +2491,12 @@ SilverBridge는 노인(피보호자)과 그 가족(보호자)을 연결하는 �
       ├── validation     ValidBirthDate/BirthDateValidator(생년월일), @ValidPassword(비밀번호)
       └── websocket      JwtHandshakeInterceptor, StompSubscriptionAuthorizationInterceptor,
                          WebSocketEventPublisher, presence 리스너
+
+  ※ global은 domain을 가져다 쓰지 않습니다(2026-09-30 정리 후 0건). 도메인 로직은 domain/ 아래에.
+
+  테스트 폴더:
+    src/test/java          단위 테스트 (목 기반, Docker 불필요)
+    src/integrationTest    통합 테스트 (실제 PostgreSQL - Testcontainers, 9-2 참고)
 
   각 도메인 하위 폴더 공통:
     controller  → API 요청을 받아서 처리 흐름을 지시 (교통 정리)
@@ -2373,6 +2552,9 @@ SilverBridge는 노인(피보호자)과 그 가족(보호자)을 연결하는 �
 
   3) 빌드 검증 (푸시 전 필수)
      ./gradlew build -x test --no-daemon
+     ./gradlew test                             (단위 테스트)
+     마이그레이션·쿼리를 바꿨다면 vkcs에서 통합 테스트도:
+     ~/SilverBridgeBe/tools/integration-test.sh <브랜치>
 
   4) API 문서 확인
      로컬   : http://localhost:6511/swagger-ui/index.html

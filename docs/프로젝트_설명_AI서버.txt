@@ -207,6 +207,7 @@ SilverBridge는 노인(피보호자)과 그 가족(보호자)을 연결하는 �
        { "type":"latest_analysis", "sessionId":"stream_009",
          "data":{
            "detectedType":"fire",     // normal | fire | smoke | unknown
+                                      // ※ 백엔드는 smoke를 화재(FIRE)로 받는다(2026-09-21, V53)
            "confidence":0.4547,       // YOLO score (최고 confidence 객체)
            "danger":false,            // 표시 전용 — 라이브 경로에서 항상 false
            "detections":[ {"detectedType":"fire","confidence":0.4547,

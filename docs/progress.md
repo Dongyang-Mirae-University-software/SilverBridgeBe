@@ -1522,3 +1522,10 @@ REST API Key 단독 대비 보안 강화 — 인가코드 탈취 시 토큰 발�
 - **M-2**: `DisconnectedBy.WITHDRAWN` 추가 - 탈퇴는 "보호자/피보호자가 탈퇴해 연결이 종료되었습니다.". 사용자 결정으로 **역할 변경 정리도 `ADMIN`**("관리자가 연결을 해제했습니다.") - 이 경로는 예전부터 "보호자가 연결을 해제했습니다"로 나가고 있었다. FE 영향 없음(서버 body 그대로 표시).
 - `./gradlew test` 685 / 0 실패 · vkcs 통합 27 / 0 실패.
 - 상세: `docs/(2026-09-30) fix-withdrawal-fcm-and-disconnect-copy.md`
+
+## [2026-09-30] 문서 동기화 - 프로젝트_설명.txt·CLAUDE.md·AI 서버 설명서
+
+- `프로젝트_설명.txt`가 2026-09-10(#245) 이후로 멈춰 있어 #246~#261을 반영했다: 3-0 개요(다수결·관리자 판정 없음·탈퇴 해제 문구), 3-6 SOS 반복 횟수·문의 답변 감사, 3-11 연기=화재·카메라 등록 공백, 3-11-A 다수결·동수 재확인·잠금, **3-11-C를 보기 전용 로그 v2로 재작성**(정정 폐지·필터·summary·AI 신뢰도), **3-14 관리자 알림 이력 신설**, 4장 WS 토픽, 5장 테이블(감사 로그 종류·SMOKE 제거·resolved_* 보존·`anomaly_review_conflict_log`·`notification_log`), 7장(커밋 직후 정리 REQUIRES_NEW·운영 설정), 8장(Boot 4.0.8·integrationTest·CD 흐름·gosky 수동 배포), 9-2 테스트(685건 + 통합 27건), 10장 폴더(global/audit·client, 관리자 패키지), 11장 통합 테스트 실행.
+- Swagger 수치 갱신: 21개 태그 / 28개 컨트롤러 / 94개 엔드포인트.
+- CLAUDE.md: §1 판정 잠금·`@DynamicUpdate`, §8 동기 AFTER_COMMIT 쓰기 = REQUIRES_NEW, 탈퇴 `WITHDRAWN`·역할 변경 `ADMIN` 문구, 최종 업데이트.
+- AI 서버 설명서: 백엔드가 smoke를 FIRE로 받는다는 주석 1줄.
