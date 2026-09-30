@@ -4,6 +4,8 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.annotation.PreDestroy;
+import jakarta.websocket.ContainerProvider;
+import jakarta.websocket.WebSocketContainer;
 import kr.silverbridge.main.domain.anomaly.config.AnomalyProperties;
 import kr.silverbridge.main.domain.anomaly.service.AnomalyDetectionService;
 import kr.silverbridge.main.domain.camera.event.CameraRegisteredEvent;
@@ -14,6 +16,8 @@ import org.springframework.boot.context.event.ApplicationReadyEvent;
 import org.springframework.context.event.EventListener;
 import org.springframework.scheduling.TaskScheduler;
 import org.springframework.stereotype.Component;
+import org.springframework.transaction.event.TransactionPhase;
+import org.springframework.transaction.event.TransactionalEventListener;
 import org.springframework.util.StringUtils;
 import org.springframework.web.socket.CloseStatus;
 import org.springframework.web.socket.TextMessage;
@@ -64,6 +68,7 @@ public class AiLiveStreamSubscriber extends TextWebSocketHandler {
 
     /** AI에 세션 목록을 요청하는 페이로드(고정 문자열 — 변수 삽입 없음). */
     private static final String LIST_ACTION = "{\"action\":\"list\"}";
+    private static final int MAX_TEXT_MESSAGE_BYTES = 1024 * 1024;
 
     /** 현재 구독 중인 세션 — 재연결 시 초기화된다(서버 측 구독 상태가 날아가므로). */
     private final Set<String> subscribedSessions = ConcurrentHashMap.newKeySet();
@@ -91,6 +96,16 @@ public class AiLiveStreamSubscriber extends TextWebSocketHandler {
      */
     public int subscribedSessionCount() {
         return subscribedSessions.size();
+    }
+
+    /**
+     * 수신 버퍼를 키운 WebSocket 컨테이너. 기본값(8KB)을 넘는 메시지가 오면 컨테이너가 연결을 끊는데(1009),
+     * AI의 세션 목록·감지 배열은 세션 수에 따라 그보다 커질 수 있다(2026-09-30 L-15).
+     */
+    private static WebSocketContainer webSocketContainer() {
+        WebSocketContainer container = ContainerProvider.getWebSocketContainer();
+        container.setDefaultMaxTextMessageBufferSize(MAX_TEXT_MESSAGE_BYTES);
+        return container;
     }
 
     @EventListener(ApplicationReadyEvent.class)
@@ -122,7 +137,7 @@ public class AiLiveStreamSubscriber extends TextWebSocketHandler {
         headers.add("x-api-key", properties.getApiKey());
 
         log.info("[ANOMALY] AI WS 접속 시도: url={}", properties.getWsUrl());
-        new StandardWebSocketClient()
+        new StandardWebSocketClient(webSocketContainer())
                 .execute(this, headers, URI.create(properties.getWsUrl()))
                 .whenComplete((connected, error) -> {
                     if (error != null) {
@@ -162,8 +177,11 @@ public class AiLiveStreamSubscriber extends TextWebSocketHandler {
      * <p>AI는 세션 <b>생성·종료 시에만</b> 목록을 broadcast한다. 따라서 "스트리밍이 이미 돌고 있는 세션을
      * 나중에 카메라로 등록"하면 그 broadcast는 이미 지나갔고, 재요청이 없으면 해당 세션은 <b>앱 재시작 전까지
      * 구독되지 않는다</b>(감지·알림이 에러 없이 0건 — 조용한 침묵).</p>
+     *
+     * <p><b>커밋 후에</b> 요청한다(2026-09-30 M-3). 등록 트랜잭션이 끝나기 전에 요청하면 AI 응답이 커밋보다 먼저
+     * 도착했을 때 방금 넣은 카메라 행이 아직 안 보여 "미등록 세션"으로 건너뛴다 - 이 메서드가 막으려던 바로 그 침묵이다.</p>
      */
-    @EventListener
+    @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
     public void onCameraRegistered(CameraRegisteredEvent event) {
         if (session == null) {
             return;   // 미연결 상태 — 재연결 시 afterConnectionEstablished가 목록을 다시 받아온다
