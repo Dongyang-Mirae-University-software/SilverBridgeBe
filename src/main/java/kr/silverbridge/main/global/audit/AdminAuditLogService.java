@@ -1,7 +1,5 @@
-package kr.silverbridge.main.domain.admin.service;
+package kr.silverbridge.main.global.audit;
 
-import kr.silverbridge.main.domain.admin.entity.AdminAuditLog;
-import kr.silverbridge.main.domain.admin.repository.AdminAuditLogRepository;
 import kr.silverbridge.main.global.enums.AdminAuditAction;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;

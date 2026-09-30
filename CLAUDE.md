@@ -10,7 +10,7 @@
 - **인프라**: PostgreSQL + Flyway / Redis(캐시·세션) / WebSocket(실시간)
 - **보안·연동**: Spring Security, OAuth2(카카오), JWT(jjwt) / Firebase(FCM), Solapi(SMS), SMTP / springdoc-openapi(Swagger) / OWASP DependencyCheck
 - **메인 브랜치**: `dev` — push 시 CD 자동 배포 (§3 참조)
-- **도메인**: `kr.silverbridge.main.domain/<bounded-context>` = `admin`·`announcement`·`anomaly`·`auth`·`camera`·`connection`·`inquiry`·`medication`·`notification`·`sos`·`user`. 공통 코드는 `global/`(aop·config·jwt·security·websocket 등).
+- **도메인**: `kr.silverbridge.main.domain/<bounded-context>` = `admin`·`announcement`·`anomaly`·`auth`·`camera`·`connection`·`inquiry`·`medication`·`notification`·`sos`·`user`. 공통 코드는 `global/`(aop·audit·client·config·jwt·security·websocket 등) - **`global`은 `domain`을 import하지 않는다**(2026-09-30 F-1~F-3 정리 후 0건).
   - ⚠️ **도메인 로직을 `global`에 넣지 말 것** — 도메인 코드는 `domain/<context>/`.
 - **이상감지**(anomaly, 2026-07-14, **1·2단계 완료**): AI 서버는 웹훅이 없어 백엔드가 **AI WS를 클라이언트로 구독**(`AiLiveStreamSubscriber`, AI 무변경). 등록된 `camera.session_id`만 subscribe → 판정 → 이력 쿨다운 → `anomaly_event` 적재 → `AnomalyDetectedEvent` → AFTER_COMMIT 리스너가 **ACTIVE 보호자 전원 + 피보호자 본인**에게 발송(WS `anomaly-detected` + FCM 고정 / SMS·알림톡은 설정대로). 쿨다운은 **이력 1분 / 알림 보호자 5분·본인 3분**(서로 별개 — 이력은 촘촘히, 사람에겐 성기게).
   - **연기 = 화재**(2026-09-21, V53): AI `smoke`는 `DetectedType.fromAi`가 `FIRE`로 받는다(알림·이력·통계 모두 "화재", enum에 SMOKE 없음). 흉기는 AI `knife` → `WEAPON`(라이브 미탑재라 `isDetectable` 제외). 유형 라벨은 `DetectedTypeLabel` 한 곳.

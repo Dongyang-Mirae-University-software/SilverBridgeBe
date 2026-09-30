@@ -1,5 +1,6 @@
 package kr.silverbridge.main.domain.auth.service;
 
+import kr.silverbridge.main.global.client.SmsSender;
 import kr.silverbridge.main.global.exception.CustomException;
 import kr.silverbridge.main.global.exception.ErrorCode;
 import kr.silverbridge.main.global.util.RedisCounter;

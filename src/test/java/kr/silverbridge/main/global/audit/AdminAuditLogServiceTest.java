@@ -1,10 +1,8 @@
-package kr.silverbridge.main.domain.admin.service;
+package kr.silverbridge.main.global.audit;
 
 import ch.qos.logback.classic.Logger;
 import ch.qos.logback.classic.spi.ILoggingEvent;
 import ch.qos.logback.core.read.ListAppender;
-import kr.silverbridge.main.domain.admin.entity.AdminAuditLog;
-import kr.silverbridge.main.domain.admin.repository.AdminAuditLogRepository;
 import kr.silverbridge.main.global.enums.AdminAuditAction;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;

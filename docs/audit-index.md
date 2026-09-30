@@ -71,7 +71,7 @@
 | **외부 연동 회복력**(FCM·Solapi·SMTP·카카오·AI WS) | ✅ | 〃 PHASE C - C-1·C-2 수정 완료 2026-09-11. 필수 알림 보장 결론 기록 |
 | **성능·JPA** | ✅ | 〃 PHASE D - D-1·D-2 인덱스 V51(2026-09-11). D-3 수용 |
 | **운영 설정·로깅** | ✅ | 〃 PHASE E - E-2·E-4·E-5 수정 완료. **E-1은 관리 밖 인프라라 수용한 한계**(정책 파일 기록) |
-| **아키텍처 경계** | ✅ | 〃 PHASE F - F-1~F-3 Low, 별도 refactor PR 대상(미착수) |
+| **아키텍처 경계** | ✅ | 〃 PHASE F - **F-1~F-3 반영 2026-09-30**(`refactor/package-boundaries`, 동작 불변 이동): 감사 로그 3종 → `global/audit`(admin↔inquiry 순환 해소, anomaly 쪽은 관리자 정정 폐지로 이미 해소), `UserIdGenerator` → `domain/user/service`, `SmsSender` → `global/client`. 결과: 도메인 간 순환 0, `global → domain` import 0 |
 | 프론트엔드(SilverBridgeFe) | ➖ | 별도 저장소 — 이 대장의 범위 밖 |
 
 ## 다음 점검 트리거

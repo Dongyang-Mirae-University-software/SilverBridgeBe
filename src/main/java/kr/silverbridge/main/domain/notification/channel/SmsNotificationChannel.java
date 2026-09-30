@@ -1,6 +1,6 @@
 package kr.silverbridge.main.domain.notification.channel;
 
-import kr.silverbridge.main.domain.auth.service.SmsSender;
+import kr.silverbridge.main.global.client.SmsSender;
 import kr.silverbridge.main.domain.notification.dispatch.NotificationType;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;

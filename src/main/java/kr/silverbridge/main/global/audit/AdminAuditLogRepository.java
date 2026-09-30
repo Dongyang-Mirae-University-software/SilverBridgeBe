@@ -1,6 +1,5 @@
-package kr.silverbridge.main.domain.admin.repository;
+package kr.silverbridge.main.global.audit;
 
-import kr.silverbridge.main.domain.admin.entity.AdminAuditLog;
 import org.springframework.data.jpa.repository.JpaRepository;
 
 import java.util.List;

@@ -1,4 +1,4 @@
-package kr.silverbridge.main.domain.auth.service;
+package kr.silverbridge.main.global.client;
 
 import com.solapi.sdk.SolapiClient;
 import com.solapi.sdk.message.exception.SolapiEmptyResponseException;

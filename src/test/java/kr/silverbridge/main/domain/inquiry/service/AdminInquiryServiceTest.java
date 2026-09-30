@@ -5,7 +5,7 @@ import kr.silverbridge.main.domain.inquiry.dto.AdminInquiryListResponse;
 import kr.silverbridge.main.domain.inquiry.dto.InquiryAnswerRequest;
 import kr.silverbridge.main.domain.inquiry.entity.Inquiry;
 import kr.silverbridge.main.domain.inquiry.event.InquiryAnsweredEvent;
-import kr.silverbridge.main.domain.admin.service.AdminAuditLogService;
+import kr.silverbridge.main.global.audit.AdminAuditLogService;
 import kr.silverbridge.main.domain.inquiry.repository.InquiryRepository;
 import kr.silverbridge.main.domain.user.entity.User;
 import kr.silverbridge.main.domain.user.repository.UserRepository;
