@@ -1487,3 +1487,14 @@ REST API Key 단독 대비 보안 강화 — 인가코드 탈취 시 토큰 발�
 - **L-1·L-2**: 코드 변경 없음(수용). 정책 파일·`application.yaml` 주석에 근거와 스케줄러 6종 목록.
 - `./gradlew test` 681 / 0 실패 · `build -x test` 통과.
 - 상세: `docs/(2026-09-22) fix-admin-notification-audit-findings.md`
+
+## [2026-09-30] 점검 잔여 이슈 처리 - H-1 실결함 수정·E-2 해결·SOS 경계값·알림 이력 실서버 확인
+
+- **H-1 실제 결함**: 탈퇴 동기 AFTER_COMMIT 리스너가 부르는 REQUIRED 쓰기가 커밋되지 않았고, 연결 정리 중 발행한 해제 이벤트가 AFTER_COMMIT을 맞지 못해 **탈퇴 시 상대 해제 알림이 나가지 않고 있었다**. 두 메서드 `REQUIRES_NEW`. 실 DB 재현(수정 전 2건 실패) → 수정 후 통과.
+- **E-2 해결**: 상황 행 쓰기 잠금(`findByIdForUpdate`). 작업 중 **감지 승계가 보호자 판정을 PENDING으로 되돌리는** 전체 컬럼 UPDATE 문제를 찾아 `@DynamicUpdate`. 둘 다 실 DB 재현(수정 전 2건 실패) → 통과. E-3은 보류 유지.
+- **#249 L-3**: 경계값 2·0 단위 테스트, 집계 쿼리 실 DB 테스트.
+- **#257 M-1 닫힘**: gosky `notification_log`에 사용자 테스트 행 전부 `DELIVERED`, `ward_id` 채워짐.
+- **#245 L-5**: FE 피보호자 토픽에 `connection-accepted` 없음 확인 → 백엔드 무변경, FE 요청.
+- **이상감지 통합 경로(신규 문제)**: FE가 카메라를 AI 서버에만 등록·송출해 백엔드가 구독할 세션이 없다 → 실송출 화재 알림 0건. 권장안 A(피보호자가 백엔드 등록 후 발급 sessionId로 송출) 문서화, FE·AI 합의 대기.
+- `./gradlew test` 683 / 0 실패 · vkcs 통합 26 / 0 실패.
+- 상세: `docs/(2026-09-30) fix-remaining-audit-items.md`, `docs/(2026-09-30) issue-anomaly-camera-integration-gap.md`
