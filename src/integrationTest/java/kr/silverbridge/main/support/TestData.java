@@ -1,6 +1,8 @@
 package kr.silverbridge.main.support;
 
 import kr.silverbridge.main.domain.camera.entity.Camera;
+import kr.silverbridge.main.domain.medication.entity.Medication;
+import kr.silverbridge.main.domain.medication.entity.MedicationTimeSlot;
 import kr.silverbridge.main.domain.user.entity.User;
 import kr.silverbridge.main.global.enums.Provider;
 import kr.silverbridge.main.global.enums.Role;
@@ -32,6 +34,18 @@ public final class TestData {
                 .deviceId("device-" + sessionId)
                 .label(label)
                 .isActive(true)
+                .build();
+    }
+
+    /** 아침(MORNING) 슬롯의 기본 시각으로 등록되는 최소 약 1건. */
+    public static Medication medication(String wardId, String createdBy, String name) {
+        return Medication.builder()
+                .wardId(wardId)
+                .createdBy(createdBy)
+                .name(name)
+                .timeSlot(MedicationTimeSlot.MORNING)
+                .doseTime(MedicationTimeSlot.MORNING.defaultTime())
+                .doseAmount(1)
                 .build();
     }
 }
