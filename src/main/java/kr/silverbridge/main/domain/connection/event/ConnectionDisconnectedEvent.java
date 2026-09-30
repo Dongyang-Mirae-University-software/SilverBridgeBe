@@ -20,7 +20,12 @@ public record ConnectionDisconnectedEvent(
     public enum DisconnectedBy {
         GUARDIAN,
         WARD,
-        /** 관리자가 강제 해제. "보호자가 해제했습니다"로 내보내면 사실과 다르다. */
-        ADMIN
+        /** 관리자가 강제 해제하거나 역할을 바꿔 정리됨. "보호자가 해제했습니다"로 내보내면 사실과 다르다. */
+        ADMIN,
+        /**
+         * 한쪽이 회원 탈퇴해 정리됨(2026-09-30). 누가 탈퇴했는지는 {@code notifyTargetId}의 반대편이다 -
+         * 알림은 남은 쪽에만 가므로 따로 싣지 않는다.
+         */
+        WITHDRAWN
     }
 }

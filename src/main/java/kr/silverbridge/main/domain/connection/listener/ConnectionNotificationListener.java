@@ -116,6 +116,10 @@ public class ConnectionNotificationListener {
             case WARD -> "피보호자가 연결을 해제했습니다.";
             // 관리자가 끊은 것을 "보호자가 해제했습니다"로 내보내면 사실과 다르다
             case ADMIN -> "관리자가 연결을 해제했습니다.";
+            // 알림은 남은 쪽에만 간다 - 받는 사람이 피보호자면 떠난 쪽은 보호자다
+            case WITHDRAWN -> event.notifyTargetId().equals(event.wardId())
+                    ? "보호자가 탈퇴해 연결이 종료되었습니다."
+                    : "피보호자가 탈퇴해 연결이 종료되었습니다.";
         };
 
         webSocketEventPublisher.sendToUser(event.notifyTargetId(), "connection-cancelled",

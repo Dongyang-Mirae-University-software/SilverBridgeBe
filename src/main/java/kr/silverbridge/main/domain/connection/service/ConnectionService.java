@@ -245,13 +245,12 @@ public class ConnectionService {
             if (connection.getStatus() == ConnectionStatus.ACTIVE) {
                 boolean withdrawnIsGuardian = connection.getGuardianId().equals(withdrawnUserId);
                 String notifyTargetId = withdrawnIsGuardian ? connection.getWardId() : connection.getGuardianId();
-                ConnectionDisconnectedEvent.DisconnectedBy by = withdrawnIsGuardian
-                        ? ConnectionDisconnectedEvent.DisconnectedBy.GUARDIAN
-                        : ConnectionDisconnectedEvent.DisconnectedBy.WARD;
 
                 connection.disconnect();
+                // 탈퇴를 "상대가 연결을 해제했습니다"로 알리면 남은 쪽은 "나를 끊었다"로 읽는다 - 전용 값(M-2, 2026-09-30)
                 eventPublisher.publishEvent(new ConnectionDisconnectedEvent(
-                        connection.getId(), notifyTargetId, by, connection.getGuardianId(), connection.getWardId()));
+                        connection.getId(), notifyTargetId, ConnectionDisconnectedEvent.DisconnectedBy.WITHDRAWN,
+                        connection.getGuardianId(), connection.getWardId()));
             } else { // PENDING — 상대 알림 없이 취소 (기존 cancel/refuse 와 동일)
                 connection.cancel();
             }
@@ -284,13 +283,12 @@ public class ConnectionService {
             if (connection.getStatus() == ConnectionStatus.ACTIVE) {
                 boolean changedIsGuardian = connection.getGuardianId().equals(userId);
                 String notifyTargetId = changedIsGuardian ? connection.getWardId() : connection.getGuardianId();
-                ConnectionDisconnectedEvent.DisconnectedBy by = changedIsGuardian
-                        ? ConnectionDisconnectedEvent.DisconnectedBy.GUARDIAN
-                        : ConnectionDisconnectedEvent.DisconnectedBy.WARD;
 
                 connection.disconnect();
+                // 역할 변경은 관리자 조작이다 - 당사자가 끊은 것처럼 알리지 않는다(2026-09-30)
                 eventPublisher.publishEvent(new ConnectionDisconnectedEvent(
-                        connection.getId(), notifyTargetId, by, connection.getGuardianId(), connection.getWardId()));
+                        connection.getId(), notifyTargetId, ConnectionDisconnectedEvent.DisconnectedBy.ADMIN,
+                        connection.getGuardianId(), connection.getWardId()));
             } else { // PENDING - 수락 전 요청이라 상대 알림 없이 취소
                 connection.cancel();
             }

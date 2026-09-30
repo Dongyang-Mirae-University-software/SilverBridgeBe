@@ -9,6 +9,11 @@ import kr.silverbridge.main.domain.medication.entity.Medication;
 import kr.silverbridge.main.domain.medication.entity.MedicationTimeSlot;
 import kr.silverbridge.main.domain.medication.repository.MedicationRepository;
 import kr.silverbridge.main.domain.medication.service.MedicationWithdrawalService;
+import kr.silverbridge.main.domain.notification.config.FcmTokenProperties;
+import kr.silverbridge.main.domain.notification.entity.FcmToken;
+import kr.silverbridge.main.domain.notification.listener.UserWithdrawalFcmListener;
+import kr.silverbridge.main.domain.notification.repository.FcmTokenRepository;
+import kr.silverbridge.main.domain.notification.service.FcmService;
 import kr.silverbridge.main.domain.user.event.UserWithdrawnEvent;
 import kr.silverbridge.main.domain.user.repository.UserRepository;
 import kr.silverbridge.main.global.enums.ConnectionStatus;
@@ -21,7 +26,9 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.ApplicationEventPublisher;
+import com.google.firebase.messaging.FirebaseMessaging;
 import org.springframework.context.annotation.Import;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
@@ -46,12 +53,16 @@ import static org.assertj.core.api.Assertions.assertThat;
  * FK CASCADE가 지워 겉으로는 무해해 보이지만, <b>그 트랜잭션 안에서 발행한 연결 해제 이벤트</b>도 AFTER_COMMIT을
  * 영영 맞지 못해 상대방 해제 알림이 사라진다 - 그래서 이벤트 도달까지 함께 본다.</p>
  *
+ * <p>FCM 토큰 정리({@code UserWithdrawalFcmListener})도 같은 형태라 함께 고정한다(M-1, 2026-09-30).</p>
+ *
  * <p>테스트 트랜잭션을 끄고 실제로 커밋한다. 전용 ID를 쓰고 끝나면 회원 삭제(CASCADE)로 정리한다.</p>
  */
 @Import({
         ConnectionService.class,
         UserWithdrawalConnectionListener.class,
         MedicationWithdrawalService.class,
+        UserWithdrawalFcmListener.class,
+        FcmService.class,
         WithdrawalListenerCommitIntegrationTest.DisconnectedEventRecorder.class
 })
 @Transactional(propagation = Propagation.NOT_SUPPORTED)
@@ -67,6 +78,11 @@ class WithdrawalListenerCommitIntegrationTest extends PostgresIntegrationTest {
     @Autowired private ConnectionRepository connectionRepository;
     @Autowired private MedicationRepository medicationRepository;
     @Autowired private DisconnectedEventRecorder recorder;
+    @Autowired private FcmTokenRepository fcmTokenRepository;
+
+    // 발송·토큰 상한은 이 테스트의 관심사가 아니다 - 삭제 경로만 실제 빈으로 돈다
+    @MockitoBean private FirebaseMessaging firebaseMessaging;
+    @MockitoBean private FcmTokenProperties fcmTokenProperties;
 
     @BeforeEach
     void setUp() {
@@ -103,6 +119,7 @@ class WithdrawalListenerCommitIntegrationTest extends PostgresIntegrationTest {
                 .singleElement()
                 .satisfies(event -> {
                     assertThat(event.notifyTargetId()).isEqualTo(WARD_ID);
+                    assertThat(event.disconnectedBy()).isEqualTo(ConnectionDisconnectedEvent.DisconnectedBy.WITHDRAWN);
                     assertThat(event.guardianId()).isEqualTo(GUARDIAN_ID);
                     assertThat(event.wardId()).isEqualTo(WARD_ID);
                 });
@@ -123,6 +140,18 @@ class WithdrawalListenerCommitIntegrationTest extends PostgresIntegrationTest {
         runAfterCommit(() -> medicationWithdrawalService.removeMedicationsRegisteredBy(GUARDIAN_ID));
 
         assertThat(medicationRepository.findByCreatedBy(GUARDIAN_ID)).isEmpty();
+    }
+
+    @Test
+    @DisplayName("탈퇴 커밋 후 FCM 토큰 정리 리스너가 토큰을 실제로 삭제한다 (M-1)")
+    void 탈퇴_FCM토큰정리는_커밋된다() {
+        fcmTokenRepository.save(FcmToken.of(GUARDIAN_ID, "test-token-gwl001", "WEB"));
+
+        new TransactionTemplate(transactionManager).executeWithoutResult(status ->
+                eventPublisher.publishEvent(new UserWithdrawnEvent(GUARDIAN_ID, "127.0.0.1", "test")));
+
+        assertThat(fcmTokenRepository.findAll())
+                .noneMatch(token -> GUARDIAN_ID.equals(token.getUserId()));
     }
 
     /** 바깥 트랜잭션을 커밋하고, 커밋 직후 콜백에서 {@code action}을 실행한다(동기 AFTER_COMMIT 리스너와 같은 자리). */
