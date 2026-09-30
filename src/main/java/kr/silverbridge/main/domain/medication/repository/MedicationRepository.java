@@ -1,17 +1,30 @@
 package kr.silverbridge.main.domain.medication.repository;
 
+import jakarta.persistence.LockModeType;
 import kr.silverbridge.main.domain.medication.entity.Medication;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Lock;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 
 import java.time.LocalTime;
 import java.util.Collection;
 import java.util.List;
+import java.util.Optional;
 
 /**
  * 약 마스터 조회. <b>모든 조회 메서드는 {@code deletedAt IS NULL}로 삭제된 약을 제외</b>한다 —
  * soft delete라 조건을 빠뜨리면 삭제한 약이 화면에 다시 나타난다.
  */
 public interface MedicationRepository extends JpaRepository<Medication, Long> {
+
+    /**
+     * 복용 체크용 - 약 행을 쓰기 잠금으로 읽어 같은 약의 동시 체크를 한 줄로 세운다.
+     * 삭제 여부는 호출자가 본다(삭제된 약도 그대로 돌려준다).
+     */
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("SELECT m FROM Medication m WHERE m.id = :id")
+    Optional<Medication> findByIdForUpdate(@Param("id") Long id);
 
     /** 피보호자 여러 명의 약을 한 번에 조회(보호자 목록 화면). 복용 시각 순. */
     List<Medication> findByWardIdInAndDeletedAtIsNullOrderByDoseTimeAscIdAsc(Collection<String> wardIds);

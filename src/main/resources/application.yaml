@@ -142,6 +142,8 @@ anomaly:
   #            CONFIDENCE(폴백, AI danger 정식화 배포 지연으로 이력 0건일 때만 임시 전환)
   # AI 팀 합의(2026-07-14): 라이브 경로에서 confidence >= 0.6이면 danger=true로 채운다 → 배포되면 DANGER 모드가 실동작
   trigger-mode: ${ANOMALY_TRIGGER_MODE:DANGER}
+  reconnect-min-seconds: ${ANOMALY_RECONNECT_MIN_SECONDS:2}   # AI WS 재접속 백오프 시작 간격
+  reconnect-max-seconds: ${ANOMALY_RECONNECT_MAX_SECONDS:60}  # 백오프 상한
   confidence-threshold: ${ANOMALY_CONFIDENCE_THRESHOLD:0.6} # CONFIDENCE 폴백 임계 + danger 불일치 경고 기준(AI 합의값과 동일하게 유지)
   # 빈도 정책(2026-07-28): 이력은 촘촘히(1분) 남겨 화재 지속 구간의 타임라인을 확보하되,
   # 사람에게 가는 알림은 그보다 성기게 — 보호자 5분(알림톡·SMS 건수·카카오 신고 리스크),

@@ -66,7 +66,7 @@ public class AdminInquiryController {
             @Parameter(description = "상태 필터") @RequestParam(required = false) InquiryStatus status,
             @Parameter(description = "검색어 (제목·내용·작성자명)") @RequestParam(required = false) String keyword,
             @Parameter(description = "페이지 번호 (0-based)") @RequestParam(defaultValue = "0") int page,
-            @Parameter(description = "페이지 크기") @RequestParam(defaultValue = "20") int size) {
+            @Parameter(description = "페이지 크기 (최대 50)") @RequestParam(defaultValue = "20") int size) {
         return ApiResponse.ok(adminInquiryService.getInquiries(category, status, keyword, page, size));
     }
 

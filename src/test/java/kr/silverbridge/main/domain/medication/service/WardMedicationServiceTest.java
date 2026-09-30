@@ -92,7 +92,7 @@ class WardMedicationServiceTest {
     void markTaken_기록_이벤트발행() {
         LocalDate today = MedicationClock.today();
         Medication medication = medication(1L, WARD_ID, "혈압약", LocalTime.of(8, 0));
-        when(medicationRepository.findById(1L)).thenReturn(Optional.of(medication));
+        when(medicationRepository.findByIdForUpdate(1L)).thenReturn(Optional.of(medication));
         when(intakeRepository.findByMedicationIdAndDoseDate(1L, today)).thenReturn(Optional.empty());
         when(intakeRepository.save(any(MedicationIntake.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
@@ -118,7 +118,7 @@ class WardMedicationServiceTest {
     void markTaken_중복_멱등() {
         LocalDate today = MedicationClock.today();
         OffsetDateTime takenAt = OffsetDateTime.now().minusHours(1);
-        when(medicationRepository.findById(1L))
+        when(medicationRepository.findByIdForUpdate(1L))
                 .thenReturn(Optional.of(medication(1L, WARD_ID, "혈압약", LocalTime.of(8, 0))));
         when(intakeRepository.findByMedicationIdAndDoseDate(1L, today))
                 .thenReturn(Optional.of(MedicationIntake.of(1L, today, takenAt)));
@@ -135,7 +135,7 @@ class WardMedicationServiceTest {
     @Test
     @DisplayName("[IDOR] 타인의 약을 체크하려 하면 403 — 기록도 알림도 없다")
     void markTaken_타인약_차단() {
-        when(medicationRepository.findById(1L))
+        when(medicationRepository.findByIdForUpdate(1L))
                 .thenReturn(Optional.of(medication(1L, OTHER_WARD_ID, "혈압약", LocalTime.of(8, 0))));
 
         assertThatThrownBy(() -> wardMedicationService.markTaken(WARD_ID, 1L))
@@ -157,7 +157,7 @@ class WardMedicationServiceTest {
     void markTaken_삭제된약_404() {
         Medication deleted = medication(1L, WARD_ID, "혈압약", LocalTime.of(8, 0));
         deleted.delete(OffsetDateTime.now());
-        when(medicationRepository.findById(1L)).thenReturn(Optional.of(deleted));
+        when(medicationRepository.findByIdForUpdate(1L)).thenReturn(Optional.of(deleted));
 
         assertThatThrownBy(() -> wardMedicationService.markTaken(WARD_ID, 1L))
                 .isInstanceOf(CustomException.class)

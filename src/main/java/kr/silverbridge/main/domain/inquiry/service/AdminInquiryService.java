@@ -40,6 +40,8 @@ import java.util.stream.Collectors;
 @RequiredArgsConstructor
 public class AdminInquiryService {
 
+    private static final int MAX_PAGE_SIZE = 50;
+
     private final InquiryRepository inquiryRepository;
     private final UserRepository userRepository;
     private final ApplicationEventPublisher eventPublisher;
@@ -52,7 +54,9 @@ public class AdminInquiryService {
     @Transactional(readOnly = true)
     public AdminInquiryListResponse getInquiries(InquiryCategory category, InquiryStatus status,
                                                  String keyword, int page, int size) {
-        Pageable pageable = PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "createdAt"));
+        // 크기 상한 - 과대 요청으로 전체 문의를 한 번에 끌어가는 것을 막는다(다른 목록 API와 같은 50)
+        Pageable pageable = PageRequest.of(Math.max(page, 0), Math.clamp(size, 1, MAX_PAGE_SIZE),
+                Sort.by(Sort.Direction.DESC, "createdAt"));
         Page<Inquiry> result = inquiryRepository.searchForAdmin(category, status, normalize(keyword), pageable);
 
         // 작성자명 배치 조회 (N+1 회피) — 탈퇴 작성자는 authorMap에 없어 null 처리
@@ -87,7 +91,10 @@ public class AdminInquiryService {
      */
     @Transactional
     public AdminInquiryDetailResponse answer(Long inquiryId, InquiryAnswerRequest request, String adminId) {
-        Inquiry inquiry = findInquiry(inquiryId);
+        // 쓰기 잠금으로 읽는다 - 두 관리자가 동시에 답하면 둘 다 "미답변"을 보고 통과해 나중 답변이 앞 답변을
+        // 덮어쓰고 작성자에게 알림이 두 번 갔다(2026-09-30 L-9). 뒤에 온 쪽은 앞 커밋을 보고 409를 받는다.
+        Inquiry inquiry = inquiryRepository.findByIdForUpdate(inquiryId)
+                .orElseThrow(() -> new CustomException(ErrorCode.INQUIRY_NOT_FOUND));
         if (inquiry.isAnswered()) {
             throw new CustomException(ErrorCode.INQUIRY_ALREADY_ANSWERED);
         }

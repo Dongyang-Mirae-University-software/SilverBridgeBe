@@ -5,8 +5,11 @@ import jakarta.validation.ConstraintValidatorContext;
 
 import java.time.LocalDate;
 import java.time.Period;
+import java.time.ZoneId;
 
 public class BirthDateValidator implements ConstraintValidator<ValidBirthDate, LocalDate> {
+
+    private static final ZoneId KST = ZoneId.of("Asia/Seoul");
 
     private int minAge;
     private int maxAge;
@@ -23,7 +26,8 @@ public class BirthDateValidator implements ConstraintValidator<ValidBirthDate, L
         if (value == null) {
             return true;
         }
-        LocalDate today = LocalDate.now();
+        // 서버 기본 시간대가 아니라 KST로 "오늘"을 정한다 - UTC 환경이면 자정~09시 사이 판정이 하루 어긋난다
+        LocalDate today = LocalDate.now(KST);
         // 오늘·미래 날짜 차단
         if (!value.isBefore(today)) {
             return false;

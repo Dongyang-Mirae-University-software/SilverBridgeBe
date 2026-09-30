@@ -78,13 +78,13 @@ public class GuardianInquiryController {
                     [요청 헤더]
                     Authorization: Bearer {accessToken}
 
-                    본인이 작성한 문의의 상세를 조회합니다. 타인 문의 ID로 조회 시 404로 응답합니다(IDOR 차단).
+                    본인이 작성한 문의의 상세를 조회합니다. 타인 문의 ID로 조회하면 403("본인이 작성한 문의만 볼 수 있습니다.")으로 응답합니다.
                     """)
     @ApiResponses({
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "문의 상세 반환"),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "인증 토큰 없음 또는 만료", content = @Content),
-            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "보호자 권한 필요", content = @Content),
-            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "존재하지 않거나 본인 문의가 아님", content = @Content)
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "보호자 권한 필요 / 본인이 작성한 문의가 아님", content = @Content),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "존재하지 않는 문의", content = @Content)
     })
     @GetMapping("/api/guardian/inquiry/{id}")
     public ResponseEntity<ApiResponse<InquiryResponse>> getMyInquiry(

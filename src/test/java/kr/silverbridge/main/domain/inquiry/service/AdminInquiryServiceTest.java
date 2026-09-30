@@ -103,10 +103,25 @@ class AdminInquiryServiceTest {
     }
 
     @Test
+    @DisplayName("페이지 크기는 50으로, 음수 페이지는 0으로 보정한다 - 과대 요청으로 전체 문의를 한 번에 끌어가지 못하게")
+    void getInquiries_페이지크기_상한() {
+        when(inquiryRepository.searchForAdmin(any(), any(), any(), any(Pageable.class)))
+                .thenReturn(new PageImpl<>(List.of(), PageRequest.of(0, 50), 0));
+        when(userRepository.findAllById(any())).thenReturn(List.of());
+
+        adminInquiryService.getInquiries(null, null, null, -1, 1_000_000);
+
+        ArgumentCaptor<Pageable> captor = ArgumentCaptor.forClass(Pageable.class);
+        verify(inquiryRepository).searchForAdmin(any(), any(), any(), captor.capture());
+        assertThat(captor.getValue().getPageSize()).isEqualTo(50);
+        assertThat(captor.getValue().getPageNumber()).isZero();
+    }
+
+    @Test
     @DisplayName("답변 작성 → WAITING→ANSWERED 전환 + 답변자 기록 + InquiryAnsweredEvent 발행")
     void answer_상태전환_이벤트발행() {
         Inquiry inquiry = inquiry(INQUIRY_ID, GUARDIAN_ID, InquiryStatus.WAITING);
-        when(inquiryRepository.findById(INQUIRY_ID)).thenReturn(Optional.of(inquiry));
+        when(inquiryRepository.findByIdForUpdate(INQUIRY_ID)).thenReturn(Optional.of(inquiry));
         when(userRepository.findById(GUARDIAN_ID)).thenReturn(Optional.of(user(GUARDIAN_ID, "김보호")));
         when(userRepository.findById(ADMIN_ID)).thenReturn(Optional.of(user(ADMIN_ID, "관리자")));
         InquiryAnswerRequest request = answerRequest("확인 후 조치했습니다.");
@@ -129,7 +144,7 @@ class AdminInquiryServiceTest {
     @DisplayName("이미 답변된 문의 재답변 → INQUIRY_ALREADY_ANSWERED, 상태·이벤트 변화 없음")
     void answer_이미답변됨_409() {
         Inquiry inquiry = inquiry(INQUIRY_ID, GUARDIAN_ID, InquiryStatus.ANSWERED);
-        when(inquiryRepository.findById(INQUIRY_ID)).thenReturn(Optional.of(inquiry));
+        when(inquiryRepository.findByIdForUpdate(INQUIRY_ID)).thenReturn(Optional.of(inquiry));
         InquiryAnswerRequest request = answerRequest("두 번째 답변");
 
         assertThatThrownBy(() -> adminInquiryService.answer(INQUIRY_ID, request, ADMIN_ID))
@@ -145,7 +160,7 @@ class AdminInquiryServiceTest {
     @DisplayName("답변은 감사 로그를 남긴다 - 보호자 개인 문의를 열어 답하는 쓰기 조작이다 (2026-09-10 A-2, V50)")
     void answer_감사로그() {
         Inquiry inquiry = inquiry(INQUIRY_ID, GUARDIAN_ID, InquiryStatus.WAITING);
-        when(inquiryRepository.findById(INQUIRY_ID)).thenReturn(Optional.of(inquiry));
+        when(inquiryRepository.findByIdForUpdate(INQUIRY_ID)).thenReturn(Optional.of(inquiry));
         when(userRepository.findById(anyString())).thenReturn(Optional.empty());
 
         adminInquiryService.answer(INQUIRY_ID, answerRequest("확인했습니다."), ADMIN_ID);
@@ -157,7 +172,7 @@ class AdminInquiryServiceTest {
     @Test
     @DisplayName("답변 대상 문의 없음 → INQUIRY_NOT_FOUND")
     void answer_문의없음_404() {
-        when(inquiryRepository.findById(INQUIRY_ID)).thenReturn(Optional.empty());
+        when(inquiryRepository.findByIdForUpdate(INQUIRY_ID)).thenReturn(Optional.empty());
         InquiryAnswerRequest request = answerRequest("답변");
 
         assertThatThrownBy(() -> adminInquiryService.answer(INQUIRY_ID, request, ADMIN_ID))
