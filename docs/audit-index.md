@@ -62,6 +62,7 @@
 
 | 영역 | 상태 | 메모 |
 |---|---|---|
+| **전체 점검 2026-09** (BE + gosky 배치) | ⚠️ (H-1·H-2만 잔여) | `(2026-09-30) audit-full-2026-09.md` (템플릿 D) - 코드 인가·트랜잭션·정책 위반 0건. **🔴 C-1 DB·Redis 포트 외부 공개(Redis 무인증)** · 🟠 H-1 AI 서버 연동 키 관리(상세 비공개, 미조치) · 🟡 M-1 역할 변경 시 복약 잔존 · M-2 FCM·Solapi 타임아웃 없음 · M-3 카메라 등록 이벤트 커밋 전 처리 · M-4 평문 HTTP 허용 · M-5 기기 없는 수신자 화재 알림 미전달(결정) · 🟢 L-1~L-15 → **반영 2026-09-30**: C-1(#265, 두 서버 db·redis 재생성·외부 포트 닫힘 확인) · M-1~M-3·L-15(#262) · L-1~L-9·L-13(#263) · L-10~L-12(#264). 미반영: H-1(AI 서버 연동 키 관리 - 카메라 연동 전까지 AI·FE와 조치) · H-2(FE 대기) · M-4 nginx·TLS(공용 서버 설정, `.env.dev` 권한만 600으로) · M-5(관측 기록) · L-7·L-14(현행 유지) |
 | `global/websocket` (STOMP 리스너) | ✅ | M-1 STOMP NPE 수정 완료(2026-07-14, null-safe) |
 | **탈퇴 리스너 트랜잭션 전파** | ✅ | H-1 **실제 결함으로 판정·수정(2026-09-30)** - 실 DB에서 연결 정리·약 삭제가 커밋되지 않고, **연결 정리 중 발행한 해제 이벤트가 AFTER_COMMIT을 맞지 못해 탈퇴 시 상대 해제 알림이 나가지 않음**을 재현. 두 메서드를 `REQUIRES_NEW`로 바꿔 통과. `WithdrawalListenerCommitIntegrationTest` · `(2026-09-30) fix-remaining-audit-items.md` |
 | **실 DB 통합 테스트** | ⚠️ | **1단계 도입(2026-09-21)** - `src/integrationTest`(Testcontainers `postgres:17`, `@DataJpaTest`) 10건: Flyway V1~V53 전체 적용·엔티티 validate, 이상감지 v2 JPQL, ON CONFLICT, enum↔CHECK. vkcs `tools/integration-test.sh`로 실행, **CD가 배포 전 자동 실행·실패 시 중단**. 남은 것: 서비스·트랜잭션 전파·리스너(전체 컨텍스트) - H-1 판정은 여기서 가능해진다. `(2026-09-21) feature-testcontainers-integration-test.md` |
