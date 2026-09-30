@@ -85,6 +85,7 @@
 - **`work-prompt`** — 구현·점검 요청 시 **가장 먼저** (§2-5의 프롬프트 설계 템플릿, §2-6 점검 제안 템플릿)
 - 자주 쓰는: `git-commit` · `test-quality` · `security-audit` · `jpa-patterns` · `spring-boot-patterns` · `architecture-review` · `issue-triage`
 - 🔁 **세션당 한 번만 로드** (컨텍스트에 유지되므로 재로드는 토큰 낭비).
+- 🧠 **모델 배치**(2026-09-30): 기존 패턴을 따르는 구현·기능 점검 = **Sonnet** / 설계·교차 비평·동시성 분석·High 최종 검증 = **Opus** / 파일 목록·grep 정리 같은 기계적 단계 = **Haiku**(코드 판단 금지). **연결·SOS·탈퇴·계정 상태·판정, AFTER_COMMIT·알림·잠금, 권한·토큰을 건드리면 구현도 Opus.** 프롬프트에 `[모델: ...]`로 명시 - 상세 `work-prompt` "모델 배치 규칙".
 
 ---
 
