@@ -4,6 +4,7 @@ import kr.silverbridge.main.domain.connection.event.ConnectionAcceptedEvent;
 import kr.silverbridge.main.domain.connection.event.ConnectionDisconnectedEvent;
 import kr.silverbridge.main.domain.connection.event.ConnectionForcedEvent;
 import kr.silverbridge.main.domain.connection.event.ConnectionRefusedEvent;
+import kr.silverbridge.main.domain.connection.event.ConnectionRequestCancelledEvent;
 import kr.silverbridge.main.domain.connection.event.ConnectionRequestedEvent;
 import kr.silverbridge.main.domain.notification.channel.NotificationContent;
 import kr.silverbridge.main.domain.notification.dispatch.NotificationDispatcher;
@@ -94,6 +95,18 @@ public class ConnectionNotificationListener {
         notificationDispatcher.dispatch(event.wardId(), event.wardId(), NotificationType.CONNECTION_FORCED,
                 NotificationContent.of("보호자 연결",
                         "관리자가 " + event.guardianName() + "님을 보호자로 연결했습니다.", data));
+    }
+
+    /**
+     * 보호자의 요청 취소 - <b>WebSocket 갱신 신호만</b> 보낸다. 디스패처를 거치지 않으므로 푸시·문자·알림 이력이
+     * 생기지 않는다(취소는 무알림 정책). 기존 {@code connection-cancelled}를 재사용하지 않는 이유: 그 이벤트는 FE가
+     * "연결이 해제되었습니다" 토스트로 보여 줘서 수락 전 요청 취소에는 문구가 맞지 않는다.
+     */
+    @Async("notificationExecutor")
+    @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
+    public void handleRequestCancelled(ConnectionRequestCancelledEvent event) {
+        webSocketEventPublisher.sendToUser(event.wardId(), "connection-request-cancelled",
+                Map.of("connectionId", event.connectionId()));
     }
 
     @Async("notificationExecutor")

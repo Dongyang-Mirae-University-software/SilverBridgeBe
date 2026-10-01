@@ -23,6 +23,7 @@ import org.springframework.web.multipart.MultipartFile;
 import java.io.IOException;
 import java.io.InputStream;
 import java.util.List;
+import java.util.Set;
 
 @Slf4j
 @Service
@@ -35,7 +36,9 @@ public class UserService {
     // 실제 파일 시그니처(Magic Number) 확인용 — 앞부분 바이트 길이 (WebP의 "RIFF....WEBP" 검증에 12바이트 필요)
     private static final int IMAGE_SIGNATURE_LENGTH = 12;
     // 카카오 사용자 탈퇴 본인 확인 문자열 (H-6)
-    private static final String KAKAO_WITHDRAW_CONFIRMATION = "탈퇴";
+    // 카카오 가입자 탈퇴 확인 문구. 두 가지를 모두 받는다(2026-10-01 QA BE-2): FE 안내는 "회원탈퇴"인데 BE가 "탈퇴"만
+    // 받아 어떤 입력으로도 탈퇴할 수 없었다. 둘 다 사용자가 직접 입력해야 하는 문구라 본인 확인 강도는 같다.
+    private static final Set<String> KAKAO_WITHDRAW_CONFIRMATIONS = Set.of("탈퇴", "회원탈퇴");
 
     private final UserRepository userRepository;
     private final PasswordEncoder passwordEncoder;
@@ -160,7 +163,7 @@ public class UserService {
     }
 
     // 회원 탈퇴 (1단계) — 본인 확인 + 비활성화 + UserWithdrawnEvent 발행.
-    // 일반 사용자: 비밀번호 확인 / 카카오 사용자: confirmation 문자열("탈퇴") 일치 확인(H-6).
+    // 일반 사용자: 비밀번호 확인 / 카카오 사용자: confirmation 문자열("탈퇴" 또는 "회원탈퇴") 일치 확인(H-6).
     // deactivate()로 즉시 로그인을 막고, 토큰 정리·접속 로그·연결 해제(상대 알림)는 리스너가
     // user 행이 살아있는 AFTER_COMMIT 시점에 처리한다. 그 직후 컨트롤러가 purgeWithdrawnUser()로 행을 영구 삭제한다.
     @Transactional
@@ -173,7 +176,7 @@ public class UserService {
             }
         } else {
             // 카카오 사용자 본인 확인 — confirmation 문자열 일치
-            if (confirmation == null || !KAKAO_WITHDRAW_CONFIRMATION.equals(confirmation.trim())) {
+            if (confirmation == null || !KAKAO_WITHDRAW_CONFIRMATIONS.contains(confirmation.trim())) {
                 throw new CustomException(ErrorCode.WITHDRAW_CONFIRMATION_MISMATCH);
             }
         }

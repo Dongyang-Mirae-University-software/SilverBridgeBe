@@ -1548,3 +1548,8 @@ REST API Key 단독 대비 보안 강화 — 인가코드 탈취 시 토큰 발�
 - **#264**: 역할 게이트 6종·enum↔CHECK 2종·복약 UNIQUE 통합 테스트.
 - 단위 712 / 0 실패 · vkcs 통합 31 / 0 실패 · 두 서버 `fcb0a7f` healthy.
 - 남은 것: H-1(AI 서버 연동 키 관리 - AI·FE와 협의, 카메라 연동 배포 전까지) · H-2(FE 카메라 연동).
+
+## [2026-10-01] QA BE 이슈 4건 반영 (BE-1~BE-4)
+
+- BE-1 AI 세션 목록 60초 재동기화 + 구독 실패 WARN / BE-2 카카오 탈퇴 문구 "탈퇴"·"회원탈퇴" 둘 다 허용 / BE-3 요청 취소 시 WS `connection-request-cancelled`만(무알림 유지) / BE-4 문자열 payload 계약 문서화.
+- 단위 718 / 0 실패. 상세: `docs/(2026-10-01) fix-qa-be-issues.md`

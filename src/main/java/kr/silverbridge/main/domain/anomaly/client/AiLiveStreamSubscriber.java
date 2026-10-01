@@ -34,6 +34,7 @@ import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ScheduledFuture;
 
 /**
  * AI 서버 이상감지 WebSocket({@code /api/v1/ws/live}) 구독자.
@@ -76,6 +77,7 @@ public class AiLiveStreamSubscriber extends TextWebSocketHandler {
     private volatile WebSocketSession session;
     private volatile int reconnectAttempts;
     private volatile boolean shuttingDown;
+    private volatile ScheduledFuture<?> resyncTask;
 
     /**
      * 관리자 대시보드 조회용 - AI WS가 지금 붙어 있는가.
@@ -120,11 +122,37 @@ public class AiLiveStreamSubscriber extends TextWebSocketHandler {
             return;
         }
         connect();
+        startResync();
+    }
+
+    /**
+     * 세션 목록을 주기적으로 다시 요청하는 안전망. AI의 broadcast가 한 번 빠져도 한 주기 안에 구독이 맞춰진다.
+     * 연결이 없는 동안에는 건너뛴다(재접속은 별도 경로가 담당).
+     */
+    private void startResync() {
+        long seconds = properties.getResyncSeconds();
+        if (seconds <= 0) {
+            log.info("[ANOMALY] 세션 목록 재동기화 비활성(anomaly.resync-seconds=0)");
+            return;
+        }
+        Duration period = Duration.ofSeconds(seconds);
+        resyncTask = taskScheduler.scheduleWithFixedDelay(this::resync, Instant.now().plus(period), period);
+    }
+
+    void resync() {
+        if (shuttingDown || !isConnected()) {
+            return;
+        }
+        send(LIST_ACTION);
     }
 
     @PreDestroy
     public void stop() {
         shuttingDown = true;
+        ScheduledFuture<?> task = this.resyncTask;
+        if (task != null) {
+            task.cancel(false);
+        }
         closeQuietly();
     }
 
@@ -221,6 +249,9 @@ public class AiLiveStreamSubscriber extends TextWebSocketHandler {
             if (send(subscribeAction(sessionId))) {
                 subscribedSessions.add(sessionId);
                 log.info("[ANOMALY] 세션 구독: sessionId={}", sessionId);
+            } else {
+                // 등록된 카메라가 라이브인데 구독하지 못했다 - 다음 재동기화까지 감시에서 빠진다(조용한 침묵 방지)
+                log.warn("[ANOMALY] 등록 카메라 세션 구독 실패 - 다음 재동기화에서 재시도: sessionId={}", sessionId);
             }
         }
 
