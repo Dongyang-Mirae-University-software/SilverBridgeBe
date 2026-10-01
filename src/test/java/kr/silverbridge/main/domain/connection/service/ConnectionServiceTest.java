@@ -343,6 +343,21 @@ class ConnectionServiceTest {
         }
 
         @Test
+        @DisplayName("취소하면 피보호자 화면 갱신용 이벤트만 발행한다 - 해제·거절 이벤트(알림)는 발행하지 않는다 (QA BE-3)")
+        void 취소는_갱신이벤트만_발행() {
+            Connection connection = connection(ConnectionStatus.PENDING);
+            when(connectionRepository.findById(CONNECTION_ID)).thenReturn(java.util.Optional.of(connection));
+
+            connectionService.cancelPendingAsGuardian(GUARDIAN_ID, CONNECTION_ID);
+
+            org.mockito.ArgumentCaptor<Object> captor = org.mockito.ArgumentCaptor.forClass(Object.class);
+            verify(eventPublisher).publishEvent(captor.capture());
+            assertThat(captor.getValue()).isEqualTo(
+                    new kr.silverbridge.main.domain.connection.event.ConnectionRequestCancelledEvent(
+                            CONNECTION_ID, WARD_ID));
+        }
+
+        @Test
         @DisplayName("PENDING이 아닌 연결 취소 → CONNECTION_NOT_PENDING")
         void 비PENDING취소_CONNECTION_NOT_PENDING() {
             Connection connection = connection(ConnectionStatus.ACTIVE);

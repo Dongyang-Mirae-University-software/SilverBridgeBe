@@ -82,6 +82,12 @@ public class AnomalyProperties {
     /** 판정 미응답 재촉 설정({@code anomaly.review-reminder.*}). */
     private ReviewReminder reviewReminder = new ReviewReminder();
 
+    /**
+     * AI 세션 목록 재동기화 주기(초, 0이면 끔). AI는 세션 생성·종료 때만 목록을 broadcast하므로 방송이 한 번 빠지면
+     * 등록된 카메라가 조용히 구독에서 빠진다 - 안전망으로 주기적으로 다시 요청한다(2026-10-01 QA BE-1).
+     */
+    private long resyncSeconds = 60;
+
     /** 재연결 백오프 최소 간격(초). */
     private long reconnectMinSeconds = 2;
 

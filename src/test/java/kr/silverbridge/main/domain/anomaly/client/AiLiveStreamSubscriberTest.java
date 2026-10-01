@@ -125,6 +125,37 @@ class AiLiveStreamSubscriberTest {
     }
 
     @Test
+    @DisplayName("재동기화는 연결돼 있으면 세션 목록을 다시 요청한다 - AI broadcast가 빠져도 구독이 맞춰진다 (QA BE-1)")
+    void 재동기화_목록_재요청() throws Exception {
+        subscriber.resync();
+
+        // 연결 시 1회 + 재동기화 1회
+        verify(session, times(2)).sendMessage(argThat(m -> ((TextMessage) m).getPayload().contains("\"list\"")));
+    }
+
+    @Test
+    @DisplayName("재동기화는 연결이 없으면 요청하지 않는다")
+    void 재동기화_연결없으면_건너뜀() throws Exception {
+        when(session.isOpen()).thenReturn(false);
+
+        subscriber.resync();
+
+        verify(session, times(1)).sendMessage(any());   // 연결 시 1회뿐
+    }
+
+    @Test
+    @DisplayName("재동기화로 받은 목록에 아직 구독 안 한 등록 카메라가 있으면 구독한다 (놓친 broadcast 보완)")
+    void 재동기화_놓친세션_구독() throws Exception {
+        when(cameraService.findOwnerBySessionId(SESSION_ID))
+                .thenReturn(Optional.of(new CameraOwner("WD0001", "거실")));
+
+        subscriber.resync();
+        subscriber.handleTextMessage(session, liveStreams(SESSION_ID));
+
+        verify(session).sendMessage(argThat(m -> isSubscribeFor((TextMessage) m, SESSION_ID)));
+    }
+
+    @Test
     @DisplayName("latest_analysis는 판정 서비스로 넘긴다")
     void 분석신호_전달() throws Exception {
         when(signalParser.parse(any())).thenReturn(Optional.empty());

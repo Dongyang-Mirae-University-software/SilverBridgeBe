@@ -9,6 +9,7 @@ import kr.silverbridge.main.domain.connection.event.ConnectionAcceptedEvent;
 import kr.silverbridge.main.domain.connection.event.ConnectionDisconnectedEvent;
 import kr.silverbridge.main.domain.connection.event.ConnectionForcedEvent;
 import kr.silverbridge.main.domain.connection.event.ConnectionRefusedEvent;
+import kr.silverbridge.main.domain.connection.event.ConnectionRequestCancelledEvent;
 import kr.silverbridge.main.domain.connection.event.ConnectionRequestedEvent;
 import kr.silverbridge.main.domain.connection.repository.ConnectionRepository;
 import kr.silverbridge.main.domain.user.entity.User;
@@ -113,6 +114,8 @@ public class ConnectionService {
             throw new CustomException(ErrorCode.CONNECTION_NOT_PENDING);
         }
         connection.cancel();
+        // 알림은 보내지 않는다(비대칭 정책). 피보호자 화면의 요청 목록을 맞추는 WS 갱신 신호만 보낸다.
+        eventPublisher.publishEvent(new ConnectionRequestCancelledEvent(connection.getId(), connection.getWardId()));
         log.info("연결 요청 취소(보호자): connectionId={}, guardianId={}", connectionId, guardianId);
     }
 

@@ -49,6 +49,19 @@
 - **DB 영향 없음**: 상태 전이(`refuse()`)는 기존과 동일, 이벤트 발행만 추가. 마이그레이션 불필요.
 - 상세: `docs/(2026-05-28) feature-connection-refused-notification.md`.
 
+## AI 세션 목록 재동기화 - 방송 누락 안전망 (2026-10-01 QA BE-1)
+
+- AI는 세션 **생성·종료 때만** 목록을 broadcast한다. 방송이 한 번 빠지면 등록된 카메라가 에러 없이 감시에서 빠지는데(조용한 침묵), 미등록 세션 로그가 DEBUG라 운영에서도 보이지 않았다.
+- `AiLiveStreamSubscriber`가 `anomaly.resync-seconds`(기본 60, 0이면 끔)마다 `list`를 다시 요청한다(연결이 없으면 건너뜀). 놓친 세션은 이때 구독된다. **등록 카메라가 라이브인데 subscribe 전송이 실패하면 WARN**을 남긴다. 미등록 세션은 로그 폭주를 막으려고 DEBUG 그대로다.
+- 이 주기 요청을 지우거나 길게 늘리면 방송 누락이 다시 침묵으로 돌아간다. 재접속 백오프·카메라 등록 시 `list` 요청과는 별개 경로다.
+
+## 연결 요청 취소 - 알림은 없고 화면 갱신 신호만 간다 (2026-10-01 QA BE-3)
+
+- 위 비대칭 정책(취소 → 무알림)은 **푸시·문자·알림 이력**에 대한 결정이다. 그런데 신호가 아예 없으면 피보호자가 열어 둔 "요청 온 목록"에 취소된 요청이 남아, 누르면 `CONNECTION_NOT_PENDING` 오류가 났다.
+- `cancelPendingAsGuardian`이 `ConnectionRequestCancelledEvent`를 발행하고, 리스너가 피보호자에게 WebSocket **`connection-request-cancelled`(payload `{connectionId}`)만** 보낸다. **디스패처를 거치지 않으므로 FCM·SMS·알림 이력이 생기지 않는다** - 이 경계를 넘어 푸시를 붙이지 말 것.
+- 기존 `connection-cancelled`를 재사용하지 말 것 - FE가 그 이벤트를 "연결이 해제되었습니다" 토스트로 보여 줘서 수락 전 요청 취소에는 문구가 거짓이 된다.
+- 탈퇴·역할 변경으로 PENDING이 조용히 취소되는 경로는 같은 증상이 있으나 이번에 다루지 않았다(필요해지면 같은 이벤트를 재사용).
+
 ## 카카오 가입 access_logs FK 위반 수정 (2026-05-30)
 
 - **의도**: 카카오 가입의 `KAKAO_LOGIN` 접속로그를 가입 트랜잭션 안에서 REQUIRES_NEW로 남기면, 미커밋 user 행을 별도 트랜잭션이 못 봐 `fk_access_logs_user` 위반(SQLState 23503)이 발생. 이를 `DataIntegrityViolationException` 핸들러가 "중복"으로 오표시했음.

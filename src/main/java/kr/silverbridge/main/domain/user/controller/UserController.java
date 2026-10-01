@@ -193,7 +193,7 @@ public class UserController {
 
                     [본인 확인 방식]
                     - 일반(LOCAL) 가입자: password 필수
-                    - 카카오(KAKAO) 가입자: confirmation 필수 — 사용자가 화면에서 정확히 "탈퇴"를 입력해 전달
+                    - 카카오(KAKAO) 가입자: confirmation 필수 — 사용자가 화면에서 정확히 "탈퇴" 또는 "회원탈퇴"를 입력해 전달
                       (access token 단독 탈취로 인한 영구 비활성화 위험 차단)
 
                     [요청 헤더]

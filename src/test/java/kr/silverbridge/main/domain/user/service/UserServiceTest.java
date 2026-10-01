@@ -129,6 +129,17 @@ class UserServiceTest {
     }
 
     @Test
+    @DisplayName("카카오 계정은 FE 안내 문구 \"회원탈퇴\"로도 탈퇴할 수 있다 (QA BE-2) - 앞뒤 공백은 무시")
+    void withdraw_카카오계정_회원탈퇴문구도_허용() {
+        User kakaoUser = kakaoUser();
+        when(userRepository.findById(USER_ID)).thenReturn(Optional.of(kakaoUser));
+
+        userService.withdraw(USER_ID, null, " 회원탈퇴 ", "127.0.0.1", "test-agent");
+
+        assertThat(kakaoUser.getStatus()).isEqualTo(Status.INACTIVE);
+    }
+
+    @Test
     @DisplayName("카카오 계정 탈퇴 시 confirmation 누락 → WITHDRAW_CONFIRMATION_MISMATCH")
     void withdraw_카카오계정_confirmation누락_거부() {
         User kakaoUser = kakaoUser();

@@ -135,14 +135,14 @@
 
 핵심 불변 규칙 (배경·상세는 위 파일):
 
-- **회원 탈퇴 = hard delete** (재가입 허용). 본인확인 유지 — 일반=비밀번호, 카카오=confirmation "탈퇴" 일치. 정리 로직은 `UserWithdrawnEvent` AFTER_COMMIT. 관리자 강제 탈퇴도 **같은 파이프라인**(`forceWithdraw`)을 타야 한다 - `delete()` 직접 호출은 상대 알림·토큰 정리를 유실시킨다.
+- **회원 탈퇴 = hard delete** (재가입 허용). 본인확인 유지 — 일반=비밀번호, 카카오=confirmation "탈퇴" 또는 "회원탈퇴" 일치(2026-10-01, FE 안내 문구와 맞춤). 정리 로직은 `UserWithdrawnEvent` AFTER_COMMIT. 관리자 강제 탈퇴도 **같은 파이프라인**(`forceWithdraw`)을 타야 한다 - `delete()` 직접 호출은 상대 알림·토큰 정리를 유실시킨다.
 - **계정 상태 3분법**(2026-09-09, V47): 이용 중(`ACTIVE`)·이용 제한(`RESTRICTED`)·탈퇴(`INACTIVE`). **정지에 `INACTIVE`를 재사용 금지** - 스윕이 영구 삭제한다. 상태 검사는 `!= ACTIVE`(등호 비교 금지). `Status`·`AdminAuditAction`에 값 추가 시 **CHECK 재정의 마이그레이션 필수**(`UserStatusCheckSyncTest`·`AdminAuditActionCheckSyncTest`가 막는다).
 - **정지 계정에는 알림 미발송**(2026-09-09, V49): 이용 제한·탈퇴 진행 계정이 *수신자*면 **강제 FCM 포함 전 채널 차단**(`dispatch()` 한 곳에서). 정지된 사람이 *원인*인 알림(그 집의 화재)은 그대로 발송. **피보호자는 이용 제한 금지**(400) - 로그인이 막히면 SOS를 못 보낸다. 정지 사유는 `users.status_reason`. 이미 열린 WS 세션은 끊지 못한다(수용한 한계).
 - **관리자 역할 변경 = 연결 정리 + 카메라 삭제 + 토큰 무효화**(2026-09-10): 보호자가 되면 카메라 API를 못 써 고아가 되므로 함께 지운다(재등록 필요). `UserRoleChangedEvent`가 옛 역할 토큰을 끊는다. INACTIVE 계정은 상세·수정·삭제 모두 404. 관리자 감사 로그는 **변경 조작만** 남기고 조회는 남기지 않는다.
 - **연결 수락 시 보호자 상태 검사**(2026-09-11): 요청 뒤 보호자가 정지·탈퇴 진행이면 피보호자 수락도 400(`CONNECTION_TARGET_NOT_ACTIVE`) - 관리자 강제 연결과 같은 기준.
 - **운영 설정**(2026-09-11): 알림 executor는 포화 시 폐기+ERROR 로그(CallerRuns 금지) / 우아한 종료 / 스케줄러 풀 3 / 외부 HTTP 클라이언트는 타임아웃 필수 / 감사 로그 detail은 DB에만. 실사용 서버 Swagger 공개는 관리 밖 인프라라 수용.
 - **관리자 강제 연결**(2026-09-10): 피보호자 수락(=동의) 없이 만드는 관계라 **양쪽 알림 + 감사 로그 필수**. 문구는 전용 종류로(`CONNECTION_FORCED`·`DisconnectedBy.ADMIN`) — 기존 "수락했습니다"·"보호자가 해제했습니다"를 재사용하면 거짓이 된다. 같은 이유로 탈퇴 정리는 `DisconnectedBy.WITHDRAWN`, 역할 변경 정리는 `ADMIN`(2026-09-30).
-- **연결 알림 비대칭(의도)**: 거절 → 보호자 알림O / 요청 취소·탈퇴 PENDING 종료 → 무알림. "일관성" 명목으로 ②③에 알림 추가 금지.
+- **연결 알림 비대칭(의도)**: 거절 → 보호자 알림O / 요청 취소·탈퇴 PENDING 종료 → 무알림. "일관성" 명목으로 ②③에 알림 추가 금지. 단 보호자의 요청 취소는 피보호자 화면 갱신용 WS `connection-request-cancelled`만 보낸다(푸시·이력 없음, 2026-10-01).
 - **비밀번호 재설정**: 미가입 404·카카오 400 명시(시니어 UX 우선) + IP/이메일 rate limit.
 - **카카오 OAuth**: `client_secret`는 `.env.dev`로만 주입(Git 평문 금지), 시작 시 fail-fast 검증.
 - **동기 AFTER_COMMIT 리스너 안의 쓰기 = `REQUIRES_NEW`**(2026-09-30, H-1·M-1): 기본 전파면 이미 커밋된 트랜잭션에 합류해 **쓰기와 그 안에서 발행한 이벤트가 조용히 사라진다**(탈퇴 시 상대 해제 알림이 이 이유로 한 번도 안 나갔다). 새 동기 리스너는 `WithdrawalListenerCommitIntegrationTest` 형태로 실 DB 검증.

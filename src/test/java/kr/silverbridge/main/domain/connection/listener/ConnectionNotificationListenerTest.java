@@ -41,6 +41,17 @@ class ConnectionNotificationListenerTest {
     private static final String GUARDIAN_NAME = "박보호";
 
     @Test
+    @DisplayName("요청 취소 → 피보호자에게 WS 갱신 신호만 보내고, 푸시·문자·알림 이력(디스패처)은 쓰지 않는다 (QA BE-3, 무알림 정책 유지)")
+    void handleRequestCancelled_WS갱신만() {
+        listener.handleRequestCancelled(
+                new kr.silverbridge.main.domain.connection.event.ConnectionRequestCancelledEvent(CONNECTION_ID, WARD_ID));
+
+        // 기존 connection-cancelled는 FE가 "연결이 해제되었습니다" 토스트로 보여 주므로 쓰지 않는다
+        verify(webSocketEventPublisher).sendToUser(eq(WARD_ID), eq("connection-request-cancelled"), anyMap());
+        org.mockito.Mockito.verifyNoInteractions(notificationDispatcher);
+    }
+
+    @Test
     @DisplayName("연결 요청 이벤트(relation 있음) → 피보호자에게 WS + 관계 포함 알림 디스패치")
     void handleRequested_relation있음_관계포함문구() {
         ConnectionRequestedEvent event =

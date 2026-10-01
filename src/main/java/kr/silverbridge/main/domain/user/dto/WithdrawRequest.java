@@ -13,7 +13,7 @@ public class WithdrawRequest {
     @Size(max = 64, message = "비밀번호 입력값이 올바르지 않습니다.")
     private String password;
 
-    @Schema(description = "카카오(KAKAO) 가입자 본인 확인용 문자열. 사용자가 화면에서 \"탈퇴\"를 직접 입력해 전달. 일반 가입자는 무시됨.",
+    @Schema(description = "카카오(KAKAO) 가입자 본인 확인용 문자열. 사용자가 화면에서 \"탈퇴\" 또는 \"회원탈퇴\"를 직접 입력해 전달. 일반 가입자는 무시됨.",
             example = "탈퇴", nullable = true)
     @Size(max = 20, message = "탈퇴 확인 문구 입력값이 올바르지 않습니다.")
     private String confirmation;
