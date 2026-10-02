@@ -36,6 +36,9 @@ public class FindPasswordController {
     // 분산 저빈도 스윕을 차단. send·resend는 같은 endpoint 키를 공유한다(기능 동일).
     private static final int PW_RESET_MAX_PER_MINUTE = 10;
     private static final int PW_RESET_MAX_PER_HOUR   = 30;
+    // 인증번호 사전 확인 IP 속도 제한 (AUTH-G10) - 가입 SMS 확인과 같은 한도. 발송과 키를 나눠 서로 깎지 않는다.
+    private static final int VERIFY_MAX_PER_MINUTE = 10;
+    private static final int VERIFY_MAX_PER_HOUR   = 60;
 
     /** 인증코드 발송/재발송 응답 (프론트 카운트다운용). 코드 = 숫자 6자리. */
     private CodeSentResponse codeSent() {
@@ -99,10 +102,14 @@ public class FindPasswordController {
     )
     @ApiResponses({
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "코드 확인 성공. 같은 email+code로 POST /api/auth/password/reset 진행"),
-            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "코드 형식 오류(숫자 6자리 아님) / 코드 불일치 / 코드 만료 / 5회 초과로 무효화됨", content = @Content)
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "코드 형식 오류(숫자 6자리 아님) / 코드 불일치 / 코드 만료 / 5회 초과로 무효화됨", content = @Content),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "429", description = "동일 IP의 과도한 확인 요청(1분 10회/1시간 60회)", content = @Content)
     })
     @PostMapping("/email/verify")
-    public ApiResponse<Void> verifyEmail(@Valid @RequestBody PasswordResetEmailVerifyRequest request) {
+    public ApiResponse<Void> verifyEmail(@Valid @RequestBody PasswordResetEmailVerifyRequest request,
+                                     HttpServletRequest httpRequest) {
+        rateLimitService.check("pw-reset-email-verify", ClientIpResolver.resolve(httpRequest),
+                VERIFY_MAX_PER_MINUTE, VERIFY_MAX_PER_HOUR);
         passwordResetService.verifyEmailCode(request);
         return ApiResponse.ok("인증되었습니다. 새 비밀번호를 설정해주세요.");
     }
@@ -191,10 +198,14 @@ public class FindPasswordController {
     )
     @ApiResponses({
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "코드 확인 성공. 같은 phone+code로 POST /api/auth/password/reset 진행"),
-            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "코드 형식 오류(숫자 6자리 아님) / 코드 불일치 / 코드 만료 / 5회 초과로 무효화됨", content = @Content)
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "코드 형식 오류(숫자 6자리 아님) / 코드 불일치 / 코드 만료 / 5회 초과로 무효화됨", content = @Content),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "429", description = "동일 IP의 과도한 확인 요청(1분 10회/1시간 60회)", content = @Content)
     })
     @PostMapping("/sms/verify")
-    public ApiResponse<Void> verifySms(@Valid @RequestBody PasswordResetSmsVerifyRequest request) {
+    public ApiResponse<Void> verifySms(@Valid @RequestBody PasswordResetSmsVerifyRequest request,
+                                     HttpServletRequest httpRequest) {
+        rateLimitService.check("pw-reset-sms-verify", ClientIpResolver.resolve(httpRequest),
+                VERIFY_MAX_PER_MINUTE, VERIFY_MAX_PER_HOUR);
         passwordResetService.verifySmsCode(request);
         return ApiResponse.ok("인증되었습니다. 새 비밀번호를 설정해주세요.");
     }

@@ -30,6 +30,11 @@ public class SmsController {
     private final SmsService smsService;
     private final RateLimitService rateLimitService;
 
+    // 인증번호 확인 IP 속도 제한 (AUTH-G10) - 분+시간 이중 윈도우. 분 한도는 재설정 발송(10회)과 같게,
+    // 시간 한도는 재발송 후 다시 입력하는 정상 흐름(코드당 오답 5회 x 여러 번)을 막지 않을 만큼 둔다.
+    private static final int VERIFY_MAX_PER_MINUTE = 10;
+    private static final int VERIFY_MAX_PER_HOUR   = 60;
+
     /** 인증코드 발송/재발송 응답에 내려줄 값 (프론트 카운트다운용). 코드 = 숫자 6자리. */
     private CodeSentResponse codeSent() {
         return new CodeSentResponse((int) SmsVerificationService.CODE_TTL_SECONDS, 6);
@@ -90,10 +95,15 @@ public class SmsController {
     )
     @ApiResponses({
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "인증 성공. data.verificationNonce를 회원가입/전화번호 변경 요청에 전달"),
-            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "코드 형식 오류(숫자 6자리 아님) / 코드 불일치 / 코드 만료 / 5회 초과로 코드 무효화됨", content = @Content)
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "코드 형식 오류(숫자 6자리 아님) / 코드 불일치 / 코드 만료 / 5회 초과로 코드 무효화됨", content = @Content),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "429", description = "동일 IP의 과도한 확인 요청(1분 10회/1시간 60회)", content = @Content)
     })
     @PostMapping("/verify")
-    public ApiResponse<SmsVerifyResponse> verify(@Valid @RequestBody SmsVerifyRequest request) {
+    public ApiResponse<SmsVerifyResponse> verify(@Valid @RequestBody SmsVerifyRequest request,
+                                                 HttpServletRequest httpRequest) {
+        // 인증번호 대입 방어 (AUTH-G10) - 번호당 오답 5회 제한과 별개로 IP 단위 확인 횟수도 막는다
+        rateLimitService.check("signup-sms-verify", ClientIpResolver.resolve(httpRequest),
+                VERIFY_MAX_PER_MINUTE, VERIFY_MAX_PER_HOUR);
         String nonce = smsService.verifyCode(request);
         return ApiResponse.ok(new SmsVerifyResponse(nonce));
     }

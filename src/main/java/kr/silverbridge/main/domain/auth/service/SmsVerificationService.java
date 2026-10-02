@@ -1,17 +1,19 @@
 package kr.silverbridge.main.domain.auth.service;
 
 import kr.silverbridge.main.global.client.SmsSender;
-import kr.silverbridge.main.global.exception.CustomException;
-import kr.silverbridge.main.global.exception.ErrorCode;
+import kr.silverbridge.main.global.exception.TooManyRequestsException;
 import kr.silverbridge.main.global.util.RedisCounter;
 import kr.silverbridge.main.global.util.RedisKeys;
 import kr.silverbridge.main.global.util.VerificationCodeValidator;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.dao.DataAccessException;
 import org.springframework.data.redis.core.StringRedisTemplate;
+import org.springframework.data.redis.core.script.DefaultRedisScript;
 import org.springframework.stereotype.Service;
 
 import java.security.SecureRandom;
+import java.util.List;
 import java.util.concurrent.TimeUnit;
 
 /**
@@ -44,6 +46,13 @@ public class SmsVerificationService {
     /** per-phone 발송 상한 (윈도우당 최대 발송 건수) — IP 우회 SMS 폭탄·비용 남용 차단 (A-M3) */
     private static final long MAX_SENDS_PER_WINDOW = 10L;
 
+    // 발송 실패 환불 - 키가 있고 0보다 클 때만 DECR(TTL 유지). 그 사이 윈도우가 만료됐으면 아무것도 하지 않는다.
+    private static final DefaultRedisScript<Long> RELEASE_SEND_QUOTA = new DefaultRedisScript<>(
+            "local c = tonumber(redis.call('GET', KEYS[1])) "
+                    + "if c and c > 0 then return redis.call('DECR', KEYS[1]) end "
+                    + "return 0",
+            Long.class);
+
     /**
      * 인증코드 발송 공통 로직
      * 코드 생성 → SMS 발송 → 저장(5분) → 오류 횟수 초기화
@@ -58,13 +67,18 @@ public class SmsVerificationService {
     public void sendCode(String phone, VerificationKeyConfig config, String messageTemplate) {
         // per-phone 발송 상한 — 컨트롤러 IP RateLimit을 IP 회전으로 우회해 특정 번호로 SMS를 폭탄·
         // 비용 남용하는 것을 차단 (A-M3). 회원가입/비번재설정 모든 발송 흐름의 공통 길목에서 검사.
-        long sent = redisCounter.incrementWithTtl(RedisKeys.SMS_SEND_COUNT + phone, SEND_CAP_WINDOW_SECONDS);
-        if (sent > MAX_SENDS_PER_WINDOW) {
-            throw new CustomException(ErrorCode.TOO_MANY_REQUESTS);
-        }
+        // 카운트는 발송 전에 확정(동시 요청이 상한을 넘기지 않게)하고, 발송이 실패하면 되돌린다 (AUTH-G11).
+        String sendCountKey = RedisKeys.SMS_SEND_COUNT + phone;
+        reserveSendQuota(redisTemplate, redisCounter, sendCountKey, SEND_CAP_WINDOW_SECONDS, MAX_SENDS_PER_WINDOW);
 
         String code = generateCode();
-        smsSender.send(phone, String.format(messageTemplate, code));
+        try {
+            smsSender.send(phone, String.format(messageTemplate, code));
+        } catch (RuntimeException e) {
+            // 통신사·Solapi 실패는 사용자가 받은 문자가 없으므로 상한에서 빼 준다
+            releaseSendQuota(redisTemplate, sendCountKey);
+            throw e;
+        }
 
         // 인증코드 저장 + 기존 오류 횟수 초기화 (기존 코드가 있으면 새 코드로 교체)
         redisTemplate.opsForValue()
@@ -84,6 +98,41 @@ public class SmsVerificationService {
                 CODE_TTL_MINUTES,
                 MAX_ATTEMPTS
         );
+    }
+
+    /**
+     * 발송 상한 1건 예약. 초과하면 남은 윈도우 시간(초)을 실은 429를 던진다 (AUTH-G11 - "언제까지 기다려야 하는지").
+     * 이메일 재설정 발송 상한(PasswordResetService)도 같은 규칙이라 공용으로 둔다.
+     * 카운터 증가는 Redis 장애 시 그대로 실패한다(fail-closed - 발송 상한이 꺼진 채 보내지 않는다).
+     */
+    static void reserveSendQuota(StringRedisTemplate redisTemplate, RedisCounter redisCounter,
+                                 String key, long windowSeconds, long maxPerWindow) {
+        long sent = redisCounter.incrementWithTtl(key, windowSeconds);
+        if (sent > maxPerWindow) {
+            throw new TooManyRequestsException(remainingWindowSeconds(redisTemplate, key, windowSeconds));
+        }
+    }
+
+    /** 발송 실패 시 예약 1건 환불. 환불 실패는 WARN만 남기고 원래 발송 오류를 그대로 응답한다. */
+    static void releaseSendQuota(StringRedisTemplate redisTemplate, String key) {
+        try {
+            redisTemplate.execute(RELEASE_SEND_QUOTA, List.of(key));
+        } catch (DataAccessException e) {
+            log.warn("[SEND-QUOTA-RELEASE-FAILED] 발송 상한 환불 실패 cause={}", e.getClass().getSimpleName());
+        }
+    }
+
+    // 남은 TTL(초). 읽지 못하면 윈도우 길이로 안내한다(짧게 안내해 곧바로 또 429가 나는 쪽을 피함)
+    private static long remainingWindowSeconds(StringRedisTemplate redisTemplate, String key, long windowSeconds) {
+        try {
+            Long ttl = redisTemplate.getExpire(key, TimeUnit.SECONDS);
+            if (ttl == null || ttl < 0) {
+                return windowSeconds;
+            }
+            return Math.max(ttl, 1L);
+        } catch (DataAccessException e) {
+            return windowSeconds;
+        }
     }
 
     private String generateCode() {

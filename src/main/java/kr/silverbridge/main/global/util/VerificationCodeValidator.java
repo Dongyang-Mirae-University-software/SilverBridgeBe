@@ -3,22 +3,37 @@ package kr.silverbridge.main.global.util;
 import kr.silverbridge.main.global.exception.CustomException;
 import kr.silverbridge.main.global.exception.ErrorCode;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.dao.DataAccessException;
 import org.springframework.data.redis.core.StringRedisTemplate;
+import org.springframework.data.redis.core.script.DefaultRedisScript;
 import org.springframework.stereotype.Component;
 
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
+import java.util.List;
 
 /**
  * SMS/이메일 인증코드 검증 공통 유틸리티
- * 코드 만료 확인 → 일치 확인 → 오류 횟수 관리 → 성공 시 키 삭제
+ * 코드 만료 확인 → 시도 횟수 예약 → 일치 확인 → 성공 시 키 삭제(소비형) 또는 예약 환불(비소비형)
  */
+@Slf4j
 @Component
 @RequiredArgsConstructor
 public class VerificationCodeValidator {
 
     private final StringRedisTemplate redisTemplate;
     private final RedisCounter redisCounter;
+
+    /**
+     * 시도 1회를 되돌린다 - 키가 있고 0보다 클 때만 DECR(TTL 유지). 그 사이 재발송으로 키가 지워졌으면
+     * 아무것도 하지 않는다(음수·TTL 없는 키를 만들지 않게).
+     */
+    private static final DefaultRedisScript<Long> RELEASE_ATTEMPT = new DefaultRedisScript<>(
+            "local c = tonumber(redis.call('GET', KEYS[1])) "
+                    + "if c and c > 0 then return redis.call('DECR', KEYS[1]) end "
+                    + "return 0",
+            Long.class);
 
     /**
      * 인증코드를 검증하고, 성공 시 관련 Redis 키를 삭제한다.
@@ -31,26 +46,7 @@ public class VerificationCodeValidator {
      */
     public void verify(String verifyKey, String attemptKey, String inputCode,
                        long codeTtlMinutes, int maxAttempts) {
-        String savedCode = redisTemplate.opsForValue().get(verifyKey);
-
-        // 인증코드가 없으면 만료된 것
-        if (savedCode == null) {
-            throw new CustomException(ErrorCode.EXPIRED_SMS_CODE);
-        }
-
-        if (!codesMatch(savedCode, inputCode)) {
-            // 오류 횟수 증가 + 최초 증가 시 TTL(인증코드와 동일) 설정을 원자적으로 (L-2)
-            long attempts = redisCounter.incrementWithTtl(attemptKey, codeTtlMinutes * 60);
-
-            // 최대 오류 횟수 초과 시 인증코드 즉시 무효화
-            if (attempts >= maxAttempts) {
-                redisTemplate.delete(verifyKey);
-                redisTemplate.delete(attemptKey);
-                throw new CustomException(ErrorCode.SMS_TOO_MANY_ATTEMPTS);
-            }
-
-            throw new CustomException(ErrorCode.INVALID_SMS_CODE);
-        }
+        checkReservingAttempt(verifyKey, attemptKey, inputCode, codeTtlMinutes, maxAttempts);
 
         // 인증 성공 — 인증코드 및 오류 횟수 삭제
         redisTemplate.delete(verifyKey);
@@ -61,27 +57,70 @@ public class VerificationCodeValidator {
      * 인증코드를 검증하되 <b>성공해도 코드를 소비(삭제)하지 않는다.</b>
      * 비밀번호 재설정처럼 "확인(pre-check) → 이후 같은 6자리 코드로 최종 처리" 흐름의
      * pre-check 단계에서 사용한다. 실패 시 오류 횟수 증가·최대치 초과 무효화는 동일하게 동작한다.
+     * <p>
+     * 정답이면 예약한 시도 1회를 되돌린다(AUTH-G10) - 정답 확인과 최종 reset 재검증, 그리고
+     * SAME_AS_CURRENT_PASSWORD 같은 1차 실패 뒤의 재시도가 오답 한도를 깎으면 정상 사용자가 막힌다.
      *
      * @see #verify(String, String, String, long, int)
      */
     public void verifyWithoutConsume(String verifyKey, String attemptKey, String inputCode,
                                      long codeTtlMinutes, int maxAttempts) {
+        checkReservingAttempt(verifyKey, attemptKey, inputCode, codeTtlMinutes, maxAttempts);
+        // 성공 — 코드 유지(최종 reset 단계에서 같은 코드로 재검증·소비), 예약분만 환불
+        releaseAttempt(attemptKey);
+    }
+
+    /**
+     * 시도 횟수를 비교 <b>전에</b> 원자적으로 예약(INCR)한 뒤 비교한다 (AUTH-G10).
+     * <p>
+     * 예전 순서(GET → 비교 → 오답이면 INCR)는 코드가 지워지기 전에 GET한 병렬 요청이 모두 비교돼
+     * 한도(5회)를 넘겨 추측할 수 있었다. 이제 예약 번호가 한도를 넘은 요청은 비교하지 않고 거절한다.
+     * <ul>
+     *   <li>코드가 없으면(만료·무효화) 예약하지 않고 EXPIRED_SMS_CODE - 만료 뒤 호출로 카운터가 늘지 않게.</li>
+     *   <li>한도 도달·초과 시 인증코드만 지우고 <b>오류 횟수 키는 남긴다</b> - 지우면 이미 코드를 읽은 병렬
+     *       요청이 새 카운터(1)로 다시 비교된다. 남은 키는 TTL 또는 재발송(sendCode)이 정리한다.</li>
+     *   <li>Redis 장애는 그대로 전파한다(fail-closed) - 시도 제한이 꺼진 채 비교를 허용하지 않는다.</li>
+     * </ul>
+     * 정답이면 예외 없이 반환한다(예약분 처리는 호출자 몫 - 소비형은 키 삭제, 비소비형은 환불).
+     */
+    private void checkReservingAttempt(String verifyKey, String attemptKey, String inputCode,
+                                       long codeTtlMinutes, int maxAttempts) {
         String savedCode = redisTemplate.opsForValue().get(verifyKey);
 
+        // 인증코드가 없으면 만료된 것
         if (savedCode == null) {
             throw new CustomException(ErrorCode.EXPIRED_SMS_CODE);
         }
 
-        if (!codesMatch(savedCode, inputCode)) {
-            long attempts = redisCounter.incrementWithTtl(attemptKey, codeTtlMinutes * 60);
-            if (attempts >= maxAttempts) {
-                redisTemplate.delete(verifyKey);
-                redisTemplate.delete(attemptKey);
-                throw new CustomException(ErrorCode.SMS_TOO_MANY_ATTEMPTS);
-            }
-            throw new CustomException(ErrorCode.INVALID_SMS_CODE);
+        // 비교 전 시도 1회 예약 + 최초 증가 시 TTL(인증코드와 동일) 설정을 원자적으로 (L-2)
+        long attempts = redisCounter.incrementWithTtl(attemptKey, codeTtlMinutes * 60);
+
+        // 한도를 넘은 예약은 비교하지 않는다 (병렬 오답이 한도를 넘겨 비교되던 문제)
+        if (attempts > maxAttempts) {
+            redisTemplate.delete(verifyKey);
+            throw new CustomException(ErrorCode.SMS_TOO_MANY_ATTEMPTS);
         }
-        // 성공 — 코드 유지(최종 reset 단계에서 같은 코드로 재검증·소비)
+
+        if (codesMatch(savedCode, inputCode)) {
+            return;
+        }
+
+        // 오답 — 예약분이 그대로 오류 1회로 남는다. 최대 오류 횟수 도달 시 인증코드 즉시 무효화
+        if (attempts >= maxAttempts) {
+            redisTemplate.delete(verifyKey);
+            throw new CustomException(ErrorCode.SMS_TOO_MANY_ATTEMPTS);
+        }
+
+        throw new CustomException(ErrorCode.INVALID_SMS_CODE);
+    }
+
+    // 정답 시 예약분 환불. 실패해도 이미 정답 확인은 끝났으므로 응답을 막지 않는다(오류 1회로 남을 뿐).
+    private void releaseAttempt(String attemptKey) {
+        try {
+            redisTemplate.execute(RELEASE_ATTEMPT, List.of(attemptKey));
+        } catch (DataAccessException e) {
+            log.warn("[VERIFY-ATTEMPT-RELEASE-FAILED] 시도 횟수 환불 실패 cause={}", e.getClass().getSimpleName());
+        }
     }
 
     /**

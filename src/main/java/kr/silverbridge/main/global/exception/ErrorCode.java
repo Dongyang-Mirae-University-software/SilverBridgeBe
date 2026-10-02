@@ -77,6 +77,8 @@ public enum ErrorCode {
     KAKAO_DORMANT_ACCOUNT(HttpStatus.FORBIDDEN, "휴면 또는 존재하지 않는 카카오 계정입니다."),
     KAKAO_AUTH_ERROR(HttpStatus.UNAUTHORIZED, "카카오 로그인에 실패했습니다. 다시 시도해주세요."),
     KAKAO_SESSION_EXPIRED(HttpStatus.BAD_REQUEST, "카카오 로그인 세션이 만료되었습니다. 카카오 로그인을 다시 시도해주세요."),
+    // 일반 가입 계정과 같은 이메일로 카카오 가입 시도 (AUTH-G08) - 연동하지 않고 기존 로그인 방법을 안내
+    KAKAO_EMAIL_REGISTERED_LOCAL(HttpStatus.CONFLICT, "이미 이메일/비밀번호로 가입된 계정입니다. 기존 로그인 방법을 사용해주세요."),
 
     // 파일 서버
     FILE_UPLOAD_FAILED(HttpStatus.INTERNAL_SERVER_ERROR, "이미지 업로드에 실패했습니다. 잠시 후 다시 시도해주세요."),
