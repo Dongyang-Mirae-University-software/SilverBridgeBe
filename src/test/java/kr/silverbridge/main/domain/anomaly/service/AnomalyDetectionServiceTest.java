@@ -24,6 +24,7 @@ import java.time.ZoneOffset;
 import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyDouble;
 import static org.mockito.ArgumentMatchers.eq;
@@ -181,5 +182,68 @@ class AnomalyDetectionServiceTest {
 
         // 소유자를 모르면 상황도 열지 않는다 — 주인 없는 판정 대상을 만들지 않는다
         verifyNoInteractions(incidentService, anomalyEventRepository, eventPublisher);
+    }
+
+    @Test
+    @DisplayName("이력 저장에 실패하면 쿨다운을 되돌려 다음 프레임이 곧바로 다시 시도한다 (ANOM-G14)")
+    void saveFailure_releasesCooldown() {
+        AnomalySignal signal = signal(OffsetDateTime.now());
+        when(judge.isAnomaly(signal)).thenReturn(true);
+        when(cooldown.tryAcquire(SESSION_ID, DetectedType.FIRE)).thenReturn(true);
+        when(cameraService.findOwnerBySessionId(SESSION_ID))
+                .thenReturn(Optional.of(new CameraOwner(WARD_ID, CAMERA_LABEL)));
+        givenIncident();
+        when(anomalyEventRepository.save(any(AnomalyEvent.class)))
+                .thenThrow(new org.springframework.dao.DataIntegrityViolationException("fk"));
+
+        // 예외는 그대로 던진다 - AI 수신부(handleTextMessage)가 메시지 단위로 격리해 수신 스레드는 살아 있다
+        assertThatThrownBy(() -> detectionService.handle(signal))
+                .isInstanceOf(org.springframework.dao.DataIntegrityViolationException.class);
+
+        verify(cooldown).release(SESSION_ID, DetectedType.FIRE);
+        verifyNoInteractions(eventPublisher);
+    }
+
+    @Test
+    @DisplayName("상황 편입·소유자 조회 중 예외도 쿨다운을 되돌린다 (ANOM-G14)")
+    void lookupFailure_releasesCooldown() {
+        AnomalySignal signal = signal(OffsetDateTime.now());
+        when(judge.isAnomaly(signal)).thenReturn(true);
+        when(cooldown.tryAcquire(SESSION_ID, DetectedType.FIRE)).thenReturn(true);
+        when(cameraService.findOwnerBySessionId(SESSION_ID))
+                .thenThrow(new org.springframework.dao.QueryTimeoutException("db down"));
+
+        assertThatThrownBy(() -> detectionService.handle(signal))
+                .isInstanceOf(org.springframework.dao.QueryTimeoutException.class);
+
+        verify(cooldown).release(SESSION_ID, DetectedType.FIRE);
+    }
+
+    @Test
+    @DisplayName("이력 저장에 성공하면 쿨다운은 유지된다 - 같은 신호 중복 방지 (ANOM-G14)")
+    void success_keepsCooldown() {
+        AnomalySignal signal = signal(OffsetDateTime.now());
+        when(judge.isAnomaly(signal)).thenReturn(true);
+        when(cooldown.tryAcquire(SESSION_ID, DetectedType.FIRE)).thenReturn(true);
+        givenRegisteredCamera();
+        givenIncident();
+        when(anomalyEventRepository.save(any(AnomalyEvent.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        assertThat(detectionService.handle(signal)).isPresent();
+
+        verify(cooldown, never()).release(any(), any());
+    }
+
+    @Test
+    @DisplayName("미등록 세션은 쿨다운을 되돌리지 않는다 - 삭제된 카메라의 매 프레임 WARN 폭주 억제")
+    void unknownSession_keepsCooldown() {
+        AnomalySignal signal = signal(OffsetDateTime.now());
+        when(judge.isAnomaly(signal)).thenReturn(true);
+        when(cooldown.tryAcquire(SESSION_ID, DetectedType.FIRE)).thenReturn(true);
+        when(cameraService.findOwnerBySessionId(SESSION_ID)).thenReturn(Optional.empty());
+
+        assertThat(detectionService.handle(signal)).isEmpty();
+
+        verify(cooldown, never()).release(any(), any());
     }
 }

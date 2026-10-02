@@ -230,6 +230,85 @@ class AnomalyReviewReminderPlannerTest {
             properties.getReviewReminder().setSummaryTime(LocalTime.MIDNIGHT);
         }
 
+        /** 오늘 요약에 담을 수 있는 재촉의 마지막 발송 시각(요약 시각 00:00 기준이라 어제 22:00). */
+        private OffsetDateTime cutoff() {
+            return AnomalyReviewReminderPlanner.summaryCutoff(AnomalyReviewClock.now(), LocalTime.MIDNIGHT);
+        }
+
+        private AnomalyReviewReminderLog reminderSentAt(OffsetDateTime sentAt) {
+            return AnomalyReviewReminderLog.builder()
+                    .incidentId(INCIDENT_ID).guardianId(GUARDIAN_ID).sentAt(sentAt).build();
+        }
+
+        /** 상황 1건 + ACTIVE 보호자 1명 + 미응답 + 오늘 요약 없음 + 설정 기본값으로 고정하고, 재촉 발송 시각만 바꾼다. */
+        private void givenRemindedAt(OffsetDateTime sentAt) {
+            when(incidentRepository.findByReviewStatusAndStartedAtGreaterThanEqual(any(), any()))
+                    .thenReturn(List.of(incident()));
+            when(connectionService.getActiveGuardianIds(WARD_ID)).thenReturn(List.of(GUARDIAN_ID));
+            when(feedbackRepository.findByIncidentIdIn(anyCollection())).thenReturn(List.of());
+            when(reminderLogRepository.findByIncidentIdIn(anyCollection())).thenReturn(List.of(reminderSentAt(sentAt)));
+            when(summaryLogRepository.findBySummaryDateAndGuardianIdIn(any(), anyCollection())).thenReturn(List.of());
+            when(settingRepository.findByGuardianIdIn(anyCollection())).thenReturn(List.of());
+        }
+
+        @Test
+        @DisplayName("요약 기준선 = 오늘(KST) 요약 시각 - 2시간 (20:00이면 18:00) (ANOM-G09)")
+        void cutoffIsSummaryTimeMinusGap() {
+            OffsetDateTime at2005 = OffsetDateTime.of(2026, 10, 2, 20, 5, 0, 0, KST);
+
+            assertThat(AnomalyReviewReminderPlanner.summaryCutoff(at2005, LocalTime.of(20, 0)))
+                    .isEqualTo(OffsetDateTime.of(2026, 10, 2, 18, 0, 0, 0, KST));
+            // UTC로 들어와도 KST 날짜 기준이다 (UTC 10/2 15:30 = KST 10/3 00:30 → 10/3 18:00)
+            assertThat(AnomalyReviewReminderPlanner.summaryCutoff(
+                    OffsetDateTime.of(2026, 10, 2, 15, 30, 0, 0, ZoneOffset.UTC), LocalTime.of(20, 0)))
+                    .isEqualTo(OffsetDateTime.of(2026, 10, 3, 18, 0, 0, 0, KST));
+        }
+
+        @Test
+        @DisplayName("같은 주기에 방금 건별 재촉이 나간 상황은 오늘 요약에 담지 않는다 - 연달아 도착 방지 (ANOM-G09)")
+        void justRemindedIsDeferred() {
+            givenRemindedAt(AnomalyReviewClock.now());
+
+            assertThat(planner.claimSummaries()).isEmpty();
+            // 선점 기록도 남기지 않는다 - 남기면 다음 날 요약까지 막힌다(하루 1건 UNIQUE)
+            verify(summaryLogRepository, never()).saveAll(anyCollection());
+        }
+
+        @Test
+        @DisplayName("경계: 기준선과 같은 시각에 재촉한 상황은 담고, 1초 뒤면 다음 날로 넘긴다 (ANOM-G09)")
+        void cutoffBoundary() {
+            givenRemindedAt(cutoff());
+            assertThat(planner.claimSummaries()).hasSize(1);
+
+            givenRemindedAt(cutoff().plusSeconds(1));
+            assertThat(planner.claimSummaries()).isEmpty();
+        }
+
+        @Test
+        @DisplayName("방금 재촉한 상황은 빼되 오래된 미응답 상황은 그대로 센다 (ANOM-G09)")
+        void onlyRecentReminderIsExcludedFromCount() {
+            AnomalyIncident older = incident();
+            AnomalyIncident recent = AnomalyIncident.builder()
+                    .wardId(WARD_ID).sessionId("ward_a9cC5f_k3m").detectedType(DetectedType.FIRE)
+                    .detectedAt(OffsetDateTime.of(2026, 9, 1, 13, 0, 0, 0, KST)).confidence(0.9).build();
+            ReflectionTestUtils.setField(recent, "id", INCIDENT_ID + 1);
+            when(incidentRepository.findByReviewStatusAndStartedAtGreaterThanEqual(any(), any()))
+                    .thenReturn(List.of(older, recent));
+            when(connectionService.getActiveGuardianIds(WARD_ID)).thenReturn(List.of(GUARDIAN_ID));
+            when(feedbackRepository.findByIncidentIdIn(anyCollection())).thenReturn(List.of());
+            when(reminderLogRepository.findByIncidentIdIn(anyCollection())).thenReturn(List.of(
+                    reminderSentAt(cutoff().minusHours(5)),
+                    AnomalyReviewReminderLog.builder().incidentId(INCIDENT_ID + 1).guardianId(GUARDIAN_ID)
+                            .sentAt(AnomalyReviewClock.now()).build()));
+            when(summaryLogRepository.findBySummaryDateAndGuardianIdIn(any(), anyCollection())).thenReturn(List.of());
+            when(settingRepository.findByGuardianIdIn(anyCollection())).thenReturn(List.of());
+
+            List<AnomalyReviewSummaryTarget> targets = planner.claimSummaries();
+
+            assertThat(targets).hasSize(1);
+            assertThat(targets.getFirst().pendingCount()).isEqualTo(1);
+        }
+
         @Test
         @DisplayName("건별 재촉을 보낸 뒤에도 답이 없으면 요약에 담는다")
         void remindedButUnansweredIsCounted() {
@@ -238,9 +317,7 @@ class AnomalyReviewReminderPlannerTest {
             when(connectionService.getActiveGuardianIds(WARD_ID)).thenReturn(List.of(GUARDIAN_ID));
             when(feedbackRepository.findByIncidentIdIn(anyCollection())).thenReturn(List.of());
             when(reminderLogRepository.findByIncidentIdIn(anyCollection())).thenReturn(List.of(
-                    AnomalyReviewReminderLog.builder()
-                            .incidentId(INCIDENT_ID).guardianId(GUARDIAN_ID)
-                            .sentAt(OffsetDateTime.now(KST)).build()));
+                    reminderSentAt(cutoff().minusHours(1))));
             when(summaryLogRepository.findBySummaryDateAndGuardianIdIn(any(), anyCollection())).thenReturn(List.of());
             when(settingRepository.findByGuardianIdIn(anyCollection())).thenReturn(List.of());
 
@@ -271,9 +348,7 @@ class AnomalyReviewReminderPlannerTest {
             when(connectionService.getActiveGuardianIds(WARD_ID)).thenReturn(List.of(GUARDIAN_ID));
             when(feedbackRepository.findByIncidentIdIn(anyCollection())).thenReturn(List.of());
             when(reminderLogRepository.findByIncidentIdIn(anyCollection())).thenReturn(List.of(
-                    AnomalyReviewReminderLog.builder()
-                            .incidentId(INCIDENT_ID).guardianId(GUARDIAN_ID)
-                            .sentAt(OffsetDateTime.now(KST)).build()));
+                    reminderSentAt(cutoff().minusHours(1))));
             when(summaryLogRepository.findBySummaryDateAndGuardianIdIn(any(), anyCollection())).thenReturn(List.of(
                     kr.silverbridge.main.domain.anomaly.entity.AnomalyReviewSummaryLog.builder()
                             .guardianId(GUARDIAN_ID)

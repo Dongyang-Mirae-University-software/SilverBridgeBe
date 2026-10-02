@@ -192,6 +192,33 @@ class CameraServiceTest {
             assertThat(res.label()).isEqualTo("거실");
             assertThat(res.isActive()).isTrue();
         }
+
+        @Test
+        @DisplayName("방 이름은 정리한 값으로 저장한다 - 앞뒤 공백·제로폭 문자 제거 (ANOM-G12)")
+        void 방이름_정리후저장() {
+            Camera mine = camera(1L, WARD_ID, "ward_a9cC5f_k3m", "dev_abc", "거실");
+            when(cameraRepository.findById(1L)).thenReturn(Optional.of(mine));
+
+            CameraResponse res = cameraService.update(WARD_ID, 1L, new CameraUpdateRequest("  안​방  ", null));
+
+            assertThat(res.label()).isEqualTo("안방");
+        }
+
+        @Test
+        @DisplayName("빈 값·공백·제로폭 문자만 있는 방 이름 → INVALID_INPUT(400), 기존 이름 유지 (ANOM-G12)")
+        void 빈방이름_거절() {
+            for (String blank : List.of("", "   ", " 　", "​")) {
+                Camera mine = camera(1L, WARD_ID, "ward_a9cC5f_k3m", "dev_abc", "거실");
+                when(cameraRepository.findById(1L)).thenReturn(Optional.of(mine));
+
+                assertThatThrownBy(() -> cameraService.update(WARD_ID, 1L, new CameraUpdateRequest(blank, false)))
+                        .as("label=[%s]", blank)
+                        .isInstanceOf(CustomException.class)
+                        .hasFieldOrPropertyWithValue("errorCode", ErrorCode.INVALID_INPUT);
+                assertThat(mine.getLabel()).isEqualTo("거실");
+                assertThat(mine.isActive()).as("요청 전체를 거절하므로 다른 필드도 바뀌지 않는다").isTrue();
+            }
+        }
     }
 
     @Nested
