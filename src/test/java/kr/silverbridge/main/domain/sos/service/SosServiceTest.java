@@ -142,6 +142,25 @@ class SosServiceTest {
     }
 
     @Test
+    @DisplayName("위치의 보이지 않는 글자·앞뒤 공백은 정리해 저장, 보이지 않는 글자만이면 null (SOS-G15)")
+    void trigger_위치_정리() {
+        User ward = User.builder().id(WARD_ID).name(WARD_NAME).role(Role.WARD).build();
+        when(userRepository.findById(WARD_ID)).thenReturn(Optional.of(ward));
+        SosEvent saved = mock(SosEvent.class);
+        when(saved.getId()).thenReturn(42L);
+        when(saved.getCreatedAt()).thenReturn(OffsetDateTime.now());
+        when(sosEventRepository.save(any(SosEvent.class))).thenReturn(saved);
+
+        sosService.trigger(WARD_ID, "\u00a0 자택\u200b 거실 ", null);
+        sosService.trigger(WARD_ID, "\u200b\u3000", null);
+
+        ArgumentCaptor<SosEvent> c = ArgumentCaptor.forClass(SosEvent.class);
+        verify(sosEventRepository, org.mockito.Mockito.times(2)).save(c.capture());
+        assertThat(c.getAllValues().get(0).getLocation()).isEqualTo("자택 거실");
+        assertThat(c.getAllValues().get(1).getLocation()).isNull();
+    }
+
+    @Test
     @DisplayName("발생 경로 미전송 → SOS_BUTTON으로 기록 (바디 없는 기존 호출 하위호환)")
     void trigger_경로없음_기본값() {
         stubSavedEvent();

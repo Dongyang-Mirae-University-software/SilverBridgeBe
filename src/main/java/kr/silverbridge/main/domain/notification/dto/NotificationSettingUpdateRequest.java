@@ -14,9 +14,8 @@ import java.util.List;
 @Schema(description = "알림 채널 설정 변경 요청")
 public record NotificationSettingUpdateRequest(
         @NotEmpty(message = "변경할 채널 설정을 하나 이상 포함해야 합니다.")
-        @Valid
         @Schema(description = "변경할 채널 설정 목록")
-        List<ChannelSettingUpdate> settings
+        List<@NotNull(message = "settings 항목은 null일 수 없습니다.") @Valid ChannelSettingUpdate> settings
 ) {
     @Schema(description = "단일 채널 설정 변경 항목")
     public record ChannelSettingUpdate(

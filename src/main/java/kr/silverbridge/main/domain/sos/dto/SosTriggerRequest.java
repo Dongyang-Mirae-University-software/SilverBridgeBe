@@ -3,6 +3,7 @@ package kr.silverbridge.main.domain.sos.dto;
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.Size;
 import kr.silverbridge.main.domain.sos.entity.SosTriggerType;
+import kr.silverbridge.main.global.validation.TextSanitizer;
 
 /**
  * 긴급 SOS 발생 요청. <b>바디 전체가 선택</b>이다 - 바디 없이 호출하면 위치 미상 · 긴급 SOS 버튼 경로로
@@ -22,4 +23,12 @@ public record SosTriggerRequest(
         @Schema(description = "발생 경로 (선택, 생략 시 SOS_BUTTON)", example = "SOS_BUTTON",
                 allowableValues = {"SOS_BUTTON", "GUARDIAN_CALL"})
         SosTriggerType triggerType
-) {}
+) {
+    /** 위치는 앞뒤 공백·보이지 않는 문자를 정리한 뒤 길이를 검사한다. 정리 결과가 비면 null(위치는 선택). */
+    public SosTriggerRequest {
+        location = TextSanitizer.sanitize(location);
+        if (location != null && location.isEmpty()) {
+            location = null;
+        }
+    }
+}
