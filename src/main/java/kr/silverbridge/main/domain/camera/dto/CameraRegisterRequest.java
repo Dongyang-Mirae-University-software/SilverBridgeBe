@@ -3,6 +3,8 @@ package kr.silverbridge.main.domain.camera.dto;
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
+import kr.silverbridge.main.global.validation.NoControlChars;
+import kr.silverbridge.main.global.validation.VisibleText;
 
 /**
  * 카메라 등록/재등록 요청.
@@ -15,6 +17,8 @@ public record CameraRegisterRequest(
 
         @Schema(description = "설치 위치(방 이름)", example = "거실")
         @NotBlank(message = "설치 위치(방 이름)를 입력해주세요.")
+        @VisibleText(message = "설치 위치(방 이름)를 입력해주세요.")
+        @NoControlChars
         @Size(max = 30, message = "설치 위치는 최대 30자입니다.")
         String label,
 
