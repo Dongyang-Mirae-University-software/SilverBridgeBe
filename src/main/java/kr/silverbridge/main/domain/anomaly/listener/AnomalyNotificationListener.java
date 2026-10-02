@@ -27,7 +27,8 @@ import java.util.Map;
  * 이상감지 이력 적재 후 보호자·피보호자에게 알림을 발송하는 리스너.
  *
  * <p>{@code SosNotificationListener}와 동일 패턴이다: AFTER_COMMIT(이력 커밋 후에만 발송, 롤백 시 미발송) +
- * {@code @Async("notificationExecutor")}(발송 지연이 AI 신호 처리 스레드를 붙잡지 않도록 분리).</p>
+ * {@code @Async("urgentNotificationExecutor")}(발송 지연이 AI 신호 처리 스레드를 붙잡지 않도록 분리. 긴급 알림
+ * 전용 풀이라 일반 알림이 밀려도 그 뒤에 줄 서지 않는다 - 2026-10-02 QA XCUT-G11).</p>
  *
  * <p><b>수신자</b> = ACTIVE 보호자 전원 + <b>피보호자 본인</b>. 화재는 집 안 당사자의 대피가 최우선이라 본인에게도
  * 보낸다(설계 D-1). 본인에겐 대피를 재촉하는 별도 문구를 쓰고, 쿨다운도 더 짧게 적용한다.</p>
@@ -57,7 +58,7 @@ public class AnomalyNotificationListener {
     private final NotificationDispatcher notificationDispatcher;
     private final AnomalyNotificationCooldown cooldown;
 
-    @Async("notificationExecutor")
+    @Async("urgentNotificationExecutor")
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
     public void handleAnomalyDetected(AnomalyDetectedEvent event) {
         List<String> recipients = new ArrayList<>(connectionService.getActiveGuardianIds(event.wardId()));
