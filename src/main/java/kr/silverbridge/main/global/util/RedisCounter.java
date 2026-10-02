@@ -6,6 +6,7 @@ import org.springframework.data.redis.core.script.DefaultRedisScript;
 import org.springframework.stereotype.Component;
 
 import java.util.List;
+import java.util.concurrent.TimeUnit;
 
 /**
  * Redis 카운터 증가 + TTL 설정을 원자적으로 수행하는 공통 유틸.
@@ -35,5 +36,14 @@ public class RedisCounter {
     public long incrementWithTtl(String key, long ttlSeconds) {
         Long count = redisTemplate.execute(INCR_WITH_TTL, List.of(key), String.valueOf(ttlSeconds));
         return count == null ? 0L : count;
+    }
+
+    /**
+     * 키의 남은 TTL(초). 키가 없거나 만료가 없으면 -1 (호출측이 대체값을 정한다).
+     * 속도제한 초과 시 "N초 후 다시 시도" 안내용 — 한도를 넘었을 때만 부른다.
+     */
+    public long remainingTtlSeconds(String key) {
+        Long ttl = redisTemplate.getExpire(key, TimeUnit.SECONDS);
+        return ttl == null || ttl < 0 ? -1L : ttl;
     }
 }
