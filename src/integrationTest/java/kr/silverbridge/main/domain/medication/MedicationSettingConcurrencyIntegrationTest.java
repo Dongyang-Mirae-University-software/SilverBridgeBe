@@ -2,6 +2,7 @@ package kr.silverbridge.main.domain.medication;
 
 import kr.silverbridge.main.domain.connection.entity.Connection;
 import kr.silverbridge.main.domain.connection.repository.ConnectionRepository;
+import kr.silverbridge.main.domain.connection.service.ConnectionRequestLimiter;
 import kr.silverbridge.main.domain.connection.service.ConnectionService;
 import kr.silverbridge.main.domain.medication.config.MedicationProperties;
 import kr.silverbridge.main.domain.medication.entity.GuardianMedicationSetting;
@@ -21,6 +22,7 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Import;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -63,6 +65,9 @@ class MedicationSettingConcurrencyIntegrationTest extends PostgresIntegrationTes
     @Autowired private GuardianMedicationSettingRepository guardianMedicationSettingRepository;
     @Autowired private ConnectionRepository connectionRepository;
     @Autowired private UserRepository userRepository;
+
+    // ConnectionService의 의존성일 뿐 이 테스트의 관심사가 아니다(Redis 없이 뜨도록 목으로 둔다)
+    @MockitoBean private ConnectionRequestLimiter connectionRequestLimiter;
 
     @BeforeEach
     void setUp() {

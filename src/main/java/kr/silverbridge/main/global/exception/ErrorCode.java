@@ -60,6 +60,9 @@ public enum ErrorCode {
     CONNECTION_TARGET_NOT_ACTIVE(HttpStatus.BAD_REQUEST,
             "이용 중인 회원만 연결할 수 있습니다. 이용 제한·탈퇴 처리 중인 계정은 연결할 수 없습니다."),
     CANNOT_CONNECT_SELF(HttpStatus.BAD_REQUEST, "자기 자신과 연결할 수 없습니다."),
+    // 같은 피보호자에게 요청·취소를 반복해 알림을 계속 보내는 것을 막는다(CONN-G04) - retryAfterSeconds 동봉
+    CONNECTION_REQUEST_COOLDOWN(HttpStatus.TOO_MANY_REQUESTS,
+            "같은 분께 연결 요청을 여러 번 보냈습니다. 잠시 후 다시 시도해주세요."),
 
     // 공지
     ANNOUNCEMENT_NOT_FOUND(HttpStatus.NOT_FOUND, "공지를 찾을 수 없습니다."),

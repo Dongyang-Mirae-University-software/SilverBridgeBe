@@ -19,11 +19,13 @@ import kr.silverbridge.main.global.enums.Role;
 import kr.silverbridge.main.global.enums.Status;
 import kr.silverbridge.main.global.exception.CustomException;
 import kr.silverbridge.main.global.exception.ErrorCode;
+import kr.silverbridge.main.global.exception.TooManyRequestsException;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
+import org.mockito.InOrder;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -39,6 +41,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyList;
+import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -61,6 +65,7 @@ class ConnectionServiceTest {
     @Mock private ConnectionRepository connectionRepository;
     @Mock private UserRepository userRepository;
     @Mock private ApplicationEventPublisher eventPublisher;
+    @Mock private ConnectionRequestLimiter requestLimiter;
 
     @InjectMocks private ConnectionService connectionService;
 
@@ -423,6 +428,120 @@ class ConnectionServiceTest {
             assertThat(ex.getErrorCode()).isEqualTo(ErrorCode.CONNECTION_NOT_PENDING);
             assertThat(connection.getStatus()).isEqualTo(ConnectionStatus.ACTIVE);
             verify(eventPublisher, never()).publishEvent(any());
+        }
+    }
+
+    // ─── 같은 쌍 반복 요청 제한 (CONN-G04) ───────────────────────────────────
+
+    @Nested
+    @DisplayName("연결 요청 반복 제한 연계 (CONN-G04)")
+    class RequestLimit {
+
+        private void 정상요청_준비() {
+            when(userRepository.findById(GUARDIAN_ID)).thenReturn(Optional.of(guardian()));
+            when(userRepository.findById(WARD_ID)).thenReturn(Optional.of(ward()));
+            when(connectionRepository.existsByGuardianIdAndWardIdAndStatusIn(
+                    GUARDIAN_ID, WARD_ID, List.of(ConnectionStatus.PENDING, ConnectionStatus.ACTIVE))).thenReturn(false);
+        }
+
+        @Test
+        @DisplayName("요청 전 한도를 검사하고, 요청이 실제로 만들어진 뒤에 센다")
+        void 검사_저장_증가_순서() {
+            정상요청_준비();
+
+            connectionService.requestConnectionAsGuardian(GUARDIAN_ID, requestDto(WARD_ID, RELATION));
+
+            InOrder order = inOrder(requestLimiter, connectionRepository);
+            order.verify(requestLimiter).checkAllowed(GUARDIAN_ID, WARD_ID);
+            order.verify(connectionRepository).saveAndFlush(any(Connection.class));
+            order.verify(requestLimiter).recordRequest(GUARDIAN_ID, WARD_ID);
+        }
+
+        @Test
+        @DisplayName("쿨다운이면 429(retryAfter 포함) - 요청을 만들지 않아 피보호자에게 알림·WS 이벤트가 없다")
+        void 쿨다운_거절_알림없음() {
+            정상요청_준비();
+            doThrow(new TooManyRequestsException(ErrorCode.CONNECTION_REQUEST_COOLDOWN, 3600L))
+                    .when(requestLimiter).checkAllowed(GUARDIAN_ID, WARD_ID);
+
+            TooManyRequestsException ex = assertThrows(TooManyRequestsException.class,
+                    () -> connectionService.requestConnectionAsGuardian(GUARDIAN_ID, requestDto(WARD_ID, RELATION)));
+
+            assertThat(ex.getErrorCode()).isEqualTo(ErrorCode.CONNECTION_REQUEST_COOLDOWN);
+            assertThat(ex.getRetryAfterSeconds()).isEqualTo(3600L);
+            verify(connectionRepository, never()).saveAndFlush(any());
+            verify(requestLimiter, never()).recordRequest(any(), any());
+            verify(eventPublisher, never()).publishEvent(any());
+        }
+
+        @Test
+        @DisplayName("이미 PENDING·ACTIVE인 쌍은 409가 먼저 - 한도 검사도 증가도 하지 않는다")
+        void 중복요청은_세지_않음() {
+            when(userRepository.findById(GUARDIAN_ID)).thenReturn(Optional.of(guardian()));
+            when(userRepository.findById(WARD_ID)).thenReturn(Optional.of(ward()));
+            when(connectionRepository.existsByGuardianIdAndWardIdAndStatusIn(
+                    GUARDIAN_ID, WARD_ID, List.of(ConnectionStatus.PENDING, ConnectionStatus.ACTIVE))).thenReturn(true);
+
+            CustomException ex = assertThrows(CustomException.class,
+                    () -> connectionService.requestConnectionAsGuardian(GUARDIAN_ID, requestDto(WARD_ID, RELATION)));
+
+            assertThat(ex.getErrorCode()).isEqualTo(ErrorCode.CONNECTION_ALREADY_EXISTS);
+            verify(requestLimiter, never()).checkAllowed(any(), any());
+            verify(requestLimiter, never()).recordRequest(any(), any());
+        }
+
+        @Test
+        @DisplayName("동시 중복으로 저장이 막히면(409) 세지 않는다")
+        void 동시중복_저장실패는_세지_않음() {
+            정상요청_준비();
+            when(connectionRepository.saveAndFlush(any(Connection.class)))
+                    .thenThrow(new DataIntegrityViolationException("dup",
+                            new java.sql.SQLException("duplicate", "23505")));
+
+            assertThrows(CustomException.class,
+                    () -> connectionService.requestConnectionAsGuardian(GUARDIAN_ID, requestDto(WARD_ID, RELATION)));
+
+            verify(requestLimiter, never()).recordRequest(any(), any());
+        }
+
+        @Test
+        @DisplayName("피보호자가 수락하면 그 쌍의 요청 횟수를 지운다 - 나중의 정상 재연결을 막지 않게")
+        void 수락시_횟수_삭제() {
+            Connection connection = connection(ConnectionStatus.PENDING);
+            when(connectionRepository.findById(CONNECTION_ID)).thenReturn(Optional.of(connection));
+            when(userRepository.findById(GUARDIAN_ID)).thenReturn(Optional.of(guardian()));
+            when(userRepository.findById(WARD_ID)).thenReturn(Optional.of(ward()));
+
+            connectionService.acceptConnectionAsWard(WARD_ID, CONNECTION_ID);
+
+            verify(requestLimiter).reset(GUARDIAN_ID, WARD_ID);
+        }
+
+        @Test
+        @DisplayName("거절·취소는 횟수를 지우지 않는다 - 지우면 요청→거절 반복으로 제한이 풀린다")
+        void 거절_취소는_횟수_유지() {
+            Connection refused = connection(ConnectionStatus.PENDING);
+            when(connectionRepository.findById(CONNECTION_ID)).thenReturn(Optional.of(refused));
+            connectionService.refuseConnectionAsWard(WARD_ID, CONNECTION_ID);
+
+            Connection cancelled = connection(ConnectionStatus.PENDING);
+            when(connectionRepository.findById(CONNECTION_ID)).thenReturn(Optional.of(cancelled));
+            connectionService.cancelPendingAsGuardian(GUARDIAN_ID, CONNECTION_ID);
+
+            verify(requestLimiter, never()).reset(any(), any());
+        }
+
+        @Test
+        @DisplayName("관리자 강제 연결에는 적용하지 않는다")
+        void 강제연결은_제한_무관() {
+            when(connectionRepository.findByParticipantAndStatusIn(GUARDIAN_ID, List.of(ConnectionStatus.PENDING)))
+                    .thenReturn(List.of());
+            when(connectionRepository.save(any(Connection.class))).thenAnswer(inv -> inv.getArgument(0));
+
+            connectionService.forceConnect(GUARDIAN_ID, WARD_ID, "AD0001", "보호자", "피보호자");
+
+            verify(requestLimiter, never()).checkAllowed(any(), any());
+            verify(requestLimiter, never()).recordRequest(any(), any());
         }
     }
 

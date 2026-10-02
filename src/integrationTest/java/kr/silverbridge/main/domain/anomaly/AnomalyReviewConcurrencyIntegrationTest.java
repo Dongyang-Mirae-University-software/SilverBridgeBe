@@ -9,6 +9,7 @@ import kr.silverbridge.main.domain.camera.service.CameraIdentifierFactory;
 import kr.silverbridge.main.domain.camera.service.CameraService;
 import kr.silverbridge.main.domain.connection.entity.Connection;
 import kr.silverbridge.main.domain.connection.repository.ConnectionRepository;
+import kr.silverbridge.main.domain.connection.service.ConnectionRequestLimiter;
 import kr.silverbridge.main.domain.connection.service.ConnectionService;
 import kr.silverbridge.main.domain.user.repository.UserRepository;
 import kr.silverbridge.main.global.enums.ConnectionStatus;
@@ -23,6 +24,7 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Import;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
@@ -70,6 +72,9 @@ class AnomalyReviewConcurrencyIntegrationTest extends PostgresIntegrationTest {
     @Autowired private AnomalyIncidentRepository incidentRepository;
     @Autowired private ConnectionRepository connectionRepository;
     @Autowired private UserRepository userRepository;
+
+    // ConnectionService의 의존성일 뿐 이 테스트의 관심사가 아니다(Redis 없이 뜨도록 목으로 둔다)
+    @MockitoBean private ConnectionRequestLimiter connectionRequestLimiter;
 
     @BeforeEach
     void setUp() {
