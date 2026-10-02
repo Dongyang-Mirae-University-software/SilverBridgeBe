@@ -6,21 +6,21 @@
 
 | 항목 | 요약 | PR |
 |---|---|---|
-| D1 | 인증 필터 Redis 장애: 일반 경로 503, `POST /api/ward/sos`만 fail-open(WARN), 핸드셰이크 503 | 머지됨 |
-| D2 | 토큰 무효화 시각 초 단위 비교(같은 초 발급 허용), 옛 ms 값 호환 | 머지됨 |
-| D3 | refresh jti 고유값·typ 검사·다른 기기 로그인으로 밀려난 토큰은 단순 INVALID_TOKEN, H-3 유지 | 머지됨 |
-| D4 | 관리자 본인 탈퇴 403 | 머지됨 |
-| D5 | `trusted-proxies` 신뢰 피어일 때만 XFF(오른쪽부터), RateLimit Redis 장애 fail-open / 보안 카운터 fail-closed | 머지됨 |
-| XCUT-G04 | STOMP 클라이언트 SEND는 `/app/`만(가짜 SOS 위조 차단) | 머지됨 |
-| 이메일·텍스트 | 이메일 소문자·V55 `lower(email)` 유니크, `global/validation` 유틸, 오류 응답 `code` | 머지됨 |
-| 로그인 잠금 | 비교 전 시도 예약, 미가입 동일 처리, 변경·탈퇴 userId 별 잠금, 성공 시 해제 | 머지됨 |
-| 인증번호 | 시도 선예약+정답 환불, 확인 API IP 제한, nonce 원자 소비 | 머지됨 |
-| 카카오 | `pendingToken`, 프로필 이미지 CDN만, `kakao_숫자@kakao.com` 가입 거절, 파일서버 삭제 baseUrl 한정 | 머지됨 |
-| SOS | 수신자별 결과 반환·전달 0명이면 쿨다운 해제, 설정 최초 저장 ON CONFLICT, 이력 `triggerType` 필터·`counts` | 머지됨 |
-| 연결 | 강제 연결·해제 WS 페이로드 type/title/body, 수락 시 역할 재검증, 동시 중복 응답 | 머지됨 |
-| 복약 | 보호자 없는 약 알림 제외, 과거 시각 수정 시 기록 유지, 늦게 등록한 약 요약 제외 | 머지됨 |
-| 이상감지 | 하루 요약에서 최근 건별 재촉 상황 제외, 이력 쿨다운 저장 실패 시 해제 | 머지됨 |
-| 관리자 | 공지 조회수 원자 증가·`updated_at` 내용 변경 시만(V56), 목록 page/size 통일, 본문 100자, 문의 분당 5회, 연결 필터 관리자 제외 | 머지됨 |
+| D1 | 인증 필터 Redis 장애: 일반 경로 503, `POST /api/ward/sos`만 fail-open(WARN), 핸드셰이크 503 | 머지됨 (#269) |
+| D2 | 토큰 무효화 시각 초 단위 비교(같은 초 발급 허용), 옛 ms 값 호환 | 머지됨 (#269) |
+| D3 | refresh jti 고유값·typ 검사·다른 기기 로그인으로 밀려난 토큰은 단순 INVALID_TOKEN, H-3 유지 | 머지됨 (#269·#275) |
+| D4 | 관리자 본인 탈퇴 403 | 머지됨 (#275) |
+| D5 | `trusted-proxies` 신뢰 피어일 때만 XFF(오른쪽부터), RateLimit Redis 장애 fail-open / 보안 카운터 fail-closed | 머지됨 (#268) |
+| XCUT-G04 | STOMP 클라이언트 SEND는 `/app/`만(가짜 SOS 위조 차단) | 머지됨 (#269) |
+| 이메일·텍스트 | 이메일 소문자·V55 `lower(email)` 유니크, `global/validation` 유틸, 오류 응답 `code` | 머지됨 (#267·#275) |
+| 로그인 잠금 | 비교 전 시도 예약, 미가입 동일 처리, 변경·탈퇴 userId 별 잠금, 성공 시 해제 | 머지됨 (#275) |
+| 인증번호 | 시도 선예약+정답 환불, 확인 API IP 제한, nonce 원자 소비 | 머지됨 (#278) |
+| 카카오 | `pendingToken`, 프로필 이미지 CDN만, `kakao_숫자@kakao.com` 가입 거절, 파일서버 삭제 baseUrl 한정 | 머지됨 (#275·#278) |
+| SOS | 수신자별 결과 반환·전달 0명이면 쿨다운 해제, 설정 최초 저장 ON CONFLICT, 이력 `triggerType` 필터·`counts` | 머지됨 (#271·#272) |
+| 연결 | 강제 연결·해제 WS 페이로드 type/title/body, 수락 시 역할 재검증, 동시 중복 응답 | 머지됨 (#273) |
+| 복약 | 보호자 없는 약 알림 제외, 과거 시각 수정 시 기록 유지, 늦게 등록한 약 요약 제외 | 머지됨 (#276) |
+| 이상감지 | 하루 요약에서 최근 건별 재촉 상황 제외, 이력 쿨다운 저장 실패 시 해제 | 머지됨 (#277) |
+| 관리자 | 공지 조회수 원자 증가·`updated_at` 내용 변경 시만(V56), 목록 page/size 통일, 본문 100자, 문의 분당 5회, 연결 필터 관리자 제외 | 머지됨 (#274·#275) |
 | P11 | WS 수신자 차단(`[WS-BLOCKED]`)·대시보드 `wardsWithoutReachableGuardian` (ADMIN-G27/28, CONN-G08, ANOM-G10) | #282 |
 | P12 | 긴급 `urgentNotificationExecutor`(4/8/200) (SOS-G13, XCUT-G11) | #281 |
 | P13 | 연결 요청 같은 쌍 24시간 5건, 6번째부터 429 (CONN-G04, XCUT-G29) | #283 |
