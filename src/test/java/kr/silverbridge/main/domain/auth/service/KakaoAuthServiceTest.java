@@ -61,6 +61,7 @@ class KakaoAuthServiceTest {
     @Mock private UserIdGenerator userIdGenerator;
     @Mock private SmsService smsService;
     @Mock private ApplicationEventPublisher eventPublisher;
+    @Mock private LoginSupersedeMarker loginSupersedeMarker;
 
     @Mock private KakaoTokenResponse tokenResponse;
     @Mock private KakaoUserInfoResponse userInfo;
@@ -70,6 +71,7 @@ class KakaoAuthServiceTest {
     private static final String KAKAO_ID = "3456789012";
     private static final String IP = "127.0.0.1";
     private static final String AGENT = "TestAgent/1.0";
+    private static final String PENDING_TOKEN = "pending-token-from-login-response";
 
     @BeforeEach
     void setUp() {
@@ -99,6 +101,8 @@ class KakaoAuthServiceTest {
         assertThat(res.getRefreshToken()).isEqualTo("refresh-jwt");
         verify(refreshTokenRepository).deleteByUserId("kAk123");
         verify(refreshTokenRepository).save(any());
+        // 밀려난 기기의 갱신이 재사용 감지로 가지 않게 로그인 시각을 남긴다 (AUTH-G03)
+        verify(loginSupersedeMarker).markLogin("kAk123", "refresh-jwt");
     }
 
     @Test
@@ -130,8 +134,49 @@ class KakaoAuthServiceTest {
         assertThat(res.getKakaoId()).isEqualTo(KAKAO_ID);
         assertThat(res.getEmail()).isEqualTo("new@kakao.com");
         assertThat(res.getName()).isNull();   // 카카오 닉네임 미사용 — 가입 시 본인 실명 직접 입력
-        verify(valueOperations).set(eq(RedisKeys.KAKAO_PENDING + KAKAO_ID), eq("new@kakao.com"), anyLong(), any());
+        // pending 값 = pendingToken 해시 + 이메일 - 원문 토큰은 응답으로만 나간다 (AUTH-G07)
+        assertThat(res.getPendingToken()).isNotBlank().hasSizeGreaterThanOrEqualTo(40);
+        verify(valueOperations).set(eq(RedisKeys.KAKAO_PENDING + KAKAO_ID),
+                eq(AuthInputNormalizer.sha256Hex(res.getPendingToken()) + "|new@kakao.com"), anyLong(), any());
         verify(userRepository, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("신규 카카오 사용자 - 로그인마다 pendingToken이 다르다(추측 불가 일회용 값)")
+    void kakaoLogin_신규사용자_pendingToken_매번다름() {
+        when(userRepository.findByProviderAndProviderId(Provider.KAKAO, KAKAO_ID)).thenReturn(Optional.empty());
+        when(userInfo.getEmail()).thenReturn("new@kakao.com");
+
+        String first = kakaoAuthService.kakaoLogin(loginRequest(), IP, AGENT).getPendingToken();
+        String second = kakaoAuthService.kakaoLogin(loginRequest(), IP, AGENT).getPendingToken();
+
+        assertThat(first).isNotEqualTo(second);
+    }
+
+    @Test
+    @DisplayName("신규 카카오 사용자 - 이메일 대소문자를 소문자로 맞춰 중복 검사·저장한다 (AUTH-G09)")
+    void kakaoLogin_신규사용자_이메일소문자() {
+        when(userRepository.findByProviderAndProviderId(Provider.KAKAO, KAKAO_ID)).thenReturn(Optional.empty());
+        when(userInfo.getEmail()).thenReturn(" New@Kakao.COM ");
+
+        KakaoLoginResponse res = kakaoAuthService.kakaoLogin(loginRequest(), IP, AGENT);
+
+        assertThat(res.getEmail()).isEqualTo("new@kakao.com");
+        verify(userRepository).existsByEmail("new@kakao.com");
+    }
+
+    @Test
+    @DisplayName("신규 카카오 사용자 - 카카오가 준 http CDN 이미지는 https로 올리고, CDN 밖 주소는 버린다")
+    void kakaoLogin_신규사용자_프로필이미지정규화() {
+        when(userRepository.findByProviderAndProviderId(Provider.KAKAO, KAKAO_ID)).thenReturn(Optional.empty());
+        when(userInfo.getEmail()).thenReturn("new@kakao.com");
+        when(userInfo.getProfileImageUrl()).thenReturn("http://k.kakaocdn.net/dn/abc/img_640x640.jpg");
+
+        assertThat(kakaoAuthService.kakaoLogin(loginRequest(), IP, AGENT).getProfileImageUrl())
+                .isEqualTo("https://k.kakaocdn.net/dn/abc/img_640x640.jpg");
+
+        when(userInfo.getProfileImageUrl()).thenReturn("https://evil.example.com/a.jpg");
+        assertThat(kakaoAuthService.kakaoLogin(loginRequest(), IP, AGENT).getProfileImageUrl()).isNull();
     }
 
     @Test
@@ -153,7 +198,7 @@ class KakaoAuthServiceTest {
     @Test
     @DisplayName("카카오 신규 가입 완료 → SMS·세션 검증 통과 후 DB 저장 + 토큰 발급")
     void kakaoRegister_성공_토큰발급() {
-        when(valueOperations.get(RedisKeys.KAKAO_PENDING + KAKAO_ID)).thenReturn("kakao@example.com");
+        when(valueOperations.get(RedisKeys.KAKAO_PENDING + KAKAO_ID)).thenReturn(pendingValue("kakao@example.com"));
         when(userRepository.existsByEmail("kakao@example.com")).thenReturn(false);
         when(userRepository.existsByPhone("01012345678")).thenReturn(false);
 
@@ -189,7 +234,7 @@ class KakaoAuthServiceTest {
     @Test
     @DisplayName("SMS 인증 미완료 상태에서 카카오 가입 → SMS_NOT_VERIFIED (세션·중복 검증 통과 후 소비 단계에서 차단)")
     void kakaoRegister_SMS미인증_SMS_NOT_VERIFIED() {
-        when(valueOperations.get(RedisKeys.KAKAO_PENDING + KAKAO_ID)).thenReturn("kakao@example.com");
+        when(valueOperations.get(RedisKeys.KAKAO_PENDING + KAKAO_ID)).thenReturn(pendingValue("kakao@example.com"));
         when(userRepository.existsByEmail("kakao@example.com")).thenReturn(false);
         when(userRepository.existsByPhone("01012345678")).thenReturn(false);
         doThrow(new CustomException(ErrorCode.SMS_NOT_VERIFIED))
@@ -205,7 +250,7 @@ class KakaoAuthServiceTest {
     @Test
     @DisplayName("카카오 가입 시 ADMIN 역할 선택 → INVALID_ROLE + SMS nonce 미소비")
     void kakaoRegister_ADMIN역할_INVALID_ROLE() {
-        when(valueOperations.get(RedisKeys.KAKAO_PENDING + KAKAO_ID)).thenReturn("kakao@example.com");
+        when(valueOperations.get(RedisKeys.KAKAO_PENDING + KAKAO_ID)).thenReturn(pendingValue("kakao@example.com"));
 
         CustomException ex = assertThrows(CustomException.class,
                 () -> kakaoAuthService.kakaoRegister(registerRequest(Role.ADMIN), IP, AGENT));
@@ -218,7 +263,7 @@ class KakaoAuthServiceTest {
     @Test
     @DisplayName("이메일 중복으로 카카오 가입 실패 → EMAIL_ALREADY_EXISTS + SMS nonce 미소비(재시도 보존)")
     void kakaoRegister_이메일중복_nonce미소비() {
-        when(valueOperations.get(RedisKeys.KAKAO_PENDING + KAKAO_ID)).thenReturn("kakao@example.com");
+        when(valueOperations.get(RedisKeys.KAKAO_PENDING + KAKAO_ID)).thenReturn(pendingValue("kakao@example.com"));
         when(userRepository.existsByEmail("kakao@example.com")).thenReturn(true);
 
         CustomException ex = assertThrows(CustomException.class,
@@ -233,7 +278,7 @@ class KakaoAuthServiceTest {
     @Test
     @DisplayName("전화번호 중복으로 카카오 가입 실패 → PHONE_ALREADY_EXISTS + SMS nonce 미소비")
     void kakaoRegister_전화번호중복_nonce미소비() {
-        when(valueOperations.get(RedisKeys.KAKAO_PENDING + KAKAO_ID)).thenReturn("kakao@example.com");
+        when(valueOperations.get(RedisKeys.KAKAO_PENDING + KAKAO_ID)).thenReturn(pendingValue("kakao@example.com"));
         when(userRepository.existsByEmail("kakao@example.com")).thenReturn(false);
         when(userRepository.existsByPhone("01012345678")).thenReturn(true);
 
@@ -243,6 +288,111 @@ class KakaoAuthServiceTest {
         assertThat(ex.getErrorCode()).isEqualTo(ErrorCode.PHONE_ALREADY_EXISTS);
         verify(userRepository, never()).save(any());
         verify(smsService, never()).consumeVerification(anyString(), anyString());
+    }
+
+    @Test
+    @DisplayName("pendingToken이 다르면 kakaoId를 알아도 가입을 완료할 수 없다 → KAKAO_SESSION_EXPIRED, nonce·세션 보존 (AUTH-G07)")
+    void kakaoRegister_pendingToken불일치_거절() {
+        when(valueOperations.get(RedisKeys.KAKAO_PENDING + KAKAO_ID)).thenReturn(pendingValue("kakao@example.com"));
+        KakaoRegisterRequest req = registerRequest(Role.WARD);
+        when(req.getPendingToken()).thenReturn("attacker-guess");
+
+        CustomException ex = assertThrows(CustomException.class,
+                () -> kakaoAuthService.kakaoRegister(req, IP, AGENT));
+
+        assertThat(ex.getErrorCode()).isEqualTo(ErrorCode.KAKAO_SESSION_EXPIRED);
+        verify(smsService, never()).consumeVerification(anyString(), anyString());
+        verify(userRepository, never()).save(any());
+        // 본인의 가입 세션은 지우지 않는다 - 제3자 시도로 본인 가입이 막히면 안 된다
+        verify(redisTemplate, never()).delete(RedisKeys.KAKAO_PENDING + KAKAO_ID);
+    }
+
+    @Test
+    @DisplayName("pendingToken 누락 → KAKAO_SESSION_EXPIRED")
+    void kakaoRegister_pendingToken누락_거절() {
+        when(valueOperations.get(RedisKeys.KAKAO_PENDING + KAKAO_ID)).thenReturn(pendingValue("kakao@example.com"));
+        KakaoRegisterRequest req = registerRequest(Role.WARD);
+        when(req.getPendingToken()).thenReturn(null);
+
+        CustomException ex = assertThrows(CustomException.class,
+                () -> kakaoAuthService.kakaoRegister(req, IP, AGENT));
+
+        assertThat(ex.getErrorCode()).isEqualTo(ErrorCode.KAKAO_SESSION_EXPIRED);
+        verify(smsService, never()).consumeVerification(anyString(), anyString());
+    }
+
+    @Test
+    @DisplayName("배포 전 옛 형식(이메일만 저장된) 세션 → 대조할 토큰이 없어 KAKAO_SESSION_EXPIRED")
+    void kakaoRegister_옛형식세션_만료처리() {
+        when(valueOperations.get(RedisKeys.KAKAO_PENDING + KAKAO_ID)).thenReturn("kakao@example.com");
+
+        CustomException ex = assertThrows(CustomException.class,
+                () -> kakaoAuthService.kakaoRegister(registerRequest(Role.WARD), IP, AGENT));
+
+        assertThat(ex.getErrorCode()).isEqualTo(ErrorCode.KAKAO_SESSION_EXPIRED);
+        verify(smsService, never()).consumeVerification(anyString(), anyString());
+    }
+
+    @Test
+    @DisplayName("카카오 CDN 밖의 프로필 이미지 주소 → INVALID_INPUT, 문자 인증은 소비되지 않는다 (AUTH-G22·USER-G03)")
+    void kakaoRegister_허용밖이미지주소_nonce미소비() {
+        when(valueOperations.get(RedisKeys.KAKAO_PENDING + KAKAO_ID)).thenReturn(pendingValue("kakao@example.com"));
+        KakaoRegisterRequest req = registerRequest(Role.WARD);
+        when(req.getProfileImageUrl()).thenReturn("https://x.example.com/any/victim-file.png");
+
+        CustomException ex = assertThrows(CustomException.class,
+                () -> kakaoAuthService.kakaoRegister(req, IP, AGENT));
+
+        assertThat(ex.getErrorCode()).isEqualTo(ErrorCode.INVALID_INPUT);
+        verify(smsService, never()).consumeVerification(anyString(), anyString());
+        verify(userRepository, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("이름이 보이지 않는 문자뿐이면 INVALID_INPUT, nonce 미소비 / 앞뒤 공백은 정리해 저장 (AUTH-G13)")
+    void kakaoRegister_이름정규화() {
+        when(valueOperations.get(RedisKeys.KAKAO_PENDING + KAKAO_ID)).thenReturn(pendingValue("kakao@example.com"));
+        KakaoRegisterRequest invisible = registerRequest(Role.WARD);
+        when(invisible.getName()).thenReturn("\u200B\u3000");
+
+        CustomException ex = assertThrows(CustomException.class,
+                () -> kakaoAuthService.kakaoRegister(invisible, IP, AGENT));
+        assertThat(ex.getErrorCode()).isEqualTo(ErrorCode.INVALID_INPUT);
+        verify(smsService, never()).consumeVerification(anyString(), anyString());
+
+        KakaoRegisterRequest padded = registerRequest(Role.WARD);
+        when(padded.getName()).thenReturn("  홍길동\u200B ");
+        when(padded.getProfileImageUrl()).thenReturn("http://k.kakaocdn.net/dn/a.jpg");
+        kakaoAuthService.kakaoRegister(padded, IP, AGENT);
+
+        org.mockito.ArgumentCaptor<User> saved = org.mockito.ArgumentCaptor.forClass(User.class);
+        verify(userRepository).save(saved.capture());
+        assertThat(saved.getValue().getName()).isEqualTo("홍길동");
+        assertThat(saved.getValue().getProfileImage()).isEqualTo("https://k.kakaocdn.net/dn/a.jpg");
+    }
+
+    @Test
+    @DisplayName("프로필 이미지 주소 검사 - kakaocdn.net과 하위 도메인만, 500자 이하, 사용자정보·포트 없는 주소")
+    void toAllowedProfileImageUrl_경계() {
+        assertThat(KakaoAuthService.toAllowedProfileImageUrl(null)).isNull();
+        assertThat(KakaoAuthService.toAllowedProfileImageUrl("  ")).isNull();
+        assertThat(KakaoAuthService.toAllowedProfileImageUrl("https://kakaocdn.net/a.png")).isEqualTo("https://kakaocdn.net/a.png");
+        assertThat(KakaoAuthService.toAllowedProfileImageUrl("https://img1.kakaocdn.net/thumb/a.png?x=1"))
+                .isEqualTo("https://img1.kakaocdn.net/thumb/a.png?x=1");
+
+        for (String bad : new String[]{
+                "https://kakaocdn.net.evil.com/a.png",
+                "https://evilkakaocdn.net/a.png",
+                "https://user@k.kakaocdn.net/a.png",
+                "https://k.kakaocdn.net:8443/a.png",
+                "ftp://k.kakaocdn.net/a.png",
+                "javascript:alert(1)",
+                "not a url",
+                "https://k.kakaocdn.net/" + "a".repeat(480)}) {
+            CustomException ex = assertThrows(CustomException.class,
+                    () -> KakaoAuthService.toAllowedProfileImageUrl(bad), bad);
+            assertThat(ex.getErrorCode()).isEqualTo(ErrorCode.INVALID_INPUT);
+        }
     }
 
     // ─── 헬퍼 ────────────────────────────────────────────────────────────────
@@ -256,6 +406,7 @@ class KakaoAuthServiceTest {
     private KakaoRegisterRequest registerRequest(Role role) {
         KakaoRegisterRequest req = org.mockito.Mockito.mock(KakaoRegisterRequest.class);
         when(req.getKakaoId()).thenReturn(KAKAO_ID);
+        when(req.getPendingToken()).thenReturn(PENDING_TOKEN);
         when(req.getName()).thenReturn("홍길동");
         when(req.getPhone()).thenReturn("01012345678");
         when(req.getVerificationNonce()).thenReturn("nonce-uuid");
@@ -267,6 +418,10 @@ class KakaoAuthServiceTest {
         when(req.getBirthDate()).thenReturn(LocalDate.of(1990, 3, 15));
         when(req.getPostcode()).thenReturn("06236");
         return req;
+    }
+
+    private static String pendingValue(String email) {
+        return AuthInputNormalizer.sha256Hex(PENDING_TOKEN) + "|" + email;
     }
 
     private User activeKakaoUser() {

@@ -6,11 +6,15 @@ import kr.silverbridge.main.global.enums.Gender;
 import kr.silverbridge.main.global.enums.Provider;
 import kr.silverbridge.main.global.enums.Role;
 import kr.silverbridge.main.global.enums.Status;
+import org.hibernate.annotations.DynamicUpdate;
 import lombok.*;
 import java.time.LocalDate;
 import java.time.OffsetDateTime;
 
+// 바뀐 컬럼만 UPDATE한다 (ADMIN-G04). 로그인은 BCrypt 검증(수백 ms) 동안 읽어 둔 엔티티로 last_login_at을 커밋하는데,
+// 전체 컬럼 UPDATE면 그 사이 관리자가 바꾼 상태(정지)·역할·이름을 옛 값으로 덮어 정지가 조용히 풀렸다.
 @Entity
+@DynamicUpdate
 @Table(name = "users")
 @Getter
 @NoArgsConstructor(access = AccessLevel.PROTECTED)

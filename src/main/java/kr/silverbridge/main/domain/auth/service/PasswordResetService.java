@@ -74,7 +74,8 @@ public class PasswordResetService {
     //   per-email 발송 상한(아래) + 미가입 WARN 로깅으로 방어한다.
     // 단일 조회 + Redis + 외부 메일 발송이므로 트랜잭션 미사용 — SMTP 호출이 DB 커넥션을 점유하지 않게 함 (M-5)
     public void requestReset(PasswordResetRequest request, String ipAddress) {
-        String email = request.getEmail();
+        // 가입과 같은 규칙(trim+소문자)으로 정규화 - 조회·발송 상한·인증코드 Redis 키가 모두 이 값 기준이다 (AUTH-G09)
+        String email = AuthInputNormalizer.email(request.getEmail());
         User user = userRepository.findByEmail(email).orElse(null);
 
         // 미가입 → 404로 명확히 안내. enumeration 스윕 사후 탐지를 위해 WARN 로깅(마스킹+IP).
@@ -116,9 +117,10 @@ public class PasswordResetService {
     // 6자리 코드만 검증하고 소비하지 않는다. 실제 변경은 confirmReset에서 같은 코드로 재검증.
     public void verifyEmailCode(PasswordResetEmailVerifyRequest request) {
         VerificationKeyConfig config = VerificationKeyConfig.PASSWORD_RESET_EMAIL;
+        String email = AuthInputNormalizer.email(request.getEmail());
         verificationCodeValidator.verifyWithoutConsume(
-                config.verifyKey(request.getEmail()),
-                config.attemptKey(request.getEmail()),
+                config.verifyKey(email),
+                config.attemptKey(email),
                 request.getCode(),
                 SmsVerificationService.CODE_TTL_MINUTES,
                 SmsVerificationService.MAX_ATTEMPTS
@@ -135,7 +137,8 @@ public class PasswordResetService {
     public void requestResetBySms(PasswordResetSmsSendRequest request, String ipAddress) {
         String phone = request.getPhone();
 
-        List<User> matches = userRepository.findAllByNameAndPhone(request.getName(), phone);
+        // 가입과 같은 규칙으로 이름을 정규화해 조회한다 (AUTH-G13·FEUX-G11)
+        List<User> matches = userRepository.findAllByNameAndPhone(AuthInputNormalizer.name(request.getName()), phone);
         User user = matches.stream()
                 .filter(User::isLocalProvider)
                 .findFirst()
@@ -184,7 +187,8 @@ public class PasswordResetService {
         VerificationKeyConfig config = byEmail
                 ? VerificationKeyConfig.PASSWORD_RESET_EMAIL
                 : VerificationKeyConfig.PASSWORD_RESET;
-        String identifier = byEmail ? request.getEmail() : request.getPhone();
+        // 이메일은 발송 단계와 같은 정규화 값이어야 Redis 키가 맞는다 (AUTH-G09)
+        String identifier = byEmail ? AuthInputNormalizer.email(request.getEmail()) : request.getPhone();
 
         // 6자리 코드를 사용자 조회보다 "먼저" 재검증한다 (A-M1, 계정 enumeration 차단).
         // 미가입/카카오 계정에는 애초에 코드가 발급되지 않으므로(requestReset 가 조용히 종료) 여기서

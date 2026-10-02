@@ -4,6 +4,7 @@ import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
+import kr.silverbridge.main.global.validation.VisibleText;
 import lombok.Getter;
 
 @Getter
@@ -12,6 +13,7 @@ public class PasswordResetSmsSendRequest {
 
     @Schema(description = "가입 시 입력한 이름 (최대 20자)", example = "홍길동")
     @NotBlank(message = "이름을 입력해주세요.")
+    @VisibleText(message = "이름을 입력해주세요.")
     @Size(max = 20, message = "이름은 20자 이하여야 합니다.")
     private String name;
 

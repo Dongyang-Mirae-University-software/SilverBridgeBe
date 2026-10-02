@@ -30,8 +30,18 @@ public final class RedisKeys {
     public static final String KAKAO_PENDING = "kakao:pending:";
 
     // ── 로그인 보안 ────────────────────────────────────
+    // 식별자: 가입 계정은 user.id(H-2), 미가입 이메일은 정규화 이메일의 SHA-256 hex(AUTH-G25 - 응답을 가입 이메일과 같게)
     public static final String LOGIN_FAIL = "login:fail:";
     public static final String LOGIN_LOCK = "login:lock:";
+    // 비밀번호 변경·회원 탈퇴의 "현재 비밀번호" 확인 실패 카운터·잠금 (USER-G05, 키: userId).
+    // 로그인 키와 섞지 않는다 - 탈취한 access token으로 이 경로를 두드려도 본인 로그인까지 잠기지 않게.
+    public static final String USER_PW_FAIL = "user:pwfail:";
+    public static final String USER_PW_LOCK = "user:pwlock:";
+
+    // ── 로그인으로 밀려난 refresh token 구분 (AUTH-G03) ──
+    // 값: 마지막 로그인에서 발급한 refresh token의 iat(epoch 초). 키: userId. TTL = 그 토큰의 수명.
+    // 이 값보다 먼저 발급된 refresh가 DB에 없으면 "다른 기기 로그인으로 밀려난 토큰"이라 재사용 감지(전체 폐기) 없이 401만 준다.
+    public static final String REFRESH_LOGIN_AT = "refresh:login-at:";
 
     // ── 로그아웃 토큰 블랙리스트 ────────────────────────
     public static final String LOGOUT_TOKEN = "logout:";
