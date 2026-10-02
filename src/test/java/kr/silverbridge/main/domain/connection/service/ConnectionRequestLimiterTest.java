@@ -28,7 +28,7 @@ import static org.mockito.Mockito.when;
 
 /**
  * 같은 (보호자, 피보호자) 쌍의 연결 요청 반복 제한 (CONN-G04 / XCUT-G29).
- * Redis 값은 메모리 맵으로 흉내 내 "4건까지 자유, 5번째부터 쿨다운"을 그대로 따라간다.
+ * Redis 값은 메모리 맵으로 흉내 내 "5건까지 자유, 6번째부터 쿨다운"을 그대로 따라간다.
  */
 @ExtendWith(MockitoExtension.class)
 @MockitoSettings(strictness = Strictness.LENIENT)
@@ -66,18 +66,18 @@ class ConnectionRequestLimiterTest {
     }
 
     @Test
-    @DisplayName("4번째 요청까지는 자유롭게 통과한다")
-    void 네번까지_통과() {
-        for (int i = 0; i < 4; i++) {
+    @DisplayName("5번째 요청까지는 자유롭게 통과한다")
+    void 다섯번까지_통과() {
+        for (int i = 0; i < 5; i++) {
             assertThatCode(this::request).doesNotThrowAnyException();
         }
-        assertThat(store.get(KEY)).isEqualTo(4L);
+        assertThat(store.get(KEY)).isEqualTo(5L);
     }
 
     @Test
-    @DisplayName("5번째 요청부터 429 CONNECTION_REQUEST_COOLDOWN + 남은 TTL을 retryAfter로 - 이후에도 계속 거절")
-    void 다섯번째부터_거절() {
-        for (int i = 0; i < 4; i++) {
+    @DisplayName("6번째 요청부터 429 CONNECTION_REQUEST_COOLDOWN + 남은 TTL을 retryAfter로 - 이후에도 계속 거절")
+    void 여섯번째부터_거절() {
+        for (int i = 0; i < 5; i++) {
             request();
         }
 
@@ -89,7 +89,7 @@ class ConnectionRequestLimiterTest {
                     });
         }
         // 거절된 요청은 세지 않는다(서비스가 증가까지 가지 않음)
-        assertThat(store.get(KEY)).isEqualTo(4L);
+        assertThat(store.get(KEY)).isEqualTo(5L);
     }
 
     @Test
@@ -103,7 +103,7 @@ class ConnectionRequestLimiterTest {
     @Test
     @DisplayName("남은 TTL을 못 읽으면 24시간으로 안내한다")
     void TTL_없으면_윈도우로_안내() {
-        store.put(KEY, 4L);
+        store.put(KEY, 5L);
         when(redisCounter.remainingTtlSeconds(KEY)).thenReturn(-1L);
 
         assertThatThrownBy(() -> limiter.checkAllowed(GUARDIAN_ID, WARD_ID))
@@ -114,7 +114,7 @@ class ConnectionRequestLimiterTest {
     @Test
     @DisplayName("수락 후 reset하면 다시 요청할 수 있다")
     void 리셋후_다시_허용() {
-        for (int i = 0; i < 4; i++) {
+        for (int i = 0; i < 5; i++) {
             request();
         }
 
@@ -127,7 +127,7 @@ class ConnectionRequestLimiterTest {
     @Test
     @DisplayName("다른 피보호자에게 보낸 요청은 따로 센다")
     void 쌍별로_따로() {
-        for (int i = 0; i < 4; i++) {
+        for (int i = 0; i < 5; i++) {
             request();
         }
 

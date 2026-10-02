@@ -31,8 +31,8 @@ import org.springframework.stereotype.Component;
 @RequiredArgsConstructor
 public class ConnectionRequestLimiter {
 
-    // 이 건수만큼 만들어진 뒤의 요청을 막는다 - 4건까지는 자유, 5번째 요청부터 쿨다운(사용자 결정 "반복 5회 이상")
-    static final int MAX_REQUESTS_PER_PAIR = 4;
+    // 이 건수만큼 만들어진 뒤의 요청을 막는다 - 5건까지는 자유, 6번째 요청부터 쿨다운(사용자 결정 "반복 5회 이상")
+    static final int MAX_REQUESTS_PER_PAIR = 5;
     static final long WINDOW_SECONDS = 24 * 60 * 60L;
 
     private final StringRedisTemplate redisTemplate;
