@@ -124,6 +124,17 @@ class UserAccountEventListenerTest {
     }
 
     @Test
+    @DisplayName("비밀번호 변경·재설정 성공 → 현재 비밀번호 확인 잠금·실패 횟수도 삭제 (USER-G05 후속)")
+    void handlePasswordChanged_비밀번호확인잠금_해제() {
+        when(jwtProperties.getAccessTokenExpiration()).thenReturn(1_800_000L);
+        when(redisTemplate.opsForValue()).thenReturn(valueOperations);
+
+        listener.handlePasswordChanged(new PasswordChangedEvent("user-7"));
+
+        verify(redisTemplate).delete(java.util.List.of(RedisKeys.USER_PW_LOCK + "user-7", RedisKeys.USER_PW_FAIL + "user-7"));
+    }
+
+    @Test
     @DisplayName("로그인 잠금 해제 실패는 삼킨다 - 토큰 무효화는 이미 끝났다")
     void handlePasswordChanged_잠금해제실패_미전파() {
         when(jwtProperties.getAccessTokenExpiration()).thenReturn(1_800_000L);

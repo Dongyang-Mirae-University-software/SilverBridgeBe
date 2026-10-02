@@ -193,6 +193,24 @@ class KakaoAuthServiceTest {
         assertThat(ex.getErrorCode()).isEqualTo(ErrorCode.EMAIL_ALREADY_EXISTS);
     }
 
+    @Test
+    @DisplayName("AUTH-G08: 같은 이메일이 일반(LOCAL) 가입 계정 → 409 KAKAO_EMAIL_REGISTERED_LOCAL(기존 로그인 방법 안내)")
+    void kakaoLogin_LOCAL이메일충돌_기존로그인안내() {
+        when(userRepository.findByProviderAndProviderId(Provider.KAKAO, KAKAO_ID))
+                .thenReturn(Optional.empty());
+        when(userInfo.getEmail()).thenReturn("dup@example.com");
+        when(userRepository.existsByEmail("dup@example.com")).thenReturn(true);
+        User local = org.mockito.Mockito.mock(User.class);
+        when(local.isLocalProvider()).thenReturn(true);
+        when(userRepository.findByEmail("dup@example.com")).thenReturn(Optional.of(local));
+
+        CustomException ex = assertThrows(CustomException.class,
+                () -> kakaoAuthService.kakaoLogin(loginRequest(), IP, AGENT));
+
+        assertThat(ex.getErrorCode()).isEqualTo(ErrorCode.KAKAO_EMAIL_REGISTERED_LOCAL);
+        assertThat(ex.getErrorCode().getStatus().value()).isEqualTo(409);
+    }
+
     // ─── kakaoRegister ───────────────────────────────────────────────────────
 
     @Test

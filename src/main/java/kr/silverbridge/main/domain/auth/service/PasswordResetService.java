@@ -93,17 +93,21 @@ public class PasswordResetService {
 
         // per-email 발송 상한 — IP 회전으로 IP RateLimit을 우회해 특정 이메일로 메일 폭탄·비용 남용하는 것을
         // 차단 (SMS sendCode의 A-M3와 대칭). 가입 계정 확인 후에만 카운트해 미존재 이메일로 키가 늘지 않게 한다.
-        long sent = redisCounter.incrementWithTtl(
-                RedisKeys.PW_EMAIL_SEND_COUNT + resolvedEmail, EMAIL_SEND_CAP_WINDOW_SECONDS);
-        if (sent > MAX_EMAIL_SENDS_PER_WINDOW) {
-            throw new CustomException(ErrorCode.TOO_MANY_REQUESTS);
-        }
+        // 초과 시 남은 대기 시간을 실어 429, 메일 발송이 실패하면 예약을 되돌린다 (AUTH-G11 - SMS 발송과 같은 규칙)
+        String sendCountKey = RedisKeys.PW_EMAIL_SEND_COUNT + resolvedEmail;
+        SmsVerificationService.reserveSendQuota(redisTemplate, redisCounter, sendCountKey,
+                EMAIL_SEND_CAP_WINDOW_SECONDS, MAX_EMAIL_SENDS_PER_WINDOW);
 
         VerificationKeyConfig config = VerificationKeyConfig.PASSWORD_RESET_EMAIL;
 
         // 재발송 쿨다운 없음 — 잘못 눌러도 즉시 재요청 가능. 빈도 방어는 IP RateLimit + per-email 상한에 의존.
         String code = generateCode();
-        sendResetEmail(resolvedEmail, code);
+        try {
+            sendResetEmail(resolvedEmail, code);
+        } catch (RuntimeException e) {
+            SmsVerificationService.releaseSendQuota(redisTemplate, sendCountKey);
+            throw e;
+        }
 
         // 인증코드 저장 + 기존 오류 횟수 초기화 (기존 코드가 있으면 새 코드로 교체)
         redisTemplate.opsForValue()
