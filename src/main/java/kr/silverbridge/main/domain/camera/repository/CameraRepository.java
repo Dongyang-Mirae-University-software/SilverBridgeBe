@@ -41,6 +41,9 @@ public interface CameraRepository extends JpaRepository<Camera, Long> {
 
     // ===== 관리자 대시보드 집계 =====
 
+    /** 활성(isActive=true) 카메라 수 - 대시보드 "끊김" 계산의 분모(ADMIN-G20). 비활성 카메라는 구독 대상이 아니다. */
+    long countByIsActiveTrue();
+
     /** 카메라를 1대 이상 등록한 피보호자 수. */
     @Query("select count(distinct c.wardId) from Camera c")
     long countDistinctWards();

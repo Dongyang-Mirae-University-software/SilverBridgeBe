@@ -66,10 +66,10 @@ class AdminAnnouncementControllerSecurityTest {
     @WithMockUser(roles = "ADMIN")
     @DisplayName("ADMIN → 목록 조회·등록 허용")
     void admin_허용() {
-        when(adminAnnouncementService.getAnnouncements()).thenReturn(List.of(response()));
+        when(adminAnnouncementService.getAnnouncements(0, 20)).thenReturn(List.of(response()));
         when(adminAnnouncementService.createAnnouncement(any(), anyString())).thenReturn(response());
 
-        assertThatNoException().isThrownBy(() -> controller.getAnnouncements());
+        assertThatNoException().isThrownBy(() -> controller.getAnnouncements(0, 20));
         assertThatNoException().isThrownBy(() -> controller.createAnnouncement(createRequest(), "AD0001"));
     }
 
@@ -77,7 +77,7 @@ class AdminAnnouncementControllerSecurityTest {
     @WithMockUser(roles = "GUARDIAN")
     @DisplayName("보호자(GUARDIAN) → 403")
     void guardian_거부() {
-        assertThatThrownBy(() -> controller.getAnnouncements())
+        assertThatThrownBy(() -> controller.getAnnouncements(0, 20))
                 .isInstanceOf(AccessDeniedException.class);
         assertThatThrownBy(() -> controller.createAnnouncement(createRequest(), "GD0001"))
                 .isInstanceOf(AccessDeniedException.class);
@@ -87,7 +87,7 @@ class AdminAnnouncementControllerSecurityTest {
     @WithMockUser(roles = "WARD")
     @DisplayName("피보호자(WARD) → 403")
     void ward_거부() {
-        assertThatThrownBy(() -> controller.getAnnouncements())
+        assertThatThrownBy(() -> controller.getAnnouncements(0, 20))
                 .isInstanceOf(AccessDeniedException.class);
         assertThatThrownBy(() -> controller.createAnnouncement(createRequest(), "WD0001"))
                 .isInstanceOf(AccessDeniedException.class);

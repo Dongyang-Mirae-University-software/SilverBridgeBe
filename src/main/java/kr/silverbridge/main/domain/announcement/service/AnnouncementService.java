@@ -50,9 +50,13 @@ public class AnnouncementService {
     // 공지 상세 조회 (조회 시 조회수 +1)
     @Transactional
     public AnnouncementResponse getAnnouncement(Long id) {
+        // 조회수는 원자적 UPDATE로 올린다 - 엔티티를 고치면 동시 조회에서 증가분이 유실되고 수정 일시도 바뀐다(ADMIN-G05·G06).
+        if (announcementRepository.incrementViewCount(id) == 0) {
+            throw new CustomException(ErrorCode.ANNOUNCEMENT_NOT_FOUND);
+        }
+        // 증가 후 값을 응답에 싣는다(기존 동작과 동일). 쿼리가 영속성 컨텍스트를 비우므로 DB 값을 새로 읽는다.
         Announcement announcement = announcementRepository.findById(id)
                 .orElseThrow(() -> new CustomException(ErrorCode.ANNOUNCEMENT_NOT_FOUND));
-        announcement.increaseViewCount();
         User author = announcement.getAuthorId() == null
                 ? null
                 : userRepository.findById(announcement.getAuthorId()).orElse(null);

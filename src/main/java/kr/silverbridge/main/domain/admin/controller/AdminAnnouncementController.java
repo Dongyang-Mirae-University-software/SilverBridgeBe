@@ -22,6 +22,7 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.util.List;
@@ -46,21 +47,31 @@ public class AdminAnnouncementController {
 
                     [정렬]
                     - 작성 일시 내림차순
+
+                    [페이징]
+                    - page(0부터, 기본 0)·size(기본 20, 최대 50)는 선택입니다. 응답은 배열 그대로이며, 생략하면 첫 20건입니다.
+
+                    [content 축약]
+                    - 목록의 content 는 앞 100자(이모지 1개=1자)로 축약된 미리보기입니다. 전체 본문은 상세 조회로 받으세요.
                     """)
     @ApiResponses({
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "공지 목록 반환"),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "인증 토큰 없음 또는 만료", content = @Content),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "관리자 권한 필요", content = @Content),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "500", description = "서버 내부 오류", content = @Content)
     })
     @GetMapping("/select")
-    public ApiResponse<List<AdminAnnouncementResponse>> getAnnouncements() {
-        return ApiResponse.ok(adminAnnouncementService.getAnnouncements());
+    public ApiResponse<List<AdminAnnouncementResponse>> getAnnouncements(
+            @Parameter(description = "페이지 번호(0부터, 생략 시 0, 음수는 0으로 보정)") @RequestParam(defaultValue = "0") int page,
+            @Parameter(description = "페이지 크기(생략 시 20, 0 이하는 20, 최대 50)") @RequestParam(defaultValue = "20") int size) {
+        return ApiResponse.ok(adminAnnouncementService.getAnnouncements(page, size));
     }
 
     @Operation(summary = "공지 상세 조회", description = "공지 ID로 단건 상세 조회합니다.")
     @ApiResponses({
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "공지 상세 반환"),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "인증 토큰 없음 또는 만료", content = @Content),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "관리자 권한 필요", content = @Content),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "존재하지 않는 공지", content = @Content),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "500", description = "서버 내부 오류", content = @Content)
     })
@@ -75,6 +86,7 @@ public class AdminAnnouncementController {
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "등록된 공지 반환"),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "title 또는 content 누락 / title 200자 초과", content = @Content),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "인증 토큰 없음 또는 만료", content = @Content),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "관리자 권한 필요", content = @Content),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "500", description = "서버 내부 오류", content = @Content)
     })
     @PostMapping("/create")
@@ -89,6 +101,7 @@ public class AdminAnnouncementController {
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "수정된 공지 반환"),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "title 또는 content 누락 / title 200자 초과", content = @Content),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "인증 토큰 없음 또는 만료", content = @Content),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "관리자 권한 필요", content = @Content),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "존재하지 않는 공지", content = @Content),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "500", description = "서버 내부 오류", content = @Content)
     })
@@ -110,6 +123,7 @@ public class AdminAnnouncementController {
     @ApiResponses({
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "삭제 성공"),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "인증 토큰 없음 또는 만료", content = @Content),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "관리자 권한 필요", content = @Content),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "존재하지 않는 공지", content = @Content),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "500", description = "서버 내부 오류", content = @Content)
     })

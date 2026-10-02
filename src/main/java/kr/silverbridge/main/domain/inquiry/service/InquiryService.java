@@ -1,5 +1,6 @@
 package kr.silverbridge.main.domain.inquiry.service;
 
+import kr.silverbridge.main.domain.admin.support.AdminPaging;
 import kr.silverbridge.main.domain.inquiry.dto.InquiryCreateRequest;
 import kr.silverbridge.main.domain.inquiry.dto.InquiryResponse;
 import kr.silverbridge.main.domain.inquiry.entity.Inquiry;
@@ -42,11 +43,11 @@ public class InquiryService {
         return InquiryResponse.of(inquiryRepository.save(inquiry));
     }
 
-    // 내 문의 목록 (본인 것만, 최신순)
+    // 내 문의 목록 (본인 것만, 최신순, 선택 페이징·본문 축약 - ADMIN-G24)
     @Transactional(readOnly = true)
-    public List<InquiryResponse> getMyInquiries(String userId) {
-        return inquiryRepository.findByUserIdOrderByCreatedAtDesc(userId).stream()
-                .map(InquiryResponse::of)
+    public List<InquiryResponse> getMyInquiries(String userId, int page, int size) {
+        return inquiryRepository.findByUserIdOrderByCreatedAtDescIdDesc(userId, AdminPaging.of(page, size)).stream()
+                .map(InquiryResponse::ofSummary)
                 .toList();
     }
 

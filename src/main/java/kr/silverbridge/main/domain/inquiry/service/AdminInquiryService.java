@@ -15,11 +15,12 @@ import kr.silverbridge.main.global.enums.InquiryStatus;
 import kr.silverbridge.main.global.enums.AdminAuditAction;
 import kr.silverbridge.main.global.exception.CustomException;
 import kr.silverbridge.main.global.exception.ErrorCode;
+import kr.silverbridge.main.global.validation.TextSanitizer;
 import kr.silverbridge.main.global.response.PageResponse;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.data.domain.Page;
-import org.springframework.data.domain.PageRequest;
+import kr.silverbridge.main.domain.admin.support.AdminPaging;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
@@ -40,8 +41,6 @@ import java.util.stream.Collectors;
 @RequiredArgsConstructor
 public class AdminInquiryService {
 
-    private static final int MAX_PAGE_SIZE = 50;
-
     private final InquiryRepository inquiryRepository;
     private final UserRepository userRepository;
     private final ApplicationEventPublisher eventPublisher;
@@ -55,7 +54,7 @@ public class AdminInquiryService {
     public AdminInquiryListResponse getInquiries(InquiryCategory category, InquiryStatus status,
                                                  String keyword, int page, int size) {
         // 크기 상한 - 과대 요청으로 전체 문의를 한 번에 끌어가는 것을 막는다(다른 목록 API와 같은 50)
-        Pageable pageable = PageRequest.of(Math.max(page, 0), Math.clamp(size, 1, MAX_PAGE_SIZE),
+        Pageable pageable = AdminPaging.of(page, size,
                 Sort.by(Sort.Direction.DESC, "createdAt"));
         Page<Inquiry> result = inquiryRepository.searchForAdmin(category, status, normalize(keyword), pageable);
 
@@ -99,7 +98,7 @@ public class AdminInquiryService {
             throw new CustomException(ErrorCode.INQUIRY_ALREADY_ANSWERED);
         }
 
-        inquiry.answer(request.getAnswer(), adminId);
+        inquiry.answer(TextSanitizer.sanitizeMultiline(request.getAnswer()), adminId);
 
         // 보호자 개인 문의를 열어 답하는 쓰기 조작이라 감사 로그를 남긴다(2026-09-10 횡단 점검 A-2).
         // 같은 트랜잭션이라 CHECK 위반이면 답변까지 롤백된다 - enum 추가 시 V50 같은 CHECK 재정의가 필수.
