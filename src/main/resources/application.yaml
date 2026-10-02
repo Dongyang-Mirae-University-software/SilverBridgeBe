@@ -81,6 +81,12 @@ app:
     #    /ws만 403으로 조용히 막혀 "실시간 알림이 안 온다"로 나타난다(2026-09-01).
     #    프론트 로컬 dev 서버 포트(6510)를 반드시 포함할 것.
     allowed-origins: ${APP_CORS_ORIGINS:https://devdmu.gosky.kr,http://localhost:6510,http://localhost:3000,http://localhost:5173,http://localhost:8080}
+  client-ip:
+    # 신뢰 프록시(IP·CIDR, 쉼표 구분). 피어(nginx가 넘긴 X-Real-IP)가 여기 들면 X-Forwarded-For를
+    # 오른쪽부터 읽어 처음 나오는 비신뢰 주소를 사용자 IP로 쓴다(AUTH-G28 - FE 서버 경유 요청이 한 IP로 합산되던 문제).
+    # 기본값 = 루프백 + 사설망(인터넷에서 올 수 없는 주소). FE 서버의 공인 IP는 서버 .env.dev의
+    # CLIENT_IP_TRUSTED_PROXIES로 넣는다 - 환경변수는 기본값을 대체하므로 아래 값도 함께 적을 것.
+    trusted-proxies: ${CLIENT_IP_TRUSTED_PROXIES:127.0.0.0/8,::1,10.0.0.0/8,172.16.0.0/12,192.168.0.0/16,fc00::/7}
 
 jwt:
   # 반드시 .env.dev 또는 운영 환경변수로 지정 (256bit 이상 랜덤 값)
