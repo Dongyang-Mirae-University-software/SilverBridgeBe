@@ -277,6 +277,7 @@ class AuthServiceTest {
         TokenRefreshRequest req = tokenRefreshRequest("stolen-old-token");
         when(refreshTokenRepository.findByToken("stolen-old-token")).thenReturn(Optional.empty());
         when(jwtTokenProvider.validateToken("stolen-old-token")).thenReturn(true);
+        when(jwtTokenProvider.isRefreshToken("stolen-old-token")).thenReturn(true);
         when(jwtTokenProvider.getUserId("stolen-old-token")).thenReturn(TEST_USER_ID);
         when(refreshTokenRepository.existsByUserId(TEST_USER_ID)).thenReturn(true);
 
@@ -287,6 +288,23 @@ class AuthServiceTest {
         // REQUIRES_NEW 분리로 caller throw에도 폐기는 유지된다 — revocation 호출 자체를 검증
         verify(refreshTokenRevocationService).revokeAll(TEST_USER_ID);
         verify(accessLogService).log(TEST_USER_ID, kr.silverbridge.main.global.enums.AccessAction.TOKEN_REUSE_DETECTED);
+    }
+
+    @Test
+    @DisplayName("refresh 자리에 access 토큰 → INVALID_TOKEN만, 아무것도 폐기하지 않고 재사용 로그도 없음 (AUTH-G27)")
+    void refresh_access토큰_폐기없이_INVALID_TOKEN() {
+        TokenRefreshRequest req = tokenRefreshRequest("access-token");
+        when(refreshTokenRepository.findByToken("access-token")).thenReturn(Optional.empty());
+        when(jwtTokenProvider.validateToken("access-token")).thenReturn(true);
+        when(jwtTokenProvider.isRefreshToken("access-token")).thenReturn(false);
+
+        CustomException ex = assertThrows(CustomException.class,
+                () -> authService.refresh(req));
+
+        assertThat(ex.getErrorCode()).isEqualTo(ErrorCode.INVALID_TOKEN);
+        verify(refreshTokenRevocationService, never()).revokeAll(anyString());
+        verify(refreshTokenRepository, never()).existsByUserId(anyString());
+        verify(accessLogService, never()).log(anyString(), eq(kr.silverbridge.main.global.enums.AccessAction.TOKEN_REUSE_DETECTED));
     }
 
     @Test

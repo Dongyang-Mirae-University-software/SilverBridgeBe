@@ -8,6 +8,7 @@ import kr.silverbridge.main.domain.user.event.UserRoleChangedEvent;
 import kr.silverbridge.main.domain.user.event.UserWithdrawnEvent;
 import kr.silverbridge.main.global.enums.AccessAction;
 import kr.silverbridge.main.global.jwt.JwtProperties;
+import kr.silverbridge.main.global.jwt.TokenInvalidation;
 import kr.silverbridge.main.global.util.RedisKeys;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -18,6 +19,7 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.event.TransactionPhase;
 import org.springframework.transaction.event.TransactionalEventListener;
 
+import java.util.List;
 import java.util.concurrent.TimeUnit;
 
 /**
@@ -91,14 +93,29 @@ public class UserAccountEventListener {
     public void handlePasswordChanged(PasswordChangedEvent event) {
         refreshTokenRepository.deleteByUserId(event.userId());
         invalidatePreviousAccessTokens(event.userId());
+        clearLoginLock(event.userId());
     }
 
-    // 무효화 기준 시각을 Redis에 저장 — 이 시각 이전 iat를 가진 access token은 401 처리.
+    // 비밀번호 변경·재설정 성공 = 본인 확인을 마친 것이므로 로그인 잠금·실패 횟수를 함께 푼다 (AUTH-G01).
+    // 안 풀면 5회 실패로 잠긴 사람이 재설정을 끝내고도 최대 30분간 새 비밀번호로 로그인하지 못한다.
+    // 키 형식은 AuthService.login과 같다(RedisKeys.LOGIN_LOCK/LOGIN_FAIL + userId).
+    // best-effort - 실패해도 잠금은 TTL로 풀리고, 이미 끝난 토큰 무효화를 되돌릴 이유가 없다.
+    private void clearLoginLock(String userId) {
+        try {
+            redisTemplate.delete(List.of(RedisKeys.LOGIN_LOCK + userId, RedisKeys.LOGIN_FAIL + userId));
+        } catch (RuntimeException e) {
+            log.warn("[PW-CHANGE] 로그인 잠금 해제 실패 - TTL 만료로 풀림 userId={} error={}",
+                    userId, e.getClass().getSimpleName());
+        }
+    }
+
+    // 무효화 기준 시각을 Redis에 저장 — 이 시각보다 앞선 초에 발급된 access token은 401 처리.
+    // 초 단위(내림)로 저장해 같은 초에 새로 받은 토큰은 살린다(D2, TokenInvalidation).
     // 비밀번호 변경·회원 탈퇴 공통으로 사용한다. TTL은 access token 만료시간과 동일 — 자연 만료 후엔 메모도 자동 제거.
     private void invalidatePreviousAccessTokens(String userId) {
         redisTemplate.opsForValue().set(
                 RedisKeys.PASSWORD_INVALIDATE + userId,
-                String.valueOf(System.currentTimeMillis()),
+                TokenInvalidation.encode(System.currentTimeMillis()),
                 jwtProperties.getAccessTokenExpiration(), TimeUnit.MILLISECONDS
         );
     }
