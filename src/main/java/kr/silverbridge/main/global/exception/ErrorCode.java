@@ -24,6 +24,8 @@ public enum ErrorCode {
     EMAIL_ACCOUNT_NOT_FOUND(HttpStatus.NOT_FOUND, "해당 이메일로 가입된 계정이 없습니다."),
     LOGIN_LOCKED(HttpStatus.TOO_MANY_REQUESTS, "비밀번호를 5회 이상 틀렸습니다. 30분 후 다시 시도해주세요."),
     CANNOT_MODIFY_ADMIN(HttpStatus.FORBIDDEN, "관리자 계정은 변경하거나 삭제할 수 없습니다."),
+    // 관리자 본인 탈퇴 차단(USER-G08, 결정 D4-A) - 관리자는 DB로만 만들어져 마지막 관리자가 사라지면 운영 주체가 없어진다
+    ADMIN_CANNOT_WITHDRAW(HttpStatus.FORBIDDEN, "관리자 계정은 탈퇴할 수 없습니다."),
     INVALID_ROLE(HttpStatus.BAD_REQUEST, "역할은 피보호자 또는 보호자만 선택할 수 있습니다."),
     EMAIL_ALREADY_EXISTS(HttpStatus.CONFLICT, "이미 사용 중인 이메일입니다."),
     PHONE_ALREADY_EXISTS(HttpStatus.CONFLICT, "이미 사용 중인 전화번호입니다."),

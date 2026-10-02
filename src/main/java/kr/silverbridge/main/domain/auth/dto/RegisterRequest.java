@@ -11,6 +11,7 @@ import kr.silverbridge.main.global.enums.Gender;
 import kr.silverbridge.main.global.enums.Role;
 import kr.silverbridge.main.global.validation.ValidBirthDate;
 import kr.silverbridge.main.global.validation.ValidPassword;
+import kr.silverbridge.main.global.validation.VisibleText;
 import lombok.Getter;
 
 import java.time.LocalDate;
@@ -23,6 +24,9 @@ public class RegisterRequest {
     @NotBlank(message = "이메일을 입력해주세요.")
     @Email(message = "이메일 형식이 올바르지 않습니다.")
     @Size(max = 50, message = "이메일은 50자 이내여야 합니다.")
+    // 카카오 대체 이메일 형식(kakao_{숫자}@kakao.com)은 카카오 가입 전용으로 예약한다 - 일반 가입으로 선점 금지 (AUTH-G08)
+    @Pattern(regexp = "^(?!(?i)\\s*kakao_\\d+@kakao\\.com\\s*$).*$", flags = Pattern.Flag.DOTALL,
+            message = "사용할 수 없는 이메일입니다.")
     private String email;
 
     @Schema(description = "비밀번호 (영문·숫자·특수문자 포함, 공백 없이 8~64자)", example = "Password1!")
@@ -33,6 +37,7 @@ public class RegisterRequest {
 
     @Schema(description = "이름 (최대 20자)", example = "홍길동")
     @NotBlank(message = "이름을 입력해주세요.")
+    @VisibleText(message = "이름을 입력해주세요.")
     @Size(max = 20, message = "이름은 20자 이하여야 합니다.")
     private String name;
 

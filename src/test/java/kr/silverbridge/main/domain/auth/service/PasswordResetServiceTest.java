@@ -1,6 +1,7 @@
 package kr.silverbridge.main.domain.auth.service;
 
 import kr.silverbridge.main.domain.auth.dto.PasswordResetConfirmRequest;
+import kr.silverbridge.main.domain.auth.dto.PasswordResetEmailVerifyRequest;
 import kr.silverbridge.main.domain.auth.dto.PasswordResetRequest;
 import kr.silverbridge.main.domain.auth.dto.PasswordResetSmsSendRequest;
 import kr.silverbridge.main.domain.user.entity.User;
@@ -232,6 +233,60 @@ class PasswordResetServiceTest {
 
         assertThat(ex.getErrorCode()).isEqualTo(ErrorCode.SOCIAL_USER_NO_PASSWORD);
         verify(verificationCodeValidator, never()).consume(anyString(), anyString());
+    }
+
+    // ─── 입력 정규화 (AUTH-G09·AUTH-G13) ─────────────────────────────────────
+
+    @Test
+    @DisplayName("대문자·공백이 섞인 이메일로 재설정 요청 → 소문자로 조회하고 인증코드 키도 소문자 기준")
+    void requestReset_이메일정규화() {
+        when(redisTemplate.opsForValue()).thenReturn(valueOperations);
+        PasswordResetRequest req = mock(PasswordResetRequest.class);
+        when(req.getEmail()).thenReturn(" User@Example.COM ");
+        when(userRepository.findByEmail(EMAIL)).thenReturn(Optional.of(localUser("encodedCurrent")));
+        when(redisCounter.incrementWithTtl(anyString(), anyLong())).thenReturn(1L);
+
+        passwordResetService.requestReset(req, IP);
+
+        verify(userRepository).findByEmail(EMAIL);
+        verify(valueOperations).set(eq(VerificationKeyConfig.PASSWORD_RESET_EMAIL.verifyKey(EMAIL)),
+                anyString(), anyLong(), any());
+    }
+
+    @Test
+    @DisplayName("이메일 코드 확인·재설정도 같은 정규화 키를 쓴다 - 대문자로 입력해도 발송 때 저장한 코드와 맞는다")
+    void verifyAndConfirm_이메일정규화키() {
+        PasswordResetEmailVerifyRequest verifyReq = mock(PasswordResetEmailVerifyRequest.class);
+        when(verifyReq.getEmail()).thenReturn("USER@example.com");
+        when(verifyReq.getCode()).thenReturn("123456");
+
+        passwordResetService.verifyEmailCode(verifyReq);
+
+        VerificationKeyConfig config = VerificationKeyConfig.PASSWORD_RESET_EMAIL;
+        verify(verificationCodeValidator).verifyWithoutConsume(eq(config.verifyKey(EMAIL)), eq(config.attemptKey(EMAIL)),
+                eq("123456"), anyLong(), anyInt());
+
+        PasswordResetConfirmRequest confirmReq = confirmRequest("User@Example.com", null, "Brand-New1!");
+        when(userRepository.findByEmail(EMAIL)).thenReturn(Optional.of(localUser("encodedCurrent")));
+        when(passwordEncoder.encode("Brand-New1!")).thenReturn("encodedNew");
+
+        passwordResetService.confirmReset(confirmReq, IP, AGENT);
+
+        verify(userRepository).findByEmail(EMAIL);
+        verify(verificationCodeValidator).consume(config.verifyKey(EMAIL), config.attemptKey(EMAIL));
+    }
+
+    @Test
+    @DisplayName("SMS 재설정 - 이름 앞뒤 공백·제로폭 문자를 정리해 조회한다 (AUTH-G13)")
+    void requestResetBySms_이름정규화() {
+        PasswordResetSmsSendRequest req = mock(PasswordResetSmsSendRequest.class);
+        when(req.getName()).thenReturn("​" + NAME + " ");
+        when(req.getPhone()).thenReturn(PHONE);
+        when(userRepository.findAllByNameAndPhone(NAME, PHONE)).thenReturn(java.util.List.of(localUser("encodedCurrent")));
+
+        passwordResetService.requestResetBySms(req, IP);
+
+        verify(userRepository).findAllByNameAndPhone(NAME, PHONE);
     }
 
     // ─── 헬퍼 ────────────────────────────────────────────────────────────────

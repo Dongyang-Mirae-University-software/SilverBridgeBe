@@ -36,6 +36,12 @@ public class KakaoLoginResponse {
     @Schema(description = "[신규 회원 전용] 카카오 프로필 이미지 URL", example = "https://k.kakaocdn.net/dn/...")
     private String profileImageUrl;
 
+    // 카카오 가입 세션을 시작한 본인만 가입을 완료할 수 있게 하는 일회용 값 (AUTH-G07).
+    // kakaoId는 URL 등으로 새어 나갈 수 있어 그것만으로는 본인을 확인할 수 없다.
+    @Schema(description = "[신규 회원 전용] 가입 완료(POST /api/auth/signup/kakao)에 그대로 전달하는 일회용 값. URL 쿼리에 싣지 말 것. 카카오 로그인을 다시 하면 새 값으로 바뀐다.",
+            example = "Q2hhbmdlTWUtOTlfcmFuZG9tLXBlbmRpbmctdG9rZW4")
+    private String pendingToken;
+
     // 기존 회원 전용 필드
     @Schema(description = "[기존 회원 전용] API 호출 시 Authorization 헤더에 담을 토큰. 'Bearer {accessToken}' 형식으로 사용. 유효 시간: 30분", example = "eyJhbGciOiJIUzI1NiJ9...")
     private String accessToken;
@@ -61,13 +67,15 @@ public class KakaoLoginResponse {
                 .build();
     }
 
-    public static KakaoLoginResponse ofNewUser(String kakaoId, String email, String name, String profileImageUrl) {
+    public static KakaoLoginResponse ofNewUser(String kakaoId, String email, String name, String profileImageUrl,
+                                               String pendingToken) {
         return KakaoLoginResponse.builder()
                 .isNewUser(true)
                 .kakaoId(kakaoId)
                 .email(email)
                 .name(name)
                 .profileImageUrl(profileImageUrl)
+                .pendingToken(pendingToken)
                 .build();
     }
 }

@@ -130,8 +130,11 @@ public class JwtTokenProvider {
     }
 
     private String buildToken(String userId, String email, String role, long expiration) {
+        // jti - 같은 초에 다시 로그인해도 access 토큰이 바이트까지 같아지지 않게 한다. 같으면 직전 로그아웃의
+        // 블랙리스트(토큰 해시 키)에 새 토큰까지 걸렸다(refresh의 AUTH-G04와 같은 이유).
         return Jwts.builder()
                 .subject(userId)
+                .id(UUID.randomUUID().toString())
                 .claim("email", email)
                 .claim("role", role)
                 .claim(CLAIM_TYPE, TYPE_ACCESS)
