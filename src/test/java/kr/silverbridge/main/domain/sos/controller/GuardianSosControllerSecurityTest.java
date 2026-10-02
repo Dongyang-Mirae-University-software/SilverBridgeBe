@@ -1,7 +1,7 @@
 package kr.silverbridge.main.domain.sos.controller;
 
 import kr.silverbridge.main.domain.sos.service.GuardianSosService;
-import kr.silverbridge.main.global.response.PageResponse;
+import kr.silverbridge.main.domain.sos.dto.SosHistoryPage;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -50,17 +50,17 @@ class GuardianSosControllerSecurityTest {
     @WithMockUser(roles = "GUARDIAN")
     @DisplayName("GUARDIAN 역할 → 이력 조회 허용")
     void guardian_이력조회_허용() {
-        when(guardianSosService.getHistory(anyString(), any(), anyInt(), anyInt()))
-                .thenReturn(new PageResponse<>(List.of(), 0, 20, 0, 0, true));
+        when(guardianSosService.getHistory(anyString(), any(), any(), anyInt(), anyInt()))
+                .thenReturn(new SosHistoryPage(List.of(), 0, 20, 0, 0, true, SosHistoryPage.Counts.EMPTY));
 
-        assertThatNoException().isThrownBy(() -> controller.getSosHistory("GD0001", null, 0, 20));
+        assertThatNoException().isThrownBy(() -> controller.getSosHistory("GD0001", null, null, 0, 20));
     }
 
     @Test
     @WithMockUser(roles = "WARD")
     @DisplayName("피보호자(WARD) → 이력 조회 403 (AccessDeniedException)")
     void ward_거부() {
-        assertThatThrownBy(() -> controller.getSosHistory("WD0001", null, 0, 20))
+        assertThatThrownBy(() -> controller.getSosHistory("WD0001", null, null, 0, 20))
                 .isInstanceOf(AccessDeniedException.class);
     }
 
@@ -68,7 +68,7 @@ class GuardianSosControllerSecurityTest {
     @WithMockUser(roles = "ADMIN")
     @DisplayName("관리자(ADMIN) → 이력 조회 403 (AccessDeniedException)")
     void admin_거부() {
-        assertThatThrownBy(() -> controller.getSosHistory("AD0001", null, 0, 20))
+        assertThatThrownBy(() -> controller.getSosHistory("AD0001", null, null, 0, 20))
                 .isInstanceOf(AccessDeniedException.class);
     }
 }

@@ -111,6 +111,16 @@ public class SosNotificationListener {
                         guardianId, event.sosEventId(), e);
             }
         }
+        if (sent == 0) {
+            // 아무에게도 나가지 못했다 - 쿨다운을 풀어 30초 안의 재요청이 다시 발송되게 한다(SOS-G09).
+            // 판단 근거는 이 리스너가 아는 범위(보호자별 발송 호출이 전부 예외)뿐이다. 디스패처는 채널 실패를 안에서
+            // 삼키고 이력(notification_log FAILED)만 남기며 결과를 돌려주지 않으므로, "FCM·SMS 모두 실패"는
+            // 여기서 구분할 수 없다(디스패처가 결과를 돌려주게 되면 그때 기준을 넓힌다).
+            cooldown.release(event.wardId());
+            log.warn("SOS 알림이 한 건도 발송되지 않아 쿨다운 해제(재요청 시 재발송): wardId={}, sosEventId={}, 대상 보호자={}명",
+                    event.wardId(), event.sosEventId(), guardianIds.size());
+            return;
+        }
         log.info("SOS 긴급 알림 발송: sosEventId={}, 대상 보호자={}명, 발송={}건, 최근 {}분 내 {}번째",
                 event.sosEventId(), guardianIds.size(), sent, REPEAT_WINDOW.toMinutes(), repeatCount);
     }

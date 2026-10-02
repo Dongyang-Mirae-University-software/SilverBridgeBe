@@ -12,9 +12,11 @@ import org.springframework.data.redis.core.ValueOperations;
 import java.time.Duration;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatNoException;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 /**
@@ -57,5 +59,21 @@ class SosNotificationCooldownTest {
         when(redisTemplate.opsForValue()).thenThrow(new RuntimeException("redis down"));
 
         assertThat(cooldown.tryAcquire(WARD_ID)).isTrue();
+    }
+
+    @Test
+    @DisplayName("release → 쿨다운 키를 지운다 (아무에게도 못 보낸 SOS의 재요청이 다시 발송되게 - SOS-G09)")
+    void release_키삭제() {
+        cooldown.release(WARD_ID);
+
+        verify(redisTemplate).delete(KEY);
+    }
+
+    @Test
+    @DisplayName("release 중 Redis 장애 → 예외를 삼킨다(키는 TTL로 자동 만료)")
+    void release_Redis장애_삼킴() {
+        when(redisTemplate.delete(KEY)).thenThrow(new RuntimeException("redis down"));
+
+        assertThatNoException().isThrownBy(() -> cooldown.release(WARD_ID));
     }
 }

@@ -15,6 +15,7 @@ import java.util.EnumMap;
 import java.util.EnumSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 
 /**
@@ -60,15 +61,26 @@ public class NotificationSettingService {
         return NotificationSettingResponse.of(settings);
     }
 
-    /** 전달된 채널만 upsert하고, 갱신된 전체 설정을 반환한다. */
+    /**
+     * 전달된 채널만 upsert하고, 갱신된 전체 설정을 반환한다.
+     *
+     * <p>행이 없는 채널은 {@code INSERT ... ON CONFLICT DO NOTHING}으로 넣는다(USER-G12). 동시 요청이 먼저 넣었으면
+     * (0건) 그 행을 다시 읽어 이 요청의 값으로 갱신한다 - 두 요청 모두 성공하고 나중 값이 남는다.</p>
+     */
     @Transactional
     public NotificationSettingResponse updateSettings(String userId, NotificationSettingUpdateRequest request) {
         for (var item : request.settings()) {
-            repository.findByUserIdAndChannelType(userId, item.channelType())
-                    .ifPresentOrElse(
-                            existing -> existing.updateEnabled(item.enabled()),
-                            () -> repository.save(
-                                    UserNotificationSetting.of(userId, item.channelType(), item.enabled())));
+            NotificationChannelType channelType = item.channelType();
+            Optional<UserNotificationSetting> existing = repository.findByUserIdAndChannelType(userId, channelType);
+            if (existing.isPresent()) {
+                existing.get().updateEnabled(item.enabled());
+            } else if (repository.insertIfAbsent(userId, channelType.name(), item.enabled()) == 0) {
+                // 동시 요청이 먼저 넣었다 - 커밋된 그 행을 읽어 갱신한다(READ COMMITTED라 새 문장에서 보인다)
+                repository.findByUserIdAndChannelType(userId, channelType)
+                        .orElseThrow(() -> new IllegalStateException(
+                                "알림 설정 동시 저장 후 행을 찾지 못함: " + userId + "/" + channelType))
+                        .updateEnabled(item.enabled());
+            }
         }
         return getSettings(userId);
     }

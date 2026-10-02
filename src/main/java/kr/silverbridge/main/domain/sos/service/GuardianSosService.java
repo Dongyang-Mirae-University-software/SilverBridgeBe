@@ -2,13 +2,14 @@ package kr.silverbridge.main.domain.sos.service;
 
 import kr.silverbridge.main.domain.connection.service.ConnectionService;
 import kr.silverbridge.main.domain.sos.dto.SosHistoryItem;
+import kr.silverbridge.main.domain.sos.dto.SosHistoryPage;
 import kr.silverbridge.main.domain.sos.entity.SosEvent;
+import kr.silverbridge.main.domain.sos.entity.SosTriggerType;
 import kr.silverbridge.main.domain.sos.repository.SosEventRepository;
 import kr.silverbridge.main.domain.user.entity.User;
 import kr.silverbridge.main.domain.user.repository.UserRepository;
 import kr.silverbridge.main.global.exception.CustomException;
 import kr.silverbridge.main.global.exception.ErrorCode;
-import kr.silverbridge.main.global.response.PageResponse;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
@@ -53,23 +54,47 @@ public class GuardianSosService {
     /**
      * 보호자용 SOS 이력 조회(발생 최신순).
      *
-     * @param guardianId 조회하는 보호자 ID (인증 주체)
-     * @param wardId     특정 피보호자만 볼 때 지정. {@code null}·공백이면 ACTIVE 연결된 피보호자 전원의 이력을 합친다
+     * <p>경로별 건수({@code counts})는 <b>필터·페이지와 무관하게 조회 범위 전체</b>를 센다(SOS-G12). 화면 탭 숫자를
+     * 현재 페이지로 세면 2페이지 이후에만 있는 경로가 0건으로 보였다. 집계 범위도 목록과 같은 인가 목록이다 -
+     * ACTIVE 연결이 아닌 피보호자의 건수는 섞이지 않는다.</p>
+     *
+     * @param guardianId  조회하는 보호자 ID (인증 주체)
+     * @param wardId      특정 피보호자만 볼 때 지정. {@code null}·공백이면 ACTIVE 연결된 피보호자 전원의 이력을 합친다
+     * @param triggerType 발생 경로 필터. {@code null}이면 전체
      * @throws CustomException {@code SOS_NOT_AUTHORIZED} - wardId를 지정했으나 ACTIVE 연결이 아닐 때
      */
     @Transactional(readOnly = true)
-    public PageResponse<SosHistoryItem> getHistory(String guardianId, String wardId, int page, int size) {
+    public SosHistoryPage getHistory(String guardianId, String wardId, SosTriggerType triggerType,
+                                     int page, int size) {
         Pageable pageable = PageRequest.of(Math.max(page, 0), normalizeSize(size));
         List<String> wardIds = resolveVisibleWardIds(guardianId, wardId);
         if (wardIds.isEmpty()) {
             // 연결된 피보호자가 없으면 빈 페이지 - 보호자 카메라 목록(allowlist)과 같은 방식
-            return PageResponse.of(Page.empty(pageable));
+            return SosHistoryPage.of(Page.empty(pageable), SosHistoryPage.Counts.EMPTY);
         }
 
-        Page<SosEvent> events = sosEventRepository.findByWardIdInOrderByCreatedAtDesc(wardIds, pageable);
+        Page<SosEvent> events = (triggerType == null)
+                ? sosEventRepository.findByWardIdInOrderByCreatedAtDesc(wardIds, pageable)
+                : sosEventRepository.findByWardIdInAndTriggerTypeOrderByCreatedAtDesc(wardIds, triggerType, pageable);
         Map<String, String> names = resolveWardNames(events.getContent());
 
-        return PageResponse.of(events.map(event -> SosHistoryItem.of(event, names.get(event.getWardId()))));
+        return SosHistoryPage.of(
+                events.map(event -> SosHistoryItem.of(event, names.get(event.getWardId()))),
+                countByTriggerType(wardIds));
+    }
+
+    /** 인가된 피보호자 범위의 경로별 전체 건수. 집계에 없는 경로는 0건이다(범위 안에서 실제로 센 값). */
+    private SosHistoryPage.Counts countByTriggerType(List<String> wardIds) {
+        long sosButton = 0;
+        long guardianCall = 0;
+        for (SosEventRepository.TriggerTypeCount row : sosEventRepository.countByTriggerType(wardIds)) {
+            if (row.getTriggerType() == SosTriggerType.GUARDIAN_CALL) {
+                guardianCall += row.getTotal();
+            } else if (row.getTriggerType() == SosTriggerType.SOS_BUTTON) {
+                sosButton += row.getTotal();
+            }
+        }
+        return SosHistoryPage.Counts.of(sosButton, guardianCall);
     }
 
     /**

@@ -9,6 +9,8 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.Optional;
+
 /**
  * 피보호자 SOS 동작 설정 조회/변경 서비스.
  *
@@ -39,14 +41,24 @@ public class SosSettingService {
         return SosSettingResponse.of(action);
     }
 
-    /** 설정을 upsert하고 갱신된 값을 반환한다. */
+    /**
+     * 설정을 upsert하고 갱신된 값을 반환한다.
+     *
+     * <p>행이 없으면 {@code INSERT ... ON CONFLICT DO NOTHING}으로 넣는다(SOS-G17). 동시 최초 저장으로 다른 요청이
+     * 먼저 넣었으면(0건) 그 행을 다시 읽어 이 요청의 값으로 갱신한다 - 두 요청 모두 성공하고 나중 값이 남는다.</p>
+     */
     @Transactional
     public SosSettingResponse updateSetting(String userId, SosSettingUpdateRequest request) {
         SosAction action = request.sosAction();
-        repository.findByUserId(userId)
-                .ifPresentOrElse(
-                        existing -> existing.updateSosAction(action),
-                        () -> repository.save(SosSetting.of(userId, action)));
+        Optional<SosSetting> existing = repository.findByUserId(userId);
+        if (existing.isPresent()) {
+            existing.get().updateSosAction(action);
+        } else if (repository.insertIfAbsent(userId, action.name()) == 0) {
+            // 동시 요청이 먼저 넣었다 - 커밋된 그 행을 읽어 갱신한다(READ COMMITTED라 새 문장에서 보인다)
+            repository.findByUserId(userId)
+                    .orElseThrow(() -> new IllegalStateException("SOS 설정 동시 저장 후 행을 찾지 못함: " + userId))
+                    .updateSosAction(action);
+        }
         return SosSettingResponse.of(action);
     }
 }
