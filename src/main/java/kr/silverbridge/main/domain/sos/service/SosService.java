@@ -14,6 +14,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import kr.silverbridge.main.global.validation.TextSanitizer;
 import org.springframework.util.StringUtils;
 
 /**
@@ -71,6 +72,7 @@ public class SosService {
      * (위치 문구는 알림 발송에 쓰이지 않으므로 여기서 정규화만 하고 통보 경로는 손대지 않는다.)
      */
     private String normalizeLocation(String location) {
-        return StringUtils.hasText(location) ? location.trim() : null;
+        String cleaned = TextSanitizer.sanitize(location);
+        return StringUtils.hasText(cleaned) ? cleaned : null;
     }
 }
