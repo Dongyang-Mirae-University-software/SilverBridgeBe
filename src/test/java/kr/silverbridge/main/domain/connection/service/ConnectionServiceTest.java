@@ -30,6 +30,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.mockito.junit.jupiter.MockitoSettings;
 import org.mockito.quality.Strictness;
 import org.springframework.context.ApplicationEventPublisher;
+import org.springframework.dao.DataIntegrityViolationException;
 
 import java.util.List;
 import java.util.Optional;
@@ -88,7 +89,7 @@ class ConnectionServiceTest {
             connectionService.requestConnectionAsGuardian(GUARDIAN_ID, dto);
 
             ArgumentCaptor<Connection> savedCaptor = ArgumentCaptor.forClass(Connection.class);
-            verify(connectionRepository).save(savedCaptor.capture());
+            verify(connectionRepository).saveAndFlush(savedCaptor.capture());
             Connection saved = savedCaptor.getValue();
             assertThat(saved.getGuardianId()).isEqualTo(GUARDIAN_ID);
             assertThat(saved.getWardId()).isEqualTo(WARD_ID);
@@ -186,6 +187,57 @@ class ConnectionServiceTest {
 
             assertThat(ex.getErrorCode()).isEqualTo(ErrorCode.CONNECTION_ALREADY_EXISTS);
             verify(connectionRepository, never()).save(any());
+            verify(connectionRepository, never()).saveAndFlush(any());
+        }
+
+        @Test
+        @DisplayName("동시 요청이 exists 검사를 함께 통과해 유니크 위반(23505) → 범용 문구가 아닌 CONNECTION_ALREADY_EXISTS, 이벤트 없음 (CONN-G11)")
+        void 동시중복_유니크위반은_CONNECTION_ALREADY_EXISTS() {
+            ConnectionRequestDto dto = requestDto(WARD_ID, RELATION);
+            when(userRepository.findById(GUARDIAN_ID)).thenReturn(Optional.of(guardian()));
+            when(userRepository.findById(WARD_ID)).thenReturn(Optional.of(ward()));
+            when(connectionRepository.saveAndFlush(any(Connection.class)))
+                    .thenThrow(new DataIntegrityViolationException("uq_connections_live",
+                            new java.sql.SQLException("duplicate key", "23505")));
+
+            CustomException ex = assertThrows(CustomException.class,
+                    () -> connectionService.requestConnectionAsGuardian(GUARDIAN_ID, dto));
+
+            assertThat(ex.getErrorCode()).isEqualTo(ErrorCode.CONNECTION_ALREADY_EXISTS);
+            verify(eventPublisher, never()).publishEvent(any());
+        }
+
+        @Test
+        @DisplayName("유니크가 아닌 무결성 위반(FK 등)은 중복으로 바꾸지 않고 그대로 던진다 (CONN-G11)")
+        void 유니크가_아닌_위반은_그대로() {
+            ConnectionRequestDto dto = requestDto(WARD_ID, RELATION);
+            when(userRepository.findById(GUARDIAN_ID)).thenReturn(Optional.of(guardian()));
+            when(userRepository.findById(WARD_ID)).thenReturn(Optional.of(ward()));
+            DataIntegrityViolationException fk = new DataIntegrityViolationException("fk",
+                    new java.sql.SQLException("fk violation", "23503"));
+            when(connectionRepository.saveAndFlush(any(Connection.class))).thenThrow(fk);
+
+            DataIntegrityViolationException thrown = assertThrows(DataIntegrityViolationException.class,
+                    () -> connectionService.requestConnectionAsGuardian(GUARDIAN_ID, dto));
+
+            assertThat(thrown).isSameAs(fk);
+        }
+
+        @Test
+        @DisplayName("관계값의 제로폭 문자·전각공백을 정리해 저장하고 이벤트에도 정리된 값을 싣는다 (CONN-G14)")
+        void 관계값은_정리해서_저장() {
+            ConnectionRequestDto dto = requestDto(WARD_ID, "\u200B아들\u3000");
+            when(userRepository.findById(GUARDIAN_ID)).thenReturn(Optional.of(guardian()));
+            when(userRepository.findById(WARD_ID)).thenReturn(Optional.of(ward()));
+
+            connectionService.requestConnectionAsGuardian(GUARDIAN_ID, dto);
+
+            ArgumentCaptor<Connection> savedCaptor = ArgumentCaptor.forClass(Connection.class);
+            verify(connectionRepository).saveAndFlush(savedCaptor.capture());
+            assertThat(savedCaptor.getValue().getRelation()).isEqualTo("아들");
+            ArgumentCaptor<ConnectionRequestedEvent> eventCaptor = ArgumentCaptor.forClass(ConnectionRequestedEvent.class);
+            verify(eventPublisher).publishEvent(eventCaptor.capture());
+            assertThat(eventCaptor.getValue().relation()).isEqualTo("아들");
         }
     }
 
@@ -201,6 +253,7 @@ class ConnectionServiceTest {
             Connection connection = connection(ConnectionStatus.PENDING);
             when(connectionRepository.findById(CONNECTION_ID)).thenReturn(java.util.Optional.of(connection));
             when(userRepository.findById(GUARDIAN_ID)).thenReturn(java.util.Optional.of(guardian()));
+            when(userRepository.findById(WARD_ID)).thenReturn(java.util.Optional.of(ward()));
 
             connectionService.acceptConnectionAsWard(WARD_ID, CONNECTION_ID);
 
@@ -219,6 +272,7 @@ class ConnectionServiceTest {
         void 정지된_보호자_요청은_수락_불가() {
             Connection connection = connection(ConnectionStatus.PENDING);
             when(connectionRepository.findById(CONNECTION_ID)).thenReturn(java.util.Optional.of(connection));
+            when(userRepository.findById(WARD_ID)).thenReturn(java.util.Optional.of(ward()));
             when(userRepository.findById(GUARDIAN_ID)).thenReturn(java.util.Optional.of(User.builder()
                     .id(GUARDIAN_ID).email("g@example.com").name("정지보호자")
                     .role(Role.GUARDIAN).status(Status.RESTRICTED).provider(Provider.LOCAL).build()));
@@ -236,6 +290,7 @@ class ConnectionServiceTest {
         void 탈퇴_진행_보호자_요청은_수락_불가() {
             Connection connection = connection(ConnectionStatus.PENDING);
             when(connectionRepository.findById(CONNECTION_ID)).thenReturn(java.util.Optional.of(connection));
+            when(userRepository.findById(WARD_ID)).thenReturn(java.util.Optional.of(ward()));
             when(userRepository.findById(GUARDIAN_ID)).thenReturn(java.util.Optional.of(User.builder()
                     .id(GUARDIAN_ID).email("g@example.com").name("탈퇴보호자")
                     .role(Role.GUARDIAN).status(Status.INACTIVE).provider(Provider.LOCAL).build()));
@@ -245,6 +300,52 @@ class ConnectionServiceTest {
 
             assertThat(ex.getErrorCode()).isEqualTo(ErrorCode.CONNECTION_TARGET_NOT_ACTIVE);
             assertThat(connection.getStatus()).isEqualTo(ConnectionStatus.PENDING);
+        }
+
+        @Test
+        @DisplayName("요청 뒤 피보호자가 보호자로 바뀌었으면 수락하지 않고 요청을 CANCELLED로 정리한다(400, 무알림) (CONN-G15)")
+        void 피보호자_역할이_바뀐_요청은_정리() {
+            Connection connection = connection(ConnectionStatus.PENDING);
+            when(connectionRepository.findById(CONNECTION_ID)).thenReturn(java.util.Optional.of(connection));
+            when(userRepository.findById(GUARDIAN_ID)).thenReturn(java.util.Optional.of(guardian()));
+            when(userRepository.findById(WARD_ID)).thenReturn(java.util.Optional.of(User.builder()
+                    .id(WARD_ID).email("w@example.com").name("역할변경")
+                    .role(Role.GUARDIAN).status(Status.ACTIVE).provider(Provider.LOCAL).build()));
+
+            CustomException ex = assertThrows(CustomException.class,
+                    () -> connectionService.acceptConnectionAsWard(WARD_ID, CONNECTION_ID));
+
+            assertThat(ex.getErrorCode()).isEqualTo(ErrorCode.INVALID_CONNECTION_ROLE);
+            assertThat(connection.getStatus()).isEqualTo(ConnectionStatus.CANCELLED);
+            verify(eventPublisher, never()).publishEvent(any());
+        }
+
+        @Test
+        @DisplayName("요청 뒤 보호자가 피보호자로 바뀌었어도 같은 400 + 요청 정리 (CONN-G15)")
+        void 보호자_역할이_바뀐_요청은_정리() {
+            Connection connection = connection(ConnectionStatus.PENDING);
+            when(connectionRepository.findById(CONNECTION_ID)).thenReturn(java.util.Optional.of(connection));
+            when(userRepository.findById(WARD_ID)).thenReturn(java.util.Optional.of(ward()));
+            when(userRepository.findById(GUARDIAN_ID)).thenReturn(java.util.Optional.of(User.builder()
+                    .id(GUARDIAN_ID).email("g@example.com").name("역할변경")
+                    .role(Role.WARD).status(Status.ACTIVE).provider(Provider.LOCAL).build()));
+
+            CustomException ex = assertThrows(CustomException.class,
+                    () -> connectionService.acceptConnectionAsWard(WARD_ID, CONNECTION_ID));
+
+            assertThat(ex.getErrorCode()).isEqualTo(ErrorCode.INVALID_CONNECTION_ROLE);
+            assertThat(connection.getStatus()).isEqualTo(ConnectionStatus.CANCELLED);
+            verify(eventPublisher, never()).publishEvent(any());
+        }
+
+        @Test
+        @DisplayName("역할 불일치로 정리한 cancel()이 오류 응답과 함께 롤백되지 않도록 noRollbackFor가 걸려 있다 (CONN-G15)")
+        void 역할불일치_정리는_롤백되지_않는다() throws Exception {
+            org.springframework.transaction.annotation.Transactional tx = ConnectionService.class
+                    .getMethod("acceptConnectionAsWard", String.class, Long.class)
+                    .getAnnotation(org.springframework.transaction.annotation.Transactional.class);
+
+            assertThat(tx.noRollbackFor()).contains(CustomException.class);
         }
 
         @Test
