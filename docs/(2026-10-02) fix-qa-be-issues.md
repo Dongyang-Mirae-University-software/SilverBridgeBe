@@ -21,6 +21,10 @@
 | 복약 | 보호자 없는 약 알림 제외, 과거 시각 수정 시 기록 유지, 늦게 등록한 약 요약 제외 | 머지됨 (#276) |
 | 이상감지 | 하루 요약에서 최근 건별 재촉 상황 제외, 이력 쿨다운 저장 실패 시 해제 | 머지됨 (#277) |
 | 관리자 | 공지 조회수 원자 증가·`updated_at` 내용 변경 시만(V56), 목록 page/size 통일, 본문 100자, 문의 분당 5회, 연결 필터 관리자 제외 | 머지됨 (#274·#275) |
+| P10 | Redis `maxmemory-policy noeviction`(AUTH-G30) - 퇴출로 인한 잠금 해제·토큰 부활 방지 | #285 |
+| P15 | 토큰 무효화 시 열린 WS 세션 서버 종료(1008 `AUTH_INVALIDATED`, `WebSocketSessionCloser`) | #287 |
+| P16 | Solapi 호출 10초 시간 제한(`SolapiCallExecutor`) | #288 |
+| 설계 | refresh HttpOnly 쿠키 설계안(XCUT-G31, 문서만) | #286 |
 | P11 | WS 수신자 차단(`[WS-BLOCKED]`)·대시보드 `wardsWithoutReachableGuardian` (ADMIN-G27/28, CONN-G08, ANOM-G10) | #282 |
 | P12 | 긴급 `urgentNotificationExecutor`(4/8/200) (SOS-G13, XCUT-G11) | #281 |
 | P13 | 연결 요청 같은 쌍 24시간 5건, 6번째부터 429 (CONN-G04, XCUT-G29) | #283 |
@@ -32,12 +36,14 @@
 
 - **V55(비가역)**: 이메일 소문자화 + `lower(email)` 유니크 인덱스. 배포 전 `SELECT lower(email), array_agg(id) FROM users GROUP BY lower(email) HAVING count(*) > 1;`로 중복 0건 확인. 두 서버(gosky·vkcs-linux) 모두.
 - **V56**(공지 트리거)은 머지됨 - 두 서버에서 적용 확인. 마이그레이션·JPQL 변경 PR은 머지 전 `tools/integration-test.sh [브랜치]`로 통합 테스트.
-- **`CLIENT_IP_TRUSTED_PROXIES`**: 서버 `.env.dev`에 FE 서버 IP를 넣기 전에는 동작이 변하지 않는다(**사용자 소관**). 넣은 뒤 접속로그·rate limit IP를 확인. Redis `maxmemory-policy noeviction`(P10)도 **미머지·사용자 소관**.
+- **`CLIENT_IP_TRUSTED_PROXIES`**: 서버 `.env.dev`에 FE 서버 IP를 넣기 전에는 동작이 변하지 않는다(**사용자 소관**). 넣은 뒤 접속로그·rate limit IP를 확인. Redis `maxmemory-policy noeviction`(P10, #285)은 머지됐으나 **서버 반영은 사용자 소관**(두 서버에서 `docker compose -f docker-compose.dev.yml up -d redis`).
 - **카카오 `pendingToken`은 FE 동시 배포 필요**(가입 완료가 토큰을 요구).
 - Redis 장애 시 정책이 바뀌었다(일반 경로 503 / SOS만 통과). 모니터링에서 `[AUTH-STORE-UNAVAILABLE]`·`[AUTH-STORE-FAIL-OPEN]` WARN을 본다.
 - FE: 오류 응답 `code` 필드로 분기, 강제 연결·해제 WS 페이로드의 type/title/body, 목록 `page`/`size` 규칙, 공지 목록 본문 축약(상세는 상세 API).
 
 ## 구현으로 이동한 항목
+
+세션 강제 종료(P15, #287) - 자체 `WebSocketSessionRegistry`로 구현(Principal 선행 불요). 단일 인스턴스 한정. Solapi 시간 제한(P16, #288)의 후속 점검: `AlimtalkSender`·`SmsSender` catch 로그의 `e.getMessage()`·실패 목록(알림 이력 불변 규칙 ② 불일치, 코드 미수정).
 
 ADMIN-G27/CONN-G08(대시보드 `wardsWithoutReachableGuardian`, 2026-09-09 "경고 안 만듦" 결정을 사용자가 2026-10-02 추천안으로 변경 - 개수만, 피보호자 화면 표시 없음) · ADMIN-G28/ANOM-G10(WS 발송 차단) · SOS-G13/XCUT-G11(긴급 executor) · CONN-G04/XCUT-G29(쿨다운) · 카메라 등록 DTO.
 
@@ -45,6 +51,5 @@ ADMIN-G27/CONN-G08(대시보드 `wardsWithoutReachableGuardian`, 2026-09-09 "경
 
 - ANOM-G08: `camera.is_active`는 표시용이라고 **문서화로 종결**(코드 변경 없음).
 - CONN-G02: 강제 연결 FCM 승격 - 현행 유지 확정.
-- XCUT-G31: refresh HttpOnly 쿠키 - 별도 설계.
-- 세션 강제 종료: 핸드셰이크 Principal 선행.
+- XCUT-G31: refresh HttpOnly 쿠키 - 설계안만 작성(`docs/(2026-10-02) design-refresh-token-httponly-cookie.md`, #286), 구현은 10/22 이후 결정(A안 추천, 결정 질문 9개).
 - CONN-G15: 경합 잔여 - 수용.

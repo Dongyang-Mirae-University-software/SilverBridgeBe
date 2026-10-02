@@ -1559,6 +1559,7 @@ REST API Key 단독 대비 보안 강화 — 인가코드 탈취 시 토큰 발�
 - 인증 필터 Redis 장애 503(SOS만 fail-open) / 무효화 초 단위 비교 / refresh typ·밀려난 토큰 / 클라이언트 IP 신뢰 프록시 / STOMP SEND `/app/`만 / 이메일 소문자 V55 / 로그인 잠금·인증번호 선예약 / 카카오 pendingToken / SOS·연결·복약·이상감지·관리자 소항목(V56 공지 트리거).
 - 후속 묶음: WS 수신자 차단 + 대시보드 `wardsWithoutReachableGuardian`(#282) / 긴급 executor(#281) / 연결 요청 24시간 5건 쿨다운(#283) / 카메라 등록 검증(#280). 정책 문서·Swagger 정정(#279), ANOM-G06 의도 명시.
 - 결정: 2026-09-09 "유일한 보호자 경고 안 만듦"을 사용자가 2026-10-02 추천안으로 변경(대시보드 지표만). ANOM-G08은 `camera.is_active` 표시용 문서화로 종결.
-- 남은 보류: CONN-G02(현행 유지) · XCUT-G31(HttpOnly 쿠키, 별도 설계) · 세션 강제 종료(핸드셰이크 Principal 선행) · CONN-G15 경합 잔여.
-- 배포 주의: **V55 비가역**(사전 중복 점검, 두 서버) / **카카오 pendingToken은 FE 동시 배포** / `CLIENT_IP_TRUSTED_PROXIES`·redis `noeviction`(P10, 미머지)은 사용자 소관.
+- 남은 보류: CONN-G02(현행 유지) · XCUT-G31(HttpOnly 쿠키, 설계안만 #286 - 구현은 10/22 이후) · CONN-G15 경합 잔여.
+- 배포 주의: **V55 비가역**(사전 중복 점검, 두 서버) / **카카오 pendingToken은 FE 동시 배포** / `CLIENT_IP_TRUSTED_PROXIES`·redis `noeviction`(P10, #285 머지, 서버 `up -d redis`)은 사용자 소관.
+- 후속 머지: P10 redis noeviction(#285) / 설계안 refresh 쿠키(#286) / P15 토큰 무효화 시 열린 WS 세션 서버 종료(#287, 1008 `AUTH_INVALIDATED`, 단일 인스턴스) / P16 Solapi 호출 10초 제한(#288, `SolapiCallExecutor`). 후속 점검: `AlimtalkSender`·`SmsSender` catch 로그의 예외 원문.
 - 상세: `docs/(2026-10-02) fix-qa-be-issues.md`
