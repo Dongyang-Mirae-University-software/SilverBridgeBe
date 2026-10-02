@@ -1,12 +1,16 @@
 package kr.silverbridge.main.domain.sos.repository;
 
 import kr.silverbridge.main.domain.sos.entity.SosEvent;
+import kr.silverbridge.main.domain.sos.entity.SosTriggerType;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 
 import java.time.OffsetDateTime;
 import java.util.Collection;
+import java.util.List;
 
 public interface SosEventRepository extends JpaRepository<SosEvent, Long> {
 
@@ -20,6 +24,31 @@ public interface SosEventRepository extends JpaRepository<SosEvent, Long> {
      * @param wardIds 조회 대상 피보호자 ID들 — <b>인가된(ACTIVE 연결) 목록만</b> 넘겨야 한다(IDOR 방지)
      */
     Page<SosEvent> findByWardIdInOrderByCreatedAtDesc(Collection<String> wardIds, Pageable pageable);
+
+    /**
+     * 발생 경로 필터를 건 보호자 이력 조회(SOS-G12). 정렬·인가 전제는 위 메서드와 같다.
+     *
+     * @param wardIds 조회 대상 피보호자 ID들 — <b>인가된(ACTIVE 연결) 목록만</b> 넘겨야 한다(IDOR 방지)
+     */
+    Page<SosEvent> findByWardIdInAndTriggerTypeOrderByCreatedAtDesc(Collection<String> wardIds,
+                                                                     SosTriggerType triggerType,
+                                                                     Pageable pageable);
+
+    /**
+     * 경로별 전체 건수 - 보호자 이력 화면의 탭 숫자용(SOS-G12).
+     *
+     * <p>페이지와 무관하게 전체 기준으로 센다. 화면이 현재 페이지(최대 50건)로 세면 2페이지 이후에만 있는 경로가
+     * "0건"으로 보인다. 건수가 0인 경로는 행이 없으므로 호출부가 0으로 채운다(인가된 범위 안에서 실제로 센 값이라
+     * "모르는 값"이 아니다).</p>
+     *
+     * @param wardIds 집계 대상 피보호자 ID들 — <b>인가된(ACTIVE 연결) 목록만</b> 넘겨야 한다(IDOR 방지)
+     */
+    @Query("""
+            SELECT e.triggerType AS triggerType, COUNT(e) AS total FROM SosEvent e
+            WHERE e.wardId IN :wardIds
+            GROUP BY e.triggerType
+            """)
+    List<TriggerTypeCount> countByTriggerType(@Param("wardIds") Collection<String> wardIds);
 
     /**
      * 최근 집계 창 안에서 같은 피보호자가 발생시킨 SOS 건수 - 보호자 알림 문구의 "N번째" 표기용.
@@ -36,4 +65,11 @@ public interface SosEventRepository extends JpaRepository<SosEvent, Long> {
      *               타임존과 무관하다 - KST 변환이 필요 없다
      */
     long countByWardIdAndCreatedAtGreaterThanEqual(String wardId, OffsetDateTime from);
+
+    /** 경로별 건수 프로젝션. */
+    interface TriggerTypeCount {
+        SosTriggerType getTriggerType();
+
+        long getTotal();
+    }
 }

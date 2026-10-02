@@ -18,6 +18,7 @@ import java.util.Optional;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 
 @ExtendWith(MockitoExtension.class)
@@ -64,15 +65,32 @@ class SosSettingServiceTest {
     }
 
     @Test
-    @DisplayName("updateSetting: 기존 행이 없으면 신규 저장한다(upsert)")
+    @DisplayName("updateSetting: 기존 행이 없으면 충돌 무시 INSERT로 신규 저장한다(upsert)")
     void updateSetting_신규_저장() {
         given(repository.findByUserId(USER_ID)).willReturn(Optional.empty());
+        given(repository.insertIfAbsent(USER_ID, "NOTIFY_GUARDIAN_FIRST")).willReturn(1);
 
         SosSettingResponse response =
                 service.updateSetting(USER_ID, new SosSettingUpdateRequest(SosAction.NOTIFY_GUARDIAN_FIRST));
 
-        verify(repository).save(ArgumentMatchers.argThat(s ->
-                USER_ID.equals(s.getUserId()) && s.getSosAction() == SosAction.NOTIFY_GUARDIAN_FIRST));
+        verify(repository).insertIfAbsent(USER_ID, "NOTIFY_GUARDIAN_FIRST");
+        verify(repository, never()).save(ArgumentMatchers.any());
+        verify(repository, times(1)).findByUserId(USER_ID); // 새로 넣었으면 재조회하지 않는다
         assertThat(response.sosAction()).isEqualTo(SosAction.NOTIFY_GUARDIAN_FIRST);
+    }
+
+    @Test
+    @DisplayName("updateSetting: 동시 최초 저장으로 다른 요청이 먼저 넣었으면(0건) 재조회해 이 요청 값으로 갱신 - 409 없음 (SOS-G17)")
+    void updateSetting_동시최초저장_재조회갱신() {
+        SosSetting insertedByOther = SosSetting.of(USER_ID, SosAction.CALL_119_AND_NOTIFY);
+        given(repository.findByUserId(USER_ID)).willReturn(Optional.empty(), Optional.of(insertedByOther));
+        given(repository.insertIfAbsent(USER_ID, "CALL_119")).willReturn(0);
+
+        SosSettingResponse response =
+                service.updateSetting(USER_ID, new SosSettingUpdateRequest(SosAction.CALL_119));
+
+        assertThat(insertedByOther.getSosAction()).isEqualTo(SosAction.CALL_119);
+        assertThat(response.sosAction()).isEqualTo(SosAction.CALL_119);
+        verify(repository, never()).save(ArgumentMatchers.any());
     }
 }

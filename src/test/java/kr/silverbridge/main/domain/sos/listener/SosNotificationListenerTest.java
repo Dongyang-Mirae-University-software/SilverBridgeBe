@@ -107,6 +107,43 @@ class SosNotificationListenerTest {
     }
 
     @Test
+    @DisplayName("보호자 전원 발송이 실패하면 쿨다운을 해제한다 - 30초 내 재요청이 다시 발송된다 (SOS-G09)")
+    void handleSosTriggered_전원실패_쿨다운해제() {
+        when(connectionService.getActiveGuardianIds(WARD_ID)).thenReturn(List.of("GD0001", "GD0002"));
+        when(cooldown.tryAcquire(WARD_ID)).thenReturn(true);
+        doThrow(new RuntimeException("dispatch down"))
+                .when(notificationDispatcher).dispatch(anyString(), any(), eq(NotificationType.WARD_SOS), any());
+
+        listener.handleSosTriggered(event);
+
+        verify(cooldown).release(WARD_ID);
+    }
+
+    @Test
+    @DisplayName("한 명에게라도 발송했으면 쿨다운을 유지한다 (연타 폭주 방지)")
+    void handleSosTriggered_일부성공_쿨다운유지() {
+        when(connectionService.getActiveGuardianIds(WARD_ID)).thenReturn(List.of("GD0001", "GD0002"));
+        when(cooldown.tryAcquire(WARD_ID)).thenReturn(true);
+        doThrow(new RuntimeException("dispatch down"))
+                .when(notificationDispatcher).dispatch(eq("GD0001"), any(), eq(NotificationType.WARD_SOS), any());
+
+        listener.handleSosTriggered(event);
+
+        verify(cooldown, never()).release(anyString());
+    }
+
+    @Test
+    @DisplayName("쿨다운에 막혀 생략된 재요청은 남의 쿨다운을 해제하지 않는다")
+    void handleSosTriggered_쿨다운생략시_해제안함() {
+        when(connectionService.getActiveGuardianIds(WARD_ID)).thenReturn(List.of("GD0001"));
+        when(cooldown.tryAcquire(WARD_ID)).thenReturn(false);
+
+        listener.handleSosTriggered(event);
+
+        verify(cooldown, never()).release(anyString());
+    }
+
+    @Test
     @DisplayName("쿨다운 내 재요청이면 알림을 생략한다 (이력은 서비스에서 이미 저장됨)")
     void handleSosTriggered_쿨다운_알림생략() {
         when(connectionService.getActiveGuardianIds(WARD_ID)).thenReturn(List.of("GD0001"));

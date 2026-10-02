@@ -2,6 +2,7 @@ package kr.silverbridge.main.domain.sos.service;
 
 import kr.silverbridge.main.domain.connection.service.ConnectionService;
 import kr.silverbridge.main.domain.sos.dto.SosHistoryItem;
+import kr.silverbridge.main.domain.sos.dto.SosHistoryPage;
 import kr.silverbridge.main.domain.sos.entity.SosEvent;
 import kr.silverbridge.main.domain.sos.entity.SosTriggerType;
 import kr.silverbridge.main.domain.sos.repository.SosEventRepository;
@@ -10,7 +11,6 @@ import kr.silverbridge.main.domain.user.repository.UserRepository;
 import kr.silverbridge.main.global.enums.Role;
 import kr.silverbridge.main.global.exception.CustomException;
 import kr.silverbridge.main.global.exception.ErrorCode;
-import kr.silverbridge.main.global.response.PageResponse;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -31,6 +31,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.*;
 
 /**
@@ -69,7 +70,7 @@ class GuardianSosServiceTest {
                 user(WARD_ID, WARD_NAME),
                 user(OTHER_WARD_ID, "박철수")));
 
-        PageResponse<SosHistoryItem> result = guardianSosService.getHistory(GUARDIAN_ID, null, 0, 20);
+        SosHistoryPage result = guardianSosService.getHistory(GUARDIAN_ID, null, null, 0, 20);
 
         // 인가된 목록만 쿼리에 전달됐는지 (IDOR 방지의 핵심)
         ArgumentCaptor<Collection<String>> wardIdsCaptor = ArgumentCaptor.captor();
@@ -103,7 +104,7 @@ class GuardianSosServiceTest {
                 .thenReturn(new PageImpl<>(List.of(event), PageRequest.of(0, 20), 1));
         when(userRepository.findAllById(any())).thenReturn(List.of(user(WARD_ID, WARD_NAME)));
 
-        PageResponse<SosHistoryItem> result = guardianSosService.getHistory(GUARDIAN_ID, WARD_ID, 0, 20);
+        SosHistoryPage result = guardianSosService.getHistory(GUARDIAN_ID, WARD_ID, null, 0, 20);
 
         ArgumentCaptor<Collection<String>> wardIdsCaptor = ArgumentCaptor.captor();
         verify(sosEventRepository).findByWardIdInOrderByCreatedAtDesc(wardIdsCaptor.capture(), any(Pageable.class));
@@ -117,7 +118,7 @@ class GuardianSosServiceTest {
     void getHistory_연결없는피보호자_거부() {
         when(connectionService.isActiveConnection(GUARDIAN_ID, OTHER_WARD_ID)).thenReturn(false);
 
-        assertThatThrownBy(() -> guardianSosService.getHistory(GUARDIAN_ID, OTHER_WARD_ID, 0, 20))
+        assertThatThrownBy(() -> guardianSosService.getHistory(GUARDIAN_ID, OTHER_WARD_ID, null, 0, 20))
                 .isInstanceOf(CustomException.class)
                 .hasFieldOrPropertyWithValue("errorCode", ErrorCode.SOS_NOT_AUTHORIZED);
 
@@ -129,11 +130,12 @@ class GuardianSosServiceTest {
     void getHistory_연결없음_빈페이지() {
         when(connectionService.getActiveWardIds(GUARDIAN_ID)).thenReturn(List.of());
 
-        PageResponse<SosHistoryItem> result = guardianSosService.getHistory(GUARDIAN_ID, null, 0, 20);
+        SosHistoryPage result = guardianSosService.getHistory(GUARDIAN_ID, null, null, 0, 20);
 
         assertThat(result.content()).isEmpty();
         assertThat(result.totalElements()).isZero();
         assertThat(result.size()).isEqualTo(20);
+        assertThat(result.counts()).isEqualTo(SosHistoryPage.Counts.EMPTY);
         verifyNoInteractions(sosEventRepository);
     }
 
@@ -145,7 +147,7 @@ class GuardianSosServiceTest {
         when(sosEventRepository.findByWardIdInOrderByCreatedAtDesc(any(), any(Pageable.class)))
                 .thenReturn(new PageImpl<>(List.of(anonymous), PageRequest.of(0, 20), 1));
 
-        PageResponse<SosHistoryItem> result = guardianSosService.getHistory(GUARDIAN_ID, null, 0, 20);
+        SosHistoryPage result = guardianSosService.getHistory(GUARDIAN_ID, null, null, 0, 20);
 
         assertThat(result.content()).hasSize(1);
         assertThat(result.content().get(0).wardId()).isNull();
@@ -161,7 +163,7 @@ class GuardianSosServiceTest {
         when(sosEventRepository.findByWardIdInOrderByCreatedAtDesc(any(), any(Pageable.class)))
                 .thenReturn(new PageImpl<>(List.of(), PageRequest.of(0, 50), 0));
 
-        guardianSosService.getHistory(GUARDIAN_ID, null, -5, 500);
+        guardianSosService.getHistory(GUARDIAN_ID, null, null, -5, 500);
 
         ArgumentCaptor<Pageable> pageableCaptor = ArgumentCaptor.captor();
         verify(sosEventRepository).findByWardIdInOrderByCreatedAtDesc(any(), pageableCaptor.capture());
@@ -169,6 +171,67 @@ class GuardianSosServiceTest {
         assertThat(pageableCaptor.getValue().getPageSize()).isEqualTo(50);
         // 정렬은 메서드 이름에 고정 - Pageable에 Sort를 넣으면 이중 적용된다
         assertThat(pageableCaptor.getValue().getSort().isSorted()).isFalse();
+    }
+
+    @Test
+    @DisplayName("triggerType 지정 → 경로 필터 쿼리로 조회하고, 탭 건수(counts)는 필터와 무관한 전체 기준 (SOS-G12)")
+    void getHistory_경로필터_전체기준건수() {
+        SosEvent call = sosEvent(5L, WARD_ID, OffsetDateTime.now(), null, SosTriggerType.GUARDIAN_CALL);
+        when(connectionService.getActiveWardIds(GUARDIAN_ID)).thenReturn(List.of(WARD_ID, OTHER_WARD_ID));
+        when(sosEventRepository.findByWardIdInAndTriggerTypeOrderByCreatedAtDesc(
+                any(), eq(SosTriggerType.GUARDIAN_CALL), any(Pageable.class)))
+                .thenReturn(new PageImpl<>(List.of(call), PageRequest.of(0, 1), 5)); // 1건/페이지 - 전체 5건
+        when(sosEventRepository.countByTriggerType(any())).thenReturn(List.of(
+                count(SosTriggerType.SOS_BUTTON, 55),
+                count(SosTriggerType.GUARDIAN_CALL, 5)));
+        when(userRepository.findAllById(any())).thenReturn(List.of(user(WARD_ID, WARD_NAME)));
+
+        SosHistoryPage result = guardianSosService.getHistory(
+                GUARDIAN_ID, null, SosTriggerType.GUARDIAN_CALL, 0, 1);
+
+        // 목록은 필터 기준
+        assertThat(result.totalElements()).isEqualTo(5);
+        assertThat(result.content()).extracting(SosHistoryItem::triggerType)
+                .containsOnly(SosTriggerType.GUARDIAN_CALL);
+        // 탭 건수는 필터·페이지와 무관한 전체 기준
+        assertThat(result.counts()).isEqualTo(new SosHistoryPage.Counts(60, 55, 5));
+        verify(sosEventRepository, never()).findByWardIdInOrderByCreatedAtDesc(any(), any());
+
+        // 목록·집계 모두 인가된(ACTIVE) 목록으로만 질의한다 (IDOR 방지)
+        ArgumentCaptor<Collection<String>> listCaptor = ArgumentCaptor.captor();
+        verify(sosEventRepository).findByWardIdInAndTriggerTypeOrderByCreatedAtDesc(
+                listCaptor.capture(), any(), any(Pageable.class));
+        assertThat(listCaptor.getValue()).containsExactly(WARD_ID, OTHER_WARD_ID);
+        ArgumentCaptor<Collection<String>> countCaptor = ArgumentCaptor.captor();
+        verify(sosEventRepository).countByTriggerType(countCaptor.capture());
+        assertThat(countCaptor.getValue()).containsExactly(WARD_ID, OTHER_WARD_ID);
+    }
+
+    @Test
+    @DisplayName("집계에 없는 경로는 0건으로 채운다 - 인가 범위 안에서 실제로 센 값")
+    void getHistory_건수_없는경로_0() {
+        when(connectionService.isActiveConnection(GUARDIAN_ID, WARD_ID)).thenReturn(true);
+        when(sosEventRepository.findByWardIdInOrderByCreatedAtDesc(any(), any(Pageable.class)))
+                .thenReturn(new PageImpl<>(List.of(), PageRequest.of(0, 20), 3));
+        when(sosEventRepository.countByTriggerType(any()))
+                .thenReturn(List.of(count(SosTriggerType.SOS_BUTTON, 3)));
+
+        SosHistoryPage result = guardianSosService.getHistory(GUARDIAN_ID, WARD_ID, null, 0, 20);
+
+        assertThat(result.counts()).isEqualTo(new SosHistoryPage.Counts(3, 3, 0));
+    }
+
+    @Test
+    @DisplayName("연결 없는 피보호자를 경로 필터와 함께 지정해도 403 - 집계 쿼리도 하지 않는다")
+    void getHistory_경로필터_연결없음_거부() {
+        when(connectionService.isActiveConnection(GUARDIAN_ID, OTHER_WARD_ID)).thenReturn(false);
+
+        assertThatThrownBy(() -> guardianSosService.getHistory(
+                GUARDIAN_ID, OTHER_WARD_ID, SosTriggerType.SOS_BUTTON, 0, 20))
+                .isInstanceOf(CustomException.class)
+                .hasFieldOrPropertyWithValue("errorCode", ErrorCode.SOS_NOT_AUTHORIZED);
+
+        verifyNoInteractions(sosEventRepository);
     }
 
     // ─── 헬퍼 ────────────────────────────────────────────────────
@@ -192,5 +255,19 @@ class GuardianSosServiceTest {
 
     private static User user(String id, String name) {
         return User.builder().id(id).name(name).role(Role.WARD).build();
+    }
+
+    private static SosEventRepository.TriggerTypeCount count(SosTriggerType type, long total) {
+        return new SosEventRepository.TriggerTypeCount() {
+            @Override
+            public SosTriggerType getTriggerType() {
+                return type;
+            }
+
+            @Override
+            public long getTotal() {
+                return total;
+            }
+        };
     }
 }
