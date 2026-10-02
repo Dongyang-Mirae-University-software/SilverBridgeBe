@@ -7,7 +7,10 @@ import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
 import kr.silverbridge.main.global.enums.Gender;
+import kr.silverbridge.main.global.validation.NoControlChars;
+import kr.silverbridge.main.global.validation.TextSanitizer;
 import kr.silverbridge.main.global.validation.ValidBirthDate;
+import kr.silverbridge.main.global.validation.VisibleText;
 
 import lombok.Getter;
 
@@ -19,6 +22,8 @@ public class UserUpdateRequest {
 
     @Schema(description = "변경할 이름 (본인 실명, 최대 20자)", example = "홍길동")
     @NotBlank(message = "이름은 필수입니다.")
+    @VisibleText(message = "이름은 필수입니다.")
+    @NoControlChars
     @Size(max = 20, message = "이름은 20자 이하여야 합니다.")
     private String name;
 
@@ -50,11 +55,28 @@ public class UserUpdateRequest {
 
     @Schema(description = "도로명 주소 또는 지번 주소 (카카오 주소 API 결과값)", example = "서울특별시 강남구 테헤란로 123")
     @NotBlank(message = "주소는 필수입니다.")
+    @VisibleText(message = "주소는 필수입니다.")
+    @NoControlChars
     @Size(max = 200, message = "주소는 200자 이하여야 합니다.")
     private String address;
 
     @Schema(description = "상세 주소 (동/호수 등)", example = "101동 202호")
     @NotBlank(message = "상세 주소는 필수입니다.")
+    @VisibleText(message = "상세 주소는 필수입니다.")
+    @NoControlChars
     @Size(max = 100, message = "상세 주소는 100자 이하여야 합니다.")
     private String addressDetail;
+
+    // 검증은 원문(제어문자·보이지 않는 글자 포함)에 걸고, 저장에 쓰는 값은 정리본을 돌려준다(USER-G14).
+    public String getName() {
+        return TextSanitizer.sanitize(name);
+    }
+
+    public String getAddress() {
+        return TextSanitizer.sanitize(address);
+    }
+
+    public String getAddressDetail() {
+        return TextSanitizer.sanitize(addressDetail);
+    }
 }
