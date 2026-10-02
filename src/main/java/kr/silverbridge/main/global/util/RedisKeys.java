@@ -56,6 +56,10 @@ public final class RedisKeys {
     // ── API 요청 속도 제한 ─────────────────────────────
     public static final String RATE_LIMIT = "rate:";
 
+    // ── 같은 (보호자, 피보호자) 쌍의 연결 요청 반복 제한 (CONN-G04, 2026-10-02) ──
+    // 키: guardianId + ":" + wardId. 값: 24시간 고정 윈도우 안에 실제로 만들어진 요청 수. 수락(ACTIVE) 시 삭제.
+    public static final String CONNECTION_REQUEST_COUNT = "connection:request:count:";
+
     // ws:connected:(WebSocket 접속 상태)는 2026-10-02 삭제 - 쓰기만 하고 읽는 곳이 없었고, CONNECTED 프레임에
     // 세션 속성이 없어 실제로는 기록도 되지 않았다(XCUT-G30). 접속 여부가 필요해지면 연결 수 카운터로 새로 설계할 것.
 }

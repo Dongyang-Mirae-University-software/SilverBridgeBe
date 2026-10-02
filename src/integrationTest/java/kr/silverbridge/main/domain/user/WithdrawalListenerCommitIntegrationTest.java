@@ -4,6 +4,7 @@ import kr.silverbridge.main.domain.connection.entity.Connection;
 import kr.silverbridge.main.domain.connection.event.ConnectionDisconnectedEvent;
 import kr.silverbridge.main.domain.connection.listener.UserWithdrawalConnectionListener;
 import kr.silverbridge.main.domain.connection.repository.ConnectionRepository;
+import kr.silverbridge.main.domain.connection.service.ConnectionRequestLimiter;
 import kr.silverbridge.main.domain.connection.service.ConnectionService;
 import kr.silverbridge.main.domain.medication.entity.Medication;
 import kr.silverbridge.main.domain.medication.entity.MedicationTimeSlot;
@@ -83,6 +84,8 @@ class WithdrawalListenerCommitIntegrationTest extends PostgresIntegrationTest {
     // 발송·토큰 상한은 이 테스트의 관심사가 아니다 - 삭제 경로만 실제 빈으로 돈다
     @MockitoBean private FirebaseMessaging firebaseMessaging;
     @MockitoBean private FcmTokenProperties fcmTokenProperties;
+    // ConnectionService의 의존성일 뿐 이 테스트의 관심사가 아니다(Redis 없이 뜨도록 목으로 둔다)
+    @MockitoBean private ConnectionRequestLimiter connectionRequestLimiter;
 
     @BeforeEach
     void setUp() {
