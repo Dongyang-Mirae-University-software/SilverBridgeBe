@@ -2,6 +2,7 @@ package kr.silverbridge.main.domain.connection.listener;
 
 import kr.silverbridge.main.domain.connection.event.ConnectionAcceptedEvent;
 import kr.silverbridge.main.domain.connection.event.ConnectionDisconnectedEvent;
+import kr.silverbridge.main.domain.connection.event.ConnectionForcedEvent;
 import kr.silverbridge.main.domain.connection.event.ConnectionRefusedEvent;
 import kr.silverbridge.main.domain.connection.event.ConnectionRequestedEvent;
 import kr.silverbridge.main.domain.notification.channel.NotificationContent;
@@ -89,7 +90,9 @@ class ConnectionNotificationListenerTest {
 
         listener.handleAccepted(event);
 
-        verify(webSocketEventPublisher).sendToUser(eq(GUARDIAN_ID), eq("connection-accepted"), anyMap());
+        // 일반 수락 WS payload는 그대로(connectionId만) - 하위호환 (CONN-G01은 강제 연결만 바꾼다)
+        verify(webSocketEventPublisher).sendToUser(eq(GUARDIAN_ID), eq("connection-accepted"),
+                eq(java.util.Map.of("connectionId", CONNECTION_ID)));
         // 수신자는 보호자, 두 번째 인자는 이력 표시용 피보호자
         verify(notificationDispatcher).dispatch(
                 eq(GUARDIAN_ID), eq(WARD_ID), eq(NotificationType.CONNECTION_ACCEPTED),
@@ -171,5 +174,76 @@ class ConnectionNotificationListenerTest {
         ArgumentCaptor<NotificationContent> captor = ArgumentCaptor.forClass(NotificationContent.class);
         verify(notificationDispatcher).dispatch(eq(GUARDIAN_ID), eq(WARD_ID), eq(NotificationType.CONNECTION_DISCONNECTED), captor.capture());
         assertThat(captor.getValue().body()).isEqualTo("피보호자가 탈퇴해 연결이 종료되었습니다.");
+    }
+
+    @Test
+    @DisplayName("연결 요청 relation이 제로폭 문자만 → 빈 접두어 없이 fallback 문구 (CONN-G14, DTO와 같은 판정 기준)")
+    void handleRequested_보이지않는_relation은_fallback() {
+        listener.handleRequested(
+                new ConnectionRequestedEvent(CONNECTION_ID, GUARDIAN_ID, WARD_ID, GUARDIAN_NAME, "\u200B\uFEFF"));
+
+        ArgumentCaptor<NotificationContent> captor = ArgumentCaptor.forClass(NotificationContent.class);
+        verify(notificationDispatcher).dispatch(eq(WARD_ID), eq(WARD_ID), eq(NotificationType.CONNECTION_REQUEST), captor.capture());
+        assertThat(captor.getValue().body()).isEqualTo("박보호 보호자가 연결을 요청했습니다.");
+    }
+
+    @Test
+    @DisplayName("강제 연결 → 양쪽 WS(connection-accepted)에 FCM과 같은 type=CONNECTION_FORCED·제목·본문을 싣는다 - '수락했습니다' 거짓 문구 방지 (CONN-G01)")
+    @SuppressWarnings("unchecked")
+    void handleForced_WS에_관리자_연결_문구() {
+        listener.handleForced(new ConnectionForcedEvent(CONNECTION_ID, GUARDIAN_ID, WARD_ID, GUARDIAN_NAME, "김피보"));
+
+        ArgumentCaptor<Object> guardianWs = ArgumentCaptor.forClass(Object.class);
+        verify(webSocketEventPublisher).sendToUser(eq(GUARDIAN_ID), eq("connection-accepted"), guardianWs.capture());
+        assertThat((java.util.Map<String, Object>) guardianWs.getValue())
+                .containsEntry("connectionId", CONNECTION_ID)
+                .containsEntry("type", "CONNECTION_FORCED")
+                .containsEntry("title", "연결 완료")
+                .containsEntry("body", "관리자가 김피보님과의 연결을 완료했습니다.");
+
+        ArgumentCaptor<Object> wardWs = ArgumentCaptor.forClass(Object.class);
+        verify(webSocketEventPublisher).sendToUser(eq(WARD_ID), eq("connection-accepted"), wardWs.capture());
+        assertThat((java.util.Map<String, Object>) wardWs.getValue())
+                .containsEntry("connectionId", CONNECTION_ID)
+                .containsEntry("type", "CONNECTION_FORCED")
+                .containsEntry("title", "보호자 연결")
+                .containsEntry("body", "관리자가 박보호님을 보호자로 연결했습니다.");
+
+        // FCM 문구와 WS 문구가 같아야 FE가 같은 알림으로 다룬다
+        ArgumentCaptor<NotificationContent> guardianFcm = ArgumentCaptor.forClass(NotificationContent.class);
+        verify(notificationDispatcher).dispatch(eq(GUARDIAN_ID), eq(WARD_ID), eq(NotificationType.CONNECTION_FORCED), guardianFcm.capture());
+        assertThat(guardianFcm.getValue().body()).isEqualTo("관리자가 김피보님과의 연결을 완료했습니다.");
+        assertThat(guardianFcm.getValue().data()).containsEntry("type", "CONNECTION_FORCED");
+        ArgumentCaptor<NotificationContent> wardFcm = ArgumentCaptor.forClass(NotificationContent.class);
+        verify(notificationDispatcher).dispatch(eq(WARD_ID), eq(WARD_ID), eq(NotificationType.CONNECTION_FORCED), wardFcm.capture());
+        assertThat(wardFcm.getValue().body()).isEqualTo("관리자가 박보호님을 보호자로 연결했습니다.");
+    }
+
+    @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.CsvSource({
+            "GUARDIAN, WD0001, 보호자가 연결을 해제했습니다.",
+            "WARD, GD0001, 피보호자가 연결을 해제했습니다.",
+            "ADMIN, GD0001, 관리자가 연결을 해제했습니다.",
+            "WITHDRAWN, WD0001, 보호자가 탈퇴해 연결이 종료되었습니다.",
+            "WITHDRAWN, GD0001, 피보호자가 탈퇴해 연결이 종료되었습니다."
+    })
+    @DisplayName("연결 해제 WS(connection-cancelled)에 해제 주체와 FCM과 같은 제목·본문을 싣는다, connectionId 유지 (CONN-G12)")
+    @SuppressWarnings("unchecked")
+    void handleDisconnected_WS에_주체별_문구(ConnectionDisconnectedEvent.DisconnectedBy by, String target, String expectedBody) {
+        listener.handleDisconnected(new ConnectionDisconnectedEvent(CONNECTION_ID, target, by, GUARDIAN_ID, WARD_ID));
+
+        ArgumentCaptor<Object> ws = ArgumentCaptor.forClass(Object.class);
+        verify(webSocketEventPublisher).sendToUser(eq(target), eq("connection-cancelled"), ws.capture());
+        assertThat((java.util.Map<String, Object>) ws.getValue())
+                .containsEntry("connectionId", CONNECTION_ID)
+                .containsEntry("type", "CONNECTION_CANCELLED")
+                .containsEntry("disconnectedBy", by.name())
+                .containsEntry("title", "연결 해제")
+                .containsEntry("body", expectedBody);
+
+        ArgumentCaptor<NotificationContent> fcm = ArgumentCaptor.forClass(NotificationContent.class);
+        verify(notificationDispatcher).dispatch(eq(target), eq(WARD_ID), eq(NotificationType.CONNECTION_DISCONNECTED), fcm.capture());
+        assertThat(fcm.getValue().title()).isEqualTo("연결 해제");
+        assertThat(fcm.getValue().body()).isEqualTo(expectedBody);
     }
 }

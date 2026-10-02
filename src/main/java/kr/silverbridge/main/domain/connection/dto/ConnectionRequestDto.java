@@ -1,6 +1,7 @@
 package kr.silverbridge.main.domain.connection.dto;
 
 import io.swagger.v3.oas.annotations.media.Schema;
+import kr.silverbridge.main.global.validation.VisibleText;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
 import lombok.Getter;
@@ -16,6 +17,8 @@ public class ConnectionRequestDto {
 
     @Schema(description = "피보호자와의 관계 (예: 아들, 딸, 며느리, 사위, 손자, 손녀, 기타)", example = "아들")
     @NotBlank(message = "피보호자와의 관계를 선택해주세요.")
+    // @NotBlank는 U+0020 이하만 공백으로 본다 - 제로폭 문자·NBSP·전각공백만 있는 값도 막는다(CONN-G14)
+    @VisibleText(message = "피보호자와의 관계를 선택해주세요.")
     @Size(max = 10, message = "관계는 최대 10자입니다.")
     private String relation;
 }

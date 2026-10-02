@@ -19,9 +19,11 @@ import kr.silverbridge.main.global.enums.Role;
 import kr.silverbridge.main.global.enums.Status;
 import kr.silverbridge.main.global.exception.CustomException;
 import kr.silverbridge.main.global.exception.ErrorCode;
+import kr.silverbridge.main.global.validation.TextSanitizer;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.ApplicationEventPublisher;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
@@ -89,18 +91,31 @@ public class ConnectionService {
         String wardId = request.getTargetId();
         validateConnectionRequest(guardianId, wardId, Role.GUARDIAN, Role.WARD);
 
+        // 제로폭 문자·NBSP·전각공백을 걷어낸 값으로 저장한다 - DTO의 @VisibleText와 같은 기준(CONN-G14)
+        String relation = TextSanitizer.sanitize(request.getRelation());
         Connection connection = Connection.builder()
                 .guardianId(guardianId)
                 .wardId(wardId)
                 .status(ConnectionStatus.PENDING)
                 .initiatedBy(guardianId)
-                .relation(request.getRelation())
+                .relation(relation)
                 .build();
-        connectionRepository.save(connection);
+        // 위 exists 검사는 동시 요청 둘이 함께 통과할 수 있다. 그때는 uq_connections_live(부분 유니크)가 막는데,
+        // 그대로 두면 범용 "중복된 값" 문구로 나가 입력 오류처럼 읽힌다 - 같은 뜻의 CONNECTION_ALREADY_EXISTS로 바꾼다(CONN-G11).
+        // flush까지 여기서 끝내야 위반이 이 try 안에서 터진다(커밋 시점으로 미뤄지면 변환할 수 없다).
+        try {
+            connectionRepository.saveAndFlush(connection);
+        } catch (DataIntegrityViolationException e) {
+            if (isUniqueViolation(e)) {
+                log.info("연결 요청 동시 중복 차단: guardianId={}, wardId={}", guardianId, wardId);
+                throw new CustomException(ErrorCode.CONNECTION_ALREADY_EXISTS);
+            }
+            throw e;
+        }
 
         User guardian = requireUser(guardianId);
         eventPublisher.publishEvent(new ConnectionRequestedEvent(
-                connection.getId(), guardianId, wardId, guardian.getName(), request.getRelation()
+                connection.getId(), guardianId, wardId, guardian.getName(), relation
         ));
         log.info("연결 요청 생성: connectionId={}, guardianId={}, wardId={}",
                 connection.getId(), guardianId, wardId);
@@ -173,7 +188,9 @@ public class ConnectionService {
 
     // 피보호자: 페어링 요청 수락 (보호자가 보낸 요청)
     // 알림은 ConnectionNotificationListener가 커밋 후 발송
-    @Transactional
+    // noRollbackFor: 역할이 어긋난 요청은 cancel()한 뒤 오류로 끝내는데, 그 정리가 롤백되면 같은 유령 요청이
+    // 계속 남는다. 이 메서드의 나머지 CustomException은 모두 쓰기 전에 던지므로 롤백할 변경이 없다.
+    @Transactional(noRollbackFor = CustomException.class)
     public void acceptConnectionAsWard(String wardId, Long connectionId) {
         Connection connection = getConnectionForWard(wardId, connectionId);
         if (connection.getStatus() != ConnectionStatus.PENDING) {
@@ -182,10 +199,20 @@ public class ConnectionService {
         if (wardId.equals(connection.getInitiatedBy())) {
             throw new CustomException(ErrorCode.CONNECTION_NOT_AUTHORIZED);
         }
+        // 요청과 관리자 역할 변경이 겹치면 역할 변경 정리(tearDownConnectionsOnRoleChange)가 아직 커밋되지 않은
+        // 요청을 못 보고 지나가, 방향이 뒤집힌 PENDING이 남을 수 있다. 수락 시점에 양쪽 역할을 다시 보고,
+        // 어긋났으면 수락하지 않고 요청을 정리한다 - 역할 변경 정리와 같은 cancel(), 무알림(CONN-G15).
+        User ward = requireUser(wardId);
+        User guardian = requireUser(connection.getGuardianId());
+        if (ward.getRole() != Role.WARD || guardian.getRole() != Role.GUARDIAN) {
+            connection.cancel();
+            log.warn("역할 불일치 연결 요청 정리: connectionId={}, wardId={}, wardRole={}, guardianId={}, guardianRole={}",
+                    connectionId, wardId, ward.getRole(), connection.getGuardianId(), guardian.getRole());
+            throw new CustomException(ErrorCode.INVALID_CONNECTION_ROLE);
+        }
         // 요청 뒤 보호자가 정지·탈퇴 진행 상태가 됐을 수 있다. 그대로 수락하면 알림은 막히지만 연결은
         // 살아 있어 정지 해제 즉시 SOS·카메라·복약 이력이 열린다. 관리자 강제 연결과 같은 기준으로 막는다
         // (2026-09-11 회귀 재점검 R-1).
-        User guardian = requireUser(connection.getGuardianId());
         if (guardian.getStatus() != Status.ACTIVE) {
             throw new CustomException(ErrorCode.CONNECTION_TARGET_NOT_ACTIVE);
         }
@@ -428,6 +455,17 @@ public class ConnectionService {
         return connections.stream()
                 .map(c -> ConnectionResponse.fromWardView(c, guardianMap.get(c.getGuardianId())))
                 .toList();
+    }
+
+    // 원인 체인에서 SQLState 23505(unique_violation)를 찾는다. 연결 INSERT에서 걸릴 수 있는 유니크 제약은
+    // uq_connections_live 하나뿐이라(PK는 IDENTITY) 이것으로 동시 중복 요청을 판정한다.
+    private static boolean isUniqueViolation(Throwable e) {
+        for (Throwable t = e; t != null; t = t.getCause()) {
+            if (t instanceof java.sql.SQLException sqlEx) {
+                return "23505".equals(sqlEx.getSQLState());
+            }
+        }
+        return false;
     }
 
     private User requireUser(String userId) {
