@@ -88,6 +88,8 @@ public class AdminDashboardService {
         var safetyEvents = new AdminSafetyDashboardResponse.SafetyEvents(
                 disconnectedCameras,
                 userRepository.countWardsWithoutActiveGuardian(Role.WARD, Status.ACTIVE, ConnectionStatus.ACTIVE),
+                // 정지 보호자만 남은 피보호자도 알림 사각지대다 - 정지는 연결을 정리하지 않아 위 지표에 안 잡힌다(ADMIN-G27).
+                userRepository.countWardsWithoutReachableGuardian(Role.WARD, Status.ACTIVE, ConnectionStatus.ACTIVE),
                 userRepository.countWardsWithoutCamera(Role.WARD, Status.ACTIVE),
                 connectionRepository.countByStatusAndCreatedAtBefore(
                         ConnectionStatus.PENDING, now.minusDays(STALE_PENDING_DAYS)));

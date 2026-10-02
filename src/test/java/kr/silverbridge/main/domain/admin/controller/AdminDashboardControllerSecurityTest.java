@@ -50,7 +50,7 @@ class AdminDashboardControllerSecurityTest {
     private AdminSafetyDashboardResponse safety() {
         return new AdminSafetyDashboardResponse(
                 false, 0, 0L, null,
-                new AdminSafetyDashboardResponse.SafetyEvents(null, 0L, 0L, 0L),
+                new AdminSafetyDashboardResponse.SafetyEvents(null, 0L, 0L, 0L, 0L),
                 new AdminSafetyDashboardResponse.TodayAnomaly(
                         0L, List.of(), new AdminSafetyDashboardResponse.ReviewCount(0L, 0L, 0L, 0L)));
     }

@@ -12,7 +12,10 @@ import kr.silverbridge.main.domain.connection.repository.ConnectionRepository;
 import kr.silverbridge.main.domain.inquiry.repository.InquiryRepository;
 import kr.silverbridge.main.domain.user.repository.UserRepository;
 import kr.silverbridge.main.global.enums.DetectedType;
+import kr.silverbridge.main.global.enums.ConnectionStatus;
 import kr.silverbridge.main.global.enums.InquiryStatus;
+import kr.silverbridge.main.global.enums.Role;
+import kr.silverbridge.main.global.enums.Status;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
@@ -110,6 +113,22 @@ class AdminDashboardServiceTest {
             assertThat(response.safetyEvents().wardsWithoutGuardian()).isEqualTo(3L);
             assertThat(response.safetyEvents().wardsWithoutCamera()).isEqualTo(5L);
             assertThat(response.subscribedSessions()).isZero();
+        }
+
+        @Test
+        @DisplayName("알림 받을 보호자가 없는 피보호자 수는 별도 필드로, 기존 연결 사각지대 지표와 함께 내린다 (ADMIN-G27)")
+        void 알림받을_보호자_없는_피보호자() {
+            when(aiLiveStreamSubscriber.isConnected()).thenReturn(false);
+            when(userRepository.countWardsWithoutActiveGuardian(
+                    Role.WARD, Status.ACTIVE, ConnectionStatus.ACTIVE)).thenReturn(3L);
+            when(userRepository.countWardsWithoutReachableGuardian(
+                    Role.WARD, Status.ACTIVE, ConnectionStatus.ACTIVE)).thenReturn(5L);
+
+            AdminSafetyDashboardResponse response = service.getSafetyDashboard();
+
+            // 기존 필드는 그대로(하위호환), 새 필드는 정지 보호자만 남은 피보호자까지 포함한 값
+            assertThat(response.safetyEvents().wardsWithoutGuardian()).isEqualTo(3L);
+            assertThat(response.safetyEvents().wardsWithoutReachableGuardian()).isEqualTo(5L);
         }
 
         @Test

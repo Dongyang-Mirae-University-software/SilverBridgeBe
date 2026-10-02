@@ -52,6 +52,16 @@ public record AdminSafetyDashboardResponse(
             @Schema(description = "ACTIVE 연결이 하나도 없는 피보호자 수", example = "3")
             long wardsWithoutGuardian,
 
+            @Schema(description = """
+                    알림을 받을 수 있는 보호자가 한 명도 없는 피보호자 수.
+
+                    `wardsWithoutGuardian`(ACTIVE 연결 0건)을 **포함**하고, 연결은 남아 있지만 연결된 보호자가
+                    **전원 이용 중이 아닌**(이용 제한 등) 피보호자를 더한 값입니다. 정지된 계정에는 SOS·화재 알림도
+                    나가지 않으므로 이 피보호자들에게 일이 생기면 아무도 알림을 받지 못합니다.
+                    항상 `wardsWithoutGuardian` 이상입니다. 개수만 제공하며 대상·정지 사유는 담지 않습니다.
+                    """, example = "4")
+            long wardsWithoutReachableGuardian,
+
             @Schema(description = "카메라를 한 대도 등록하지 않은 피보호자 수", example = "5")
             long wardsWithoutCamera,
 
