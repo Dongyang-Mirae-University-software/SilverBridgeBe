@@ -94,6 +94,7 @@ public class UserAccountEventListener {
         refreshTokenRepository.deleteByUserId(event.userId());
         invalidatePreviousAccessTokens(event.userId());
         clearLoginLock(event.userId());
+        clearPasswordConfirmLock(event.userId());
     }
 
     // 비밀번호 변경·재설정 성공 = 본인 확인을 마친 것이므로 로그인 잠금·실패 횟수를 함께 푼다 (AUTH-G01).
@@ -105,6 +106,17 @@ public class UserAccountEventListener {
             redisTemplate.delete(List.of(RedisKeys.LOGIN_LOCK + userId, RedisKeys.LOGIN_FAIL + userId));
         } catch (RuntimeException e) {
             log.warn("[PW-CHANGE] 로그인 잠금 해제 실패 - TTL 만료로 풀림 userId={} error={}",
+                    userId, e.getClass().getSimpleName());
+        }
+    }
+
+    // 비밀번호 변경·탈퇴의 "현재 비밀번호" 확인 잠금·실패 횟수도 함께 푼다 (USER-G05 후속).
+    // 새 비밀번호를 정한 사람이 옛 실패 기록 때문에 계속 잠겨 있을 이유가 없다. best-effort - 실패는 TTL로 풀린다.
+    private void clearPasswordConfirmLock(String userId) {
+        try {
+            redisTemplate.delete(List.of(RedisKeys.USER_PW_LOCK + userId, RedisKeys.USER_PW_FAIL + userId));
+        } catch (RuntimeException e) {
+            log.warn("[PW-CHANGE] 비밀번호 확인 잠금 해제 실패 - TTL 만료로 풀림 userId={} error={}",
                     userId, e.getClass().getSimpleName());
         }
     }

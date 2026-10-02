@@ -12,7 +12,9 @@ import kr.silverbridge.main.global.enums.Role;
 import kr.silverbridge.main.global.enums.Status;
 import kr.silverbridge.main.global.exception.CustomException;
 import kr.silverbridge.main.global.exception.ErrorCode;
+import kr.silverbridge.main.global.exception.TooManyRequestsException;
 import kr.silverbridge.main.global.util.RedisCounter;
+import kr.silverbridge.main.global.util.RedisKeys;
 import kr.silverbridge.main.global.util.VerificationCodeValidator;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -24,12 +26,15 @@ import org.mockito.quality.Strictness;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.data.redis.core.ValueOperations;
+import org.springframework.data.redis.core.script.RedisScript;
+import org.springframework.mail.MailSendException;
 import org.springframework.mail.SimpleMailMessage;
 import org.springframework.mail.javamail.JavaMailSender;
 import org.springframework.security.crypto.password.PasswordEncoder;
 
 import java.util.List;
 import java.util.Optional;
+import java.util.concurrent.TimeUnit;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -118,6 +123,37 @@ class PasswordResetServiceTest {
 
         assertThat(ex.getErrorCode()).isEqualTo(ErrorCode.TOO_MANY_REQUESTS);
         verify(mailSender, never()).send(any(SimpleMailMessage.class));
+    }
+
+    @Test
+    @DisplayName("AUTH-G11: per-email 상한 초과 429에 남은 대기 시간(retryAfterSeconds)을 싣는다")
+    void requestReset_상한초과_retryAfter() {
+        when(userRepository.findByEmail(EMAIL)).thenReturn(Optional.of(localUser("encodedCurrent")));
+        when(redisCounter.incrementWithTtl(anyString(), anyLong())).thenReturn(11L);
+        when(redisTemplate.getExpire(RedisKeys.PW_EMAIL_SEND_COUNT + EMAIL, TimeUnit.SECONDS)).thenReturn(1500L);
+
+        TooManyRequestsException ex = assertThrows(TooManyRequestsException.class,
+                () -> passwordResetService.requestReset(passwordResetRequest(), IP));
+
+        assertThat(ex.getRetryAfterSeconds()).isEqualTo(1500L);
+        assertThat(ex.getErrorCode()).isEqualTo(ErrorCode.TOO_MANY_REQUESTS);
+    }
+
+    @Test
+    @DisplayName("AUTH-G11: 메일 발송 실패 → per-email 발송 상한 예약을 되돌리고 코드 미저장")
+    void requestReset_메일실패_상한환불() {
+        when(redisTemplate.opsForValue()).thenReturn(valueOperations);
+        when(userRepository.findByEmail(EMAIL)).thenReturn(Optional.of(localUser("encodedCurrent")));
+        when(redisCounter.incrementWithTtl(anyString(), anyLong())).thenReturn(2L);
+        doThrow(new MailSendException("smtp down")).when(mailSender).send(any(SimpleMailMessage.class));
+
+        CustomException ex = assertThrows(CustomException.class,
+                () -> passwordResetService.requestReset(passwordResetRequest(), IP));
+
+        assertThat(ex.getErrorCode()).isEqualTo(ErrorCode.INTERNAL_SERVER_ERROR);
+        verify(redisTemplate).execute(any(RedisScript.class),
+                eq(java.util.List.of(RedisKeys.PW_EMAIL_SEND_COUNT + EMAIL)));
+        verify(valueOperations, never()).set(anyString(), anyString(), anyLong(), any());
     }
 
     // ─── requestResetBySms — 시니어 친화 명시적 응답 (2026-05-23 정책 변경) ──────────────
@@ -220,6 +256,28 @@ class PasswordResetServiceTest {
         verify(eventPublisher, never()).publishEvent(any());
         // ★ 다운스트림 검증 실패 시 인증코드를 소비하지 않아야 한다 — 같은 코드로 재시도 가능해야 버그가 재발하지 않음
         verify(verificationCodeValidator, never()).consume(anyString(), anyString());
+    }
+
+    @Test
+    @DisplayName("소비 순서 회귀: 비소비 검증 → 비즈니스(비밀번호 비교·이벤트·로그) → 마지막 consume")
+    void confirmReset_소비순서_검증후마지막소비() {
+        PasswordResetConfirmRequest req = confirmRequest(EMAIL, null, "Brand-New1!");
+        User user = localUser("encodedCurrent");
+        when(userRepository.findByEmail(EMAIL)).thenReturn(Optional.of(user));
+        when(passwordEncoder.matches("Brand-New1!", "encodedCurrent")).thenReturn(false);
+        when(passwordEncoder.encode("Brand-New1!")).thenReturn("encodedNew");
+
+        passwordResetService.confirmReset(req, IP, AGENT);
+
+        VerificationKeyConfig config = VerificationKeyConfig.PASSWORD_RESET_EMAIL;
+        org.mockito.InOrder inOrder = org.mockito.Mockito.inOrder(
+                verificationCodeValidator, passwordEncoder, eventPublisher, accessLogService);
+        inOrder.verify(verificationCodeValidator).verifyWithoutConsume(
+                eq(config.verifyKey(EMAIL)), eq(config.attemptKey(EMAIL)), anyString(), anyLong(), anyInt());
+        inOrder.verify(passwordEncoder).matches("Brand-New1!", "encodedCurrent");
+        inOrder.verify(eventPublisher).publishEvent(any(PasswordChangedEvent.class));
+        inOrder.verify(accessLogService).log(anyString(), any(), anyString(), anyString());
+        inOrder.verify(verificationCodeValidator).consume(config.verifyKey(EMAIL), config.attemptKey(EMAIL));
     }
 
     @Test

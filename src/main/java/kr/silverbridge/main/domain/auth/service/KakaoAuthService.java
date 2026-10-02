@@ -120,10 +120,9 @@ public class KakaoAuthService {
                         email = FALLBACK_EMAIL_PREFIX + kakaoId + FALLBACK_EMAIL_DOMAIN;
                     }
 
-                    // 동일 이메일로 이미 LOCAL 가입된 계정이 있으면 예외
-                    // (AUTH-G08 "기존 로그인 방법 안내" 문구는 새 ErrorCode가 필요해 보류 - EMAIL_ALREADY_EXISTS 그대로)
+                    // 동일 이메일로 이미 가입된 계정이 있으면 예외 - 일반 가입 계정이면 기존 로그인 방법을 안내 (AUTH-G08)
                     if (userRepository.existsByEmail(email)) {
-                        throw new CustomException(ErrorCode.EMAIL_ALREADY_EXISTS);
+                        throw emailTaken(email);
                     }
 
                     // 카카오 닉네임은 사용하지 않는다. 회원가입 시 사용자가 본인 실명을 직접 입력하도록
@@ -188,7 +187,7 @@ public class KakaoAuthService {
 
         // 이메일 중복 확인 (재검증)
         if (userRepository.existsByEmail(email)) {
-            throw new CustomException(ErrorCode.EMAIL_ALREADY_EXISTS);
+            throw emailTaken(email);
         }
 
         // 전화번호 중복 확인
@@ -243,6 +242,18 @@ public class KakaoAuthService {
         eventPublisher.publishEvent(new KakaoRegisteredEvent(user.getId(), ipAddress, userAgent));
 
         return LoginResponse.of(user, accessToken, refreshToken);
+    }
+
+    /**
+     * 이미 쓰이는 이메일로 카카오 가입을 시도했을 때의 응답 (AUTH-G08).
+     * 일반(이메일/비밀번호) 가입 계정이면 {@code KAKAO_EMAIL_REGISTERED_LOCAL}로 기존 로그인 방법을 안내하고,
+     * 그 밖(다른 카카오 계정 등)은 종전대로 {@code EMAIL_ALREADY_EXISTS}. 계정 연동은 하지 않는다.
+     */
+    private CustomException emailTaken(String email) {
+        boolean local = userRepository.findByEmail(email)
+                .map(User::isLocalProvider)
+                .orElse(false);
+        return new CustomException(local ? ErrorCode.KAKAO_EMAIL_REGISTERED_LOCAL : ErrorCode.EMAIL_ALREADY_EXISTS);
     }
 
     private static String generatePendingToken() {
