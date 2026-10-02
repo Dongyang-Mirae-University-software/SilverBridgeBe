@@ -1554,8 +1554,11 @@ REST API Key 단독 대비 보안 강화 — 인가코드 탈취 시 토큰 발�
 - BE-1 AI 세션 목록 60초 재동기화 + 구독 실패 WARN / BE-2 카카오 탈퇴 문구 "탈퇴"·"회원탈퇴" 둘 다 허용 / BE-3 요청 취소 시 WS `connection-request-cancelled`만(무알림 유지) / BE-4 문자열 payload 계약 문서화.
 - 단위 718 / 0 실패. 상세: `docs/(2026-10-01) fix-qa-be-issues.md`
 
-## [2026-10-02] QA BE 이슈 반영 - 인증 저장소 장애·토큰·입력 정규화·알림 결과 (P0~P9)
+## [2026-10-02] QA BE 이슈 반영 - 최종 (PR #267~#283, V55·V56)
 
-- 인증 필터 Redis 장애 503(SOS만 fail-open) / 무효화 초 단위 비교 / refresh typ·밀려난 토큰 / 클라이언트 IP 신뢰 프록시 / STOMP SEND `/app/`만 / 이메일 소문자 V55 / 로그인 잠금·인증번호 선예약 / 카카오 pendingToken / SOS·연결·복약·이상감지·관리자 소항목.
-- P9(문서): 정책 문서 새 절, Swagger 오기 3건(로그아웃 401·카카오 대기 30분·비밀번호 길이), ANOM-G06 의도 명시. 미반영 보류 7묶음은 승인 대기.
-- 배포 주의: V55 사전 중복 점검, `CLIENT_IP_TRUSTED_PROXIES` 설정 전 동작 불변. 상세: `docs/(2026-10-02) fix-qa-be-issues.md`
+- 인증 필터 Redis 장애 503(SOS만 fail-open) / 무효화 초 단위 비교 / refresh typ·밀려난 토큰 / 클라이언트 IP 신뢰 프록시 / STOMP SEND `/app/`만 / 이메일 소문자 V55 / 로그인 잠금·인증번호 선예약 / 카카오 pendingToken / SOS·연결·복약·이상감지·관리자 소항목(V56 공지 트리거).
+- 후속 묶음: WS 수신자 차단 + 대시보드 `wardsWithoutReachableGuardian`(#282) / 긴급 executor(#281) / 연결 요청 24시간 5건 쿨다운(#283) / 카메라 등록 검증(#280). 정책 문서·Swagger 정정(#279), ANOM-G06 의도 명시.
+- 결정: 2026-09-09 "유일한 보호자 경고 안 만듦"을 사용자가 2026-10-02 추천안으로 변경(대시보드 지표만). ANOM-G08은 `camera.is_active` 표시용 문서화로 종결.
+- 남은 보류: CONN-G02(현행 유지) · XCUT-G31(HttpOnly 쿠키, 별도 설계) · 세션 강제 종료(핸드셰이크 Principal 선행) · CONN-G15 경합 잔여.
+- 배포 주의: **V55 비가역**(사전 중복 점검, 두 서버) / **카카오 pendingToken은 FE 동시 배포** / `CLIENT_IP_TRUSTED_PROXIES`·redis `noeviction`(P10, 미머지)은 사용자 소관.
+- 상세: `docs/(2026-10-02) fix-qa-be-issues.md`
