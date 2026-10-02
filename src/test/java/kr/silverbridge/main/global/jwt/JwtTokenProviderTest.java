@@ -109,4 +109,26 @@ class JwtTokenProviderTest {
         assertThat(remaining).isPositive();
         assertThat(remaining).isLessThanOrEqualTo(properties.getAccessTokenExpiration());
     }
+
+    @Test
+    @DisplayName("같은 userId·같은 초에 연달아 만든 refresh 토큰도 서로 다르다 - jti (AUTH-G04)")
+    void refreshTokensAreUniqueWithinSameSecond() {
+        java.util.Set<String> tokens = new java.util.HashSet<>();
+        for (int i = 0; i < 20; i++) {
+            tokens.add(jwtTokenProvider.generateRefreshToken("abc123"));
+        }
+
+        assertThat(tokens).hasSize(20);
+    }
+
+    @Test
+    @DisplayName("isRefreshToken은 refresh에만 true, access에는 false (AUTH-G27)")
+    void isRefreshTokenDistinguishesType() {
+        String refresh = jwtTokenProvider.generateRefreshToken("abc123");
+        String access = jwtTokenProvider.generateAccessToken("abc123", "user@example.com", "WARD");
+
+        assertThat(jwtTokenProvider.isRefreshToken(refresh)).isTrue();
+        assertThat(jwtTokenProvider.isRefreshToken(access)).isFalse();
+        assertThat(jwtTokenProvider.isAccessToken(refresh)).isFalse();
+    }
 }

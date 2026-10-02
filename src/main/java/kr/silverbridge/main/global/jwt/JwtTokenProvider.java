@@ -14,6 +14,7 @@ import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.util.Date;
 import java.util.HexFormat;
+import java.util.UUID;
 
 @Slf4j
 @Component
@@ -72,9 +73,13 @@ public class JwtTokenProvider {
 
     // Refresh Token 생성
     // Access Token과 달리 최소 정보(userId)만 담음
+    // jti(UUID)를 넣어 같은 초·같은 userId라도 토큰이 매번 달라지게 한다 (AUTH-G04).
+    // iat/exp가 초 단위라 jti가 없으면 1초 안의 재로그인·재발급이 바이트까지 같은 토큰을 만들어
+    // refresh_tokens.token UNIQUE에 걸려 409가 났다.
     public String generateRefreshToken(String userId) {
         return Jwts.builder()
                 .subject(userId)
+                .id(UUID.randomUUID().toString())
                 .claim(CLAIM_TYPE, TYPE_REFRESH)
                 .issuedAt(new Date())
                 .expiration(new Date(System.currentTimeMillis() + jwtProperties.getRefreshTokenExpiration()))
@@ -101,6 +106,12 @@ public class JwtTokenProvider {
     // typ 클레임이 없는 과거 토큰은 access로 보지 않는다(false) → 배포 후 자연 재발급으로 전환.
     public boolean isAccessToken(String token) {
         return TYPE_ACCESS.equals(getClaims(token).get(CLAIM_TYPE, String.class));
+    }
+
+    // refresh token 여부 — 재발급·재사용 감지가 다른 종류의 토큰으로 세션을 폐기하지 않게 한다 (AUTH-G27)
+    // typ 클레임이 없는 과거 토큰도 refresh로 보지 않는다(false).
+    public boolean isRefreshToken(String token) {
+        return TYPE_REFRESH.equals(getClaims(token).get(CLAIM_TYPE, String.class));
     }
 
     // 토큰 유효성 검증

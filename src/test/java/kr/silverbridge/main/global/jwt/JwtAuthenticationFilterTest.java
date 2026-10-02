@@ -11,6 +11,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.data.redis.core.StringRedisTemplate;
+import org.springframework.data.redis.RedisConnectionFailureException;
 import org.springframework.data.redis.core.ValueOperations;
 import org.springframework.mock.web.MockHttpServletRequest;
 import org.springframework.mock.web.MockHttpServletResponse;
@@ -136,5 +137,205 @@ class JwtAuthenticationFilterTest {
 
         assertThat(SecurityContextHolder.getContext().getAuthentication()).isNull();
         verify(filterChain).doFilter(request, response);
+    }
+
+    // ─── 401 응답 code (P0 ApiResponse 형식) ─────────────────────────────
+
+    @Test
+    @DisplayName("필터가 내는 401 JSON에 code=LOGIN_REQUIRED와 기존 문구가 실린다")
+    void unauthorizedBodyCarriesCode() throws Exception {
+        MockHttpServletRequest request = bearer(access());
+        MockHttpServletResponse response = new MockHttpServletResponse();
+        when(redisTemplate.hasKey(anyString())).thenReturn(true);
+
+        filter.doFilterInternal(request, response, filterChain);
+
+        assertThat(response.getStatus()).isEqualTo(401);
+        assertThat(response.getContentAsString())
+                .contains("\"code\":\"LOGIN_REQUIRED\"")
+                .contains("로그인이 필요합니다.");
+    }
+
+    // ─── D2: 무효화 시각은 초 단위, 같은 초 발급은 허용 ─────────────────────
+
+    @Test
+    @DisplayName("무효화와 같은 초에 발급된 토큰은 통과한다 (AUTH-G06·USER-G13·XCUT-G10·ADMIN-G03)")
+    void sameSecondTokenPasses() throws Exception {
+        String access = access();
+        long iatSec = jwtTokenProvider.getIssuedAt(access) / 1000;
+        stubInvalidate(String.valueOf(iatSec));
+        MockHttpServletRequest request = bearer(access);
+        MockHttpServletResponse response = new MockHttpServletResponse();
+
+        filter.doFilterInternal(request, response, filterChain);
+
+        assertThat(SecurityContextHolder.getContext().getAuthentication()).isNotNull();
+        verify(filterChain).doFilter(request, response);
+    }
+
+    @Test
+    @DisplayName("무효화보다 앞선 초에 발급된 토큰은 401")
+    void earlierSecondTokenRejected() throws Exception {
+        String access = access();
+        long iatSec = jwtTokenProvider.getIssuedAt(access) / 1000;
+        stubInvalidate(String.valueOf(iatSec + 1));
+        MockHttpServletResponse response = new MockHttpServletResponse();
+
+        filter.doFilterInternal(bearer(access), response, filterChain);
+
+        assertThat(response.getStatus()).isEqualTo(401);
+        assertThat(SecurityContextHolder.getContext().getAuthentication()).isNull();
+    }
+
+    @Test
+    @DisplayName("배포 전 ms로 저장된 무효화 값도 초로 환산해 같은 규칙으로 비교한다 (같은 초 통과·다음 초 거부)")
+    void legacyMillisValueIsReadAsSeconds() throws Exception {
+        String access = access();
+        long iatMs = jwtTokenProvider.getIssuedAt(access);
+
+        stubInvalidate(String.valueOf(iatMs + 999));    // 같은 초의 .999 → 통과
+        MockHttpServletResponse sameSecond = new MockHttpServletResponse();
+        filter.doFilterInternal(bearer(access), sameSecond, filterChain);
+        assertThat(sameSecond.getStatus()).isEqualTo(200);
+        assertThat(SecurityContextHolder.getContext().getAuthentication()).isNotNull();
+
+        SecurityContextHolder.clearContext();
+        stubInvalidate(String.valueOf(iatMs + 1000));   // 다음 초 → 거부
+        MockHttpServletResponse nextSecond = new MockHttpServletResponse();
+        filter.doFilterInternal(bearer(access), nextSecond, filterChain);
+        assertThat(nextSecond.getStatus()).isEqualTo(401);
+    }
+
+    // ─── D1: Redis 오류 → 일반 503, SOS만 통과 ─────────────────────────────
+
+    @Test
+    @DisplayName("로그아웃 조회에서 Redis 오류 → 일반 경로는 503 + code=SERVICE_UNAVAILABLE, 체인 미진행 (XCUT-G03·AUTH-G21)")
+    void logoutLookupFailureReturns503() throws Exception {
+        MockHttpServletRequest request = bearer(access());
+        request.setMethod("GET");
+        request.setRequestURI("/api/user/me");
+        MockHttpServletResponse response = new MockHttpServletResponse();
+        when(redisTemplate.hasKey(anyString())).thenThrow(new RedisConnectionFailureException("down"));
+
+        filter.doFilterInternal(request, response, filterChain);
+
+        assertThat(response.getStatus()).isEqualTo(503);
+        assertThat(response.getContentAsString()).contains("\"code\":\"SERVICE_UNAVAILABLE\"");
+        assertThat(SecurityContextHolder.getContext().getAuthentication()).isNull();
+        verify(filterChain, never()).doFilter(request, response);
+    }
+
+    @Test
+    @DisplayName("무효화 값이 숫자가 아님(손상된 키) → 일반 경로는 401이 아니라 503")
+    void malformedInvalidateValueReturns503() throws Exception {
+        MockHttpServletRequest request = bearer(access());
+        request.setMethod("GET");
+        request.setRequestURI("/api/notice");
+        MockHttpServletResponse response = new MockHttpServletResponse();
+        stubInvalidate("not-a-number");
+
+        filter.doFilterInternal(request, response, filterChain);
+
+        assertThat(response.getStatus()).isEqualTo(503);
+        verify(filterChain, never()).doFilter(request, response);
+    }
+
+    @Test
+    @DisplayName("SOS 발송(POST /api/ward/sos)은 Redis 오류여도 검사를 건너뛰고 인증 통과 (SOS-G10)")
+    void sosPathFailsOpenOnRedisError() throws Exception {
+        MockHttpServletRequest request = sosRequest(access());
+        MockHttpServletResponse response = new MockHttpServletResponse();
+        when(redisTemplate.hasKey(anyString())).thenThrow(new RedisConnectionFailureException("down"));
+        when(redisTemplate.opsForValue()).thenThrow(new RedisConnectionFailureException("down"));
+
+        filter.doFilterInternal(request, response, filterChain);
+
+        assertThat(SecurityContextHolder.getContext().getAuthentication()).isNotNull();
+        assertThat(SecurityContextHolder.getContext().getAuthentication().getPrincipal()).isEqualTo(USER_ID);
+        verify(filterChain).doFilter(request, response);
+    }
+
+    @Test
+    @DisplayName("SOS 경로에서 무효화 값이 손상돼도 통과한다")
+    void sosPathFailsOpenOnMalformedValue() throws Exception {
+        MockHttpServletRequest request = sosRequest(access());
+        MockHttpServletResponse response = new MockHttpServletResponse();
+        stubInvalidate("{broken");
+
+        filter.doFilterInternal(request, response, filterChain);
+
+        assertThat(SecurityContextHolder.getContext().getAuthentication()).isNotNull();
+        verify(filterChain).doFilter(request, response);
+    }
+
+    @Test
+    @DisplayName("SOS 경로라도 Redis가 정상이면 무효화 검사는 그대로 적용된다")
+    void sosPathStillChecksWhenRedisHealthy() throws Exception {
+        String access = access();
+        MockHttpServletRequest request = sosRequest(access);
+        MockHttpServletResponse response = new MockHttpServletResponse();
+        stubInvalidate(String.valueOf(jwtTokenProvider.getIssuedAt(access) / 1000 + 1));
+
+        filter.doFilterInternal(request, response, filterChain);
+
+        assertThat(response.getStatus()).isEqualTo(401);
+        verify(filterChain, never()).doFilter(request, response);
+    }
+
+    @Test
+    @DisplayName("SOS 경로 fail-open이어도 위조 토큰은 서명 검증에서 401 (서명·만료 검사는 유지)")
+    void sosPathStillVerifiesSignature() throws Exception {
+        MockHttpServletRequest request = sosRequest("forged.token.value");
+        MockHttpServletResponse response = new MockHttpServletResponse();
+        when(redisTemplate.hasKey(anyString())).thenThrow(new RedisConnectionFailureException("down"));
+
+        filter.doFilterInternal(request, response, filterChain);
+
+        assertThat(response.getStatus()).isEqualTo(401);
+        assertThat(SecurityContextHolder.getContext().getAuthentication()).isNull();
+        verify(filterChain, never()).doFilter(request, response);
+    }
+
+    @Test
+    @DisplayName("SOS 설정(GET /api/ward/sos-setting)·GET /api/ward/sos 는 fail-open 대상이 아니다 → 503")
+    void onlySosSendIsFailOpen() throws Exception {
+        when(redisTemplate.hasKey(anyString())).thenThrow(new RedisConnectionFailureException("down"));
+
+        MockHttpServletRequest setting = bearer(access());
+        setting.setMethod("POST");
+        setting.setRequestURI("/api/ward/sos-setting");
+        MockHttpServletResponse r1 = new MockHttpServletResponse();
+        filter.doFilterInternal(setting, r1, filterChain);
+        assertThat(r1.getStatus()).isEqualTo(503);
+
+        MockHttpServletRequest getSos = bearer(access());
+        getSos.setMethod("GET");
+        getSos.setRequestURI("/api/ward/sos");
+        MockHttpServletResponse r2 = new MockHttpServletResponse();
+        filter.doFilterInternal(getSos, r2, filterChain);
+        assertThat(r2.getStatus()).isEqualTo(503);
+    }
+
+    private String access() {
+        return jwtTokenProvider.generateAccessToken(USER_ID, "user@example.com", "WARD");
+    }
+
+    private MockHttpServletRequest bearer(String token) {
+        MockHttpServletRequest request = new MockHttpServletRequest();
+        request.addHeader("Authorization", "Bearer " + token);
+        return request;
+    }
+
+    private MockHttpServletRequest sosRequest(String token) {
+        MockHttpServletRequest request = bearer(token);
+        request.setMethod("POST");
+        request.setRequestURI("/api/ward/sos");
+        return request;
+    }
+
+    private void stubInvalidate(String value) {
+        when(redisTemplate.hasKey(anyString())).thenReturn(false);
+        when(redisTemplate.opsForValue()).thenReturn(valueOperations);
+        when(valueOperations.get(RedisKeys.PASSWORD_INVALIDATE + USER_ID)).thenReturn(value);
     }
 }

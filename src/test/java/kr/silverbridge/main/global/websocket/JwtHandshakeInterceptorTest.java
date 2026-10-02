@@ -10,7 +10,9 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.data.redis.core.StringRedisTemplate;
+import org.springframework.data.redis.RedisConnectionFailureException;
 import org.springframework.data.redis.core.ValueOperations;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.server.ServerHttpRequest;
 import org.springframework.http.server.ServerHttpResponse;
 import org.springframework.web.socket.WebSocketHandler;
@@ -22,6 +24,8 @@ import java.util.Map;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 /**
@@ -93,9 +97,9 @@ class JwtHandshakeInterceptorTest {
     }
 
     @Test
-    @DisplayName("비밀번호 변경·탈퇴 무효화 시각 이전 발급(iat) 토큰 → 거부")
+    @DisplayName("비밀번호 변경·탈퇴 무효화 시각(초)보다 앞선 초에 발급(iat)된 토큰 → 거부")
     void 무효화토큰_거부() {
-        when(valueOperations.get(RedisKeys.PASSWORD_INVALIDATE + USER_ID)).thenReturn("2000");
+        when(valueOperations.get(RedisKeys.PASSWORD_INVALIDATE + USER_ID)).thenReturn("2");
         when(jwtTokenProvider.getIssuedAt(TOKEN)).thenReturn(1000L);
 
         boolean allowed = interceptor.beforeHandshake(requestWithToken(), response, wsHandler, attributes);
@@ -104,9 +108,9 @@ class JwtHandshakeInterceptorTest {
     }
 
     @Test
-    @DisplayName("무효화 시각 이후 발급된 새 토큰 → 연결 허용")
+    @DisplayName("무효화 시각(초) 이후 발급된 새 토큰 → 연결 허용")
     void 무효화이후_새토큰_허용() {
-        when(valueOperations.get(RedisKeys.PASSWORD_INVALIDATE + USER_ID)).thenReturn("2000");
+        when(valueOperations.get(RedisKeys.PASSWORD_INVALIDATE + USER_ID)).thenReturn("2");
         when(jwtTokenProvider.getIssuedAt(TOKEN)).thenReturn(3000L);
 
         boolean allowed = interceptor.beforeHandshake(requestWithToken(), response, wsHandler, attributes);
@@ -123,5 +127,61 @@ class JwtHandshakeInterceptorTest {
         boolean allowed = interceptor.beforeHandshake(request, response, wsHandler, attributes);
 
         assertThat(allowed).isFalse();
+    }
+
+    @Test
+    @DisplayName("무효화와 같은 초에 발급된 토큰 → 연결 허용 (HTTP 필터와 같은 D2 규칙)")
+    void 같은초_발급_허용() {
+        when(valueOperations.get(RedisKeys.PASSWORD_INVALIDATE + USER_ID)).thenReturn("3");
+        when(jwtTokenProvider.getIssuedAt(TOKEN)).thenReturn(3000L);
+
+        boolean allowed = interceptor.beforeHandshake(requestWithToken(), response, wsHandler, attributes);
+
+        assertThat(allowed).isTrue();
+    }
+
+    @Test
+    @DisplayName("배포 전 ms로 저장된 값도 초로 환산 - 같은 초는 허용")
+    void 옛_ms값_같은초_허용() {
+        when(valueOperations.get(RedisKeys.PASSWORD_INVALIDATE + USER_ID)).thenReturn("1759380000500");
+        when(jwtTokenProvider.getIssuedAt(TOKEN)).thenReturn(1759380000000L);
+
+        boolean allowed = interceptor.beforeHandshake(requestWithToken(), response, wsHandler, attributes);
+
+        assertThat(allowed).isTrue();
+    }
+
+    @Test
+    @DisplayName("Redis 조회 오류 → 연결 거부 + 503 (AUTH-G21)")
+    void 저장소오류_503거부() {
+        when(redisTemplate.hasKey(RedisKeys.LOGOUT_TOKEN + HASH))
+                .thenThrow(new RedisConnectionFailureException("down"));
+
+        boolean allowed = interceptor.beforeHandshake(requestWithToken(), response, wsHandler, attributes);
+
+        assertThat(allowed).isFalse();
+        assertThat(attributes).isEmpty();
+        verify(response).setStatusCode(HttpStatus.SERVICE_UNAVAILABLE);
+    }
+
+    @Test
+    @DisplayName("무효화 값이 숫자가 아님 → 예전처럼 허용하지 않고 거부 + 503")
+    void 손상된무효화값_503거부() {
+        when(valueOperations.get(RedisKeys.PASSWORD_INVALIDATE + USER_ID)).thenReturn("garbage");
+
+        boolean allowed = interceptor.beforeHandshake(requestWithToken(), response, wsHandler, attributes);
+
+        assertThat(allowed).isFalse();
+        verify(response).setStatusCode(HttpStatus.SERVICE_UNAVAILABLE);
+    }
+
+    @Test
+    @DisplayName("일반 거부(로그아웃 토큰)는 503을 붙이지 않는다")
+    void 로그아웃거부는_503아님() {
+        when(redisTemplate.hasKey(RedisKeys.LOGOUT_TOKEN + HASH)).thenReturn(true);
+
+        interceptor.beforeHandshake(requestWithToken(), response, wsHandler, attributes);
+
+        verify(response, never()).setStatusCode(HttpStatus.SERVICE_UNAVAILABLE);
     }
 }

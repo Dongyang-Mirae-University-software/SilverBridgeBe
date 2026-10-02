@@ -188,6 +188,8 @@ public class AuthService {
     // DB에서 Refresh Token 검증 → 만료 확인 → 새 Access Token + Refresh Token 발급 (Rotation)
     // 기존 Refresh Token은 즉시 무효화 → 탈취된 토큰 재사용 차단
     // 폐기된 옛 토큰이 다시 들어왔는데 같은 사용자에게 다른 token이 남아있다면 도난 신호로 간주 → 사용자의 모든 token 강제 폐기 (H-3)
+    // refresh 종류(typ)가 아닌 토큰은 재사용 감지 없이 INVALID_TOKEN만 (AUTH-G27).
+    // 같은 초 재발급의 UNIQUE 충돌(AUTH-G04)은 refresh 토큰의 jti로 막는다 - 삭제 후 저장 순서에 flush는 필요 없다.
     @Transactional
     public TokenRefreshResponse refresh(TokenRefreshRequest request) {
         Optional<RefreshToken> opt = refreshTokenRepository.findByToken(request.getRefreshToken());
@@ -265,6 +267,9 @@ public class AuthService {
         String userId;
         try {
             if (!jwtTokenProvider.validateToken(suspectedToken)) return;
+            // refresh 토큰이 아니면(access 토큰을 잘못 보낸 경우 등) 재사용 신호가 아니다 - 아무것도 폐기하지 않는다 (AUTH-G27).
+            // typ 없이 subject만 보면 access 토큰 한 번 잘못 보낸 것으로 정상 세션이 통째로 끊기고 TOKEN_REUSE_DETECTED가 오탐된다.
+            if (!jwtTokenProvider.isRefreshToken(suspectedToken)) return;
             userId = jwtTokenProvider.getUserId(suspectedToken);
         } catch (CustomException ignored) {
             return;

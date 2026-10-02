@@ -107,8 +107,33 @@ class UserAccountEventListenerTest {
                 anyLong(),
                 eq(TimeUnit.MILLISECONDS)
         );
+        // 초 단위(내림)로 저장한다 - 같은 초에 새로 발급된 토큰을 살리기 위해 (D2, AUTH-G06)
         long savedAt = Long.parseLong(captor.getValue());
-        assertThat(savedAt).isBetween(before, after);
+        assertThat(savedAt).isBetween(before / 1000, after / 1000);
+    }
+
+    @Test
+    @DisplayName("PasswordChangedEvent 수신 시 로그인 잠금·실패 횟수 키를 삭제한다 - 재설정 후 바로 로그인 가능 (AUTH-G01)")
+    void handlePasswordChanged_로그인잠금_해제() {
+        when(jwtProperties.getAccessTokenExpiration()).thenReturn(1_800_000L);
+        when(redisTemplate.opsForValue()).thenReturn(valueOperations);
+
+        listener.handlePasswordChanged(new PasswordChangedEvent("user-5"));
+
+        verify(redisTemplate).delete(java.util.List.of(RedisKeys.LOGIN_LOCK + "user-5", RedisKeys.LOGIN_FAIL + "user-5"));
+    }
+
+    @Test
+    @DisplayName("로그인 잠금 해제 실패는 삼킨다 - 토큰 무효화는 이미 끝났다")
+    void handlePasswordChanged_잠금해제실패_미전파() {
+        when(jwtProperties.getAccessTokenExpiration()).thenReturn(1_800_000L);
+        when(redisTemplate.opsForValue()).thenReturn(valueOperations);
+        when(redisTemplate.delete(org.mockito.ArgumentMatchers.<java.util.Collection<String>>any()))
+                .thenThrow(new RuntimeException("Redis 장애"));
+
+        org.assertj.core.api.Assertions.assertThatCode(() -> listener.handlePasswordChanged(new PasswordChangedEvent("user-6")))
+                .doesNotThrowAnyException();
+        verify(valueOperations).set(eq(RedisKeys.PASSWORD_INVALIDATE + "user-6"), anyString(), anyLong(), eq(TimeUnit.MILLISECONDS));
     }
 
     @Test
