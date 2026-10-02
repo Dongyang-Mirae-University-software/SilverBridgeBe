@@ -10,6 +10,7 @@ import kr.silverbridge.main.global.enums.AccessAction;
 import kr.silverbridge.main.global.jwt.JwtProperties;
 import kr.silverbridge.main.global.jwt.TokenInvalidation;
 import kr.silverbridge.main.global.util.RedisKeys;
+import kr.silverbridge.main.global.websocket.WebSocketSessionCloser;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.redis.core.StringRedisTemplate;
@@ -38,6 +39,10 @@ public class UserAccountEventListener {
     private final AccessLogService accessLogService;
     private final StringRedisTemplate redisTemplate;
     private final JwtProperties jwtProperties;
+    // 토큰 무효화만으로는 이미 열린 WS 세션이 끊기지 않는다(핸드셰이크 때만 검사) - 무효화 직후 서버가 닫는다 (AUTH-G19·ADMIN-G28)
+    // 순서는 무효화 → 닫기. 반대면 닫힌 클라이언트가 옛 토큰으로 바로 재연결해 통과할 수 있다.
+    // closeAll은 예외를 던지지 않는다(best-effort, DB 쓰기 없음).
+    private final WebSocketSessionCloser webSocketSessionCloser;
 
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
     @Transactional(propagation = Propagation.REQUIRES_NEW)
@@ -55,6 +60,8 @@ public class UserAccountEventListener {
         } catch (RuntimeException e) {
             log.error("[WITHDRAW] 토큰·접속로그 정리 실패 — purge/스윕이 회수 예정 userId={}", event.userId(), e);
         }
+        // 탈퇴한 계정의 열린 세션도 닫는다 - 남겨 두면 purge 뒤에도 그 브라우저가 연결된 채로 남는다
+        webSocketSessionCloser.closeAll(event.userId());
     }
 
     // 관리자 정지 - 상태 변경만으로는 이미 발급된 access token이 만료까지 살아 있어
@@ -71,6 +78,7 @@ public class UserAccountEventListener {
             log.error("[ADMIN-RESTRICT] 토큰 무효화 실패 - 기존 토큰이 만료까지 유효할 수 있음 userId={}",
                     event.userId(), e);
         }
+        webSocketSessionCloser.closeAll(event.userId());
     }
 
     // 관리자 역할 변경 - access token은 발급 시점의 role 클레임으로 권한을 만들어, 역할만 바꾸면 옛 역할의
@@ -86,6 +94,7 @@ public class UserAccountEventListener {
             log.error("[ADMIN-ROLE-CHANGE] 토큰 무효화 실패 - 옛 역할 토큰이 만료까지 유효할 수 있음 userId={}",
                     event.userId(), e);
         }
+        webSocketSessionCloser.closeAll(event.userId());
     }
 
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
@@ -93,6 +102,7 @@ public class UserAccountEventListener {
     public void handlePasswordChanged(PasswordChangedEvent event) {
         refreshTokenRepository.deleteByUserId(event.userId());
         invalidatePreviousAccessTokens(event.userId());
+        webSocketSessionCloser.closeAll(event.userId());
         clearLoginLock(event.userId());
         clearPasswordConfirmLock(event.userId());
     }

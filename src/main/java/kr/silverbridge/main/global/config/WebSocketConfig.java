@@ -3,6 +3,8 @@ package kr.silverbridge.main.global.config;
 import kr.silverbridge.main.global.jwt.JwtTokenProvider;
 import kr.silverbridge.main.global.websocket.JwtHandshakeInterceptor;
 import kr.silverbridge.main.global.websocket.StompSubscriptionAuthorizationInterceptor;
+import kr.silverbridge.main.global.websocket.UserSessionTrackingHandlerDecorator;
+import kr.silverbridge.main.global.websocket.WebSocketSessionRegistry;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Configuration;
@@ -12,6 +14,7 @@ import org.springframework.messaging.simp.config.MessageBrokerRegistry;
 import org.springframework.web.socket.config.annotation.EnableWebSocketMessageBroker;
 import org.springframework.web.socket.config.annotation.StompEndpointRegistry;
 import org.springframework.web.socket.config.annotation.WebSocketMessageBrokerConfigurer;
+import org.springframework.web.socket.config.annotation.WebSocketTransportRegistration;
 
 import java.util.Arrays;
 
@@ -23,6 +26,7 @@ public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
     private final JwtTokenProvider jwtTokenProvider;
     private final StringRedisTemplate redisTemplate;
     private final StompSubscriptionAuthorizationInterceptor subscriptionAuthInterceptor;
+    private final WebSocketSessionRegistry sessionRegistry;
 
     // HTTP CORS(app.cors.allowed-origins)와 동일한 출처 목록 사용 — WS만 와일드카드였던 비대칭 해소 (L-S3-3)
     @Value("${app.cors.allowed-origins}")
@@ -51,5 +55,11 @@ public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
     public void configureClientInboundChannel(ChannelRegistration registration) {
         // SUBSCRIBE 시 /topic/{userId}/... 의 userId가 세션 userId와 일치하는지 검증
         registration.interceptors(subscriptionAuthInterceptor);
+    }
+
+    @Override
+    public void configureWebSocketTransport(WebSocketTransportRegistration registration) {
+        // 사용자별 열린 세션 목록 - 토큰 무효화(정지·비밀번호 변경·역할 변경·탈퇴) 때 서버가 세션을 닫는 데 쓴다 (AUTH-G19·ADMIN-G28)
+        registration.addDecoratorFactory(handler -> new UserSessionTrackingHandlerDecorator(handler, sessionRegistry));
     }
 }
