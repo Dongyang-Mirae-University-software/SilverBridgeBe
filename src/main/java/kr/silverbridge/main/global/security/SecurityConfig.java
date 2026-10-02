@@ -2,8 +2,10 @@ package kr.silverbridge.main.global.security;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.servlet.http.HttpServletResponse;
+import kr.silverbridge.main.global.exception.ErrorCode;
 import kr.silverbridge.main.global.jwt.JwtAuthenticationFilter;
 import kr.silverbridge.main.global.jwt.JwtTokenProvider;
+import kr.silverbridge.main.global.response.ApiResponse;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
@@ -26,6 +28,7 @@ import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.CorsConfigurationSource;
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 
+import java.io.IOException;
 import java.util.Arrays;
 import java.util.List;
 
@@ -79,13 +82,14 @@ public class SecurityConfig {
                         session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
 
                 // 인증 실패(미인증 상태로 보호 자원 접근) 시 JSON 401 반환
-                // — JwtAuthenticationFilter.sendError와 동일 포맷으로 응답 일관성 유지
-                .exceptionHandling(ex -> ex.authenticationEntryPoint((request, response, authException) -> {
-                    response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
-                    response.setContentType(MediaType.APPLICATION_JSON_VALUE);
-                    response.setCharacterEncoding("UTF-8");
-                    response.getWriter().write("{\"success\":false,\"message\":\"로그인이 필요합니다.\"}");
-                }))
+                // — JwtAuthenticationFilter.sendError와 동일 포맷(+ code)으로 응답 일관성 유지
+                // 인가 실패(인증은 됐으나 URL 규칙 위반, 예: 비ADMIN의 /api/admin/**)는 JSON 403 —
+                // @PreAuthorize 경로(GlobalExceptionHandler)와 같은 문구·형식. 없으면 빈 본문 403이 나간다.
+                .exceptionHandling(ex -> ex
+                        .authenticationEntryPoint((request, response, authException) ->
+                                writeError(response, ErrorCode.LOGIN_REQUIRED))
+                        .accessDeniedHandler((request, response, accessDeniedException) ->
+                                writeError(response, ErrorCode.FORBIDDEN)))
 
                 // 경로별 접근 권한 설정
                 .authorizeHttpRequests(auth -> auth
@@ -116,6 +120,13 @@ public class SecurityConfig {
                 );
 
         return http.build();
+    }
+
+    private void writeError(HttpServletResponse response, ErrorCode errorCode) throws IOException {
+        response.setStatus(errorCode.getStatus().value());
+        response.setContentType(MediaType.APPLICATION_JSON_VALUE);
+        response.setCharacterEncoding("UTF-8");
+        response.getWriter().write(objectMapper.writeValueAsString(ApiResponse.fail(errorCode)));
     }
 
     /**
