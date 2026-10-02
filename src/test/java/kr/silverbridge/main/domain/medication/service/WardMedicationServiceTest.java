@@ -171,7 +171,7 @@ class WardMedicationServiceTest {
     void unmarkTaken_해제_이벤트발행() {
         LocalDate today = MedicationClock.today();
         MedicationIntake intake = MedicationIntake.of(1L, today, OffsetDateTime.now());
-        when(medicationRepository.findById(1L))
+        when(medicationRepository.findByIdForUpdate(1L))
                 .thenReturn(Optional.of(medication(1L, WARD_ID, "혈압약", LocalTime.of(8, 0))));
         when(intakeRepository.findByMedicationIdAndDoseDate(1L, today)).thenReturn(Optional.of(intake));
 
@@ -192,7 +192,7 @@ class WardMedicationServiceTest {
     @DisplayName("체크되지 않은 약을 해제 → 오류 아님(멱등), 삭제·알림 없음")
     void unmarkTaken_미체크_멱등() {
         LocalDate today = MedicationClock.today();
-        when(medicationRepository.findById(1L))
+        when(medicationRepository.findByIdForUpdate(1L))
                 .thenReturn(Optional.of(medication(1L, WARD_ID, "혈압약", LocalTime.of(8, 0))));
         when(intakeRepository.findByMedicationIdAndDoseDate(1L, today)).thenReturn(Optional.empty());
 
@@ -205,7 +205,7 @@ class WardMedicationServiceTest {
     @Test
     @DisplayName("[IDOR] 타인의 약을 해제하려 하면 403")
     void unmarkTaken_타인약_차단() {
-        when(medicationRepository.findById(1L))
+        when(medicationRepository.findByIdForUpdate(1L))
                 .thenReturn(Optional.of(medication(1L, OTHER_WARD_ID, "혈압약", LocalTime.of(8, 0))));
 
         assertThatThrownBy(() -> wardMedicationService.unmarkTaken(WARD_ID, 1L))

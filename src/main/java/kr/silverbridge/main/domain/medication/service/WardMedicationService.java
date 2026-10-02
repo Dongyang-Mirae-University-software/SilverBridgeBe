@@ -102,7 +102,9 @@ public class WardMedicationService {
      */
     @Transactional
     public MedicationItem unmarkTaken(String wardId, Long medicationId) {
-        Medication medication = findOwnMedication(wardId, medicationId);
+        // 체크와 같은 잠금을 건다 - 두 기기에서 동시에 해제하면 둘 다 기록을 읽고 지우려다 진 쪽이 0행 삭제로
+        // 409("다른 요청이 먼저 처리되었습니다")를 받았다. 뒤에 온 쪽은 앞 커밋을 보고 "이미 해제됨"을 돌려준다(멱등, MED-G04).
+        Medication medication = requireOwn(wardId, medicationId, medicationRepository.findByIdForUpdate(medicationId));
         LocalDate today = MedicationClock.today();
 
         Optional<MedicationIntake> existing = intakeRepository.findByMedicationIdAndDoseDate(medicationId, today);
@@ -117,11 +119,6 @@ public class WardMedicationService {
         log.info("복약 체크 해제: medicationId={}, wardId={}, doseDate={}", medicationId, wardId, today);
 
         return MedicationItem.of(medication, null);
-    }
-
-    /** 본인의 삭제되지 않은 약을 찾는다. */
-    private Medication findOwnMedication(String wardId, Long medicationId) {
-        return requireOwn(wardId, medicationId, medicationRepository.findById(medicationId));
     }
 
     private Medication requireOwn(String wardId, Long medicationId, Optional<Medication> found) {

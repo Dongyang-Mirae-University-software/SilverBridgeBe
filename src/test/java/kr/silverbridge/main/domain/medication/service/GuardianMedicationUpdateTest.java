@@ -129,14 +129,46 @@ class GuardianMedicationUpdateTest {
     }
 
     @Test
-    @DisplayName("복용 시각이 바뀌면 당일 발송 기록을 지워 새 시각으로 다시 알림이 나가게 한다")
+    @DisplayName("복용 시각이 아직 오지 않은 시각으로 바뀌면 당일 발송 기록을 지워 새 시각으로 다시 알림이 나가게 한다")
     void 시각변경_발송기록_초기화() {
         givenConnectedMedication();
 
+        // 23:59:59 - 실행 시각과 무관하게 "아직 오지 않은" 시각(실시간 시계라 상대 시각을 쓰면 자정 근처에서 되감긴다)
         guardianMedicationService.update(GUARDIAN_ID, 1L,
-                new MedicationUpdateRequest(null, null, LocalTime.of(20, 0), null, null));
+                new MedicationUpdateRequest(null, null, LocalTime.of(23, 59, 59), null, null));
 
         verify(reminderLogRepository).deleteByMedicationIdAndDoseDate(1L, MedicationClock.today());
+    }
+
+    @Test
+    @DisplayName("[MED-G12] 이미 지난 시각으로 바꾸면 발송 기록을 지우지 않는다 - 받은 알림이 다시 나가지 않게")
+    void 지난시각_변경_발송기록_유지() {
+        Medication medication = givenConnectedMedication();
+
+        // 00:00 - 실행 시각과 무관하게 "지금보다 뒤"가 될 수 없는 시각
+        guardianMedicationService.update(GUARDIAN_ID, 1L,
+                new MedicationUpdateRequest(null, null, LocalTime.MIN, null, null));
+
+        assertThat(medication.getDoseTime()).isEqualTo(LocalTime.MIN);   // 시각 자체는 바뀐다
+        verify(reminderLogRepository, never()).deleteByMedicationIdAndDoseDate(anyLong(), any());
+    }
+
+    @Test
+    @DisplayName("[MED-G12] 기록 초기화 조건 - 시각이 바뀌었고 새 시각이 지금보다 뒤일 때만")
+    void 기록초기화_조건_경계() {
+        LocalTime now = LocalTime.of(8, 10);
+        LocalTime previous = LocalTime.of(8, 0);
+
+        // 미래로 옮김 → 초기화(08:00 → 20:00, 오늘 저녁에 다시 울려야 한다)
+        assertThat(GuardianMedicationService.shouldResetTodayReminders(previous, LocalTime.of(20, 0), now)).isTrue();
+        assertThat(GuardianMedicationService.shouldResetTodayReminders(previous, LocalTime.of(8, 11), now)).isTrue();
+        // 이미 지난 시각으로 옮김 → 유지(08:00 알림을 받은 뒤 08:05로 고쳐도 재발송하지 않는다)
+        assertThat(GuardianMedicationService.shouldResetTodayReminders(previous, LocalTime.of(8, 5), now)).isFalse();
+        // 지금과 같은 시각 → 이미 도래했으므로 유지
+        assertThat(GuardianMedicationService.shouldResetTodayReminders(previous, now, now)).isFalse();
+        // 시각이 그대로면 미래라도 유지
+        assertThat(GuardianMedicationService.shouldResetTodayReminders(
+                LocalTime.of(20, 0), LocalTime.of(20, 0), now)).isFalse();
     }
 
     @Test
@@ -147,7 +179,7 @@ class GuardianMedicationUpdateTest {
                 .thenReturn(Optional.of(MedicationIntake.of(1L, MedicationClock.today(), OffsetDateTime.now())));
 
         MedicationItem item = guardianMedicationService.update(GUARDIAN_ID, 1L,
-                new MedicationUpdateRequest(null, null, LocalTime.of(20, 0), null, null));
+                new MedicationUpdateRequest(null, null, LocalTime.of(23, 59, 59), null, null));
 
         assertThat(item.taken()).isTrue();
         assertThat(item.takenAt()).isNotNull();
@@ -166,6 +198,40 @@ class GuardianMedicationUpdateTest {
                 new MedicationUpdateRequest(null, null, null, null, ""));
 
         assertThat(medication.getMemo()).isNull();
+    }
+
+    @Test
+    @DisplayName("[MED-G11] 메모에 공백만 보내도 삭제(null)로 저장한다")
+    void 공백메모_삭제() {
+        Medication medication = givenConnectedMedication();
+
+        guardianMedicationService.update(GUARDIAN_ID, 1L,
+                new MedicationUpdateRequest(null, null, null, null, " \u3000 "));
+
+        assertThat(medication.getMemo()).isNull();
+    }
+
+    @Test
+    @DisplayName("[MED-G16] 이름·메모의 보이지 않는 문자와 앞뒤 공백은 정리해 저장한다")
+    void 이름메모_정리() {
+        Medication medication = givenConnectedMedication();
+
+        guardianMedicationService.update(GUARDIAN_ID, 1L,
+                new MedicationUpdateRequest(" \u200B당뇨약\u200B ", null, null, null, " 식전\u200B  복용 "));
+
+        assertThat(medication.getName()).isEqualTo("당뇨약");
+        assertThat(medication.getMemo()).isEqualTo("식전 복용");
+    }
+
+    @Test
+    @DisplayName("[MED-G16] 이름에 제로폭 문자만 오면 기존 이름을 유지한다(요청 검증을 우회한 경우의 마지막 방어선)")
+    void 제로폭이름_무시() {
+        Medication medication = givenConnectedMedication();
+
+        guardianMedicationService.update(GUARDIAN_ID, 1L,
+                new MedicationUpdateRequest("\u200B\u200B", null, null, null, null));
+
+        assertThat(medication.getName()).isEqualTo("혈압약");
     }
 
     @Test

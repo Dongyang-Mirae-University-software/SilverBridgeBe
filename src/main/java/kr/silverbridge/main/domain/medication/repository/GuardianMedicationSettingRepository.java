@@ -2,7 +2,9 @@ package kr.silverbridge.main.domain.medication.repository;
 
 import kr.silverbridge.main.domain.medication.entity.GuardianMedicationSetting;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 
 import java.time.LocalTime;
 import java.util.Collection;
@@ -35,4 +37,23 @@ public interface GuardianMedicationSettingRepository extends JpaRepository<Guard
     /** 시각을 직접 지정한 설정 중 가장 늦은 발송 시각. 발송 창의 끝을 정하는 데 쓴다. */
     @Query("select max(s.missedAlertTime) from GuardianMedicationSetting s where s.missedAlertEnabled = true")
     Optional<LocalTime> findLatestAlertTime();
+
+    /**
+     * (보호자, 피보호자) 설정 행이 없을 때만 만든다. 이미 있으면 아무것도 하지 않는다(시각은 NULL = 미설정).
+     *
+     * <p>한 보호자가 두 탭에서 동시에 처음 저장하면 find 후 save는 늦은 쪽이 UNIQUE 위반(409)으로 실패한다(MED-G13).
+     * 예외를 잡아 재조회하는 방식은 rollback-only 트랜잭션이라 쓸 수 없어 {@code ON CONFLICT DO NOTHING}으로 넘기고
+     * 호출자가 다시 조회한다. {@link MedicationSettingRepository#insertIfAbsent}와 같은 방식이다.</p>
+     *
+     * @return 실제로 만든 행 수(0 또는 1)
+     */
+    @Modifying
+    @Query(value = """
+            INSERT INTO guardian_medication_setting (guardian_id, ward_id, missed_alert_enabled)
+            VALUES (:guardianId, :wardId, :missedAlertEnabled)
+            ON CONFLICT (guardian_id, ward_id) DO NOTHING
+            """, nativeQuery = true)
+    int insertIfAbsent(@Param("guardianId") String guardianId,
+                       @Param("wardId") String wardId,
+                       @Param("missedAlertEnabled") boolean missedAlertEnabled);
 }

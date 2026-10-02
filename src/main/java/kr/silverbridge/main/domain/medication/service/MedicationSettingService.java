@@ -64,10 +64,7 @@ public class MedicationSettingService {
     @Transactional
     public MedicationPreference updatePreference(String wardId, Boolean alarmEnabled, Boolean remindAgainEnabled) {
         MedicationSetting setting = repository.findByUserId(wardId)
-                .orElseGet(() -> repository.save(MedicationSetting.of(
-                        wardId,
-                        MedicationPreference.DEFAULT.alarmEnabled(),
-                        MedicationPreference.DEFAULT.remindAgainEnabled())));
+                .orElseGet(() -> createDefault(wardId));
 
         if (alarmEnabled != null) {
             setting.updateAlarmEnabled(alarmEnabled);
@@ -76,6 +73,21 @@ public class MedicationSettingService {
             setting.updateRemindAgainEnabled(remindAgainEnabled);
         }
         return toPreference(setting);
+    }
+
+    /**
+     * 기본값 행을 만들고 다시 읽는다. 동시 요청이 먼저 만들었으면 그 행을 받아 그대로 갱신한다(MED-G13).
+     *
+     * <p>{@code save()} 후 UNIQUE 위반을 잡는 방식은 쓰지 않는다 - 예외가 나면 이 트랜잭션은 rollback-only라
+     * 재조회·갱신을 이어 갈 수 없다. {@code ON CONFLICT DO NOTHING}은 예외 없이 넘어간다.</p>
+     */
+    private MedicationSetting createDefault(String wardId) {
+        repository.insertIfAbsent(
+                wardId,
+                MedicationPreference.DEFAULT.alarmEnabled(),
+                MedicationPreference.DEFAULT.remindAgainEnabled());
+        return repository.findByUserId(wardId)
+                .orElseThrow(() -> new IllegalStateException("복약 설정 행 생성 직후 조회 실패: wardId=" + wardId));
     }
 
     private static MedicationPreference toPreference(MedicationSetting setting) {
