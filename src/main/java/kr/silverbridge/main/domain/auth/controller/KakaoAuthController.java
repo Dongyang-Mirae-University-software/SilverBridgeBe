@@ -90,7 +90,7 @@ public class KakaoAuthController {
                     (email은 보내지 않습니다 — 서버가 카카오 계정 이메일로 자동 설정)
 
                     [요청 전 확인사항]
-                    - kakaoId는 서버에서 10분간 유지됩니다. 10분 초과 시 카카오 로그인부터 다시 진행하세요.
+                    - 가입 대기 정보(kakaoId·pendingToken)는 서버에서 30분간 유지됩니다. 30분 초과 시 카카오 로그인부터 다시 진행하세요.
                     - SMS 인증(POST /api/auth/signup/sms/verify)이 완료된 전화번호여야 합니다.
 
                     [토큰 사용 방법]

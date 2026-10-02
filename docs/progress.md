@@ -1553,3 +1553,9 @@ REST API Key 단독 대비 보안 강화 — 인가코드 탈취 시 토큰 발�
 
 - BE-1 AI 세션 목록 60초 재동기화 + 구독 실패 WARN / BE-2 카카오 탈퇴 문구 "탈퇴"·"회원탈퇴" 둘 다 허용 / BE-3 요청 취소 시 WS `connection-request-cancelled`만(무알림 유지) / BE-4 문자열 payload 계약 문서화.
 - 단위 718 / 0 실패. 상세: `docs/(2026-10-01) fix-qa-be-issues.md`
+
+## [2026-10-02] QA BE 이슈 반영 - 인증 저장소 장애·토큰·입력 정규화·알림 결과 (P0~P9)
+
+- 인증 필터 Redis 장애 503(SOS만 fail-open) / 무효화 초 단위 비교 / refresh typ·밀려난 토큰 / 클라이언트 IP 신뢰 프록시 / STOMP SEND `/app/`만 / 이메일 소문자 V55 / 로그인 잠금·인증번호 선예약 / 카카오 pendingToken / SOS·연결·복약·이상감지·관리자 소항목.
+- P9(문서): 정책 문서 새 절, Swagger 오기 3건(로그아웃 401·카카오 대기 30분·비밀번호 길이), ANOM-G06 의도 명시. 미반영 보류 7묶음은 승인 대기.
+- 배포 주의: V55 사전 중복 점검, `CLIENT_IP_TRUSTED_PROXIES` 설정 전 동작 불변. 상세: `docs/(2026-10-02) fix-qa-be-issues.md`

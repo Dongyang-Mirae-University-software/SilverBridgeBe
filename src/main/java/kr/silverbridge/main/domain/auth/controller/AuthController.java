@@ -177,8 +177,7 @@ public class AuthController {
     )
     @ApiResponses({
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "로그아웃 성공"),
-            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "Authorization 헤더 누락", content = @Content),
-            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "Access Token이 만료되었거나 유효하지 않음", content = @Content),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "Authorization 헤더 누락, 또는 Access Token이 만료되었거나 유효하지 않음", content = @Content),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "500", description = "서버 오류", content = @Content)
     })
     @SecurityRequirement(name = "Bearer Authentication")
