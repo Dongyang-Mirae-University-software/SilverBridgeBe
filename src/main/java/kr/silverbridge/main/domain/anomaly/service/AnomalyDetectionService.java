@@ -13,6 +13,8 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 import org.springframework.util.StringUtils;
 
 import java.time.OffsetDateTime;
@@ -64,8 +66,41 @@ public class AnomalyDetectionService {
             return Optional.empty();
         }
 
+        // 쿨다운은 저장 전에 선점하되, 이력을 남기지 못하면 되돌린다(ANOM-G14) - 남겨 두면 일시 장애 직후
+        // 쿨다운 동안 같은 카메라의 화재 신호가 모두 버려진다. 예외는 그대로 던진다(AI 수신부가 메시지 단위로 격리).
+        releaseCooldownIfRolledBack(signal);
+        try {
+            return record(signal);
+        } catch (RuntimeException e) {
+            cooldown.release(signal.sessionId(), signal.detectedType());
+            throw e;
+        }
+    }
+
+    /**
+     * 커밋 시점 실패(제약 위반 flush 등)로 롤백돼도 쿨다운을 되돌린다. 메서드 안의 예외는 {@code catch}가 먼저
+     * 되돌리므로 이쪽은 메서드가 정상 반환한 뒤의 롤백을 맡는다(중복 해제는 무해 - 키 삭제일 뿐이다).
+     * 트랜잭션 밖(단위 테스트 등)에서는 등록하지 않는다.
+     */
+    private void releaseCooldownIfRolledBack(AnomalySignal signal) {
+        if (!TransactionSynchronizationManager.isSynchronizationActive()) {
+            return;
+        }
+        TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+            @Override
+            public void afterCompletion(int status) {
+                if (status != STATUS_COMMITTED) {
+                    cooldown.release(signal.sessionId(), signal.detectedType());
+                }
+            }
+        });
+    }
+
+    private Optional<AnomalyEvent> record(AnomalySignal signal) {
         Optional<CameraOwner> owner = cameraService.findOwnerBySessionId(signal.sessionId());
         if (owner.isEmpty()) {
+            // 미등록 세션은 쿨다운을 되돌리지 않는다 - 카메라 삭제 직후 AI가 계속 보내는 프레임마다 WARN이 찍히지
+            // 않게 하는 억제 장치를 겸한다. 등록 직후 경합은 구독이 등록 커밋 후에 일어나(M-3) 사실상 생기지 않는다.
             log.warn("[ANOMALY] 알 수 없는 세션 — 등록된 카메라가 없어 이력 스킵: sessionId={}, detectedType={}",
                     signal.sessionId(), signal.detectedType());
             return Optional.empty();

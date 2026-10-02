@@ -13,6 +13,7 @@ import kr.silverbridge.main.domain.user.entity.User;
 import kr.silverbridge.main.domain.user.repository.UserRepository;
 import kr.silverbridge.main.global.exception.CustomException;
 import kr.silverbridge.main.global.exception.ErrorCode;
+import kr.silverbridge.main.global.validation.TextSanitizer;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
@@ -100,7 +101,7 @@ public class CameraService {
         Camera camera = getOwnedCamera(wardId, cameraId);
 
         if (request.label() != null) {
-            camera.rename(request.label());
+            camera.rename(sanitizeLabel(request.label()));
         }
         if (request.isActive() != null) {
             if (request.isActive()) {
@@ -110,6 +111,18 @@ public class CameraService {
             }
         }
         return CameraResponse.of(camera, recommendedFps);
+    }
+
+    /**
+     * 방 이름을 정리(제어·서식문자 제거, 공백 정리, trim)해 돌려준다. 정리 후 보이는 글자가 없으면 400이다(ANOM-G12).
+     * DTO의 {@code @VisibleText}가 1차로 막지만, 방 이름은 화재 알림 문구의 위치로 쓰이므로 서비스에서도 한 번 더 막는다.
+     */
+    private static String sanitizeLabel(String label) {
+        String sanitized = TextSanitizer.sanitize(label);
+        if (!TextSanitizer.hasVisibleChar(sanitized)) {
+            throw new CustomException(ErrorCode.INVALID_INPUT);
+        }
+        return sanitized;
     }
 
     @Transactional

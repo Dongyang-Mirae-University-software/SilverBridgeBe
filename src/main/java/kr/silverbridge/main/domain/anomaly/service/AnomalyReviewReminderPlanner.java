@@ -23,7 +23,9 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.Duration;
 import java.time.LocalDate;
+import java.time.LocalTime;
 import java.time.OffsetDateTime;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -58,6 +60,17 @@ public class AnomalyReviewReminderPlanner {
 
     /** 이름을 못 찾은 피보호자의 표시용 폴백(문구에 null이 들어가지 않게). */
     static final String FALLBACK_WARD_NAME = "피보호자";
+
+    /**
+     * 건별 재촉과 요약 사이의 최소 간격(ANOM-G09). 요약에는 <b>오늘 요약 시각보다 이만큼 앞서</b> 건별 재촉이 나간
+     * 상황만 담는다 - 기본 20:00이면 18:00까지 재촉한 상황이다.
+     *
+     * <p>이 조건이 없으면 요약 시각 전후(19:5x, 또는 20:00~21:59에 새로 닫힌 상황)에 같은 상황으로 건별 재촉과
+     * 요약이 몇 초~몇 분 간격으로 연달아 도착한다. 빠진 상황은 버려지지 않고 <b>다음 날 요약</b>에 담긴다
+     * (마감 3일 안이면). 2시간은 "방금 받은 재촉을 확인할 여유"로 잡은 값이다 - 늘리면 다음 날로 밀리는 상황이
+     * 늘어나고, 0으로 줄이면 연달아 도착하는 문제가 돌아온다.</p>
+     */
+    static final Duration SUMMARY_MIN_GAP_AFTER_REMINDER = Duration.ofHours(2);
 
     private final AnomalyIncidentRepository incidentRepository;
     private final AnomalyIncidentFeedbackRepository feedbackRepository;
@@ -141,6 +154,9 @@ public class AnomalyReviewReminderPlanner {
      *
      * <p>담는 것은 <b>이미 건별 재촉을 보낸</b> 상황뿐이다. 이 조건이 없으면 1차가 아직 안 나간 상황이
      * 요약에 먼저 실려, 같은 상황으로 요약과 건별 재촉이 연달아 도착한다.</p>
+     *
+     * <p>또 건별 재촉이 <b>오늘 요약 시각 - {@link #SUMMARY_MIN_GAP_AFTER_REMINDER}</b> 이후에 나간 상황은
+     * 오늘 요약에서 빼고 다음 날로 넘긴다(ANOM-G09) - 반대 순서(재촉 직후 요약)로 연달아 도착하는 것을 막는다.</p>
      */
     @Transactional
     public List<AnomalyReviewSummaryTarget> claimSummaries() {
@@ -166,10 +182,15 @@ public class AnomalyReviewReminderPlanner {
         Map<String, List<String>> guardiansByWard = activeGuardiansByWard(candidates);
 
         // 보호자별 "재촉했는데 아직 답이 없는" 상황 수. 연결이 끊긴 보호자는 세지 않는다.
+        // 방금(요약 시각 직전·이후) 재촉한 상황은 다음 날 요약으로 넘긴다(ANOM-G09).
+        OffsetDateTime remindedBy = summaryCutoff(now, config.getSummaryTime());
         Map<String, Integer> pendingCounts = new LinkedHashMap<>();
         for (AnomalyReviewReminderLog reminder : reminderLogRepository.findByIncidentIdIn(incidentIds)) {
             AnomalyIncident incident = byId.get(reminder.getIncidentId());
             if (incident == null || answered.contains(key(incident.getId(), reminder.getGuardianId()))) {
+                continue;
+            }
+            if (reminder.getSentAt().isAfter(remindedBy)) {
                 continue;
             }
             if (!guardiansByWard.getOrDefault(incident.getWardId(), List.of()).contains(reminder.getGuardianId())) {
@@ -291,6 +312,16 @@ public class AnomalyReviewReminderPlanner {
                         claim.incident().getDetectedType(),
                         claim.incident().getStartedAt()))
                 .toList();
+    }
+
+    /**
+     * 오늘 요약에 담을 수 있는 건별 재촉의 마지막 발송 시각 = 오늘(KST) 요약 시각 - 최소 간격. 이 시각과 같으면 담는다.
+     * 기준을 "지금"이 아니라 요약 시각에 두어, 같은 날 요약이 늦게 돌더라도(재기동 등) 담는 범위가 흔들리지 않게 한다.
+     */
+    static OffsetDateTime summaryCutoff(OffsetDateTime now, LocalTime summaryTime) {
+        return AnomalyReviewClock.toDate(now).atTime(summaryTime)
+                .atZone(AnomalyReviewClock.KST).toOffsetDateTime()
+                .minus(SUMMARY_MIN_GAP_AFTER_REMINDER);
     }
 
     private boolean isQuietHours(OffsetDateTime now) {
