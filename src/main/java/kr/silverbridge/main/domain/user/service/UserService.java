@@ -10,9 +10,13 @@ import kr.silverbridge.main.domain.user.repository.UserRepository;
 import kr.silverbridge.main.global.client.FileServerClient;
 import kr.silverbridge.main.global.exception.CustomException;
 import kr.silverbridge.main.global.exception.ErrorCode;
+import kr.silverbridge.main.global.enums.Role;
+import kr.silverbridge.main.global.util.RedisCounter;
+import kr.silverbridge.main.global.util.RedisKeys;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.ApplicationEventPublisher;
+import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -24,6 +28,7 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.util.List;
 import java.util.Set;
+import java.util.concurrent.TimeUnit;
 
 @Slf4j
 @Service
@@ -39,6 +44,11 @@ public class UserService {
     // 카카오 가입자 탈퇴 확인 문구. 두 가지를 모두 받는다(2026-10-01 QA BE-2): FE 안내는 "회원탈퇴"인데 BE가 "탈퇴"만
     // 받아 어떤 입력으로도 탈퇴할 수 없었다. 둘 다 사용자가 직접 입력해야 하는 문구라 본인 확인 강도는 같다.
     private static final Set<String> KAKAO_WITHDRAW_CONFIRMATIONS = Set.of("탈퇴", "회원탈퇴");
+    // 비밀번호 변경·탈퇴의 현재 비밀번호 확인 시도 제한 (USER-G05) - 로그인 잠금(5회·30분)과 같은 강도.
+    // access token만 탈취한 쪽이 이 경로로 비밀번호를 무제한 대입해 계정을 장악하던 틈을 막는다.
+    // 로그인 설정(AuthLoginProperties)은 auth 도메인이라 user → auth 의존을 만들지 않으려고 값을 여기 둔다.
+    private static final int MAX_PASSWORD_CHECK_ATTEMPTS = 5;
+    private static final long PASSWORD_CHECK_LOCK_MINUTES = 30L;
 
     private final UserRepository userRepository;
     private final PasswordEncoder passwordEncoder;
@@ -46,6 +56,8 @@ public class UserService {
     private final ApplicationEventPublisher eventPublisher;
     private final PhoneVerificationPort phoneVerificationPort;
     private final ProfileImagePersister profileImagePersister;
+    private final StringRedisTemplate redisTemplate;
+    private final RedisCounter redisCounter;
 
     // 내 정보 조회
     @Transactional(readOnly = true)
@@ -62,12 +74,15 @@ public class UserService {
 
         String newPhone = request.getPhone();
         if (newPhone != null && !newPhone.equals(user.getPhone())) {
-            // SMS 인증 nonce 일치 확인 + 키 소비 (H-5). user→auth 직접 의존 대신 포트 경유 (B-1)
-            phoneVerificationPort.consumeVerification(newPhone, request.getVerificationNonce());
-            // 다른 계정이 이미 사용 중인 전화번호인지 확인
+            // 다른 계정이 이미 사용 중인 전화번호인지 먼저 확인한다 (USER-G11, "검증 후 마지막 소비").
+            // 소비가 앞이면 409로 끝나도 nonce가 이미 지워져(Redis 삭제는 롤백 대상이 아님) 문자 인증을 다시 받아야 했다.
+            // 가입 SMS 발송이 이미 가입 번호를 409로 알려 주므로 순서를 바꿔도 새로 드러나는 정보는 없다.
             if (userRepository.existsByPhone(newPhone)) {
                 throw new CustomException(ErrorCode.PHONE_ALREADY_EXISTS);
             }
+            // SMS 인증 nonce 일치 확인 + 키 소비 (H-5). user→auth 직접 의존 대신 포트 경유 (B-1)
+            // 커밋 시점 유니크 위반(동시 선점)으로 실패하면 nonce는 복구되지 않는다 - 가입 nonce의 L-1과 같은 이유로 수용한다.
+            phoneVerificationPort.consumeVerification(newPhone, request.getVerificationNonce());
         }
 
         user.updateProfile(
@@ -93,9 +108,7 @@ public class UserService {
             throw new CustomException(ErrorCode.SOCIAL_USER_NO_PASSWORD);
         }
 
-        if (!passwordEncoder.matches(currentPassword, user.getPassword())) {
-            throw new CustomException(ErrorCode.INVALID_PASSWORD);
-        }
+        verifyCurrentPassword(user, currentPassword);
 
         // 현재 비밀번호와 동일한 경우 차단
         if (passwordEncoder.matches(newPassword, user.getPassword())) {
@@ -170,10 +183,15 @@ public class UserService {
     public void withdraw(String userId, String password, String confirmation, String ipAddress, String userAgent) {
         User user = getUserOrThrow(userId);
 
+        // 관리자 계정은 본인 탈퇴 불가 (USER-G08, 결정 D4-A) - 비밀번호 확인보다 먼저 막는다.
+        // 관리자는 DB로만 만들어져 마지막 관리자가 스스로 지우면 운영 주체가 사라진다(회원관리의 CANNOT_MODIFY_ADMIN과 같은 취지).
+        if (user.getRole() == Role.ADMIN) {
+            log.warn("[WITHDRAW-ADMIN-BLOCKED] 관리자 본인 탈퇴 시도 차단 userId={}", userId);
+            throw new CustomException(ErrorCode.ADMIN_CANNOT_WITHDRAW);
+        }
+
         if (user.isLocalProvider()) {
-            if (!passwordEncoder.matches(password, user.getPassword())) {
-                throw new CustomException(ErrorCode.INVALID_PASSWORD);
-            }
+            verifyCurrentPassword(user, password);
         } else {
             // 카카오 사용자 본인 확인 — confirmation 문자열 일치
             if (confirmation == null || !KAKAO_WITHDRAW_CONFIRMATIONS.contains(confirmation.trim())) {
@@ -215,6 +233,37 @@ public class UserService {
         // 카카오 CDN 등 외부 URL이면 파일서버가 대상 파일을 못 찾아 WARN 로깅만 하고 넘어간다.
         deleteStoredFileAfterCommit(profileImageUrl);
         log.info("[WITHDRAW] 계정 영구 삭제 완료 userId={}", userId);
+    }
+
+    // 현재 비밀번호 확인 + 시도 제한 (USER-G05) - 비밀번호 변경·탈퇴 공용.
+    // 로그인과 같은 방식으로 비교 "전에" 시도 횟수를 원자적으로 예약하고, 한도를 넘기면 비교 없이 429(LOGIN_LOCKED, 30분)다.
+    // 키는 userId 기준 user:pwfail/user:pwlock - 로그인 키(login:*)와 섞지 않는다. 확인에 성공하면 카운터를 지운다.
+    // Redis 장애 시 RedisCounter 예외가 그대로 나가 요청이 실패한다(fail-closed, 로그인과 같다).
+    private void verifyCurrentPassword(User user, String rawPassword) {
+        String failKey = RedisKeys.USER_PW_FAIL + user.getId();
+        String lockKey = RedisKeys.USER_PW_LOCK + user.getId();
+
+        if (Boolean.TRUE.equals(redisTemplate.hasKey(lockKey))) {
+            throw new CustomException(ErrorCode.LOGIN_LOCKED);
+        }
+        // 비밀번호를 아예 보내지 않은 요청은 추측 시도가 아니라 횟수에 넣지 않는다(이전엔 BCrypt가 null을 거부해 400이었다)
+        if (rawPassword == null) {
+            throw new CustomException(ErrorCode.INVALID_PASSWORD);
+        }
+        long attempts = redisCounter.incrementWithTtl(failKey, PASSWORD_CHECK_LOCK_MINUTES * 60);
+        if (attempts > MAX_PASSWORD_CHECK_ATTEMPTS) {
+            redisTemplate.opsForValue().setIfAbsent(lockKey, "1", PASSWORD_CHECK_LOCK_MINUTES, TimeUnit.MINUTES);
+            throw new CustomException(ErrorCode.LOGIN_LOCKED);
+        }
+        if (!passwordEncoder.matches(rawPassword, user.getPassword())) {
+            if (attempts >= MAX_PASSWORD_CHECK_ATTEMPTS) {
+                redisTemplate.opsForValue().set(lockKey, "1", PASSWORD_CHECK_LOCK_MINUTES, TimeUnit.MINUTES);
+                log.warn("[PASSWORD-CHECK-LOCK] 현재 비밀번호 연속 실패로 잠금 userId={}, 실패 {}회 → {}분",
+                        user.getId(), attempts, PASSWORD_CHECK_LOCK_MINUTES);
+            }
+            throw new CustomException(ErrorCode.INVALID_PASSWORD);
+        }
+        redisTemplate.delete(failKey);
     }
 
     // userId로 사용자 조회 (없으면 USER_NOT_FOUND) — 전 메서드 공통 진입점 (B-USER-2)

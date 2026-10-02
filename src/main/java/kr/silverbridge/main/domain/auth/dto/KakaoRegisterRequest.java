@@ -9,6 +9,7 @@ import jakarta.validation.constraints.Size;
 import kr.silverbridge.main.global.enums.Gender;
 import kr.silverbridge.main.global.enums.Role;
 import kr.silverbridge.main.global.validation.ValidBirthDate;
+import kr.silverbridge.main.global.validation.VisibleText;
 import lombok.Getter;
 
 import java.time.LocalDate;
@@ -22,8 +23,15 @@ public class KakaoRegisterRequest {
     @Size(max = 20, message = "카카오 ID 입력값이 올바르지 않습니다.")
     private String kakaoId;
 
+    @Schema(description = "POST /api/auth/kakao 응답(신규 회원)에서 받은 pendingToken 값을 그대로 전달. 카카오 로그인을 시작한 본인 확인용",
+            example = "Q2hhbmdlTWUtOTlfcmFuZG9tLXBlbmRpbmctdG9rZW4")
+    @NotBlank(message = "카카오 로그인 정보가 없습니다. 카카오 로그인을 다시 시도해주세요.")
+    @Size(max = 100, message = "카카오 로그인 정보가 올바르지 않습니다. 카카오 로그인을 다시 시도해주세요.")
+    private String pendingToken;
+
     @Schema(description = "본인 실명 (카카오 닉네임 사용 불가, 사용자가 직접 입력, 최대 20자)", example = "홍길동")
     @NotBlank(message = "이름을 입력해주세요.")
+    @VisibleText(message = "이름을 입력해주세요.")
     @Size(max = 20, message = "이름은 20자 이하여야 합니다.")
     private String name;
 
@@ -42,7 +50,10 @@ public class KakaoRegisterRequest {
     @NotNull(message = "역할을 선택해주세요. (WARD: 피보호자, GUARDIAN: 보호자)")
     private Role role;
 
-    @Schema(description = "프로필 이미지 URL (선택값. 카카오 응답의 profileImageUrl 전달 또는 null)", example = "https://k.kakaocdn.net/dn/...", nullable = true)
+    @Schema(description = "프로필 이미지 URL (선택값. 카카오 응답의 profileImageUrl 전달 또는 null). 카카오 CDN(kakaocdn.net과 하위 도메인) 주소만, 최대 500자. http로 오면 서버가 https로 바꿔 저장",
+            example = "https://k.kakaocdn.net/dn/...", nullable = true)
+    @Size(max = 500, message = "프로필 이미지 주소가 올바르지 않습니다.")
+    @Pattern(regexp = "^(?i)https?://([a-z0-9-]+\\.)*kakaocdn\\.net(/\\S*)?$", message = "프로필 이미지 주소가 올바르지 않습니다.")
     private String profileImageUrl;
 
     @Schema(description = "도로명 주소 또는 지번 주소 (카카오 주소 API 결과값)", example = "서울특별시 강남구 테헤란로 123")

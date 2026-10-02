@@ -14,6 +14,8 @@ import kr.silverbridge.main.global.enums.Role;
 import kr.silverbridge.main.global.enums.Status;
 import kr.silverbridge.main.global.exception.CustomException;
 import kr.silverbridge.main.global.exception.ErrorCode;
+import kr.silverbridge.main.global.util.RedisCounter;
+import kr.silverbridge.main.global.util.RedisKeys;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -22,6 +24,8 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.context.ApplicationEventPublisher;
+import org.springframework.data.redis.core.StringRedisTemplate;
+import org.springframework.data.redis.core.ValueOperations;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.test.util.ReflectionTestUtils;
 import org.springframework.web.multipart.MultipartFile;
@@ -34,7 +38,9 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -50,6 +56,9 @@ class UserServiceTest {
     @Mock private ApplicationEventPublisher eventPublisher;
     @Mock private PhoneVerificationPort phoneVerificationPort;
     @Mock private ProfileImagePersister profileImagePersister;
+    @Mock private StringRedisTemplate redisTemplate;
+    @Mock private RedisCounter redisCounter;
+    @Mock private ValueOperations<String, String> valueOperations;
 
     @InjectMocks private UserService userService;
 
@@ -74,6 +83,7 @@ class UserServiceTest {
     void changePassword_현재비밀번호불일치_INVALID_PASSWORD() {
         User user = localUser();
         when(userRepository.findById(USER_ID)).thenReturn(Optional.of(user));
+        allowPasswordCheck();
         when(passwordEncoder.matches("wrongCurrent", "encodedPassword")).thenReturn(false);
 
         CustomException ex = assertThrows(CustomException.class,
@@ -87,6 +97,7 @@ class UserServiceTest {
     void changePassword_현재와동일한새비밀번호_SAME_AS_CURRENT_PASSWORD() {
         User user = localUser();
         when(userRepository.findById(USER_ID)).thenReturn(Optional.of(user));
+        allowPasswordCheck();
         // 현재 비밀번호 검증(true) → 통과, 새 비밀번호 == 현재 비밀번호 검증(true) → SAME_AS_CURRENT_PASSWORD
         when(passwordEncoder.matches("currentPass", "encodedPassword")).thenReturn(true);
 
@@ -103,6 +114,7 @@ class UserServiceTest {
     void withdraw_비밀번호불일치_INVALID_PASSWORD() {
         User user = localUser();
         when(userRepository.findById(USER_ID)).thenReturn(Optional.of(user));
+        allowPasswordCheck();
         when(passwordEncoder.matches("wrongPassword", "encodedPassword")).thenReturn(false);
 
         CustomException ex = assertThrows(CustomException.class,
@@ -229,6 +241,7 @@ class UserServiceTest {
     void changePassword_성공_이벤트발행() {
         User user = localUser();
         when(userRepository.findById(USER_ID)).thenReturn(Optional.of(user));
+        allowPasswordCheck();
         when(passwordEncoder.matches("currentPass", "encodedPassword")).thenReturn(true);
         when(passwordEncoder.matches("NewPass1!", "encodedPassword")).thenReturn(false);
         when(passwordEncoder.encode("NewPass1!")).thenReturn("encodedNew");
@@ -298,7 +311,7 @@ class UserServiceTest {
     }
 
     @Test
-    @DisplayName("전화번호 변경 시 이미 사용 중이면 PHONE_ALREADY_EXISTS (인증은 검사 전에 소비됨)")
+    @DisplayName("전화번호 변경 시 이미 사용 중이면 PHONE_ALREADY_EXISTS, 인증은 소비되지 않는다 (USER-G11 검증 후 마지막 소비)")
     void updateProfile_전화번호중복_PHONE_ALREADY_EXISTS() {
         User user = localUserWithPhone("01011112222");
         when(userRepository.findById(USER_ID)).thenReturn(Optional.of(user));
@@ -308,7 +321,7 @@ class UserServiceTest {
                 () -> userService.updateProfile(USER_ID, updateRequest("01099998888", "nonce-123")));
 
         assertThat(ex.getErrorCode()).isEqualTo(ErrorCode.PHONE_ALREADY_EXISTS);
-        verify(phoneVerificationPort).consumeVerification("01099998888", "nonce-123");
+        verify(phoneVerificationPort, never()).consumeVerification(anyString(), anyString());
         assertThat(user.getPhone()).isEqualTo("01011112222");
     }
 
@@ -400,6 +413,7 @@ class UserServiceTest {
     void withdraw_일반계정_비밀번호일치_탈퇴() {
         User user = localUser();
         when(userRepository.findById(USER_ID)).thenReturn(Optional.of(user));
+        allowPasswordCheck();
         when(passwordEncoder.matches("Password1!", "encodedPassword")).thenReturn(true);
 
         userService.withdraw(USER_ID, "Password1!", null, "10.0.0.1", "agent");
@@ -447,6 +461,114 @@ class UserServiceTest {
     }
 
     // ─── 헬퍼 메서드 ────────────────────────────────────────────────────────
+
+    @Test
+    @DisplayName("전화번호 변경 - 중복 검사가 nonce 소비보다 먼저다 (USER-G11)")
+    void updateProfile_중복검사후_소비() {
+        User user = localUserWithPhone("01011112222");
+        when(userRepository.findById(USER_ID)).thenReturn(Optional.of(user));
+        when(userRepository.existsByPhone("01099998888")).thenReturn(false);
+
+        userService.updateProfile(USER_ID, updateRequest("01099998888", "nonce-123"));
+
+        org.mockito.InOrder inOrder = org.mockito.Mockito.inOrder(userRepository, phoneVerificationPort);
+        inOrder.verify(userRepository).existsByPhone("01099998888");
+        inOrder.verify(phoneVerificationPort).consumeVerification("01099998888", "nonce-123");
+    }
+
+    // ─── 현재 비밀번호 시도 제한 (USER-G05) ──────────────────────────────────
+
+    @Test
+    @DisplayName("비밀번호 변경 - 5번째 실패에서 30분 잠금(user:pwlock) 설정, 응답은 INVALID_PASSWORD")
+    void changePassword_5번째실패_잠금설정() {
+        User user = localUser();
+        when(userRepository.findById(USER_ID)).thenReturn(Optional.of(user));
+        when(redisCounter.incrementWithTtl(eq(RedisKeys.USER_PW_FAIL + USER_ID), anyLong())).thenReturn(5L);
+        when(redisTemplate.opsForValue()).thenReturn(valueOperations);
+        when(passwordEncoder.matches("wrong", "encodedPassword")).thenReturn(false);
+
+        CustomException ex = assertThrows(CustomException.class,
+                () -> userService.changePassword(USER_ID, "wrong", "NewPass1!"));
+
+        assertThat(ex.getErrorCode()).isEqualTo(ErrorCode.INVALID_PASSWORD);
+        verify(valueOperations).set(eq(RedisKeys.USER_PW_LOCK + USER_ID), eq("1"), eq(30L), any());
+    }
+
+    @Test
+    @DisplayName("비밀번호 변경 - 잠금 중이면 비교 없이 429(LOGIN_LOCKED), 로그인 키는 건드리지 않는다")
+    void changePassword_잠금중_LOGIN_LOCKED() {
+        User user = localUser();
+        when(userRepository.findById(USER_ID)).thenReturn(Optional.of(user));
+        when(redisTemplate.hasKey(RedisKeys.USER_PW_LOCK + USER_ID)).thenReturn(true);
+
+        CustomException ex = assertThrows(CustomException.class,
+                () -> userService.changePassword(USER_ID, "Current1!", "NewPass1!"));
+
+        assertThat(ex.getErrorCode()).isEqualTo(ErrorCode.LOGIN_LOCKED);
+        verify(passwordEncoder, never()).matches(anyString(), anyString());
+        verify(redisTemplate, never()).hasKey(RedisKeys.LOGIN_LOCK + USER_ID);
+    }
+
+    @Test
+    @DisplayName("탈퇴 - 예약 결과가 한도를 넘으면 비교 없이 429 + 잠금 설정 (동시 요청 방어)")
+    void withdraw_예약초과_LOGIN_LOCKED() {
+        User user = localUser();
+        when(userRepository.findById(USER_ID)).thenReturn(Optional.of(user));
+        when(redisCounter.incrementWithTtl(eq(RedisKeys.USER_PW_FAIL + USER_ID), anyLong())).thenReturn(6L);
+        when(redisTemplate.opsForValue()).thenReturn(valueOperations);
+
+        CustomException ex = assertThrows(CustomException.class,
+                () -> userService.withdraw(USER_ID, "Password1!", null, "127.0.0.1", "agent"));
+
+        assertThat(ex.getErrorCode()).isEqualTo(ErrorCode.LOGIN_LOCKED);
+        verify(passwordEncoder, never()).matches(anyString(), anyString());
+        verify(valueOperations).setIfAbsent(eq(RedisKeys.USER_PW_LOCK + USER_ID), eq("1"), eq(30L), any());
+        verify(eventPublisher, never()).publishEvent(any());
+    }
+
+    @Test
+    @DisplayName("비밀번호 변경 성공 → 현재 비밀번호 실패 카운터 삭제")
+    void changePassword_성공_실패카운터삭제() {
+        User user = localUser();
+        when(userRepository.findById(USER_ID)).thenReturn(Optional.of(user));
+        allowPasswordCheck();
+        when(passwordEncoder.matches("Current1!", "encodedPassword")).thenReturn(true);
+        when(passwordEncoder.matches("NewPass1!", "encodedPassword")).thenReturn(false);
+        when(passwordEncoder.encode("NewPass1!")).thenReturn("encodedNew");
+
+        userService.changePassword(USER_ID, "Current1!", "NewPass1!");
+
+        verify(redisTemplate).delete(RedisKeys.USER_PW_FAIL + USER_ID);
+    }
+
+    @Test
+    @DisplayName("관리자 계정 본인 탈퇴 → 403 ADMIN_CANNOT_WITHDRAW, 비밀번호 확인·탈퇴 처리 없음 (USER-G08)")
+    void withdraw_관리자_ADMIN_CANNOT_WITHDRAW() {
+        User admin = User.builder()
+                .id(USER_ID)
+                .email("admin@example.com")
+                .password("encodedPassword")
+                .name("관리자")
+                .role(Role.ADMIN)
+                .status(Status.ACTIVE)
+                .provider(Provider.LOCAL)
+                .build();
+        when(userRepository.findById(USER_ID)).thenReturn(Optional.of(admin));
+
+        CustomException ex = assertThrows(CustomException.class,
+                () -> userService.withdraw(USER_ID, "Password1!", null, "127.0.0.1", "agent"));
+
+        assertThat(ex.getErrorCode()).isEqualTo(ErrorCode.ADMIN_CANNOT_WITHDRAW);
+        assertThat(ex.getErrorCode().getStatus().value()).isEqualTo(403);
+        verify(passwordEncoder, never()).matches(anyString(), anyString());
+        verify(eventPublisher, never()).publishEvent(any());
+        assertThat(admin.getStatus()).isEqualTo(Status.ACTIVE);
+    }
+
+    // 현재 비밀번호 확인이 시도 횟수를 예약할 수 있게 한다(1회째)
+    private void allowPasswordCheck() {
+        when(redisCounter.incrementWithTtl(eq(RedisKeys.USER_PW_FAIL + USER_ID), anyLong())).thenReturn(1L);
+    }
 
     private User localUser() {
         return User.builder()
