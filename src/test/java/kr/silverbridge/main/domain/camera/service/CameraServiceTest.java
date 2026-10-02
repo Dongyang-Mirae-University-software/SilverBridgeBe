@@ -128,6 +128,48 @@ class CameraServiceTest {
     }
 
     @Nested
+    @DisplayName("카메라 등록 - 방 이름 정리")
+    class RegisterLabel {
+
+        @Test
+        @DisplayName("방 이름은 정리한 값으로 저장한다 - 앞뒤 공백·제로폭 문자 제거")
+        void 등록_방이름_정리후저장() {
+            when(identifierFactory.newSessionId(WARD_ID)).thenReturn("ward_a9cC5f_k3m9Q2");
+            when(identifierFactory.newDeviceId()).thenReturn("dev_7Qs4Xu9Ld2");
+            when(cameraRepository.save(any(Camera.class))).thenAnswer(inv -> inv.getArgument(0));
+
+            CameraResponse res = cameraService.register(WARD_ID, new CameraRegisterRequest("  거\u200b실  ", null));
+
+            assertThat(res.label()).isEqualTo("거실");
+        }
+
+        @Test
+        @DisplayName("재등록도 정리한 값으로 갱신한다")
+        void 재등록_방이름_정리() {
+            Camera existing = camera(1L, WARD_ID, "ward_a9cC5f_k3m9Q2", "dev_7Qs4Xu9Ld2", "거실");
+            when(cameraRepository.findByWardIdAndDeviceId(WARD_ID, "dev_7Qs4Xu9Ld2"))
+                    .thenReturn(Optional.of(existing));
+
+            CameraResponse res = cameraService.register(
+                    WARD_ID, new CameraRegisterRequest(" 안방 ", "dev_7Qs4Xu9Ld2"));
+
+            assertThat(res.label()).isEqualTo("안방");
+        }
+
+        @Test
+        @DisplayName("정리 후 비는 방 이름 → INVALID_INPUT(400), 저장 없음")
+        void 빈방이름_거절() {
+            for (String blank : List.of("", "   ", "\u00a0\u3000", "\u200b")) {
+                assertThatThrownBy(() -> cameraService.register(WARD_ID, new CameraRegisterRequest(blank, null)))
+                        .as("label=[%s]", blank)
+                        .isInstanceOf(CustomException.class)
+                        .hasFieldOrPropertyWithValue("errorCode", ErrorCode.INVALID_INPUT);
+            }
+            verify(cameraRepository, never()).save(any(Camera.class));
+        }
+    }
+
+    @Nested
     @DisplayName("소유권 검증 (IDOR 차단)")
     class Ownership {
 
