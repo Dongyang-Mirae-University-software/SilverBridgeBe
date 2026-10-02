@@ -10,6 +10,7 @@ import com.solapi.sdk.message.service.DefaultMessageService;
 import kr.silverbridge.main.domain.notification.channel.ChannelFailureReason;
 import kr.silverbridge.main.domain.notification.channel.ChannelResult;
 import kr.silverbridge.main.domain.notification.config.AlimtalkProperties;
+import kr.silverbridge.main.global.client.SolapiCallExecutor;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
@@ -28,6 +29,10 @@ import java.util.Map;
  *
  * <p>발송 실패는 예외를 던지지 않고 실패 결과를 돌려준다 — 알림톡은 부가 채널이라 실패가 FCM 발송이나
  * 이력 저장에 영향을 주면 안 된다(디스패처의 채널 격리와 이중 방어).</p>
+ *
+ * <p>SDK 호출은 {@link SolapiCallExecutor}로 시간 제한(기본 10초)을 건다(2026-10-02 QA P16) - SDK 자체 제한이 50초
+ * 고정이라 이상감지 알림톡이 긴급 알림 스레드를 오래 붙드는 것을 막는다. 시간 초과는 기존 고정 코드
+ * {@link ChannelFailureReason#PROVIDER_ERROR}(발송 서버 오류)로 기록한다 - 응답을 받지 못했다는 점에서 통신 오류와 같다.</p>
  */
 @Slf4j
 @Component
@@ -35,6 +40,7 @@ import java.util.Map;
 public class AlimtalkSender {
 
     private final AlimtalkProperties properties;
+    private final SolapiCallExecutor solapiCallExecutor;
 
     @Value("${solapi.api-key}")
     private String apiKey;
@@ -65,6 +71,13 @@ public class AlimtalkSender {
         message.setTo(phone);
         message.setKakaoOptions(kakaoOption);   // text는 채우지 않는다(알림톡 규칙)
 
+        // 시간 초과·풀 포화는 빈 값 - 응답을 못 받았으므로 통신 오류로 기록한다.
+        return solapiCallExecutor.call("알림톡", () -> sendNow(message, templateId))
+                .orElseGet(() -> ChannelResult.failed(ChannelFailureReason.PROVIDER_ERROR));
+    }
+
+    /** SDK 호출 본체. {@link SolapiCallExecutor} 스레드에서 실행된다(테스트에서 느린 호출로 대체). */
+    ChannelResult sendNow(Message message, String templateId) {
         DefaultMessageService messageService = SolapiClient.INSTANCE.createInstance(apiKey, apiSecret);
         try {
             messageService.send(message);

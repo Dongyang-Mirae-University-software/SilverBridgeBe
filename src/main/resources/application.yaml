@@ -109,6 +109,8 @@ solapi:
   api-key: ${SOLAPI_API_KEY}
   api-secret: ${SOLAPI_API_SECRET}
   sender-phone: ${SOLAPI_SENDER_PHONE}
+  # SDK 1.0.3은 연결·읽기 제한이 50초 고정이라 SDK 밖에서 이 시간만 기다린다(SolapiCallExecutor) - 넘기면 발송 실패(통신 오류).
+  call-timeout-seconds: ${SOLAPI_CALL_TIMEOUT_SECONDS:10}
 
 
 file-server:
