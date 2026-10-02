@@ -37,15 +37,15 @@ public final class RedisKeys {
     public static final String LOGOUT_TOKEN = "logout:";
 
     // ── 비밀번호 변경 후 토큰 무효화 ────────────────────
-    // 값: 비밀번호 변경 시각(epoch ms). 토큰 iat가 이 값 이하이면 401 처리.
+    // 값: 무효화 시각(epoch 초, 내림). 토큰 iat(초)가 이 값보다 작으면 401 처리 - 같은 초 발급은 허용(D2, 2026-10-02).
+    // 비교·해석 규칙은 TokenInvalidation 한 곳에 둔다(배포 전 ms 값도 초로 환산해 읽는다).
+    // 비밀번호 변경·재설정·탈퇴·정지·역할 변경이 공통으로 쓴다.
     // TTL은 access token 만료시간과 동일하게 두어 자연 만료 시 자동 정리.
     public static final String PASSWORD_INVALIDATE = "password:invalidate:";
 
     // ── API 요청 속도 제한 ─────────────────────────────
     public static final String RATE_LIMIT = "rate:";
 
-
-    // ── WebSocket 접속 상태 ───────────────────────────
-    public static final String WS_CONNECTED = "ws:connected:";
-
+    // ws:connected:(WebSocket 접속 상태)는 2026-10-02 삭제 - 쓰기만 하고 읽는 곳이 없었고, CONNECTED 프레임에
+    // 세션 속성이 없어 실제로는 기록도 되지 않았다(XCUT-G30). 접속 여부가 필요해지면 연결 수 카운터로 새로 설계할 것.
 }
