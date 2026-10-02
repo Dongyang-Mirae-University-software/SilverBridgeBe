@@ -153,6 +153,30 @@ public interface UserRepository extends JpaRepository<User, String> {
                                          @Param("active") Status active,
                                          @Param("connected") ConnectionStatus connected);
 
+    /**
+     * 알림을 받을 수 있는 보호자가 한 명도 없는 피보호자 수(ADMIN-G27).
+     *
+     * <p>{@link #countWardsWithoutActiveGuardian}의 상위 집합이다 - ACTIVE 연결이 없는 피보호자에 더해,
+     * 연결은 ACTIVE로 남아 있지만 그 보호자가 <b>전원 이용 중(ACTIVE)이 아닌</b> 피보호자를 센다.
+     * 정지(RESTRICTED)는 연결을 정리하지 않아 위 지표에 잡히지 않는데, 정지 계정에는 SOS·화재 알림도
+     * 나가지 않으므로(알림 차단은 수신자 기준) 실제로는 아무도 알림을 받지 못하는 사각지대다.</p>
+     */
+    @Query("select count(u) from User u "
+            + "where u.role = :ward and u.status = :active "
+            + "and not exists (select 1 from Connection c, User g "
+            + "                where c.wardId = u.id and c.status = :connected "
+            + "                and g.id = c.guardianId and g.status = :active)")
+    long countWardsWithoutReachableGuardian(@Param("ward") Role ward,
+                                            @Param("active") Status active,
+                                            @Param("connected") ConnectionStatus connected);
+
+    /**
+     * 계정 상태만 PK로 조회한다(WebSocket 수신자 차단 판단용). 엔티티 전체를 읽지 않는다.
+     * 행이 없으면 빈 값 - 호출부는 이를 "상태 모름"으로 다룬다.
+     */
+    @Query("select u.status from User u where u.id = :id")
+    Optional<Status> findStatusById(@Param("id") String id);
+
     /** 카메라를 한 대도 등록하지 않은 피보호자 수. is_active(사용자 토글)와 무관하게 "등록 자체가 없는" 경우만 센다. */
     @Query("select count(u) from User u "
             + "where u.role = :ward and u.status = :active "
