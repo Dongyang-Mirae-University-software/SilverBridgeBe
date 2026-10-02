@@ -20,13 +20,17 @@ import static org.assertj.core.api.Assertions.assertThat;
 /**
  * 관리자 회원 목록 쿼리 - 전화번호 하이픈 무시 검색(ADMIN-G31)과 연결 필터의 관리자 제외(ADMIN-G10).
  * 목 테스트는 JPQL(replace 함수·enum 리터럴)을 실행하지 않는다.
+ *
+ * <p>검색어 인자는 {@code AdminUserService.getUsers}와 같은 짝으로 넘긴다 - 전화번호 조건은 {@code keyword}가 있을 때만
+ * 평가되므로, 서비스는 같은 입력에서 {@code keyword}(소문자화)와 {@code phoneKeyword}(하이픈 제거)를 함께 만든다.
+ * 검색어가 없으면 둘 다 null이다(기본 목록). null 검색어가 bytea로 바인딩돼 기본 목록이 실패하던 것(2026-10-02)도 여기서 막는다.</p>
  */
 class AdminUserSearchIntegrationTest extends PostgresIntegrationTest {
 
     @Autowired private UserRepository userRepository;
 
-    private List<User> search(String phoneKeyword, Integer connectionFilter) {
-        return userRepository.searchForAdmin(Status.INACTIVE, null, null, null, phoneKeyword, connectionFilter,
+    private List<User> search(String keyword, String phoneKeyword, Integer connectionFilter) {
+        return userRepository.searchForAdmin(Status.INACTIVE, null, null, keyword, phoneKeyword, connectionFilter,
                 List.of(ConnectionStatus.ACTIVE, ConnectionStatus.PENDING),
                 ConnectionStatus.ACTIVE, ConnectionStatus.PENDING, PageRequest.of(0, 20)).getContent();
     }
@@ -41,11 +45,14 @@ class AdminUserSearchIntegrationTest extends PostgresIntegrationTest {
         userRepository.saveAll(List.of(guardian, admin));
 
         // 저장은 하이픈 있음 / 검색어는 하이픈 뺀 값 - 부분 일치
-        assertThat(search("01012345678", null)).extracting(User::getId).containsExactly("GSR001");
-        assertThat(search("12345", null)).extracting(User::getId).containsExactly("GSR001");
-        assertThat(search(null, null)).extracting(User::getId).contains("GSR001", "ASR001");
+        assertThat(search("01012345678", "01012345678", null)).extracting(User::getId).containsExactly("GSR001");
+        assertThat(search("12345", "12345", null)).extracting(User::getId).containsExactly("GSR001");
+        // 하이픈을 넣어 입력해도(keyword는 그대로, phoneKeyword는 하이픈 제거) 찾는다
+        assertThat(search("1234-5678", "12345678", null)).extracting(User::getId).containsExactly("GSR001");
+        // 검색어 없음(기본 목록) - 둘 다 null
+        assertThat(search(null, null, null)).extracting(User::getId).contains("GSR001", "ASR001");
 
         // 연결이 없는 NONE(3) 필터: 보호자는 나오고 관리자는 나오지 않는다
-        assertThat(search(null, 3)).extracting(User::getId).contains("GSR001").doesNotContain("ASR001");
+        assertThat(search(null, null, 3)).extracting(User::getId).contains("GSR001").doesNotContain("ASR001");
     }
 }

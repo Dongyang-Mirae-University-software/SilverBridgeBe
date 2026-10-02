@@ -52,20 +52,35 @@ public class AuthService {
     private final UserIdGenerator userIdGenerator;
     private final SmsService smsService;
     private final AuthLoginProperties authLoginProperties;
+    private final LoginSupersedeMarker loginSupersedeMarker;
+
+    // 미가입 이메일 로그인에도 BCrypt 비교를 한 번 하기 위한 더미 해시 (AUTH-G25).
+    // 같은 인코더(strength 12)로 만들어 가입 이메일의 오답과 응답 시간이 같아진다. 처음 쓸 때 한 번만 만든다.
+    private volatile String dummyPasswordHash;
 
     // 이메일 중복 확인 (회원가입 전 단계)
     @Transactional(readOnly = true)
     public void checkEmail(EmailCheckRequest request) {
-        if (userRepository.existsByEmail(request.getEmail())) {
+        if (userRepository.existsByEmail(AuthInputNormalizer.email(request.getEmail()))) {
             throw new CustomException(ErrorCode.EMAIL_ALREADY_EXISTS);
         }
     }
 
     // 회원가입
     // 이메일/전화번호 중복 확인 → SMS 인증 완료 여부 확인 → 비밀번호 암호화 → 6자 ID로 사용자 생성
+    // 이메일은 소문자, 이름은 TextSanitizer로 정규화해 저장한다(AUTH-G09·AUTH-G13) - 모든 검증이 nonce 소비보다 앞이다.
     @Transactional
     public void register(RegisterRequest request) {
-        if (userRepository.existsByEmail(request.getEmail())) {
+        String email = AuthInputNormalizer.email(request.getEmail());
+        String name = AuthInputNormalizer.name(request.getName());
+
+        // 카카오 대체 이메일(kakao_{숫자}@kakao.com)은 일반 가입으로 선점할 수 없다 (AUTH-G08).
+        // DTO @Pattern이 "사용할 수 없는 이메일입니다."로 먼저 막고, 여기는 정규화 뒤 값에 대한 방어선이다.
+        if (AuthInputNormalizer.isReservedKakaoEmail(email)) {
+            throw new CustomException(ErrorCode.INVALID_INPUT);
+        }
+
+        if (userRepository.existsByEmail(email)) {
             throw new CustomException(ErrorCode.EMAIL_ALREADY_EXISTS);
         }
 
@@ -84,9 +99,9 @@ public class AuthService {
 
         User user = User.builder()
                 .id(userIdGenerator.generate())
-                .email(request.getEmail())
+                .email(email)
                 .password(passwordEncoder.encode(request.getPassword()))
-                .name(request.getName())
+                .name(name)
                 .phone(request.getPhone())
                 .role(request.getRole())
                 .status(Status.ACTIVE)
@@ -102,44 +117,60 @@ public class AuthService {
     }
 
     // 로그인
-    // 사용자 조회 → 잠금 확인(user.id 기반) → 비밀번호 검증 → 계정 상태 검증 → 토큰 발급 → Refresh Token 저장 → 로그 기록
+    // 사용자 조회 → 잠금 확인 → 시도 횟수 예약 → 비밀번호 검증 → 계정 상태 검증 → 토큰 발급 → Refresh Token 저장 → 로그 기록
     // - 잠금 키는 user.id 기반(H-2): 임의 이메일로 정상 사용자를 잠그는 DoS 차단
     // - 가입 안 된 이메일과 비밀번호 불일치는 모두 INVALID_CREDENTIALS로 통합(H-1): 계정 enumeration 차단
+    // - 미가입 이메일도 같은 카운터(정규화 이메일의 해시 키)·더미 BCrypt 비교를 거친다(AUTH-G25) -
+    //   6번째에 429가 되는 시점과 응답 시간이 가입 이메일과 같다. 해시 키는 user.id와 겹치지 않고, 나중에 그 이메일로
+    //   가입해도 새 계정의 잠금(user.id 키)에는 영향이 없다.
+    // - 시도 횟수는 비밀번호 비교 "전에" 원자적으로 예약한다(AUTH-G05). 비교(BCrypt 수백 ms) 뒤에 세면 동시 요청이 모두
+    //   잠금 전 상태로 평가돼 5회를 넘겨 비교됐다. 예약 결과가 한도를 넘으면 비교 없이 429다 - 동시 요청이 몇 건이든
+    //   한 윈도우에서 비교는 최대 maxAttempts건이다. Redis 장애 시 RedisCounter 예외가 그대로 나가 로그인을 막는다(fail-closed).
     // - INACTIVE 안내는 비밀번호 검증 통과 이후에만 노출 — 본인만 정지 사실을 확인
+    // - 사용자 엔티티는 @DynamicUpdate라 이 트랜잭션은 last_login_at만 UPDATE한다(ADMIN-G04) - BCrypt 동안 관리자가 바꾼
+    //   상태·역할·이름을 로그인 커밋이 옛 값으로 덮지 않는다.
     @Transactional
     public LoginResponse login(LoginRequest request, String ipAddress, String userAgent) {
-        String email = request.getEmail();
+        String email = AuthInputNormalizer.email(request.getEmail());
 
-        User user = userRepository.findByEmail(email)
-                .orElseThrow(() -> new CustomException(ErrorCode.INVALID_CREDENTIALS));
+        User user = userRepository.findByEmail(email).orElse(null);
 
-        String lockKey = RedisKeys.LOGIN_LOCK + user.getId();
-        String failKey = RedisKeys.LOGIN_FAIL + user.getId();
+        String attemptSubject = user != null ? user.getId() : AuthInputNormalizer.sha256Hex(email);
+        String lockKey = RedisKeys.LOGIN_LOCK + attemptSubject;
+        String failKey = RedisKeys.LOGIN_FAIL + attemptSubject;
+        long lockTtlMinutes = authLoginProperties.getLockTtlMinutes();
+        int maxAttempts = authLoginProperties.getMaxAttempts();
 
         // 잠금 상태 확인 (5회 실패 시 30분 잠금)
         if (Boolean.TRUE.equals(redisTemplate.hasKey(lockKey))) {
             throw new CustomException(ErrorCode.LOGIN_LOCKED);
         }
 
-        if (!passwordEncoder.matches(request.getPassword(), user.getPassword())) {
-            long lockTtlMinutes = authLoginProperties.getLockTtlMinutes();
-            // 실패 횟수 증가 + 최초 1회 TTL 설정을 원자적으로 (M-4 패턴, RateLimitService와 일관).
-            // 분리 호출 시 두 명령 사이 장애로 TTL 누락 우려가 있어 Lua 스크립트로 한 번에 처리.
-            // 윈도우는 첫 실패 시각 기준 고정(sliding 아님) — 정상 사용자 흐름엔 영향 없고
-            // 매 실패마다 TTL이 갱신되어 사실상 영구 잠금되던 잠재 위험도 제거.
-            long attempts = redisCounter.incrementWithTtl(failKey, lockTtlMinutes * 60);
+        // 시도 횟수 예약 - 증가 + 최초 1회 TTL을 원자적으로(M-4 패턴). 윈도우는 첫 시도 시각 기준 고정.
+        // 성공하면 아래에서 지우므로 정상 사용자의 성공 시도는 누적되지 않는다.
+        long attempts = redisCounter.incrementWithTtl(failKey, lockTtlMinutes * 60);
+        if (attempts > maxAttempts) {
+            // 한도를 넘긴 예약 - 비교하지 않는다. 잠금 키가 아직 없으면(동시 요청이 먼저 도착) 여기서 건다.
+            redisTemplate.opsForValue().setIfAbsent(lockKey, "1", lockTtlMinutes, TimeUnit.MINUTES);
+            throw new CustomException(ErrorCode.LOGIN_LOCKED);
+        }
 
-            // 최대 실패 횟수 초과 시 잠금 설정
-            if (attempts >= authLoginProperties.getMaxAttempts()) {
-                redisTemplate.delete(failKey);
+        String passwordHash = user != null ? user.getPassword() : dummyPasswordHash();
+        boolean matched = passwordEncoder.matches(request.getPassword(), passwordHash);
+        if (user == null || !matched) {
+            // 최대 실패 횟수 도달 시 잠금 설정. 실패 카운터는 지우지 않는다 - 지우면 이미 잠금 검사를 통과한 동시 요청이
+            // 1부터 다시 예약해 비교까지 가게 된다. 카운터는 자기 TTL(잠금과 같은 길이)로 사라진다.
+            if (attempts >= maxAttempts) {
                 redisTemplate.opsForValue().set(lockKey, "1", lockTtlMinutes, TimeUnit.MINUTES);
-                // 보안 이벤트 기록 — 모니터링용. PII 없이 userId·시도횟수만 (E-3)
+                // 보안 이벤트 기록 — 모니터링용. PII 없이 userId·시도횟수만 (E-3). 미가입 이메일은 식별자를 남기지 않는다.
                 log.warn("로그인 연속 실패로 계정 잠금: userId={}, 실패 {}회 → {}분 잠금",
-                        user.getId(), attempts, lockTtlMinutes);
+                        user != null ? user.getId() : "(미가입)", attempts, lockTtlMinutes);
             }
-
             throw new CustomException(ErrorCode.INVALID_CREDENTIALS);
         }
+
+        // 비밀번호가 맞았으면 실패 횟수 초기화 - 정지 계정도 본인 확인은 된 것이라 카운터를 남기지 않는다
+        redisTemplate.delete(failKey);
 
         // 비밀번호 검증 통과 후 계정 상태 확인 (본인에게만 정지 사실 노출)
         // ACTIVE가 아닌 모든 상태를 막는다 - INACTIVE(탈퇴 진행) + RESTRICTED(관리자 정지).
@@ -151,21 +182,30 @@ public class AuthService {
             throw new CustomException(ErrorCode.INACTIVE_USER);
         }
 
-        // 로그인 성공 시 실패 횟수 초기화
-        redisTemplate.delete(failKey);
-
         String accessToken  = jwtTokenProvider.generateAccessToken(user.getId(), user.getEmail(), user.getRole().name());
         String refreshToken = jwtTokenProvider.generateRefreshToken(user.getId());
 
         // 기존 Refresh Token 삭제 후 새로 저장 (단일 디바이스 정책)
+        // 밀려난 토큰이 갱신에 쓰이면 재사용 감지가 아니라 단순 401이 되도록 로그인 시각을 남긴다(AUTH-G03)
         refreshTokenRepository.deleteByUserId(user.getId());
         refreshTokenRepository.save(RefreshToken.of(user.getId(), refreshToken,
                 jwtTokenProvider.getRemainingExpiration(refreshToken)));
+        loginSupersedeMarker.markLogin(user.getId(), refreshToken);
 
         user.updateLastLoginAt();
         accessLogService.log(user.getId(), AccessAction.LOGIN, ipAddress, userAgent);
 
         return LoginResponse.of(user, accessToken, refreshToken);
+    }
+
+    // 미가입 이메일 비교용 더미 BCrypt 해시 - 실제 인코더로 한 번 만들어 재사용한다(멱등이라 동시 초기화돼도 안전)
+    private String dummyPasswordHash() {
+        String hash = dummyPasswordHash;
+        if (hash == null) {
+            hash = passwordEncoder.encode(java.util.UUID.randomUUID().toString());
+            dummyPasswordHash = hash;
+        }
+        return hash;
     }
 
     // 로그아웃
@@ -235,7 +275,9 @@ public class AuthService {
     // - 둘 다 존재하면 둘 다 반환, 아무것도 없으면 USER_NOT_FOUND
     @Transactional(readOnly = true)
     public FindEmailResponse findEmail(FindEmailRequest request) {
-        List<User> users = userRepository.findAllByNameAndPhone(request.getName(), request.getPhone());
+        // 가입과 같은 규칙으로 이름을 정규화해 조회한다 (AUTH-G13·FEUX-G11)
+        List<User> users = userRepository.findAllByNameAndPhone(
+                AuthInputNormalizer.name(request.getName()), request.getPhone());
 
         if (users.isEmpty()) {
             throw new CustomException(ErrorCode.USER_NOT_FOUND);
@@ -272,6 +314,12 @@ public class AuthService {
             if (!jwtTokenProvider.isRefreshToken(suspectedToken)) return;
             userId = jwtTokenProvider.getUserId(suspectedToken);
         } catch (CustomException ignored) {
+            return;
+        }
+        // 마지막 로그인보다 먼저 발급된 토큰 = 다른 기기 로그인으로 밀려난 토큰이다(AUTH-G03, D3).
+        // 그 로그인이 이미 이 토큰을 지웠으므로 재사용 신호가 아니다 - 새 기기 세션을 폐기하지 않고 401만 준다.
+        // 회전(refresh)으로 지워진 토큰은 마지막 로그인 이후 발급분이라 아래 재사용 감지(H-3)를 그대로 탄다.
+        if (loginSupersedeMarker.isIssuedBeforeLastLogin(userId, suspectedToken)) {
             return;
         }
         if (refreshTokenRepository.existsByUserId(userId)) {

@@ -34,6 +34,16 @@ class JwtTokenProviderTest {
     }
 
     @Test
+    @DisplayName("같은 초에 같은 사용자로 발급한 Access Token도 jti로 서로 다르다 - 직전 로그아웃 블랙리스트에 걸리지 않는다")
+    void accessTokenUniqueWithinSameSecond() {
+        String first = jwtTokenProvider.generateAccessToken("abc123", "user@example.com", "WARD");
+        String second = jwtTokenProvider.generateAccessToken("abc123", "user@example.com", "WARD");
+
+        assertThat(first).isNotEqualTo(second);
+        assertThat(jwtTokenProvider.hashToken(first)).isNotEqualTo(jwtTokenProvider.hashToken(second));
+    }
+
+    @Test
     @DisplayName("Refresh Token의 subject는 userId와 일치한다")
     void generateRefreshTokenHasUserIdAsSubject() {
         String token = jwtTokenProvider.generateRefreshToken("abc123");

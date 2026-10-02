@@ -60,24 +60,28 @@ public interface UserRepository extends JpaRepository<User, String> {
      * 인덱스(V15)를 타지 못하는 서브쿼리지만, 회원 수 규모에서 문제되지 않는다.
      * 전화번호는 저장 형식(하이픈 유무)과 입력 형식이 달라도 찾히도록 양쪽의 하이픈을 제거해 비교한다
      * ({@code phoneKeyword}, 호출부가 하이픈을 뺀 값을 넘긴다. 빈 값이면 전화번호 조건을 건너뛴다 - ADMIN-G31).</p>
+     *
+     * <p>{@code concat} 안의 검색어는 {@code cast(... as String)}으로 타입을 못 박는다. 그대로 두면 값이 null일 때
+     * Hibernate가 타입을 몰라 bytea로 바인딩하고, PostgreSQL이 LIKE 전체를 bytea로 풀다가 {@code escape '\'}에서
+     * "invalid input syntax for type bytea"로 실패한다 - 검색어 없는 기본 목록이 500이 된다(2026-10-02 통합 테스트로 확인).</p>
      */
     String ADMIN_USER_SEARCH_WHERE =
             " u.status <> :excludedStatus "
             + " and (:role is null or u.role = :role) "
             + " and (:status is null or u.status = :status) "
             + " and (:keyword is null "
-            + "      or lower(u.name) like concat('%', :keyword, '%') escape '\\' "
-            + "      or lower(u.email) like concat('%', :keyword, '%') escape '\\' "
+            + "      or lower(u.name) like concat('%', cast(:keyword as String), '%') escape '\\' "
+            + "      or lower(u.email) like concat('%', cast(:keyword as String), '%') escape '\\' "
             + "      or (:phoneKeyword is not null "
-            + "          and replace(u.phone, '-', '') like concat('%', :phoneKeyword, '%') escape '\\') "
+            + "          and replace(u.phone, '-', '') like concat('%', cast(:phoneKeyword as String), '%') escape '\\') "
             + "      or exists (select 1 from Connection cg, User w "
             + "                 where cg.guardianId = u.id and w.id = cg.wardId "
             + "                   and cg.status in :linkedStatuses "
-            + "                   and lower(w.name) like concat('%', :keyword, '%') escape '\\') "
+            + "                   and lower(w.name) like concat('%', cast(:keyword as String), '%') escape '\\') "
             + "      or exists (select 1 from Connection cw, User g "
             + "                 where cw.wardId = u.id and g.id = cw.guardianId "
             + "                   and cw.status in :linkedStatuses "
-            + "                   and lower(g.name) like concat('%', :keyword, '%') escape '\\')) "
+            + "                   and lower(g.name) like concat('%', cast(:keyword as String), '%') escape '\\')) "
             + " and (:connectionFilter is null or (u.role <> kr.silverbridge.main.global.enums.Role.ADMIN and :connectionFilter = "
             + "      case when exists (select 1 from Connection ca "
             + "                        where (ca.guardianId = u.id or ca.wardId = u.id) "
