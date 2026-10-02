@@ -181,6 +181,18 @@ class AdminInquiryServiceTest {
                 .isEqualTo(ErrorCode.INQUIRY_NOT_FOUND);
     }
 
+    @Test
+    @DisplayName("답변은 정리된 값(제로폭 제거, 줄바꿈 보존)으로 저장한다 (ADMIN-G22)")
+    void answer_정리해_저장() {
+        Inquiry inquiry = inquiry(INQUIRY_ID, GUARDIAN_ID, InquiryStatus.WAITING);
+        when(inquiryRepository.findByIdForUpdate(INQUIRY_ID)).thenReturn(Optional.of(inquiry));
+        when(userRepository.findById(anyString())).thenReturn(Optional.empty());
+
+        adminInquiryService.answer(INQUIRY_ID, answerRequest("확인\u200B했습니다.\r\n조치 완료\u00A0"), ADMIN_ID);
+
+        assertThat(inquiry.getAnswer()).isEqualTo("확인했습니다.\n조치 완료");
+    }
+
     private Inquiry inquiry(long id, String userId, InquiryStatus status) {
         return Inquiry.builder()
                 .id(id)

@@ -4,6 +4,7 @@ import kr.silverbridge.main.domain.admin.dto.AdminAnnouncementDraftResponse;
 import kr.silverbridge.main.domain.admin.dto.AdminAnnouncementResponse;
 import kr.silverbridge.main.domain.admin.dto.AnnouncementDraftCreateRequest;
 import kr.silverbridge.main.domain.admin.dto.AnnouncementDraftUpdateRequest;
+import kr.silverbridge.main.domain.admin.support.AdminPaging;
 import kr.silverbridge.main.domain.announcement.entity.Announcement;
 import kr.silverbridge.main.domain.announcement.entity.AnnouncementDraft;
 import kr.silverbridge.main.domain.announcement.repository.AnnouncementDraftRepository;
@@ -14,6 +15,7 @@ import kr.silverbridge.main.global.audit.AdminAuditLogService;
 import kr.silverbridge.main.global.enums.AdminAuditAction;
 import kr.silverbridge.main.global.exception.CustomException;
 import kr.silverbridge.main.global.exception.ErrorCode;
+import kr.silverbridge.main.global.validation.TextSanitizer;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
@@ -39,11 +41,11 @@ public class AdminAnnouncementDraftService {
     private final AnnouncementRepository announcementRepository;
     private final AdminAuditLogService auditLogService;
 
-    // 임시저장 목록 조회 (최신순 + 배치 작성자 조회)
+    // 임시저장 목록 조회 (최신순 + 배치 작성자 조회, 선택 페이징·본문 축약 - ADMIN-G24)
     @Transactional(readOnly = true)
-    public List<AdminAnnouncementDraftResponse> getDrafts() {
-        List<AnnouncementDraft> drafts = draftRepository.findAll(
-                Sort.by(Sort.Direction.DESC, "createdAt"));
+    public List<AdminAnnouncementDraftResponse> getDrafts(int page, int size) {
+        List<AnnouncementDraft> drafts = draftRepository.findAll(AdminPaging.of(page, size,
+                Sort.by(Sort.Direction.DESC, "createdAt").and(Sort.by(Sort.Direction.DESC, "id")))).getContent();
 
         Set<String> authorIds = drafts.stream()
                 .map(AnnouncementDraft::getAuthorId)
@@ -53,7 +55,7 @@ public class AdminAnnouncementDraftService {
                 .collect(Collectors.toMap(User::getId, u -> u));
 
         return drafts.stream()
-                .map(d -> AdminAnnouncementDraftResponse.of(d, authorMap.get(d.getAuthorId())))
+                .map(d -> AdminAnnouncementDraftResponse.ofSummary(d, authorMap.get(d.getAuthorId())))
                 .toList();
     }
 
@@ -70,8 +72,8 @@ public class AdminAnnouncementDraftService {
     public AdminAnnouncementDraftResponse createDraft(AnnouncementDraftCreateRequest request, String adminId) {
         AnnouncementDraft draft = AnnouncementDraft.builder()
                 .authorId(adminId)
-                .title(nullToEmpty(request.getTitle()))
-                .content(nullToEmpty(request.getContent()))
+                .title(cleanTitle(request.getTitle()))
+                .content(cleanContent(request.getContent()))
                 .build();
 
         AnnouncementDraft saved = draftRepository.save(draft);
@@ -86,10 +88,10 @@ public class AdminAnnouncementDraftService {
     @Transactional
     public AdminAnnouncementDraftResponse updateDraft(Long id, AnnouncementDraftUpdateRequest request, String adminId) {
         AnnouncementDraft draft = findDraft(id);
-        draft.update(nullToEmpty(request.getTitle()), nullToEmpty(request.getContent()));
+        draft.update(cleanTitle(request.getTitle()), cleanContent(request.getContent()));
 
         auditLogService.log(adminId, AdminAuditAction.ANNOUNCEMENT_DRAFT_UPDATE, String.valueOf(id),
-                String.format("공지 임시저장 수정: %s", safeTitle(request.getTitle())));
+                String.format("공지 임시저장 수정: %s", safeTitle(draft.getTitle())));
 
         return AdminAnnouncementDraftResponse.of(draft, findAuthor(draft.getAuthorId()));
     }
@@ -110,8 +112,8 @@ public class AdminAnnouncementDraftService {
     public AdminAnnouncementResponse publishDraft(Long id, String adminId) {
         AnnouncementDraft draft = findDraft(id);
 
-        if (draft.getTitle() == null || draft.getTitle().isBlank()
-                || draft.getContent() == null || draft.getContent().isBlank()) {
+        // isBlank()는 NBSP·제로폭 문자만 있는 값을 통과시킨다 - 눈에 보이는 글자가 있는지로 판단한다(ADMIN-G22)
+        if (!TextSanitizer.hasVisibleChar(draft.getTitle()) || !TextSanitizer.hasVisibleChar(draft.getContent())) {
             throw new CustomException(ErrorCode.INVALID_INPUT);
         }
 
@@ -146,5 +148,14 @@ public class AdminAnnouncementDraftService {
     // DB NOT NULL 컬럼 보호 — null 전송 시 23502(500) 대신 빈 문자열로 저장 (L-S3-2)
     private String nullToEmpty(String value) {
         return value == null ? "" : value;
+    }
+
+    // 정리(NFC·제어/제로폭 문자 제거·공백 통일) 후 저장 - null은 빈 문자열
+    private String cleanTitle(String value) {
+        return nullToEmpty(TextSanitizer.sanitize(value));
+    }
+
+    private String cleanContent(String value) {
+        return nullToEmpty(TextSanitizer.sanitizeMultiline(value));
     }
 }

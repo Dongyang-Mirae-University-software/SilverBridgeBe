@@ -11,6 +11,7 @@ import kr.silverbridge.main.global.exception.ErrorCode;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.InOrder;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -25,6 +26,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyCollection;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -44,24 +46,30 @@ class AnnouncementServiceTest {
     }
 
     @Test
-    @DisplayName("상세 조회는 조회수를 1 올린다")
-    void 상세_조회수_증가() {
+    @DisplayName("상세 조회는 조회수를 원자적 UPDATE로 올리고 엔티티는 수정하지 않는다 (ADMIN-G05·G06)")
+    void 상세_조회수_원자_증가() {
         Announcement target = announcement(1L, "AD0001");
+        ReflectionTestUtils.setField(target, "viewCount", 8L); // 증가 후 값을 DB에서 다시 읽은 상태
+        when(announcementRepository.incrementViewCount(1L)).thenReturn(1);
         when(announcementRepository.findById(1L)).thenReturn(Optional.of(target));
         when(userRepository.findById("AD0001")).thenReturn(Optional.of(
                 User.builder().id("AD0001").name("관리자").role(Role.ADMIN).build()));
 
-        AnnouncementResponse first = service.getAnnouncement(1L);
-        AnnouncementResponse second = service.getAnnouncement(1L);
+        AnnouncementResponse response = service.getAnnouncement(1L);
 
-        assertThat(first.viewCount()).isEqualTo(1L);
-        assertThat(second.viewCount()).isEqualTo(2L);
-        assertThat(second.authorName()).isEqualTo("관리자");
+        InOrder order = inOrder(announcementRepository);
+        order.verify(announcementRepository).incrementViewCount(1L);
+        order.verify(announcementRepository).findById(1L);
+        // read-modify-write 경로(save)를 타지 않는다 - Auditing이 수정 일시를 바꾸고 동시 조회가 유실된다
+        verify(announcementRepository, never()).save(any());
+        assertThat(response.viewCount()).isEqualTo(8L);
+        assertThat(response.authorName()).isEqualTo("관리자");
     }
 
     @Test
     @DisplayName("작성자가 탈퇴한 공지(author_id NULL)는 사용자 조회 없이 이름 null로 응답한다")
     void 탈퇴_작성자_조회_생략() {
+        when(announcementRepository.incrementViewCount(2L)).thenReturn(1);
         when(announcementRepository.findById(2L)).thenReturn(Optional.of(announcement(2L, null)));
 
         AnnouncementResponse response = service.getAnnouncement(2L);
@@ -73,7 +81,7 @@ class AnnouncementServiceTest {
     @Test
     @DisplayName("없는 공지 → ANNOUNCEMENT_NOT_FOUND")
     void 없는_공지_404() {
-        when(announcementRepository.findById(9L)).thenReturn(Optional.empty());
+        when(announcementRepository.incrementViewCount(9L)).thenReturn(0);
 
         assertThatThrownBy(() -> service.getAnnouncement(9L))
                 .isInstanceOf(CustomException.class)

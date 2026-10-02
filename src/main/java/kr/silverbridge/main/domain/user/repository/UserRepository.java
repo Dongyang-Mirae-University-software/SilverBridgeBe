@@ -52,11 +52,14 @@ public interface UserRepository extends JpaRepository<User, String> {
      * 일이 없고, 스윕이 곧 회수한다. "이용 중/이용 제한" 두 상태만 회원 목록의 대상이다.</p>
      *
      * <p>연결 상태는 우선순위로 하나를 고른다 - ACTIVE가 하나라도 있으면 "연결됨"(1),
-     * 없고 PENDING만 있으면 "수락 대기"(2), 둘 다 없으면 "미연결"(3). 관리자 계정도 연결이 없어 3에 들어가므로
-     * 연결 필터를 걸면 목록에서 빠진다(관리자는 연결 축이 없는 계정이다).</p>
+     * 없고 PENDING만 있으면 "수락 대기"(2), 둘 다 없으면 "미연결"(3). 관리자 계정은 연결 축이 없어
+     * (표시값도 null) 연결 필터(CONNECTED·PENDING·NONE)를 걸면 <b>항상 제외</b>한다 - NONE("미연결")에 섞이면
+     * "연결이 끊긴 회원"으로 읽힌다(ADMIN-G10). 필터를 걸지 않으면(ALL) 관리자도 목록에 나온다.</p>
      *
      * <p>키워드는 이름·이메일·전화번호에 더해 <b>연결된 상대의 이름</b>까지 훑는다. 상대 이름 검색은
-     * 인덱스(V15)를 타지 못하는 서브쿼리지만, 회원 수 규모에서 문제되지 않는다.</p>
+     * 인덱스(V15)를 타지 못하는 서브쿼리지만, 회원 수 규모에서 문제되지 않는다.
+     * 전화번호는 저장 형식(하이픈 유무)과 입력 형식이 달라도 찾히도록 양쪽의 하이픈을 제거해 비교한다
+     * ({@code phoneKeyword}, 호출부가 하이픈을 뺀 값을 넘긴다. 빈 값이면 전화번호 조건을 건너뛴다 - ADMIN-G31).</p>
      */
     String ADMIN_USER_SEARCH_WHERE =
             " u.status <> :excludedStatus "
@@ -65,7 +68,8 @@ public interface UserRepository extends JpaRepository<User, String> {
             + " and (:keyword is null "
             + "      or lower(u.name) like concat('%', :keyword, '%') escape '\\' "
             + "      or lower(u.email) like concat('%', :keyword, '%') escape '\\' "
-            + "      or u.phone like concat('%', :keyword, '%') escape '\\' "
+            + "      or (:phoneKeyword is not null "
+            + "          and replace(u.phone, '-', '') like concat('%', :phoneKeyword, '%') escape '\\') "
             + "      or exists (select 1 from Connection cg, User w "
             + "                 where cg.guardianId = u.id and w.id = cg.wardId "
             + "                   and cg.status in :linkedStatuses "
@@ -74,14 +78,14 @@ public interface UserRepository extends JpaRepository<User, String> {
             + "                 where cw.wardId = u.id and g.id = cw.guardianId "
             + "                   and cw.status in :linkedStatuses "
             + "                   and lower(g.name) like concat('%', :keyword, '%') escape '\\')) "
-            + " and (:connectionFilter is null or :connectionFilter = "
+            + " and (:connectionFilter is null or (u.role <> kr.silverbridge.main.global.enums.Role.ADMIN and :connectionFilter = "
             + "      case when exists (select 1 from Connection ca "
             + "                        where (ca.guardianId = u.id or ca.wardId = u.id) "
             + "                          and ca.status = :activeStatus) then 1 "
             + "           when exists (select 1 from Connection cp "
             + "                        where (cp.guardianId = u.id or cp.wardId = u.id) "
             + "                          and cp.status = :pendingStatus) then 2 "
-            + "           else 3 end) ";
+            + "           else 3 end)) ";
 
     /** 회원관리 목록 - 키워드·역할·계정 상태·연결 상태 필터, 가입일 역순은 호출부 Pageable이 정한다. */
     @Query(value = "select u from User u where " + ADMIN_USER_SEARCH_WHERE,
@@ -90,6 +94,7 @@ public interface UserRepository extends JpaRepository<User, String> {
                               @Param("role") Role role,
                               @Param("status") Status status,
                               @Param("keyword") String keyword,
+                              @Param("phoneKeyword") String phoneKeyword,
                               @Param("connectionFilter") Integer connectionFilter,
                               @Param("linkedStatuses") List<ConnectionStatus> linkedStatuses,
                               @Param("activeStatus") ConnectionStatus activeStatus,

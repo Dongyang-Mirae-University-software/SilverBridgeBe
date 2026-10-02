@@ -118,6 +118,7 @@ class AdminDashboardServiceTest {
             when(aiLiveStreamSubscriber.isConnected()).thenReturn(true);
             when(aiLiveStreamSubscriber.subscribedSessionCount()).thenReturn(27);
             when(cameraRepository.count()).thenReturn(29L);
+            when(cameraRepository.countByIsActiveTrue()).thenReturn(29L);
 
             AdminSafetyDashboardResponse response = service.getSafetyDashboard();
 
@@ -127,11 +128,26 @@ class AdminDashboardServiceTest {
         }
 
         @Test
+        @DisplayName("끊긴 카메라의 분모는 활성 카메라만이다 - 비활성은 구독 대상이 아니라 끊김으로 세지 않는다 (ADMIN-G20)")
+        void 비활성_카메라는_분모에서_제외() {
+            when(aiLiveStreamSubscriber.isConnected()).thenReturn(true);
+            when(aiLiveStreamSubscriber.subscribedSessionCount()).thenReturn(27);
+            when(cameraRepository.count()).thenReturn(29L);
+            when(cameraRepository.countByIsActiveTrue()).thenReturn(28L);
+
+            AdminSafetyDashboardResponse response = service.getSafetyDashboard();
+
+            assertThat(response.totalCameras()).isEqualTo(29L);
+            assertThat(response.safetyEvents().disconnectedCameras()).isEqualTo(1L);
+        }
+
+        @Test
         @DisplayName("구독이 등록 대수보다 많아도 끊긴 카메라가 음수가 되지 않는다")
         void 음수_방지() {
             when(aiLiveStreamSubscriber.isConnected()).thenReturn(true);
             when(aiLiveStreamSubscriber.subscribedSessionCount()).thenReturn(5);
             when(cameraRepository.count()).thenReturn(3L);
+            when(cameraRepository.countByIsActiveTrue()).thenReturn(3L);
 
             AdminSafetyDashboardResponse response = service.getSafetyDashboard();
 

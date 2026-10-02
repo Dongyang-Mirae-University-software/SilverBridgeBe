@@ -56,11 +56,12 @@ public class AdminUserController {
                     [검색 범위]
                     keyword 는 이름·이메일·전화번호에 더해 **연결된 상대의 이름**까지 찾습니다.
                     (예: "홍길동"으로 검색하면 홍길동 본인과, 홍길동과 연결된 피보호자들이 함께 나옵니다)
+                    전화번호는 하이픈 유무와 관계없이 찾습니다("01012345678"과 "010-1234-5678" 모두 가능).
 
                     [연결 상태]
                     한 회원이 연결됨과 수락 대기를 동시에 가질 수 있어 우선순위로 하나를 고릅니다.
                     ACTIVE가 하나라도 있으면 CONNECTED, 없고 PENDING만 있으면 PENDING, 둘 다 없으면 NONE입니다.
-                    관리자 계정은 연결 축이 없어 connectionState 가 **null** 이며, 연결 필터를 걸면 목록에서 빠집니다.
+                    관리자 계정은 연결 축이 없어 connectionState 가 **null** 이며, 연결 필터(CONNECTED·PENDING·NONE)를 걸면 NONE 포함 목록에서 제외됩니다(ALL이면 포함).
 
                     [목록에 없는 것]
                     탈퇴가 진행 중인 계정은 나오지 않습니다. 관리자가 할 수 있는 일이 없고 곧 사라지는 임시 상태입니다.
@@ -85,11 +86,11 @@ public class AdminUserController {
             @Parameter(description = "계정 상태 필터 (생략 시 ALL)")
             @RequestParam(required = false) AdminUserStatusFilter status,
 
-            @Parameter(description = "연결 상태 필터 (생략 시 ALL)")
+            @Parameter(description = "연결 상태 필터 (생략 시 ALL). ALL이 아니면 관리자 계정은 제외")
             @RequestParam(required = false) AdminUserConnectionFilter connection,
 
-            @Parameter(description = "페이지 번호 (0-based)") @RequestParam(defaultValue = "0") int page,
-            @Parameter(description = "페이지 크기 (최대 50)") @RequestParam(defaultValue = "20") int size) {
+            @Parameter(description = "페이지 번호 (0-based, 음수는 0)") @RequestParam(defaultValue = "0") int page,
+            @Parameter(description = "페이지 크기 (기본 20, 0 이하는 20, 최대 50)") @RequestParam(defaultValue = "20") int size) {
 
         return ApiResponse.ok(adminUserService.getUsers(keyword, role, status, connection, page, size));
     }

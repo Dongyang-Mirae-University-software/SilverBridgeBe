@@ -3,6 +3,7 @@ package kr.silverbridge.main.domain.admin.service;
 import kr.silverbridge.main.domain.admin.dto.AnnouncementCreateRequest;
 import kr.silverbridge.main.domain.admin.dto.AdminAnnouncementResponse;
 import kr.silverbridge.main.domain.admin.dto.AnnouncementUpdateRequest;
+import kr.silverbridge.main.domain.admin.support.AdminPaging;
 import kr.silverbridge.main.domain.announcement.entity.Announcement;
 import kr.silverbridge.main.domain.announcement.repository.AnnouncementRepository;
 import kr.silverbridge.main.domain.user.entity.User;
@@ -11,6 +12,7 @@ import kr.silverbridge.main.global.audit.AdminAuditLogService;
 import kr.silverbridge.main.global.enums.AdminAuditAction;
 import kr.silverbridge.main.global.exception.CustomException;
 import kr.silverbridge.main.global.exception.ErrorCode;
+import kr.silverbridge.main.global.validation.TextSanitizer;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
@@ -34,11 +36,12 @@ public class AdminAnnouncementService {
     private final AnnouncementRepository announcementRepository;
     private final AdminAuditLogService auditLogService;
 
-    // 공지 목록 조회 (최신순 + 배치 작성자 조회)
+    // 공지 목록 조회 (최신순 + 배치 작성자 조회, 선택 페이징·본문 축약 - ADMIN-G24)
     @Transactional(readOnly = true)
-    public List<AdminAnnouncementResponse> getAnnouncements() {
-        List<Announcement> announcements = announcementRepository.findAll(
-                Sort.by(Sort.Direction.DESC, "createdAt"));
+    public List<AdminAnnouncementResponse> getAnnouncements(int page, int size) {
+        // id 내림차순을 함께 둬 같은 시각의 공지가 페이지 사이에서 겹치거나 빠지지 않게 한다
+        List<Announcement> announcements = announcementRepository.findAll(AdminPaging.of(page, size,
+                Sort.by(Sort.Direction.DESC, "createdAt").and(Sort.by(Sort.Direction.DESC, "id")))).getContent();
 
         Set<String> authorIds = announcements.stream()
                 .map(Announcement::getAuthorId)
@@ -48,7 +51,7 @@ public class AdminAnnouncementService {
                 .collect(Collectors.toMap(User::getId, u -> u));
 
         return announcements.stream()
-                .map(a -> AdminAnnouncementResponse.of(a, authorMap.get(a.getAuthorId())))
+                .map(a -> AdminAnnouncementResponse.ofSummary(a, authorMap.get(a.getAuthorId())))
                 .toList();
     }
 
@@ -64,8 +67,8 @@ public class AdminAnnouncementService {
     public AdminAnnouncementResponse createAnnouncement(AnnouncementCreateRequest request, String adminId) {
         Announcement announcement = Announcement.builder()
                 .authorId(adminId)
-                .title(request.getTitle())
-                .content(request.getContent())
+                .title(TextSanitizer.sanitize(request.getTitle()))
+                .content(TextSanitizer.sanitizeMultiline(request.getContent()))
                 .build();
 
         Announcement saved = announcementRepository.save(announcement);
@@ -80,10 +83,11 @@ public class AdminAnnouncementService {
     @Transactional
     public AdminAnnouncementResponse updateAnnouncement(Long id, AnnouncementUpdateRequest request, String adminId) {
         Announcement announcement = findAnnouncement(id);
-        announcement.update(request.getTitle(), request.getContent());
+        announcement.update(TextSanitizer.sanitize(request.getTitle()),
+                TextSanitizer.sanitizeMultiline(request.getContent()));
 
         auditLogService.log(adminId, AdminAuditAction.ANNOUNCEMENT_UPDATE, String.valueOf(id),
-                String.format("공지 수정: %s", request.getTitle()));
+                String.format("공지 수정: %s", announcement.getTitle()));
 
         return AdminAnnouncementResponse.of(announcement, findAuthor(announcement.getAuthorId()));
     }

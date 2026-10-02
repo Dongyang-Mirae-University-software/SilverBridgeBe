@@ -19,7 +19,7 @@ import kr.silverbridge.main.global.response.PageResponse;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
-import org.springframework.data.domain.PageRequest;
+import kr.silverbridge.main.domain.admin.support.AdminPaging;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -51,7 +51,6 @@ import java.util.stream.Collectors;
 @RequiredArgsConstructor
 public class AdminAnomalyService {
 
-    private static final int MAX_PAGE_SIZE = 50;
 
     /** 기간 "전체"의 하한 - 서비스 이전 시각. */
     private static final OffsetDateTime NO_LOWER_BOUND = OffsetDateTime.of(2000, 1, 1, 0, 0, 0, 0, ZoneOffset.UTC);
@@ -78,7 +77,7 @@ public class AdminAnomalyService {
                                                               AdminAnomalyPeriod period,
                                                               AdminAnomalyTypeFilter type, String keyword,
                                                               int page, int size) {
-        Pageable pageable = PageRequest.of(Math.max(page, 0), normalizeSize(size));
+        Pageable pageable = AdminPaging.of(page, size);
         KeywordScope scope = resolveKeyword(keyword);
         Page<AnomalyIncident> incidents = incidentRepository.searchForAdmin(
                 status,
@@ -258,10 +257,4 @@ public class AdminAnomalyService {
     private record KeywordScope(boolean applied, List<String> wardIds, List<String> sessionIds) {
     }
 
-    private int normalizeSize(int size) {
-        if (size <= 0) {
-            return 20;
-        }
-        return Math.min(size, MAX_PAGE_SIZE);
-    }
 }

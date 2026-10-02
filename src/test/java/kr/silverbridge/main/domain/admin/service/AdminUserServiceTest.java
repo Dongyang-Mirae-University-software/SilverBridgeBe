@@ -28,6 +28,7 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.mockito.junit.jupiter.MockitoSettings;
@@ -164,7 +165,7 @@ class AdminUserServiceTest {
 
             service().getUsers(null, null, null, null, 0, 20);
 
-            verify(userRepository).searchForAdmin(eq(Status.INACTIVE), any(), any(), any(), any(),
+            verify(userRepository).searchForAdmin(eq(Status.INACTIVE), any(), any(), any(), any(), any(),
                     anyList(), eq(ConnectionStatus.ACTIVE), eq(ConnectionStatus.PENDING), any(Pageable.class));
         }
 
@@ -208,8 +209,68 @@ class AdminUserServiceTest {
                     .hasFieldOrPropertyWithValue("errorCode", ErrorCode.USER_NOT_FOUND);
         }
 
+        @Test
+        @DisplayName("연결 항목에 connectionId가 실린다 (CONN-G07)")
+        void 연결_항목에_connectionId() {
+            User guardian = user(USER_ID, "홍길동", Role.GUARDIAN, Status.ACTIVE);
+            givenPage(guardian);
+            when(connectionRepository.findByParticipantsAndStatusIn(anyCollection(), anyList()))
+                    .thenReturn(List.of(connection(42L, USER_ID, WARD_ID, ConnectionStatus.ACTIVE, "딸")));
+            when(userRepository.findAllById(anyCollection())).thenReturn(List.of(
+                    guardian, user(WARD_ID, "박민수", Role.WARD, Status.ACTIVE)));
+
+            AdminUserListItem item = service().getUsers(null, null, null, null, 0, 20).content().get(0);
+
+            assertThat(item.firstConnection().connectionId()).isEqualTo(42L);
+        }
+
+        @Test
+        @DisplayName("전화번호 검색어는 하이픈·공백을 뺀 값으로 넘긴다 - 입력 형식과 저장 형식이 달라도 찾힌다 (ADMIN-G31)")
+        void 전화번호_검색어_하이픈_제거() {
+            givenPage(user(USER_ID, "홍길동", Role.GUARDIAN, Status.ACTIVE));
+            when(connectionRepository.findByParticipantsAndStatusIn(anyCollection(), anyList()))
+                    .thenReturn(List.of());
+
+            service().getUsers(" 010-1234-5678 ", null, null, null, 0, 20);
+
+            ArgumentCaptor<String> keyword = ArgumentCaptor.forClass(String.class);
+            ArgumentCaptor<String> phone = ArgumentCaptor.forClass(String.class);
+            verify(userRepository).searchForAdmin(any(), any(), any(), keyword.capture(), phone.capture(),
+                    any(), anyList(), any(), any(), any(Pageable.class));
+            assertThat(keyword.getValue()).isEqualTo("010-1234-5678");
+            assertThat(phone.getValue()).isEqualTo("01012345678");
+        }
+
+        @Test
+        @DisplayName("하이픈만 입력하면 전화번호 조건은 건너뛴다 - 모든 번호에 걸리지 않게")
+        void 하이픈만_입력하면_전화조건_없음() {
+            assertThat(service().normalizePhoneKeyword("-")).isNull();
+            assertThat(service().normalizePhoneKeyword("  ")).isNull();
+            assertThat(service().normalizePhoneKeyword(null)).isNull();
+            assertThat(service().normalizePhoneKeyword("0_1%")).isEqualTo("0\\_1\\%");
+        }
+
+        @Test
+        @DisplayName("page·size 보정 - 음수 page는 0, size 0 이하는 20, 50 초과는 50 (ADMIN-G09)")
+        void 페이지_보정() {
+            givenPage(user(USER_ID, "홍길동", Role.GUARDIAN, Status.ACTIVE));
+            when(connectionRepository.findByParticipantsAndStatusIn(anyCollection(), anyList()))
+                    .thenReturn(List.of());
+
+            service().getUsers(null, null, null, null, -3, 0);
+            service().getUsers(null, null, null, null, 2, 500);
+
+            ArgumentCaptor<Pageable> captor = ArgumentCaptor.forClass(Pageable.class);
+            verify(userRepository, org.mockito.Mockito.times(2)).searchForAdmin(any(), any(), any(), any(), any(),
+                    any(), anyList(), any(), any(), captor.capture());
+            assertThat(captor.getAllValues().get(0).getPageNumber()).isZero();
+            assertThat(captor.getAllValues().get(0).getPageSize()).isEqualTo(20);
+            assertThat(captor.getAllValues().get(1).getPageNumber()).isEqualTo(2);
+            assertThat(captor.getAllValues().get(1).getPageSize()).isEqualTo(50);
+        }
+
         private void givenPage(User user) {
-            when(userRepository.searchForAdmin(any(), any(), any(), any(), any(), anyList(),
+            when(userRepository.searchForAdmin(any(), any(), any(), any(), any(), any(), anyList(),
                     any(), any(), any(Pageable.class)))
                     .thenReturn(new PageImpl<>(List.of(user), PageRequest.of(0, 20), 1));
         }
@@ -490,6 +551,29 @@ class AdminUserServiceTest {
                     .hasFieldOrPropertyWithValue("errorCode", ErrorCode.INVALID_INPUT);
 
             assertThat(user.getName()).isEqualTo("홍길동");
+        }
+
+        @Test
+        @DisplayName("NBSP·제로폭 문자만 있는 이름도 빈 이름으로 400이다 (ADMIN-G22)")
+        void 보이지_않는_문자만_있는_이름은_거부한다() {
+            User user = givenUser(user(USER_ID, "홍길동", Role.GUARDIAN, Status.ACTIVE));
+
+            assertThatThrownBy(() -> service().updateUser(USER_ID,
+                    new AdminUserUpdateRequest("\u00A0\u200B\u3000", null, null, null), ADMIN_ID))
+                    .isInstanceOf(CustomException.class)
+                    .hasFieldOrPropertyWithValue("errorCode", ErrorCode.INVALID_INPUT);
+
+            assertThat(user.getName()).isEqualTo("홍길동");
+        }
+
+        @Test
+        @DisplayName("이름은 정리된 값(제로폭 제거·연속 공백 1개)으로 저장한다 (ADMIN-G22)")
+        void 이름은_정리해_저장한다() {
+            User user = givenUser(user(USER_ID, "홍길동", Role.GUARDIAN, Status.ACTIVE));
+
+            service().updateUser(USER_ID, new AdminUserUpdateRequest("홍\u200B길  순", null, null, null), ADMIN_ID);
+
+            assertThat(user.getName()).isEqualTo("홍길 순");
         }
     }
 

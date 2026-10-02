@@ -80,9 +80,10 @@ public class AdminDashboardService {
         // AI가 끊겨 있으면 구독 집합은 "카메라가 없다"가 아니라 "알 수 없다"이다.
         // 이때 0을 내려보내면 우리 수신기의 장애가 현장 카메라 전멸로 표시된다.
         Long streamingCameras = aiConnected ? (long) aiLiveStreamSubscriber.subscribedSessionCount() : null;
+        // 분모는 활성 카메라만 - 비활성 카메라는 구독 대상이 아니라 "끊김"으로 세면 항상 끊긴 것으로 부풀려진다(ADMIN-G20).
         Long disconnectedCameras = streamingCameras == null
                 ? null
-                : Math.max(0L, totalCameras - streamingCameras);
+                : Math.max(0L, cameraRepository.countByIsActiveTrue() - streamingCameras);
 
         var safetyEvents = new AdminSafetyDashboardResponse.SafetyEvents(
                 disconnectedCameras,

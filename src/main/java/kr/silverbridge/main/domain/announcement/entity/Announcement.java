@@ -33,8 +33,4 @@ public class Announcement extends BaseTimeEntity {
         this.title = title;
         this.content = content;
     }
-
-    public void increaseViewCount() {
-        this.viewCount = (this.viewCount == null ? 0L : this.viewCount) + 1;
-    }
 }

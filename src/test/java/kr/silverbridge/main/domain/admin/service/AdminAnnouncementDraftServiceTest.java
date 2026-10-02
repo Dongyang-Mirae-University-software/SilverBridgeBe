@@ -17,8 +17,10 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
+import java.util.List;
 import java.util.Optional;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
@@ -95,5 +97,37 @@ class AdminAnnouncementDraftServiceTest {
         verify(draftRepository).delete(target);
         verify(auditLogService).log(eq("AD0001"), eq(AdminAuditAction.ANNOUNCEMENT_DRAFT_DELETE),
                 anyString(), anyString());
+    }
+
+    @Test
+    @DisplayName("NBSP·제로폭 문자만 있는 제목의 임시저장은 게시할 수 없다 (ADMIN-G22)")
+    void publishDraft_보이지_않는_문자만_차단() {
+        AnnouncementDraft invisible = draft("\u00A0\u200B", "내용");
+        when(draftRepository.findById(5L)).thenReturn(Optional.of(invisible));
+
+        assertThatThrownBy(() -> service.publishDraft(5L, "AD0001"))
+                .isInstanceOf(CustomException.class)
+                .extracting(e -> ((CustomException) e).getErrorCode())
+                .isEqualTo(ErrorCode.INVALID_INPUT);
+
+        verify(announcementRepository, org.mockito.Mockito.never()).save(any(Announcement.class));
+    }
+
+    @Test
+    @DisplayName("임시저장은 정리된 값으로 저장하고, 목록은 본문을 앞 100자로 축약한다 (ADMIN-G22·G24)")
+    void 정리_저장_목록_축약() {
+        when(draftRepository.save(any(AnnouncementDraft.class))).thenAnswer(inv -> inv.getArgument(0));
+        when(userRepository.findById("AD0001")).thenReturn(Optional.empty());
+        AnnouncementDraftCreateRequest request = new AnnouncementDraftCreateRequest();
+        org.springframework.test.util.ReflectionTestUtils.setField(request, "title", "제\u200B목");
+        org.springframework.test.util.ReflectionTestUtils.setField(request, "content", "x".repeat(150));
+
+        assertThat(service.createDraft(request, "AD0001").title()).isEqualTo("제목");
+
+        when(draftRepository.findAll(any(org.springframework.data.domain.Pageable.class)))
+                .thenReturn(new org.springframework.data.domain.PageImpl<>(List.of(draft("제목", "y".repeat(150)))));
+        when(userRepository.findAllById(org.mockito.ArgumentMatchers.anyCollection())).thenReturn(List.of());
+
+        assertThat(service.getDrafts(-1, 0).get(0).content()).hasSize(100);
     }
 }
