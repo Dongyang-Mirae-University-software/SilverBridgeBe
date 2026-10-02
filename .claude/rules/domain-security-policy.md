@@ -285,7 +285,11 @@
   - **상태를 모르면(사용자 행 없음) 막지 않는다** - "정지"가 아니라 "알 수 없음"이다.
   - **수용한 위험**: 보호자가 한 명뿐인데 정지 상태면 그 피보호자의 SOS가 아무에게도 안 간다. `[NOTIFY-BLOCKED]` WARN이 유일한 흔적이다.
   - **WebSocket도 같은 기준이다 (2026-10-02, ANOM-G10·ADMIN-G28)**: `WebSocketEventPublisher.sendToUser`가 발송 직전에 수신자 상태를 PK로 조회해 ACTIVE가 아니면 보내지 않는다(`[WS-BLOCKED]` INFO, userId만). 사용자 행이 없거나 조회가 실패하면 상태를 모르는 것이라 막지 않는다. 정지 즉시성이 목적이므로 **상태 캐시를 두지 말 것**. 상태 조회는 `global`의 `WebSocketRecipientStatusPort`를 user 도메인(`UserWebSocketRecipientStatusAdapter`)이 구현한다(`global`→`domain` import 금지). 이 확인을 지우면 정지 전에 열린 소켓으로 SOS·화재가 계속 흘러간다.
-  - **수용한 한계 - 열린 WebSocket 세션 (2026-09-10 점검 M-5, 2026-10-02 정정)**: 무효화 키는 `JwtHandshakeInterceptor`가 핸드셰이크 때만 검사하므로 정지 시점에 이미 열려 있던 STOMP 세션은 서버가 끊지 못한다. **이벤트 발송은 2026-10-02부터 막힌다.** 남은 한계는 세션 자체를 끊지 못하는 것뿐이며, 서버 측 강제 종료는 핸드셰이크가 Principal을 세우지 않아(`SimpUserRegistry`로 세션을 못 찾음) 핸드셰이크에 Principal을 붙이는 작업이 선행되어야 한다.
+  - **열린 WebSocket 세션은 토큰 무효화 직후 서버가 닫는다 - 해소 (2026-10-02 P15, 2026-09-10 점검 M-5의 수용한 한계를 대체)**: 정지·비밀번호 변경/재설정·역할 변경·탈퇴 시 `UserAccountEventListener`가 토큰 무효화 직후 `WebSocketSessionCloser.closeAll(userId)`로 그 사용자의 열린 세션을 닫는다(close `1008 POLICY_VIOLATION`, reason은 고정 `AUTH_INVALIDATED` - 사유 상세·개인정보 금지). 세션 목록은 Principal이 아니라 자체 `WebSocketSessionRegistry`(핸드셰이크 attributes의 userId 기준, `UserSessionTrackingHandlerDecorator`가 등록·제거)다 - Principal을 세우면 구독 인가·`convertAndSendToUser` 경로가 바뀔 수 있어 택하지 않았다.
+    - ⚠️ **단일 인스턴스 메모리 목록**이라 API 서버를 여러 대로 늘리면 다른 인스턴스에 붙은 세션은 닫히지 않는다 - 그때 다시 설계한다.
+    - **순서(무효화 -> 닫기)를 뒤집지 말 것**: 닫힌 클라이언트가 옛 토큰으로 즉시 재연결하면 핸드셰이크를 통과한다.
+    - 위 WS 발송 차단(`[WS-BLOCKED]`)과는 **별개의 이중 방어**다(발송 차단은 상태 조회, 닫기는 이벤트 시점 1회). 정지 **해제는 닫지 않는다**.
+    - FE는 `1008`/`AUTH_INVALIDATED`를 받으면 재연결하지 말고 로그아웃하거나 토큰 재발급 후 재연결한다.
   - **"유일한 보호자 경고"는 2026-09-09엔 만들지 않기로 했으나, 사용자가 2026-10-02에 추천안으로 변경해 대시보드 지표로 구현했다 (ADMIN-G27/CONN-G08)**: `safetyEvents.wardsWithoutReachableGuardian` = ACTIVE 연결 보호자가 없거나, 있어도 전원이 이용 중(ACTIVE)이 아닌 피보호자 수. 기존 `wardsWithoutGuardian`은 그대로 둔다(하위호환). **개수만 내리고 대상·정지 사유는 싣지 않는다. 피보호자 화면에는 표시하지 않는다**(정지 사유 비노출). 정지 결정 자체를 막거나 관리자 화면에 경고 팝업을 만들지는 않는다.
     - 옛 판단(2026-09-09): 정지 대상을 보안 이상·법적 문제 계정으로 한정해 경고가 불필요하다고 봤다. 정지를 실제로 쓰며 사각지대가 지표에 안 잡히는 점이 문제로 확인되어 뒤집혔다 - 위 지표를 지우고 "만들지 않기로 했다"로 되돌리지 말 것.
     - ⚠️ **정지가 만드는 사각지대**: 강제 탈퇴·역할 변경은 연결이 사라져 `wardsWithoutGuardian`에 잡히지만 정지는 연결이 남아 거기엔 안 잡힌다. 정지까지 포함한 지표는 `wardsWithoutReachableGuardian`이다.
@@ -314,11 +318,13 @@
 - **우아한 종료** (B-3): `server.shutdown=graceful` + executor 종료 대기 20초. 배포마다 컨테이너가 교체되므로 이것이 없으면 그 순간 큐에 있던 SOS 알림이 사라진다.
 - **스케줄러 풀 3스레드** (B-1): 기본 1스레드에 스케줄러와 AI WS 재접속 예약이 함께 줄을 선다. 복약 Planner가 느려지면 AI 재접속이 밀려 그 사이 화재 신호를 놓친다. 스케줄러를 추가하면 이 값을 다시 본다.
   - **재검토 (2026-09-22, 알림 이력 점검 L-2)**: 6종이 됐다 - 주기형 3종(복약 1분·판정 재촉 5분·탈퇴 스윕 10분) + 일일 정리 3종(토큰 03:00·FCM 토큰 04:00·알림 이력 04:30). 일일 정리는 시각을 비껴 두어 주기형과만 겹칠 수 있고, 3스레드로 감당된다고 보고 **3을 유지**했다. 일일 작업을 같은 시각에 몰아 넣지 말 것.
-- **외부 연동 타임아웃**: 카카오(기존)·SMTP(C-1, 각 10초)·파일서버(C-2, connect 3초·read 10초). 새 HTTP 클라이언트를 추가할 때 타임아웃 없이 두지 말 것 - 요청 스레드를 붙든다.
-  - **FCM에도 시간 제한을 걸었다 (2026-09-30 전체 점검 M-2)**: `FcmConfig`에 연결 3초·응답 10초. Solapi SDK는 내부에서 이미 제한을 건다. FCM이 느려지면 `notificationExecutor`가 묶여 뒤따르는 SOS·화재 알림이 밀린다.
+- **외부 연동 타임아웃**: 카카오(기존)·SMTP(C-1, 각 10초)·파일서버(C-2, connect 3초·read 10초)·Solapi(P16, 호출 10초 - 아래). 새 HTTP 클라이언트를 추가할 때 타임아웃 없이 두지 말 것 - 요청 스레드를 붙든다.
+  - **FCM에도 시간 제한을 걸었다 (2026-09-30 전체 점검 M-2)**: `FcmConfig`에 연결 3초·응답 10초. Solapi는 SDK 제한이 50초 고정이라 별도로 감쌌다(아래 P16). FCM이 느려지면 `notificationExecutor`가 묶여 뒤따르는 SOS·화재 알림이 밀린다.
 - **긴급 알림 전용 executor (2026-10-02 QA SOS-G13·XCUT-G11)**: SOS·이상감지 발생 알림(`SosNotificationListener`·`AnomalyNotificationListener`)은 `urgentNotificationExecutor`(core 4 / max 8 / queue 200, 스레드명 `notify-urgent-`)를 쓰고, 연결·문의·복약 체크·카카오 가입 접속로그는 `notificationExecutor`에 남는다. 포화·종료 정책은 일반 풀과 같다(폐기 + `[NOTIFY-REJECTED]` ERROR, CallerRuns 금지, 종료 대기 20초). **긴급 리스너를 일반 풀로 되돌리거나 일반 알림을 긴급 풀에 태우지 말 것**(`NotificationExecutorAssignmentTest`가 고정). 새 `@Async` 리스너는 executor 이름을 명시한다.
-  - **수용한 한계 - Solapi 타임아웃 50초**: SDK 1.0.3이 연결·읽기·쓰기 50초 고정(설정 불가)이라, SMS 폴백이 느리면 긴급 풀 스레드 하나가 최대 50초 묶인다(core 4가 흡수). 후속 후보: `SmsSender`/`AlimtalkSender` 호출 시간 제한.
+  - **Solapi 호출 시간 제한 (2026-10-02 P16, 위 50초 한계를 해소)**: SDK 1.0.3은 연결·읽기·쓰기 50초 고정(설정 불가)이라 `SolapiCallExecutor`(전용 데몬 풀 10 + 큐 20, 포화 시 즉시 실패, CallerRuns 금지)에서 호출하고 `solapi.call-timeout-seconds`(기본 10초, `SOLAPI_CALL_TIMEOUT_SECONDS`)만 기다린다. 초과·포화는 기존 통신 오류와 같게 처리된다: 알림 이력 `PROVIDER_ERROR`, 인증번호는 `SMS_SEND_FAILED` + 발송 한도 환불. **수용한 한계**: SDK가 인터럽트를 무시하면 풀 스레드는 50초까지 남지만 긴급 알림 스레드는 풀려난다 / 늦게 접수된 건도 실패로 기록될 수 있다. **SDK 호출을 호출 스레드로 되돌리거나 CallerRuns로 바꾸지 말 것.**
+  - **후속 점검 항목(코드 미수정)**: `AlimtalkSender`·`SmsSender`의 기존 catch 블록이 로그에 `e.getMessage()`·`getFailedMessageList()`를 찍는다 - 알림 이력 불변 규칙 ②(예외 원문 금지)와 어긋난다.
 - **DB·Redis 포트는 로컬 전용이다 (2026-09-30 전체 점검 C-1)**: `docker-compose.dev.yml`의 db·redis는 `127.0.0.1:`에만 묶는다. 전 인터페이스(`"6514:6379"`)로 되돌리지 말 것 - gosky는 호스트 방화벽이 없어 그대로 인터넷에 노출되고, Redis는 비밀번호가 없는 채로 비밀번호 재설정 코드·본인확인 통과 표시·토큰 무효화 키를 담는다(읽히면 임의 계정 탈취). 2026-09-30까지 실제로 열려 있었고 스캐너 접근 흔적이 있었다(파괴 흔적은 없음, 읽기 여부는 확인 불가). 외부에서 DB를 볼 때는 SSH 터널. CD는 api만 재기동하므로 compose의 db·redis 설정을 바꾸면 두 서버에서 `up -d`를 직접 돌려야 반영된다.
+- **Redis 퇴출 정책 `noeviction` (2026-10-02 AUTH-G30, P10)**: `docker-compose.dev.yml`의 Redis는 `maxmemory 256mb`, `maxmemory-policy noeviction`이다. 로그인 잠금·로그아웃 블랙리스트·토큰 무효화·인증코드 키가 메모리 압박으로 임의 삭제되면 잠금 해제·로그아웃 토큰 부활이 생긴다. 모든 쓰기에 TTL이 있음을 확인했다(키 수는 활성 사용자·요청량에 비례). 대신 가득 차면 쓰기가 OOM 오류가 되므로 `INFO memory`·`evicted_keys`·`DBSIZE`를 점검하고 사용량이 70~80%를 넘으면 원인 키를 확인한다. **`allkeys-lru`로 되돌리지 말 것.** CD의 `up -d api`는 compose 변경이 있으면 redis도 재생성한다(`appendonly yes`라 키는 대부분 유지, 최대 약 1초분 쓰기 유실 가능). 상세 `docs/(2026-10-02) infra-redis-eviction-policy.md`.
 - **감사 로그 detail은 DB에만** (E-2): `AdminAuditLogService`의 SLF4J 출력에는 adminId·action·targetId까지만 적는다. detail에는 이름·이메일이 들어가고 컨테이너 stdout은 로그 수집 경로다.
 - 상세: `docs/(2026-09-10) feature-admin-force-connection.md`.
 
@@ -400,7 +406,7 @@
 ### 남은 보류 (의도적으로 만들지 않았다)
 
 - **CONN-G02**: 강제 연결 알림의 FCM 승격 - **현행 유지로 확정**(`CONNECTION_FORCED`는 설정 기반 발송). 강제 채널로 올리지 말 것.
-- **XCUT-G31**: refresh 토큰 HttpOnly 쿠키 전환 - **별도 설계가 필요**해 보류.
-- **세션 강제 종료**: 정지 시 이미 열린 WS 세션 자체를 끊는 것 - 핸드셰이크에 Principal을 붙이는 작업이 선행되어야 한다(이벤트 발송은 2026-10-02부터 차단됨).
+- **XCUT-G31**: refresh 토큰 HttpOnly 쿠키 전환 - 설계안만 작성(`docs/(2026-10-02) design-refresh-token-httponly-cookie.md`), 구현은 10/22 이후 결정(A안 추천, 결정 질문 9개).
+- **세션 강제 종료**: **구현됨**(2026-10-02 P15, #287) - 위 "관리자 회원관리" 규칙 ⑦의 "열린 WebSocket 세션" 항목 참조. 단일 인스턴스 한정.
 - **CONN-G15 경합 잔여**: 수락 시점의 양쪽 역할 재검증(`INVALID_CONNECTION_ROLE`)은 넣었지만, 관리자 역할 변경과 연결 요청이 같은 순간 겹치는 경합 자체는 막지 않는다(사용자 행 잠금 없음). 보호자가 된 W 앞으로 PENDING 이 남을 수 있고, 보호자 G 가 취소하거나 역할을 다시 바꾸면 정리된다 - 수용. 실사용에서 보이면 사용자 행 잠금을 검토.
 - (ANOM-G08은 위 "카메라 등록·중지 카메라"로 종결.)
