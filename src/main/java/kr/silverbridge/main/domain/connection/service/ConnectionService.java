@@ -39,6 +39,7 @@ public class ConnectionService {
     private final ConnectionRepository connectionRepository;
     private final UserRepository userRepository;
     private final ApplicationEventPublisher eventPublisher;
+    private final ConnectionRequestLimiter requestLimiter;
 
     // ─── 보호자 API ──────────────────────────────────────────────
 
@@ -90,6 +91,9 @@ public class ConnectionService {
     public void requestConnectionAsGuardian(String guardianId, ConnectionRequestDto request) {
         String wardId = request.getTargetId();
         validateConnectionRequest(guardianId, wardId, Role.GUARDIAN, Role.WARD);
+        // 같은 쌍에 요청·취소를 반복해 피보호자에게 알림을 계속 보내는 것을 막는다(CONN-G04). 중복(PENDING·ACTIVE)
+        // 검사 뒤에 둬서 409로 끝나는 요청은 세지 않는다. 거절(429)은 요청을 만들지 않으므로 알림·WS도 없다.
+        requestLimiter.checkAllowed(guardianId, wardId);
 
         // 제로폭 문자·NBSP·전각공백을 걷어낸 값으로 저장한다 - DTO의 @VisibleText와 같은 기준(CONN-G14)
         String relation = TextSanitizer.sanitize(request.getRelation());
@@ -112,6 +116,8 @@ public class ConnectionService {
             }
             throw e;
         }
+        // 실제로 만들어진 요청만 센다(생성 성공 후 증가 - 동시 요청 경합 허용 범위는 ConnectionRequestLimiter 참고)
+        requestLimiter.recordRequest(guardianId, wardId);
 
         User guardian = requireUser(guardianId);
         eventPublisher.publishEvent(new ConnectionRequestedEvent(
@@ -217,6 +223,8 @@ public class ConnectionService {
             throw new CustomException(ErrorCode.CONNECTION_TARGET_NOT_ACTIVE);
         }
         connection.activate();
+        // 피보호자가 받아들인 관계라 이전 요청 횟수를 지운다 - 나중에 끊긴 뒤 재연결 요청이 막히지 않게(CONN-G04)
+        requestLimiter.reset(connection.getGuardianId(), wardId);
 
         eventPublisher.publishEvent(new ConnectionAcceptedEvent(
                 connectionId, connection.getGuardianId(), wardId
