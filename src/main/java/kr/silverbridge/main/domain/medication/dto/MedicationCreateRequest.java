@@ -7,6 +7,8 @@ import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
 import kr.silverbridge.main.domain.medication.entity.MedicationTimeSlot;
+import kr.silverbridge.main.global.validation.NoControlChars;
+import kr.silverbridge.main.global.validation.VisibleText;
 
 import java.time.LocalTime;
 
@@ -18,7 +20,10 @@ import java.time.LocalTime;
 @Schema(description = "약 추가 요청")
 public record MedicationCreateRequest(
 
+        // 제로폭 공백만 넣은 이름은 @NotBlank를 통과하지만 화면·알림에 빈 이름으로 보인다(MED-G16).
         @NotBlank(message = "약 이름은 필수입니다.")
+        @VisibleText(message = "약 이름을 입력해주세요.")
+        @NoControlChars
         @Size(max = 100, message = "약 이름은 100자를 초과할 수 없습니다.")
         @Schema(description = "약 이름", example = "혈압약 (암로디핀 5mg)")
         String name,
@@ -36,8 +41,10 @@ public record MedicationCreateRequest(
         @Schema(description = "복용량(정)", example = "1", defaultValue = "1")
         Integer doseAmount,
 
+        // 줄바꿈은 막지 않는다(입력창에 따라 섞여 올 수 있다) - 저장 전 한 줄로 정리된다.
+        @NoControlChars(allowLineBreaks = true)
         @Size(max = 100, message = "메모는 100자를 초과할 수 없습니다.")
-        @Schema(description = "복용 안내 메모 (선택)", example = "식사와 함께")
+        @Schema(description = "복용 안내 메모 (선택, 공백만 보내면 메모 없음)", example = "식사와 함께")
         String memo
 ) {
     /** 복용량 미지정 시 기본값. 화면의 복용량 스테퍼 초기값과 같다. */

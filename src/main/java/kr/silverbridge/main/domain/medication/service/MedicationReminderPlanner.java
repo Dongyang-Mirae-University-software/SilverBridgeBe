@@ -1,5 +1,7 @@
 package kr.silverbridge.main.domain.medication.service;
 
+import kr.silverbridge.main.domain.connection.entity.Connection;
+import kr.silverbridge.main.domain.connection.repository.ConnectionRepository;
 import kr.silverbridge.main.domain.medication.config.MedicationProperties;
 import kr.silverbridge.main.domain.medication.entity.Medication;
 import kr.silverbridge.main.domain.medication.entity.MedicationIntake;
@@ -7,6 +9,7 @@ import kr.silverbridge.main.domain.medication.entity.MedicationReminderLog;
 import kr.silverbridge.main.domain.medication.repository.MedicationIntakeRepository;
 import kr.silverbridge.main.domain.medication.repository.MedicationReminderLogRepository;
 import kr.silverbridge.main.domain.medication.repository.MedicationRepository;
+import kr.silverbridge.main.global.enums.ConnectionStatus;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -16,6 +19,7 @@ import java.time.LocalDate;
 import java.time.LocalTime;
 import java.time.OffsetDateTime;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -33,6 +37,12 @@ import java.util.stream.Collectors;
  * <p><b>UNIQUE는 최종 방어선</b>: {@code (medication_id, dose_date, attempt)} 제약이 있어 사전 조회가
  * 놓친 중복은 저장 시점에 막힌다. 그 경우 이 주기 전체가 롤백되지만, 중복을 만든 쪽이 이미 커밋했으므로
  * 다음 주기의 사전 조회에서 걸러져 스스로 회복된다.</p>
+ *
+ * <p><b>ACTIVE 보호자가 한 명도 없는 피보호자의 약은 보내지 않는다</b>(MED-G01). 약 등록·삭제·알림 설정은
+ * 연결된 보호자만 할 수 있어(복약 불변 규칙 ①), 마지막 보호자와 연결이 끊기면 아무도 끌 수 없는 알림이 매일
+ * 나갔다. 약을 지우지 않고 <b>대상 선정에서만</b> 거른다 — 복용 이력을 보존하고, 다른 보호자와 다시 연결되면
+ * 그 보호자가 약을 관리하게 되므로 알림도 자연스럽게 재개된다(역할 변경 시 약을 중지하는
+ * {@link MedicationRoleChangeService}와 달리 일반 연결 해제는 약을 남긴다).</p>
  */
 @Slf4j
 @Service
@@ -43,12 +53,14 @@ public class MedicationReminderPlanner {
     private final MedicationIntakeRepository intakeRepository;
     private final MedicationReminderLogRepository reminderLogRepository;
     private final MedicationSettingService settingService;
+    private final ConnectionRepository connectionRepository;
     private final MedicationProperties properties;
 
     /**
      * 복용 시각이 도래했는데 아직 체크되지 않은 약의 <b>최초 알림</b>을 선점한다.
      *
-     * <p>대상 조건 — 삭제되지 않음 && 복용 시각이 유예 창 안 && 오늘 미체크 && 알림 설정 ON && 미발송.</p>
+     * <p>대상 조건 — 삭제되지 않음 && 복용 시각이 유예 창 안 && 오늘 미체크 && 알림 설정 ON && 미발송
+     * && ACTIVE 보호자가 있음.</p>
      */
     @Transactional
     public List<MedicationReminderTarget> claimFirstReminders() {
@@ -73,14 +85,14 @@ public class MedicationReminderPlanner {
                 .filter(medication -> preference(preferences, medication.getWardId()).alarmEnabled())
                 .toList();
 
-        return claim(targets, today, now, MedicationReminderLog.ATTEMPT_FIRST);
+        return claim(withActiveGuardian(targets), today, now, MedicationReminderLog.ATTEMPT_FIRST);
     }
 
     /**
      * 최초 알림 후에도 체크되지 않은 약의 <b>재알림</b>을 선점한다.
      *
      * <p>대상 조건 — 최초 발송이 {@code [now-마감, now-지연]} 구간 && 재알림 미발송 && 여전히 미체크
-     * && 약이 살아 있음 && 알림·재알림 설정 모두 ON.</p>
+     * && 약이 살아 있음 && 알림·재알림 설정 모두 ON && ACTIVE 보호자가 있음(최초 발송 뒤 연결이 끊겼으면 재알림도 없다).</p>
      */
     @Transactional
     public List<MedicationReminderTarget> claimRetryReminders() {
@@ -115,7 +127,32 @@ public class MedicationReminderPlanner {
                 })
                 .toList();
 
-        return claim(targets, today, now, MedicationReminderLog.ATTEMPT_RETRY);
+        return claim(withActiveGuardian(targets), today, now, MedicationReminderLog.ATTEMPT_RETRY);
+    }
+
+    /**
+     * ACTIVE 보호자가 한 명이라도 있는 피보호자의 약만 남긴다(MED-G01).
+     *
+     * <p>피보호자별로 {@code getActiveGuardianIds}를 부르면 매 분 N+1이 되므로 연결을 한 번에 조회한다.
+     * 참여자 조회라 그 피보호자가 보호자 쪽인 연결도 섞일 수 있어 {@code wardId}로 다시 고른다.
+     * 다른 필터를 모두 거친 뒤 부르므로 대상이 없으면 조회하지 않는다. 인가가 아니라 발송 대상 선정이다.</p>
+     */
+    private List<Medication> withActiveGuardian(List<Medication> targets) {
+        if (targets.isEmpty()) {
+            return targets;
+        }
+        Set<String> wardIds = targets.stream().map(Medication::getWardId).collect(Collectors.toSet());
+        Set<String> guarded = wardIdsWithActiveGuardian(wardIds);
+        return targets.stream()
+                .filter(medication -> guarded.contains(medication.getWardId()))
+                .toList();
+    }
+
+    private Set<String> wardIdsWithActiveGuardian(Collection<String> wardIds) {
+        return connectionRepository.findByParticipantsAndStatusIn(wardIds, List.of(ConnectionStatus.ACTIVE)).stream()
+                .map(Connection::getWardId)
+                .filter(wardIds::contains)
+                .collect(Collectors.toSet());
     }
 
     /** 발송 기록을 남기고(선점) 발송 단계로 넘길 값을 만든다. */

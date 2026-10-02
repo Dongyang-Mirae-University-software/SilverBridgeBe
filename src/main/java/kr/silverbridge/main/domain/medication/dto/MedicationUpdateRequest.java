@@ -5,6 +5,8 @@ import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.Size;
 import kr.silverbridge.main.domain.medication.entity.MedicationTimeSlot;
+import kr.silverbridge.main.global.validation.NoControlChars;
+import kr.silverbridge.main.global.validation.VisibleText;
 
 import java.time.LocalTime;
 
@@ -22,6 +24,9 @@ import java.time.LocalTime;
 @Schema(description = "약 수정 요청 (부분 수정 — null 필드는 미변경)")
 public record MedicationUpdateRequest(
 
+        // null은 미변경이라 통과하고, 보내는 경우엔 보이는 글자가 있어야 한다(MED-G16 - 제로폭 공백만 넣은 이름 차단).
+        @VisibleText(message = "약 이름을 입력해주세요.")
+        @NoControlChars
         @Size(min = 1, max = 100, message = "약 이름은 1~100자여야 합니다.")
         @Schema(description = "약 이름", example = "혈압약 (암로디핀 5mg)", nullable = true)
         String name,
@@ -39,6 +44,8 @@ public record MedicationUpdateRequest(
         @Schema(description = "복용량(정)", example = "2", nullable = true)
         Integer doseAmount,
 
+        // 줄바꿈은 막지 않는다(입력창에 따라 섞여 올 수 있다) - 저장 전 한 줄로 정리된다.
+        @NoControlChars(allowLineBreaks = true)
         @Size(max = 100, message = "메모는 100자를 초과할 수 없습니다.")
         @Schema(description = "복용 안내 메모 (빈 문자열이면 메모 삭제)", example = "식사와 함께", nullable = true)
         String memo

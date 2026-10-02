@@ -17,6 +17,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.time.LocalTime;
 import java.time.OffsetDateTime;
 import java.util.ArrayList;
@@ -40,6 +41,10 @@ import java.util.stream.Collectors;
  * 21:00을 고른 보호자는 분모가 다를 수 있어, 집계를 피보호자 단위로 미리 확정하지 못한다. 그래서
  * "지금까지 지난 약"을 한 번 상위집합으로 읽고 보호자별 상한으로 걸러 센다 - 발송 창 안에 있는
  * 보호자의 시각은 언제나 현재 시각 이하라 상위집합이 각자의 집계 대상을 모두 포함한다.</p>
+ *
+ * <p><b>오늘 등록된 약은 등록 시각이 복용 시각보다 늦으면 그날 집계에서 뺀다</b>(MED-G14). 20:50에 "아침 08:00"
+ * 약을 등록하면 피보호자는 오늘 그 약을 먹을 기회가 없었는데도 21:00 요약에 미체크로 잡혔다. 분모·미체크 모두에서
+ * 빠지며 다음 날부터는 그대로 센다. 집계 상한(= 발송 시각, 불변 규칙 ⑧)과는 별개 조건이다.</p>
  *
  * <p><b>수신자</b>는 그 피보호자의 ACTIVE 보호자 중 수신 설정이 켜진 사람이다. 피보호자 본인에게는
  * 보내지 않는다 - 본인은 이미 복용 시각 알림과 재알림(2차)을 받았다.</p>
@@ -77,7 +82,9 @@ public class MedicationMissedAlertPlanner {
         LocalDate today = MedicationClock.today();
 
         // 상위집합 - 지금까지 복용 시각이 지난 약 전부. 보호자별 상한으로 다시 거른다.
-        List<Medication> due = medicationRepository.findByDeletedAtIsNullAndDoseTimeLessThanEqual(nowTime);
+        List<Medication> due = medicationRepository.findByDeletedAtIsNullAndDoseTimeLessThanEqual(nowTime).stream()
+                .filter(medication -> !registeredAfterDoseToday(medication, today))
+                .toList();
         if (due.isEmpty()) {
             return List.of();
         }
@@ -107,6 +114,7 @@ public class MedicationMissedAlertPlanner {
         for (Map.Entry<String, List<Medication>> entry : byWard.entrySet()) {
             String wardId = entry.getKey();
             List<String> guardianIds = connectionService.getActiveGuardianIds(wardId);
+            // ACTIVE 보호자가 없는 피보호자는 받을 사람이 없어 자연히 빠진다(MED-G01 - 복용 알림 쪽은 Planner가 거른다).
             if (guardianIds.isEmpty()) {
                 continue;
             }
@@ -153,6 +161,21 @@ public class MedicationMissedAlertPlanner {
                         wardNames.getOrDefault(claim.wardId(), FALLBACK_WARD_NAME),
                         today, claim.alertTime(), claim.counts().missed(), claim.counts().total()))
                 .toList();
+    }
+
+    /**
+     * 오늘(KST) 등록됐고 등록 시각이 복용 시각보다 늦은 약인지 — 그날은 먹을 기회가 없었으므로 집계에서 뺀다(MED-G14).
+     *
+     * <p>등록 시각이 복용 시각과 같으면(정각 등록) 뺄 이유가 없어 센다. 등록 시각을 모르면(감사 필드 미기록)
+     * 예전처럼 센다. 어제 이전 등록분은 시각과 무관하게 센다.</p>
+     */
+    static boolean registeredAfterDoseToday(Medication medication, LocalDate today) {
+        if (medication.getCreatedAt() == null) {
+            return false;
+        }
+        LocalDateTime registeredAt = MedicationClock.toKst(medication.getCreatedAt());
+        return registeredAt.toLocalDate().equals(today)
+                && registeredAt.toLocalTime().isAfter(medication.getDoseTime());
     }
 
     /** 상한까지 예정된 약의 (전체, 미체크) 수. */

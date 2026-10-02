@@ -190,6 +190,40 @@ class GuardianMedicationServiceTest {
     }
 
     @Test
+    @DisplayName("[MED-G11] 약 등록 — 이름 앞뒤 공백을 지우고, 공백뿐인 메모는 null로 저장한다(수정과 같은 규칙)")
+    void create_이름메모_정리() {
+        when(connectionService.isActiveConnection(GUARDIAN_ID, WARD_ID)).thenReturn(true);
+        when(medicationRepository.save(any(Medication.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        MedicationItem created = guardianMedicationService.create(GUARDIAN_ID, WARD_ID,
+                new MedicationCreateRequest(" 혈압약 ", MedicationTimeSlot.MORNING, null, 1, "   "));
+
+        ArgumentCaptor<Medication> captor = ArgumentCaptor.forClass(Medication.class);
+        verify(medicationRepository).save(captor.capture());
+        assertThat(captor.getValue().getName()).isEqualTo("혈압약");
+        assertThat(captor.getValue().getMemo()).isNull();
+        assertThat(created.name()).isEqualTo("혈압약");
+    }
+
+    @Test
+    @DisplayName("[MED-G11] 약 등록 — 빈 문자열 메모도 null, 메모 앞뒤 공백·제로폭 문자는 지운다")
+    void create_메모_정리() {
+        when(connectionService.isActiveConnection(GUARDIAN_ID, WARD_ID)).thenReturn(true);
+        when(medicationRepository.save(any(Medication.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        guardianMedicationService.create(GUARDIAN_ID, WARD_ID,
+                new MedicationCreateRequest("혈압약", MedicationTimeSlot.MORNING, null, 1, ""));
+        guardianMedicationService.create(GUARDIAN_ID, WARD_ID,
+                new MedicationCreateRequest("\u200B당뇨약", MedicationTimeSlot.MORNING, null, 1, " 식후\u200B "));
+
+        ArgumentCaptor<Medication> captor = ArgumentCaptor.forClass(Medication.class);
+        verify(medicationRepository, times(2)).save(captor.capture());
+        assertThat(captor.getAllValues().get(0).getMemo()).isNull();
+        assertThat(captor.getAllValues().get(1).getName()).isEqualTo("당뇨약");
+        assertThat(captor.getAllValues().get(1).getMemo()).isEqualTo("식후");
+    }
+
+    @Test
     @DisplayName("[IDOR] 연결되지 않은 피보호자에게 약 등록 시도 → 403, 저장하지 않는다")
     void create_연결없음_차단() {
         when(connectionService.isActiveConnection(GUARDIAN_ID, OTHER_WARD_ID)).thenReturn(false);

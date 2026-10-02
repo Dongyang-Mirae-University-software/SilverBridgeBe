@@ -1,5 +1,7 @@
 package kr.silverbridge.main.domain.medication.service;
 
+import kr.silverbridge.main.domain.connection.entity.Connection;
+import kr.silverbridge.main.domain.connection.repository.ConnectionRepository;
 import kr.silverbridge.main.domain.medication.config.MedicationProperties;
 import kr.silverbridge.main.domain.medication.entity.Medication;
 import kr.silverbridge.main.domain.medication.entity.MedicationIntake;
@@ -8,6 +10,7 @@ import kr.silverbridge.main.domain.medication.entity.MedicationTimeSlot;
 import kr.silverbridge.main.domain.medication.repository.MedicationIntakeRepository;
 import kr.silverbridge.main.domain.medication.repository.MedicationReminderLogRepository;
 import kr.silverbridge.main.domain.medication.repository.MedicationRepository;
+import kr.silverbridge.main.global.enums.ConnectionStatus;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -33,7 +36,7 @@ import static org.mockito.Mockito.*;
  * MedicationReminderPlanner 단위 테스트 — <b>누구에게 보낼지 고르고, 두 번 보내지 않는지</b>가 핵심이다.
  *
  * <p>검증 축 — ① 미복용·설정 ON인 약만 대상 ② 이미 보낸 회차는 다시 보내지 않음(발송 기록 선점)
- * ③ 유예 창 경계 ④ 재알림 조건(지연·마감·재알림 설정·중간 체크).</p>
+ * ③ 유예 창 경계 ④ 재알림 조건(지연·마감·재알림 설정·중간 체크) ⑤ ACTIVE 보호자가 없는 피보호자 제외(MED-G01).</p>
  */
 @ExtendWith(MockitoExtension.class)
 @MockitoSettings(strictness = Strictness.LENIENT) // 분기별로 쓰이지 않는 스텁이 생긴다(조회 순서에 따라 조기 반환)
@@ -43,17 +46,23 @@ class MedicationReminderPlannerTest {
     @Mock private MedicationIntakeRepository intakeRepository;
     @Mock private MedicationReminderLogRepository reminderLogRepository;
     @Mock private MedicationSettingService settingService;
+    @Mock private ConnectionRepository connectionRepository;
 
     private MedicationProperties properties;
     private MedicationReminderPlanner planner;
 
     private static final String WARD_ID = "WD0001";
+    private static final String UNGUARDED_WARD_ID = "WD0002";
 
     @BeforeEach
     void setUp() {
         properties = new MedicationProperties();
         planner = new MedicationReminderPlanner(
-                medicationRepository, intakeRepository, reminderLogRepository, settingService, properties);
+                medicationRepository, intakeRepository, reminderLogRepository, settingService,
+                connectionRepository, properties);
+        // 기본 시나리오: WARD_ID에는 ACTIVE 보호자가 있다
+        when(connectionRepository.findByParticipantsAndStatusIn(any(), any()))
+                .thenReturn(List.of(activeConnection("GD0001", WARD_ID)));
     }
 
     // ─── 최초 발송 ──────────────────────────────────────────────────
@@ -259,9 +268,93 @@ class MedicationReminderPlannerTest {
         verify(reminderLogRepository, never()).findRetryCandidates(any(), any(), any());
     }
 
+    // ─── ACTIVE 보호자 없음 (MED-G01) ─────────────────────────────────
+
+    @Test
+    @DisplayName("[MED-G01] ACTIVE 보호자가 한 명도 없는 피보호자의 약은 최초 알림 대상에서 빠진다 - 기록도 남기지 않는다")
+    void claimFirst_보호자없음_제외() {
+        when(medicationRepository.findByDeletedAtIsNullAndDoseTimeBetween(any(), any()))
+                .thenReturn(List.of(medication(1L, "혈압약", UNGUARDED_WARD_ID)));
+        when(intakeRepository.findByMedicationIdInAndDoseDate(any(), any())).thenReturn(List.of());
+        when(reminderLogRepository.findByMedicationIdInAndDoseDate(any(), any())).thenReturn(List.of());
+        when(settingService.findPreferences(any()))
+                .thenReturn(Map.of(UNGUARDED_WARD_ID, MedicationPreference.DEFAULT));
+        when(connectionRepository.findByParticipantsAndStatusIn(any(), any())).thenReturn(List.of());
+
+        assertThat(planner.claimFirstReminders()).isEmpty();
+        verify(reminderLogRepository, never()).saveAll(any());
+    }
+
+    @Test
+    @DisplayName("[MED-G01] 보호자 있는 피보호자만 남기고, 연결은 ACTIVE 상태로 한 번에 조회한다(피보호자별 N+1 없음)")
+    void claimFirst_보호자있는_피보호자만_일괄조회() {
+        when(medicationRepository.findByDeletedAtIsNullAndDoseTimeBetween(any(), any()))
+                .thenReturn(List.of(medication(1L, "혈압약", WARD_ID), medication(2L, "당뇨약", UNGUARDED_WARD_ID)));
+        when(intakeRepository.findByMedicationIdInAndDoseDate(any(), any())).thenReturn(List.of());
+        when(reminderLogRepository.findByMedicationIdInAndDoseDate(any(), any())).thenReturn(List.of());
+        when(settingService.findPreferences(any())).thenReturn(Map.of(
+                WARD_ID, MedicationPreference.DEFAULT, UNGUARDED_WARD_ID, MedicationPreference.DEFAULT));
+        // 참여자 조회라 "그 ID가 보호자 쪽인 연결"이 섞여도 피보호자로 오인하지 않는다
+        when(connectionRepository.findByParticipantsAndStatusIn(any(), any())).thenReturn(List.of(
+                activeConnection("GD0001", WARD_ID),
+                activeConnection(UNGUARDED_WARD_ID, "WD9999")));
+
+        assertThat(planner.claimFirstReminders())
+                .extracting(MedicationReminderTarget::medicationId)
+                .containsExactly(1L);
+
+        ArgumentCaptor<java.util.Collection<String>> wardIds = ArgumentCaptor.forClass(java.util.Collection.class);
+        verify(connectionRepository, times(1))
+                .findByParticipantsAndStatusIn(wardIds.capture(), eq(List.of(ConnectionStatus.ACTIVE)));
+        assertThat(wardIds.getValue()).containsExactlyInAnyOrder(WARD_ID, UNGUARDED_WARD_ID);
+    }
+
+    @Test
+    @DisplayName("[MED-G01] 다른 조건에서 대상이 모두 빠지면 연결 조회도 하지 않는다")
+    void claimFirst_대상없으면_연결조회없음() {
+        when(medicationRepository.findByDeletedAtIsNullAndDoseTimeBetween(any(), any()))
+                .thenReturn(List.of(medication(1L, "혈압약")));
+        when(intakeRepository.findByMedicationIdInAndDoseDate(any(), any()))
+                .thenReturn(List.of(MedicationIntake.of(1L, MedicationClock.today(), OffsetDateTime.now())));
+        when(reminderLogRepository.findByMedicationIdInAndDoseDate(any(), any())).thenReturn(List.of());
+        when(settingService.findPreferences(any())).thenReturn(Map.of(WARD_ID, MedicationPreference.DEFAULT));
+
+        assertThat(planner.claimFirstReminders()).isEmpty();
+        verify(connectionRepository, never()).findByParticipantsAndStatusIn(any(), any());
+    }
+
+    @Test
+    @DisplayName("[MED-G01] 최초 알림 뒤 마지막 보호자와 연결이 끊겼으면 재알림도 보내지 않는다")
+    void claimRetry_보호자없음_제외() {
+        when(reminderLogRepository.findRetryCandidates(any(), any(), any()))
+                .thenReturn(List.of(MedicationReminderLog.of(1L, MedicationClock.today(),
+                        MedicationReminderLog.ATTEMPT_FIRST, MedicationClock.now().minusMinutes(20))));
+        when(intakeRepository.findByMedicationIdInAndDoseDate(any(), any())).thenReturn(List.of());
+        when(medicationRepository.findAllById(any())).thenReturn(List.of(medication(1L, "혈압약", UNGUARDED_WARD_ID)));
+        when(settingService.findPreferences(any()))
+                .thenReturn(Map.of(UNGUARDED_WARD_ID, MedicationPreference.DEFAULT));
+        when(connectionRepository.findByParticipantsAndStatusIn(any(), any())).thenReturn(List.of());
+
+        assertThat(planner.claimRetryReminders()).isEmpty();
+        verify(reminderLogRepository, never()).saveAll(any());
+    }
+
+    private static Connection activeConnection(String guardianId, String wardId) {
+        return Connection.builder()
+                .guardianId(guardianId)
+                .wardId(wardId)
+                .status(ConnectionStatus.ACTIVE)
+                .initiatedBy(guardianId)
+                .build();
+    }
+
     private static Medication medication(Long id, String name) {
+        return medication(id, name, WARD_ID);
+    }
+
+    private static Medication medication(Long id, String name, String wardId) {
         Medication medication = Medication.builder()
-                .wardId(WARD_ID)
+                .wardId(wardId)
                 .createdBy("GD0001")
                 .name(name)
                 .timeSlot(MedicationTimeSlot.MORNING)
