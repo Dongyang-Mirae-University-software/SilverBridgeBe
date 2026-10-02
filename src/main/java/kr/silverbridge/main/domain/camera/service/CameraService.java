@@ -56,10 +56,11 @@ public class CameraService {
      */
     @Transactional
     public CameraResponse register(String wardId, CameraRegisterRequest request) {
+        String label = sanitizeLabel(request.label()); // 수정 경로와 같은 기준 (ANOM-G12 후속)
         Optional<Camera> existing = findOwnedByDeviceId(wardId, request.deviceId());
         if (existing.isPresent()) {
             Camera camera = existing.get();
-            camera.rename(request.label());
+            camera.rename(label);
             publishRegistered(camera);
             return CameraResponse.of(camera, recommendedFps);
         }
@@ -67,7 +68,7 @@ public class CameraService {
         Camera camera = Camera.builder()
                 .wardId(wardId)
                 .registeredBy(wardId)
-                .label(request.label())
+                .label(label)
                 .sessionId(identifierFactory.newSessionId(wardId))
                 .deviceId(identifierFactory.newDeviceId())
                 .isActive(true)
