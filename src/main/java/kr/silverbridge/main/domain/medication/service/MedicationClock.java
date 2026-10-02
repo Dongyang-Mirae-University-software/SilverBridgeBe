@@ -1,6 +1,7 @@
 package kr.silverbridge.main.domain.medication.service;
 
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.time.OffsetDateTime;
 import java.time.ZoneId;
 
@@ -26,5 +27,10 @@ public final class MedicationClock {
     /** 기록용 현재 시각(KST 오프셋). */
     public static OffsetDateTime now() {
         return OffsetDateTime.now(KST);
+    }
+
+    /** 저장된 시각(오프셋 무관)을 KST 날짜·시각으로 바꾼다 — 등록 시각을 복용 시각과 같은 기준으로 비교할 때 쓴다. */
+    public static LocalDateTime toKst(OffsetDateTime dateTime) {
+        return dateTime.atZoneSameInstant(KST).toLocalDateTime();
     }
 }

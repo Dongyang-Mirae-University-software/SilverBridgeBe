@@ -16,6 +16,7 @@ import kr.silverbridge.main.domain.user.entity.User;
 import kr.silverbridge.main.domain.user.repository.UserRepository;
 import kr.silverbridge.main.global.exception.CustomException;
 import kr.silverbridge.main.global.exception.ErrorCode;
+import kr.silverbridge.main.global.validation.TextSanitizer;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -112,11 +113,13 @@ public class GuardianMedicationService {
         Medication medication = medicationRepository.save(Medication.builder()
                 .wardId(wardId)
                 .createdBy(guardianId)
-                .name(request.name())
+                // 수정과 같은 규칙으로 정리해 저장한다(MED-G11) - 이름은 앞뒤 공백·보이지 않는 문자 제거,
+                // 메모는 비면 null(빈 문자열·공백 메모가 "1정 · "처럼 보이지 않게).
+                .name(TextSanitizer.sanitize(request.name()))
                 .timeSlot(request.timeSlot())
                 .doseTime(request.resolveDoseTime())
                 .doseAmount(request.resolveDoseAmount())
-                .memo(request.memo())
+                .memo(normalizeMemo(request.memo()))
                 .build());
 
         log.info("복약 등록: medicationId={}, wardId={}, guardianId={}", medication.getId(), wardId, guardianId);
@@ -127,9 +130,10 @@ public class GuardianMedicationService {
     /**
      * 약 정보를 부분 수정한다. 전달하지 않은 항목({@code null})은 기존값을 유지한다.
      *
-     * <p><b>복용 시각이 실제로 바뀌면 그 약의 당일 발송 기록을 지운다</b> — 그래야 새 시각 기준으로 다시
-     * 판정되어 알림이 나간다(08:00을 20:00으로 고쳤는데 오늘 저녁에 안 울리는 문제 방지). 복용 체크는
-     * 건드리지 않으므로 이미 드신 약은 여전히 울리지 않는다.</p>
+     * <p><b>복용 시각이 실제로 바뀌고 새 시각이 아직 오지 않았으면 그 약의 당일 발송 기록을 지운다</b> — 그래야
+     * 새 시각 기준으로 다시 판정되어 알림이 나간다(08:00을 20:00으로 고쳤는데 오늘 저녁에 안 울리는 문제 방지).
+     * 새 시각이 이미 지났으면 지우지 않는다 — 08:00 알림을 받은 뒤 08:10에 08:05로 고치면 기록이 지워져 같은
+     * 회차가 다시 나갔다(MED-G12, 고칠 때마다 반복). 복용 체크는 건드리지 않으므로 이미 드신 약은 여전히 울리지 않는다.</p>
      *
      * @throws CustomException {@code MEDICATION_NOT_FOUND} 없거나 이미 삭제된 약 /
      *                         {@code MEDICATION_NOT_AUTHORIZED} ACTIVE 연결이 아닌 피보호자의 약
@@ -151,7 +155,7 @@ public class GuardianMedicationService {
                 resolveMemo(request, medication));
 
         LocalDate today = MedicationClock.today();
-        if (!doseTime.equals(previousDoseTime)) {
+        if (shouldResetTodayReminders(previousDoseTime, doseTime, MedicationClock.now().toLocalTime())) {
             reminderLogRepository.deleteByMedicationIdAndDoseDate(medicationId, today);
             log.info("복약 시각 변경으로 당일 발송 기록 초기화: medicationId={}, {} → {}",
                     medicationId, previousDoseTime, doseTime);
@@ -203,12 +207,30 @@ public class GuardianMedicationService {
         return MedicationSettingResponse.of(wardId, applied);
     }
 
-    /** 이름은 공백만 보낸 경우 기존값을 유지한다(빈 이름으로 덮어써 목록을 못 알아보게 만들지 않는다). */
+    /**
+     * 시각 변경 시 당일 발송 기록을 지울지. <b>시각이 바뀌었고 새 시각이 지금(KST)보다 뒤</b>일 때만 지운다(MED-G12).
+     *
+     * <p>새 시각이 지금이거나 이미 지났으면 지우지 않는다 — 지우면 유예 창 안의 과거 시각이 "오늘 아직 안 보낸"
+     * 약이 되어 이미 받은 알림이 다시 나간다(선점 후 발송 불변 규칙 ④의 "같은 회차 1회"가 깨진다). 대가로
+     * 지난 시각으로 옮긴 약은 오늘 다시 울리지 않는데, 이미 그날 알림을 한 번 받았으므로 의도된 동작이다.</p>
+     *
+     * <p>현재 시각을 인자로 받는 static이다 — 경계값을 리터럴로 검증할 수 있게
+     * ({@link MedicationReminderPlanner#graceWindowStart}와 같은 이유).</p>
+     */
+    static boolean shouldResetTodayReminders(LocalTime previousDoseTime, LocalTime newDoseTime, LocalTime now) {
+        return !newDoseTime.equals(previousDoseTime) && newDoseTime.isAfter(now);
+    }
+
+    /**
+     * 이름은 정리(앞뒤 공백·보이지 않는 문자 제거) 후 비면 기존값을 유지한다(빈 이름으로 덮어써 목록을 못
+     * 알아보게 만들지 않는다). 요청 단계의 {@code @VisibleText}가 먼저 막으므로 여기는 마지막 방어선이다.
+     */
     private static String resolveName(MedicationUpdateRequest request, Medication medication) {
-        if (request.name() == null || request.name().isBlank()) {
+        String name = TextSanitizer.sanitize(request.name());
+        if (!TextSanitizer.hasVisibleChar(name)) {
             return medication.getName();
         }
-        return request.name().trim();
+        return name;
     }
 
     /**
@@ -233,7 +255,13 @@ public class GuardianMedicationService {
         if (request.memo() == null) {
             return medication.getMemo();
         }
-        return request.memo().isBlank() ? null : request.memo().trim();
+        return normalizeMemo(request.memo());
+    }
+
+    /** 메모 정리 — 보이지 않는 문자·앞뒤 공백을 지우고, 남는 글자가 없으면 메모 없음({@code null})이다(등록·수정 공통). */
+    private static String normalizeMemo(String memo) {
+        String sanitized = TextSanitizer.sanitize(memo);
+        return TextSanitizer.hasVisibleChar(sanitized) ? sanitized : null;
     }
 
     /** 삭제되지 않은 약을 찾는다. 삭제된 약은 존재하지 않는 것으로 취급한다. */

@@ -23,6 +23,7 @@ import java.util.Optional;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.Mockito.*;
 
 /**
@@ -128,16 +129,46 @@ class GuardianMedicationSettingServiceTest {
     }
 
     @Test
-    @DisplayName("설정 행이 없으면 만들어서 변경한다")
+    @DisplayName("설정 행이 없으면 만들어서(충돌 무시 INSERT) 다시 읽은 뒤 변경한다")
     void 미설정_upsert() {
-        when(repository.findByGuardianIdAndWardId(GUARDIAN_ID, WARD_ID)).thenReturn(Optional.empty());
-        when(repository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
+        when(repository.findByGuardianIdAndWardId(GUARDIAN_ID, WARD_ID))
+                .thenReturn(Optional.empty(), Optional.of(GuardianMedicationSetting.of(GUARDIAN_ID, WARD_ID, true)));
+        when(repository.insertIfAbsent(GUARDIAN_ID, WARD_ID, true)).thenReturn(1);
 
         GuardianMissedAlertSetting result = service.update(GUARDIAN_ID, WARD_ID, false, null);
 
         assertThat(result.enabled()).isFalse();
         assertThat(result.alertTime()).isEqualTo(DEFAULT_TIME);
-        verify(repository).save(any());
+        verify(repository).insertIfAbsent(GUARDIAN_ID, WARD_ID, true);
+        // find 후 save는 동시 최초 저장에서 UNIQUE 위반(409)이 났다 - 쓰지 않는다(MED-G13)
+        verify(repository, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("[MED-G13] 동시 요청이 먼저 행을 만들었으면(INSERT 0건) 그 행을 받아 이 요청의 값으로 갱신한다 - 409 없음")
+    void 동시_최초저장_충돌시_재조회_갱신() {
+        GuardianMedicationSetting createdByOther = GuardianMedicationSetting.of(GUARDIAN_ID, WARD_ID, true);
+        createdByOther.updateMissedAlertTime(LocalTime.of(20, 0));
+        when(repository.findByGuardianIdAndWardId(GUARDIAN_ID, WARD_ID))
+                .thenReturn(Optional.empty(), Optional.of(createdByOther));
+        when(repository.insertIfAbsent(any(), any(), anyBoolean())).thenReturn(0);   // 이미 있음 - 조용히 넘어감
+
+        GuardianMissedAlertSetting result = service.update(GUARDIAN_ID, WARD_ID, false, null);
+
+        assertThat(result.enabled()).isFalse();                              // 이 요청의 값 적용
+        assertThat(result.alertTime()).isEqualTo(LocalTime.of(20, 0));       // 먼저 저장된 다른 필드는 유지
+        assertThat(createdByOther.isMissedAlertEnabled()).isFalse();
+    }
+
+    @Test
+    @DisplayName("[MED-G13] 행이 이미 있으면 INSERT를 시도하지 않는다")
+    void 기존행_INSERT_없음() {
+        when(repository.findByGuardianIdAndWardId(GUARDIAN_ID, WARD_ID))
+                .thenReturn(Optional.of(GuardianMedicationSetting.of(GUARDIAN_ID, WARD_ID, true)));
+
+        service.update(GUARDIAN_ID, WARD_ID, false, null);
+
+        verify(repository, never()).insertIfAbsent(any(), any(), anyBoolean());
     }
 
     // ─── 벌크 조회 ───────────────────────────────────────────

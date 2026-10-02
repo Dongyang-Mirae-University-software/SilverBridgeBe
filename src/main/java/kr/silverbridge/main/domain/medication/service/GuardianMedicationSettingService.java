@@ -107,8 +107,7 @@ public class GuardianMedicationSettingService {
         requireActiveConnection(guardianId, wardId, "미복용 요약 설정 변경");
 
         GuardianMedicationSetting setting = repository.findByGuardianIdAndWardId(guardianId, wardId)
-                .orElseGet(() -> repository.save(GuardianMedicationSetting.of(
-                        guardianId, wardId, DEFAULT_MISSED_ALERT_ENABLED)));
+                .orElseGet(() -> createDefault(guardianId, wardId));
 
         if (missedAlertEnabled != null) {
             setting.updateMissedAlertEnabled(missedAlertEnabled);
@@ -117,6 +116,19 @@ public class GuardianMedicationSettingService {
             setting.updateMissedAlertTime(missedAlertTime);
         }
         return toEffective(setting);
+    }
+
+    /**
+     * 기본값 행을 만들고 다시 읽는다. 같은 보호자의 다른 탭이 먼저 만들었으면 그 행을 받아 갱신한다(MED-G13).
+     *
+     * <p>{@code save()} 후 UNIQUE 위반을 잡는 방식은 쓰지 않는다 - 예외가 나면 이 트랜잭션은 rollback-only라
+     * 재조회·갱신을 이어 갈 수 없다. {@code ON CONFLICT DO NOTHING}은 예외 없이 넘어간다.</p>
+     */
+    private GuardianMedicationSetting createDefault(String guardianId, String wardId) {
+        repository.insertIfAbsent(guardianId, wardId, DEFAULT_MISSED_ALERT_ENABLED);
+        return repository.findByGuardianIdAndWardId(guardianId, wardId)
+                .orElseThrow(() -> new IllegalStateException(
+                        "미복용 요약 설정 행 생성 직후 조회 실패: guardianId=" + guardianId + ", wardId=" + wardId));
     }
 
     /**

@@ -292,6 +292,40 @@ class MedicationMissedAlertPlannerTest {
         verify(guardianSettingService).findSettings(eq(WARD_ID), eq(List.of(GUARDIAN_A)));
     }
 
+    @Test
+    @DisplayName("[MED-G14] 오늘 복용 시각이 지난 뒤 등록한 약은 그날 분모·미체크에서 빠진다 - 어제 등록분은 그대로 센다")
+    void 오늘_늦게등록한_약_제외() {
+        Medication oldOne = medication(1L, "혈압약");                        // 00:00 복용, 어제 등록
+        ReflectionTestUtils.setField(oldOne, "createdAt", MedicationClock.now().minusDays(1));
+        Medication newOne = medication(2L, "당뇨약");                        // 00:00 복용, 방금 등록(02:00 이후)
+        ReflectionTestUtils.setField(newOne, "createdAt", MedicationClock.now());
+        when(medicationRepository.findByDeletedAtIsNullAndDoseTimeLessThanEqual(any()))
+                .thenReturn(List.of(oldOne, newOne));
+        when(intakeRepository.findByMedicationIdInAndDoseDate(any(), any())).thenReturn(List.of());
+        when(missedAlertLogRepository.findByDoseDateAndWardIdIn(any(), any())).thenReturn(List.of());
+        when(connectionService.getActiveGuardianIds(WARD_ID)).thenReturn(List.of(GUARDIAN_A));
+        when(guardianSettingService.findSettings(any(), any())).thenReturn(Map.of());
+        when(userRepository.findAllById(any()))
+                .thenReturn(List.of(User.builder().id(WARD_ID).name("김영희").build()));
+
+        assertThat(planner.claimMissedAlerts()).singleElement()
+                .satisfies(t -> {
+                    assertThat(t.totalCount()).isEqualTo(1);
+                    assertThat(t.missedCount()).isEqualTo(1);
+                });
+    }
+
+    @Test
+    @DisplayName("[MED-G14] 늦게 등록한 약만 미체크였다면 요약 자체를 보내지 않는다")
+    void 오늘_늦게등록한_약뿐이면_미발송() {
+        Medication newOne = medication(1L, "당뇨약");
+        ReflectionTestUtils.setField(newOne, "createdAt", MedicationClock.now());
+        when(medicationRepository.findByDeletedAtIsNullAndDoseTimeLessThanEqual(any())).thenReturn(List.of(newOne));
+
+        assertThat(planner.claimMissedAlerts()).isEmpty();
+        verify(missedAlertLogRepository, never()).saveAll(any());
+    }
+
     /** 기본 시각을 바꾸고, 그에 맞춰 서비스가 돌려줄 기본 실효값도 갱신한다. */
     private void setDefaultAlertTime(LocalTime alertTime) {
         properties.getMissedAlert().setAlertTime(alertTime);
