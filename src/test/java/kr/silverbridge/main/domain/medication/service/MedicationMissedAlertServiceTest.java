@@ -73,7 +73,7 @@ class MedicationMissedAlertServiceTest {
     @DisplayName("한 건이 실패해도 나머지는 계속 보내고 예외를 밖으로 내보내지 않는다")
     void 발송실패_격리() {
         when(planner.claimMissedAlerts()).thenReturn(List.of(target(2, 1), target(2, 2)));
-        doThrow(new IllegalStateException("FCM 오류")).doNothing()
+        doThrow(new IllegalStateException("FCM 오류")).doReturn(null)
                 .when(notificationDispatcher).dispatch(any(), any(), any(), any());
 
         assertThatNoException().isThrownBy(() -> {

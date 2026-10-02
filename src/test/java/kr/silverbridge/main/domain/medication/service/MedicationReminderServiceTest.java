@@ -85,7 +85,7 @@ class MedicationReminderServiceTest {
                 target(MedicationReminderLog.ATTEMPT_FIRST, 1L),
                 target(MedicationReminderLog.ATTEMPT_FIRST, 2L)));
         doThrow(new IllegalStateException("FCM 오류"))
-                .doNothing()
+                .doReturn(null)
                 .when(notificationDispatcher).dispatch(any(), any(), any(), any());
 
         int sent = reminderService.sendFirstReminders();

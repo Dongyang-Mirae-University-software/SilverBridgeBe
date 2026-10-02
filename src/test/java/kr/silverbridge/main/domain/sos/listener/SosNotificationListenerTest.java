@@ -4,6 +4,7 @@ import kr.silverbridge.main.domain.connection.service.ConnectionService;
 import kr.silverbridge.main.domain.notification.channel.NotificationContent;
 import kr.silverbridge.main.domain.notification.dispatch.NotificationDispatcher;
 import kr.silverbridge.main.domain.notification.dispatch.NotificationType;
+import kr.silverbridge.main.domain.notification.entity.NotificationLogResult;
 import kr.silverbridge.main.domain.sos.event.SosTriggeredEvent;
 import kr.silverbridge.main.domain.sos.repository.SosEventRepository;
 import kr.silverbridge.main.domain.sos.service.SosNotificationCooldown;
@@ -120,12 +121,48 @@ class SosNotificationListenerTest {
     }
 
     @Test
-    @DisplayName("한 명에게라도 발송했으면 쿨다운을 유지한다 (연타 폭주 방지)")
+    @DisplayName("한 명에게라도 전달했으면 쿨다운을 유지한다 (연타 폭주 방지)")
     void handleSosTriggered_일부성공_쿨다운유지() {
         when(connectionService.getActiveGuardianIds(WARD_ID)).thenReturn(List.of("GD0001", "GD0002"));
         when(cooldown.tryAcquire(WARD_ID)).thenReturn(true);
         doThrow(new RuntimeException("dispatch down"))
                 .when(notificationDispatcher).dispatch(eq("GD0001"), any(), eq(NotificationType.WARD_SOS), any());
+        when(notificationDispatcher.dispatch(eq("GD0002"), any(), eq(NotificationType.WARD_SOS), any()))
+                .thenReturn(NotificationLogResult.DELIVERED);
+
+        listener.handleSosTriggered(event);
+
+        verify(cooldown, never()).release(anyString());
+    }
+
+    @Test
+    @DisplayName("디스패처가 전원 FAILED·NOT_SENT를 돌려주면(예외 없이) 쿨다운을 해제한다 (SOS-G09)")
+    void handleSosTriggered_전원미전달_쿨다운해제() {
+        when(connectionService.getActiveGuardianIds(WARD_ID)).thenReturn(List.of("GD0001", "GD0002"));
+        when(cooldown.tryAcquire(WARD_ID)).thenReturn(true);
+        // 푸시 토큰·전화번호가 없어 전 채널 실패 / 정지 계정이라 차단 - 둘 다 예외 없이 정상 반환된다
+        when(notificationDispatcher.dispatch(eq("GD0001"), any(), eq(NotificationType.WARD_SOS), any()))
+                .thenReturn(NotificationLogResult.FAILED);
+        when(notificationDispatcher.dispatch(eq("GD0002"), any(), eq(NotificationType.WARD_SOS), any()))
+                .thenReturn(NotificationLogResult.NOT_SENT);
+
+        listener.handleSosTriggered(event);
+
+        // 발송 자체는 전원에게 시도됐다 - 해제는 결과만 보고 판단한다
+        verify(notificationDispatcher).dispatch(eq("GD0001"), any(), eq(NotificationType.WARD_SOS), any());
+        verify(notificationDispatcher).dispatch(eq("GD0002"), any(), eq(NotificationType.WARD_SOS), any());
+        verify(cooldown).release(WARD_ID);
+    }
+
+    @Test
+    @DisplayName("한 명이라도 문자 대체(SMS_FALLBACK)로 전달됐으면 전달로 보고 쿨다운을 유지한다")
+    void handleSosTriggered_문자대체_전달_쿨다운유지() {
+        when(connectionService.getActiveGuardianIds(WARD_ID)).thenReturn(List.of("GD0001", "GD0002"));
+        when(cooldown.tryAcquire(WARD_ID)).thenReturn(true);
+        when(notificationDispatcher.dispatch(eq("GD0001"), any(), eq(NotificationType.WARD_SOS), any()))
+                .thenReturn(NotificationLogResult.FAILED);
+        when(notificationDispatcher.dispatch(eq("GD0002"), any(), eq(NotificationType.WARD_SOS), any()))
+                .thenReturn(NotificationLogResult.SMS_FALLBACK);
 
         listener.handleSosTriggered(event);
 
