@@ -25,8 +25,9 @@ import java.util.Map;
  * 피보호자 SOS 발생 이벤트를 수신해 ACTIVE 보호자 전원에게 긴급 알림을 발송하는 리스너.
  *
  * <p>{@code ConnectionNotificationListener}와 동일 패턴이다: {@code @TransactionalEventListener(AFTER_COMMIT)}로
- * 이력 저장 커밋 후에만 동작하고(롤백 시 미발송), {@code @Async("notificationExecutor")}로 발송 지연이
- * HTTP 응답 시간에 포함되지 않도록 분리한다.</p>
+ * 이력 저장 커밋 후에만 동작하고(롤백 시 미발송), {@code @Async("urgentNotificationExecutor")}로 발송 지연이
+ * HTTP 응답 시간에 포함되지 않도록 분리한다. 긴급 알림 전용 풀이라 일반 알림이 밀려도 그 뒤에 줄 서지 않는다
+ * (2026-10-02 QA SOS-G13).</p>
  *
  * <p>발송은 두 갈래다:</p>
  * <ul>
@@ -68,7 +69,7 @@ public class SosNotificationListener {
     private final SosNotificationCooldown cooldown;
     private final SosEventRepository sosEventRepository;
 
-    @Async("notificationExecutor")
+    @Async("urgentNotificationExecutor")
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
     public void handleSosTriggered(SosTriggeredEvent event) {
         List<String> guardianIds = connectionService.getActiveGuardianIds(event.wardId());
