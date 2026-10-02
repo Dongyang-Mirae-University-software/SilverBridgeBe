@@ -66,10 +66,10 @@ class AdminAnnouncementDraftControllerSecurityTest {
     @WithMockUser(roles = "ADMIN")
     @DisplayName("ADMIN → 목록 조회·임시저장 생성 허용")
     void admin_허용() {
-        when(draftService.getDrafts()).thenReturn(List.of(response()));
+        when(draftService.getDrafts(0, 20)).thenReturn(List.of(response()));
         when(draftService.createDraft(any(), anyString())).thenReturn(response());
 
-        assertThatNoException().isThrownBy(() -> controller.getDrafts());
+        assertThatNoException().isThrownBy(() -> controller.getDrafts(0, 20));
         assertThatNoException().isThrownBy(() -> controller.createDraft(createRequest(), "AD0001"));
     }
 
@@ -77,7 +77,7 @@ class AdminAnnouncementDraftControllerSecurityTest {
     @WithMockUser(roles = "GUARDIAN")
     @DisplayName("보호자(GUARDIAN) → 403")
     void guardian_거부() {
-        assertThatThrownBy(() -> controller.getDrafts())
+        assertThatThrownBy(() -> controller.getDrafts(0, 20))
                 .isInstanceOf(AccessDeniedException.class);
         assertThatThrownBy(() -> controller.createDraft(createRequest(), "GD0001"))
                 .isInstanceOf(AccessDeniedException.class);
@@ -87,7 +87,7 @@ class AdminAnnouncementDraftControllerSecurityTest {
     @WithMockUser(roles = "WARD")
     @DisplayName("피보호자(WARD) → 403")
     void ward_거부() {
-        assertThatThrownBy(() -> controller.getDrafts())
+        assertThatThrownBy(() -> controller.getDrafts(0, 20))
                 .isInstanceOf(AccessDeniedException.class);
         assertThatThrownBy(() -> controller.createDraft(createRequest(), "WD0001"))
                 .isInstanceOf(AccessDeniedException.class);

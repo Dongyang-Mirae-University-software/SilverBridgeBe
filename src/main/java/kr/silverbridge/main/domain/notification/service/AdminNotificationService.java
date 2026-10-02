@@ -16,7 +16,7 @@ import kr.silverbridge.main.global.enums.ConnectionStatus;
 import kr.silverbridge.main.global.response.PageResponse;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
-import org.springframework.data.domain.PageRequest;
+import kr.silverbridge.main.domain.admin.support.AdminPaging;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -43,7 +43,6 @@ import java.util.stream.Collectors;
 @RequiredArgsConstructor
 public class AdminNotificationService {
 
-    private static final int MAX_PAGE_SIZE = 50;
 
     /** 검색 결과가 없는 쪽 IN 절에 넣는 값. 사용자 ID는 빈 문자열일 수 없다. */
     private static final List<String> NO_MATCH = List.of("");
@@ -65,7 +64,7 @@ public class AdminNotificationService {
                                                        NotificationLogResult result,
                                                        AdminNotificationPeriod period, String keyword,
                                                        int page, int size) {
-        Pageable pageable = PageRequest.of(Math.max(page, 0), normalizeSize(size));
+        Pageable pageable = AdminPaging.of(page, size);
         TypeScope types = TypeScope.of(category);
         KeywordScope scope = resolveKeyword(keyword);
         Page<NotificationLog> logs = notificationLogRepository.searchForAdmin(
@@ -185,13 +184,6 @@ public class AdminNotificationService {
                 .replace("%", "\\%")
                 .replace("_", "\\_")
                 .toLowerCase();
-    }
-
-    private int normalizeSize(int size) {
-        if (size <= 0) {
-            return 20;
-        }
-        return Math.min(size, MAX_PAGE_SIZE);
     }
 
     /** 카테고리 적용 여부와 그 종류 목록. 미적용이어도 빈 IN 절을 피하려고 전 종류를 넣는다. */

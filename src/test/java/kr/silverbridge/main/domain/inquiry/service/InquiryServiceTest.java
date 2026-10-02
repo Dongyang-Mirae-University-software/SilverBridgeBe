@@ -17,12 +17,15 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.test.util.ReflectionTestUtils;
 
+import org.springframework.data.domain.Pageable;
+
 import java.util.List;
 import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -66,13 +69,32 @@ class InquiryServiceTest {
     @DisplayName("내 문의 목록 조회 → 본인 것만 최신순으로 매핑")
     void getMyInquiries_본인것만_매핑() {
         Inquiry inquiry = inquiry(GUARDIAN_ID, InquiryStatus.WAITING);
-        when(inquiryRepository.findByUserIdOrderByCreatedAtDesc(GUARDIAN_ID))
+        when(inquiryRepository.findByUserIdOrderByCreatedAtDescIdDesc(eq(GUARDIAN_ID), any(Pageable.class)))
                 .thenReturn(List.of(inquiry));
 
-        List<InquiryResponse> result = inquiryService.getMyInquiries(GUARDIAN_ID);
+        List<InquiryResponse> result = inquiryService.getMyInquiries(GUARDIAN_ID, 0, 20);
 
         assertThat(result).hasSize(1);
         assertThat(result.get(0).id()).isEqualTo(INQUIRY_ID);
+    }
+
+    @Test
+    @DisplayName("내 문의 목록은 본문을 앞 100자로 축약하고 페이지를 보정한다. 상세는 전체 (ADMIN-G24·G09)")
+    void getMyInquiries_본문_축약_페이지_보정() {
+        Inquiry inquiry = inquiry(GUARDIAN_ID, InquiryStatus.WAITING);
+        ReflectionTestUtils.setField(inquiry, "content", "z".repeat(300));
+        when(inquiryRepository.findByUserIdOrderByCreatedAtDescIdDesc(eq(GUARDIAN_ID), any(Pageable.class)))
+                .thenReturn(List.of(inquiry));
+        when(inquiryRepository.findById(INQUIRY_ID)).thenReturn(Optional.of(inquiry));
+
+        List<InquiryResponse> result = inquiryService.getMyInquiries(GUARDIAN_ID, -2, 0);
+
+        assertThat(result.get(0).content()).hasSize(100);
+        ArgumentCaptor<Pageable> captor = ArgumentCaptor.forClass(Pageable.class);
+        verify(inquiryRepository).findByUserIdOrderByCreatedAtDescIdDesc(eq(GUARDIAN_ID), captor.capture());
+        assertThat(captor.getValue().getPageNumber()).isZero();
+        assertThat(captor.getValue().getPageSize()).isEqualTo(20);
+        assertThat(inquiryService.getMyInquiry(GUARDIAN_ID, INQUIRY_ID).content()).hasSize(300);
     }
 
     @Test

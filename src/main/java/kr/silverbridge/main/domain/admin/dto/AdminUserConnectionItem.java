@@ -17,6 +17,9 @@ import kr.silverbridge.main.global.enums.Role;
 @Schema(description = "연결된 상대방 한 명")
 public record AdminUserConnectionItem(
 
+        @Schema(description = "연결 ID. 관리자 연결 해제 등 연결 단위 조작에 쓴다", example = "17")
+        Long connectionId,
+
         @Schema(description = "상대방 회원 ID", example = "C82D3E")
         String counterpartId,
 

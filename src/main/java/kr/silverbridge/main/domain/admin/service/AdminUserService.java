@@ -25,10 +25,11 @@ import kr.silverbridge.main.global.enums.Status;
 import kr.silverbridge.main.global.exception.CustomException;
 import kr.silverbridge.main.global.exception.ErrorCode;
 import kr.silverbridge.main.global.response.PageResponse;
+import kr.silverbridge.main.global.validation.TextSanitizer;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.ApplicationEventPublisher;
-import org.springframework.data.domain.PageRequest;
+import kr.silverbridge.main.domain.admin.support.AdminPaging;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
@@ -62,8 +63,6 @@ import java.util.stream.Collectors;
 @RequiredArgsConstructor
 public class AdminUserService {
 
-    private static final int MAX_PAGE_SIZE = 50;
-
     /** 목록에 표시할 연결. 종료된 이력(CANCELLED·REFUSED·DISCONNECTED)은 "지금 맺고 있는 관계"가 아니라 제외한다. */
     private static final List<ConnectionStatus> LINKED_STATUSES =
             List.of(ConnectionStatus.ACTIVE, ConnectionStatus.PENDING);
@@ -90,7 +89,7 @@ public class AdminUserService {
                                                     AdminUserStatusFilter statusFilter,
                                                     AdminUserConnectionFilter connectionFilter,
                                                     int page, int size) {
-        Pageable pageable = PageRequest.of(Math.max(page, 0), normalizeSize(size),
+        Pageable pageable = AdminPaging.of(page, size,
                 Sort.by(Sort.Direction.DESC, "createdAt"));
 
         var users = userRepository.searchForAdmin(
@@ -98,6 +97,7 @@ public class AdminUserService {
                 role,
                 AdminUserStatusFilter.orDefault(statusFilter).toStatus(),
                 normalizeKeyword(keyword),
+                normalizePhoneKeyword(keyword),
                 AdminUserConnectionFilter.orDefault(connectionFilter).toCode(),
                 LINKED_STATUSES,
                 ConnectionStatus.ACTIVE,
@@ -203,8 +203,9 @@ public class AdminUserService {
         if (name == null) {
             return;
         }
-        String trimmed = name.trim();
-        if (trimmed.isEmpty()) {
+        // NBSP·제로폭 문자만 있는 이름도 비어 있는 것으로 본다(ADMIN-G22). 저장도 정리된 값으로 한다.
+        String trimmed = TextSanitizer.sanitize(name);
+        if (!TextSanitizer.hasVisibleChar(trimmed)) {
             throw new CustomException(ErrorCode.INVALID_INPUT);
         }
         if (trimmed.equals(user.getName())) {
@@ -338,6 +339,7 @@ public class AdminUserService {
         }
         result.computeIfAbsent(ownerId, key -> new ArrayList<>())
                 .add(new AdminUserConnectionItem(
+                        connection.getId(),
                         counterpart.getId(),
                         counterpart.getName(),
                         counterpart.getRole(),
@@ -365,6 +367,25 @@ public class AdminUserService {
     }
 
     /**
+     * 전화번호 검색어 - 하이픈·공백을 뺀 값(ADMIN-G31). DB 쪽도 {@code replace(phone, '-', '')}로 비교하므로
+     * "010-1234-5678"과 "01012345678"이 서로 찾힌다. 정리하고 남은 게 없으면 null(전화번호 조건 건너뜀 -
+     * "-"만 입력했을 때 모든 번호에 걸리는 것을 막는다).
+     */
+    String normalizePhoneKeyword(String keyword) {
+        if (!StringUtils.hasText(keyword)) {
+            return null;
+        }
+        String stripped = keyword.replace("-", "").replaceAll("\\s+", "");
+        if (stripped.isEmpty()) {
+            return null;
+        }
+        return stripped
+                .replace("\\", "\\\\")
+                .replace("%", "\\%")
+                .replace("_", "\\_");
+    }
+
+    /**
      * LIKE 메타문자 이스케이프 + 소문자화. JPQL의 {@code escape '\'} 절과 짝을 이룬다.
      * 소문자화는 이메일이 대소문자 섞여 저장되기 때문이다(가입 시 정규화하지 않는다).
      */
@@ -377,10 +398,6 @@ public class AdminUserService {
                 .replace("%", "\\%")
                 .replace("_", "\\_")
                 .toLowerCase();
-    }
-
-    private int normalizeSize(int size) {
-        return Math.clamp(size, 1, MAX_PAGE_SIZE);
     }
 
     private static String roleLabel(Role role) {

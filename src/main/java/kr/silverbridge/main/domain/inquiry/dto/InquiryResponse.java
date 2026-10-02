@@ -1,6 +1,7 @@
 package kr.silverbridge.main.domain.inquiry.dto;
 
 import io.swagger.v3.oas.annotations.media.Schema;
+import kr.silverbridge.main.domain.admin.support.TextSummary;
 import kr.silverbridge.main.domain.inquiry.entity.Inquiry;
 import kr.silverbridge.main.global.enums.InquiryCategory;
 import kr.silverbridge.main.global.enums.InquiryStatus;
@@ -25,7 +26,8 @@ public record InquiryResponse(
         @Schema(description = "제목", example = "이상감지 알림이 오지 않아요")
         String title,
 
-        @Schema(description = "내용", example = "어제부터 피보호자 이상감지 알림이 전혀 오지 않습니다.")
+        @Schema(description = "내용. 목록 조회에서는 앞 100자(이모지 1개=1자)로 축약된 미리보기이고, 상세·작성 응답은 전체입니다.",
+                example = "어제부터 피보호자 이상감지 알림이 전혀 오지 않습니다.")
         String content,
 
         @Schema(description = "상태 코드", example = "WAITING")
@@ -40,6 +42,13 @@ public record InquiryResponse(
         @Schema(description = "작성 일시", example = "2026-07-01T10:00:00+09:00")
         OffsetDateTime createdAt
 ) {
+    /** 목록용 - 본문을 앞 100자로 축약한다(ADMIN-G24). 답변은 그대로 싣는다. */
+    public static InquiryResponse ofSummary(Inquiry inquiry) {
+        InquiryResponse full = of(inquiry);
+        return new InquiryResponse(full.id, full.category, full.title, TextSummary.forList(full.content),
+                full.status, full.answer, full.answeredAt, full.createdAt);
+    }
+
     public static InquiryResponse of(Inquiry inquiry) {
         return new InquiryResponse(
                 inquiry.getId(),

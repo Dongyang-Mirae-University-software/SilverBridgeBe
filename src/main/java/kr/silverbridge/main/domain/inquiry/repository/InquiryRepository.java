@@ -25,6 +25,9 @@ public interface InquiryRepository extends JpaRepository<Inquiry, Long> {
     // 보호자 본인 문의 목록 (최신순)
     List<Inquiry> findByUserIdOrderByCreatedAtDesc(String userId);
 
+    // 보호자 본인 문의 목록 - 페이징(같은 시각 문의가 페이지 사이에서 겹치지 않게 id 내림차순을 보조 정렬로)
+    List<Inquiry> findByUserIdOrderByCreatedAtDescIdDesc(String userId, Pageable pageable);
+
     // 관리자 탭 카운트 — 상태별 전체 건수 (필터·검색과 무관한 전역 카운트)
     long countByStatus(InquiryStatus status);
 

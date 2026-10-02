@@ -2,8 +2,10 @@ package kr.silverbridge.main.domain.admin.dto;
 
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.Size;
+import kr.silverbridge.main.domain.admin.support.CodePointSize;
 import kr.silverbridge.main.global.enums.Role;
 import kr.silverbridge.main.global.enums.Status;
+import kr.silverbridge.main.global.validation.VisibleText;
 
 /**
  * 회원 정보 수정 요청. 모든 필드가 <b>선택</b>이며 {@code null}은 "변경하지 않음"이다
@@ -22,8 +24,9 @@ import kr.silverbridge.main.global.enums.Status;
 @Schema(description = "회원 정보 수정 요청 (모든 필드 선택, null=변경 안 함)")
 public record AdminUserUpdateRequest(
 
-        @Schema(description = "이름 (최대 20자). null이면 변경하지 않음", nullable = true, example = "홍길동")
-        @Size(max = 20, message = "이름은 20자 이하여야 합니다.")
+        @Schema(description = "이름 (최대 20자, 이모지는 1자로 계산). null이면 변경하지 않음", nullable = true, example = "홍길동")
+        @VisibleText(message = "이름을 입력해주세요.")
+        @CodePointSize(max = 20, message = "이름은 20자 이하여야 합니다.")
         String name,
 
         @Schema(description = "역할. WARD·GUARDIAN만 지정할 수 있고 null이면 변경하지 않음",
