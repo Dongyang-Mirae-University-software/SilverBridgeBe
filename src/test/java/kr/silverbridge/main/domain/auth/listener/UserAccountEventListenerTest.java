@@ -3,15 +3,18 @@ package kr.silverbridge.main.domain.auth.listener;
 import kr.silverbridge.main.domain.auth.repository.RefreshTokenRepository;
 import kr.silverbridge.main.domain.auth.service.AccessLogService;
 import kr.silverbridge.main.domain.user.event.PasswordChangedEvent;
+import kr.silverbridge.main.domain.user.event.UserRestrictedEvent;
 import kr.silverbridge.main.domain.user.event.UserRoleChangedEvent;
 import kr.silverbridge.main.domain.user.event.UserWithdrawnEvent;
 import kr.silverbridge.main.global.enums.AccessAction;
 import kr.silverbridge.main.global.jwt.JwtProperties;
 import kr.silverbridge.main.global.util.RedisKeys;
+import kr.silverbridge.main.global.websocket.WebSocketSessionCloser;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.InOrder;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -24,6 +27,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -36,6 +40,7 @@ class UserAccountEventListenerTest {
     @Mock private StringRedisTemplate redisTemplate;
     @Mock private ValueOperations<String, String> valueOperations;
     @Mock private JwtProperties jwtProperties;
+    @Mock private WebSocketSessionCloser webSocketSessionCloser;
 
     @InjectMocks private UserAccountEventListener listener;
 
@@ -157,5 +162,70 @@ class UserAccountEventListenerTest {
 
         org.assertj.core.api.Assertions.assertThatCode(() -> listener.handleWithdrawn(event))
                 .doesNotThrowAnyException();
+    }
+
+    // ===== 열린 WebSocket 세션 종료 (AUTH-G19·ADMIN-G28 세션 부분) =====
+
+    @Test
+    @DisplayName("이용 제한 → 토큰 무효화 뒤 그 사용자의 열린 WS 세션을 닫는다 (ADMIN-G28)")
+    void handleRestricted_무효화후_세션종료() {
+        when(jwtProperties.getAccessTokenExpiration()).thenReturn(1_800_000L);
+        when(redisTemplate.opsForValue()).thenReturn(valueOperations);
+
+        listener.handleRestricted(new UserRestrictedEvent("user-10"));
+
+        // 무효화가 먼저여야 닫힌 클라이언트가 옛 토큰으로 재연결해도 핸드셰이크에서 막힌다
+        InOrder order = inOrder(valueOperations, webSocketSessionCloser);
+        order.verify(valueOperations).set(eq(RedisKeys.PASSWORD_INVALIDATE + "user-10"), anyString(), anyLong(), eq(TimeUnit.MILLISECONDS));
+        order.verify(webSocketSessionCloser).closeAll("user-10");
+    }
+
+    @Test
+    @DisplayName("이용 제한 토큰 무효화가 실패해도 세션은 닫는다 - 이벤트 발송 차단과 별개로 연결을 남기지 않는다")
+    void handleRestricted_무효화실패_세션종료() {
+        org.mockito.Mockito.doThrow(new RuntimeException("DB 장애"))
+                .when(refreshTokenRepository).deleteByUserId("user-11");
+
+        org.assertj.core.api.Assertions.assertThatCode(() -> listener.handleRestricted(new UserRestrictedEvent("user-11")))
+                .doesNotThrowAnyException();
+        verify(webSocketSessionCloser).closeAll("user-11");
+    }
+
+    @Test
+    @DisplayName("역할 변경 → 토큰 무효화 뒤 열린 WS 세션을 닫는다 - 옛 역할 화면이 실시간 이벤트를 계속 받지 않게")
+    void handleRoleChanged_무효화후_세션종료() {
+        when(jwtProperties.getAccessTokenExpiration()).thenReturn(1_800_000L);
+        when(redisTemplate.opsForValue()).thenReturn(valueOperations);
+
+        listener.handleRoleChanged(new UserRoleChangedEvent("user-12"));
+
+        InOrder order = inOrder(valueOperations, webSocketSessionCloser);
+        order.verify(valueOperations).set(eq(RedisKeys.PASSWORD_INVALIDATE + "user-12"), anyString(), anyLong(), eq(TimeUnit.MILLISECONDS));
+        order.verify(webSocketSessionCloser).closeAll("user-12");
+    }
+
+    @Test
+    @DisplayName("비밀번호 변경·재설정 → 토큰 무효화 뒤 열린 WS 세션을 닫는다 (AUTH-G19)")
+    void handlePasswordChanged_무효화후_세션종료() {
+        when(jwtProperties.getAccessTokenExpiration()).thenReturn(1_800_000L);
+        when(redisTemplate.opsForValue()).thenReturn(valueOperations);
+
+        listener.handlePasswordChanged(new PasswordChangedEvent("user-13"));
+
+        InOrder order = inOrder(valueOperations, webSocketSessionCloser);
+        order.verify(valueOperations).set(eq(RedisKeys.PASSWORD_INVALIDATE + "user-13"), anyString(), anyLong(), eq(TimeUnit.MILLISECONDS));
+        order.verify(webSocketSessionCloser).closeAll("user-13");
+    }
+
+    @Test
+    @DisplayName("탈퇴 → 열린 WS 세션을 닫는다. 정리가 실패해도 닫기는 수행하고 예외는 새지 않는다")
+    void handleWithdrawn_세션종료() {
+        org.mockito.Mockito.doThrow(new RuntimeException("Redis 장애"))
+                .when(refreshTokenRepository).deleteByUserId("user-14");
+
+        org.assertj.core.api.Assertions.assertThatCode(() ->
+                        listener.handleWithdrawn(new UserWithdrawnEvent("user-14", "127.0.0.1", "test-agent")))
+                .doesNotThrowAnyException();
+        verify(webSocketSessionCloser).closeAll("user-14");
     }
 }
