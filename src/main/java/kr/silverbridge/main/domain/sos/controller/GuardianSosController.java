@@ -5,10 +5,10 @@ import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.tags.Tag;
-import kr.silverbridge.main.domain.sos.dto.SosHistoryItem;
+import kr.silverbridge.main.domain.sos.dto.SosHistoryPage;
+import kr.silverbridge.main.domain.sos.entity.SosTriggerType;
 import kr.silverbridge.main.domain.sos.service.GuardianSosService;
 import kr.silverbridge.main.global.response.ApiResponse;
-import kr.silverbridge.main.global.response.PageResponse;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -42,10 +42,16 @@ public class GuardianSosController {
                     - 지정: 해당 피보호자의 이력만 (연결이 ACTIVE가 아니면 403)
                     - 생략: ACTIVE 연결된 피보호자 전원의 이력을 합쳐서 최신순 (연결이 없으면 빈 페이지)
 
-                    [응답] data: PageResponse<SosHistoryItem>
+                    [triggerType 파라미터] (선택)
+                    - SOS_BUTTON(긴급 SOS 버튼) · GUARDIAN_CALL(보호자에게 직접 전화) 중 하나만 조회
+                    - 생략: 전체 경로
+
+                    [응답] data: SosHistoryPage
                     - content[].sosEventId / wardId / wardName / triggeredAt / location
                     - content[].triggerType: SOS_BUTTON(긴급 SOS 버튼) · GUARDIAN_CALL(보호자에게 직접 전화)
-                    - totalElements 로 "최근 N건" 표기가 가능합니다.
+                    - page / size / totalElements / totalPages / last: 기존 페이지 응답과 같은 필드 (triggerType 필터 기준)
+                    - counts.all / counts.sosButton / counts.guardianCall: 경로별 전체 건수
+                      (triggerType·페이지와 무관, 조회 범위 피보호자 전체 기준 - 탭 숫자는 이 값으로 그립니다)
 
                     [주의]
                     - 이력은 "언제·어떤 경로로 발생했는지"까지만 답합니다. 처리 결과(ACK)는 기록하지 않습니다.
@@ -59,12 +65,13 @@ public class GuardianSosController {
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "보호자 권한 필요 / 연결되지 않은 피보호자 지정", content = @Content)
     })
     @GetMapping("/api/guardian/sos/history")
-    public ResponseEntity<ApiResponse<PageResponse<SosHistoryItem>>> getSosHistory(
+    public ResponseEntity<ApiResponse<SosHistoryPage>> getSosHistory(
             @AuthenticationPrincipal String guardianId,
             @Parameter(description = "특정 피보호자만 조회 (생략 시 연결된 피보호자 전원)") @RequestParam(required = false) String wardId,
+            @Parameter(description = "발생 경로 필터 (생략 시 전체)") @RequestParam(required = false) SosTriggerType triggerType,
             @Parameter(description = "페이지 번호 (0-based)") @RequestParam(defaultValue = "0") int page,
             @Parameter(description = "페이지 크기 (최대 50)") @RequestParam(defaultValue = "20") int size) {
         return ResponseEntity.ok(ApiResponse.ok(
-                guardianSosService.getHistory(guardianId, wardId, page, size)));
+                guardianSosService.getHistory(guardianId, wardId, triggerType, page, size)));
     }
 }

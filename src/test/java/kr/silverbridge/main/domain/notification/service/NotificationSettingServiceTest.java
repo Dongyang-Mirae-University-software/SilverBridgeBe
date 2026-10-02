@@ -17,8 +17,12 @@ import java.util.List;
 import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyBoolean;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 
 @ExtendWith(MockitoExtension.class)
@@ -65,15 +69,16 @@ class NotificationSettingServiceTest {
     }
 
     @Test
-    @DisplayName("updateSettings: 기존 행은 갱신, 없는 행은 신규 저장(upsert)")
+    @DisplayName("updateSettings: 기존 행은 갱신, 없는 행은 충돌 무시 INSERT로 신규 저장(upsert)")
     void updateSettings_upsert() {
-        // SMS는 기존 행 존재 → updateEnabled, KAKAO_ALIMTALK은 없음 → save
+        // SMS는 기존 행 존재 → updateEnabled, KAKAO_ALIMTALK은 없음 → insertIfAbsent
         UserNotificationSetting existingSms =
                 UserNotificationSetting.of(USER_ID, NotificationChannelType.SMS, false);
         given(repository.findByUserIdAndChannelType(USER_ID, NotificationChannelType.SMS))
                 .willReturn(Optional.of(existingSms));
         given(repository.findByUserIdAndChannelType(USER_ID, NotificationChannelType.KAKAO_ALIMTALK))
                 .willReturn(Optional.empty());
+        given(repository.insertIfAbsent(USER_ID, "KAKAO_ALIMTALK", true)).willReturn(1);
         given(repository.findByUserId(USER_ID)).willReturn(List.of()); // 마지막 getSettings용
 
         NotificationSettingUpdateRequest request = new NotificationSettingUpdateRequest(List.of(
@@ -84,10 +89,34 @@ class NotificationSettingServiceTest {
         service.updateSettings(USER_ID, request);
 
         assertThat(existingSms.isEnabled()).isTrue(); // 기존 행 갱신됨
-        verify(repository).save(org.mockito.ArgumentMatchers.argThat(s ->
-                s.getChannelType() == NotificationChannelType.KAKAO_ALIMTALK && s.isEnabled()));
-        // SMS는 기존 행 갱신이라 save 호출 없음
-        verify(repository, never()).save(org.mockito.ArgumentMatchers.argThat(s ->
-                s.getChannelType() == NotificationChannelType.SMS));
+        verify(repository).insertIfAbsent(USER_ID, "KAKAO_ALIMTALK", true);
+        // SMS는 기존 행 갱신이라 INSERT 없음
+        verify(repository, never()).insertIfAbsent(eq(USER_ID), eq("SMS"), anyBoolean());
+        verify(repository, never()).save(any());
+        // 새로 넣은 쪽은 재조회하지 않는다(조회 1회 = 최초 확인)
+        verify(repository, times(1)).findByUserIdAndChannelType(USER_ID, NotificationChannelType.KAKAO_ALIMTALK);
+    }
+
+    @Test
+    @DisplayName("updateSettings: 동시 최초 저장으로 다른 요청이 먼저 넣었으면(0건) 재조회해 이 요청 값으로 갱신 - 409 없음 (USER-G12)")
+    void updateSettings_동시최초저장_재조회갱신() {
+        // 처음 확인 땐 없었고, INSERT는 충돌로 0건, 다시 읽으면 상대가 넣은 행(enabled=false)이 있다
+        UserNotificationSetting insertedByOther =
+                UserNotificationSetting.of(USER_ID, NotificationChannelType.SMS, false);
+        given(repository.findByUserIdAndChannelType(USER_ID, NotificationChannelType.SMS))
+                .willReturn(Optional.empty(), Optional.of(insertedByOther));
+        given(repository.insertIfAbsent(USER_ID, "SMS", true)).willReturn(0);
+        given(repository.findByUserId(USER_ID)).willReturn(List.of(insertedByOther));
+
+        NotificationSettingResponse response = service.updateSettings(USER_ID,
+                new NotificationSettingUpdateRequest(List.of(
+                        new ChannelSettingUpdate(NotificationChannelType.SMS, true))));
+
+        assertThat(insertedByOther.isEnabled()).isTrue(); // 나중 요청 값으로 덮였다
+        assertThat(response.settings())
+                .filteredOn(s -> s.channelType() == NotificationChannelType.SMS)
+                .extracting(NotificationSettingResponse.ChannelSetting::enabled)
+                .containsExactly(true);
+        verify(repository, never()).save(any());
     }
 }

@@ -46,4 +46,24 @@ public class SosNotificationCooldown {
             return true;
         }
     }
+
+    /**
+     * 선점한 쿨다운을 푼다 - 이번 발송이 <b>아무에게도 나가지 못했을 때</b>만 부른다(SOS-G09).
+     *
+     * <p>쿨다운은 "선점 후 발송"이라 발송 전에 키를 건다. 발송이 전부 실패했는데 키가 남으면 30초 안의 재요청이
+     * "직전에 보냈다"는 이유로 알림을 생략해, 다시 알릴 가장 필요한 순간에 알림이 빠진다. 쿨다운의 목적은 같은
+     * 알림의 폭주를 막는 것이지 실패한 알림을 재시도하지 못하게 하는 것이 아니다.</p>
+     *
+     * <p>해제 실패는 삼킨다 - 키는 30초 뒤 저절로 만료되므로 최악이어도 지금과 같다.</p>
+     *
+     * @param wardId SOS를 발생시킨 피보호자 ID
+     */
+    public void release(String wardId) {
+        try {
+            redisTemplate.delete(KEY_PREFIX + wardId);
+        } catch (Exception e) {
+            log.warn("SOS 쿨다운 해제 실패 — {}초 뒤 자동 만료: wardId={}, error={}",
+                    COOLDOWN.toSeconds(), wardId, e.getMessage());
+        }
+    }
 }
