@@ -15,5 +15,13 @@ public enum NotificationLogResult {
     /** 시도한 채널이 모두 실패했다. */
     FAILED,
     /** 보내지 않았다. 사유는 {@link NotificationNotSentReason}. */
-    NOT_SENT
+    NOT_SENT;
+
+    /**
+     * 수신자에게 전달됐는가({@link #DELIVERED}·{@link #SMS_FALLBACK}). 실패와 보내지 않음은 모두 미전달이다.
+     * "전달"은 발송 서버 접수 기준이다(기기 표시 여부는 서버가 알 수 없다).
+     */
+    public boolean isDelivered() {
+        return this == DELIVERED || this == SMS_FALLBACK;
+    }
 }

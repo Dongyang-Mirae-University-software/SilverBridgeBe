@@ -80,9 +80,10 @@ public class NotificationDispatcher {
      * @param userId  수신자 ID
      * @param type    알림 종류(필수/선택 분류 포함)
      * @param content 발송할 제목/본문/부가데이터
+     * @return 이 수신자에 대한 최종 결과(이력에 남긴 값과 같다). 필요 없는 호출자는 무시해도 된다
      */
-    public void dispatch(String userId, NotificationType type, NotificationContent content) {
-        dispatch(userId, null, type, content);
+    public NotificationLogResult dispatch(String userId, NotificationType type, NotificationContent content) {
+        return dispatch(userId, null, type, content);
     }
 
     /**
@@ -92,9 +93,16 @@ public class NotificationDispatcher {
      * 쓰지 않는다. {@code content.data()}의 wardId를 대신 읽지 않는 이유 - data는 FE 계약 값이라 라우팅·기록의
      * 근거로 쓰지 않는다(2026-07-27 알림톡 결정과 같은 원칙).</p>
      *
+     * <p><b>반환값</b>(SOS-G09, 2026-10-02): 이력에 남긴 것과 같은 최종 결과를 돌려준다. 채널 실패는 여전히
+     * 안에서 삼키므로 호출자는 예외가 아니라 이 값으로 전달 여부({@link NotificationLogResult#isDelivered()})를
+     * 안다. 결과는 <b>발송·기록이 모두 끝난 뒤</b> 돌려주며, 이력 기록 실패와는 무관하다. 기존 호출자는 반환값을
+     * 무시해도 동작이 같다 - 이 값으로 발송 여부·채널을 바꾸는 데 쓰지 말 것(정책 판단은 이 클래스의 몫이다).</p>
+     *
      * @param wardId 이 알림이 어느 피보호자에 관한 것인가. 특정할 수 없으면 null
+     * @return 이 수신자에 대한 최종 결과
      */
-    public void dispatch(String userId, String wardId, NotificationType type, NotificationContent content) {
+    public NotificationLogResult dispatch(String userId, String wardId, NotificationType type,
+                                          NotificationContent content) {
         Outcome outcome = switch (type.policy()) {
             case FORCED_PUSH_WITH_SMS_FALLBACK ->
                     withReceivableRecipient(userId, type, r -> dispatchMandatory(r, type, content));
@@ -103,6 +111,7 @@ public class NotificationDispatcher {
             case SETTINGS_ONLY -> dispatchBySettings(userId, type, content);
         };
         record(userId, wardId, type, content, outcome);
+        return outcome.result();
     }
 
     /**

@@ -4,6 +4,7 @@ import kr.silverbridge.main.domain.connection.service.ConnectionService;
 import kr.silverbridge.main.domain.notification.channel.NotificationContent;
 import kr.silverbridge.main.domain.notification.dispatch.NotificationDispatcher;
 import kr.silverbridge.main.domain.notification.dispatch.NotificationType;
+import kr.silverbridge.main.domain.notification.entity.NotificationLogResult;
 import kr.silverbridge.main.domain.sos.event.SosTriggeredEvent;
 import kr.silverbridge.main.domain.sos.repository.SosEventRepository;
 import kr.silverbridge.main.domain.sos.service.SosNotificationCooldown;
@@ -88,7 +89,7 @@ public class SosNotificationListener {
         long repeatCount = countRecentOccurrences(event.wardId());
         String body = buildBody(event.wardName(), repeatCount);
         String repeatCountValue = String.valueOf(repeatCount);
-        int sent = 0;
+        int delivered = 0;
         for (String guardianId : guardianIds) {
             try {
                 webSocketEventPublisher.sendToUser(guardianId, "sos-triggered",
@@ -98,31 +99,38 @@ public class SosNotificationListener {
                                 // 기존 키는 그대로 두고 추가만 한다 - 쓰지 않는 프론트는 영향받지 않는다.
                                 "repeatCount", repeatCountValue));
 
-                notificationDispatcher.dispatch(guardianId, event.wardId(), NotificationType.WARD_SOS,
+                NotificationLogResult result = notificationDispatcher.dispatch(guardianId, event.wardId(),
+                        NotificationType.WARD_SOS,
                         NotificationContent.of("긴급 SOS", body,
                                 Map.of("type", "WARD_SOS",
                                         "wardId", event.wardId(),
                                         "sosEventId", String.valueOf(event.sosEventId()),
                                         "repeatCount", repeatCountValue)));
-                sent++;
+                // 디스패처가 채널 실패를 안에서 삼키므로 예외 여부가 아니라 결과로 센다(SOS-G09).
+                // 푸시 또는 문자 대체가 접수된 경우만 전달 - 실패·보내지 않음(정지 계정 차단 등)은 미전달이다.
+                if (result != null && result.isDelivered()) {
+                    delivered++;
+                }
             } catch (Exception e) {
                 // 한 보호자 발송 실패가 나머지 보호자 발송을 막지 않도록 격리. 원인 진단을 위해 스택 포함 (L-S2-6)
                 log.error("SOS 알림 발송 실패: guardianId={}, sosEventId={}",
                         guardianId, event.sosEventId(), e);
             }
         }
-        if (sent == 0) {
-            // 아무에게도 나가지 못했다 - 쿨다운을 풀어 30초 안의 재요청이 다시 발송되게 한다(SOS-G09).
-            // 판단 근거는 이 리스너가 아는 범위(보호자별 발송 호출이 전부 예외)뿐이다. 디스패처는 채널 실패를 안에서
-            // 삼키고 이력(notification_log FAILED)만 남기며 결과를 돌려주지 않으므로, "FCM·SMS 모두 실패"는
-            // 여기서 구분할 수 없다(디스패처가 결과를 돌려주게 되면 그때 기준을 넓힌다).
+        if (delivered == 0) {
+            // 아무에게도 전달되지 못했다(FCM·문자 모두 실패, 연락 수단 없음, 수신자 전원 정지 등) -
+            // 쿨다운을 풀어 30초 안의 재요청이 다시 발송되게 한다(SOS-G09). 쿨다운은 "같은 상황을 거듭 알리는 소음"을
+            // 막으려는 것이라, 한 번도 닿지 않은 알림에 적용하면 다시 알릴 가장 필요한 순간을 30초 막는다.
+            // 발송 자체(대상·채널·정지 계정 제외)는 이 판단과 무관하다 - 이미 끝난 발송의 결과만 본다.
+            // WebSocket(sos-triggered)은 채널 추상화 밖이라 결과를 모른다 - 접속 중인 화면에 닿았어도 미전달로 본다.
             cooldown.release(event.wardId());
-            log.warn("SOS 알림이 한 건도 발송되지 않아 쿨다운 해제(재요청 시 재발송): wardId={}, sosEventId={}, 대상 보호자={}명",
+            log.warn("[SOS-NO-DELIVERY] SOS 알림이 어느 보호자에게도 전달되지 않아 쿨다운 해제(재요청 시 재발송): "
+                            + "wardId={}, sosEventId={}, 대상 보호자={}명",
                     event.wardId(), event.sosEventId(), guardianIds.size());
             return;
         }
-        log.info("SOS 긴급 알림 발송: sosEventId={}, 대상 보호자={}명, 발송={}건, 최근 {}분 내 {}번째",
-                event.sosEventId(), guardianIds.size(), sent, REPEAT_WINDOW.toMinutes(), repeatCount);
+        log.info("SOS 긴급 알림 발송: sosEventId={}, 대상 보호자={}명, 전달={}명, 최근 {}분 내 {}번째",
+                event.sosEventId(), guardianIds.size(), delivered, REPEAT_WINDOW.toMinutes(), repeatCount);
     }
 
     /**

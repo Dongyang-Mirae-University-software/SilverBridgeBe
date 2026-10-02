@@ -537,6 +537,102 @@ class NotificationDispatcherTest {
                 .extracting(ChannelAttempt::reason).isEqualTo(ChannelFailureReason.UNEXPECTED_ERROR);
     }
 
+    // ─── 반환 결과 (SOS-G09, 2026-10-02) ──────────────────────────
+    // 호출자(SOS 리스너)가 "아무에게도 안 갔는지"를 알 수 있도록, 이력에 남긴 것과 같은 결과를 돌려준다.
+
+    @Test
+    @DisplayName("반환: 채널이 접수하면 DELIVERED - 전달로 본다")
+    void 반환_전달() {
+        given(settingService.enabledChannels(USER_ID)).willReturn(EnumSet.of(NotificationChannelType.FCM));
+
+        NotificationLogResult result = dispatcher.dispatch(USER_ID, NotificationType.CONNECTION_REQUEST, content);
+
+        assertThat(result).isEqualTo(NotificationLogResult.DELIVERED);
+        assertThat(result.isDelivered()).isTrue();
+        assertThat(recordedLog().getResult()).isEqualTo(result);
+    }
+
+    @Test
+    @DisplayName("반환: SOS 푸시 실패 후 문자 대체가 접수되면 SMS_FALLBACK - 전달로 본다")
+    void 반환_SOS_문자대체() {
+        when(fcmChannel.send(any(), any(), any())).thenReturn(ChannelResult.failed(ChannelFailureReason.NO_DEVICE));
+
+        NotificationLogResult result = dispatcher.dispatch(USER_ID, WARD_ID, NotificationType.WARD_SOS, content);
+
+        assertThat(result).isEqualTo(NotificationLogResult.SMS_FALLBACK);
+        assertThat(result.isDelivered()).isTrue();
+        assertThat(recordedLog().getResult()).isEqualTo(result);
+    }
+
+    @Test
+    @DisplayName("반환: SOS 푸시·문자가 모두 실패하면(연락 수단 없음) FAILED - 예외 없이 미전달을 돌려준다")
+    void 반환_SOS_전부실패() {
+        when(fcmChannel.send(any(), any(), any())).thenReturn(ChannelResult.failed(ChannelFailureReason.NO_DEVICE));
+        when(smsChannel.send(any(), any(), any())).thenReturn(ChannelResult.failed(ChannelFailureReason.NO_PHONE));
+
+        NotificationLogResult result = dispatcher.dispatch(USER_ID, WARD_ID, NotificationType.WARD_SOS, content);
+
+        assertThat(result).isEqualTo(NotificationLogResult.FAILED);
+        assertThat(result.isDelivered()).isFalse();
+        assertThat(recordedLog().getResult()).isEqualTo(result);
+    }
+
+    @Test
+    @DisplayName("반환: 채널이 예외를 던져도 밖으로 내보내지 않고 FAILED를 돌려준다")
+    void 반환_채널예외() {
+        doThrow(new RuntimeException("FCM 장애")).when(fcmChannel).send(any(), any(), any());
+        doThrow(new RuntimeException("SMS 장애")).when(smsChannel).send(any(), any(), any());
+
+        NotificationLogResult result = dispatcher.dispatch(USER_ID, WARD_ID, NotificationType.WARD_SOS, content);
+
+        assertThat(result).isEqualTo(NotificationLogResult.FAILED);
+        assertThat(result.isDelivered()).isFalse();
+    }
+
+    @Test
+    @DisplayName("반환: 켠 채널이 없으면 NOT_SENT - 미전달이다")
+    void 반환_채널꺼둠() {
+        given(settingService.enabledChannels(USER_ID)).willReturn(EnumSet.noneOf(NotificationChannelType.class));
+
+        NotificationLogResult result = dispatcher.dispatch(USER_ID, NotificationType.CONNECTION_REQUEST, content);
+
+        assertThat(result).isEqualTo(NotificationLogResult.NOT_SENT);
+        assertThat(result.isDelivered()).isFalse();
+    }
+
+    @Test
+    @DisplayName("반환: 정지 계정은 SOS도 차단되어 NOT_SENT - 미전달이다(차단 정책은 그대로)")
+    void 반환_정지계정() {
+        givenRestrictedRecipient();
+
+        NotificationLogResult result = dispatcher.dispatch(USER_ID, WARD_ID, NotificationType.WARD_SOS, content);
+
+        assertThat(result).isEqualTo(NotificationLogResult.NOT_SENT);
+        assertThat(result.isDelivered()).isFalse();
+        verify(fcmChannel, never()).send(any(), any(), any());
+        verify(smsChannel, never()).send(any(), any(), any());
+    }
+
+    @Test
+    @DisplayName("반환: 이력 기록이 실패해도 발송 결과는 그대로 돌려준다(기록과 무관)")
+    void 반환_기록실패와_무관() {
+        given(settingService.enabledChannels(USER_ID)).willReturn(EnumSet.of(NotificationChannelType.FCM));
+        doThrow(new RuntimeException("DB 장애")).when(notificationLogService).record(any());
+
+        NotificationLogResult result = dispatcher.dispatch(USER_ID, NotificationType.CONNECTION_REQUEST, content);
+
+        assertThat(result).isEqualTo(NotificationLogResult.DELIVERED);
+    }
+
+    @Test
+    @DisplayName("전달 판정: DELIVERED·SMS_FALLBACK만 전달, FAILED·NOT_SENT는 미전달")
+    void 전달판정() {
+        assertThat(NotificationLogResult.DELIVERED.isDelivered()).isTrue();
+        assertThat(NotificationLogResult.SMS_FALLBACK.isDelivered()).isTrue();
+        assertThat(NotificationLogResult.FAILED.isDelivered()).isFalse();
+        assertThat(NotificationLogResult.NOT_SENT.isDelivered()).isFalse();
+    }
+
     // ─── [가드] 기록 누락 방지 (2026-09-22 영향 범위 점검 L-4) ────────────
 
     static Stream<Arguments> 전종류_x_수신자상태() {
@@ -554,9 +650,11 @@ class NotificationDispatcherTest {
         given(recipientResolver.resolve(USER_ID))
                 .willReturn(new NotificationRecipient(USER_ID, "01012345678", "a@b.com", status));
 
-        dispatcher.dispatch(USER_ID, WARD_ID, type, content);
+        NotificationLogResult returned = dispatcher.dispatch(USER_ID, WARD_ID, type, content);
 
         NotificationLog log = recordedLog();
+        // 돌려주는 결과는 이력에 남긴 결과와 같아야 한다(SOS-G09 쿨다운 해제 판단의 근거)
+        assertThat(returned).isEqualTo(log.getResult());
         assertThat(log.getType()).isEqualTo(type);
         assertThat(log.getWardId()).isEqualTo(WARD_ID);
         if (status == Status.RESTRICTED) {
