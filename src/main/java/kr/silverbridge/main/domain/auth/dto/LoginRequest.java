@@ -16,7 +16,7 @@ public class LoginRequest {
     @Size(max = 50, message = "이메일은 50자 이내여야 합니다.")
     private String email;
 
-    @Schema(description = "비밀번호 (8~64자)", example = "Password1!")
+    @Schema(description = "비밀번호 (최대 64자. 로그인에서는 최소 길이를 검사하지 않음)", example = "Password1!")
     @NotBlank(message = "비밀번호를 입력해주세요.")
     @Size(max = 64, message = "비밀번호는 64자 이내여야 합니다.")
     private String password;
