@@ -1572,3 +1572,10 @@ REST API Key 단독 대비 보안 강화 — 인가코드 탈취 시 토큰 발�
 - 단위 1168 / 0 실패(신규 63). FE 전달 Notion 작성(2026-10-02), AI 서버 안내는 기능 문서 §10.
 - 남은 것: FE 전환(등록 교체 → 시청 전환 → 프록시 축소·`NEXT_PUBLIC_STREAM_WS_URL` 제거) 전까지 무인증 구멍 유지 / 배포 후 실서버 `<img>` 중계·nginx 버퍼링 확인 / 5초 클립은 다음 작업.
 - 상세: `docs/(2026-10-03) feature-ai-stream-relay.md`
+
+## [2026-10-04] 실시간 카메라 보기 머지·배포·영향 범위 점검(템플릿 C) + 점검 반영
+
+- PR #290 머지(`ea3d7b8`) → vkcs CD success, **gosky 수동 배포**(`reset --hard origin/dev` → `up -d --build api`, untracked 보존) healthy·AI WS 재연결. 실서버 스모크: 보호자 API 무인증 401, 티켓 없는 영상 401 `CAMERA_STREAM_TICKET_INVALID`, 그 외 `/api/camera/stream/**` 401, 컨테이너 → AI REST 키 200·무키 401. FE 노션 "배포 완료" 갱신.
+- 점검: 🔴 0 · 🟠 1 · 🟡 4 · 🟢 4 - 열람 범위 누락 없음. 반영(`fix/camera-stream-audit`): M-1 AI 연결 끊김 시 `camera-analysis` `status=null`(확인 불가) / L-1 꺼진 카메라 미발송 / L-2 AI 호출 리다이렉트 미추종. 단위 1173 / 0 실패.
+- 후속: L-3 전체 시간 제한·L-4 속도 제한·I-1 거부 로그 분리 / 실서버 브라우저 E2E(운영 활성 카메라 1대·ACTIVE 연결 1건).
+- 상세: `docs/(2026-10-03) audit-impact-ai-stream-relay.md`

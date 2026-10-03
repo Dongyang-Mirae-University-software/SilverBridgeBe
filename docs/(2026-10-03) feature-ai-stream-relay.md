@@ -46,7 +46,7 @@
 | `POST /api/guardian/camera/{sessionId}/stream-ticket` | `{ticket, expiresInSeconds: 60}` |
 | `GET /api/camera/stream/{sessionId}/mjpeg?ticket=` | `multipart/x-mixed-replace` 중계, `X-Accel-Buffering: no` (SecurityConfig에서 이 GET 하나만 permitAll) |
 
-**STOMP** `/topic/{guardianId}/camera-analysis` - `{sessionId, wardId, status, detectedType, detectedTypeLabel, confidence, danger, analyzedAt(KST ISO)}`. 세션 종료 시 `status: offline`(분석 필드 null).
+**STOMP** `/topic/{guardianId}/camera-analysis` - `{sessionId, wardId, status, detectedType, detectedTypeLabel, confidence, danger, analyzedAt(KST ISO)}`. 세션 종료 시 `status: offline`(분석 필드 null). **AI 연결이 끊기면 `status: null`(확인 불가, 분석 필드 null)** - 2026-10-04 점검 M-1. 꺼진 카메라에는 보내지 않는다(L-1).
 
 **에러**
 
