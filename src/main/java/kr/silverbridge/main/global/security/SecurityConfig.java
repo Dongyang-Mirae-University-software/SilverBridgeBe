@@ -107,6 +107,9 @@ public class SecurityConfig {
                                 "/actuator/health/**",   // liveness/readiness probe
                                 "/actuator/info"
                         ).permitAll()
+                        // 카메라 영상(MJPEG) - <img>가 헤더를 못 보내 1회용 스트림 티켓으로 인증한다(CameraStreamService).
+                        // GET 영상 경로 하나만 연다 - 티켓 발급은 일반 인증 경로(/api/guardian/camera/**)다.
+                        .requestMatchers(HttpMethod.GET, "/api/camera/stream/*/mjpeg").permitAll()
                         // 관리자 전용 경로
                         .requestMatchers("/api/admin/**").hasRole("ADMIN")
                         // 나머지는 인증 필요

@@ -174,6 +174,42 @@ public class CameraService {
     }
 
     /**
+     * 보호자 영상·상태 조회 인가 - 그 세션이 <b>ACTIVE 연결된 피보호자의 활성 등록 카메라</b>일 때만 통과한다.
+     *
+     * <p>없는·비활성·백엔드 미등록 세션은 모두 404다(미등록은 AI에 송출 중이어도 주인을 모른다). 연결되지 않은
+     * 피보호자의 카메라는 403 + {@code [IDOR-ATTEMPT]}다 - 응답에는 소유자·방 이름을 싣지 않는다(2026-07-14 정책).
+     * 인가 근거는 {@code isActiveConnection}뿐이다({@code getMyWards}는 PENDING이 섞여 금지).</p>
+     */
+    @Transactional(readOnly = true)
+    public CameraOwner getViewableCamera(String guardianId, String sessionId) {
+        Camera camera = cameraRepository.findBySessionId(sessionId)
+                .filter(Camera::isActive)
+                .orElseThrow(() -> {
+                    log.info("[CAMERA-UNKNOWN-SESSION] 등록되지 않았거나 꺼진 카메라 영상 요청: guardianId={}, sessionId={}",
+                            guardianId, sessionId);
+                    return new CustomException(ErrorCode.CAMERA_NOT_FOUND);
+                });
+        if (!connectionService.isActiveConnection(guardianId, camera.getWardId())) {
+            log.warn("[IDOR-ATTEMPT] 연결되지 않은 피보호자 카메라 접근 시도: guardianId={}, sessionId={}",
+                    guardianId, sessionId);
+            throw new CustomException(ErrorCode.CAMERA_NOT_CONNECTED);
+        }
+        return new CameraOwner(camera.getWardId(), camera.getLabel());
+    }
+
+    /**
+     * {@link #getViewableCamera}와 같은 기준의 예외 없는 판정 - 시청 중 주기 재확인용(연결 해제·카메라 삭제·끄기를
+     * 열린 영상에 반영한다). 로그는 남기지 않는다(재확인은 정상 경로라 IDOR 시도가 아니다).
+     */
+    @Transactional(readOnly = true)
+    public boolean isViewable(String guardianId, String sessionId) {
+        return cameraRepository.findBySessionId(sessionId)
+                .filter(Camera::isActive)
+                .map(camera -> connectionService.isActiveConnection(guardianId, camera.getWardId()))
+                .orElse(false);
+    }
+
+    /**
      * AI 이상감지 신호의 {@code sessionId}를 소유 피보호자·설치 위치로 매핑한다(anomaly 도메인 협력용).
      *
      * <p>백엔드에 등록되지 않은 세션(직접 AI에 붙은 카메라 등)은 소유자를 알 수 없으므로 빈 값을 돌려주고,

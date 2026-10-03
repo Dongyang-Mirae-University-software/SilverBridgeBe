@@ -302,4 +302,65 @@ class CameraServiceTest {
             verify(userRepository, never()).findAllById(anyList());
         }
     }
+
+    @Nested
+    @DisplayName("보호자 영상 인가 (getViewableCamera / isViewable, 2026-10-03)")
+    class ViewableCamera {
+
+        private static final String SESSION_ID = "ward_a9cC5f_live";
+
+        @Test
+        @DisplayName("ACTIVE 연결된 피보호자의 활성 카메라 → 주인·방 이름 반환")
+        void 연결된_보호자_허용() {
+            when(cameraRepository.findBySessionId(SESSION_ID))
+                    .thenReturn(Optional.of(camera(1L, WARD_ID, SESSION_ID, "dev", "거실")));
+            when(connectionService.isActiveConnection(GUARDIAN_ID, WARD_ID)).thenReturn(true);
+
+            var owner = cameraService.getViewableCamera(GUARDIAN_ID, SESSION_ID);
+
+            assertThat(owner.wardId()).isEqualTo(WARD_ID);
+            assertThat(owner.label()).isEqualTo("거실");
+            assertThat(cameraService.isViewable(GUARDIAN_ID, SESSION_ID)).isTrue();
+        }
+
+        @Test
+        @DisplayName("연결 없음·PENDING(isActiveConnection=false) → 403 CAMERA_NOT_CONNECTED")
+        void 연결없는_보호자_403() {
+            when(cameraRepository.findBySessionId(SESSION_ID))
+                    .thenReturn(Optional.of(camera(1L, WARD_ID, SESSION_ID, "dev", "거실")));
+            when(connectionService.isActiveConnection(GUARDIAN_ID, WARD_ID)).thenReturn(false);
+
+            assertThatThrownBy(() -> cameraService.getViewableCamera(GUARDIAN_ID, SESSION_ID))
+                    .isInstanceOf(CustomException.class)
+                    .extracting(e -> ((CustomException) e).getErrorCode())
+                    .isEqualTo(ErrorCode.CAMERA_NOT_CONNECTED);
+            assertThat(cameraService.isViewable(GUARDIAN_ID, SESSION_ID)).isFalse();
+        }
+
+        @Test
+        @DisplayName("백엔드에 등록되지 않은 세션(AI에는 송출 중이어도) → 404, 연결 조회도 하지 않는다")
+        void 미등록세션_404() {
+            when(cameraRepository.findBySessionId("stream_001")).thenReturn(Optional.empty());
+
+            assertThatThrownBy(() -> cameraService.getViewableCamera(GUARDIAN_ID, "stream_001"))
+                    .isInstanceOf(CustomException.class)
+                    .extracting(e -> ((CustomException) e).getErrorCode())
+                    .isEqualTo(ErrorCode.CAMERA_NOT_FOUND);
+            verify(connectionService, never()).isActiveConnection(any(), any());
+        }
+
+        @Test
+        @DisplayName("꺼진(비활성) 카메라 → 404 (보호자 카메라 목록과 같은 모집단)")
+        void 비활성카메라_404() {
+            Camera inactive = camera(1L, WARD_ID, SESSION_ID, "dev", "거실");
+            inactive.deactivate();
+            when(cameraRepository.findBySessionId(SESSION_ID)).thenReturn(Optional.of(inactive));
+
+            assertThatThrownBy(() -> cameraService.getViewableCamera(GUARDIAN_ID, SESSION_ID))
+                    .isInstanceOf(CustomException.class)
+                    .extracting(e -> ((CustomException) e).getErrorCode())
+                    .isEqualTo(ErrorCode.CAMERA_NOT_FOUND);
+            assertThat(cameraService.isViewable(GUARDIAN_ID, SESSION_ID)).isFalse();
+        }
+    }
 }

@@ -54,6 +54,17 @@ public class AsyncConfig {
         return newExecutor("urgentNotificationExecutor", "notify-urgent-", 4, 8, 200);
     }
 
+    /**
+     * 실시간 분석 상태 팬아웃(LiveAnalysisBroadcaster) 전용 - AI WS 수신 스레드가 DB 조회·WS 발송을 기다리지 않게 한다.
+     *
+     * <p>알림 풀을 쓰지 않는다: 화면 표시용 상태라 SOS·화재 알림과 줄을 같이 서면 안 된다. 상태가 바뀔 때만
+     * 들어오는 작업이라 작게 두고, 넘치면 폐기한다(다음 변화 때 최신 상태가 다시 나간다).</p>
+     */
+    @Bean(name = "liveAnalysisExecutor")
+    public Executor liveAnalysisExecutor() {
+        return newExecutor("liveAnalysisExecutor", "live-analysis-", 1, 2, 100);
+    }
+
     private static ThreadPoolTaskExecutor newExecutor(String name, String threadNamePrefix,
                                                       int corePoolSize, int maxPoolSize, int queueCapacity) {
         ThreadPoolTaskExecutor executor = new ThreadPoolTaskExecutor();

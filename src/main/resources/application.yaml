@@ -121,6 +121,18 @@ file-server:
 # 5fps면 충분(과한 fps는 대역폭·GPU 낭비). 필요 시 CAMERA_RECOMMENDED_FPS로 조정.
 camera:
   recommended-fps: ${CAMERA_RECOMMENDED_FPS:5}
+  # 보호자 실시간 카메라 보기 - AI 영상·상태를 백엔드가 인가 후 중계(2026-10-03). 브라우저는 AI에 직접 붙지 않는다.
+  stream:
+    ai-base-url: ${AI_HTTP_BASE_URL:https://testai.gosky.kr}
+    api-key: ${AI_API_KEY:}                                 # 이상감지 수신과 같은 키. 서버 안에서만 헤더로 사용(평문 커밋 금지)
+    connect-timeout: ${CAMERA_STREAM_CONNECT_TIMEOUT:3s}
+    read-timeout: ${CAMERA_STREAM_READ_TIMEOUT:5s}           # 목록·상태·스냅샷
+    stream-idle-timeout: ${CAMERA_STREAM_IDLE_TIMEOUT:15s}   # MJPEG 무수신 제한(끝없는 응답이라 전체 제한 대신 읽기 1회 제한)
+    max-stream-duration: ${CAMERA_STREAM_MAX_DURATION:30m}   # AI MJPEG는 스스로 끝나지 않아 서버가 끊는다(FE는 새 티켓으로 재연결)
+    revalidate-interval: ${CAMERA_STREAM_REVALIDATE:60s}     # 시청 중 연결·계정 상태 재확인 주기
+    ticket-ttl: ${CAMERA_STREAM_TICKET_TTL:60s}
+    max-concurrent-streams: ${CAMERA_STREAM_MAX_CONCURRENT:20}  # 영상 1건 = 요청 스레드 1개 + AI 연결 1개
+    max-streams-per-user: ${CAMERA_STREAM_MAX_PER_USER:2}
 
 # AI 이상감지 수신 (1단계 — 수신·판정·이력. 보호자 알림 발송은 2단계).
 # 백엔드가 AI WS에 클라이언트로 붙어 latest_analysis를 받는다(AI 서버 무변경 — 웹훅 없음).

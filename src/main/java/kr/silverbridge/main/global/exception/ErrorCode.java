@@ -100,6 +100,13 @@ public enum ErrorCode {
     CAMERA_NOT_FOUND(HttpStatus.NOT_FOUND, "카메라를 찾을 수 없습니다."),
     // 타인 카메라 접근 — 무슨 일이 일어났는지 그대로 안내한다(시니어 UX 우선, 2026-07-14 정책)
     CAMERA_NOT_AUTHORIZED(HttpStatus.FORBIDDEN, "본인이 등록한 카메라만 사용할 수 있습니다."),
+    // 보호자 경로용 - 문구는 수신자 기준이라 피보호자용(CAMERA_NOT_AUTHORIZED)과 나눈다(2026-08-06 정책)
+    CAMERA_NOT_CONNECTED(HttpStatus.FORBIDDEN, "연결된 피보호자의 카메라만 볼 수 있습니다."),
+    CAMERA_NOT_STREAMING(HttpStatus.NOT_FOUND, "카메라가 지금 영상을 보내고 있지 않습니다."),
+    CAMERA_STREAM_TICKET_INVALID(HttpStatus.UNAUTHORIZED, "영상 연결이 만료되었습니다. 다시 시도해주세요."),
+    CAMERA_STREAM_LIMIT_EXCEEDED(HttpStatus.TOO_MANY_REQUESTS,
+            "동시에 볼 수 있는 영상 수를 넘었습니다. 다른 영상을 닫고 다시 시도해주세요."),
+    CAMERA_STREAM_UNAVAILABLE(HttpStatus.SERVICE_UNAVAILABLE, "카메라 영상 서버에 연결할 수 없습니다. 잠시 후 다시 시도해주세요."),
 
     // SOS 이력 조회 (처리(ACK) 기능 철회로 SOS_EVENT_NOT_FOUND 제거 - 2026-08-26, V39)
     // 연결되지 않은 피보호자의 이력 접근 — 404 위장 대신 그대로 안내한다(2026-07-14 정책)

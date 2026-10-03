@@ -60,6 +60,11 @@ public final class RedisKeys {
     // 키: guardianId + ":" + wardId. 값: 24시간 고정 윈도우 안에 실제로 만들어진 요청 수. 수락(ACTIVE) 시 삭제.
     public static final String CONNECTION_REQUEST_COUNT = "connection:request:count:";
 
+    // ── 카메라 영상 스트림 티켓 (2026-10-03) ──────────────
+    // 키: 티켓 문자열. 값: "{userId}:{sessionId}:{발급 epoch ms}". TTL 60초, 1회 소비(GETDEL).
+    // <img>는 Authorization 헤더를 못 보내서 access token 대신 이 티켓을 영상 주소에 붙인다.
+    public static final String CAMERA_STREAM_TICKET = "camera:stream:ticket:";
+
     // ws:connected:(WebSocket 접속 상태)는 2026-10-02 삭제 - 쓰기만 하고 읽는 곳이 없었고, CONNECTED 프레임에
     // 세션 속성이 없어 실제로는 기록도 되지 않았다(XCUT-G30). 접속 여부가 필요해지면 연결 수 카운터로 새로 설계할 것.
 }
