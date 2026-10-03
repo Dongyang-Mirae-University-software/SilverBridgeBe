@@ -1563,3 +1563,12 @@ REST API Key 단독 대비 보안 강화 — 인가코드 탈취 시 토큰 발�
 - 배포 주의: **V55 비가역**(사전 중복 점검, 두 서버) / **카카오 pendingToken은 FE 동시 배포** / `CLIENT_IP_TRUSTED_PROXIES`·redis `noeviction`(P10, #285 머지, 서버 `up -d redis`)은 사용자 소관.
 - 후속 머지: P10 redis noeviction(#285) / 설계안 refresh 쿠키(#286) / P15 토큰 무효화 시 열린 WS 세션 서버 종료(#287, 1008 `AUTH_INVALIDATED`, 단일 인스턴스) / P16 Solapi 호출 10초 제한(#288, `SolapiCallExecutor`). 후속 점검: `AlimtalkSender`·`SmsSender` catch 로그의 예외 원문.
 - 상세: `docs/(2026-10-02) fix-qa-be-issues.md`
+
+## [2026-10-03] 보호자 실시간 카메라 보기 - AI 영상 백엔드 중계 + 분석 상태 STOMP 전환 (branch `feature/camera-stream-relay`)
+
+- 근거(gosky 조사): FE `/api/streams/**` 무인증 프록시로 누구나 모든 집 영상 시청 가능 + AI 키 브라우저 노출. 2026-07-03 "백엔드는 영상을 프록시하지 않는다"를 뒤집어 완전 중계로.
+- 신규 API 5종(목록+송출 상태·상태+최근 분석·스냅샷·스트림 티켓·MJPEG 티켓 인증) + STOMP `camera-analysis`(WS 전용, 상태 변화 시만). 인가는 `CameraService.getViewableCamera` 한 곳(ACTIVE 연결 + 활성 등록 카메라), 시청 중 60초 재확인·최대 30분·동시 20/1인 2. 마이그레이션 없음.
+- 구현 중 결함 발견·수정: Spring `SimpleClientHttpResponse.close()`가 본문을 drain해 끝없는 MJPEG에서 닫기가 멈춤(자리·스레드 누수) → `HttpURLConnection.disconnect()`로 교체, 실 HTTP 회귀 테스트로 고정.
+- 단위 1168 / 0 실패(신규 63). FE 전달 Notion 작성(2026-10-02), AI 서버 안내는 기능 문서 §10.
+- 남은 것: FE 전환(등록 교체 → 시청 전환 → 프록시 축소·`NEXT_PUBLIC_STREAM_WS_URL` 제거) 전까지 무인증 구멍 유지 / 배포 후 실서버 `<img>` 중계·nginx 버퍼링 확인 / 5초 클립은 다음 작업.
+- 상세: `docs/(2026-10-03) feature-ai-stream-relay.md`
