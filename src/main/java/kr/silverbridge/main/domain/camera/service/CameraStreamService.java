@@ -17,6 +17,7 @@ import kr.silverbridge.main.global.enums.Status;
 import kr.silverbridge.main.global.exception.CustomException;
 import kr.silverbridge.main.global.exception.ErrorCode;
 import kr.silverbridge.main.global.jwt.TokenInvalidation;
+import kr.silverbridge.main.global.security.RateLimitService;
 import kr.silverbridge.main.global.util.RedisKeys;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -57,11 +58,13 @@ public class CameraStreamService {
     private final UserRepository userRepository;
     private final StringRedisTemplate redisTemplate;
     private final CameraStreamProperties properties;
+    private final RateLimitService rateLimitService;
 
     /**
      * 연결된 피보호자의 등록 카메라 + 송출 상태. AI가 응답하지 않으면 카메라 목록은 그대로 주고 상태만 {@code null}(확인 불가)이다.
      */
     public List<GuardianLiveCameraView> getLiveCameras(String guardianId) {
+        rateLimit(CameraStreamRateLimit.LIVE, guardianId);
         List<GuardianCameraView> cameras = cameraService.getConnectedWardCameras(guardianId);
         if (cameras.isEmpty()) {
             return List.of();
@@ -94,6 +97,7 @@ public class CameraStreamService {
 
     /** 선택한 카메라의 송출 상태 + 최근 AI 분석. */
     public CameraLiveStatusResponse getStatus(String guardianId, String sessionId) {
+        rateLimit(CameraStreamRateLimit.STATUS, guardianId);
         cameraService.getViewableCamera(guardianId, sessionId);
         Optional<AiStreamClient.AiStreamStatus> status;
         try {
@@ -111,6 +115,7 @@ public class CameraStreamService {
 
     /** 최신 정지 화면(JPEG). */
     public byte[] getLatestFrame(String guardianId, String sessionId) {
+        rateLimit(CameraStreamRateLimit.FRAME, guardianId);
         cameraService.getViewableCamera(guardianId, sessionId);
         try {
             return aiStreamClient.fetchLatestFrame(sessionId)
@@ -122,6 +127,7 @@ public class CameraStreamService {
 
     /** 영상 1회용 티켓. 인가를 통과한 카메라에만 발급한다. */
     public StreamTicketResponse issueTicket(String guardianId, String sessionId) {
+        rateLimit(CameraStreamRateLimit.TICKET, guardianId);
         cameraService.getViewableCamera(guardianId, sessionId);
         String ticket = ticketService.issue(guardianId, sessionId);
         return new StreamTicketResponse(ticket, properties.getTicketTtl().toSeconds());
@@ -163,6 +169,11 @@ public class CameraStreamService {
                     streamTicket.issuedAtMillis());
             log.info("[CAMERA-STREAM] 영상 중계 종료: userId={}, sessionId={}, reason={}", userId, sessionId, reason);
         }
+    }
+
+    // 인가·AI 호출보다 먼저 - 가장 싼 검사로 반복 호출을 막는다(점검 L-4). 식별자는 보호자 ID다(공용 NAT의 시니어를 IP로 묶지 않는다).
+    private void rateLimit(CameraStreamRateLimit limit, String guardianId) {
+        rateLimitService.check(limit.endpoint, guardianId, limit.perMinute, limit.perHour);
     }
 
     enum StopReason { AI_ENDED, AI_IDLE, AI_ERROR, CLIENT_GONE, MAX_DURATION, REVOKED, SHUTDOWN }

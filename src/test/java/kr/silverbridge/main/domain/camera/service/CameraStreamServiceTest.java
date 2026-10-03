@@ -17,6 +17,8 @@ import kr.silverbridge.main.domain.user.repository.UserRepository;
 import kr.silverbridge.main.global.enums.Status;
 import kr.silverbridge.main.global.exception.CustomException;
 import kr.silverbridge.main.global.exception.ErrorCode;
+import kr.silverbridge.main.global.exception.TooManyRequestsException;
+import kr.silverbridge.main.global.security.RateLimitService;
 import kr.silverbridge.main.global.util.RedisKeys;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -66,6 +68,7 @@ class CameraStreamServiceTest {
     @Mock private UserRepository userRepository;
     @Mock private StringRedisTemplate redisTemplate;
     @Mock private ValueOperations<String, String> valueOps;
+    @Mock private RateLimitService rateLimitService;
 
     private CameraStreamProperties properties;
     private CameraStreamSlots slots;
@@ -76,7 +79,7 @@ class CameraStreamServiceTest {
         properties = new CameraStreamProperties();
         slots = new CameraStreamSlots(properties);
         service = new CameraStreamService(cameraService, aiStreamClient, ticketService, slots, analysisSnapshots,
-                userRepository, redisTemplate, properties);
+                userRepository, redisTemplate, properties, rateLimitService);
         lenient().when(redisTemplate.opsForValue()).thenReturn(valueOps);
     }
 
@@ -389,6 +392,47 @@ class CameraStreamServiceTest {
             when(valueOps.get(any())).thenThrow(new RedisConnectionFailureException("down"));
 
             assertThat(service.isStillViewable(GUARDIAN_ID, SESSION_ID, 0)).isTrue();
+        }
+    }
+
+    @Nested
+    @DisplayName("속도 제한 (점검 L-4)")
+    class RateLimit {
+
+        @Test
+        @DisplayName("API마다 보호자 ID 기준 분·시간 한도로 검사한다")
+        void 한도_검사() {
+            when(cameraService.getConnectedWardCameras(GUARDIAN_ID)).thenReturn(List.of());
+            when(aiStreamClient.fetchStatus(SESSION_ID)).thenReturn(Optional.empty());
+            when(aiStreamClient.fetchLatestFrame(SESSION_ID)).thenReturn(Optional.of(new byte[]{1}));
+            when(ticketService.issue(GUARDIAN_ID, SESSION_ID)).thenReturn(TICKET);
+
+            service.getLiveCameras(GUARDIAN_ID);
+            service.getStatus(GUARDIAN_ID, SESSION_ID);
+            service.getLatestFrame(GUARDIAN_ID, SESSION_ID);
+            service.issueTicket(GUARDIAN_ID, SESSION_ID);
+
+            verify(rateLimitService).check("camera-live", GUARDIAN_ID, 30, 600);
+            verify(rateLimitService).check("camera-status", GUARDIAN_ID, 30, 600);
+            verify(rateLimitService).check("camera-frame", GUARDIAN_ID, 60, 1200);
+            verify(rateLimitService).check("camera-ticket", GUARDIAN_ID, 20, 300);
+        }
+
+        @Test
+        @DisplayName("한도를 넘으면 429 - 인가·AI 호출·티켓 발급 전에 막힌다")
+        void 한도초과_조기차단() {
+            org.mockito.Mockito.doThrow(new TooManyRequestsException(30))
+                    .when(rateLimitService).check(anyString(), anyString(), org.mockito.ArgumentMatchers.anyInt(),
+                            org.mockito.ArgumentMatchers.anyInt());
+
+            assertThat(errorOf(() -> service.getLiveCameras(GUARDIAN_ID))).isEqualTo(ErrorCode.TOO_MANY_REQUESTS);
+            assertThat(errorOf(() -> service.getStatus(GUARDIAN_ID, SESSION_ID))).isEqualTo(ErrorCode.TOO_MANY_REQUESTS);
+            assertThat(errorOf(() -> service.getLatestFrame(GUARDIAN_ID, SESSION_ID))).isEqualTo(ErrorCode.TOO_MANY_REQUESTS);
+            assertThat(errorOf(() -> service.issueTicket(GUARDIAN_ID, SESSION_ID))).isEqualTo(ErrorCode.TOO_MANY_REQUESTS);
+            verify(cameraService, never()).getConnectedWardCameras(anyString());
+            verify(cameraService, never()).getViewableCamera(anyString(), anyString());
+            verify(aiStreamClient, never()).fetchStatus(anyString());
+            verify(ticketService, never()).issue(anyString(), anyString());
         }
     }
 

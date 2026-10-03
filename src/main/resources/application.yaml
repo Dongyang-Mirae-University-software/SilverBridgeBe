@@ -126,7 +126,8 @@ camera:
     ai-base-url: ${AI_HTTP_BASE_URL:https://testai.gosky.kr}
     api-key: ${AI_API_KEY:}                                 # 이상감지 수신과 같은 키. 서버 안에서만 헤더로 사용(평문 커밋 금지)
     connect-timeout: ${CAMERA_STREAM_CONNECT_TIMEOUT:3s}
-    read-timeout: ${CAMERA_STREAM_READ_TIMEOUT:5s}           # 목록·상태·스냅샷
+    read-timeout: ${CAMERA_STREAM_READ_TIMEOUT:5s}           # 목록·상태·스냅샷 읽기 1회
+    call-timeout: ${CAMERA_STREAM_CALL_TIMEOUT:8s}           # 목록·상태·스냅샷 호출 전체(마감 시 연결을 끊는다)
     stream-idle-timeout: ${CAMERA_STREAM_IDLE_TIMEOUT:15s}   # MJPEG 무수신 제한(끝없는 응답이라 전체 제한 대신 읽기 1회 제한)
     max-stream-duration: ${CAMERA_STREAM_MAX_DURATION:30m}   # AI MJPEG는 스스로 끝나지 않아 서버가 끊는다(FE는 새 티켓으로 재연결)
     revalidate-interval: ${CAMERA_STREAM_REVALIDATE:60s}     # 시청 중 연결·계정 상태 재확인 주기

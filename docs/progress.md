@@ -1579,3 +1579,9 @@ REST API Key 단독 대비 보안 강화 — 인가코드 탈취 시 토큰 발�
 - 점검: 🔴 0 · 🟠 1 · 🟡 4 · 🟢 4 - 열람 범위 누락 없음. 반영(`fix/camera-stream-audit`): M-1 AI 연결 끊김 시 `camera-analysis` `status=null`(확인 불가) / L-1 꺼진 카메라 미발송 / L-2 AI 호출 리다이렉트 미추종. 단위 1173 / 0 실패.
 - 후속: L-3 전체 시간 제한·L-4 속도 제한·I-1 거부 로그 분리 / 실서버 브라우저 E2E(운영 활성 카메라 1대·ACTIVE 연결 1건).
 - 상세: `docs/(2026-10-03) audit-impact-ai-stream-relay.md`
+
+## [2026-10-04] 실시간 카메라 점검 후속 L-3·L-4 (branch `fix/camera-stream-limits`)
+
+- L-3: AI 목록·상태·스냅샷 호출 전체 제한 8초(헤더 대기는 연결 끊기, 본문은 읽기 사이 마감 확인 - 읽는 중 `disconnect()`가 읽기를 깨우지 못하는 JDK 동작을 재현·확인), 잘린 본문 실패 처리, JSON 1MB 상한.
+- L-4: 보호자 카메라 API 4종 보호자별 분·시간 속도 제한(목록·상태 30/600, 스냅샷 60/1200, 티켓 20/300), 인가보다 먼저, Redis 장애 fail-open.
+- 단위 1177 / 0 실패. 상세: `docs/(2026-10-03) audit-impact-ai-stream-relay.md` "후속 반영".
