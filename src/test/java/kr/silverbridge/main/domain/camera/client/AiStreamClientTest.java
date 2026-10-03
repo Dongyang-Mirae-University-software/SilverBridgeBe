@@ -1,0 +1,214 @@
+package kr.silverbridge.main.domain.camera.client;
+
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.sun.net.httpserver.HttpExchange;
+import com.sun.net.httpserver.HttpServer;
+import kr.silverbridge.main.domain.camera.client.AiStreamClient.AiLiveStream;
+import kr.silverbridge.main.domain.camera.client.AiStreamClient.AiMjpegStream;
+import kr.silverbridge.main.domain.camera.config.CameraStreamProperties;
+import kr.silverbridge.main.global.exception.CustomException;
+import kr.silverbridge.main.global.exception.ErrorCode;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Test;
+
+import java.io.IOException;
+import java.io.OutputStream;
+import java.net.InetSocketAddress;
+import java.nio.charset.StandardCharsets;
+import java.time.Duration;
+import java.time.OffsetDateTime;
+import java.time.ZoneOffset;
+import java.util.Map;
+import java.util.concurrent.atomic.AtomicReference;
+
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+
+/**
+ * AI REST 클라이언트 - 실제 HTTP로 키 헤더·응답 해석·404/장애 구분을 확인한다(로컬 임시 서버).
+ */
+class AiStreamClientTest {
+
+    private static final String KEY = "test-key";
+
+    private HttpServer server;
+    private final AtomicReference<String> receivedKey = new AtomicReference<>();
+    private final AtomicReference<String> receivedQuery = new AtomicReference<>();
+    private final AtomicReference<String> receivedRawPath = new AtomicReference<>();
+    private CameraStreamProperties properties;
+
+    @BeforeEach
+    void setUp() throws IOException {
+        server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
+        server.createContext("/api/v1/live-streams", this::handle);
+        server.setExecutor(java.util.concurrent.Executors.newCachedThreadPool());
+        server.start();
+        properties = new CameraStreamProperties();
+        properties.setAiBaseUrl("http://127.0.0.1:" + server.getAddress().getPort());
+        properties.setApiKey(KEY);
+        properties.setReadTimeout(Duration.ofSeconds(2));
+        properties.setStreamIdleTimeout(Duration.ofSeconds(2));
+    }
+
+    @AfterEach
+    void tearDown() {
+        server.stop(0);
+    }
+
+    private void handle(HttpExchange exchange) throws IOException {
+        receivedKey.set(exchange.getRequestHeaders().getFirst("X-API-Key"));
+        receivedQuery.set(exchange.getRequestURI().getRawQuery());
+        receivedRawPath.set(exchange.getRequestURI().getRawPath());
+        String path = exchange.getRequestURI().getPath();
+        switch (path) {
+            case "/api/v1/live-streams" -> json(exchange, 200, """
+                    {"success":true,"data":[
+                      {"sessionId":"s1","status":"running","lastFrameAt":"2026-10-03T05:03:09.123456"},
+                      {"sessionId":"s2","status":"disconnected","lastFrameAt":null}]}""");
+            case "/api/v1/live-streams/s1/status" -> json(exchange, 200, """
+                    {"success":true,"data":{"sessionId":"s1","status":"running","fps":1.9,"viewerCount":3,"isAnalyzing":true}}""");
+            case "/api/v1/live-streams/gone/status", "/api/v1/live-streams/gone/mjpeg" ->
+                    json(exchange, 404, "{\"success\":false,\"errorCode\":\"STREAM_SESSION_NOT_FOUND\"}");
+            case "/api/v1/live-streams/boom/status" -> json(exchange, 500, "{}");
+            case "/api/v1/live-streams/endless/mjpeg" -> {
+                // 실제 AI처럼 끝나지 않는 MJPEG - 클라이언트가 끊을 때까지 계속 보낸다
+                exchange.getResponseHeaders().set("Content-Type", "multipart/x-mixed-replace; boundary=frame");
+                exchange.sendResponseHeaders(200, 0);
+                try (OutputStream out = exchange.getResponseBody()) {
+                    while (true) {
+                        out.write("--frame\r\nContent-Type: image/jpeg\r\n\r\nJPEG\r\n".getBytes(StandardCharsets.US_ASCII));
+                        out.flush();
+                        Thread.sleep(20);
+                    }
+                } catch (IOException | InterruptedException ignored) {
+                    // 클라이언트가 끊음
+                }
+            }
+            case "/api/v1/live-streams/s1/mjpeg" -> {
+                exchange.getResponseHeaders().set("Content-Type", "multipart/x-mixed-replace; boundary=frame");
+                exchange.sendResponseHeaders(200, 0);
+                try (OutputStream out = exchange.getResponseBody()) {
+                    out.write("--frame\r\n".getBytes(StandardCharsets.US_ASCII));
+                }
+            }
+            default -> json(exchange, 404, "{}");
+        }
+    }
+
+    private static void json(HttpExchange exchange, int status, String body) throws IOException {
+        byte[] bytes = body.getBytes(StandardCharsets.UTF_8);
+        exchange.getResponseHeaders().set("Content-Type", "application/json");
+        exchange.sendResponseHeaders(status, bytes.length);
+        try (OutputStream out = exchange.getResponseBody()) {
+            out.write(bytes);
+        }
+    }
+
+    private AiStreamClient client() {
+        return new AiStreamClient(properties, new ObjectMapper());
+    }
+
+    @Test
+    @DisplayName("목록: 키는 X-API-Key 헤더로만 보내고(쿼리 없음) 세션별 상태·시각(UTC)을 읽는다")
+    void 목록() {
+        Map<String, AiLiveStream> streams = client().fetchLiveStreams();
+
+        assertThat(receivedKey.get()).isEqualTo(KEY);
+        assertThat(receivedQuery.get()).isNull();
+        assertThat(streams).containsOnlyKeys("s1", "s2");
+        assertThat(streams.get("s1").status()).isEqualTo("running");
+        assertThat(streams.get("s1").lastFrameAt())
+                .isEqualTo(OffsetDateTime.of(2026, 10, 3, 5, 3, 9, 123_456_000, ZoneOffset.UTC));
+        assertThat(streams.get("s2").lastFrameAt()).isNull();
+    }
+
+    @Test
+    @DisplayName("상태: AI가 세션을 모르면(404) 빈 값, 5xx는 장애 - 둘을 섞지 않는다")
+    void 상태_404와_장애구분() {
+        AiStreamClient client = client();
+
+        assertThat(client.fetchStatus("s1")).hasValueSatisfying(s -> {
+            assertThat(s.status()).isEqualTo("running");
+            assertThat(s.fps()).isEqualTo(1.9);
+            assertThat(s.isAnalyzing()).isTrue();
+        });
+        assertThat(client.fetchStatus("gone")).isEmpty();
+        assertThatThrownBy(() -> client.fetchStatus("boom")).isInstanceOf(AiStreamUnavailableException.class);
+    }
+
+    @Test
+    @DisplayName("MJPEG: 열어서 본문을 읽을 수 있고, 세션이 없으면 404 CAMERA_NOT_STREAMING")
+    void mjpeg() throws IOException {
+        AiStreamClient client = client();
+
+        try (AiMjpegStream stream = client.openMjpeg("s1")) {
+            assertThat(stream.contentType()).startsWith("multipart/x-mixed-replace");
+            assertThat(new String(stream.body().readAllBytes(), StandardCharsets.US_ASCII)).isEqualTo("--frame\r\n");
+        }
+        assertThatThrownBy(() -> client.openMjpeg("gone"))
+                .isInstanceOf(CustomException.class)
+                .extracting(e -> ((CustomException) e).getErrorCode())
+                .isEqualTo(ErrorCode.CAMERA_NOT_STREAMING);
+    }
+
+    @Test
+    @DisplayName("끝나지 않는 MJPEG도 즉시 닫힌다 - 본문을 끝까지 읽지(drain) 않는다 (시청자 이탈 시 스레드·자리 누수 방지)")
+    void 끝없는스트림_즉시닫힘() throws Exception {
+        AiMjpegStream stream = client().openMjpeg("endless");
+        assertThat(stream.body().read(new byte[64])).isPositive();
+
+        java.util.concurrent.CompletableFuture<Void> closing =
+                java.util.concurrent.CompletableFuture.runAsync(stream::close);
+
+        closing.get(2, java.util.concurrent.TimeUnit.SECONDS);   // drain하면 여기서 시간 초과
+    }
+
+    @Test
+    @DisplayName("다른 스레드에서 닫으면 읽고 있던 쪽이 예외로 빠져나온다 (서버 종료 처리)")
+    void 다른스레드에서_닫기() throws Exception {
+        AiMjpegStream stream = client().openMjpeg("endless");
+        java.util.concurrent.CompletableFuture<Boolean> reader = java.util.concurrent.CompletableFuture.supplyAsync(() -> {
+            byte[] buffer = new byte[1024];
+            try {
+                while (stream.body().read(buffer) >= 0) {
+                    // 계속 읽는다
+                }
+                return true;
+            } catch (IOException e) {
+                return true;
+            }
+        });
+        Thread.sleep(100);
+
+        stream.close();
+
+        assertThat(reader.get(2, java.util.concurrent.TimeUnit.SECONDS)).isTrue();
+    }
+
+    @Test
+    @DisplayName("AI 키가 비어 있으면 호출하지 않고 장애로 본다(기동은 막지 않는다)")
+    void 키없음() {
+        properties.setApiKey("");
+
+        assertThatThrownBy(() -> client().fetchLiveStreams()).isInstanceOf(AiStreamUnavailableException.class);
+        assertThat(receivedKey.get()).isNull();
+    }
+
+    @Test
+    @DisplayName("AI 서버가 꺼져 있으면 장애(연결 실패)")
+    void 서버꺼짐() {
+        server.stop(0);
+
+        assertThatThrownBy(() -> client().fetchLiveStreams()).isInstanceOf(AiStreamUnavailableException.class);
+    }
+
+    @Test
+    @DisplayName("세션 ID의 '/'까지 인코딩해 한 경로 조각으로만 넣는다(다른 AI 경로를 가리킬 수 없다)")
+    void 경로인코딩() {
+        client().fetchStatus("../../stream-sessions/x");
+
+        assertThat(receivedRawPath.get()).isEqualTo("/api/v1/live-streams/..%2F..%2Fstream-sessions%2Fx/status");
+    }
+}

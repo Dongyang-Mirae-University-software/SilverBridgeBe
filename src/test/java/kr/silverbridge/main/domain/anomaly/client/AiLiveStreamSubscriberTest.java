@@ -2,7 +2,10 @@ package kr.silverbridge.main.domain.anomaly.client;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import kr.silverbridge.main.domain.anomaly.config.AnomalyProperties;
+import kr.silverbridge.main.domain.anomaly.dto.AnomalySignal;
 import kr.silverbridge.main.domain.anomaly.service.AnomalyDetectionService;
+import kr.silverbridge.main.domain.anomaly.service.LiveAnalysisBroadcaster;
+import kr.silverbridge.main.global.enums.DetectedType;
 import kr.silverbridge.main.domain.camera.dto.CameraOwner;
 import kr.silverbridge.main.domain.camera.service.CameraService;
 import org.junit.jupiter.api.BeforeEach;
@@ -18,6 +21,7 @@ import org.springframework.web.socket.TextMessage;
 import org.springframework.web.socket.WebSocketSession;
 
 import java.util.Optional;
+import java.util.Set;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
@@ -44,13 +48,14 @@ class AiLiveStreamSubscriberTest {
     @Mock private CameraService cameraService;
     @Mock private TaskScheduler taskScheduler;
     @Mock private WebSocketSession session;
+    @Mock private LiveAnalysisBroadcaster liveAnalysisBroadcaster;
 
     private AiLiveStreamSubscriber subscriber;
 
     @BeforeEach
     void setUp() throws Exception {
         subscriber = new AiLiveStreamSubscriber(new AnomalyProperties(), signalParser, detectionService,
-                cameraService, new ObjectMapper(), taskScheduler);
+                cameraService, new ObjectMapper(), taskScheduler, liveAnalysisBroadcaster);
         lenient().when(session.isOpen()).thenReturn(true);
         subscriber.afterConnectionEstablished(session);   // 연결 → {"action":"list"} 1건 발송
     }
@@ -163,5 +168,49 @@ class AiLiveStreamSubscriberTest {
         subscriber.handleTextMessage(session, new TextMessage("{\"type\":\"latest_analysis\",\"data\":{}}"));
 
         verify(signalParser).parse(any());
+    }
+
+    @Test
+    @DisplayName("latest_analysis는 판정을 먼저 거친 뒤 실시간 분석 상태로도 넘긴다 (2026-10-03)")
+    void 분석신호_판정후_실시간상태로_전달() throws Exception {
+        AnomalySignal signal = new AnomalySignal(SESSION_ID, DetectedType.NORMAL, 0.1, false, null);
+        when(signalParser.parse(any())).thenReturn(Optional.of(signal));
+
+        subscriber.handleTextMessage(session, new TextMessage("{\"type\":\"latest_analysis\"}"));
+
+        org.mockito.InOrder order = org.mockito.Mockito.inOrder(detectionService, liveAnalysisBroadcaster);
+        order.verify(detectionService).handle(signal);
+        order.verify(liveAnalysisBroadcaster).onAnalysis(signal);
+    }
+
+    @Test
+    @DisplayName("session_status는 세션 ID와 상태만 실시간 분석 상태로 넘긴다")
+    void 세션상태_전달() throws Exception {
+        subscriber.handleTextMessage(session, new TextMessage(
+                "{\"type\":\"session_status\",\"sessionId\":\"" + SESSION_ID
+                        + "\",\"data\":{\"status\":\"running\",\"fps\":1.9}}"));
+
+        verify(liveAnalysisBroadcaster).onSessionStatus(SESSION_ID, "running");
+    }
+
+    @Test
+    @DisplayName("목록에서 사라진 구독 세션은 종료로 알린다(보호자 화면 꺼짐 표시)")
+    void 종료세션_알림() throws Exception {
+        when(cameraService.findOwnerBySessionId(SESSION_ID))
+                .thenReturn(Optional.of(new CameraOwner("WD0001", "거실")));
+
+        subscriber.handleTextMessage(session, liveStreams(SESSION_ID));
+        subscriber.handleTextMessage(session, liveStreams());
+
+        verify(liveAnalysisBroadcaster).onSessionsEnded(Set.of(SESSION_ID));
+    }
+
+    @Test
+    @DisplayName("AI 연결이 끊기면 받아 둔 분석 상태를 비운다 - 옛 결과를 현재처럼 보여주지 않는다")
+    void 연결종료시_상태_초기화() {
+        subscriber.afterConnectionClosed(session, org.springframework.web.socket.CloseStatus.GOING_AWAY);
+
+        // 연결 시 1회 + 종료 시 1회
+        verify(liveAnalysisBroadcaster, times(2)).clear();
     }
 }

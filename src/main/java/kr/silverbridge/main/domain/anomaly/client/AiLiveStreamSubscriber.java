@@ -8,6 +8,7 @@ import jakarta.websocket.ContainerProvider;
 import jakarta.websocket.WebSocketContainer;
 import kr.silverbridge.main.domain.anomaly.config.AnomalyProperties;
 import kr.silverbridge.main.domain.anomaly.service.AnomalyDetectionService;
+import kr.silverbridge.main.domain.anomaly.service.LiveAnalysisBroadcaster;
 import kr.silverbridge.main.domain.camera.event.CameraRegisteredEvent;
 import kr.silverbridge.main.domain.camera.service.CameraService;
 import lombok.RequiredArgsConstructor;
@@ -66,6 +67,7 @@ public class AiLiveStreamSubscriber extends TextWebSocketHandler {
     private final CameraService cameraService;
     private final ObjectMapper objectMapper;
     private final TaskScheduler taskScheduler;
+    private final LiveAnalysisBroadcaster liveAnalysisBroadcaster;
 
     /** AI에 세션 목록을 요청하는 페이로드(고정 문자열 — 변수 삽입 없음). */
     private static final String LIST_ACTION = "{\"action\":\"list\"}";
@@ -180,6 +182,7 @@ public class AiLiveStreamSubscriber extends TextWebSocketHandler {
         this.session = session;
         this.reconnectAttempts = 0;
         subscribedSessions.clear();   // 재연결이면 서버 측 구독이 사라졌으므로 다시 구독해야 한다
+        liveAnalysisBroadcaster.clear();
         log.info("[ANOMALY] AI WS 연결됨 — 세션 목록 요청");
         send(LIST_ACTION);
     }
@@ -190,8 +193,13 @@ public class AiLiveStreamSubscriber extends TextWebSocketHandler {
             JsonNode root = objectMapper.readTree(message.getPayload());
             switch (root.path("type").asText("")) {
                 case "live_streams" -> subscribeRegisteredSessions(root.path("data"));
-                case "latest_analysis" -> signalParser.parse(root).ifPresent(detectionService::handle);
-                default -> { /* connected·pong·subscribed·session_status 등은 처리 대상 아님 */ }
+                case "latest_analysis" -> signalParser.parse(root).ifPresent(signal -> {
+                    detectionService.handle(signal);           // 판정·이력·알림이 먼저다
+                    liveAnalysisBroadcaster.onAnalysis(signal); // 화면 표시용 상태(2026-10-03)
+                });
+                case "session_status" -> liveAnalysisBroadcaster.onSessionStatus(
+                        root.path("sessionId").asText(null), root.path("data").path("status").asText(null));
+                default -> { /* connected·pong·subscribed 등은 처리 대상 아님 */ }
             }
         } catch (Exception e) {
             // 메시지 1건의 실패가 커넥션을 끊지 않도록 격리 — 다음 프레임은 계속 처리한다
@@ -256,6 +264,11 @@ public class AiLiveStreamSubscriber extends TextWebSocketHandler {
         }
 
         // AI 목록에서 사라진 세션 = 종료된 세션. 기록을 지워야 같은 sessionId로 재시작할 때 다시 구독한다.
+        Set<String> ended = new HashSet<>(subscribedSessions);
+        ended.removeAll(live);
+        if (!ended.isEmpty()) {
+            liveAnalysisBroadcaster.onSessionsEnded(ended);   // 보호자 화면에 꺼짐 표시
+        }
         if (subscribedSessions.retainAll(live)) {
             log.info("[ANOMALY] 종료된 세션 구독 해제 — 남은 구독={}건", subscribedSessions.size());
         }
@@ -279,6 +292,7 @@ public class AiLiveStreamSubscriber extends TextWebSocketHandler {
     public void afterConnectionClosed(WebSocketSession session, CloseStatus status) {
         this.session = null;
         subscribedSessions.clear();
+        liveAnalysisBroadcaster.clear();   // 끊긴 동안의 상태는 알 수 없다 - 옛 결과를 현재처럼 보여주지 않는다
         log.warn("[ANOMALY] AI WS 연결 종료: code={}, reason={}", status.getCode(), status.getReason());
         scheduleReconnect();
     }

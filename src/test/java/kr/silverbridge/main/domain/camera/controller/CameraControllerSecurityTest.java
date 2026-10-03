@@ -2,6 +2,7 @@ package kr.silverbridge.main.domain.camera.controller;
 
 import kr.silverbridge.main.domain.camera.dto.CameraUpdateRequest;
 import kr.silverbridge.main.domain.camera.service.CameraService;
+import kr.silverbridge.main.domain.camera.service.CameraStreamService;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -43,6 +44,9 @@ class CameraControllerSecurityTest {
 
     @MockitoBean
     private CameraService cameraService;
+
+    @MockitoBean
+    private CameraStreamService cameraStreamService;
 
     @Autowired
     private WardCameraController wardController;
@@ -90,5 +94,35 @@ class CameraControllerSecurityTest {
     void 비GUARDIAN_보호자조회_거부() {
         assertThatThrownBy(() -> guardianController.getConnectedWardCameras("WD0001"))
                 .isInstanceOf(AccessDeniedException.class);
+    }
+
+    @Test
+    @WithMockUser(roles = "GUARDIAN")
+    @DisplayName("GUARDIAN 역할 → 실시간 카메라 목록·상태·스냅샷·티켓 허용 (2026-10-03)")
+    void guardian_실시간카메라_허용() {
+        when(cameraStreamService.getLiveCameras(anyString())).thenReturn(List.of());
+        when(cameraStreamService.getLatestFrame(anyString(), anyString())).thenReturn(new byte[0]);
+
+        assertThatNoException().isThrownBy(() -> guardianController.getLiveCameras("GD0001"));
+        assertThatNoException().isThrownBy(() -> guardianController.getStatus("GD0001", "s1"));
+        assertThatNoException().isThrownBy(() -> guardianController.getLatestFrame("GD0001", "s1"));
+        assertThatNoException().isThrownBy(() -> guardianController.issueStreamTicket("GD0001", "s1"));
+    }
+
+    @Test
+    @WithMockUser(roles = "WARD")
+    @DisplayName("피보호자(WARD)는 보호자 실시간 카메라 API를 쓸 수 없다 - 시청은 보호자 전용(403)")
+    void ward_실시간카메라_거부() {
+        assertThatThrownBy(() -> guardianController.getLiveCameras("WD0001")).isInstanceOf(AccessDeniedException.class);
+        assertThatThrownBy(() -> guardianController.getStatus("WD0001", "s1")).isInstanceOf(AccessDeniedException.class);
+        assertThatThrownBy(() -> guardianController.getLatestFrame("WD0001", "s1")).isInstanceOf(AccessDeniedException.class);
+        assertThatThrownBy(() -> guardianController.issueStreamTicket("WD0001", "s1")).isInstanceOf(AccessDeniedException.class);
+    }
+
+    @Test
+    @WithMockUser(roles = "ADMIN")
+    @DisplayName("관리자(ADMIN)도 영상 티켓을 받을 수 없다(403)")
+    void admin_티켓_거부() {
+        assertThatThrownBy(() -> guardianController.issueStreamTicket("AD0001", "s1")).isInstanceOf(AccessDeniedException.class);
     }
 }

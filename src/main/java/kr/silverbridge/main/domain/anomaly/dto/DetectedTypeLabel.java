@@ -23,4 +23,16 @@ public final class DetectedTypeLabel {
             default -> "이상 상황";
         };
     }
+
+    /**
+     * 실시간 분석 상태 표시용(보호자 실시간 카메라 보기). 알림 문구({@link #of})와 달리 정상·확인 불가도 그대로 보여준다 -
+     * 매 순간의 상태를 그리는 화면이라 "이상 상황"으로 뭉뚱그리면 정상 화면에 경고처럼 뜬다.
+     */
+    public static String ofLive(DetectedType detectedType) {
+        return switch (detectedType) {
+            case NORMAL -> "정상";
+            case UNKNOWN -> "확인 불가";   // 프레임 없음·모델 미로드·디코드 실패
+            default -> of(detectedType);
+        };
+    }
 }
