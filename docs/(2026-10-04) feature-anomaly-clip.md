@@ -166,7 +166,7 @@ AI 서버보다 백엔드가 먼저 배포돼도 깨지지 않는다 - 클립 �
   - `AnomalyClipStorageTest`: 원자적 쓰기, 경로 이탈 8종 거부, 청소 목록
   - `AnomalyClipAccessServiceTest`: 보호자 미연결·PENDING 403 / 피보호자 남의 것 403·연결 0건 404 / 파일 없음 404
   - `AnomalyClipServiceTest`·`AnomalyClipCleanupSchedulerTest`·보안 테스트(보호자·피보호자 컨트롤러, 관리자 노출 없음)·`CameraServiceTest`(삭제 이벤트)·`NotificationExecutorAssignmentTest`(clipExecutor·동기 삭제 리스너)
-- **통합 테스트(실 DB) - vkcs 실행 필요**(로컬 Docker 없음, 컴파일만 확인):
+- **통합 테스트(실 DB) - vkcs 통과**(2026-10-04, `fb6efa3`, 55건 / 실패 0):
   `AnomalyClipIntegrationTest` 9건(판정 비공개·복구, 오탐 상황 클립 비공개, **오탐 응답 ↔ 클립 기록 동시 20회**, 탈퇴·보호자 탈퇴·카메라 삭제·일괄 삭제 리스너 커밋 + 파일, 조건부 삭제, 카메라 없으면 기록 안 함) + `EnumCheckConstraintIntegrationTest`(`anomaly_clip.status`) + 기존 `AnomalyReviewConcurrencyIntegrationTest`(의존성 추가 반영)
   ```bash
   ~/SilverBridgeBe/tools/integration-test.sh feature/anomaly-clip

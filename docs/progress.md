@@ -1596,6 +1596,6 @@ REST API Key 단독 대비 보안 강화 — 인가코드 탈취 시 토큰 발�
 - AI 계약서(2026-10-04 최종본) 기준 백엔드 구현. `danger=true` 이력 커밋 뒤 별도 리스너·`clipExecutor`가 클립 쿨다운(5분)을 통과한 건만 AI에 앞 3초+뒤 2초 WebM을 요청 → EBML·10MB 검증 → `/data/clips`에 UUID 이름으로 원자적 저장 → `anomaly_clip` 행(상황 행 잠금 안). 실패·지연은 이력·알림 무영향.
 - 열람 4종(보호자·피보호자 × 목록·파일) + 보호자 이력에 대표 클립·`clipCount`. 피보호자는 ACTIVE 연결 1건 이상일 때만, 관리자 불허(테스트 고정). 오탐 = 판정 트랜잭션에서 즉시 비공개 → 24시간 뒤 조건부 삭제(번복 시 복구). 삭제 5경로(보관 30일·오탐·탈퇴·카메라 삭제 `CameraDeletedEvent`·고아 청소 05:00).
 - PHASE 0: 영상 중계(#290)가 이미 머지돼 AI 클라이언트 설정(`camera.stream.*`) 공용 / AI 클립 API 미배포 확인 → 모의 서버로 개발 / CONFIDENCE 폴백은 `danger=false` 적재 → 클립은 danger만 / QA 브랜치 코드 충돌 없음.
-- `./gradlew build` 통과, 단위 1273 / 0 실패(신규 94, dev #292·#293 위로 rebase). 통합 테스트(`AnomalyClipIntegrationTest` 9건 + CHECK 동기화)는 **vkcs 실행 대기**.
-- 남은 것: vkcs 통합 테스트 / 영향 범위 점검(템플릿 C) / 인프라(`./.data/clips` 마운트, AI 서버 먼저 배포) / FE 재생 화면.
+- `./gradlew build` 통과, 단위 1273 / 0 실패(신규 94, dev #292·#293 위로 rebase). 통합 테스트(`AnomalyClipIntegrationTest` 9건 + CHECK 동기화 포함) **vkcs 55건 통과**(`fb6efa3`).
+- 남은 것: 영향 범위 점검(템플릿 C) / 인프라(`./.data/clips` 마운트, AI 서버 먼저 배포) / FE 재생 화면.
 - 상세: `docs/(2026-10-04) feature-anomaly-clip.md`
