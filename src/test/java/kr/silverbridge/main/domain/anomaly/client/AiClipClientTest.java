@@ -14,6 +14,7 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
+import org.springframework.scheduling.concurrent.ThreadPoolTaskScheduler;
 
 import java.io.IOException;
 import java.io.OutputStream;
@@ -48,6 +49,7 @@ class AiClipClientTest {
     private CameraStreamProperties streamProperties;
     private AnomalyProperties anomalyProperties;
     private final ObjectMapper objectMapper = new ObjectMapper();
+    private final ThreadPoolTaskScheduler scheduler = new ThreadPoolTaskScheduler();
 
     @BeforeEach
     void setUp() throws IOException {
@@ -55,6 +57,7 @@ class AiClipClientTest {
         server.createContext("/api/v1/live-streams", this::handle);
         server.setExecutor(Executors.newCachedThreadPool());
         server.start();
+        scheduler.initialize();
         streamProperties = new CameraStreamProperties();
         streamProperties.setAiBaseUrl("http://127.0.0.1:" + server.getAddress().getPort());
         streamProperties.setApiKey(KEY);
@@ -66,10 +69,11 @@ class AiClipClientTest {
     @AfterEach
     void tearDown() {
         server.stop(0);
+        scheduler.shutdown();
     }
 
     private AiClipClient client() {
-        return new AiClipClient(streamProperties, anomalyProperties, objectMapper);
+        return new AiClipClient(streamProperties, anomalyProperties, objectMapper, scheduler);
     }
 
     private void handle(HttpExchange exchange) throws IOException {
@@ -99,6 +103,20 @@ class AiClipClientTest {
             case "huge" -> {
                 byte[] big = Arrays.copyOf(WEBM, 65);
                 bytes(exchange, 200, big);
+            }
+            case "drip" -> {
+                // 바이트를 0.3초마다 하나씩 - 읽기 1회 제한(1초)에는 안 걸리지만 전체는 3초 넘게 걸린다
+                exchange.getResponseHeaders().set("Content-Type", "video/webm");
+                exchange.sendResponseHeaders(200, 0);
+                try (OutputStream out = exchange.getResponseBody()) {
+                    for (int i = 0; i < 12; i++) {
+                        out.write(WEBM[i % WEBM.length]);
+                        out.flush();
+                        sleep(300);
+                    }
+                } catch (IOException ignored) {
+                    // 클라이언트가 마감으로 끊었다
+                }
             }
             case "slow" -> {
                 sleep(2_000);
@@ -205,6 +223,19 @@ class AiClipClientTest {
 
         assertThat(result.outcome()).isEqualTo(Outcome.UNAVAILABLE);
         assertThat(result.outcome().isRetryable()).isTrue();
+    }
+
+    @Test
+    @DisplayName("본문을 조금씩 흘려 보내도 호출 전체 제한에서 끊는다(읽기 1회 제한만으로는 무한정 묶인다 - L-3과 같은 기준)")
+    void 전체_시간제한() {
+        long started = System.nanoTime();
+
+        ClipResult result = client().requestClip("drip", null);
+
+        long elapsedMillis = (System.nanoTime() - started) / 1_000_000;
+        assertThat(result.outcome()).isEqualTo(Outcome.UNAVAILABLE);
+        // 전체 제한 1초 + 읽기 1회(0.3초 간격) 여유 - 서버가 다 보내는 3.6초보다 짧아야 한다
+        assertThat(elapsedMillis).isLessThan(2_500);
     }
 
     @Test

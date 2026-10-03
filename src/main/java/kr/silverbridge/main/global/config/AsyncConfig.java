@@ -75,11 +75,16 @@ public class AsyncConfig {
      *
      * <p>작업 하나가 AI 응답(뒤 구간 대기 + 인코딩, 최대 20초)을 기다린다. 긴급 알림 풀에 태우면 화재 알림이 그 뒤에 줄을
      * 서므로 분리한다. 동시 2개는 AI 서버의 동시 인코딩 상한(2)과 맞춘 것이고, 클립 쿨다운(카메라당 5분) 덕에 큐가 차는 일은
-     * 드물다. 넘치면 다른 풀과 같이 폐기 + ERROR 로그다 - 클립 하나를 잃는 쪽이 AI 수신·알림을 막는 쪽보다 낫다.</p>
+     * 드물다. 넘치면 폐기한다(CallerRuns 금지) - 클립 하나를 잃는 쪽이 AI 수신·알림을 막는 쪽보다 낫다.</p>
+     *
+     * <p>폐기는 알림 장애가 아니라 클립 1건이 빠진 것이라 {@code [NOTIFY-REJECTED]} ERROR로 남기지 않는다 - 실시간 분석 풀과
+     * 같은 이유(점검 I-1)로 별도 태그의 WARN이다. 폐기된 감지는 클립 쿨다운이 풀릴 때까지 다시 만들지 않는다.</p>
      */
     @Bean(name = "clipExecutor")
     public Executor clipExecutor() {
-        return newExecutor("clipExecutor", "anomaly-clip-", 2, 2, 20);
+        return newExecutor("anomaly-clip-", 2, 2, 20, (task, pool) ->
+                log.warn("[ANOMALY-CLIP-REJECTED] 클립 생성 폐기(알림·이력은 정상 - 다음 클립 쿨다운 이후 다시 만든다): "
+                        + "active={}, queue={}", pool.getActiveCount(), pool.getQueue().size()));
     }
 
     private static ThreadPoolTaskExecutor newExecutor(String name, String threadNamePrefix,

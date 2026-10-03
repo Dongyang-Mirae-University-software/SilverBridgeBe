@@ -5,20 +5,19 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import kr.silverbridge.main.domain.anomaly.config.AnomalyProperties;
 import kr.silverbridge.main.domain.camera.config.CameraStreamProperties;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.http.HttpMethod;
-import org.springframework.http.MediaType;
-import org.springframework.http.client.ClientHttpRequest;
-import org.springframework.http.client.ClientHttpResponse;
-import org.springframework.http.client.SimpleClientHttpRequestFactory;
+import org.springframework.scheduling.TaskScheduler;
 import org.springframework.stereotype.Component;
 import org.springframework.util.StringUtils;
 import org.springframework.web.util.UriComponentsBuilder;
 
+import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.net.HttpURLConnection;
 import java.net.URI;
+import java.time.Duration;
+import java.time.Instant;
 import java.time.LocalDateTime;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
@@ -26,13 +25,17 @@ import java.time.format.DateTimeFormatter;
 import java.time.format.DateTimeParseException;
 import java.util.LinkedHashMap;
 import java.util.Map;
+import java.util.concurrent.ScheduledFuture;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
  * AI 서버 클립 API 클라이언트 - {@code POST /api/v1/live-streams/{sessionId}/clips}(계약서 2026-10-04 최종본).
  *
  * <p>접속 정보(주소·키·연결 제한)는 영상 중계와 같은 {@link CameraStreamProperties}를 쓴다 - AI 서버 하나에 설정이 둘로
- * 갈리지 않게 한다. 응답 제한만 클립 전용({@code anomaly.clip.request-timeout})이다: AI가 뒤 구간을 기다린 뒤 인코딩하므로
- * 일반 5초로는 부족하다.</p>
+ * 갈리지 않게 한다. 시간 제한만 클립 전용({@code anomaly.clip.request-timeout}, 기본 20초)이다: AI가 뒤 구간을 기다린 뒤
+ * 인코딩하므로 일반 5초로는 부족하다. 이 값은 <b>호출 전체</b>(연결·요청 전송·헤더 대기·본문 수신 합계) 제한이다 - 마감 시각에
+ * 스케줄러가 연결을 끊는다(영상 중계 점검 L-3과 같은 방식). 읽기 1회 제한만 두면 AI가 조금씩 흘려 보낼 때 클립 스레드가
+ * 무한정 묶인다.</p>
  *
  * <p>AI 키는 {@code X-API-Key} 헤더로만 보내고 로그·예외에 남기지 않는다. 리다이렉트는 따라가지 않는다(다른 호스트로
  * 키 헤더가 새는 것 방지 - 영상 중계 L-2와 같은 기준). 로그에는 sessionId·결과 코드·HTTP 상태까지만 남긴다.</p>
@@ -51,23 +54,14 @@ public class AiClipClient {
     private final CameraStreamProperties streamProperties;
     private final AnomalyProperties anomalyProperties;
     private final ObjectMapper objectMapper;
-    private final SimpleClientHttpRequestFactory requestFactory;
+    private final TaskScheduler taskScheduler;
 
     public AiClipClient(CameraStreamProperties streamProperties, AnomalyProperties anomalyProperties,
-                        ObjectMapper objectMapper) {
+                        ObjectMapper objectMapper, TaskScheduler taskScheduler) {
         this.streamProperties = streamProperties;
         this.anomalyProperties = anomalyProperties;
         this.objectMapper = objectMapper;
-        SimpleClientHttpRequestFactory factory = new SimpleClientHttpRequestFactory() {
-            @Override
-            protected void prepareConnection(HttpURLConnection connection, String httpMethod) throws IOException {
-                super.prepareConnection(connection, httpMethod);
-                connection.setInstanceFollowRedirects(false);
-            }
-        };
-        factory.setConnectTimeout((int) streamProperties.getConnectTimeout().toMillis());
-        factory.setReadTimeout((int) anomalyProperties.getClip().getRequestTimeout().toMillis());
-        this.requestFactory = factory;
+        this.taskScheduler = taskScheduler;
     }
 
     /**
@@ -139,22 +133,81 @@ public class AiClipClient {
             return ClipResult.fail(Outcome.NOT_CONFIGURED, null, null);
         }
         AnomalyProperties.Clip clip = anomalyProperties.getClip();
+        Duration limit = clip.getRequestTimeout();
+        long deadlineNanos = System.nanoTime() + limit.toNanos();
+        AtomicBoolean timedOut = new AtomicBoolean();
+        HttpURLConnection connection = null;
+        ScheduledFuture<?> deadline = null;
         try {
-            ClientHttpRequest request = requestFactory.createRequest(uri(sessionId), HttpMethod.POST);
-            request.getHeaders().set(API_KEY_HEADER, streamProperties.getApiKey());
-            request.getHeaders().setContentType(MediaType.APPLICATION_JSON);
             byte[] payload = objectMapper.writeValueAsBytes(requestBody(detectedAt, clip));
-            try (OutputStream body = request.getBody()) {
+            connection = open(uri(sessionId), limit, payload.length);
+            HttpURLConnection target = connection;
+            // 연결·전송·헤더 대기 단계는 연결을 끊으면 바로 빠져나온다. 본문 수신 중에는 readBounded가 마감을 확인한다.
+            deadline = taskScheduler.schedule(() -> {
+                timedOut.set(true);
+                target.disconnect();
+            }, Instant.now().plus(limit));
+
+            try (OutputStream body = connection.getOutputStream()) {
                 body.write(payload);
             }
-            try (ClientHttpResponse response = request.execute()) {
-                return readResponse(sessionId, response, clip.getMaxBytes());
+            int status = connection.getResponseCode();
+            if (timedOut.get()) {
+                throw new IOException("call deadline reached");
             }
+            if (status != 200) {
+                String errorCode = readErrorCode(connection);
+                Outcome outcome = outcomeOf(status, errorCode);
+                log.warn("[ANOMALY-CLIP] AI 응답 실패: sessionId={}, status={}, errorCode={}, outcome={}",
+                        sessionId, status, errorCode, outcome);
+                return ClipResult.fail(outcome, errorCode, status);
+            }
+
+            byte[] bytes;
+            try (InputStream body = connection.getInputStream()) {
+                bytes = readBounded(body, clip.getMaxBytes(), deadlineNanos, timedOut);
+            }
+            if (bytes == null) {
+                log.warn("[ANOMALY-CLIP] 클립 크기 상한 초과 - 저장 안 함: sessionId={}, limit={}",
+                        sessionId, clip.getMaxBytes());
+                return ClipResult.fail(Outcome.TOO_LARGE, null, status);
+            }
+            if (!hasEbmlMagic(bytes)) {
+                log.warn("[ANOMALY-CLIP] WebM 시그니처 불일치 - 저장 안 함: sessionId={}, size={}", sessionId, bytes.length);
+                return ClipResult.fail(Outcome.INVALID_RESPONSE, null, status);
+            }
+            return ClipResult.ok(bytes, metaOf(connection));
         } catch (IOException e) {
-            // 예외 원문에는 접속 주소가 섞일 수 있어 클래스명만 남긴다
-            log.warn("[ANOMALY-CLIP] AI 호출 실패: sessionId={}, error={}", sessionId, e.getClass().getSimpleName());
+            if (timedOut.get()) {
+                log.warn("[ANOMALY-CLIP] AI 호출 시간 초과: sessionId={}, limit={}", sessionId, limit);
+            } else {
+                // 예외 원문에는 접속 주소가 섞일 수 있어 클래스명만 남긴다
+                log.warn("[ANOMALY-CLIP] AI 호출 실패: sessionId={}, error={}", sessionId, e.getClass().getSimpleName());
+            }
             return ClipResult.fail(Outcome.UNAVAILABLE, null, null);
+        } finally {
+            if (deadline != null) {
+                deadline.cancel(false);
+            }
+            if (connection != null) {
+                connection.disconnect();   // 다 읽었거나 중단했다 - 연결을 재사용하지 않는다
+            }
         }
+    }
+
+    /** AI 연결 준비. 리다이렉트를 따라가지 않는다(30x로 다른 호스트를 가리키면 키 헤더가 따라간다 - 영상 중계 L-2). */
+    private HttpURLConnection open(URI uri, Duration readTimeout, int contentLength) throws IOException {
+        HttpURLConnection connection = (HttpURLConnection) uri.toURL().openConnection();
+        connection.setConnectTimeout((int) streamProperties.getConnectTimeout().toMillis());
+        connection.setReadTimeout((int) readTimeout.toMillis());
+        connection.setUseCaches(false);
+        connection.setInstanceFollowRedirects(false);
+        connection.setRequestMethod("POST");
+        connection.setDoOutput(true);
+        connection.setFixedLengthStreamingMode(contentLength);
+        connection.setRequestProperty(API_KEY_HEADER, streamProperties.getApiKey());
+        connection.setRequestProperty("Content-Type", "application/json");
+        return connection;
     }
 
     private Map<String, Object> requestBody(OffsetDateTime detectedAt, AnomalyProperties.Clip clip) {
@@ -167,37 +220,47 @@ public class AiClipClient {
         return body;
     }
 
-    private ClipResult readResponse(String sessionId, ClientHttpResponse response, int maxBytes) throws IOException {
-        int status = response.getStatusCode().value();
-        if (status != 200) {
-            String errorCode = readErrorCode(response);
-            Outcome outcome = outcomeOf(status, errorCode);
-            log.warn("[ANOMALY-CLIP] AI 응답 실패: sessionId={}, status={}, errorCode={}, outcome={}",
-                    sessionId, status, errorCode, outcome);
-            return ClipResult.fail(outcome, errorCode, status);
+    /**
+     * 본문을 덩어리 단위로 읽으며 읽을 때마다 마감·크기를 확인한다. 크기를 넘으면 null.
+     *
+     * <p>본문 읽기 중에는 다른 스레드의 {@code disconnect()}가 읽기를 깨우지 못해(JDK 동작) 마감 확인을 읽기 사이에 둔다 -
+     * 최악은 마감 + 읽기 1회 제한이다. 마감에 끊긴 스트림은 EOF로 끝나기도 해서, 마감이 지났으면 잘린 본문으로 보고 실패시킨다
+     * ({@code AiStreamClient}와 같은 규칙).</p>
+     */
+    private static byte[] readBounded(InputStream body, int maxBytes, long deadlineNanos, AtomicBoolean timedOut)
+            throws IOException {
+        ByteArrayOutputStream out = new ByteArrayOutputStream();
+        byte[] buffer = new byte[16 * 1024];
+        while (true) {
+            if (System.nanoTime() > deadlineNanos) {
+                timedOut.set(true);
+            }
+            if (timedOut.get()) {
+                throw new IOException("call deadline reached");
+            }
+            int read = body.read(buffer);
+            if (read < 0) {
+                break;
+            }
+            out.write(buffer, 0, read);
+            if (out.size() > maxBytes) {
+                return null;
+            }
         }
+        if (timedOut.get() || System.nanoTime() > deadlineNanos) {
+            timedOut.set(true);
+            throw new IOException("call deadline reached");
+        }
+        return out.toByteArray();
+    }
 
-        byte[] bytes;
-        try (InputStream body = response.getBody()) {
-            bytes = body.readNBytes(maxBytes + 1);
-        }
-        if (bytes.length > maxBytes) {
-            log.warn("[ANOMALY-CLIP] 클립 크기 상한 초과 - 저장 안 함: sessionId={}, limit={}", sessionId, maxBytes);
-            return ClipResult.fail(Outcome.TOO_LARGE, null, status);
-        }
-        if (!hasEbmlMagic(bytes)) {
-            log.warn("[ANOMALY-CLIP] WebM 시그니처 불일치 - 저장 안 함: sessionId={}, size={}", sessionId, bytes.length);
-            return ClipResult.fail(Outcome.INVALID_RESPONSE, null, status);
-        }
-
-        var headers = response.getHeaders();
-        ClipMeta meta = new ClipMeta(
-                intHeader(headers.getFirst("X-Clip-Duration-Ms")),
-                intHeader(headers.getFirst("X-Clip-Frames")),
-                intHeader(headers.getFirst("X-Clip-Width")),
-                intHeader(headers.getFirst("X-Clip-Height")),
-                timeHeader(headers.getFirst("X-Clip-Started-At")));
-        return ClipResult.ok(bytes, meta);
+    private static ClipMeta metaOf(HttpURLConnection connection) {
+        return new ClipMeta(
+                intHeader(connection.getHeaderField("X-Clip-Duration-Ms")),
+                intHeader(connection.getHeaderField("X-Clip-Frames")),
+                intHeader(connection.getHeaderField("X-Clip-Width")),
+                intHeader(connection.getHeaderField("X-Clip-Height")),
+                timeHeader(connection.getHeaderField("X-Clip-Started-At")));
     }
 
     static Outcome outcomeOf(int status, String errorCode) {
@@ -213,8 +276,11 @@ public class AiClipClient {
     }
 
     /** 오류 본문 {@code {success, message, errorCode, data}}에서 errorCode만 꺼낸다. 형식이 다르면 null. */
-    private String readErrorCode(ClientHttpResponse response) {
-        try (InputStream body = response.getBody()) {
+    private String readErrorCode(HttpURLConnection connection) {
+        try (InputStream body = connection.getErrorStream()) {
+            if (body == null) {
+                return null;
+            }
             byte[] bytes = body.readNBytes(4096);
             if (bytes.length == 0) {
                 return null;

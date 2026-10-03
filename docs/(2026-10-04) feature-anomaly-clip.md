@@ -1,6 +1,6 @@
 # 이상감지 5초 영상 클립 - 저장·열람·삭제 (백엔드) (2026-10-04)
 
-> 브랜치 `feature/anomaly-clip` · 마이그레이션 **V57** · AI 계약: "AI 서버 클립 엔드포인트 계약서(2026-10-04 최종본)"
+> 브랜치 `feature/anomaly-clip`(dev `0503f0c` 위로 rebase - #292 L-3 호출 전체 제한·#293 I-1 폐기 로그 분리 기준에 맞춤) · 마이그레이션 **V57** · AI 계약: "AI 서버 클립 엔드포인트 계약서(2026-10-04 최종본)"
 > 근거: gosky 조사·측정(앞 3초 + 뒤 2초 / VP8 WebM FHD 3Mbps / 클립 약 1.9MB, 인코딩 0.5~0.6초)
 
 ## 1. 무엇을 하나
@@ -28,7 +28,7 @@ AI WS 신호 → AnomalyDetectionService(이력 적재·커밋)
 | 3 | 이력 응답 | 상황당 **대표 클립 1개(최신) + `clipCount`**, 전체는 목록 API. 상황당 상한 **12개** |
 | 4 | 피보호자 오류 | 남의 클립 403 `ANOMALY_CLIP_NOT_OWNED` + `[IDOR-ATTEMPT]` / 연결 0건 404 / 보호자 미연결 403 `ANOMALY_NOT_AUTHORIZED` / 비공개·만료 404 `ANOMALY_CLIP_NOT_FOUND` |
 | 5 | 청소 | **05:00 KST**. 고아 = 행 없는 파일·임시 파일 중 수정 후 1시간 경과. 스케줄러 풀 3 유지 |
-| 6 | 타임아웃·크기 | 연결 3초(`camera.stream.connect-timeout` 공용), **응답 20초**(AI 하드 상한과 맞춤 - 일반 10초 규칙의 예외), 크기 **10MB** |
+| 6 | 타임아웃·크기 | 연결 3초(`camera.stream.connect-timeout` 공용), **호출 전체 20초**(AI 하드 상한과 맞춤 - 일반 10초 규칙의 예외, 마감 시 연결을 끊는다 - 영상 중계 L-3과 같은 방식), 크기 **10MB** |
 | 7 | 완성 WS 이벤트 | **없음** |
 | 8 | QA 브랜치 순서 | 무관(코드 패치 전부 dev 반영, 남은 건 문서 커밋 1개) |
 | 9 | AI 클라이언트 | `anomaly/client/AiClipClient` 신설, 접속 정보는 **기존 `camera.stream.*` 공용**(새 env 없음). `AiStreamClient`는 무변경 |
@@ -84,7 +84,7 @@ AI WS 신호 → AnomalyDetectionService(이력 적재·커밋)
 ### 생성
 - 킬 스위치 `anomaly.clip.enabled=false`는 **생성만** 멈춘다(열람·삭제·청소는 계속).
 - 쿨다운 키 `anomaly:clip:{sessionId}:{type}` - 이력(`anomaly:cooldown:`)·알림(`anomaly:notify:`)과 별개.
-- `clipExecutor` core 2 / max 2 / queue 20, 포화 시 폐기 + `[NOTIFY-REJECTED]` ERROR(CallerRuns 금지). 폐기된 건은 쿨다운(5분)이 풀릴 때까지 다시 만들지 않는다(수용).
+- `clipExecutor` core 2 / max 2 / queue 20, 포화 시 폐기(CallerRuns 금지) + **`[ANOMALY-CLIP-REJECTED]` WARN** - 알림 유실이 아니라 `[NOTIFY-REJECTED]` ERROR와 섞지 않는다(실시간 분석 풀 점검 I-1과 같은 기준). 폐기된 건은 쿨다운(5분)이 풀릴 때까지 다시 만들지 않는다(수용).
 - 로그 태그 `[ANOMALY-CLIP]` - sessionId·clipId·incidentId·결과 코드·HTTP 상태만. AI 키·경로·예외 원문 금지.
 
 ## 6. 변경 파일
@@ -160,8 +160,8 @@ AI 서버보다 백엔드가 먼저 배포돼도 깨지지 않는다 - 클립 �
 
 ## 9. 검증
 
-- `./gradlew build` 통과. **단위 1264 / 실패 0**(건너뜀 16은 기존) - 신규 91.
-  - `AiClipClientTest`(모의 AI 서버): 계약 형식 요청(POST·키 헤더·`detectedAt` UTC Z), 헤더 메타·누락 null, EBML 불일치·크기 초과 거부, 응답 시간 초과, 리다이렉트 미추종, 오류 7종 매핑·재시도 여부, 키 미설정, 세션 ID 경로 인코딩
+- `./gradlew build` 통과. **단위 1273 / 실패 0**(건너뜀 16은 기존) - 신규 94.
+  - `AiClipClientTest`(모의 AI 서버): 계약 형식 요청(POST·키 헤더·`detectedAt` UTC Z), 헤더 메타·누락 null, EBML 불일치·크기 초과 거부, 응답 시간 초과, 본문을 조금씩 흘려도 호출 전체 제한에서 끊김, 리다이렉트 미추종, 오류 7종 매핑·재시도 여부, 키 미설정, 세션 ID 경로 인코딩
   - `AnomalyClipCaptureServiceTest`: 쿨다운 해제/유지 분기, 실패 시 파일 삭제, 킬 스위치, danger=false 생략, 디스크 부족
   - `AnomalyClipStorageTest`: 원자적 쓰기, 경로 이탈 8종 거부, 청소 목록
   - `AnomalyClipAccessServiceTest`: 보호자 미연결·PENDING 403 / 피보호자 남의 것 403·연결 0건 404 / 파일 없음 404
@@ -179,4 +179,4 @@ AI 서버보다 백엔드가 먼저 배포돼도 깨지지 않는다 - 클립 �
 - 클립 기록과 카메라 삭제가 아주 짧게 엇갈리면 삭제된 카메라의 클립 행이 남을 수 있다 - 다음 청소(카메라 사라짐 단계)가 회수한다.
 - 오탐 유예(24시간)가 지나 삭제된 뒤 번복되면 클립은 돌아오지 않는다.
 - 저장소는 단일 서버 로컬 디스크다(API 서버를 여러 대로 늘리면 공유 저장소로 다시 설계).
-- AI 응답 제한은 읽기 1회 기준 20초다(전체 경과 시간 상한이 아님) - AI가 계약상 20초 하드 상한을 지킨다.
+- AI 호출 전체 제한(20초)은 본문 수신 중에는 읽기 사이에서만 확인된다 - 최악은 마감 + 읽기 1회 제한(영상 중계 `AiStreamClient`와 같은 JDK 제약).
