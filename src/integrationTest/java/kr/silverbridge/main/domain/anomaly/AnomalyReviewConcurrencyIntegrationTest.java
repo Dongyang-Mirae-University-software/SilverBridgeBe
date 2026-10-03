@@ -1,9 +1,11 @@
 package kr.silverbridge.main.domain.anomaly;
 
+import kr.silverbridge.main.domain.anomaly.config.AnomalyProperties;
 import kr.silverbridge.main.domain.anomaly.entity.AnomalyIncident;
 import kr.silverbridge.main.domain.anomaly.entity.AnomalyReviewStatus;
 import kr.silverbridge.main.domain.anomaly.entity.AnomalyVerdict;
 import kr.silverbridge.main.domain.anomaly.repository.AnomalyIncidentRepository;
+import kr.silverbridge.main.domain.anomaly.service.AnomalyClipService;
 import kr.silverbridge.main.domain.anomaly.service.GuardianAnomalyService;
 import kr.silverbridge.main.domain.camera.service.CameraIdentifierFactory;
 import kr.silverbridge.main.domain.camera.service.CameraService;
@@ -23,6 +25,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Import;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.transaction.PlatformTransactionManager;
@@ -52,11 +55,13 @@ import static org.assertj.core.api.Assertions.assertThat;
  */
 @Import({
         GuardianAnomalyService.class,
+        AnomalyClipService.class,
         ConnectionService.class,
         CameraService.class,
         CameraIdentifierFactory.class,
         UserIdGenerator.class
 })
+@EnableConfigurationProperties(AnomalyProperties.class)
 @Transactional(propagation = Propagation.NOT_SUPPORTED)
 class AnomalyReviewConcurrencyIntegrationTest extends PostgresIntegrationTest {
 

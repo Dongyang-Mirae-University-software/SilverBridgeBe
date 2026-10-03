@@ -1590,3 +1590,19 @@ REST API Key 단독 대비 보안 강화 — 인가코드 탈취 시 토큰 발�
 
 - I-1: 실시간 분석 풀 폐기 로그를 `[LIVE-ANALYSIS-REJECTED]` WARN으로 분리(알림 `[NOTIFY-REJECTED]` ERROR와 구분). I-3: AI `lastFrameAt`을 KST로 변환해 응답 시각 오프셋 통일.
 - 단위 1179 / 0 실패. #290 점검 항목 전부 반영 완료(I-2·I-4 수용).
+
+## [2026-10-04] 이상감지 5초 클립 - 저장·열람·삭제 (branch `feature/anomaly-clip`, V57)
+
+- AI 계약서(2026-10-04 최종본) 기준 백엔드 구현. `danger=true` 이력 커밋 뒤 별도 리스너·`clipExecutor`가 클립 쿨다운(5분)을 통과한 건만 AI에 앞 3초+뒤 2초 WebM을 요청 → EBML·10MB 검증 → `/data/clips`에 UUID 이름으로 원자적 저장 → `anomaly_clip` 행(상황 행 잠금 안). 실패·지연은 이력·알림 무영향.
+- 열람 4종(보호자·피보호자 × 목록·파일) + 보호자 이력에 대표 클립·`clipCount`. 피보호자는 ACTIVE 연결 1건 이상일 때만, 관리자 불허(테스트 고정). 오탐 = 판정 트랜잭션에서 즉시 비공개 → 24시간 뒤 조건부 삭제(번복 시 복구). 삭제 5경로(보관 30일·오탐·탈퇴·카메라 삭제 `CameraDeletedEvent`·고아 청소 05:00).
+- PHASE 0: 영상 중계(#290)가 이미 머지돼 AI 클라이언트 설정(`camera.stream.*`) 공용 / AI 클립 API 미배포 확인 → 모의 서버로 개발 / CONFIDENCE 폴백은 `danger=false` 적재 → 클립은 danger만 / QA 브랜치 코드 충돌 없음.
+- `./gradlew build` 통과, 단위 1273 / 0 실패(신규 94, dev #292·#293 위로 rebase). 통합 테스트(`AnomalyClipIntegrationTest` 9건 + CHECK 동기화 포함) **vkcs 55건 통과**(`fb6efa3`).
+- 남은 것: 영향 범위 점검(템플릿 C) / 인프라(`./.data/clips` 마운트, AI 서버 먼저 배포) / FE 재생 화면.
+- 상세: `docs/(2026-10-04) feature-anomaly-clip.md`
+
+## [2026-10-04] 이상감지 클립 - AI 계약 v2 반영 + 영향 범위 점검(템플릿 C) (PR #294)
+
+- AI 클립 API 배포 확인(gosky AI `87accbb`). AI 쪽 대조 권장 2건 반영(`df64f23`): 503 `CLIP_DISABLED` 재시도 안 함, 호출 전체 제한 25초. drift: 없는 세션 404가 앞단에서 HTML로 바뀜(동작 영향 없음).
+- 템플릿 C(Sonnet 수집 → Opus 판정): 🔴0 🟠0 🟡0 🟢3 ℹ️3. 불변식 위반 없음. L-1 클립 기록↔피보호자 purge 교착(자동 복구, 잠금 순서 users→incident로 해소 가능) / L-2 오탐 확정 상황에 이어진 감지 클립 비공개(정책 결정 요청) / L-3 스윕 purge 경로 파일 하루 잔존.
+- 머지 전 남은 것: 두 서버 `./.data/clips:/data/clips` 마운트(현재 없음).
+- 상세: `docs/(2026-10-04) audit-impact-anomaly-clip.md`

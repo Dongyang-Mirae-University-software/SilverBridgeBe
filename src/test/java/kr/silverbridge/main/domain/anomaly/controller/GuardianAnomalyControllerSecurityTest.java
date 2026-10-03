@@ -5,6 +5,7 @@ import kr.silverbridge.main.domain.anomaly.dto.AnomalyReminderSettingRequest;
 import kr.silverbridge.main.domain.anomaly.dto.AnomalyReminderSettingResponse;
 import kr.silverbridge.main.domain.anomaly.entity.AnomalyVerdict;
 import kr.silverbridge.main.domain.anomaly.service.GuardianAnomalyService;
+import kr.silverbridge.main.domain.anomaly.service.AnomalyClipAccessService;
 import kr.silverbridge.main.domain.anomaly.service.GuardianAnomalySettingService;
 import kr.silverbridge.main.global.response.PageResponse;
 import org.junit.jupiter.api.DisplayName;
@@ -53,6 +54,9 @@ class GuardianAnomalyControllerSecurityTest {
     @MockitoBean
     private GuardianAnomalySettingService settingService;
 
+    @MockitoBean
+    private AnomalyClipAccessService clipAccessService;
+
     @Autowired
     private GuardianAnomalyController controller;
 
@@ -96,5 +100,33 @@ class GuardianAnomalyControllerSecurityTest {
                 .isInstanceOf(AccessDeniedException.class);
         assertThatThrownBy(() -> controller.submitFeedback("AD0001", 37L, feedback()))
                 .isInstanceOf(AccessDeniedException.class);
+    }
+
+    @Test
+    @WithMockUser(roles = "GUARDIAN")
+    @DisplayName("GUARDIAN → 영상 클립 목록·파일 허용 (연결 여부는 서비스가 검사)")
+    void guardian_클립_허용() {
+        when(clipAccessService.guardianClips(anyString(), any())).thenReturn(List.of());
+        when(clipAccessService.guardianFile(anyString(), any()))
+                .thenReturn(new AnomalyClipAccessService.ClipFile(101L, java.nio.file.Path.of("/x")));
+
+        assertThatNoException().isThrownBy(() -> controller.getClips("GD0001", 37L));
+        assertThatNoException().isThrownBy(() -> controller.getClipFile("GD0001", 101L));
+    }
+
+    @Test
+    @WithMockUser(roles = "WARD")
+    @DisplayName("피보호자(WARD) → 보호자용 영상 경로 403 (본인 열람은 /api/ward/anomaly/** 전용 경로)")
+    void ward_클립_거부() {
+        assertThatThrownBy(() -> controller.getClips("WD0001", 37L)).isInstanceOf(AccessDeniedException.class);
+        assertThatThrownBy(() -> controller.getClipFile("WD0001", 101L)).isInstanceOf(AccessDeniedException.class);
+    }
+
+    @Test
+    @WithMockUser(roles = "ADMIN")
+    @DisplayName("관리자(ADMIN) → 영상 경로 403 (관리자는 클립을 열람하지 않는다)")
+    void admin_클립_거부() {
+        assertThatThrownBy(() -> controller.getClips("AD0001", 37L)).isInstanceOf(AccessDeniedException.class);
+        assertThatThrownBy(() -> controller.getClipFile("AD0001", 101L)).isInstanceOf(AccessDeniedException.class);
     }
 }

@@ -123,7 +123,13 @@ public enum ErrorCode {
     // 이상감지 판정 (2026-08-31)
     ANOMALY_INCIDENT_NOT_FOUND(HttpStatus.NOT_FOUND, "이상감지 기록을 찾을 수 없습니다."),
     // 없는 자원은 404, 남의 자원은 403으로 그대로 안내한다(2026-07-14 정책). 문구는 수신자(보호자) 기준이다
-    ANOMALY_NOT_AUTHORIZED(HttpStatus.FORBIDDEN, "연결된 피보호자의 이상감지 기록만 볼 수 있습니다.");
+    ANOMALY_NOT_AUTHORIZED(HttpStatus.FORBIDDEN, "연결된 피보호자의 이상감지 기록만 볼 수 있습니다."),
+
+    // 이상감지 영상 클립 (2026-10-04). 없음·비공개(오탐 확정)·보관 기간 경과·피보호자의 연결 0건은 모두 404 -
+    // 비공개 사유(오탐·연결 상태)를 응답으로 구분해 알리지 않는다
+    ANOMALY_CLIP_NOT_FOUND(HttpStatus.NOT_FOUND, "영상을 찾을 수 없습니다."),
+    // 피보호자 경로용 - 보호자 경로는 ANOMALY_NOT_AUTHORIZED를 쓴다(문구는 수신자 기준, 2026-08-06 정책)
+    ANOMALY_CLIP_NOT_OWNED(HttpStatus.FORBIDDEN, "본인 집의 이상감지 영상만 볼 수 있습니다.");
 
     private final HttpStatus status;
     private final String message;

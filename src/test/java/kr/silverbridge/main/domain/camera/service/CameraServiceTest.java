@@ -5,6 +5,7 @@ import kr.silverbridge.main.domain.camera.dto.CameraResponse;
 import kr.silverbridge.main.domain.camera.dto.CameraUpdateRequest;
 import kr.silverbridge.main.domain.camera.dto.GuardianCameraView;
 import kr.silverbridge.main.domain.camera.entity.Camera;
+import kr.silverbridge.main.domain.camera.event.CameraDeletedEvent;
 import kr.silverbridge.main.domain.camera.repository.CameraRepository;
 import kr.silverbridge.main.domain.connection.service.ConnectionService;
 import kr.silverbridge.main.domain.user.entity.User;
@@ -375,6 +376,45 @@ class CameraServiceTest {
             assertThat(cameraService.findActiveOwnerBySessionId(SESSION_ID)).isPresent();
             assertThat(cameraService.findActiveOwnerBySessionId("ward_off")).isEmpty();
             assertThat(cameraService.findOwnerBySessionId("ward_off")).isPresent();   // 감지·알림 경로는 그대로
+        }
+    }
+
+    @Nested
+    @DisplayName("삭제 시 이상감지 클립 정리 이벤트 (2026-10-04)")
+    class DeletedEvent {
+
+        @Test
+        @DisplayName("본인 카메라 삭제 → 그 세션으로 CameraDeletedEvent 발행")
+        void 단건_삭제_이벤트() {
+            Camera mine = camera(1L, WARD_ID, "ward_a9cC5f_k3m", "dev_aaa", "거실");
+            when(cameraRepository.findById(1L)).thenReturn(Optional.of(mine));
+
+            cameraService.delete(WARD_ID, 1L);
+
+            verify(eventPublisher).publishEvent(new CameraDeletedEvent(WARD_ID, List.of("ward_a9cC5f_k3m")));
+        }
+
+        @Test
+        @DisplayName("역할 변경 일괄 삭제 → 벌크 삭제 전에 모은 세션 전부로 발행")
+        void 일괄_삭제_이벤트() {
+            when(cameraRepository.findByWardIdOrderByCreatedAtDesc(WARD_ID)).thenReturn(List.of(
+                    camera(1L, WARD_ID, "s-a", "dev_a", "거실"),
+                    camera(2L, WARD_ID, "s-b", "dev_b", "안방")));
+            when(cameraRepository.deleteByWardId(WARD_ID)).thenReturn(2L);
+
+            assertThat(cameraService.deleteAllByWard(WARD_ID)).isEqualTo(2);
+
+            verify(eventPublisher).publishEvent(new CameraDeletedEvent(WARD_ID, List.of("s-a", "s-b")));
+        }
+
+        @Test
+        @DisplayName("카메라가 없으면 발행하지 않는다")
+        void 카메라_없음() {
+            when(cameraRepository.findByWardIdOrderByCreatedAtDesc(WARD_ID)).thenReturn(List.of());
+
+            cameraService.deleteAllByWard(WARD_ID);
+
+            verify(eventPublisher, never()).publishEvent(any(CameraDeletedEvent.class));
         }
     }
 }

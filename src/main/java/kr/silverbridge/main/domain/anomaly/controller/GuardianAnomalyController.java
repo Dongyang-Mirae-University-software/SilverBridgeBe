@@ -6,20 +6,25 @@ import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
+import kr.silverbridge.main.domain.anomaly.dto.AnomalyClipItem;
 import kr.silverbridge.main.domain.anomaly.dto.AnomalyFeedbackRequest;
 import kr.silverbridge.main.domain.anomaly.dto.AnomalyFeedbackResponse;
 import kr.silverbridge.main.domain.anomaly.dto.AnomalyIncidentItem;
 import kr.silverbridge.main.domain.anomaly.dto.AnomalyReminderSettingRequest;
 import kr.silverbridge.main.domain.anomaly.dto.AnomalyReminderSettingResponse;
+import kr.silverbridge.main.domain.anomaly.service.AnomalyClipAccessService;
 import kr.silverbridge.main.domain.anomaly.service.GuardianAnomalySettingService;
 import kr.silverbridge.main.domain.anomaly.service.GuardianAnomalyService;
 import kr.silverbridge.main.global.response.ApiResponse;
 import kr.silverbridge.main.global.response.PageResponse;
 import lombok.RequiredArgsConstructor;
+import org.springframework.core.io.Resource;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
+
+import java.util.List;
 
 /**
  * 보호자용 이상감지 이력 조회 + 오탐 응답 API.
@@ -35,6 +40,7 @@ public class GuardianAnomalyController {
 
     private final GuardianAnomalyService guardianAnomalyService;
     private final GuardianAnomalySettingService guardianAnomalySettingService;
+    private final AnomalyClipAccessService clipAccessService;
 
     @Operation(summary = "피보호자 이상감지 이력 조회 (보호자 전용)",
             description = """
@@ -113,6 +119,60 @@ public class GuardianAnomalyController {
         return ResponseEntity.ok(ApiResponse.ok(
                 guardianAnomalyService.submitFeedback(guardianId, incidentId, request.verdict())));
     }
+    @Operation(summary = "이상감지 영상 클립 목록 (보호자 전용)",
+            description = """
+                    [요청 헤더]
+                    Authorization: Bearer {accessToken}
+
+                    상황(incidentId)에 저장된 영상 클립을 최신순으로 반환합니다.
+                    클립은 감지 시각 앞 3초 + 뒤 2초(약 5초, WebM)이며, 같은 카메라에서는 5분에 한 번 만들어집니다.
+
+                    [보이지 않는 클립]
+                    - 오탐(FALSE_ALARM)으로 확정된 상황의 클립은 즉시 비공개됩니다(24시간 안에 판정이 바뀌면 다시 보입니다).
+                    - 저장 후 30일이 지난 클립은 삭제됩니다.
+                    - AI 서버 오류 등으로 클립이 만들어지지 않았을 수 있습니다(빈 목록).
+
+                    [재생] 파일은 GET /api/guardian/anomaly/clips/{clipId}/file 을 Authorization 헤더와 함께 fetch해
+                    blob URL로 재생합니다(<video src>에 직접 넣으면 인증 헤더가 가지 않아 401).
+                    """)
+    @ApiResponses({
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "클립 목록 (없으면 빈 배열)"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "인증 토큰 없음 또는 만료", content = @Content),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "보호자 권한 필요 / 연결되지 않은 피보호자의 기록", content = @Content),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "이상감지 기록 없음", content = @Content)
+    })
+    @GetMapping("/api/guardian/anomaly/{incidentId}/clips")
+    public ResponseEntity<ApiResponse<List<AnomalyClipItem>>> getClips(
+            @AuthenticationPrincipal String guardianId,
+            @Parameter(description = "상황 ID") @PathVariable Long incidentId) {
+        return ResponseEntity.ok(ApiResponse.ok(clipAccessService.guardianClips(guardianId, incidentId)));
+    }
+
+    @Operation(summary = "이상감지 영상 클립 파일 (보호자 전용)",
+            description = """
+                    [요청 헤더]
+                    Authorization: Bearer {accessToken}
+
+                    클립 영상(video/webm)을 내려줍니다. Range 요청을 지원합니다(206).
+                    응답은 캐시하지 않습니다(Cache-Control: private, no-store).
+
+                    [404] 없는 클립 · 오탐으로 비공개된 클립 · 보관 기간(30일)이 지난 클립
+                    [403] 연결되지 않은 피보호자의 클립 (오류 응답은 JSON)
+                    """)
+    @ApiResponses({
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "video/webm"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "206", description = "Range 부분 응답"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "인증 토큰 없음 또는 만료", content = @Content),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "보호자 권한 필요 / 연결되지 않은 피보호자의 클립", content = @Content),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "클립 없음·비공개·만료", content = @Content)
+    })
+    @GetMapping("/api/guardian/anomaly/clips/{clipId}/file")
+    public ResponseEntity<Resource> getClipFile(
+            @AuthenticationPrincipal String guardianId,
+            @Parameter(description = "클립 ID") @PathVariable Long clipId) {
+        return AnomalyClipFileResponse.of(clipAccessService.guardianFile(guardianId, clipId));
+    }
+
     @Operation(summary = "판정 재촉 알림 수신 설정 조회 (보호자 전용)",
             description = """
                     [요청 헤더]
