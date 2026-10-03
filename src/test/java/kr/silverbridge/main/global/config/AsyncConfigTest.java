@@ -27,8 +27,10 @@ class AsyncConfigTest {
     static Stream<Arguments> executors() {
         Function<AsyncConfig, Object> general = AsyncConfig::notificationExecutor;
         Function<AsyncConfig, Object> urgent = AsyncConfig::urgentNotificationExecutor;
+        Function<AsyncConfig, Object> liveAnalysis = AsyncConfig::liveAnalysisExecutor;
         return Stream.of(Arguments.of("notificationExecutor", general),
-                Arguments.of("urgentNotificationExecutor", urgent));
+                Arguments.of("urgentNotificationExecutor", urgent),
+                Arguments.of("liveAnalysisExecutor", liveAnalysis));
     }
 
     @ParameterizedTest(name = "{0}")
@@ -115,6 +117,38 @@ class AsyncConfigTest {
             release.countDown();
             general.shutdown();
             urgent.shutdown();
+        }
+    }
+
+    @Test
+    @DisplayName("실시간 분석 풀 - 알림 풀과 독립, 폐기는 [LIVE-ANALYSIS-REJECTED] WARN이고 알림 장애 로그([NOTIFY-REJECTED] ERROR)를 남기지 않는다 (점검 I-1)")
+    void 실시간분석풀_폐기로그_분리() {
+        ThreadPoolTaskExecutor live = (ThreadPoolTaskExecutor) new AsyncConfig().liveAnalysisExecutor();
+        ch.qos.logback.classic.Logger logger =
+                (ch.qos.logback.classic.Logger) org.slf4j.LoggerFactory.getLogger(AsyncConfig.class);
+        ch.qos.logback.core.read.ListAppender<ch.qos.logback.classic.spi.ILoggingEvent> appender =
+                new ch.qos.logback.core.read.ListAppender<>();
+        appender.start();
+        logger.addAppender(appender);
+        CountDownLatch release = new CountDownLatch(1);
+        try {
+            assertThat(live.getThreadNamePrefix()).isEqualTo("live-analysis-");
+            int capacity = live.getMaxPoolSize() + live.getQueueCapacity();
+            for (int i = 0; i < capacity; i++) {
+                live.execute(() -> await(release));
+            }
+            live.execute(() -> { });   // 거부 대상
+
+            assertThat(appender.list)
+                    .anySatisfy(e -> {
+                        assertThat(e.getLevel()).isEqualTo(ch.qos.logback.classic.Level.WARN);
+                        assertThat(e.getFormattedMessage()).startsWith("[LIVE-ANALYSIS-REJECTED]");
+                    })
+                    .noneSatisfy(e -> assertThat(e.getFormattedMessage()).contains("[NOTIFY-REJECTED]"));
+        } finally {
+            release.countDown();
+            logger.detachAppender(appender);
+            live.shutdown();
         }
     }
 

@@ -141,6 +141,8 @@ public class LiveAnalysisBroadcaster implements LiveAnalysisSnapshotPort {
     }
 
     private void dispatch(String sessionId, State state) {
+        // 포화 시 executor가 예외 없이 폐기하고 [LIVE-ANALYSIS-REJECTED] WARN을 남긴다(AsyncConfig). 아래 catch는
+        // executor 교체(예: 종료 중 TaskRejectedException)에 대비한 안전망이다.
         try {
             executor.execute(() -> fanOut(sessionId, state));
         } catch (RuntimeException e) {

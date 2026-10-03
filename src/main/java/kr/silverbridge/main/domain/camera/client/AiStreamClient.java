@@ -22,6 +22,7 @@ import java.time.Duration;
 import java.time.Instant;
 import java.time.LocalDateTime;
 import java.time.OffsetDateTime;
+import java.time.ZoneId;
 import java.time.ZoneOffset;
 import java.time.format.DateTimeParseException;
 import java.util.HashMap;
@@ -48,6 +49,7 @@ public class AiStreamClient {
     private static final String LIVE_STREAMS_PATH = "/api/v1/live-streams";
     /** 목록·상태 JSON 최대 크기 - 메모리에 올리므로 상한을 둔다. */
     private static final int MAX_JSON_BYTES = 1024 * 1024;
+    private static final ZoneId KST = ZoneId.of("Asia/Seoul");
 
     private final CameraStreamProperties properties;
     private final ObjectMapper objectMapper;
@@ -280,21 +282,25 @@ public class AiStreamClient {
         return value == null || value.isNull() ? null : value.asText();
     }
 
-    /** AI 시각은 오프셋 없는 UTC(예 {@code 2026-05-30T10:20:22.939247})다. 오프셋이 붙어 오면 그대로 읽는다. */
+    /**
+     * AI 시각은 오프셋 없는 UTC(예 {@code 2026-05-30T10:20:22.939247})다. 오프셋이 붙어 오면 그대로 읽는다.
+     * 응답에는 <b>KST로 바꿔</b> 싣는다 - 같은 응답의 분석 시각(KST)과 오프셋이 섞이지 않게(2026-10-03 점검 I-3).
+     */
     static OffsetDateTime parseAiTime(String raw) {
         if (!StringUtils.hasText(raw)) {
             return null;
         }
+        OffsetDateTime parsed;
         try {
-            return OffsetDateTime.parse(raw);
+            parsed = OffsetDateTime.parse(raw);
         } catch (DateTimeParseException ignored) {
-            // 오프셋 없는 형식 - 아래에서 UTC로 읽는다
+            try {
+                parsed = LocalDateTime.parse(raw).atOffset(ZoneOffset.UTC);   // 오프셋 없는 형식 = UTC
+            } catch (DateTimeParseException e) {
+                return null;
+            }
         }
-        try {
-            return LocalDateTime.parse(raw).atOffset(ZoneOffset.UTC);
-        } catch (DateTimeParseException e) {
-            return null;
-        }
+        return parsed.atZoneSameInstant(KST).toOffsetDateTime();
     }
 
     /**
