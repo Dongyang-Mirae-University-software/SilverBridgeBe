@@ -1585,3 +1585,8 @@ REST API Key 단독 대비 보안 강화 — 인가코드 탈취 시 토큰 발�
 - L-3: AI 목록·상태·스냅샷 호출 전체 제한 8초(헤더 대기는 연결 끊기, 본문은 읽기 사이 마감 확인 - 읽는 중 `disconnect()`가 읽기를 깨우지 못하는 JDK 동작을 재현·확인), 잘린 본문 실패 처리, JSON 1MB 상한.
 - L-4: 보호자 카메라 API 4종 보호자별 분·시간 속도 제한(목록·상태 30/600, 스냅샷 60/1200, 티켓 20/300), 인가보다 먼저, Redis 장애 fail-open.
 - 단위 1177 / 0 실패. 상세: `docs/(2026-10-03) audit-impact-ai-stream-relay.md` "후속 반영".
+
+## [2026-10-04] 실시간 카메라 점검 후속 I-1·I-3 (branch `fix/camera-stream-info`)
+
+- I-1: 실시간 분석 풀 폐기 로그를 `[LIVE-ANALYSIS-REJECTED]` WARN으로 분리(알림 `[NOTIFY-REJECTED]` ERROR와 구분). I-3: AI `lastFrameAt`을 KST로 변환해 응답 시각 오프셋 통일.
+- 단위 1179 / 0 실패. #290 점검 항목 전부 반영 완료(I-2·I-4 수용).
