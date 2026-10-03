@@ -52,7 +52,15 @@ public class AiStreamClient {
     public AiStreamClient(CameraStreamProperties properties, ObjectMapper objectMapper) {
         this.properties = properties;
         this.objectMapper = objectMapper;
-        SimpleClientHttpRequestFactory factory = new SimpleClientHttpRequestFactory();
+        // 리다이렉트를 따라가지 않는다(2026-10-03 점검 L-2) - 30x로 다른 호스트를 가리키면 AI 키 헤더가 그쪽으로 갈 수
+        // 있다. AI는 리다이렉트를 쓰지 않으므로 30x는 장애로 본다(requireSuccess).
+        SimpleClientHttpRequestFactory factory = new SimpleClientHttpRequestFactory() {
+            @Override
+            protected void prepareConnection(HttpURLConnection connection, String httpMethod) throws IOException {
+                super.prepareConnection(connection, httpMethod);
+                connection.setInstanceFollowRedirects(false);
+            }
+        };
         factory.setConnectTimeout((int) properties.getConnectTimeout().toMillis());
         factory.setReadTimeout((int) properties.getReadTimeout().toMillis());
         this.requestFactory = factory;
@@ -137,6 +145,7 @@ public class AiStreamClient {
             connection.setConnectTimeout((int) properties.getConnectTimeout().toMillis());
             connection.setReadTimeout((int) properties.getStreamIdleTimeout().toMillis());   // 읽기 1회 무수신 제한
             connection.setUseCaches(false);
+            connection.setInstanceFollowRedirects(false);   // 30x는 장애로 본다(점검 L-2)
             connection.setRequestProperty(API_KEY_HEADER, properties.getApiKey());
 
             int status = connection.getResponseCode();

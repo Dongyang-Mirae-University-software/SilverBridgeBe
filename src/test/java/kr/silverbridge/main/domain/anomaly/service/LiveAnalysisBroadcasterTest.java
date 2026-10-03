@@ -61,7 +61,7 @@ class LiveAnalysisBroadcasterTest {
         WebSocketEventPublisher publisher = new WebSocketEventPublisher(messagingTemplate, recipientStatusPort);
         // 동기 실행기 - 발송 결과를 바로 검증한다
         broadcaster = new LiveAnalysisBroadcaster(cameraService, connectionService, publisher, Runnable::run, now::get);
-        lenient().when(cameraService.findOwnerBySessionId(SESSION_ID))
+        lenient().when(cameraService.findActiveOwnerBySessionId(SESSION_ID))
                 .thenReturn(Optional.of(new CameraOwner(WARD_ID, "거실")));
         lenient().when(recipientStatusPort.findStatus(anyString())).thenReturn(Optional.of(Status.ACTIVE));
     }
@@ -170,9 +170,9 @@ class LiveAnalysisBroadcasterTest {
     }
 
     @Test
-    @DisplayName("주인을 모르는 세션(그 사이 삭제된 카메라)은 아무에게도 보내지 않는다")
+    @DisplayName("삭제·비활성(꺼진) 카메라는 아무에게도 보내지 않는다 - 영상·목록과 같은 기준 (점검 L-1)")
     void 주인없음_미발송() {
-        when(cameraService.findOwnerBySessionId(SESSION_ID)).thenReturn(Optional.empty());
+        when(cameraService.findActiveOwnerBySessionId(SESSION_ID)).thenReturn(Optional.empty());
 
         broadcaster.onAnalysis(signal(DetectedType.FIRE, true, 0.9));
 
@@ -203,5 +203,44 @@ class LiveAnalysisBroadcasterTest {
         broadcaster.onAnalysis(signal(DetectedType.FIRE, true, 0.9));   // 예외 없이 끝나야 한다
 
         verify(messagingTemplate, never()).convertAndSend(anyString(), any(Object.class));
+    }
+
+    @Test
+    @DisplayName("AI 연결이 끊기면 상태를 보낸 적 있는 세션에 status=null(확인 불가)을 보낸다 - 마지막 '정상'이 화면에 남지 않게 (점검 M-1)")
+    void 연결끊김_확인불가_발송() {
+        when(connectionService.getActiveGuardianIds(WARD_ID)).thenReturn(List.of("G1"));
+        broadcaster.onAnalysis(signal(DetectedType.NORMAL, false, 0.1));
+
+        broadcaster.clear();
+
+        ArgumentCaptor<Object> payload = ArgumentCaptor.forClass(Object.class);
+        verify(messagingTemplate, times(2)).convertAndSend(eq("/topic/G1/camera-analysis"), payload.capture());
+        LiveAnalysisMessage unknown = (LiveAnalysisMessage) payload.getAllValues().get(1);
+        assertThat(unknown.status()).isNull();
+        assertThat(unknown.detectedType()).isNull();
+        assertThat(broadcaster.findLatest(SESSION_ID)).isEmpty();
+    }
+
+    @Test
+    @DisplayName("아직 아무것도 보내지 않은 세션은 연결이 끊겨도 보내지 않는다")
+    void 연결끊김_미발송세션_무시() {
+        now.set(0);   // 첫 결과도 간격 제한에 걸려 보내지 않은 상태
+        broadcaster.onSessionStatus(SESSION_ID, "running");
+
+        broadcaster.clear();
+
+        verify(messagingTemplate, never()).convertAndSend(anyString(), any(Object.class));
+    }
+
+    @Test
+    @DisplayName("송출 상태를 받기 전에 분석이 먼저 오면 running으로 채운다 - status=null은 '확인 불가'만 뜻한다")
+    void 분석먼저_running() {
+        when(connectionService.getActiveGuardianIds(WARD_ID)).thenReturn(List.of("G1"));
+
+        broadcaster.onAnalysis(signal(DetectedType.NORMAL, false, 0.1));
+
+        ArgumentCaptor<Object> payload = ArgumentCaptor.forClass(Object.class);
+        verify(messagingTemplate).convertAndSend(eq("/topic/G1/camera-analysis"), payload.capture());
+        assertThat(((LiveAnalysisMessage) payload.getValue()).status()).isEqualTo("running");
     }
 }

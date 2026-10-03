@@ -224,6 +224,18 @@ public class CameraService {
     }
 
     /**
+     * {@link #findOwnerBySessionId}와 같지만 <b>활성 카메라만</b> - 보호자 화면 표시용(실시간 분석 상태) 협력.
+     * 꺼진 카메라는 영상·목록에서 빠지므로 분석 상태도 보내지 않는다. 감지·알림 경로는 이 메서드를 쓰지 않는다
+     * ({@code is_active}는 감지·알림을 끄지 않는다, ANOM-G08).
+     */
+    @Transactional(readOnly = true)
+    public Optional<CameraOwner> findActiveOwnerBySessionId(String sessionId) {
+        return cameraRepository.findBySessionId(sessionId)
+                .filter(Camera::isActive)
+                .map(camera -> new CameraOwner(camera.getWardId(), camera.getLabel()));
+    }
+
+    /**
      * {@code sessionId} → 설치 위치 맵(anomaly 도메인 협력용). 이상감지 이력 목록에서 "어디서 감지됐는지"를
      * 표시하는 데 쓴다.
      *

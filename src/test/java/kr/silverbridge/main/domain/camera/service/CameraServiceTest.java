@@ -362,5 +362,19 @@ class CameraServiceTest {
                     .isEqualTo(ErrorCode.CAMERA_NOT_FOUND);
             assertThat(cameraService.isViewable(GUARDIAN_ID, SESSION_ID)).isFalse();
         }
+    
+        @Test
+        @DisplayName("화면 표시용 주인 조회는 활성 카메라만 - 꺼진 카메라는 빈 값 (점검 L-1)")
+        void 활성카메라만_주인조회() {
+            Camera inactive = camera(2L, WARD_ID, "ward_off", "dev2", "주방");
+            inactive.deactivate();
+            when(cameraRepository.findBySessionId(SESSION_ID))
+                    .thenReturn(Optional.of(camera(1L, WARD_ID, SESSION_ID, "dev", "거실")));
+            when(cameraRepository.findBySessionId("ward_off")).thenReturn(Optional.of(inactive));
+
+            assertThat(cameraService.findActiveOwnerBySessionId(SESSION_ID)).isPresent();
+            assertThat(cameraService.findActiveOwnerBySessionId("ward_off")).isEmpty();
+            assertThat(cameraService.findOwnerBySessionId("ward_off")).isPresent();   // 감지·알림 경로는 그대로
+        }
     }
 }
