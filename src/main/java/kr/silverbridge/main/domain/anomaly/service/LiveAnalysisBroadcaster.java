@@ -99,9 +99,17 @@ public class LiveAnalysisBroadcaster implements LiveAnalysisSnapshotPort {
         }
     }
 
-    /** AI 연결이 끊겼다 - 받아 둔 결과가 현재 상태라고 보장할 수 없어 비운다. */
+    /**
+     * AI 연결이 끊겼다 - 받아 둔 결과가 현재 상태라고 보장할 수 없어 비우고, 화면에 이미 상태를 보낸 세션에는
+     * <b>"확인 불가"(status=null)</b>를 알린다(2026-10-03 점검 M-1). 비우기만 하면 재접속을 기다리는 동안 화면에
+     * 마지막 "송출 중·정상"이 그대로 남아, 모르는 값을 아는 값처럼 보여준다(대시보드와 같은 원칙).
+     */
     public void clear() {
-        states.clear();
+        for (Map.Entry<String, State> entry : states.entrySet()) {
+            if (states.remove(entry.getKey(), entry.getValue()) && entry.getValue().sentKey() != null) {
+                dispatch(entry.getKey(), State.UNKNOWN);
+            }
+        }
     }
 
     @Override
@@ -143,9 +151,10 @@ public class LiveAnalysisBroadcaster implements LiveAnalysisSnapshotPort {
 
     void fanOut(String sessionId, State state) {
         try {
-            Optional<CameraOwner> owner = cameraService.findOwnerBySessionId(sessionId);
+            // 꺼진 카메라는 영상·목록과 같이 표시 대상이 아니다(2026-10-03 점검 L-1). 감지·화재 알림은 별개로 계속된다.
+            Optional<CameraOwner> owner = cameraService.findActiveOwnerBySessionId(sessionId);
             if (owner.isEmpty()) {
-                return;   // 그 사이 카메라가 삭제됨 - 주인을 모르면 보내지 않는다
+                return;   // 삭제·비활성 카메라 - 보내지 않는다
             }
             String wardId = owner.get().wardId();
             List<String> guardianIds = connectionService.getActiveGuardianIds(wardId);
@@ -186,13 +195,17 @@ public class LiveAnalysisBroadcaster implements LiveAnalysisSnapshotPort {
     record State(String status, AnomalySignal analysis, String sentKey, long sentAt) {
 
         static final State EMPTY = new State(null, null, null, 0);
+        /** AI 연결이 끊겨 상태를 알 수 없음 - status·분석 모두 null로 나간다. */
+        static final State UNKNOWN = new State(null, null, null, 0);
 
         State withStatus(String newStatus) {
             return new State(newStatus, analysis, sentKey, sentAt);
         }
 
+        // 분석 결과는 송출 중인 세션에만 온다 - 송출 상태를 아직 못 받았으면 running으로 둔다.
+        // 그래야 메시지의 status=null이 "확인 불가"(AI 연결 끊김) 한 가지 뜻만 갖는다.
         State withAnalysis(AnomalySignal newAnalysis) {
-            return new State(status, newAnalysis, sentKey, sentAt);
+            return new State(status == null ? CameraLiveStatus.RUNNING : status, newAnalysis, sentKey, sentAt);
         }
 
         State markSent(String key, long at) {

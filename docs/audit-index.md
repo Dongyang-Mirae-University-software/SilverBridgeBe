@@ -9,7 +9,7 @@
 
 | 머지 | 기능 | 상태 | 점검 문서 | 잔여 이슈 |
 |---|---|---|---|---|
-| (PR 전, 2026-10-03) | 보호자 실시간 카메라 보기 - AI 영상 백엔드 중계·스트림 티켓·STOMP `camera-analysis` (마이그레이션 없음) | ❌ | 미점검 - 구현 문서 `(2026-10-03) feature-ai-stream-relay.md`. 새 STOMP 이벤트·`AiLiveStreamSubscriber`·`SecurityConfig` permitAll을 건드려 **템플릿 C** 대상 | 배포 후 실서버 MJPEG 중계·nginx 버퍼링 확인 / FE 전환 전까지 무인증 프록시 잔존 |
+| #290 (2026-10-03) | 보호자 실시간 카메라 보기 - AI 영상 백엔드 중계·스트림 티켓·STOMP `camera-analysis` (마이그레이션 없음) | ✅ | `(2026-10-03) audit-impact-ai-stream-relay.md` (템플릿 C) | - (M-1·L-1·L-2 반영 2026-10-04 `fix/camera-stream-audit`) · L-3·L-4·I-1·I-3 후속 / 실서버 브라우저 `<img>` E2E 미확인(운영 활성 카메라 1대·ACTIVE 연결 1건 - 보호자 계정으로 확인 가능) |
 | #261 (2026-09-30) | 탈퇴 FCM 토큰 삭제 REQUIRES_NEW(M-1)·탈퇴 `WITHDRAWN`/역할 변경 `ADMIN` 해제 문구(M-2) (마이그레이션 없음) | ➖ | 점검 불요 - 사용처 전수(`DisconnectedBy` 이벤트 생성 5경로·알림 분기·FE)는 구현 PHASE 0에서 수행, `(2026-09-30) fix-withdrawal-fcm-and-disconnect-copy.md` | - (M-1 실 DB 재현·고정, M-2 단위 테스트 5건. 별도 템플릿 C는 사용자 결정으로 생략 2026-09-30) |
 | #260 (2026-09-30) | 아키텍처 경계 정리 F-1~F-3 - 감사 로그·SMS 발송기 → global, ID 생성기 → user (동작 불변) | ✅ | `(2026-09-30) audit-impact-remaining-audit-items.md` (템플릿 C) | - |
 | #259 (2026-09-30) | 점검 잔여 이슈 - 탈퇴 리스너 REQUIRES_NEW(H-1)·판정 쓰기 잠금+`@DynamicUpdate`(E-2)·SOS 경계값 | ✅ | `(2026-09-30) audit-impact-remaining-audit-items.md` (템플릿 C + B) | - (M-1 `deleteAllTokens` REQUIRES_NEW·M-2 탈퇴 `WITHDRAWN`/역할 변경 `ADMIN` 문구 반영 2026-09-30 `(2026-09-30) fix-withdrawal-fcm-and-disconnect-copy.md`) · L-1~L-3 기록 |

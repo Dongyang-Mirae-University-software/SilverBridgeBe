@@ -37,6 +37,7 @@ class AiStreamClientTest {
     private final AtomicReference<String> receivedKey = new AtomicReference<>();
     private final AtomicReference<String> receivedQuery = new AtomicReference<>();
     private final AtomicReference<String> receivedRawPath = new AtomicReference<>();
+    private final java.util.concurrent.atomic.AtomicBoolean redirectFollowed = new java.util.concurrent.atomic.AtomicBoolean();
     private CameraStreamProperties properties;
 
     @BeforeEach
@@ -72,6 +73,15 @@ class AiStreamClientTest {
             case "/api/v1/live-streams/gone/status", "/api/v1/live-streams/gone/mjpeg" ->
                     json(exchange, 404, "{\"success\":false,\"errorCode\":\"STREAM_SESSION_NOT_FOUND\"}");
             case "/api/v1/live-streams/boom/status" -> json(exchange, 500, "{}");
+            case "/api/v1/live-streams/moved/status", "/api/v1/live-streams/moved/mjpeg" -> {
+                exchange.getResponseHeaders().set("Location", "/api/v1/live-streams/target/status");
+                exchange.sendResponseHeaders(302, -1);
+                exchange.close();
+            }
+            case "/api/v1/live-streams/target/status" -> {
+                redirectFollowed.set(true);
+                json(exchange, 200, "{\"success\":true,\"data\":{\"status\":\"running\"}}");
+            }
             case "/api/v1/live-streams/endless/mjpeg" -> {
                 // 실제 AI처럼 끝나지 않는 MJPEG - 클라이언트가 끊을 때까지 계속 보낸다
                 exchange.getResponseHeaders().set("Content-Type", "multipart/x-mixed-replace; boundary=frame");
@@ -185,6 +195,16 @@ class AiStreamClientTest {
         stream.close();
 
         assertThat(reader.get(2, java.util.concurrent.TimeUnit.SECONDS)).isTrue();
+    }
+
+    @Test
+    @DisplayName("리다이렉트를 따라가지 않고 장애로 본다 - 30x로 다른 곳을 가리켜도 AI 키가 따라가지 않게 (점검 L-2)")
+    void 리다이렉트_미추종() {
+        AiStreamClient client = client();
+
+        assertThatThrownBy(() -> client.fetchStatus("moved")).isInstanceOf(AiStreamUnavailableException.class);
+        assertThatThrownBy(() -> client.openMjpeg("moved")).isInstanceOf(AiStreamUnavailableException.class);
+        assertThat(redirectFollowed).isFalse();
     }
 
     @Test
