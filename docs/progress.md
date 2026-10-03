@@ -1599,3 +1599,10 @@ REST API Key 단독 대비 보안 강화 — 인가코드 탈취 시 토큰 발�
 - `./gradlew build` 통과, 단위 1273 / 0 실패(신규 94, dev #292·#293 위로 rebase). 통합 테스트(`AnomalyClipIntegrationTest` 9건 + CHECK 동기화 포함) **vkcs 55건 통과**(`fb6efa3`).
 - 남은 것: 영향 범위 점검(템플릿 C) / 인프라(`./.data/clips` 마운트, AI 서버 먼저 배포) / FE 재생 화면.
 - 상세: `docs/(2026-10-04) feature-anomaly-clip.md`
+
+## [2026-10-04] 이상감지 클립 - AI 계약 v2 반영 + 영향 범위 점검(템플릿 C) (PR #294)
+
+- AI 클립 API 배포 확인(gosky AI `87accbb`). AI 쪽 대조 권장 2건 반영(`df64f23`): 503 `CLIP_DISABLED` 재시도 안 함, 호출 전체 제한 25초. drift: 없는 세션 404가 앞단에서 HTML로 바뀜(동작 영향 없음).
+- 템플릿 C(Sonnet 수집 → Opus 판정): 🔴0 🟠0 🟡0 🟢3 ℹ️3. 불변식 위반 없음. L-1 클립 기록↔피보호자 purge 교착(자동 복구, 잠금 순서 users→incident로 해소 가능) / L-2 오탐 확정 상황에 이어진 감지 클립 비공개(정책 결정 요청) / L-3 스윕 purge 경로 파일 하루 잔존.
+- 머지 전 남은 것: 두 서버 `./.data/clips:/data/clips` 마운트(현재 없음).
+- 상세: `docs/(2026-10-04) audit-impact-anomaly-clip.md`
