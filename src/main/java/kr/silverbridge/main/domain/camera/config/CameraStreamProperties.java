@@ -27,8 +27,14 @@ public class CameraStreamProperties {
     /** AI 연결 제한. */
     private Duration connectTimeout = Duration.ofSeconds(3);
 
-    /** 목록·상태·스냅샷 응답 제한. */
+    /** 목록·상태·스냅샷의 읽기 1회 제한. */
     private Duration readTimeout = Duration.ofSeconds(5);
+
+    /**
+     * 목록·상태·스냅샷 호출 <b>전체</b> 제한(연결·헤더 대기·본문 수신 합계). 마감이 되면 연결을 끊는다(2026-10-04 점검 L-3) -
+     * 읽기 제한만으로는 AI가 조금씩 흘려 보낼 때 요청 스레드가 무한정 묶인다.
+     */
+    private Duration callTimeout = Duration.ofSeconds(8);
 
     /**
      * MJPEG 무수신 제한 - 이 시간 동안 AI에서 바이트가 하나도 안 오면 끊는다.

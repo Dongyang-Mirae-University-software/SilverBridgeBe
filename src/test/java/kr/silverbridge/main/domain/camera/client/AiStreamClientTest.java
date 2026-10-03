@@ -39,6 +39,8 @@ class AiStreamClientTest {
     private final AtomicReference<String> receivedRawPath = new AtomicReference<>();
     private final java.util.concurrent.atomic.AtomicBoolean redirectFollowed = new java.util.concurrent.atomic.AtomicBoolean();
     private CameraStreamProperties properties;
+    private final org.springframework.scheduling.concurrent.ThreadPoolTaskScheduler scheduler =
+            new org.springframework.scheduling.concurrent.ThreadPoolTaskScheduler();
 
     @BeforeEach
     void setUp() throws IOException {
@@ -51,11 +53,13 @@ class AiStreamClientTest {
         properties.setApiKey(KEY);
         properties.setReadTimeout(Duration.ofSeconds(2));
         properties.setStreamIdleTimeout(Duration.ofSeconds(2));
+        scheduler.initialize();
     }
 
     @AfterEach
     void tearDown() {
         server.stop(0);
+        scheduler.shutdown();
     }
 
     private void handle(HttpExchange exchange) throws IOException {
@@ -73,6 +77,25 @@ class AiStreamClientTest {
             case "/api/v1/live-streams/gone/status", "/api/v1/live-streams/gone/mjpeg" ->
                     json(exchange, 404, "{\"success\":false,\"errorCode\":\"STREAM_SESSION_NOT_FOUND\"}");
             case "/api/v1/live-streams/boom/status" -> json(exchange, 500, "{}");
+            case "/api/v1/live-streams/slowhead/status" -> {
+                // 헤더를 늦게 준다 - 읽기 제한(2초) 안이지만 전체 제한(1초)은 넘는다
+                sleepQuietly(1_500);
+                json(exchange, 200, "{\"success\":true,\"data\":{\"status\":\"running\"}}");
+            }
+            case "/api/v1/live-streams/trickle/latest-frame" -> {
+                // 본문을 조금씩 흘린다 - 읽기 1회 제한(2초)에는 한 번도 걸리지 않는다
+                exchange.getResponseHeaders().set("Content-Type", "image/jpeg");
+                exchange.sendResponseHeaders(200, 0);
+                try (OutputStream out = exchange.getResponseBody()) {
+                    for (int i = 0; i < 50; i++) {
+                        out.write(0xFF);
+                        out.flush();
+                        sleepQuietly(200);
+                    }
+                } catch (IOException ignored) {
+                    // 클라이언트가 끊음
+                }
+            }
             case "/api/v1/live-streams/moved/status", "/api/v1/live-streams/moved/mjpeg" -> {
                 exchange.getResponseHeaders().set("Location", "/api/v1/live-streams/target/status");
                 exchange.sendResponseHeaders(302, -1);
@@ -107,6 +130,14 @@ class AiStreamClientTest {
         }
     }
 
+    private static void sleepQuietly(long millis) {
+        try {
+            Thread.sleep(millis);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+        }
+    }
+
     private static void json(HttpExchange exchange, int status, String body) throws IOException {
         byte[] bytes = body.getBytes(StandardCharsets.UTF_8);
         exchange.getResponseHeaders().set("Content-Type", "application/json");
@@ -117,7 +148,7 @@ class AiStreamClientTest {
     }
 
     private AiStreamClient client() {
-        return new AiStreamClient(properties, new ObjectMapper());
+        return new AiStreamClient(properties, new ObjectMapper(), scheduler);
     }
 
     @Test
@@ -205,6 +236,28 @@ class AiStreamClientTest {
         assertThatThrownBy(() -> client.fetchStatus("moved")).isInstanceOf(AiStreamUnavailableException.class);
         assertThatThrownBy(() -> client.openMjpeg("moved")).isInstanceOf(AiStreamUnavailableException.class);
         assertThat(redirectFollowed).isFalse();
+    }
+
+    @Test
+    @DisplayName("헤더가 늦으면 호출 전체 제한에서 끊는다(읽기 1회 제한보다 짧아도) (점검 L-3)")
+    void 전체시간제한_헤더지연() {
+        properties.setCallTimeout(Duration.ofSeconds(1));
+        long started = System.nanoTime();
+
+        assertThatThrownBy(() -> client().fetchStatus("slowhead")).isInstanceOf(AiStreamUnavailableException.class);
+
+        assertThat(Duration.ofNanos(System.nanoTime() - started)).isLessThan(Duration.ofMillis(1_400));
+    }
+
+    @Test
+    @DisplayName("본문을 조금씩 흘려도 호출 전체 제한에서 끊는다 - 읽기 1회 제한으로는 걸리지 않는 경우 (점검 L-3)")
+    void 전체시간제한_본문흘림() {
+        properties.setCallTimeout(Duration.ofSeconds(1));
+        long started = System.nanoTime();
+
+        assertThatThrownBy(() -> client().fetchLatestFrame("trickle")).isInstanceOf(AiStreamUnavailableException.class);
+
+        assertThat(Duration.ofNanos(System.nanoTime() - started)).isLessThan(Duration.ofMillis(2_000));
     }
 
     @Test

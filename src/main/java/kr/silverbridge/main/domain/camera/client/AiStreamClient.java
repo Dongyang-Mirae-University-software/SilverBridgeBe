@@ -6,21 +6,20 @@ import kr.silverbridge.main.domain.camera.config.CameraStreamProperties;
 import kr.silverbridge.main.global.exception.CustomException;
 import kr.silverbridge.main.global.exception.ErrorCode;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.http.HttpMethod;
 import org.springframework.http.HttpStatus;
-import org.springframework.http.HttpStatusCode;
-import org.springframework.http.client.ClientHttpRequest;
-import org.springframework.http.client.ClientHttpResponse;
-import org.springframework.http.client.SimpleClientHttpRequestFactory;
+import org.springframework.scheduling.TaskScheduler;
 import org.springframework.stereotype.Component;
 import org.springframework.util.StringUtils;
 import org.springframework.web.util.UriComponentsBuilder;
 
+import java.io.ByteArrayOutputStream;
 import java.io.Closeable;
 import java.io.IOException;
 import java.io.InputStream;
 import java.net.HttpURLConnection;
 import java.net.URI;
+import java.time.Duration;
+import java.time.Instant;
 import java.time.LocalDateTime;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
@@ -28,6 +27,8 @@ import java.time.format.DateTimeParseException;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Optional;
+import java.util.concurrent.ScheduledFuture;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
  * AI 서버 라이브 스트림 REST 클라이언트(보호자 영상 중계용).
@@ -35,8 +36,9 @@ import java.util.Optional;
  * <p>AI 키는 {@code X-API-Key} 헤더로만 보낸다 - AI REST는 쿼리 키를 받지 않고, 쿼리에 실으면 접속 로그에 남는다.
  * 로그에는 세션 ID·응답 코드까지만 남기고 키·응답 본문은 남기지 않는다.</p>
  *
- * <p>응답 제한이 둘이다: 목록·상태·스냅샷은 일반 제한({@code readTimeout}), 끝이 없는 MJPEG는 읽기 한 번의
- * 무수신 제한({@code streamIdleTimeout})만 둔다(외부 HTTP 타임아웃 필수 규칙의 예외 - 2026-10-03).</p>
+ * <p>응답 제한이 둘이다: 목록·상태·스냅샷은 <b>호출 전체 제한</b>({@code callTimeout}, 마감 시 연결을 끊는다 - 2026-10-04
+ * 점검 L-3), 끝이 없는 MJPEG는 읽기 한 번의 무수신 제한({@code streamIdleTimeout})만 둔다(외부 HTTP 타임아웃 필수 규칙의
+ * 예외 - 2026-10-03).</p>
  */
 @Slf4j
 @Component
@@ -44,88 +46,64 @@ public class AiStreamClient {
 
     private static final String API_KEY_HEADER = "X-API-Key";
     private static final String LIVE_STREAMS_PATH = "/api/v1/live-streams";
+    /** 목록·상태 JSON 최대 크기 - 메모리에 올리므로 상한을 둔다. */
+    private static final int MAX_JSON_BYTES = 1024 * 1024;
 
     private final CameraStreamProperties properties;
     private final ObjectMapper objectMapper;
-    private final SimpleClientHttpRequestFactory requestFactory;
+    private final TaskScheduler taskScheduler;
 
-    public AiStreamClient(CameraStreamProperties properties, ObjectMapper objectMapper) {
+    public AiStreamClient(CameraStreamProperties properties, ObjectMapper objectMapper, TaskScheduler taskScheduler) {
         this.properties = properties;
         this.objectMapper = objectMapper;
-        // 리다이렉트를 따라가지 않는다(2026-10-03 점검 L-2) - 30x로 다른 호스트를 가리키면 AI 키 헤더가 그쪽으로 갈 수
-        // 있다. AI는 리다이렉트를 쓰지 않으므로 30x는 장애로 본다(requireSuccess).
-        SimpleClientHttpRequestFactory factory = new SimpleClientHttpRequestFactory() {
-            @Override
-            protected void prepareConnection(HttpURLConnection connection, String httpMethod) throws IOException {
-                super.prepareConnection(connection, httpMethod);
-                connection.setInstanceFollowRedirects(false);
-            }
-        };
-        factory.setConnectTimeout((int) properties.getConnectTimeout().toMillis());
-        factory.setReadTimeout((int) properties.getReadTimeout().toMillis());
-        this.requestFactory = factory;
+        this.taskScheduler = taskScheduler;
     }
 
     /** 송출 중인 세션 전체({@code sessionId} → 상태). AI가 목록에 넣지 않은 세션은 송출하지 않는 것이다. */
     public Map<String, AiLiveStream> fetchLiveStreams() {
-        try (ClientHttpResponse response = execute(requestFactory, uri(LIVE_STREAMS_PATH))) {
-            requireSuccess(response, "live-streams", null);
-            JsonNode data = readData(response);
-            Map<String, AiLiveStream> streams = new HashMap<>();
-            if (data.isArray()) {
-                for (JsonNode node : data) {
-                    String sessionId = node.path("sessionId").asText(null);
-                    if (StringUtils.hasText(sessionId)) {
-                        streams.put(sessionId, new AiLiveStream(sessionId,
-                                textOrNull(node, "status"), parseAiTime(textOrNull(node, "lastFrameAt"))));
-                    }
+        AiResponse response = get("live-streams", null, uri(LIVE_STREAMS_PATH), MAX_JSON_BYTES);
+        requireSuccess(response, "live-streams", null);
+        JsonNode data = readData(response, "live-streams", null);
+        Map<String, AiLiveStream> streams = new HashMap<>();
+        if (data.isArray()) {
+            for (JsonNode node : data) {
+                String sessionId = node.path("sessionId").asText(null);
+                if (StringUtils.hasText(sessionId)) {
+                    streams.put(sessionId, new AiLiveStream(sessionId,
+                            textOrNull(node, "status"), parseAiTime(textOrNull(node, "lastFrameAt"))));
                 }
             }
-            return streams;
-        } catch (IOException e) {
-            throw unavailable("live-streams", null, e);
         }
+        return streams;
     }
 
     /** 세션 상태. AI가 세션을 모르면(송출 안 함) 빈 값. */
     public Optional<AiStreamStatus> fetchStatus(String sessionId) {
-        try (ClientHttpResponse response = execute(requestFactory, uri(LIVE_STREAMS_PATH + "/{id}/status", sessionId))) {
-            if (response.getStatusCode().value() == HttpStatus.NOT_FOUND.value()) {
-                return Optional.empty();
-            }
-            requireSuccess(response, "status", sessionId);
-            JsonNode data = readData(response);
-            if (!data.isObject()) {
-                return Optional.empty();
-            }
-            return Optional.of(new AiStreamStatus(
-                    textOrNull(data, "status"),
-                    parseAiTime(textOrNull(data, "lastFrameAt")),
-                    data.hasNonNull("fps") ? data.get("fps").asDouble() : null,
-                    data.path("isAnalyzing").asBoolean(false)));
-        } catch (IOException e) {
-            throw unavailable("status", sessionId, e);
+        AiResponse response = get("status", sessionId, uri(LIVE_STREAMS_PATH + "/{id}/status", sessionId), MAX_JSON_BYTES);
+        if (response.status() == HttpStatus.NOT_FOUND.value()) {
+            return Optional.empty();
         }
+        requireSuccess(response, "status", sessionId);
+        JsonNode data = readData(response, "status", sessionId);
+        if (!data.isObject()) {
+            return Optional.empty();
+        }
+        return Optional.of(new AiStreamStatus(
+                textOrNull(data, "status"),
+                parseAiTime(textOrNull(data, "lastFrameAt")),
+                data.hasNonNull("fps") ? data.get("fps").asDouble() : null,
+                data.path("isAnalyzing").asBoolean(false)));
     }
 
     /** 최신 프레임(JPEG). 아직 프레임이 없거나 세션이 없으면 빈 값. */
     public Optional<byte[]> fetchLatestFrame(String sessionId) {
-        try (ClientHttpResponse response = execute(requestFactory,
-                uri(LIVE_STREAMS_PATH + "/{id}/latest-frame", sessionId))) {
-            if (response.getStatusCode().value() == HttpStatus.NOT_FOUND.value()) {
-                return Optional.empty();
-            }
-            requireSuccess(response, "latest-frame", sessionId);
-            try (InputStream body = response.getBody()) {
-                byte[] bytes = body.readNBytes(properties.getMaxFrameBytes() + 1);
-                if (bytes.length > properties.getMaxFrameBytes()) {
-                    throw new AiStreamUnavailableException("AI 스냅샷이 크기 상한을 넘음");
-                }
-                return Optional.of(bytes);
-            }
-        } catch (IOException e) {
-            throw unavailable("latest-frame", sessionId, e);
+        AiResponse response = get("latest-frame", sessionId,
+                uri(LIVE_STREAMS_PATH + "/{id}/latest-frame", sessionId), properties.getMaxFrameBytes());
+        if (response.status() == HttpStatus.NOT_FOUND.value()) {
+            return Optional.empty();
         }
+        requireSuccess(response, "latest-frame", sessionId);
+        return Optional.of(response.body());
     }
 
     /**
@@ -141,12 +119,8 @@ public class AiStreamClient {
         requireApiKey();
         HttpURLConnection connection = null;
         try {
-            connection = (HttpURLConnection) uri(LIVE_STREAMS_PATH + "/{id}/mjpeg", sessionId).toURL().openConnection();
-            connection.setConnectTimeout((int) properties.getConnectTimeout().toMillis());
-            connection.setReadTimeout((int) properties.getStreamIdleTimeout().toMillis());   // 읽기 1회 무수신 제한
-            connection.setUseCaches(false);
-            connection.setInstanceFollowRedirects(false);   // 30x는 장애로 본다(점검 L-2)
-            connection.setRequestProperty(API_KEY_HEADER, properties.getApiKey());
+            // 끝없는 응답이라 전체 시간 제한 대신 읽기 1회 무수신 제한만 둔다
+            connection = open(uri(LIVE_STREAMS_PATH + "/{id}/mjpeg", sessionId), properties.getStreamIdleTimeout());
 
             int status = connection.getResponseCode();
             if (status == HttpStatus.NOT_FOUND.value()) {
@@ -167,18 +141,106 @@ public class AiStreamClient {
         }
     }
 
+    /**
+     * 목록·상태·스냅샷 공통 GET - 연결·헤더 대기·본문 수신 <b>전체</b>를 {@code callTimeout} 안에 끝낸다(2026-10-04 점검 L-3).
+     *
+     * <p>읽기 제한({@code readTimeout})은 읽기 한 번의 제한이라 AI가 조금씩 흘려 보내면 요청 스레드가 무한정 묶인다.
+     * 그래서 마감 시각에 스케줄러가 연결을 끊는다 - 끊으면 막혀 있던 읽기가 예외로 빠져나온다. Spring 응답 래퍼를
+     * 쓰지 않는 이유는 MJPEG와 같다(그 {@code close()}는 남은 본문을 끝까지 읽어 중단한 의미가 없어진다).</p>
+     */
+    private AiResponse get(String call, String sessionId, URI uri, int maxBytes) {
+        requireApiKey();
+        HttpURLConnection connection = null;
+        ScheduledFuture<?> deadline = null;
+        AtomicBoolean timedOut = new AtomicBoolean();
+        long deadlineNanos = System.nanoTime() + properties.getCallTimeout().toNanos();
+        try {
+            connection = open(uri, properties.getReadTimeout());
+            HttpURLConnection target = connection;
+            // 헤더 대기 단계는 연결을 끊으면 바로 빠져나온다
+            deadline = taskScheduler.schedule(() -> {
+                timedOut.set(true);
+                target.disconnect();
+            }, Instant.now().plus(properties.getCallTimeout()));
+
+            int status = connection.getResponseCode();
+            if (timedOut.get()) {
+                throw new IOException("call deadline reached");
+            }
+            if (status < 200 || status >= 300) {
+                return new AiResponse(status, new byte[0]);
+            }
+            try (InputStream body = connection.getInputStream()) {
+                return new AiResponse(status, readBounded(body, maxBytes, deadlineNanos, timedOut, call, sessionId));
+            }
+        } catch (IOException e) {
+            if (timedOut.get()) {
+                log.warn("[CAMERA-STREAM] AI 호출 시간 초과: call={}, sessionId={}, limit={}",
+                        call, sessionId, properties.getCallTimeout());
+                throw new AiStreamUnavailableException("AI 호출 시간 초과: " + call, e);
+            }
+            throw unavailable(call, sessionId, e);
+        } finally {
+            if (deadline != null) {
+                deadline.cancel(false);
+            }
+            if (connection != null) {
+                connection.disconnect();   // 본문을 다 읽었거나 중단했다 - 연결을 재사용하지 않는다
+            }
+        }
+    }
+
+    /**
+     * 본문을 덩어리 단위로 읽으며 읽을 때마다 마감·크기를 확인한다.
+     *
+     * <p>본문을 읽는 중에는 다른 스레드의 {@code disconnect()}가 읽기를 깨우지 못한다(JDK 동작, 테스트로 확인). 그래서
+     * 마감 확인을 읽기 사이에 둔다 - 최악의 경우는 마감 + 읽기 1회 제한({@code readTimeout})이다. 마감에 끊긴 스트림은
+     * 예외 대신 EOF로 끝나기도 해서, 마감이 지났으면 정상 종료여도 잘린 본문으로 보고 실패시킨다.</p>
+     */
+    private byte[] readBounded(InputStream body, int maxBytes, long deadlineNanos, AtomicBoolean timedOut,
+                               String call, String sessionId) throws IOException {
+        ByteArrayOutputStream out = new ByteArrayOutputStream();
+        byte[] buffer = new byte[8 * 1024];
+        while (true) {
+            if (System.nanoTime() > deadlineNanos) {
+                timedOut.set(true);
+            }
+            if (timedOut.get()) {
+                throw new IOException("call deadline reached");
+            }
+            int read = body.read(buffer);
+            if (read < 0) {
+                break;
+            }
+            out.write(buffer, 0, read);
+            if (out.size() > maxBytes) {
+                log.warn("[CAMERA-STREAM] AI 응답이 크기 상한을 넘음: call={}, sessionId={}, max={}", call, sessionId, maxBytes);
+                throw new AiStreamUnavailableException("AI 응답 크기 초과: " + call);
+            }
+        }
+        if (timedOut.get() || System.nanoTime() > deadlineNanos) {
+            timedOut.set(true);
+            throw new IOException("call deadline reached");
+        }
+        return out.toByteArray();
+    }
+
+    /** AI 연결 준비. 리다이렉트를 따라가지 않는다(점검 L-2 - 30x로 다른 호스트를 가리키면 키 헤더가 따라간다). */
+    private HttpURLConnection open(URI uri, Duration readTimeout) throws IOException {
+        HttpURLConnection connection = (HttpURLConnection) uri.toURL().openConnection();
+        connection.setConnectTimeout((int) properties.getConnectTimeout().toMillis());
+        connection.setReadTimeout((int) readTimeout.toMillis());
+        connection.setUseCaches(false);
+        connection.setInstanceFollowRedirects(false);
+        connection.setRequestProperty(API_KEY_HEADER, properties.getApiKey());
+        return connection;
+    }
+
     private void requireApiKey() {
         if (!StringUtils.hasText(properties.getApiKey())) {
             log.warn("[CAMERA-STREAM] AI_API_KEY 미설정 - 영상 중계 불가(.env.dev에 AI_API_KEY 주입 필요)");
             throw new AiStreamUnavailableException("AI API Key 미설정");
         }
-    }
-
-    private ClientHttpResponse execute(SimpleClientHttpRequestFactory factory, URI uri) throws IOException {
-        requireApiKey();
-        ClientHttpRequest request = factory.createRequest(uri, HttpMethod.GET);
-        request.getHeaders().set(API_KEY_HEADER, properties.getApiKey());
-        return request.execute();
     }
 
     private URI uri(String path, Object... variables) {
@@ -190,18 +252,19 @@ public class AiStreamClient {
                 .toUri();
     }
 
-    private void requireSuccess(ClientHttpResponse response, String call, String sessionId) throws IOException {
-        HttpStatusCode status = response.getStatusCode();
-        if (!status.is2xxSuccessful()) {
-            log.warn("[CAMERA-STREAM] AI 응답 실패: call={}, sessionId={}, status={}", call, sessionId, status.value());
-            throw new AiStreamUnavailableException("AI 응답 실패: " + call + " " + status.value());
+    private void requireSuccess(AiResponse response, String call, String sessionId) {
+        if (response.status() < 200 || response.status() >= 300) {
+            log.warn("[CAMERA-STREAM] AI 응답 실패: call={}, sessionId={}, status={}", call, sessionId, response.status());
+            throw new AiStreamUnavailableException("AI 응답 실패: " + call + " " + response.status());
         }
     }
 
     /** AI 공통 응답 {@code {success, message, data}}에서 data만 꺼낸다. */
-    private JsonNode readData(ClientHttpResponse response) throws IOException {
-        try (InputStream body = response.getBody()) {
-            return objectMapper.readTree(body).path("data");
+    private JsonNode readData(AiResponse response, String call, String sessionId) {
+        try {
+            return objectMapper.readTree(response.body()).path("data");
+        } catch (IOException e) {
+            throw unavailable(call, sessionId, e);
         }
     }
 
@@ -244,6 +307,9 @@ public class AiStreamClient {
             disconnect.run();
         }
     }
+
+    /** AI 응답(상태 코드 + 상한 안에서 읽은 본문). 2xx가 아니면 본문은 비어 있다. */
+    private record AiResponse(int status, byte[] body) {}
 
     /** AI 목록의 세션 1건. */
     public record AiLiveStream(String sessionId, String status, OffsetDateTime lastFrameAt) {}
