@@ -13,7 +13,7 @@
 AI WS 신호 → AnomalyDetectionService(이력 적재·커밋)
    ├─ AFTER_COMMIT @Async(urgentNotificationExecutor) → 알림 (기존, 무변경)
    └─ AFTER_COMMIT @Async(clipExecutor)               → AnomalyClipCaptureService (신규)
-        danger 확인 → 클립 쿨다운(Redis) → 디스크 여유 → AI 요청(최대 20초)
+        danger 확인 → 클립 쿨다운(Redis) → 디스크 여유 → AI 요청(최대 25초)
         → EBML 시그니처·크기 검증 → 임시 파일 → 원자적 이동 → 행 기록(상황 행 잠금 안)
 ```
 
@@ -24,11 +24,11 @@ AI WS 신호 → AnomalyDetectionService(이력 적재·커밋)
 | # | 항목 | 결정 |
 |---|---|---|
 | 1 | 재생 인증 | FE가 `Authorization` 헤더로 **fetch → blob URL 재생**. 티켓·permitAll 경로 없음 |
-| 2 | 요청 실패 | 재시도 가능한 실패면 **클립 쿨다운 해제 → 다음 감지(이력 1분 간격)에서 재시도**. 401·422·키 미설정은 해제하지 않음. Redis 장애 시 **클립 생략(fail-closed)** |
+| 2 | 요청 실패 | 재시도 가능한 실패면 **클립 쿨다운 해제 → 다음 감지(이력 1분 간격)에서 재시도**. 401·422·키 미설정·503 `CLIP_DISABLED`(AI 킬 스위치, 계약 v2)는 해제하지 않음. Redis 장애 시 **클립 생략(fail-closed)** |
 | 3 | 이력 응답 | 상황당 **대표 클립 1개(최신) + `clipCount`**, 전체는 목록 API. 상황당 상한 **12개** |
 | 4 | 피보호자 오류 | 남의 클립 403 `ANOMALY_CLIP_NOT_OWNED` + `[IDOR-ATTEMPT]` / 연결 0건 404 / 보호자 미연결 403 `ANOMALY_NOT_AUTHORIZED` / 비공개·만료 404 `ANOMALY_CLIP_NOT_FOUND` |
 | 5 | 청소 | **05:00 KST**. 고아 = 행 없는 파일·임시 파일 중 수정 후 1시간 경과. 스케줄러 풀 3 유지 |
-| 6 | 타임아웃·크기 | 연결 3초(`camera.stream.connect-timeout` 공용), **호출 전체 20초**(AI 하드 상한과 맞춤 - 일반 10초 규칙의 예외, 마감 시 연결을 끊는다 - 영상 중계 L-3과 같은 방식), 크기 **10MB** |
+| 6 | 타임아웃·크기 | 연결 3초(`camera.stream.connect-timeout` 공용), **호출 전체 25초**(AI 상한 20초 + 전송 여유 - 계약 v2 대조 권장, 일반 10초 규칙의 예외, 마감 시 연결을 끊는다 - 영상 중계 L-3과 같은 방식), 크기 **10MB** |
 | 7 | 완성 WS 이벤트 | **없음** |
 | 8 | QA 브랜치 순서 | 무관(코드 패치 전부 dev 반영, 남은 건 문서 커밋 1개) |
 | 9 | AI 클라이언트 | `anomaly/client/AiClipClient` 신설, 접속 정보는 **기존 `camera.stream.*` 공용**(새 env 없음). `AiStreamClient`는 무변경 |
@@ -152,7 +152,7 @@ video.src = url;            // 화면을 떠날 때 URL.revokeObjectURL(url)
    두 서버(gosky·vkcs) 모두. 마운트가 없으면 컨테이너 재생성 때 클립이 사라진다(행은 남아 404 → 다음 청소가 행 정리).
 3. **백엔드 배포**(이 PR 머지) - V57 적용.
 
-환경변수(모두 선택, 기본값이 계약서 값): `ANOMALY_CLIP_ENABLED`(true) · `ANOMALY_CLIP_STORAGE_DIR`(/data/clips) · `ANOMALY_CLIP_PRE_SECONDS`(3) · `ANOMALY_CLIP_POST_SECONDS`(2) · `ANOMALY_CLIP_COOLDOWN_MINUTES`(5) · `ANOMALY_CLIP_REQUEST_TIMEOUT`(20s) · `ANOMALY_CLIP_MAX_BYTES`(10485760) · `ANOMALY_CLIP_RETENTION_DAYS`(30, 상한 30) · `ANOMALY_CLIP_HIDDEN_GRACE_HOURS`(24) · `ANOMALY_CLIP_MAX_PER_INCIDENT`(12) · `ANOMALY_CLIP_MIN_FREE_DISK_MB`(1024). AI 주소·키는 기존 `AI_HTTP_BASE_URL`·`AI_API_KEY`.
+환경변수(모두 선택, 기본값이 계약서 값): `ANOMALY_CLIP_ENABLED`(true) · `ANOMALY_CLIP_STORAGE_DIR`(/data/clips) · `ANOMALY_CLIP_PRE_SECONDS`(3) · `ANOMALY_CLIP_POST_SECONDS`(2) · `ANOMALY_CLIP_COOLDOWN_MINUTES`(5) · `ANOMALY_CLIP_REQUEST_TIMEOUT`(25s) · `ANOMALY_CLIP_MAX_BYTES`(10485760) · `ANOMALY_CLIP_RETENTION_DAYS`(30, 상한 30) · `ANOMALY_CLIP_HIDDEN_GRACE_HOURS`(24) · `ANOMALY_CLIP_MAX_PER_INCIDENT`(12) · `ANOMALY_CLIP_MIN_FREE_DISK_MB`(1024). AI 주소·키는 기존 `AI_HTTP_BASE_URL`·`AI_API_KEY`.
 
 AI 서버보다 백엔드가 먼저 배포돼도 깨지지 않는다 - 클립 요청이 404(`SESSION_NOT_FOUND`로 분류)로 실패하고 다음 감지에서 다시 시도할 뿐, 이력·알림은 그대로다.
 
@@ -160,7 +160,7 @@ AI 서버보다 백엔드가 먼저 배포돼도 깨지지 않는다 - 클립 �
 
 ## 9. 검증
 
-- `./gradlew build` 통과. **단위 1273 / 실패 0**(건너뜀 16은 기존) - 신규 94.
+- `./gradlew build` 통과. **단위 1276 / 실패 0**(건너뜀 16은 기존) - 신규 97.
   - `AiClipClientTest`(모의 AI 서버): 계약 형식 요청(POST·키 헤더·`detectedAt` UTC Z), 헤더 메타·누락 null, EBML 불일치·크기 초과 거부, 응답 시간 초과, 본문을 조금씩 흘려도 호출 전체 제한에서 끊김, 리다이렉트 미추종, 오류 7종 매핑·재시도 여부, 키 미설정, 세션 ID 경로 인코딩
   - `AnomalyClipCaptureServiceTest`: 쿨다운 해제/유지 분기, 실패 시 파일 삭제, 킬 스위치, danger=false 생략, 디스크 부족
   - `AnomalyClipStorageTest`: 원자적 쓰기, 경로 이탈 8종 거부, 청소 목록
@@ -173,10 +173,16 @@ AI 서버보다 백엔드가 먼저 배포돼도 깨지지 않는다 - 클립 �
   ```
 - 실서버 E2E(AI 클립 API 배포 후): 화재 감지 → 수 초 뒤 `anomaly_clip` 행·`/data/clips/*.webm` → 보호자 이력 `clip` → 파일 Chrome 재생 5.0초 / 오탐 응답 → 404 → 번복 → 재생.
 
-## 10. 수용한 한계
+## 10. AI 계약 v2 대조 (2026-10-04, AI 서버 `87accbb`·`5046436` 배포 후)
+
+- AI 클립 API 배포 확인(gosky, 서버 키로 호출): 범위 밖 파라미터 422 `CLIP_INVALID_PARAMS`(JSON) - 계약대로.
+- AI 쪽 대조 권장 2건 반영: ① 503 `CLIP_DISABLED` → `DISABLED`(재시도 안 함, 쿨다운 유지) ② 호출 제한 20 → **25초**.
+- **drift 1건(동작 영향 없음)**: 없는 세션의 404가 `testai.gosky.kr` 앞단에서 **HTML 404 페이지로 바뀌어** 내려온다(계약은 JSON `STREAM_SESSION_NOT_FOUND`). 백엔드는 상태 코드로 `SESSION_NOT_FOUND`(재시도 가능)를 판정해 영향이 없고, 로그의 `errorCode`만 null이다. 프록시 설정은 AI·인프라 쪽 확인 사항.
+
+## 11. 수용한 한계
 
 - `clipExecutor` 포화로 폐기된 클립은 쿨다운(5분) 동안 다시 만들지 않는다.
 - 클립 기록과 카메라 삭제가 아주 짧게 엇갈리면 삭제된 카메라의 클립 행이 남을 수 있다 - 다음 청소(카메라 사라짐 단계)가 회수한다.
 - 오탐 유예(24시간)가 지나 삭제된 뒤 번복되면 클립은 돌아오지 않는다.
 - 저장소는 단일 서버 로컬 디스크다(API 서버를 여러 대로 늘리면 공유 저장소로 다시 설계).
-- AI 호출 전체 제한(20초)은 본문 수신 중에는 읽기 사이에서만 확인된다 - 최악은 마감 + 읽기 1회 제한(영상 중계 `AiStreamClient`와 같은 JDK 제약).
+- AI 호출 전체 제한(25초)은 본문 수신 중에는 읽기 사이에서만 확인된다 - 최악은 마감 + 읽기 1회 제한(영상 중계 `AiStreamClient`와 같은 JDK 제약).

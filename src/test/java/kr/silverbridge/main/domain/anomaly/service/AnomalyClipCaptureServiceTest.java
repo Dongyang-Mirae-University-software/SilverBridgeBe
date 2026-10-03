@@ -154,7 +154,7 @@ class AnomalyClipCaptureServiceTest {
     }
 
     @ParameterizedTest
-    @EnumSource(value = Outcome.class, names = {"REJECTED", "NOT_CONFIGURED"})
+    @EnumSource(value = Outcome.class, names = {"REJECTED", "NOT_CONFIGURED", "DISABLED"})
     @DisplayName("키·파라미터 결함(다시 보내도 같은 실패)이면 쿨다운을 유지해 AI를 두드리지 않는다")
     void 재시도_불가_실패(Outcome outcome) {
         readyToRequest();

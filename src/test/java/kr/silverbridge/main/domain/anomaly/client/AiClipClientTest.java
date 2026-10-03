@@ -137,6 +137,8 @@ class AiClipClientTest {
             case "e500" -> error(exchange, 500, "CLIP_ENCODE_FAILED");
             case "e401" -> error(exchange, 401, "AUTH_INVALID_KEY");
             case "e422" -> error(exchange, 422, "CLIP_INVALID_PARAMS");
+            case "e503off" -> error(exchange, 503, "CLIP_DISABLED");
+            case "e503" -> bytes(exchange, 503, "<html>503</html>".getBytes(StandardCharsets.UTF_8));
             case "e502" -> bytes(exchange, 502, "bad gateway".getBytes(StandardCharsets.UTF_8));
             default -> error(exchange, 404, "STREAM_SESSION_NOT_FOUND");
         }
@@ -255,9 +257,11 @@ class AiClipClientTest {
             "e500, SERVER_ERROR, true",
             "e502, SERVER_ERROR, true",
             "e401, REJECTED, false",
-            "e422, REJECTED, false"
+            "e422, REJECTED, false",
+            "e503off, DISABLED, false",
+            "e503, SERVER_ERROR, true"
     })
-    @DisplayName("계약서 오류 응답을 결과 코드로 바꾼다 - 키·파라미터 결함만 재시도하지 않는다")
+    @DisplayName("계약서 오류 응답을 결과 코드로 바꾼다 - 키·파라미터 결함·AI 킬 스위치(503 CLIP_DISABLED)는 재시도하지 않는다")
     void 오류_매핑(String session, Outcome expected, boolean retryable) {
         ClipResult result = client().requestClip(session, null);
 

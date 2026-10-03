@@ -129,10 +129,11 @@ public class AnomalyProperties {
         private long cooldownMinutes = 5;
 
         /**
-         * AI 응답 제한. 일반 외부 호출(10초)보다 길다 - AI는 뒤 구간(2초)을 기다린 뒤 인코딩하고, 계약상 전체 처리
-         * 하드 상한이 20초다. 연결 제한은 영상 중계와 같은 {@code camera.stream.connect-timeout}을 쓴다.
+         * AI 호출 전체 제한. 일반 외부 호출(10초)보다 길다 - AI는 뒤 구간(2초)을 기다린 뒤 인코딩하고, 계약상 처리 상한이
+         * 요청 수신부터 20초다. 상한 직전에 끝난 응답도 받도록 전송 여유 5초를 더한다(계약 v2 대조 권장 22~25초).
+         * 연결 제한은 영상 중계와 같은 {@code camera.stream.connect-timeout}을 쓴다.
          */
-        private Duration requestTimeout = Duration.ofSeconds(20);
+        private Duration requestTimeout = Duration.ofSeconds(25);
 
         /** 클립 최대 크기(바이트). FHD 5초가 약 1.9MB라 넉넉히 잡되, 넘으면 저장하지 않는다. */
         private int maxBytes = 10 * 1024 * 1024;

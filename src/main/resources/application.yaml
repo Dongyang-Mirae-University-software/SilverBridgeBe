@@ -195,7 +195,7 @@ anomaly:
     pre-seconds: ${ANOMALY_CLIP_PRE_SECONDS:3}                # 감지 앞 구간(AI 상한 5)
     post-seconds: ${ANOMALY_CLIP_POST_SECONDS:2}              # 감지 뒤 구간(AI 상한 3)
     cooldown-minutes: ${ANOMALY_CLIP_COOLDOWN_MINUTES:5}      # 같은 카메라·유형 클립 최소 간격(알림 쿨다운과 별개 키)
-    request-timeout: ${ANOMALY_CLIP_REQUEST_TIMEOUT:20s}      # AI 응답 제한(뒤 구간 대기 + 인코딩, AI 하드 상한 20초)
+    request-timeout: ${ANOMALY_CLIP_REQUEST_TIMEOUT:25s}      # AI 호출 전체 제한(AI 상한 20초 + 전송 여유 5초)
     max-bytes: ${ANOMALY_CLIP_MAX_BYTES:10485760}             # 클립 최대 크기(10MB). 넘으면 저장하지 않는다
     retention-days: ${ANOMALY_CLIP_RETENTION_DAYS:30}         # 보관 기간(최대 30일 - 넘게 줘도 30으로 자른다). 매일 05:00 청소
     hidden-grace-hours: ${ANOMALY_CLIP_HIDDEN_GRACE_HOURS:24} # 오탐 확정 후 물리 삭제까지 유예(번복 시 복구)

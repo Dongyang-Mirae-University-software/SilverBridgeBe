@@ -32,8 +32,8 @@ import java.util.concurrent.atomic.AtomicBoolean;
  * AI 서버 클립 API 클라이언트 - {@code POST /api/v1/live-streams/{sessionId}/clips}(계약서 2026-10-04 최종본).
  *
  * <p>접속 정보(주소·키·연결 제한)는 영상 중계와 같은 {@link CameraStreamProperties}를 쓴다 - AI 서버 하나에 설정이 둘로
- * 갈리지 않게 한다. 시간 제한만 클립 전용({@code anomaly.clip.request-timeout}, 기본 20초)이다: AI가 뒤 구간을 기다린 뒤
- * 인코딩하므로 일반 5초로는 부족하다. 이 값은 <b>호출 전체</b>(연결·요청 전송·헤더 대기·본문 수신 합계) 제한이다 - 마감 시각에
+ * 갈리지 않게 한다. 시간 제한만 클립 전용({@code anomaly.clip.request-timeout}, 기본 25초)이다: AI가 뒤 구간을 기다린 뒤
+ * 인코딩하고 그 상한이 요청 수신부터 20초라, 응답 전송 여유를 더한다(계약 v2 대조 권장 22~25초). 이 값은 <b>호출 전체</b>(연결·요청 전송·헤더 대기·본문 수신 합계) 제한이다 - 마감 시각에
  * 스케줄러가 연결을 끊는다(영상 중계 점검 L-3과 같은 방식). 읽기 1회 제한만 두면 AI가 조금씩 흘려 보낼 때 클립 스레드가
  * 무한정 묶인다.</p>
  *
@@ -80,6 +80,11 @@ public class AiClipClient {
         BUSY(true),
         /** 500 CLIP_ENCODE_FAILED 또는 그 밖의 5xx. */
         SERVER_ERROR(true),
+        /**
+         * 503 CLIP_DISABLED - AI 쪽 킬 스위치가 꺼져 있다(계약 v2). 다시 보내도 같은 결과라 쿨다운을 풀지 않는다.
+         * {@code errorCode} 없는 503(프록시·업스트림 장애)은 {@link #SERVER_ERROR}로 남는다.
+         */
+        DISABLED(false),
         /** 401·422 등 다시 보내도 같은 4xx(키·파라미터 결함). */
         REJECTED(false),
         /** 200이지만 WebM이 아니거나 비어 있음. */
@@ -266,6 +271,9 @@ public class AiClipClient {
     static Outcome outcomeOf(int status, String errorCode) {
         if (status >= 300 && status < 400) {
             return Outcome.UNAVAILABLE;   // 리다이렉트는 따라가지 않고 장애로 본다
+        }
+        if (status == 503 && "CLIP_DISABLED".equals(errorCode)) {
+            return Outcome.DISABLED;
         }
         return switch (status) {
             case 409 -> Outcome.NOT_ENOUGH_FRAMES;
