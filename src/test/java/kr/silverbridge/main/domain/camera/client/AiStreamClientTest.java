@@ -152,7 +152,7 @@ class AiStreamClientTest {
     }
 
     @Test
-    @DisplayName("목록: 키는 X-API-Key 헤더로만 보내고(쿼리 없음) 세션별 상태·시각(UTC)을 읽는다")
+    @DisplayName("목록: 키는 X-API-Key 헤더로만 보내고(쿼리 없음) 세션별 상태·시각(UTC → KST)을 읽는다")
     void 목록() {
         Map<String, AiLiveStream> streams = client().fetchLiveStreams();
 
@@ -160,8 +160,9 @@ class AiStreamClientTest {
         assertThat(receivedQuery.get()).isNull();
         assertThat(streams).containsOnlyKeys("s1", "s2");
         assertThat(streams.get("s1").status()).isEqualTo("running");
+        // AI의 오프셋 없는 UTC를 KST로 바꿔 싣는다(점검 I-3 - 분석 시각과 오프셋을 맞춘다)
         assertThat(streams.get("s1").lastFrameAt())
-                .isEqualTo(OffsetDateTime.of(2026, 10, 3, 5, 3, 9, 123_456_000, ZoneOffset.UTC));
+                .isEqualTo(OffsetDateTime.of(2026, 10, 3, 14, 3, 9, 123_456_000, ZoneOffset.ofHours(9)));
         assertThat(streams.get("s2").lastFrameAt()).isNull();
     }
 

@@ -80,3 +80,13 @@
 - MJPEG 중계 루프는 AI가 0.2초마다 프레임을 보내 매 반복에서 종료·재확인 조건을 보므로 같은 JDK 동작의 영향이 없다.
 - 테스트 +4: 헤더 지연·본문 흘림이 전체 제한(1초)에서 끊김(실 HTTP, 1.0초·1.35초), API별 한도 검사, 한도 초과 시 인가·AI·티켓 전 차단. `./gradlew clean build` 단위 **1177 / 실패 0**.
 - 남은 정보 항목: I-1(거부 로그 분리)·I-3(시각 오프셋 - FE 안내).
+
+## 후속 반영 - I-1·I-3 (2026-10-04, branch `fix/camera-stream-info`)
+
+| # | 반영 |
+|---|---|
+| I-1 | `liveAnalysisExecutor` 폐기 로그를 `[LIVE-ANALYSIS-REJECTED]` **WARN**으로 분리(알림 풀은 `[NOTIFY-REJECTED]` ERROR 그대로). 화면 상태 1건 폐기가 SOS·화재 알림 유실처럼 보이지 않게 |
+| I-3 | AI 시각(`lastFrameAt`)을 읽을 때 KST로 바꿔 싣는다 - `/live`·`/status`의 `lastFrameAt`과 `analysis.analyzedAt`·STOMP `analyzedAt`이 모두 `+09:00` |
+
+- 테스트 +2: 실시간 분석 풀 포화 정책(호출 스레드 실행·예외 없음), 폐기 로그 태그·레벨(로그 캡처). AI 시각 KST 비교로 갱신. `./gradlew clean build` 단위 **1179 / 실패 0**.
+- 이로써 이 점검의 항목은 모두 반영됐다(M-1·L-1~L-4·I-1·I-3, I-2·I-4는 수용).

@@ -8,6 +8,7 @@ import org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor;
 import lombok.extern.slf4j.Slf4j;
 
 import java.util.concurrent.Executor;
+import java.util.concurrent.RejectedExecutionHandler;
 
 /**
  * 비동기 실행 설정.
@@ -62,19 +63,28 @@ public class AsyncConfig {
      */
     @Bean(name = "liveAnalysisExecutor")
     public Executor liveAnalysisExecutor() {
-        return newExecutor("liveAnalysisExecutor", "live-analysis-", 1, 2, 100);
+        // 폐기는 알림 장애가 아니라 화면 상태 1건이 건너뛰어진 것이다 - [NOTIFY-REJECTED] ERROR로 남기면 SOS·화재 알림
+        // 유실처럼 보여 진짜 장애가 묻힌다(2026-10-03 점검 I-1). 별도 태그의 WARN으로 남긴다.
+        return newExecutor("live-analysis-", 1, 2, 100, (task, pool) ->
+                log.warn("[LIVE-ANALYSIS-REJECTED] 실시간 분석 상태 발송 폐기(화면 표시용 - 다음 상태 변화 때 최신 상태가 "
+                        + "다시 나간다): active={}, queue={}", pool.getActiveCount(), pool.getQueue().size()));
     }
 
     private static ThreadPoolTaskExecutor newExecutor(String name, String threadNamePrefix,
                                                       int corePoolSize, int maxPoolSize, int queueCapacity) {
+        return newExecutor(threadNamePrefix, corePoolSize, maxPoolSize, queueCapacity, (task, pool) ->
+                log.error("[NOTIFY-REJECTED] 알림 executor 포화로 작업 폐기: executor={}, active={}, queue={}, completed={}",
+                        name, pool.getActiveCount(), pool.getQueue().size(), pool.getCompletedTaskCount()));
+    }
+
+    private static ThreadPoolTaskExecutor newExecutor(String threadNamePrefix, int corePoolSize, int maxPoolSize,
+                                                      int queueCapacity, RejectedExecutionHandler rejectedHandler) {
         ThreadPoolTaskExecutor executor = new ThreadPoolTaskExecutor();
         executor.setCorePoolSize(corePoolSize);
         executor.setMaxPoolSize(maxPoolSize);
         executor.setQueueCapacity(queueCapacity);
         executor.setThreadNamePrefix(threadNamePrefix);
-        executor.setRejectedExecutionHandler((task, pool) ->
-                log.error("[NOTIFY-REJECTED] 알림 executor 포화로 작업 폐기: executor={}, active={}, queue={}, completed={}",
-                        name, pool.getActiveCount(), pool.getQueue().size(), pool.getCompletedTaskCount()));
+        executor.setRejectedExecutionHandler(rejectedHandler);
         executor.setWaitForTasksToCompleteOnShutdown(true);
         executor.setAwaitTerminationSeconds(AWAIT_TERMINATION_SECONDS);
         executor.initialize();
