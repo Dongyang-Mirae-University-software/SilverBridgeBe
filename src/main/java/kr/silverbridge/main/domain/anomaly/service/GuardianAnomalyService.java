@@ -62,6 +62,7 @@ public class GuardianAnomalyService {
     private final ConnectionService connectionService;
     private final CameraService cameraService;
     private final UserRepository userRepository;
+    private final AnomalyClipService clipService;
 
     /**
      * 이상감지 이력 조회(상황 최신순).
@@ -84,12 +85,20 @@ public class GuardianAnomalyService {
         Map<String, String> cameraLabels = cameraService.findLabelsBySessionIds(
                 content.stream().map(AnomalyIncident::getSessionId).collect(Collectors.toSet()));
         Map<Long, AnomalyVerdict> myVerdicts = resolveMyVerdicts(guardianId, content);
+        // 인가를 통과한 상황들만 넘긴다 - 클립 요약도 같은 인가 범위다
+        Map<Long, AnomalyClipService.ClipSummary> clips = clipService.summarize(
+                content.stream().map(AnomalyIncident::getId).toList());
 
-        return PageResponse.of(incidents.map(incident -> AnomalyIncidentItem.of(
-                incident,
-                wardNames.get(incident.getWardId()),
-                cameraLabels.get(incident.getSessionId()),
-                myVerdicts.get(incident.getId()))));
+        return PageResponse.of(incidents.map(incident -> {
+            AnomalyClipService.ClipSummary clip = clips.get(incident.getId());
+            return AnomalyIncidentItem.of(
+                    incident,
+                    wardNames.get(incident.getWardId()),
+                    cameraLabels.get(incident.getSessionId()),
+                    myVerdicts.get(incident.getId()),
+                    clip == null ? null : clip.latest(),
+                    clip == null ? 0 : clip.count());
+        }));
     }
 
     /**
@@ -123,6 +132,8 @@ public class GuardianAnomalyService {
 
         AnomalyReviewStatus status = calculateStatus(verdicts);
         incident.applyReviewStatus(status);
+        // 오탐 확정이면 클립 비공개, 번복이면 복구 - 같은 잠금 안이라 클립 기록·다른 응답과 한 줄로 선다
+        clipService.applyReviewStatus(incidentId, status);
         if (status == AnomalyReviewStatus.CONFLICTED) {
             skipConflictNoticeFor(incidentId, guardianId);
         }

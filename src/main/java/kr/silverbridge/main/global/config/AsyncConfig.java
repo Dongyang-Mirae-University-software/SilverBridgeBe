@@ -70,6 +70,18 @@ public class AsyncConfig {
                         + "다시 나간다): active={}, queue={}", pool.getActiveCount(), pool.getQueue().size()));
     }
 
+    /**
+     * 이상감지 영상 클립 생성(AnomalyClipListener) 전용(2026-10-04).
+     *
+     * <p>작업 하나가 AI 응답(뒤 구간 대기 + 인코딩, 최대 20초)을 기다린다. 긴급 알림 풀에 태우면 화재 알림이 그 뒤에 줄을
+     * 서므로 분리한다. 동시 2개는 AI 서버의 동시 인코딩 상한(2)과 맞춘 것이고, 클립 쿨다운(카메라당 5분) 덕에 큐가 차는 일은
+     * 드물다. 넘치면 다른 풀과 같이 폐기 + ERROR 로그다 - 클립 하나를 잃는 쪽이 AI 수신·알림을 막는 쪽보다 낫다.</p>
+     */
+    @Bean(name = "clipExecutor")
+    public Executor clipExecutor() {
+        return newExecutor("clipExecutor", "anomaly-clip-", 2, 2, 20);
+    }
+
     private static ThreadPoolTaskExecutor newExecutor(String name, String threadNamePrefix,
                                                       int corePoolSize, int maxPoolSize, int queueCapacity) {
         return newExecutor(threadNamePrefix, corePoolSize, maxPoolSize, queueCapacity, (task, pool) ->

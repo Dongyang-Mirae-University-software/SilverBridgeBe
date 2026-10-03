@@ -4,6 +4,7 @@ import lombok.Getter;
 import lombok.Setter;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 
+import java.time.Duration;
 import java.time.LocalTime;
 
 /**
@@ -93,6 +94,67 @@ public class AnomalyProperties {
 
     /** 재연결 백오프 최대 간격(초). */
     private long reconnectMaxSeconds = 60;
+
+    /** 이상감지 5초 영상 클립({@code anomaly.clip.*}). */
+    private Clip clip = new Clip();
+
+    /**
+     * 이상감지 영상 클립(2026-10-04).
+     *
+     * <p>클립은 부가 기능이다 - 실패·지연이 이력 적재와 알림 발송에 영향을 주지 않도록 별도 리스너·executor에서 만든다.</p>
+     */
+    @Getter
+    @Setter
+    public static class Clip {
+
+        /** 보관 기간 상한(일). 설정으로 이보다 길게 잡아도 30일로 자른다. */
+        public static final int MAX_RETENTION_DAYS = 30;
+
+        /** 킬 스위치. false면 <b>생성만</b> 멈춘다 - 열람·삭제·청소는 계속 동작해야 한다. */
+        private boolean enabled = true;
+
+        /** 저장 루트(컨테이너 내부). 호스트 마운트는 인프라 쪽에서 붙인다. */
+        private String storageDir = "/data/clips";
+
+        /** 감지 앞 구간(초). AI가 0~5를 검증한다. */
+        private double preSeconds = 3;
+
+        /** 감지 뒤 구간(초). AI가 0~3을 검증한다. */
+        private double postSeconds = 2;
+
+        /**
+         * 같은 (카메라, 유형)의 클립 최소 간격(분). 보호자 알림 쿨다운과 같은 5분이 기본이지만 키·설정은 따로다 -
+         * 알림 빈도를 바꿀 때 디스크·AI 부하가 함께 흔들리지 않게 한다.
+         */
+        private long cooldownMinutes = 5;
+
+        /**
+         * AI 응답 제한. 일반 외부 호출(10초)보다 길다 - AI는 뒤 구간(2초)을 기다린 뒤 인코딩하고, 계약상 전체 처리
+         * 하드 상한이 20초다. 연결 제한은 영상 중계와 같은 {@code camera.stream.connect-timeout}을 쓴다.
+         */
+        private Duration requestTimeout = Duration.ofSeconds(20);
+
+        /** 클립 최대 크기(바이트). FHD 5초가 약 1.9MB라 넉넉히 잡되, 넘으면 저장하지 않는다. */
+        private int maxBytes = 10 * 1024 * 1024;
+
+        /** 보관 기간(일, 최대 {@value #MAX_RETENTION_DAYS}). */
+        private int retentionDays = MAX_RETENTION_DAYS;
+
+        /** 오탐 확정 후 물리 삭제까지의 유예(시간). 이 안에 판정이 번복되면 복구된다. */
+        private long hiddenGraceHours = 24;
+
+        /** 상황 하나에 쌓을 수 있는 클립 수 상한. 화재가 길게 이어져도 디스크가 한 상황에 묶이지 않게 한다. */
+        private int maxPerIncident = 12;
+
+        /** 저장 루트의 여유 공간이 이보다 적으면 만들지 않는다(MB). 디스크가 차면 DB·로그까지 함께 멈춘다. */
+        private long minFreeDiskMb = 1024;
+
+        /** 실제로 적용되는 보관 기간 - 1 ~ {@value #MAX_RETENTION_DAYS}일로 자른다. */
+        public int effectiveRetentionDays() {
+            return Math.min(Math.max(retentionDays, 1), MAX_RETENTION_DAYS);
+        }
+    }
+
     /**
      * 판정 미응답 재촉.
      *

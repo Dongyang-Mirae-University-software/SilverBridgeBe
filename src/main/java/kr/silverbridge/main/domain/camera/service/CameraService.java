@@ -6,6 +6,7 @@ import kr.silverbridge.main.domain.camera.dto.CameraResponse;
 import kr.silverbridge.main.domain.camera.dto.CameraUpdateRequest;
 import kr.silverbridge.main.domain.camera.dto.GuardianCameraView;
 import kr.silverbridge.main.domain.camera.entity.Camera;
+import kr.silverbridge.main.domain.camera.event.CameraDeletedEvent;
 import kr.silverbridge.main.domain.camera.event.CameraRegisteredEvent;
 import kr.silverbridge.main.domain.camera.repository.CameraRepository;
 import kr.silverbridge.main.domain.connection.service.ConnectionService;
@@ -126,9 +127,14 @@ public class CameraService {
         return sanitized;
     }
 
+    /**
+     * 카메라 삭제. 그 카메라의 이상감지 클립은 커밋 뒤 anomaly 도메인이 지운다({@link CameraDeletedEvent}).
+     */
     @Transactional
     public void delete(String wardId, Long cameraId) {
-        cameraRepository.delete(getOwnedCamera(wardId, cameraId));
+        Camera camera = getOwnedCamera(wardId, cameraId);
+        cameraRepository.delete(camera);
+        eventPublisher.publishEvent(new CameraDeletedEvent(camera.getWardId(), List.of(camera.getSessionId())));
     }
 
     /**
@@ -140,13 +146,22 @@ public class CameraService {
      * <p>AI 구독은 여기서 따로 끊지 않는다 - 피보호자 본인의 삭제와 같은 방식이다. 삭제된 세션은 AI가
      * 목록을 갱신할 때 정리되고, 그 사이 들어오는 신호는 "등록된 카메라 없음"으로 이력이 스킵된다.</p>
      *
+     * <p>이 카메라들의 이상감지 클립은 커밋 뒤 anomaly 도메인이 지운다({@link CameraDeletedEvent}).</p>
+     *
      * @return 삭제한 카메라 수
      */
     @Transactional
     public int deleteAllByWard(String wardId) {
+        // 벌크 삭제 뒤에는 세션을 알 수 없어 먼저 모은다 - 이상감지 클립 정리(CameraDeletedEvent)에 쓴다
+        List<String> sessionIds = cameraRepository.findByWardIdOrderByCreatedAtDesc(wardId).stream()
+                .map(Camera::getSessionId)
+                .toList();
         long deleted = cameraRepository.deleteByWardId(wardId);
         if (deleted > 0) {
             log.info("[CAMERA] 역할 변경으로 카메라 일괄 삭제: wardId={}, {}대", wardId, deleted);
+        }
+        if (!sessionIds.isEmpty()) {
+            eventPublisher.publishEvent(new CameraDeletedEvent(wardId, sessionIds));
         }
         return (int) deleted;
     }
