@@ -1607,3 +1607,9 @@ REST API Key 단독 대비 보안 강화 — 인가코드 탈취 시 토큰 발�
 - 머지 전 남은 것: 두 서버 `./.data/clips:/data/clips` 마운트(현재 없음).
 - 상세: `docs/(2026-10-04) audit-impact-anomaly-clip.md`
 - 점검 반영(사용자 "추천안대로"): L-1 기록 잠금 순서 users → 상황 / L-2 판정 뒤 저장된 클립은 공개 / L-3 고아 파일 매시 청소 / compose api에 `./.data/clips:/data/clips`.
+
+## [2026-10-04] 이상감지 클립 배포 + FE 전달 (PR #294 `183a023`)
+
+- 머지 → vkcs CD 성공, gosky 수동 배포(`pull --ff-only` + api만 재생성). 두 서버 V57·`/data/clips` 마운트·health·클립 API 401 확인, gosky AI WS 재연결.
+- 실 클립 E2E 미확인: gosky 등록 카메라 1대 미송출(AI 404). vkcs는 `AI_API_KEY` 미설정(기존)이라 이상감지·클립 비활성.
+- FE 전달: Notion "DMU / 프론트엔드 전달 내용 / 이상감지 5초 영상 클립 (보호자·피보호자) - 목록·재생 API 안내".
