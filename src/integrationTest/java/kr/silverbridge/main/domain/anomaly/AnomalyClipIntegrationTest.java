@@ -37,6 +37,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.context.annotation.Import;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
@@ -116,6 +117,7 @@ class AnomalyClipIntegrationTest extends PostgresIntegrationTest {
     @Autowired private CameraRepository cameraRepository;
     @Autowired private ConnectionRepository connectionRepository;
     @Autowired private UserRepository userRepository;
+    @Autowired private JdbcTemplate jdbcTemplate;
 
     // ConnectionService의 의존성일 뿐 이 테스트의 관심사가 아니다(Redis 없이 뜨도록 목으로 둔다)
     @MockitoBean private ConnectionRequestLimiter connectionRequestLimiter;
@@ -165,18 +167,23 @@ class AnomalyClipIntegrationTest extends PostgresIntegrationTest {
     }
 
     @Test
-    @DisplayName("이미 오탐인 상황에 도착한 클립은 비공개로 저장된다")
-    void 오탐상황_클립은_비공개() {
+    @DisplayName("오탐 판정 뒤 저장된 클립은 공개로 남고, 다시 오탐으로 답하면 그때까지의 클립이 숨겨진다(L-2)")
+    void 오탐판정_이후_클립은_공개() {
         Long incidentId = openIncident();
+        Long before = recordClip(incidentId).getId();
         guardianAnomalyService.submitFeedback(GUARDIAN_A, incidentId, AnomalyVerdict.FALSE_ALARM);
 
-        AnomalyClip clip = recordClip(incidentId);
+        Long after = recordClip(incidentId).getId();
 
-        assertThat(clip.getStatus()).isEqualTo(AnomalyClipStatus.HIDDEN);
+        assertThat(clipRepository.findById(before).orElseThrow().getStatus()).isEqualTo(AnomalyClipStatus.HIDDEN);
+        assertThat(clipRepository.findById(after).orElseThrow().getStatus()).isEqualTo(AnomalyClipStatus.VISIBLE);
+
+        guardianAnomalyService.submitFeedback(GUARDIAN_B, incidentId, AnomalyVerdict.FALSE_ALARM);
+        assertThat(clipRepository.findById(after).orElseThrow().getStatus()).isEqualTo(AnomalyClipStatus.HIDDEN);
     }
 
     @Test
-    @DisplayName("오탐 응답과 클립 기록이 동시에 와도 오탐 상황의 클립은 공개로 남지 않는다(상황 행 잠금)")
+    @DisplayName("오탐 응답과 클립 기록이 동시에 와도 한 줄로 선다 - 판정보다 먼저 저장된 클립은 반드시 숨겨진다(상황 행 잠금)")
     void 오탐응답과_클립기록_동시() throws Exception {
         ExecutorService pool = Executors.newFixedThreadPool(2);
         try {
@@ -194,9 +201,14 @@ class AnomalyClipIntegrationTest extends PostgresIntegrationTest {
                 }, pool);
                 CompletableFuture.allOf(feedback, clip).get(30, TimeUnit.SECONDS);
 
-                assertThat(clipRepository.findById(clip.get().getId()).orElseThrow().getStatus())
-                        .as("round %d", round)
-                        .isEqualTo(AnomalyClipStatus.HIDDEN);
+                AnomalyClip saved = clipRepository.findById(clip.get().getId()).orElseThrow();
+                OffsetDateTime decidedAt = incidentRepository.findById(incidentId).orElseThrow().getUpdatedAt();
+                // 판정이 먼저면 클립은 판정 뒤에 저장돼 공개, 클립이 먼저면 판정이 숨긴다 - 판정보다 이른 공개 클립은 없어야 한다
+                if (saved.getStatus() == AnomalyClipStatus.VISIBLE) {
+                    assertThat(saved.getCreatedAt()).as("round %d", round).isAfterOrEqualTo(decidedAt);
+                } else {
+                    assertThat(saved.getHiddenAt()).as("round %d", round).isAfterOrEqualTo(saved.getCreatedAt());
+                }
             }
         } finally {
             pool.shutdownNow();
@@ -213,6 +225,45 @@ class AnomalyClipIntegrationTest extends PostgresIntegrationTest {
 
         assertThat(clipRepository.findById(clip.getId())).isEmpty();
         assertThat(storage.find(clip.getFileName())).isEmpty();
+    }
+
+    @Test
+    @DisplayName("클립 기록과 피보호자 purge가 동시에 와도 교착 없이 끝나고 클립 행이 남지 않는다(L-1 - 잠금 순서 users → 상황)")
+    void 클립기록과_탈퇴purge_동시() throws Exception {
+        ExecutorService pool = Executors.newFixedThreadPool(2);
+        try {
+            for (int round = 0; round < ROUNDS; round++) {
+                String wardId = String.format("WP%04d", round);
+                String session = "sess-purge-" + round;
+                userRepository.save(TestData.user(wardId, "탈퇴피보호자", Role.WARD));
+                cameraRepository.save(TestData.camera(wardId, session, "거실"));
+                Long incidentId = incidentRepository.save(AnomalyIncident.builder()
+                        .wardId(wardId).sessionId(session).detectedType(DetectedType.FIRE)
+                        .detectedAt(OffsetDateTime.now()).confidence(0.8).build()).getId();
+                String fileName = storage.write(new byte[]{0x1A, 0x45, (byte) 0xDF, (byte) 0xA3});
+                CyclicBarrier start = new CyclicBarrier(2);
+
+                CompletableFuture<?> record = CompletableFuture.runAsync(() -> {
+                    await(start);
+                    clipService.record(new StoredClip(incidentId, wardId, session, fileName, 4,
+                            new ClipMeta(5000, 25, 1920, 1080, null), OffsetDateTime.now()));
+                }, pool);
+                CompletableFuture<?> purge = CompletableFuture.runAsync(() -> {
+                    await(start);
+                    new TransactionTemplate(transactionManager).executeWithoutResult(status ->
+                            jdbcTemplate.update("delete from users where id = ?", wardId));
+                }, pool);
+
+                // 교착이면 PostgreSQL이 한쪽을 중단시켜 예외가 난다 - 둘 다 정상 종료해야 한다
+                CompletableFuture.allOf(record, purge).get(30, TimeUnit.SECONDS);
+
+                assertThat(userRepository.findById(wardId)).as("round %d", round).isEmpty();
+                assertThat(clipRepository.findByWardId(wardId)).as("round %d", round).isEmpty();
+                storage.delete(fileName);
+            }
+        } finally {
+            pool.shutdownNow();
+        }
     }
 
     @Test

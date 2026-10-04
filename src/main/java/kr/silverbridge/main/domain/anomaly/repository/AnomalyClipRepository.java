@@ -12,8 +12,21 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.OffsetDateTime;
 import java.util.Collection;
 import java.util.List;
+import java.util.Optional;
 
 public interface AnomalyClipRepository extends JpaRepository<AnomalyClip, Long> {
+
+    /**
+     * 클립 기록용 - 피보호자 행을 {@code FOR KEY SHARE}로 먼저 잠근다(점검 L-1, 2026-10-04).
+     *
+     * <p>탈퇴 purge는 {@code users} 행 → (CASCADE) 상황 행 순서로 잠근다. 기록이 상황 행부터 잠그고 클립 INSERT의 FK 검사로
+     * {@code users}를 나중에 잠그면 순서가 엇갈려 교착이 난다. 같은 순서(users → 상황)로 맞추면 먼저 온 쪽이 끝날 때까지
+     * 다른 쪽이 기다릴 뿐이다. {@code KEY SHARE}는 일반 UPDATE(정지·이름 변경)와는 충돌하지 않고 삭제·키 변경만 막는다.</p>
+     *
+     * @return 피보호자가 남아 있으면 그 ID, 이미 지워졌으면 빈 값
+     */
+    @Query(value = "SELECT id FROM users WHERE id = :wardId FOR KEY SHARE", nativeQuery = true)
+    Optional<String> lockWardForKeyShare(@Param("wardId") String wardId);
 
     /** 상황 하나의 클립 목록(최신순). 열람 API는 {@code VISIBLE}만 넘긴다. */
     List<AnomalyClip> findByIncidentIdAndStatusOrderByCreatedAtDesc(Long incidentId, AnomalyClipStatus status);

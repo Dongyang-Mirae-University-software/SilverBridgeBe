@@ -22,11 +22,15 @@ import java.util.Set;
 import java.util.function.IntSupplier;
 
 /**
- * 이상감지 클립 청소. 하루 한 번(05:00 KST) 돈다.
+ * 이상감지 클립 청소. 하루 한 번(05:00 KST) + 고아 파일만 매시 15분.
  *
  * <p>지우는 것: ① 오탐 비공개 후 유예(24시간)가 지난 클립 ② 보관 기간(최대 30일)이 지난 클립 ③ 카메라가 사라진 클립
  * (삭제 이벤트와 요청 중이던 클립이 엇갈린 경우) ④ 파일이 없는 행 ⑤ 행이 없는 파일·쓰다 남은 임시 파일(스윕 purge 경로,
  * 리스너 실패 포함). ④⑤는 만든 지 1시간이 지난 것만 본다 - 저장 중(파일 → 행 사이)인 클립을 고아로 오인하지 않게 한다.</p>
+ *
+ * <p>⑤ 고아 파일은 <b>매시 15분</b>에 따로 돈다(점검 L-3) - 탈퇴 리스너가 실패해 스윕 purge가 계정을 지우면 행은 CASCADE로
+ * 사라지지만 파일은 남는다. 하루 1회면 탈퇴자 영상이 최대 하루 디스크에 남아 "탈퇴자 데이터를 붙들지 않는다"에 어긋난다.
+ * 디렉터리 목록 + 파일 이름 조회뿐이라 가볍다.</p>
  *
  * <p>05:00인 이유 - 토큰 03:00·FCM 토큰 04:00·알림 이력 04:30과 겹치지 않게 한다(스케줄러 풀 3스레드).
  * <b>킬 스위치({@code anomaly.clip.enabled})와 무관하게 돈다</b> - 생성을 멈춰도 만료·삭제는 계속돼야 한다.</p>
@@ -56,7 +60,12 @@ public class AnomalyClipCleanupScheduler {
         run("retention", () -> purgeExpired(now));
         run("camera-gone", this::purgeCameraGone);
         run("missing-file", () -> purgeMissingFiles(now));
-        run("orphan-file", () -> purgeOrphanFiles(now.toInstant()));
+    }
+
+    /** 행이 없는 파일·임시 파일 회수 - 매시 15분(점검 L-3). 킬 스위치와 무관하게 돈다. */
+    @Scheduled(cron = "0 15 * * * *", zone = "Asia/Seoul")
+    public void cleanupOrphanFiles() {
+        run("orphan-file", () -> purgeOrphanFiles(Instant.now()));
     }
 
     /** 오탐 비공개 후 유예가 지난 클립. 판정이 번복돼 다시 공개된 클립은 조건부 삭제가 건너뛴다. */

@@ -44,7 +44,7 @@ public class WardAnomalyClipController {
 
                     [보이지 않는 경우]
                     - 연결된 보호자가 한 명도 없으면 404입니다(다시 연결되면 보입니다).
-                    - 오탐으로 확정된 상황의 클립, 저장 후 30일이 지난 클립은 보이지 않습니다.
+                    - 오탐 판정 시점까지 저장된 클립, 저장 후 30일이 지난 클립은 보이지 않습니다.
 
                     [재생] GET /api/ward/anomaly/clips/{clipId}/file 을 Authorization 헤더와 함께 fetch해 blob URL로 재생합니다.
                     """)

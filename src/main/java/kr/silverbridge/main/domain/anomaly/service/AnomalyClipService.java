@@ -49,11 +49,19 @@ public class AnomalyClipService {
     /**
      * 저장된 파일을 클립 행으로 기록한다. 기록하지 않았으면(상황·카메라가 사라짐, 상한 도달) 빈 값 - 호출부가 파일을 지운다.
      *
-     * <p><b>상황 행 쓰기 잠금 안에서</b> 판정 상태를 읽는다. 보호자 응답과 한 줄로 서게 해, "오탐 확정 직후 도착한 클립이
-     * 공개 상태로 남는" 경합을 막는다(오탐 비공개도 같은 잠금 안에서 일어난다). 이미 오탐인 상황의 클립은 비공개로 태어난다.</p>
+     * <p>잠금 순서는 <b>피보호자({@code users}) → 상황 행</b>이다 - 탈퇴 purge와 같은 순서라 둘이 겹쳐도 교착이 나지 않는다
+     * (점검 L-1). 상황 행 쓰기 잠금으로 보호자 응답과 한 줄로 선다.</p>
+     *
+     * <p><b>클립은 언제나 공개로 저장한다</b>(점검 L-2 결정, 2026-10-04). 오탐 판정은 <b>판정 시점에 있던 클립</b>에만 적용된다 -
+     * 오탐 확정 뒤 10분 안에 같은 카메라에서 다시 잡혀 같은 상황으로 이어진 감지는 진짜 화재일 수 있어, 그 영상을 숨기면
+     * 증거가 24시간 뒤 사라진다. 보호자가 그 뒤 다시 오탐으로 답하면 그때까지의 클립이 함께 숨겨진다.</p>
      */
     @Transactional
     public Optional<AnomalyClip> record(StoredClip stored) {
+        if (clipRepository.lockWardForKeyShare(stored.wardId()).isEmpty()) {
+            log.info("[ANOMALY-CLIP] 피보호자가 탈퇴해 기록 안 함: incidentId={}", stored.incidentId());
+            return Optional.empty();
+        }
         Optional<AnomalyIncident> locked = incidentRepository.findByIdForUpdate(stored.incidentId());
         if (locked.isEmpty() || !locked.get().getWardId().equals(stored.wardId())) {
             log.info("[ANOMALY-CLIP] 상황이 사라져 기록 안 함: incidentId={}", stored.incidentId());
@@ -72,8 +80,6 @@ public class AnomalyClipService {
             return Optional.empty();
         }
 
-        OffsetDateTime now = OffsetDateTime.now();
-        boolean hidden = locked.get().getReviewStatus() == AnomalyReviewStatus.FALSE_ALARM;
         ClipMeta meta = stored.meta();
         AnomalyClip clip = clipRepository.save(AnomalyClip.builder()
                 .incidentId(stored.incidentId())
@@ -87,8 +93,7 @@ public class AnomalyClipService {
                 .height(meta == null ? null : meta.height())
                 .clipStartedAt(meta == null ? null : meta.startedAt())
                 .detectedAt(stored.detectedAt())
-                .status(hidden ? AnomalyClipStatus.HIDDEN : AnomalyClipStatus.VISIBLE)
-                .hiddenAt(hidden ? now : null)
+                .status(AnomalyClipStatus.VISIBLE)
                 .build());
         return Optional.of(clip);
     }
@@ -96,8 +101,9 @@ public class AnomalyClipService {
     /**
      * 판정 결과에 맞춰 공개 상태를 바꾼다 - <b>보호자 응답 트랜잭션 안</b>(상황 행 쓰기 잠금 안)에서만 부른다.
      *
-     * <p>오탐 확정이면 즉시 비공개(24시간 뒤 청소가 물리 삭제), 그 밖(REAL·CONFLICTED·PENDING)이면 비공개였던 클립을
-     * 되살린다. 동수·판정 대기는 지우지도 숨기지도 않는다.</p>
+     * <p>오탐 확정이면 <b>지금 있는</b> 공개 클립을 즉시 비공개(24시간 뒤 청소가 물리 삭제), 그 밖(REAL·CONFLICTED·PENDING)이면
+     * 비공개였던 클립을 되살린다. 동수·판정 대기는 지우지도 숨기지도 않는다. 이후 저장되는 클립은 공개로 태어난다
+     * ({@link #record}).</p>
      */
     @Transactional(propagation = Propagation.MANDATORY)
     public void applyReviewStatus(Long incidentId, AnomalyReviewStatus status) {

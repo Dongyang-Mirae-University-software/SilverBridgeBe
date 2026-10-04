@@ -81,6 +81,14 @@
 | C-2 L-1 수정 시 | 실 DB 경합 테스트(기록 ↔ purge 동시 20회, 교착 예외 0) |
 | C-3 탈퇴 경로가 늘 때 | `UserWithdrawnEvent`를 발행하지 않는 users 삭제 경로가 `purgeWithdrawnUser`(스윕) 하나뿐임을 고정 |
 
+## 반영 (2026-10-04, 사용자 "추천안대로 진행")
+
+- L-1 ✅ `AnomalyClipService.record`가 `AnomalyClipRepository.lockWardForKeyShare`로 피보호자 행을 먼저 잠근다 - 통합 테스트 `클립기록과_탈퇴purge_동시`(20회).
+- L-2 ✅ 판정 뒤 저장된 클립은 공개로 저장(정책 파일 규칙 ⑤ 하위 항목) - 통합 테스트 `오탐판정_이후_클립은_공개`, 동시 테스트 불변식을 "판정보다 이른 공개 클립 없음"으로 변경.
+- L-3 ✅ 고아 파일 청소를 매시 15분(`cleanupOrphanFiles`)으로 분리.
+- 인프라: `docker-compose.dev.yml` api에 `./.data/clips:/data/clips` 추가.
+- C-1·C-3(아키텍처 테스트)은 제안으로 남긴다.
+
 ## 종합 판정
 
 ⚠️ **점검됨 - 머지 가능, 잔여 Low 3건**. 불변식 위반(열람 범위 이탈·삭제 누락·알림 영향)은 없다. L-1은 자동 복구되는 드문 경합, L-2는 정책 결정 사항, L-3은 수용 가능한 지연이다.

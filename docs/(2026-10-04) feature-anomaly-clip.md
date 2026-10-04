@@ -68,7 +68,8 @@ AI WS 신호 → AnomalyDetectionService(이력 적재·커밋)
 
 ### 오탐 비공개·복구
 - 판정 쓰기 잠금(`findByIdForUpdate`) **같은 트랜잭션**에서 `FALSE_ALARM`이면 `HIDDEN`(+`hidden_at`), 그 밖(REAL·CONFLICTED·PENDING)이면 `VISIBLE` 복구.
-- 이미 오탐인 상황에 도착한 클립은 `HIDDEN`으로 저장(기록도 같은 상황 행 잠금 안에서 판정을 읽는다 - 응답과 기록이 동시에 와도 오탐 상황의 클립이 공개로 남지 않는다).
+- **판정 뒤 저장된 클립은 공개**(점검 L-2 결정): 오탐 판정은 그 시점까지의 클립에만 적용된다. 오탐 확정 상황에 10분 안에 이어진 감지는 진짜 화재일 수 있어 숨기지 않는다. 보호자가 다시 오탐으로 답하면 그때까지의 클립이 숨겨진다.
+- 기록은 피보호자 `users` 행 → 상황 행 순서로 잠근다(탈퇴 purge와 같은 순서 - 교착 없음, 점검 L-1). 상황 행 잠금으로 응답과 한 줄로 서서 판정보다 먼저 저장된 클립이 공개로 남지 않는다.
 - 물리 삭제는 청소 스케줄러가 `hidden_at` + 24시간 뒤, **여전히 HIDDEN일 때만**(조건부 DELETE) 한다. 유예 안에 번복되면 복구, 유예가 지나 삭제된 뒤에는 번복해도 돌아오지 않는다.
 - 판정은 이미 나간 알림을 되돌리지 않는다(기존 규칙) - 클립 비공개는 알림이 아니다.
 
@@ -77,9 +78,9 @@ AI WS 신호 → AnomalyDetectionService(이력 적재·커밋)
 |---|---|
 | 보관 만료(30일, 상한 30) | 청소(05:00) - 행 → 파일 |
 | 오탐 24시간 | 청소 - 조건부 삭제 |
-| 피보호자 탈퇴 | `UserWithdrawnEvent` **동기 AFTER_COMMIT** → `REQUIRES_NEW` 행 삭제 → 파일 삭제(purge CASCADE 전). 스윕 purge 경로는 행 CASCADE + 고아 파일 청소 |
+| 피보호자 탈퇴 | `UserWithdrawnEvent` **동기 AFTER_COMMIT** → `REQUIRES_NEW` 행 삭제 → 파일 삭제(purge CASCADE 전). 스윕 purge 경로는 행 CASCADE + 매시 고아 파일 청소(최대 약 1시간) |
 | 카메라 삭제(`delete`·`deleteAllByWard`) | `CameraDeletedEvent`(camera → 이벤트, anomaly가 수신) 동기 AFTER_COMMIT → `REQUIRES_NEW` 행 삭제 → 파일. 상황 이력은 남는다 |
-| 고아 | 청소 - 행 없는 파일·임시 파일(1시간 경과), 파일 없는 행, 카메라가 사라진 세션의 클립 |
+| 고아 | 행 없는 파일·임시 파일(1시간 경과)은 **매시 15분**(점검 L-3), 파일 없는 행·카메라가 사라진 세션의 클립은 05:00 |
 
 ### 생성
 - 킬 스위치 `anomaly.clip.enabled=false`는 **생성만** 멈춘다(열람·삭제·청소는 계속).
@@ -99,6 +100,7 @@ AI WS 신호 → AnomalyDetectionService(이력 적재·커밋)
 - `domain/camera/event/CameraDeletedEvent`
 
 **변경**
+- `docker-compose.dev.yml` - api 서비스에 `./.data/clips:/data/clips` 바인드 마운트(점검 후 추가)
 - `GuardianAnomalyService` - 판정 직후 `clipService.applyReviewStatus`(같은 트랜잭션), 이력에 클립 요약
 - `GuardianAnomalyController` - 클립 목록·파일 2종
 - `AnomalyIncidentItem` - `clip`·`clipCount` 추가(필드 추가, 하위호환)
@@ -144,12 +146,7 @@ video.src = url;            // 화면을 떠날 때 URL.revokeObjectURL(url)
 ## 8. 인프라 전달 (사용자 진행)
 
 1. **AI 서버 먼저 배포** - 계약서대로 `POST /api/v1/live-streams/{sessionId}/clips` + `imageio-ffmpeg==0.6.0`. 확인: 키를 넣은 요청이 404(세션 없음 `STREAM_SESSION_NOT_FOUND`)·200을 주면 라우트가 있는 것.
-2. **볼륨 마운트** - `docker-compose.dev.yml` api 서비스:
-   ```yaml
-   volumes:
-     - ./.data/clips:/data/clips
-   ```
-   두 서버(gosky·vkcs) 모두. 마운트가 없으면 컨테이너 재생성 때 클립이 사라진다(행은 남아 404 → 다음 청소가 행 정리).
+2. **볼륨 마운트** - 이 PR이 `docker-compose.dev.yml` api 서비스에 `./.data/clips:/data/clips`를 넣었다. vkcs는 CD(`git pull` → `up -d --build api`)가 api를 다시 만들며 반영되고, gosky는 수동 배포 때 같은 명령으로 반영된다. `.data/`는 `.gitignore` 대상이고 디렉터리는 Docker가 만든다(컨테이너는 root 실행).
 3. **백엔드 배포**(이 PR 머지) - V57 적용.
 
 환경변수(모두 선택, 기본값이 계약서 값): `ANOMALY_CLIP_ENABLED`(true) · `ANOMALY_CLIP_STORAGE_DIR`(/data/clips) · `ANOMALY_CLIP_PRE_SECONDS`(3) · `ANOMALY_CLIP_POST_SECONDS`(2) · `ANOMALY_CLIP_COOLDOWN_MINUTES`(5) · `ANOMALY_CLIP_REQUEST_TIMEOUT`(25s) · `ANOMALY_CLIP_MAX_BYTES`(10485760) · `ANOMALY_CLIP_RETENTION_DAYS`(30, 상한 30) · `ANOMALY_CLIP_HIDDEN_GRACE_HOURS`(24) · `ANOMALY_CLIP_MAX_PER_INCIDENT`(12) · `ANOMALY_CLIP_MIN_FREE_DISK_MB`(1024). AI 주소·키는 기존 `AI_HTTP_BASE_URL`·`AI_API_KEY`.
@@ -160,7 +157,7 @@ AI 서버보다 백엔드가 먼저 배포돼도 깨지지 않는다 - 클립 �
 
 ## 9. 검증
 
-- `./gradlew build` 통과. **단위 1276 / 실패 0**(건너뜀 16은 기존) - 신규 97.
+- `./gradlew build` 통과. **단위 1278 / 실패 0**(건너뜀 16은 기존) - 신규 99.
   - `AiClipClientTest`(모의 AI 서버): 계약 형식 요청(POST·키 헤더·`detectedAt` UTC Z), 헤더 메타·누락 null, EBML 불일치·크기 초과 거부, 응답 시간 초과, 본문을 조금씩 흘려도 호출 전체 제한에서 끊김, 리다이렉트 미추종, 오류 7종 매핑·재시도 여부, 키 미설정, 세션 ID 경로 인코딩
   - `AnomalyClipCaptureServiceTest`: 쿨다운 해제/유지 분기, 실패 시 파일 삭제, 킬 스위치, danger=false 생략, 디스크 부족
   - `AnomalyClipStorageTest`: 원자적 쓰기, 경로 이탈 8종 거부, 청소 목록
@@ -179,10 +176,19 @@ AI 서버보다 백엔드가 먼저 배포돼도 깨지지 않는다 - 클립 �
 - AI 쪽 대조 권장 2건 반영: ① 503 `CLIP_DISABLED` → `DISABLED`(재시도 안 함, 쿨다운 유지) ② 호출 제한 20 → **25초**.
 - **drift 1건(동작 영향 없음)**: 없는 세션의 404가 `testai.gosky.kr` 앞단에서 **HTML 404 페이지로 바뀌어** 내려온다(계약은 JSON `STREAM_SESSION_NOT_FOUND`). 백엔드는 상태 코드로 `SESSION_NOT_FOUND`(재시도 가능)를 판정해 영향이 없고, 로그의 `errorCode`만 null이다. 프록시 설정은 AI·인프라 쪽 확인 사항.
 
-## 11. 수용한 한계
+## 11. 영향 범위 점검 반영 (템플릿 C, `docs/(2026-10-04) audit-impact-anomaly-clip.md`)
+
+| 이슈 | 반영 |
+|---|---|
+| L-1 기록 ↔ 피보호자 purge 교착 | 기록이 `users` 행을 `FOR KEY SHARE`로 먼저 잠근다(순서 users → 상황). 실 DB 동시 20회 테스트 |
+| L-2 오탐 상황에 이어진 감지 클립 | **판정 뒤 저장된 클립은 공개**(사용자 결정 "추천안대로"). 재판정 시 함께 숨김 |
+| L-3 스윕 purge 파일 잔존 | 고아 파일 청소를 매시 15분으로 분리(스케줄러 8종, 풀 3 유지) |
+
+## 12. 수용한 한계
 
 - `clipExecutor` 포화로 폐기된 클립은 쿨다운(5분) 동안 다시 만들지 않는다.
 - 클립 기록과 카메라 삭제가 아주 짧게 엇갈리면 삭제된 카메라의 클립 행이 남을 수 있다 - 다음 청소(카메라 사라짐 단계)가 회수한다.
 - 오탐 유예(24시간)가 지나 삭제된 뒤 번복되면 클립은 돌아오지 않는다.
+- 판정 뒤 공개로 저장된 클립은 같은 상황의 판정이 다시 내려질 때(재응답)만 숨겨진다 - 그대로 두면 보관 기간까지 공개다.
 - 저장소는 단일 서버 로컬 디스크다(API 서버를 여러 대로 늘리면 공유 저장소로 다시 설계).
 - AI 호출 전체 제한(25초)은 본문 수신 중에는 읽기 사이에서만 확인된다 - 최악은 마감 + 읽기 1회 제한(영상 중계 `AiStreamClient`와 같은 JDK 제약).

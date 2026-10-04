@@ -64,7 +64,7 @@ public record AnomalyIncidentItem(
                 allowableValues = {"REAL", "FALSE_ALARM"})
         AnomalyVerdict myVerdict,
 
-        @Schema(description = "대표 영상 클립(최신 1건). 볼 수 있는 클립이 없으면 null - 오탐 확정·보관 기간(30일) 경과·생성 실패 포함")
+        @Schema(description = "대표 영상 클립(최신 1건). 볼 수 있는 클립이 없으면 null - 오탐 판정으로 비공개·보관 기간(30일) 경과·생성 실패 포함")
         AnomalyClipItem clip,
 
         @Schema(description = "볼 수 있는 영상 클립 수 (전체 목록은 /api/guardian/anomaly/{incidentId}/clips)", example = "2")

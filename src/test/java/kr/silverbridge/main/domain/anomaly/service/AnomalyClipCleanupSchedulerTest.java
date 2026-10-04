@@ -168,7 +168,21 @@ class AnomalyClipCleanupSchedulerTest {
         scheduler.cleanup();
 
         verify(clipRepository).findByCreatedAtBefore(any(), any());
-        verify(clipRepository).findAllFileNames();
+        verify(clipRepository).findByCreatedAtBeforeOrderByIdAsc(any());
         verify(clipRepository, never()).deleteOneById(anyLong());
+    }
+
+    @Test
+    @DisplayName("고아 파일 회수는 매시 작업이 맡는다(L-3 - 스윕 purge로 남은 탈퇴자 파일을 하루 넘게 두지 않는다)")
+    void 고아파일_매시() throws IOException {
+        String orphan = file();
+        age(orphan, 3);
+        when(clipRepository.findAllFileNames()).thenReturn(List.of());
+
+        scheduler.cleanup();
+        assertThat(storage.find(orphan)).as("일일 작업은 고아 파일을 보지 않는다").isPresent();
+
+        scheduler.cleanupOrphanFiles();
+        assertThat(storage.find(orphan)).isEmpty();
     }
 }

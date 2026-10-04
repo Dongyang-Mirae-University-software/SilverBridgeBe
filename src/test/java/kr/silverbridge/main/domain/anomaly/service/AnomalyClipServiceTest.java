@@ -20,6 +20,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.EnumSource;
 import org.mockito.ArgumentCaptor;
+import org.mockito.InOrder;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.test.util.ReflectionTestUtils;
@@ -33,6 +34,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -70,13 +72,18 @@ class AnomalyClipServiceTest {
                 OffsetDateTime.now());
     }
 
+    private void wardAlive() {
+        when(clipRepository.lockWardForKeyShare(WARD)).thenReturn(Optional.of(WARD));
+    }
+
     private void cameraAlive() {
         when(cameraService.findOwnerBySessionId(SESSION)).thenReturn(Optional.of(new CameraOwner(WARD, "거실")));
     }
 
     @Test
-    @DisplayName("기록은 상황 행을 쓰기 잠금으로 읽고, 판정 대기 상황이면 공개 상태로 남긴다")
+    @DisplayName("기록은 피보호자 → 상황 행 순서로 잠그고(탈퇴 purge와 같은 순서, L-1) 공개 상태로 남긴다")
     void 기록_공개() {
+        wardAlive();
         when(incidentRepository.findByIdForUpdate(INCIDENT_ID)).thenReturn(Optional.of(incident(AnomalyReviewStatus.PENDING)));
         cameraAlive();
         when(clipRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
@@ -88,26 +95,40 @@ class AnomalyClipServiceTest {
             assertThat(saved.getHiddenAt()).isNull();
             assertThat(saved.getDurationMs()).isEqualTo(5000);
         });
-        verify(incidentRepository).findByIdForUpdate(INCIDENT_ID);
+        InOrder order = inOrder(clipRepository, incidentRepository);
+        order.verify(clipRepository).lockWardForKeyShare(WARD);
+        order.verify(incidentRepository).findByIdForUpdate(INCIDENT_ID);
     }
 
     @Test
-    @DisplayName("이미 오탐으로 확정된 상황의 클립은 비공개로 태어난다(24시간 유예 기준점 기록)")
-    void 기록_오탐상황은_비공개() {
+    @DisplayName("이미 오탐으로 확정된 상황이어도 판정 뒤 저장된 클립은 공개로 남긴다(L-2 - 진짜 화재 영상 보존)")
+    void 기록_오탐상황도_공개() {
+        wardAlive();
         when(incidentRepository.findByIdForUpdate(INCIDENT_ID))
                 .thenReturn(Optional.of(incident(AnomalyReviewStatus.FALSE_ALARM)));
         cameraAlive();
         when(clipRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
 
         assertThat(service.record(stored())).get().satisfies(saved -> {
-            assertThat(saved.getStatus()).isEqualTo(AnomalyClipStatus.HIDDEN);
-            assertThat(saved.getHiddenAt()).isNotNull();
+            assertThat(saved.getStatus()).isEqualTo(AnomalyClipStatus.VISIBLE);
+            assertThat(saved.getHiddenAt()).isNull();
         });
+    }
+
+    @Test
+    @DisplayName("피보호자가 이미 탈퇴했으면 상황 행을 잠그지 않고 기록하지 않는다")
+    void 기록_피보호자없음() {
+        when(clipRepository.lockWardForKeyShare(WARD)).thenReturn(Optional.empty());
+
+        assertThat(service.record(stored())).isEmpty();
+        verify(incidentRepository, never()).findByIdForUpdate(anyLong());
+        verify(clipRepository, never()).save(any());
     }
 
     @Test
     @DisplayName("상황이 사라졌으면(탈퇴 CASCADE) 기록하지 않는다")
     void 기록_상황없음() {
+        wardAlive();
         when(incidentRepository.findByIdForUpdate(INCIDENT_ID)).thenReturn(Optional.empty());
 
         assertThat(service.record(stored())).isEmpty();
@@ -117,6 +138,7 @@ class AnomalyClipServiceTest {
     @Test
     @DisplayName("요청 사이에 카메라가 삭제됐거나 다른 회원 것이 됐으면 기록하지 않는다")
     void 기록_카메라없음() {
+        wardAlive();
         when(incidentRepository.findByIdForUpdate(INCIDENT_ID)).thenReturn(Optional.of(incident(AnomalyReviewStatus.PENDING)));
         when(cameraService.findOwnerBySessionId(SESSION)).thenReturn(Optional.of(new CameraOwner("WD0009", "거실")));
 
@@ -127,6 +149,7 @@ class AnomalyClipServiceTest {
     @Test
     @DisplayName("상황당 상한에 닿으면 기록하지 않는다(비공개 클립도 센다)")
     void 기록_상한() {
+        wardAlive();
         when(incidentRepository.findByIdForUpdate(INCIDENT_ID)).thenReturn(Optional.of(incident(AnomalyReviewStatus.PENDING)));
         cameraAlive();
         when(clipRepository.countByIncidentId(INCIDENT_ID)).thenReturn(12L);

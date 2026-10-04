@@ -1606,3 +1606,4 @@ REST API Key 단독 대비 보안 강화 — 인가코드 탈취 시 토큰 발�
 - 템플릿 C(Sonnet 수집 → Opus 판정): 🔴0 🟠0 🟡0 🟢3 ℹ️3. 불변식 위반 없음. L-1 클립 기록↔피보호자 purge 교착(자동 복구, 잠금 순서 users→incident로 해소 가능) / L-2 오탐 확정 상황에 이어진 감지 클립 비공개(정책 결정 요청) / L-3 스윕 purge 경로 파일 하루 잔존.
 - 머지 전 남은 것: 두 서버 `./.data/clips:/data/clips` 마운트(현재 없음).
 - 상세: `docs/(2026-10-04) audit-impact-anomaly-clip.md`
+- 점검 반영(사용자 "추천안대로"): L-1 기록 잠금 순서 users → 상황 / L-2 판정 뒤 저장된 클립은 공개 / L-3 고아 파일 매시 청소 / compose api에 `./.data/clips:/data/clips`.
