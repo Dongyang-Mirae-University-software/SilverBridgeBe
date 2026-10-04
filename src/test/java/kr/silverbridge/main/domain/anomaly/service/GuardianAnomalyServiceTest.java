@@ -57,13 +57,14 @@ class GuardianAnomalyServiceTest {
     @Mock private ConnectionService connectionService;
     @Mock private CameraService cameraService;
     @Mock private UserRepository userRepository;
+    @Mock private AnomalyClipService clipService;
 
     private GuardianAnomalyService service;
 
     @BeforeEach
     void setUp() {
         service = new GuardianAnomalyService(
-                incidentRepository, feedbackRepository, conflictLogRepository, connectionService, cameraService, userRepository);
+                incidentRepository, feedbackRepository, conflictLogRepository, connectionService, cameraService, userRepository, clipService);
     }
 
     private AnomalyIncident incident() {
@@ -109,6 +110,7 @@ class GuardianAnomalyServiceTest {
             assertThatThrownBy(() -> service.submitFeedback(GUARDIAN_ID, INCIDENT_ID, AnomalyVerdict.REAL))
                     .isInstanceOf(CustomException.class)
                     .hasFieldOrPropertyWithValue("errorCode", ErrorCode.ANOMALY_NOT_AUTHORIZED);
+            verify(clipService, never()).applyReviewStatus(any(), any());
 
             verify(feedbackRepository, never()).save(any());
         }
@@ -190,6 +192,18 @@ class GuardianAnomalyServiceTest {
             assertThat(response.reviewStatus()).isEqualTo(AnomalyReviewStatus.FALSE_ALARM);
             assertThat(incident.getReviewStatus()).isEqualTo(AnomalyReviewStatus.FALSE_ALARM);
             verify(feedbackRepository).save(any(AnomalyIncidentFeedback.class));
+        }
+
+        @Test
+        @DisplayName("판정 결과를 같은 트랜잭션에서 클립 공개 상태에 반영한다(오탐 → 비공개, 번복 → 복구) - 2026-10-04")
+        void reviewStatusIsAppliedToClips() {
+            AnomalyIncident incident = incident();
+            when(incidentRepository.findByIdForUpdate(INCIDENT_ID)).thenReturn(Optional.of(incident));
+            when(feedbackRepository.findByIncidentId(INCIDENT_ID)).thenReturn(List.of());
+
+            service.submitFeedback(GUARDIAN_ID, INCIDENT_ID, AnomalyVerdict.FALSE_ALARM);
+
+            verify(clipService).applyReviewStatus(INCIDENT_ID, AnomalyReviewStatus.FALSE_ALARM);
         }
 
         @Test

@@ -3,6 +3,7 @@ package kr.silverbridge.main.domain.anomaly.dto;
 import io.swagger.v3.oas.annotations.media.Schema;
 import kr.silverbridge.main.domain.anomaly.entity.AnomalyIncident;
 import kr.silverbridge.main.domain.anomaly.entity.AnomalyReviewStatus;
+import kr.silverbridge.main.domain.anomaly.entity.AnomalyClip;
 import kr.silverbridge.main.domain.anomaly.entity.AnomalyVerdict;
 import kr.silverbridge.main.global.enums.DetectedType;
 
@@ -19,6 +20,8 @@ import java.time.OffsetDateTime;
  * @param eventCount       이 상황에 묶인 감지 횟수. "몇 번 잡혔는지"가 보호자 판단의 근거가 된다
  * @param maxConfidence    묶인 감지 중 최고 신뢰도(0.0~1.0). 평균이 아니라 최고값이다
  * @param myVerdict        내가 낸 응답. 아직 응답하지 않았으면 null. 언제든 번복할 수 있다
+ * @param clip             대표 영상 클립(최신 공개 1건). 없으면 null(2026-10-04). 관리자 DTO에는 싣지 않는다
+ * @param clipCount        볼 수 있는 클립 수
  */
 @Schema(description = "보호자용 이상감지 이력 항목(상황 단위)")
 public record AnomalyIncidentItem(
@@ -59,10 +62,17 @@ public record AnomalyIncidentItem(
 
         @Schema(description = "내가 낸 응답 (미응답 시 null)", example = "FALSE_ALARM",
                 allowableValues = {"REAL", "FALSE_ALARM"})
-        AnomalyVerdict myVerdict
+        AnomalyVerdict myVerdict,
+
+        @Schema(description = "대표 영상 클립(최신 1건). 볼 수 있는 클립이 없으면 null - 오탐 판정으로 비공개·보관 기간(30일) 경과·생성 실패 포함")
+        AnomalyClipItem clip,
+
+        @Schema(description = "볼 수 있는 영상 클립 수 (전체 목록은 /api/guardian/anomaly/{incidentId}/clips)", example = "2")
+        int clipCount
 ) {
     public static AnomalyIncidentItem of(AnomalyIncident incident, String wardName,
-                                         String cameraLabel, AnomalyVerdict myVerdict) {
+                                         String cameraLabel, AnomalyVerdict myVerdict,
+                                         AnomalyClip latestClip, int clipCount) {
         return new AnomalyIncidentItem(
                 incident.getId(),
                 incident.getWardId(),
@@ -75,7 +85,9 @@ public record AnomalyIncidentItem(
                 incident.getEventCount(),
                 incident.getMaxConfidence(),
                 incident.getReviewStatus(),
-                myVerdict
+                myVerdict,
+                latestClip == null ? null : AnomalyClipItem.of(latestClip),
+                clipCount
         );
     }
 }

@@ -1,5 +1,6 @@
 package kr.silverbridge.main.migration;
 
+import kr.silverbridge.main.domain.anomaly.entity.AnomalyClipStatus;
 import kr.silverbridge.main.domain.anomaly.entity.AnomalyReviewStatus;
 import kr.silverbridge.main.domain.user.repository.UserRepository;
 import kr.silverbridge.main.global.enums.AdminAuditAction;
@@ -62,6 +63,32 @@ class EnumCheckConstraintIntegrationTest extends PostgresIntegrationTest {
             assertThatNoException().as("AnomalyReviewStatus.%s", status).isThrownBy(() ->
                     jdbcTemplate.update("update anomaly_incident set review_status = ? where ward_id = ?",
                             status.name(), "WD0001"));
+        }
+    }
+
+    @Test
+    @DisplayName("anomaly_clip.status - AnomalyClipStatus enum 전 값이 CHECK를 통과한다(비공개면 hidden_at 짝)")
+    void 이상감지_클립_상태() {
+        userRepository.saveAndFlush(TestData.user("WD0001", "김영희", Role.WARD));
+        Long incidentId = jdbcTemplate.queryForObject("""
+                insert into anomaly_incident (ward_id, session_id, detected_type, started_at, last_detected_at,
+                                              event_count, max_confidence, review_status, created_at, updated_at)
+                values ('WD0001', 'sess-living', 'FIRE', now(), now(), 1, 0.8, 'PENDING', now(), now())
+                returning id
+                """, Long.class);
+        jdbcTemplate.update("""
+                insert into anomaly_clip (incident_id, ward_id, session_id, file_name, size_bytes, detected_at,
+                                          status, created_at, updated_at)
+                values (?, 'WD0001', 'sess-living', '00000000-0000-0000-0000-000000000001.webm', 1, now(),
+                        'VISIBLE', now(), now())
+                """, incidentId);
+
+        for (AnomalyClipStatus status : AnomalyClipStatus.values()) {
+            boolean hidden = status == AnomalyClipStatus.HIDDEN;
+            assertThatNoException().as("AnomalyClipStatus.%s", status).isThrownBy(() ->
+                    jdbcTemplate.update("update anomaly_clip set status = ?, hidden_at = "
+                                    + (hidden ? "now()" : "null") + " where incident_id = ?",
+                            status.name(), incidentId));
         }
     }
 }

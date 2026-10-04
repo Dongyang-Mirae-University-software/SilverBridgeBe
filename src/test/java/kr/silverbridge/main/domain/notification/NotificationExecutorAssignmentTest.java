@@ -1,5 +1,7 @@
 package kr.silverbridge.main.domain.notification;
 
+import kr.silverbridge.main.domain.anomaly.listener.AnomalyClipCleanupListener;
+import kr.silverbridge.main.domain.anomaly.listener.AnomalyClipListener;
 import kr.silverbridge.main.domain.anomaly.listener.AnomalyNotificationListener;
 import kr.silverbridge.main.domain.auth.listener.KakaoRegisterEventListener;
 import kr.silverbridge.main.domain.connection.listener.ConnectionNotificationListener;
@@ -30,6 +32,7 @@ class NotificationExecutorAssignmentTest {
 
     private static final String URGENT = "urgentNotificationExecutor";
     private static final String GENERAL = "notificationExecutor";
+    private static final String CLIP = "clipExecutor";
 
     @Test
     @DisplayName("SOS·이상감지 발생 알림 리스너는 긴급 전용 executor를 쓴다")
@@ -48,6 +51,15 @@ class NotificationExecutorAssignmentTest {
     }
 
     @Test
+    @DisplayName("이상감지 클립 생성은 전용 executor, 클립 삭제(탈퇴·카메라)는 동기 리스너다 - 2026-10-04")
+    void 클립_리스너_executor() {
+        // AI 응답을 최대 20초 기다리므로 긴급 알림 풀에 태우면 화재 알림이 그 뒤에 줄을 선다
+        assertThat(asyncQualifiers(AnomalyClipListener.class)).containsExactly(CLIP);
+        // 탈퇴는 커밋 직후 purge가 행을 지우므로 비동기면 지울 파일을 알 수 없다
+        assertThat(asyncQualifiers(AnomalyClipCleanupListener.class)).isEmpty();
+    }
+
+    @Test
     @DisplayName("리스너가 가리키는 executor 이름은 AsyncConfig에 빈으로 존재한다(오타 시 기본 executor로 새지 않게)")
     void executor_이름이_빈으로_존재() {
         Set<String> beanNames = Arrays.stream(AsyncConfig.class.getDeclaredMethods())
@@ -55,7 +67,7 @@ class NotificationExecutorAssignmentTest {
                 .filter(b -> b != null)
                 .flatMap(b -> Arrays.stream(b.name()))
                 .collect(Collectors.toSet());
-        assertThat(beanNames).contains(URGENT, GENERAL);
+        assertThat(beanNames).contains(URGENT, GENERAL, CLIP);
     }
 
     private static Set<String> asyncQualifiers(Class<?> type) {

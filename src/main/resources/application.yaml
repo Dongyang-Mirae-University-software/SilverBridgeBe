@@ -60,7 +60,8 @@ spring:
         # 기본 1스레드에 스케줄러 + AI WS 재접속 예약이 함께 줄을 선다 - 복약 Planner가 느려지면
         # AI 재접속까지 밀려 그 사이 화재 신호를 놓친다(2026-09-11 기술 점검 B-1).
         # 스케줄러 6종(2026-09-22): 복약 1분 · 판정 재촉 5분 · 탈퇴 스윕 10분 · 토큰 정리 03:00 · FCM 토큰 정리 04:00 ·
-        # 알림 이력 정리 04:30. 주기형 3종이 동시에 몰려도 3스레드로 감당하고, 일일 정리 3종은 시각을 비껴 둔다.
+        # 알림 이력 정리 04:30 · 이상감지 클립 청소 05:00 + 클립 고아 파일 매시 15분(2026-10-04 추가, 8종).
+        # 주기형 4종이 동시에 몰려도 3스레드로 감당하고(고아 파일은 디렉터리 목록뿐이라 짧다), 일일 정리 4종은 시각을 비껴 둔다.
         # 스케줄러를 추가하면 이 값을 다시 볼 것.
         size: 3
 
@@ -185,6 +186,21 @@ anomaly:
     summary-time: ${ANOMALY_REVIEW_SUMMARY_TIME:20:00}           # 하루 1회 요약(KST). 미복용 요약 21:00과 겹치지 않게
     quiet-start: ${ANOMALY_REVIEW_QUIET_START:22:00}             # 야간 억제 시작(재촉만. 화재 알림 본체는 밤에도 나간다)
     quiet-end: ${ANOMALY_REVIEW_QUIET_END:08:00}                 # 야간 억제 종료. 걸린 건은 버리지 않고 아침으로 미룬다
+  # 이상감지 5초 영상 클립(2026-10-04). 위험 이력이 적재된 감지 중 클립 쿨다운을 통과한 건만 AI에 요청해 저장한다.
+  # AI 주소·키·연결 제한은 영상 중계와 같은 camera.stream.*(AI_HTTP_BASE_URL·AI_API_KEY)를 쓴다 - 여기 따로 두지 않는다.
+  # 클립 실패·지연은 이력·알림에 영향이 없다(별도 리스너·clipExecutor).
+  clip:
+    enabled: ${ANOMALY_CLIP_ENABLED:true}                     # 킬 스위치. false면 생성만 멈추고 열람·삭제·청소는 그대로
+    storage-dir: ${ANOMALY_CLIP_STORAGE_DIR:/data/clips}      # 컨테이너 내부 경로. 호스트 ./.data/clips 마운트 필요
+    pre-seconds: ${ANOMALY_CLIP_PRE_SECONDS:3}                # 감지 앞 구간(AI 상한 5)
+    post-seconds: ${ANOMALY_CLIP_POST_SECONDS:2}              # 감지 뒤 구간(AI 상한 3)
+    cooldown-minutes: ${ANOMALY_CLIP_COOLDOWN_MINUTES:5}      # 같은 카메라·유형 클립 최소 간격(알림 쿨다운과 별개 키)
+    request-timeout: ${ANOMALY_CLIP_REQUEST_TIMEOUT:25s}      # AI 호출 전체 제한(AI 상한 20초 + 전송 여유 5초)
+    max-bytes: ${ANOMALY_CLIP_MAX_BYTES:10485760}             # 클립 최대 크기(10MB). 넘으면 저장하지 않는다
+    retention-days: ${ANOMALY_CLIP_RETENTION_DAYS:30}         # 보관 기간(최대 30일 - 넘게 줘도 30으로 자른다). 매일 05:00 청소
+    hidden-grace-hours: ${ANOMALY_CLIP_HIDDEN_GRACE_HOURS:24} # 오탐 확정 후 물리 삭제까지 유예(번복 시 복구)
+    max-per-incident: ${ANOMALY_CLIP_MAX_PER_INCIDENT:12}     # 상황 하나당 클립 수 상한
+    min-free-disk-mb: ${ANOMALY_CLIP_MIN_FREE_DISK_MB:1024}   # 저장 루트 여유 공간이 이보다 적으면 생성 생략 + ERROR
 
 notification:
   # FCM 토큰 보관 정책. 토큰은 기기 단위라 한 사람이 여러 개를 갖는 것이 정상이지만(폰·PC·태블릿),
