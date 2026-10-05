@@ -1647,3 +1647,9 @@ REST API Key 단독 대비 보안 강화 — 인가코드 탈취 시 토큰 발�
 - `sos.notify-cooldown-seconds`(기본 10, 1~300 밖은 기본값 + WARN)로 분리(`SosProperties`). 반복 집계 창(10분)은 상수 유지.
 - 검증: 단위 1340 통과, `build -x test` 통과. 통합 테스트는 마이그레이션 없어 생략.
 - 상세: `docs/(2026-10-05) fix-sos-notify-cooldown.md`
+
+### [2026-10-05] SOS 알림 쿨다운 10초 기능 점검 (템플릿 B, PR #302) - PASS
+
+- 🔴 0 · 🟠 0 · 🟡 2 · 🟢 3. 인가·IDOR·이력·fail-open·해제 모두 불변 확인, 서버 두 곳 덮어쓰기 없음·경고 로그 0건.
+- 🟡 M-1: 빈 값·비숫자 환경변수는 대체되지 않고 기동 실패(BindException) - 프로브로 확인, 문서 문구 정정(코드 변경 없음). 🟡 M-2: SOS 입력 상한이 없어 문자 폴백 보호자는 연타 시 분당 최대 6건(이전 2건) - 수용, `SMS_FALLBACK` 관찰.
+- 상세: `docs/(2026-10-05) audit-sos-notify-cooldown.md`
