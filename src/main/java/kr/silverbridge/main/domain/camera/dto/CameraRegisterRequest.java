@@ -15,7 +15,8 @@ import kr.silverbridge.main.global.validation.VisibleText;
 @Schema(description = "카메라 등록 요청")
 public record CameraRegisterRequest(
 
-        @Schema(description = "설치 위치(방 이름)", example = "거실")
+        @Schema(description = "설치 위치(방). 거실·침실·주방·화장실·현관·베란다·작은방·작은방2 중 하나, 한 방에 카메라 1대",
+                example = "거실")
         @NotBlank(message = "설치 위치(방 이름)를 입력해주세요.")
         @VisibleText(message = "설치 위치(방 이름)를 입력해주세요.")
         @NoControlChars

@@ -8,8 +8,11 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import kr.silverbridge.main.domain.camera.dto.CameraRegisterRequest;
 import kr.silverbridge.main.domain.camera.dto.CameraResponse;
+import kr.silverbridge.main.domain.camera.dto.CameraRoomOption;
 import kr.silverbridge.main.domain.camera.dto.CameraUpdateRequest;
+import kr.silverbridge.main.domain.camera.dto.WardLiveCameraView;
 import kr.silverbridge.main.domain.camera.service.CameraService;
+import kr.silverbridge.main.domain.camera.service.CameraStreamService;
 import kr.silverbridge.main.global.response.ApiResponse;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
@@ -26,7 +29,7 @@ import org.springframework.web.bind.annotation.RestController;
 import java.util.List;
 
 /**
- * 피보호자용 이상감지 카메라 API. 본인 카메라 등록·목록·수정·삭제.
+ * 피보호자용 이상감지 카메라 API. 본인 카메라 등록·목록·방 선택지·연결 상태·수정·삭제.
  * 클래스 레벨 {@code @PreAuthorize("hasRole('WARD')")}로 WARD만 접근 가능(GUARDIAN/ADMIN 403).
  * 소유자는 항상 accessToken의 wardId — 요청 body의 사용자 ID는 신뢰하지 않는다.
  */
@@ -37,14 +40,20 @@ import java.util.List;
 public class WardCameraController {
 
     private final CameraService cameraService;
+    private final CameraStreamService cameraStreamService;
 
     @Operation(summary = "카메라 등록 (재등록 시 멱등)",
             description = """
                     [요청 헤더]
                     Authorization: Bearer {accessToken}
 
-                    이 기기를 특정 방(거실/안방/방1~3 등)의 카메라로 등록합니다.
-                    SessionID·DeviceID는 모두 서버가 발급하므로 사용자는 방 이름만 입력합니다.
+                    이 기기를 특정 방의 카메라로 등록합니다.
+                    SessionID·DeviceID는 모두 서버가 발급하므로 사용자는 방만 고릅니다.
+
+                    [방 규칙] (2026-10-05)
+                    - label은 거실·침실·주방·화장실·현관·베란다·작은방·작은방2 중 하나(GET /api/ward/camera/rooms). 그 밖은 400 CAMERA_ROOM_INVALID
+                    - 한 방에는 카메라 1대. 다른 카메라가 쓰는 방이면 409 CAMERA_LABEL_DUPLICATED
+                    - 같은 기기가 같은 방으로 다시 등록하면 그대로 성공(멱등)
 
                     [FE 사용법]
                     1. localStorage에 저장된 deviceId가 있으면 함께 전송 → 같은 기기로 인식되어 기존 SessionID 재사용(방 이름만 갱신)
@@ -55,9 +64,10 @@ public class WardCameraController {
                     """)
     @ApiResponses({
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "등록된(또는 기존) 카메라 반환"),
-            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "방 이름 누락 또는 형식 오류", content = @Content),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "방 이름 누락·형식 오류 / CAMERA_ROOM_INVALID(목록에 없는 방)", content = @Content),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "인증 토큰 없음 또는 만료", content = @Content),
-            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "피보호자 권한 필요", content = @Content)
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "피보호자 권한 필요", content = @Content),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "409", description = "CAMERA_LABEL_DUPLICATED(그 방에 이미 다른 카메라가 있음)", content = @Content)
     })
     @PostMapping("/api/ward/camera")
     public ResponseEntity<ApiResponse<CameraResponse>> register(
@@ -84,6 +94,51 @@ public class WardCameraController {
         return ResponseEntity.ok(ApiResponse.ok(cameraService.getMyCameras(wardId)));
     }
 
+    @Operation(summary = "카메라 방 선택지",
+            description = """
+                    [요청 헤더]
+                    Authorization: Bearer {accessToken}
+
+                    등록·방 이름 변경 화면의 방 버튼 목록입니다. 화면 표시 순서대로
+                    거실·침실·주방·화장실·현관·베란다·작은방·작은방2를 돌려줍니다.
+                    registered=true인 방은 이미 카메라가 있어 고를 수 없습니다("· 등록됨").
+                    방 이름 변경 화면에서는 지금 카메라의 방도 registered=true로 오니, 현재 방은 선택된 상태로 표시하세요.
+                    """)
+    @ApiResponses({
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "방 선택지 8개"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "인증 토큰 없음 또는 만료", content = @Content),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "피보호자 권한 필요", content = @Content)
+    })
+    @GetMapping("/api/ward/camera/rooms")
+    public ResponseEntity<ApiResponse<List<CameraRoomOption>>> getRoomOptions(
+            @AuthenticationPrincipal String wardId) {
+        return ResponseEntity.ok(ApiResponse.ok(cameraService.getRoomOptions(wardId)));
+    }
+
+    @Operation(summary = "내 카메라 목록 + 연결 상태",
+            description = """
+                    [요청 헤더]
+                    Authorization: Bearer {accessToken}
+
+                    "내 카메라" 화면용. 본인 카메라 전부에 AI 송출 상태를 붙여 돌려줍니다(최신 등록순).
+                    status: running(연결됨) / disconnected(10초 이상 프레임 없음) / offline(송출 안 함).
+                    화면에서는 running = "연결됨", disconnected·offline = "연결 안 됨"으로 표시합니다.
+                    status가 null이면 "연결 안 됨"이 아니라 AI 서버 장애로 지금 확인할 수 없다는 뜻입니다("확인 중").
+                    deviceId가 이 기기의 localStorage 값과 같으면 "이 기기" 카메라입니다.
+                    송출 시작에 필요한 sessionId는 지연 없는 GET /api/ward/camera를 쓰세요(이 API는 AI 서버를 함께 부릅니다).
+                    """)
+    @ApiResponses({
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "목록 반환(카메라 없으면 빈 배열)"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "인증 토큰 없음 또는 만료", content = @Content),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "피보호자 권한 필요", content = @Content),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "429", description = "너무 잦은 조회(분 30회·시간 600회)", content = @Content)
+    })
+    @GetMapping("/api/ward/camera/live")
+    public ResponseEntity<ApiResponse<List<WardLiveCameraView>>> getMyLiveCameras(
+            @AuthenticationPrincipal String wardId) {
+        return ResponseEntity.ok(ApiResponse.ok(cameraStreamService.getWardLiveCameras(wardId)));
+    }
+
     @Operation(summary = "카메라 수정 (방 이름 변경 / 사용 토글)",
             description = """
                     [요청 헤더]
@@ -91,12 +146,15 @@ public class WardCameraController {
 
                     전달한 필드만 갱신합니다(null 필드는 미변경).
                     타인 카메라 ID로 요청하면 403("본인이 등록한 카메라만 사용할 수 있습니다.")으로 응답합니다.
+                    방 이름은 등록과 같은 규칙입니다(정해진 8개 방 중 하나, 한 방에 1대).
                     """)
     @ApiResponses({
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "수정된 카메라 반환"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "방 이름 형식 오류 / CAMERA_ROOM_INVALID(목록에 없는 방)", content = @Content),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "인증 토큰 없음 또는 만료", content = @Content),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "피보호자 권한 필요 / 본인이 등록한 카메라가 아님", content = @Content),
-            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "존재하지 않는 카메라", content = @Content)
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "존재하지 않는 카메라", content = @Content),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "409", description = "CAMERA_LABEL_DUPLICATED(그 방에 이미 다른 카메라가 있음)", content = @Content)
     })
     @PatchMapping("/api/ward/camera/{id}")
     public ResponseEntity<ApiResponse<CameraResponse>> update(

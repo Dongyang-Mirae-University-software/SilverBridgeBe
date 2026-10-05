@@ -64,6 +64,32 @@ class CameraControllerSecurityTest {
     }
 
     @Test
+    @WithMockUser(roles = "WARD")
+    @DisplayName("WARD 역할 → 방 선택지·내 카메라 연결 상태 조회 허용")
+    void ward_방선택지_연결상태_허용() {
+        when(cameraService.getRoomOptions(anyString())).thenReturn(List.of());
+        when(cameraStreamService.getWardLiveCameras(anyString())).thenReturn(List.of());
+
+        assertThatNoException().isThrownBy(() -> wardController.getRoomOptions("WD0001"));
+        assertThatNoException().isThrownBy(() -> wardController.getMyLiveCameras("WD0001"));
+    }
+
+    @Test
+    @WithMockUser(roles = "GUARDIAN")
+    @DisplayName("WARD 아닌 역할(GUARDIAN·ADMIN) → 방 선택지·내 카메라 연결 상태 거부(403)")
+    void 비WARD_방선택지_연결상태_거부() {
+        assertThatThrownBy(() -> wardController.getRoomOptions("GD0001")).isInstanceOf(AccessDeniedException.class);
+        assertThatThrownBy(() -> wardController.getMyLiveCameras("GD0001")).isInstanceOf(AccessDeniedException.class);
+    }
+
+    @Test
+    @WithMockUser(roles = "ADMIN")
+    @DisplayName("ADMIN → 내 카메라 연결 상태 거부(403)")
+    void admin_연결상태_거부() {
+        assertThatThrownBy(() -> wardController.getMyLiveCameras("AD0001")).isInstanceOf(AccessDeniedException.class);
+    }
+
+    @Test
     @WithMockUser(roles = "GUARDIAN")
     @DisplayName("WARD 아닌 역할(GUARDIAN) → 카메라 삭제 거부(403)")
     void 비WARD_카메라삭제_거부() {

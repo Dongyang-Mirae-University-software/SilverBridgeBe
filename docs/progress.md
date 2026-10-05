@@ -1613,3 +1613,12 @@ REST API Key 단독 대비 보안 강화 — 인가코드 탈취 시 토큰 발�
 - 머지 → vkcs CD 성공, gosky 수동 배포(`pull --ff-only` + api만 재생성). 두 서버 V57·`/data/clips` 마운트·health·클립 API 401 확인, gosky AI WS 재연결.
 - 실 클립 E2E 미확인: gosky 등록 카메라 1대 미송출(AI 404). vkcs는 `AI_API_KEY` 미설정(기존)이라 이상감지·클립 비활성.
 - FE 전달: Notion "DMU / 프론트엔드 전달 내용 / 이상감지 5초 영상 클립 (보호자·피보호자) - 목록·재생 API 안내".
+
+## [2026-10-05] 카메라 방 선택(8개 고정·방마다 1대) + 피보호자 내 카메라 연결 상태 (branch `feature/camera-label-unique-ward-status`, V58)
+
+- 사용자 결정(피보호자 "내 카메라" 프로토타입 수정안): 방은 거실·침실·주방·화장실·현관·베란다·작은방·작은방2 중 선택, 이미 등록된 방은 선택 불가, 내 카메라에 연결됨/연결 안 됨 표시.
+- 방: 목록 밖 400 `CAMERA_ROOM_INVALID`, 같은 피보호자의 같은 방 409 `CAMERA_LABEL_DUPLICATED`(같은 기기 같은 방은 멱등), V58 `uq_camera_ward_label` + flush 시 409 변환. 선택지 API `GET /api/ward/camera/rooms`.
+- 상태: `GET /api/ward/camera/live` - 보호자 `/live`와 같은 기준(AI 1회 호출, 장애 시 `null`), 속도 제한 `camera-ward-live` 30/600. 기존 `GET /api/ward/camera`는 AI 호출 없이 유지(송출 기기 지연 방지).
+- PHASE 0: 중복 제한·방 목록 없음 확인, 운영 DB 중복 0(gosky 1대·vkcs 0대, 8개 방 밖 0), `CustomException`이 고정 문구만 받아 409 문구에 방 이름 미포함으로 변경.
+- 검증: 단위 1295 통과(카메라 114, 신규 17), `build` 통과, 통합 60 통과(vkcs, V58 4개 포함 - 작업 트리로 실행, push 없음). 기존 테스트의 "안방"·"방1"·"방2" 입력을 8개 방으로 교체.
+- 상세: `docs/(2026-10-05) feature-camera-room-and-ward-status.md`

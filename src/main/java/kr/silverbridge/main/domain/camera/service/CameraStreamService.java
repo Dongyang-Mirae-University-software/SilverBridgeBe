@@ -8,9 +8,11 @@ import kr.silverbridge.main.domain.camera.client.AiStreamUnavailableException;
 import kr.silverbridge.main.domain.camera.config.CameraStreamProperties;
 import kr.silverbridge.main.domain.camera.dto.CameraLiveStatus;
 import kr.silverbridge.main.domain.camera.dto.CameraLiveStatusResponse;
+import kr.silverbridge.main.domain.camera.dto.CameraResponse;
 import kr.silverbridge.main.domain.camera.dto.GuardianCameraView;
 import kr.silverbridge.main.domain.camera.dto.GuardianLiveCameraView;
 import kr.silverbridge.main.domain.camera.dto.StreamTicketResponse;
+import kr.silverbridge.main.domain.camera.dto.WardLiveCameraView;
 import kr.silverbridge.main.domain.camera.service.CameraStreamTicketService.StreamTicket;
 import kr.silverbridge.main.domain.user.repository.UserRepository;
 import kr.silverbridge.main.global.enums.Status;
@@ -78,6 +80,36 @@ public class CameraStreamService {
         Map<String, AiLiveStream> liveStreams = live;
         return cameras.stream()
                 .map(camera -> toLiveView(camera, liveStreams))
+                .toList();
+    }
+
+    /**
+     * 피보호자 "내 카메라" - 본인 등록 카메라 전부 + 송출 상태(보호자 실시간 목록과 같은 기준).
+     * AI가 응답하지 않으면 목록은 그대로 주고 상태만 {@code null}(확인 불가)이다. AI 목록은 카메라 수와 관계없이 1번만 부른다.
+     */
+    public List<WardLiveCameraView> getWardLiveCameras(String wardId) {
+        rateLimit(CameraStreamRateLimit.WARD_LIVE, wardId);
+        List<CameraResponse> cameras = cameraService.getMyCameras(wardId);
+        if (cameras.isEmpty()) {
+            return List.of();
+        }
+        Map<String, AiLiveStream> live;
+        try {
+            live = aiStreamClient.fetchLiveStreams();
+        } catch (AiStreamUnavailableException e) {
+            live = null;   // 모르는 값을 offline으로 채우지 않는다
+        }
+        Map<String, AiLiveStream> liveStreams = live;
+        return cameras.stream()
+                .map(camera -> {
+                    if (liveStreams == null) {
+                        return WardLiveCameraView.of(camera, null, null);
+                    }
+                    AiLiveStream stream = liveStreams.get(camera.sessionId());
+                    return stream == null
+                            ? WardLiveCameraView.of(camera, CameraLiveStatus.OFFLINE, null)
+                            : WardLiveCameraView.of(camera, CameraLiveStatus.fromAi(stream.status()), stream.lastFrameAt());
+                })
                 .toList();
     }
 
@@ -171,9 +203,9 @@ public class CameraStreamService {
         }
     }
 
-    // 인가·AI 호출보다 먼저 - 가장 싼 검사로 반복 호출을 막는다(점검 L-4). 식별자는 보호자 ID다(공용 NAT의 시니어를 IP로 묶지 않는다).
-    private void rateLimit(CameraStreamRateLimit limit, String guardianId) {
-        rateLimitService.check(limit.endpoint, guardianId, limit.perMinute, limit.perHour);
+    // 인가·AI 호출보다 먼저 - 가장 싼 검사로 반복 호출을 막는다(점검 L-4). 식별자는 사용자 ID다(공용 NAT의 시니어를 IP로 묶지 않는다).
+    private void rateLimit(CameraStreamRateLimit limit, String userId) {
+        rateLimitService.check(limit.endpoint, userId, limit.perMinute, limit.perHour);
     }
 
     enum StopReason { AI_ENDED, AI_IDLE, AI_ERROR, CLIENT_GONE, MAX_DURATION, REVOKED, SHUTDOWN }
