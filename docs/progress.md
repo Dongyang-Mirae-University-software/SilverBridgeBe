@@ -1621,3 +1621,4 @@ REST API Key 단독 대비 보안 강화 — 인가코드 탈취 시 토큰 발�
 - ③ PHASE 0에서 "포화 폐기 시 쿨다운 잔존"은 코드상 발생하지 않음을 확인(쿨다운을 작업 안에서 잡음) → 테스트로 고정하고 로그·정책의 틀린 문구 정정. 정책에 파일 잔존 최대 약 2시간 수용, AI 계약 v2(503·ffmpeg 옵션) 보충.
 - `./gradlew build` 통과, 단위 1300 / 0 실패. 통합 테스트 추가 1건은 vkcs 실행 필요.
 - 상세: `docs/(2026-10-05) fix-qa-comprehensive-be.md`
+- 배포: PR #297 머지 `17da651` → vkcs CD 성공 / gosky 수동 배포(api만 재생성), 두 서버 healthy·gosky AI WS 재연결 확인. 통합 테스트 vkcs 통과(`db572bd`).
