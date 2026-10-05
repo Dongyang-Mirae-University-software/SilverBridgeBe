@@ -1666,3 +1666,9 @@ REST API Key 단독 대비 보안 강화 — 인가코드 탈취 시 토큰 발�
 - 🔴 0 · 🟠 0 · 🟡 1 · 🟢 4. 변경은 디스패처 문자 폴백 직전 한 곳이고 `ChannelFailureReason.RATE_LIMITED` 소비처(관리자 DTO·집계·이력 JSONB)는 모두 값을 문자열/라벨로 다뤄 깨지지 않음. 정책 종류는 `WARD_SOS` 하나뿐이며 기존 테스트가 고정.
 - 🟡 M-1: 새 사유가 관리자 알림 이력 계약·FE 타입(Notion)·프로젝트_설명·CLAUDE.md에 없던 drift - 정정 완료. 🟢 L-1 Swagger "항상 발송" 설명에 문자 상한 미기재(코드 변경이라 제안), L-2~L-4 수용.
 - 상세: `docs/(2026-10-05) audit-impact-sms-fallback-cap.md`
+
+### [2026-10-05] SOS 문자 폴백 상한 후속 정리 (branch `test/sms-fallback-cap-followups`, 마이그레이션 없음)
+
+- 영향 범위 점검(C) 후속 선택 항목을 모두 반영: Swagger 문자 상한 안내, `[SOS-NO-DELIVERY]` 문구에 상한 초과 포함 명시, `SmsFallbackLimiterUsageTest`(limiter는 디스패처 필수 알림 폴백에서만), `SmsFallbackLimiterRedisIntegrationTest`(실제 `redis:7.2`로 Lua 증가·환불 검증, 통합 스위트에 `spring-boot-starter-data-redis` 추가).
+- 검증: 단위 통과, vkcs 통합 테스트 71건 통과(새 Redis 테스트 6건 포함, 브랜치로 머지 전 실행).
+- 상세: `docs/(2026-10-05) audit-impact-sms-fallback-cap.md`

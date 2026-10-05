@@ -53,7 +53,7 @@ branch `feature/sos-sms-fallback-cap` · 마이그레이션 없음 · 근거: �
 
 - `SmsFallbackLimiterTest`(신규): 30번째 허용·31번째 생략, 원자 증가+TTL 1시간, 수신자별 키, 0=끔(Redis 미접근), Redis 장애 fail-open, 증가값 0, 환불 실행·장애 삼킴, 음수 대체, 바인딩·비숫자 기동 실패.
 - `NotificationDispatcherTest`: 상한 초과 시 문자 생략 + 이력 RATE_LIMITED(환불 없음), 푸시 성공 시 상한 미사용, 설정 기반 문자(복약 요약)는 상한 미적용, 문자 미접수 시 환불·접수 시 환불 없음.
-- 한계: Lua 스크립트(증가·환불)는 단위 테스트에서 실행되지 않는다(`RedisCounter`는 기존 검증된 유틸, 환불은 인증번호 한도 환불과 같은 스크립트). 실제 Redis 통합 테스트는 두지 않았다.
+- Lua 스크립트(증가·환불)는 단위 테스트에서는 실행되지 않아 후속으로 `SmsFallbackLimiterRedisIntegrationTest`(실제 `redis:7.2`, 통합 테스트 스위트)를 추가했다. 구조는 `SmsFallbackLimiterUsageTest`가 고정한다.
 - 전체 단위 테스트 통과(1359), `build -x test` 통과.
 
 ## 7. 배포 결과
