@@ -89,3 +89,10 @@
 | L-1 Swagger 한 줄 | 완료 | 후속 PR |
 | 구조 테스트 / Redis 통합 테스트 | 완료 | 후속 PR (통합 71건 통과, vkcs) |
 | FE에 `RATE_LIMITED` 전달 | FE | Notion 반영 완료, 전수 매핑 코드가 있으면 확인 |
+
+## 후속 반영 결과 (2026-10-05)
+- PR #310 머지 `435beea`(브랜치 커밋 `0f04496`): Swagger 안내, `[SOS-NO-DELIVERY]` 문구, 구조 테스트, 실제 Redis 통합 테스트.
+- 머지 전 vkcs에서 브랜치로 통합 테스트 71건 통과(새 Redis 테스트 6건 포함). CD(배포 전 통합 테스트 포함) 성공.
+- vkcs-linux·gosky 모두 `435beea`, healthy, 오류 0건, Flyway 변경 없음.
+- 남은 것: FE 전수 매핑 코드의 `RATE_LIMITED` 확인(FE 몫, Notion 반영 완료). 전원 상한 초과 시 쿨다운 해제·보호자 단위 한도는 수용 유지.
+
