@@ -216,6 +216,10 @@ notification:
     max-per-user: ${FCM_TOKEN_MAX_PER_USER:5}        # 초과 시 마지막 사용이 오래된 것부터 삭제
     cleanup-enabled: ${FCM_TOKEN_CLEANUP_ENABLED:true} # 킬 스위치. false면 정리만 멈춘다(등록·발송은 그대로)
     stale-days: ${FCM_TOKEN_STALE_DAYS:60}           # 이 기간 재등록이 없으면 유휴로 보고 정리(매일 04:00 KST)
+  # 필수 알림(SOS)의 문자 폴백 상한. 푸시를 못 받는 수신자에게 문자가 유일한 수단이라 높게 잡는다(10초 간격 연타 시 5분이면 도달).
+  # 넘으면 그 문자만 생략되고 푸시·WS·이력은 그대로다. 0이면 상한을 끈다. Redis 장애 시 막지 않는다.
+  sms-fallback:
+    max-per-hour: ${SMS_FALLBACK_MAX_PER_HOUR:30}
   # 관리자 알림 이력(notification_log) 보관. 본문에 이름·장소가 들어 있어 무기한 두지 않는다.
   log:
     retention-days: ${NOTIFICATION_LOG_RETENTION_DAYS:90}          # 이보다 오래된 이력 삭제(매일 04:30 KST)

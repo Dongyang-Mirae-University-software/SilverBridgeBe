@@ -56,6 +56,7 @@ class NotificationDispatcherTest {
     @Mock private NotificationSettingService settingService;
     @Mock private NotificationRecipientResolver recipientResolver;
     @Mock private NotificationLogService notificationLogService;
+    @Mock private SmsFallbackLimiter smsFallbackLimiter;
 
     private NotificationDispatcher dispatcher;
 
@@ -72,8 +73,10 @@ class NotificationDispatcherTest {
         lenient().when(fcmChannel.send(any(), any(), any())).thenReturn(ChannelResult.delivered());
         lenient().when(smsChannel.send(any(), any(), any())).thenReturn(ChannelResult.delivered());
         // KAKAO_ALIMTALK / EMAIL 구현체는 등록하지 않음(미구현 채널 시나리오 재현)
+        // 기본은 상한 안(허용). 상한 초과 시나리오는 테스트마다 덮어쓴다.
+        lenient().when(smsFallbackLimiter.tryAcquire(any(), any())).thenReturn(true);
         dispatcher = new NotificationDispatcher(List.of(fcmChannel, smsChannel), settingService, recipientResolver,
-                notificationLogService);
+                notificationLogService, smsFallbackLimiter);
         lenient().when(recipientResolver.resolve(USER_ID))
                 .thenReturn(new NotificationRecipient(USER_ID, "01012345678", "a@b.com", Status.ACTIVE));
     }
@@ -237,6 +240,76 @@ class NotificationDispatcherTest {
 
         verify(settingService, never()).enabledChannels(any()); // 설정 무시
         verify(smsChannel).send(any(), any(), any());
+    }
+
+    @Test
+    @DisplayName("필수 알림 문자 폴백이 시간당 상한을 넘으면 문자만 생략된다 - 푸시는 이미 시도됐고 이력에 RATE_LIMITED가 남는다")
+    void 필수알림_문자폴백_상한초과_문자생략() {
+        when(fcmChannel.send(any(), any(), any())).thenReturn(ChannelResult.failed(ChannelFailureReason.NO_DEVICE));
+        when(smsFallbackLimiter.tryAcquire(NotificationType.WARD_SOS, USER_ID)).thenReturn(false);
+
+        NotificationLogResult result = dispatcher.dispatch(USER_ID, WARD_ID, NotificationType.WARD_SOS, content);
+
+        verify(fcmChannel).send(any(), any(), any());
+        verify(smsChannel, never()).send(any(), any(), any());
+        assertThat(result).isEqualTo(NotificationLogResult.FAILED);
+        assertThat(result.isDelivered()).isFalse();
+        assertThat(recordedLog().getChannelResults()).containsExactly(
+                new ChannelAttempt(NotificationChannelType.FCM, ChannelResult.Status.FAILED, ChannelFailureReason.NO_DEVICE),
+                new ChannelAttempt(NotificationChannelType.SMS, ChannelResult.Status.FAILED, ChannelFailureReason.RATE_LIMITED));
+    }
+
+    @Test
+    @DisplayName("필수 알림 문자 폴백이 접수되지 않으면(번호 없음·발송사 장애) 센 한 건을 환불한다 - 접수되면 환불하지 않는다")
+    void 필수알림_문자실패시_환불() {
+        when(fcmChannel.send(any(), any(), any())).thenReturn(ChannelResult.failed(ChannelFailureReason.NO_DEVICE));
+        when(smsChannel.send(any(), any(), any())).thenReturn(ChannelResult.failed(ChannelFailureReason.PROVIDER_ERROR));
+
+        dispatcher.dispatch(USER_ID, NotificationType.WARD_SOS, content);
+
+        verify(smsFallbackLimiter).tryAcquire(NotificationType.WARD_SOS, USER_ID);
+        verify(smsFallbackLimiter).release(NotificationType.WARD_SOS, USER_ID);
+    }
+
+    @Test
+    @DisplayName("필수 알림 문자 폴백이 접수되면 한도를 그대로 쓴다(환불 없음)")
+    void 필수알림_문자성공시_환불없음() {
+        when(fcmChannel.send(any(), any(), any())).thenReturn(ChannelResult.failed(ChannelFailureReason.NO_DEVICE));
+
+        dispatcher.dispatch(USER_ID, NotificationType.WARD_SOS, content);
+
+        verify(smsFallbackLimiter, never()).release(any(), any());
+    }
+
+    @Test
+    @DisplayName("상한을 넘어 생략한 문자는 환불하지 않는다 - 센 적이 없는 것을 돌려주면 한도가 어긋난다")
+    void 상한초과_생략은_환불없음() {
+        when(fcmChannel.send(any(), any(), any())).thenReturn(ChannelResult.failed(ChannelFailureReason.NO_DEVICE));
+        when(smsFallbackLimiter.tryAcquire(NotificationType.WARD_SOS, USER_ID)).thenReturn(false);
+
+        dispatcher.dispatch(USER_ID, NotificationType.WARD_SOS, content);
+
+        verify(smsFallbackLimiter, never()).release(any(), any());
+    }
+
+    @Test
+    @DisplayName("필수 알림: 푸시가 전달되면 문자 상한을 세지 않는다(문자를 보내지 않으니 소진하면 안 된다)")
+    void 필수알림_푸시성공_상한미사용() {
+        dispatcher.dispatch(USER_ID, NotificationType.WARD_SOS, content);
+
+        verify(smsFallbackLimiter, never()).tryAcquire(any(), any());
+    }
+
+    @Test
+    @DisplayName("문자 상한은 필수 알림 폴백에만 적용된다 - 설정 기반 문자(복약 요약 등)는 상한을 거치지 않는다")
+    void 설정기반_문자는_상한미적용() {
+        given(settingService.enabledChannels(USER_ID))
+                .willReturn(EnumSet.of(NotificationChannelType.FCM, NotificationChannelType.SMS));
+
+        dispatcher.dispatch(USER_ID, WARD_ID, NotificationType.MEDICATION_MISSED, content);
+
+        verify(smsChannel).send(any(), any(), any());
+        verify(smsFallbackLimiter, never()).tryAcquire(any(), any());
     }
 
     @Test

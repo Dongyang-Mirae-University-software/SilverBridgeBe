@@ -9,6 +9,7 @@
 
 | 머지 | 기능 | 상태 | 점검 문서 | 잔여 이슈 |
 |---|---|---|---|---|
+| (이 PR, 2026-10-05) | SOS 문자 폴백 시간당 상한 30건 (`SmsFallbackLimiter`, `NotificationDispatcher` 폴백 경로) | ❌ | - (템플릿 C 제안: 디스패처 정책을 건드렸으므로 `NotificationType` 사용처·이력 `ChannelFailureReason` 소비처 점검) | - |
 | #302 (2026-10-05) | SOS 알림 쿨다운 30초 → 10초 + `sos.notify-cooldown-seconds` 설정 분리 | ✅ | `(2026-10-05) audit-sos-notify-cooldown.md` (템플릿 B) | - (M-1 빈 값·비숫자는 기동 실패 - 문서 정정 반영 / M-2 문자 폴백 상한 3배 수용·`SMS_FALLBACK` 관찰) · L-1~L-3 기록 |
 | #299 (2026-10-05) | 카메라 방 선택 8개 고정·방마다 1대 + 피보호자 내 카메라 연결 상태 (`/api/ward/camera/rooms`·`/live`, V58) | ✅ | `(2026-10-05) audit-camera-room-and-ward-status.md` (템플릿 B) | - (H-1 새 등록 경합 409 코드·L-1 제약 이름 판정 반영, M-1 해당 없음, M-2 의도, L-2 수용) |
 | #297 (2026-10-05) | QA 종합 점검 후속 - 카메라 세션 ID 피보호자 ID 제거·클립 테스트 공백 5건·클립 정책 정정 (마이그레이션 없음) | ✅ | `(2026-10-05) audit-qa-comprehensive-be.md` (템플릿 B, 변이 테스트 포함) | - (M-1·L-1·L-2 후속 PR로 해소, L-3 수용) / 기존 카메라 옛 형식 세션 ID 잔존(수용) |
