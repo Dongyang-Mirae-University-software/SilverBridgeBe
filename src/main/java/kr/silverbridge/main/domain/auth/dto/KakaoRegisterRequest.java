@@ -18,12 +18,12 @@ import java.time.LocalDate;
 @Schema(description = "카카오 신규 회원가입 완료 요청 (SMS 인증 완료 후 호출)")
 public class KakaoRegisterRequest {
 
-    @Schema(description = "POST /api/auth/kakao 응답에서 받은 kakaoId 값을 그대로 전달 (최대 20자)", example = "3456789012")
+    @Schema(description = "POST /api/auth/signin/kakao 응답에서 받은 kakaoId 값을 그대로 전달 (최대 20자)", example = "3456789012")
     @NotBlank(message = "카카오 ID를 입력해주세요.")
     @Size(max = 20, message = "카카오 ID 입력값이 올바르지 않습니다.")
     private String kakaoId;
 
-    @Schema(description = "POST /api/auth/kakao 응답(신규 회원)에서 받은 pendingToken 값을 그대로 전달. 카카오 로그인을 시작한 본인 확인용",
+    @Schema(description = "POST /api/auth/signin/kakao 응답(신규 회원)에서 받은 pendingToken 값을 그대로 전달. 카카오 로그인을 시작한 본인 확인용",
             example = "Q2hhbmdlTWUtOTlfcmFuZG9tLXBlbmRpbmctdG9rZW4")
     @NotBlank(message = "카카오 로그인 정보가 없습니다. 카카오 로그인을 다시 시도해주세요.")
     @Size(max = 100, message = "카카오 로그인 정보가 올바르지 않습니다. 카카오 로그인을 다시 시도해주세요.")
