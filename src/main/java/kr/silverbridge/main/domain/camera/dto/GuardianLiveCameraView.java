@@ -12,7 +12,7 @@ import java.time.OffsetDateTime;
  */
 @Schema(description = "실시간 카메라 목록 항목")
 public record GuardianLiveCameraView(
-        @Schema(description = "카메라 세션 ID(영상·상태 API 경로에 사용)", example = "ward_a9cC5f_k3m9Q2")
+        @Schema(description = "카메라 세션 ID(영상·상태 API 경로에 사용)", example = "ward_k3m9Q2aZ7pLx01Bc")
         String sessionId,
         @Schema(description = "피보호자 ID", example = "a9cC5f")
         String wardId,

@@ -12,7 +12,7 @@ import kr.silverbridge.main.domain.camera.entity.Camera;
 @Schema(description = "카메라 뷰 (보호자 — 연결된 피보호자의 활성 카메라)")
 public record GuardianCameraView(
 
-        @Schema(description = "카메라 고유 SessionID (AI 세션 구독 키)", example = "ward_a9cC5f_k3m9Q2")
+        @Schema(description = "카메라 고유 SessionID (AI 세션 구독 키)", example = "ward_k3m9Q2aZ7pLx01Bc")
         String sessionId,
 
         @Schema(description = "피보호자 ID", example = "a9cC5f")

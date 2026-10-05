@@ -78,12 +78,13 @@ public class AsyncConfig {
      * 드물다. 넘치면 폐기한다(CallerRuns 금지) - 클립 하나를 잃는 쪽이 AI 수신·알림을 막는 쪽보다 낫다.</p>
      *
      * <p>폐기는 알림 장애가 아니라 클립 1건이 빠진 것이라 {@code [NOTIFY-REJECTED]} ERROR로 남기지 않는다 - 실시간 분석 풀과
-     * 같은 이유(점검 I-1)로 별도 태그의 WARN이다. 폐기된 감지는 클립 쿨다운이 풀릴 때까지 다시 만들지 않는다.</p>
+     * 같은 이유(점검 I-1)로 별도 태그의 WARN이다. 클립 쿨다운은 작업 <b>안</b>에서 잡으므로 폐기된 작업은 쿨다운을 남기지
+     * 않고, 다음 위험 감지(이력 쿨다운 1분 뒤)가 다시 시도한다(2026-10-05 QA 종합 점검 확인, {@code AnomalyClipExecutorSaturationTest}).</p>
      */
     @Bean(name = "clipExecutor")
     public Executor clipExecutor() {
         return newExecutor("anomaly-clip-", 2, 2, 20, (task, pool) ->
-                log.warn("[ANOMALY-CLIP-REJECTED] 클립 생성 폐기(알림·이력은 정상 - 다음 클립 쿨다운 이후 다시 만든다): "
+                log.warn("[ANOMALY-CLIP-REJECTED] 클립 생성 폐기(알림·이력은 정상 - 쿨다운을 잡기 전이라 다음 위험 감지에서 다시 시도한다): "
                         + "active={}, queue={}", pool.getActiveCount(), pool.getQueue().size()));
     }
 

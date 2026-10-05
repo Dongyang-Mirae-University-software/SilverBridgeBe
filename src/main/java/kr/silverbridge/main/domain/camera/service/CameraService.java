@@ -70,7 +70,7 @@ public class CameraService {
                 .wardId(wardId)
                 .registeredBy(wardId)
                 .label(label)
-                .sessionId(identifierFactory.newSessionId(wardId))
+                .sessionId(identifierFactory.newSessionId())
                 .deviceId(identifierFactory.newDeviceId())
                 .isActive(true)
                 .build();

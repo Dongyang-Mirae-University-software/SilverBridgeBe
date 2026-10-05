@@ -27,7 +27,7 @@
 
 | 개념 | = 화면 필드 | 무엇을 식별 | 발급/저장 | 예 |
 |---|---|---|---|---|
-| **SessionID** | Session ID | **어느 카메라(방)의 세션인가** | 백엔드 발급, 카메라 행마다 고유 | `ward_a9cC5f_k3m` |
+| **SessionID** | Session ID | **어느 카메라(방)의 세션인가** | 백엔드 발급, 카메라 행마다 고유 | `ward_k3m9Q2aZ7pLx01Bc` (2026-10-05부터 `ward_` + 16자, 피보호자 ID 미포함) |
 | **DeviceID** | Camera ID | **어느 기기인가**(재등록 dedup 키) | **백엔드 발급 토큰, FE가 `localStorage` 영속** | `dev_7Qs4Xu` |
 
 - ⚠️ **DeviceID는 하드웨어 지문이 아니다.** 브라우저 지문(userAgent·화면·mediaDevices)은 시크릿모드·캐시삭제·브라우저 교체에 취약하고 프라이버시 이슈가 있어 폐기. 대신 **최초 등록 시 백엔드가 랜덤 토큰을 발급 → FE가 `localStorage`에 저장 → 재등록 때 되돌려 보냄**. 어떤 기기·OS·브라우저(아이패드/PC/폰)에서도 동일하게 동작(핸드폰 전용 아님).
@@ -98,7 +98,7 @@ users(WARD) 1 ──< connections(ACTIVE) >── 1 users(GUARDIAN)
 | `createdAt`/`updatedAt` | — | `BaseTimeEntity` |
 
 - 메서드: `rename(label)`, `activate()`/`deactivate()`.
-- **식별자 발급**: `UserIdGenerator`와 동일한 SecureRandom + 중복 재시도 방식의 신규 `CameraIdentifierFactory`(global/util)가 `sessionId`(`ward_{wardId}_{rand}`)와 `deviceId`(`dev_{rand}`)를 각각 유니크 보장 생성. 가독성만 부여, 인가는 **DB 행**으로 판정.
+- **식별자 발급**: `UserIdGenerator`와 동일한 SecureRandom + 중복 재시도 방식의 신규 `CameraIdentifierFactory`(global/util)가 `sessionId`(`ward_{rand16}` - 2026-10-05 QA 종합 점검으로 피보호자 ID 제거, 옛 형식 `ward_{wardId}_{rand}`)와 `deviceId`(`dev_{rand}`)를 각각 유니크 보장 생성. 가독성만 부여, 인가는 **DB 행**으로 판정.
 - **멱등 키**: `(ward_id, device_id)` 유니크 → 같은 피보호자·같은 기기 재등록 시 기존 행(=기존 SessionID) 반환.
 
 ### 3-2. 마이그레이션 `V29__add_cameras.sql`

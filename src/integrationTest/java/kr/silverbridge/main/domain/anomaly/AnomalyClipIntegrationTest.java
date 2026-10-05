@@ -10,6 +10,7 @@ import kr.silverbridge.main.domain.anomaly.entity.AnomalyVerdict;
 import kr.silverbridge.main.domain.anomaly.listener.AnomalyClipCleanupListener;
 import kr.silverbridge.main.domain.anomaly.repository.AnomalyClipRepository;
 import kr.silverbridge.main.domain.anomaly.repository.AnomalyIncidentRepository;
+import kr.silverbridge.main.domain.anomaly.service.AnomalyClipCleanupScheduler;
 import kr.silverbridge.main.domain.anomaly.service.AnomalyClipService;
 import kr.silverbridge.main.domain.anomaly.service.AnomalyClipService.StoredClip;
 import kr.silverbridge.main.domain.anomaly.service.AnomalyClipStorage;
@@ -50,6 +51,9 @@ import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.attribute.FileTime;
+import java.time.Duration;
+import java.time.Instant;
 import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
@@ -68,6 +72,7 @@ import static org.assertj.core.api.Assertions.assertThat;
  *   <li>오탐 응답과 클립 기록이 동시에 와도 오탐 상황의 클립이 공개로 남지 않는가(상황 행 쓰기 잠금)</li>
  *   <li>탈퇴·카메라 삭제 리스너(동기 AFTER_COMMIT)의 행 삭제가 실제로 커밋되는가(REQUIRES_NEW, H-1) + 파일 삭제</li>
  *   <li>청소의 조건부 삭제가 번복으로 돌아온 클립을 지우지 않는가</li>
+ *   <li>매시 고아 청소가 실제 DB 파일 목록·실제 파일 수정 시각으로 1시간 경계를 지키는가(2026-10-05 QA 종합 점검)</li>
  * </ul>
  *
  * <p>테스트 트랜잭션을 끄고 실제로 커밋한다. 전용 ID를 쓰고 끝나면 회원 삭제(CASCADE)로 정리한다.</p>
@@ -77,6 +82,7 @@ import static org.assertj.core.api.Assertions.assertThat;
         AnomalyClipService.class,
         AnomalyClipStorage.class,
         AnomalyClipCleanupListener.class,
+        AnomalyClipCleanupScheduler.class,
         ConnectionService.class,
         CameraService.class,
         CameraIdentifierFactory.class,
@@ -111,6 +117,7 @@ class AnomalyClipIntegrationTest extends PostgresIntegrationTest {
     @Autowired private GuardianAnomalyService guardianAnomalyService;
     @Autowired private AnomalyClipService clipService;
     @Autowired private AnomalyClipStorage storage;
+    @Autowired private AnomalyClipCleanupScheduler cleanupScheduler;
     @Autowired private CameraService cameraService;
     @Autowired private AnomalyClipRepository clipRepository;
     @Autowired private AnomalyIncidentRepository incidentRepository;
@@ -316,6 +323,31 @@ class AnomalyClipIntegrationTest extends PostgresIntegrationTest {
         assertThat(clipRepository.deleteHiddenById(clip.getId(), OffsetDateTime.now().minusHours(24)))
                 .as("유예 전").isZero();
         assertThat(clipRepository.deleteHiddenById(clip.getId(), future)).as("유예 후").isOne();
+    }
+
+    @Test
+    @DisplayName("매시 고아 청소 - 행이 사라진 지 61분 된 파일만 지우고, 59분 파일·행 있는 파일은 둔다(스윕 purge 잔존 회수, L-3)")
+    void 고아_파일_1시간_경계() throws IOException {
+        Long incidentId = openIncident();
+        AnomalyClip kept = recordClip(incidentId);
+        AnomalyClip orphanOld = recordClip(incidentId);
+        AnomalyClip orphanFresh = recordClip(incidentId);
+        // 리스너를 거치지 않은 행 삭제(스윕 purge의 FK CASCADE와 같은 효과) - 파일만 남는다
+        jdbcTemplate.update("DELETE FROM anomaly_clip WHERE id IN (?, ?)", orphanOld.getId(), orphanFresh.getId());
+        age(kept.getFileName(), Duration.ofHours(3));
+        age(orphanOld.getFileName(), Duration.ofMinutes(61));
+        age(orphanFresh.getFileName(), Duration.ofMinutes(59));
+
+        cleanupScheduler.cleanupOrphanFiles();
+
+        assertThat(storage.find(orphanOld.getFileName())).as("행 없음 + 1시간 경과").isEmpty();
+        assertThat(storage.find(orphanFresh.getFileName())).as("1시간 전 - 저장 중일 수 있어 보호").isPresent();
+        assertThat(storage.find(kept.getFileName())).as("행이 있으면 오래돼도 둔다").isPresent();
+        assertThat(clipRepository.findById(kept.getId())).isPresent();
+    }
+
+    private static void age(String fileName, Duration age) throws IOException {
+        Files.setLastModifiedTime(STORAGE.resolve(fileName), FileTime.from(Instant.now().minus(age)));
     }
 
     @Test
