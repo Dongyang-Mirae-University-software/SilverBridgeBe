@@ -113,6 +113,40 @@ class ConnectionServiceTest {
         }
 
         @Test
+        @DisplayName("CONN-G15: 두 회원 행을 잠근 뒤에 역할을 읽고 저장한다 - 역할 변경과 겹치면 커밋된 역할로 판정")
+        void 회원행_잠금_뒤에_역할을_읽는다() {
+            ConnectionRequestDto dto = requestDto(WARD_ID, RELATION);
+            when(userRepository.findById(GUARDIAN_ID)).thenReturn(Optional.of(guardian()));
+            when(userRepository.findById(WARD_ID)).thenReturn(Optional.of(ward()));
+
+            connectionService.requestConnectionAsGuardian(GUARDIAN_ID, dto);
+
+            InOrder order = inOrder(userRepository, connectionRepository);
+            order.verify(userRepository).lockForConnectionChange(List.of(GUARDIAN_ID, WARD_ID));
+            order.verify(userRepository).findById(GUARDIAN_ID);
+            order.verify(userRepository).findById(WARD_ID);
+            order.verify(connectionRepository).saveAndFlush(any(Connection.class));
+        }
+
+        @Test
+        @DisplayName("CONN-G15: 잠금을 기다리는 사이 상대가 보호자로 바뀌었으면 요청을 만들지 않는다")
+        void 잠금_뒤_바뀐_역할이면_거절() {
+            ConnectionRequestDto dto = requestDto(WARD_ID, RELATION);
+            when(userRepository.findById(GUARDIAN_ID)).thenReturn(Optional.of(guardian()));
+            // 역할 변경이 먼저 커밋돼 잠금 뒤의 조회가 바뀐 역할(GUARDIAN)을 읽은 상황
+            User changed = User.builder().id(WARD_ID).email("w@test.local").name("피보호자")
+                    .role(Role.GUARDIAN).status(Status.ACTIVE).provider(Provider.LOCAL).build();
+            when(userRepository.findById(WARD_ID)).thenReturn(Optional.of(changed));
+
+            CustomException ex = assertThrows(CustomException.class,
+                    () -> connectionService.requestConnectionAsGuardian(GUARDIAN_ID, dto));
+
+            assertThat(ex.getErrorCode()).isEqualTo(ErrorCode.INVALID_CONNECTION_ROLE);
+            verify(connectionRepository, never()).saveAndFlush(any());
+            verify(eventPublisher, never()).publishEvent(any());
+        }
+
+        @Test
         @DisplayName("본인에게 요청 → CANNOT_CONNECT_SELF, 저장·이벤트 없음")
         void 본인연결_CANNOT_CONNECT_SELF() {
             ConnectionRequestDto dto = requestDto(GUARDIAN_ID, RELATION);

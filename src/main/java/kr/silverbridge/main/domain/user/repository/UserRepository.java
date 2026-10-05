@@ -12,6 +12,7 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
 import java.time.OffsetDateTime;
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 
@@ -190,4 +191,30 @@ public interface UserRepository extends JpaRepository<User, String> {
      */
     @Query("select u.id from User u where lower(u.name) like concat('%', :keyword, '%') escape '\\'")
     List<String> findIdsByNameContaining(@Param("keyword") String keyword);
+
+    // ===== 연결 생성 ↔ 역할 변경 직렬화 (CONN-G15, 2026-10-05) =====
+    //
+    // 연결 요청(행 INSERT)과 관리자 역할 변경(연결 정리)이 겹치면, 역할 변경 쪽 정리 조회가 아직 커밋되지 않은
+    // 요청을 못 보고 지나가 "보호자가 된 사용자 앞으로 PENDING"이 남는다. INSERT는 기존 행이 아니라
+    // 낙관적 잠금(@Version)으로도 못 막는다. 두 경로가 같은 users 행을 먼저 잠가 한 줄로 세운다.
+    //
+    // 잠금 종류를 고른 이유:
+    //  - 연결 생성 쪽은 FOR SHARE - 연결 생성끼리는 서로 막지 않고, 역할·상태 UPDATE(FOR NO KEY UPDATE)와만 충돌한다.
+    //  - 역할 변경 쪽은 FOR NO KEY UPDATE - 어차피 커밋 때 UPDATE가 잡는 잠금과 같은 종류를 "정리 조회 전에" 당겨 잡을 뿐이다.
+    //    클립 기록의 FOR KEY SHARE(AnomalyClipRepository)와는 충돌하지 않는다(FOR UPDATE로 바꾸지 말 것 - 충돌하게 된다).
+    //  - 순서는 언제나 users → connection. 탈퇴 purge(users → CASCADE)·클립(users → 상황)과 같은 순서라 교착이 없다.
+
+    /**
+     * 연결을 새로 만드는 경로(보호자 요청·관리자 강제 연결)가 <b>역할·상태를 읽기 전에</b> 부른다.
+     * ID 순으로 잠가 여러 행을 잡는 순서를 고정한다. 없는 ID는 결과에서 빠질 뿐이다(호출부의 기존 404 처리).
+     */
+    @Query(value = "SELECT id FROM users WHERE id IN (:ids) ORDER BY id FOR SHARE", nativeQuery = true)
+    List<String> lockForConnectionChange(@Param("ids") Collection<String> ids);
+
+    /**
+     * 관리자 회원 정보 수정(역할·상태)이 <b>연결 정리 전에</b> 부른다. 진행 중인 연결 생성이 커밋될 때까지 기다린 뒤
+     * 정리 조회가 그 요청까지 보게 하고, 반대로 이 잠금이 먼저면 연결 생성 쪽이 바뀐 역할을 읽어 거절한다.
+     */
+    @Query(value = "SELECT id FROM users WHERE id = :id FOR NO KEY UPDATE", nativeQuery = true)
+    Optional<String> lockForAccountChange(@Param("id") String id);
 }

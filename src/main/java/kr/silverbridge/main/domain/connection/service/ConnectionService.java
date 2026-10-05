@@ -90,6 +90,10 @@ public class ConnectionService {
     @Transactional
     public void requestConnectionAsGuardian(String guardianId, ConnectionRequestDto request) {
         String wardId = request.getTargetId();
+        // 역할·상태를 읽기 전에 두 사람의 users 행을 잠근다(CONN-G15). 관리자 역할 변경이 진행 중이면 그 커밋을
+        // 기다렸다가 바뀐 역할을 읽어 거절하고, 이 요청이 먼저면 역할 변경의 연결 정리가 이 요청까지 보고 취소한다.
+        // 잠금 뒤에 읽어야 하므로 반드시 검증보다 먼저 둔다(open-in-view=false라 이전에 읽어 둔 엔티티가 없다).
+        userRepository.lockForConnectionChange(List.of(guardianId, wardId));
         validateConnectionRequest(guardianId, wardId, Role.GUARDIAN, Role.WARD);
         // 같은 쌍에 요청·취소를 반복해 피보호자에게 알림을 계속 보내는 것을 막는다(CONN-G04). 중복(PENDING·ACTIVE)
         // 검사 뒤에 둬서 409로 끝나는 요청은 세지 않는다. 거절(429)은 요청을 만들지 않으므로 알림·WS도 없다.
