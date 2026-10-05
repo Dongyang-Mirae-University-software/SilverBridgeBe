@@ -108,7 +108,7 @@ class SosNotificationListenerTest {
     }
 
     @Test
-    @DisplayName("보호자 전원 발송이 실패하면 쿨다운을 해제한다 - 30초 내 재요청이 다시 발송된다 (SOS-G09)")
+    @DisplayName("보호자 전원 발송이 실패하면 쿨다운을 해제한다 - 쿨다운 내 재요청이 다시 발송된다 (SOS-G09)")
     void handleSosTriggered_전원실패_쿨다운해제() {
         when(connectionService.getActiveGuardianIds(WARD_ID)).thenReturn(List.of("GD0001", "GD0002"));
         when(cooldown.tryAcquire(WARD_ID)).thenReturn(true);
