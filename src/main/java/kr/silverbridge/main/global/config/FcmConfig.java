@@ -48,17 +48,20 @@ public class FcmConfig {
         }
         if (FirebaseApp.getApps().isEmpty()) {
             try (InputStream in = new ByteArrayInputStream(decoded)) {
-                // 외부 호출에는 시간 제한을 둔다(2026-09-30 M-2) - 없으면 FCM이 느려질 때 알림 executor 스레드가
-                // 전부 묶여 뒤따르는 SOS·화재 알림이 큐에서 밀리거나 폐기된다.
-                FirebaseOptions options = FirebaseOptions.builder()
-                        .setCredentials(GoogleCredentials.fromStream(in))
-                        .setConnectTimeout(CONNECT_TIMEOUT_MILLIS)
-                        .setReadTimeout(READ_TIMEOUT_MILLIS)
-                        .build();
-                FirebaseApp.initializeApp(options);
+                FirebaseApp.initializeApp(buildOptions(GoogleCredentials.fromStream(in)));
                 log.info("Firebase 초기화 완료 (env base64 기반, decoded={} bytes)", decoded.length);
             }
         }
         return FirebaseMessaging.getInstance();
+    }
+
+    // 외부 호출에는 시간 제한을 둔다(2026-09-30 M-2) - 없으면 FCM이 느려질 때 알림 executor 스레드가
+    // 전부 묶여 뒤따르는 SOS·화재 알림이 큐에서 밀리거나 폐기된다. FcmConfigTest가 이 값을 고정한다(XCUT-G11).
+    static FirebaseOptions buildOptions(GoogleCredentials credentials) {
+        return FirebaseOptions.builder()
+                .setCredentials(credentials)
+                .setConnectTimeout(CONNECT_TIMEOUT_MILLIS)
+                .setReadTimeout(READ_TIMEOUT_MILLIS)
+                .build();
     }
 }
