@@ -1,6 +1,18 @@
 package kr.silverbridge.main.global.client;
 
+import ch.qos.logback.classic.Logger;
+import ch.qos.logback.classic.spi.ILoggingEvent;
+import ch.qos.logback.core.read.ListAppender;
+import com.solapi.sdk.message.exception.SolapiEmptyResponseException;
+import com.solapi.sdk.message.exception.SolapiMessageNotReceivedException;
+import com.solapi.sdk.message.exception.SolapiUnknownException;
+import com.solapi.sdk.message.model.FailedMessage;
+import com.solapi.sdk.message.model.Message;
 import kr.silverbridge.main.global.exception.CustomException;
+import org.slf4j.LoggerFactory;
+
+import java.util.List;
+import java.util.Map;
 import kr.silverbridge.main.global.exception.ErrorCode;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.DisplayName;
@@ -71,6 +83,79 @@ class SmsSenderTest {
                 .isInstanceOf(CustomException.class)
                 .extracting(e -> ((CustomException) e).getErrorCode())
                 .isEqualTo(ErrorCode.SMS_SEND_FAILED);
+    }
+
+    // ── 실패 로그에 예외 원문·번호를 남기지 않는다 (QA XCUT-G11 후속, 알림 이력 불변 규칙 ②) ──
+
+    private SmsSender senderThrowing(Exception toThrow) {
+        return new SmsSender(executor) {
+            @Override
+            void deliver(Message message) throws SolapiMessageNotReceivedException, SolapiEmptyResponseException,
+                    SolapiUnknownException {
+                if (toThrow instanceof SolapiMessageNotReceivedException e) throw e;
+                if (toThrow instanceof SolapiEmptyResponseException e) throw e;
+                throw (SolapiUnknownException) toThrow;
+            }
+        };
+    }
+
+    @Test
+    @DisplayName("접수 거부 - REJECTED, 로그에는 클래스명·상태 코드만(번호·사유 원문 없음, 형식이 이상한 코드는 버림)")
+    void 접수거부_로그_마스킹() {
+        SolapiMessageNotReceivedException rejected = new SolapiMessageNotReceivedException("원문 01099998888 거부");
+        rejected.setFailedMessageList(List.of(
+                new FailedMessage("01099998888", "0212345678", "SMS", "82", "M-1", "1062", "번호 오류 01099998888",
+                        "acc-1", Map.of()),
+                new FailedMessage("01099998888", "0212345678", "SMS", "82", "M-2", "bad code 01099998888", "x",
+                        "acc-1", Map.of())));
+
+        try (LogCapture logs = LogCapture.of(SmsSender.class)) {
+            assertThat(senderThrowing(rejected).trySend("01099998888", "본문")).isEqualTo(SmsSender.Outcome.REJECTED);
+
+            assertThat(logs.messages()).anySatisfy(m -> assertThat(m)
+                    .startsWith("[SMS-SEND-REJECTED]").contains("SolapiMessageNotReceivedException", "1062"));
+            assertThat(logs.messages()).allSatisfy(m -> assertThat(m)
+                    .doesNotContain("01099998888", "0212345678", "원문", "번호 오류", "bad code"));
+        }
+    }
+
+    @Test
+    @DisplayName("빈 응답·알 수 없는 오류 - ERROR, 로그에 예외 메시지(응답 원문)를 싣지 않는다")
+    void 통신오류_로그_마스킹() {
+        try (LogCapture logs = LogCapture.of(SmsSender.class)) {
+            assertThat(senderThrowing(new SolapiEmptyResponseException("empty 01099998888")).trySend("01099998888", "본문"))
+                    .isEqualTo(SmsSender.Outcome.ERROR);
+            assertThat(senderThrowing(new SolapiUnknownException("raw apiSecret=abc")).trySend("01099998888", "본문"))
+                    .isEqualTo(SmsSender.Outcome.ERROR);
+
+            assertThat(logs.messages()).filteredOn(m -> m.startsWith("[SMS-SEND-ERROR]")).hasSize(2);
+            assertThat(logs.messages()).allSatisfy(m -> assertThat(m)
+                    .doesNotContain("01099998888", "empty", "apiSecret"));
+        }
+    }
+
+    static final class LogCapture implements AutoCloseable {
+        private final Logger logger;
+        private final ListAppender<ILoggingEvent> appender = new ListAppender<>();
+
+        private LogCapture(Class<?> type) {
+            logger = (Logger) LoggerFactory.getLogger(type);
+            appender.start();
+            logger.addAppender(appender);
+        }
+
+        static LogCapture of(Class<?> type) {
+            return new LogCapture(type);
+        }
+
+        List<String> messages() {
+            return appender.list.stream().map(ILoggingEvent::getFormattedMessage).toList();
+        }
+
+        @Override
+        public void close() {
+            logger.detachAppender(appender);
+        }
     }
 
     @Test
