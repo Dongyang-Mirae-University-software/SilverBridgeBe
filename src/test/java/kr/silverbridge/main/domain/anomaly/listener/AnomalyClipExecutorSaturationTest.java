@@ -18,11 +18,17 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.beans.factory.config.BeanDefinition;
+import org.springframework.context.annotation.ClassPathScanningCandidateComponentProvider;
+import org.springframework.core.type.filter.AssignableTypeFilter;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.data.redis.core.ValueOperations;
 import org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor;
 
 import java.time.Duration;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.List;
 import java.time.OffsetDateTime;
 import java.util.Optional;
 import java.util.concurrent.CountDownLatch;
@@ -43,8 +49,12 @@ import static org.mockito.Mockito.when;
  *
  * <p>클립 쿨다운은 executor 스레드 <b>안</b>({@link AnomalyClipCaptureService#capture})에서 잡는다. 그래서 포화로 폐기된
  * 작업은 쿨다운을 잡지도 않고, 다음 위험 감지(이력 쿨다운 1분 뒤)가 다시 시도한다 - "폐기되면 5분간 클립이 안 생긴다"는
- * 걱정은 성립하지 않는다. 누가 쿨다운 확인을 리스너 제출 전(AI 수신 스레드)으로 옮기면 폐기 건이 쿨다운만 남기게 되어
- * 여기서 깨진다.</p>
+ * 걱정은 성립하지 않는다.</p>
+ *
+ * <p><b>이 테스트가 고정하는 것</b>: ① 실행기 포화 시 호출 스레드에서 돌지 않고(CallerRuns 금지) 예외 없이 폐기한다
+ * ② {@code capture} 안에서 쿨다운을 잡는다(폐기된 작업은 Redis를 건드리지 않는다). <b>고정하지 못하는 것</b>: 쿨다운 확인을
+ * 이벤트 발행 쪽(작업 밖)으로 옮기는 회귀 - 제출 람다를 이 테스트가 직접 만들기 때문이다. 그 회귀는
+ * {@link #cooldownIsOnlyUsedInsideCapture()}가 막는다.</p>
  */
 @ExtendWith(MockitoExtension.class)
 class AnomalyClipExecutorSaturationTest {
@@ -133,6 +143,34 @@ class AnomalyClipExecutorSaturationTest {
 
         verify(valueOps, timeout(5_000)).setIfAbsent(eq(KEY), eq("1"), any(Duration.class));
         verify(storage, timeout(5_000)).hasEnoughSpace();
+    }
+
+    @Test
+    @DisplayName("클립 쿨다운은 AnomalyClipCaptureService(실행기 작업 안)만 쓴다 - 이벤트 발행 쪽으로 옮기면 폐기된 건이 쿨다운만 남긴다")
+    void cooldownIsOnlyUsedInsideCapture() throws Exception {
+        ClassPathScanningCandidateComponentProvider scanner = new ClassPathScanningCandidateComponentProvider(false);
+        scanner.addIncludeFilter(new AssignableTypeFilter(Object.class));
+
+        List<String> users = new ArrayList<>();
+        for (BeanDefinition candidate : scanner.findCandidateComponents("kr.silverbridge.main")) {
+            Class<?> type = Class.forName(candidate.getBeanClassName());
+            if (type == AnomalyClipCooldown.class || type == AnomalyClipCaptureService.class || !isProductionClass(type)) {
+                continue;
+            }
+            boolean uses = Arrays.stream(type.getDeclaredFields()).anyMatch(f -> f.getType() == AnomalyClipCooldown.class)
+                    || Arrays.stream(type.getDeclaredConstructors()).flatMap(c -> Arrays.stream(c.getParameterTypes()))
+                            .anyMatch(p -> p == AnomalyClipCooldown.class);
+            if (uses) {
+                users.add(type.getSimpleName());
+            }
+        }
+
+        assertThat(users).as("쿨다운을 쓰는 다른 클래스").isEmpty();
+    }
+
+    /** 같은 패키지의 테스트 클래스도 클래스패스에 잡히므로 운영 코드 출력 디렉터리의 클래스만 본다. */
+    private static boolean isProductionClass(Class<?> type) {
+        return type.getProtectionDomain().getCodeSource().getLocation().getPath().contains("/classes/java/main");
     }
 
     private static void await(CountDownLatch latch) {
