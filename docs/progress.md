@@ -1622,3 +1622,4 @@ REST API Key 단독 대비 보안 강화 — 인가코드 탈취 시 토큰 발�
 - PHASE 0: 중복 제한·방 목록 없음 확인, 운영 DB 중복 0(gosky 1대·vkcs 0대, 8개 방 밖 0), `CustomException`이 고정 문구만 받아 409 문구에 방 이름 미포함으로 변경.
 - 검증: 단위 1295 통과(카메라 114, 신규 17), `build` 통과, 통합 60 통과(vkcs, V58 4개 포함 - 작업 트리로 실행, push 없음). 기존 테스트의 "안방"·"방1"·"방2" 입력을 8개 방으로 교체.
 - 상세: `docs/(2026-10-05) feature-camera-room-and-ward-status.md`
+- 기능 점검(템플릿 B, PR #299): ✅ PASS. 🟠 H-1 새 등록 동시 경합이 `DUPLICATE_VALUE`로 나가던 문제(IDENTITY라 `save()`에서 위반) → `save()`도 변환 범위에 넣어 반영, 🟢 L-1 제약 이름 판정을 Hibernate `getConstraintName()` 우선으로. M-1 해당 없음(운영 8개 밖 0건), M-2 사용 중지 카메라도 방 점유(의도). `docs/(2026-10-05) audit-camera-room-and-ward-status.md`

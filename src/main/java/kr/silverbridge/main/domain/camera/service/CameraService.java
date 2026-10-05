@@ -19,6 +19,7 @@ import kr.silverbridge.main.global.exception.ErrorCode;
 import kr.silverbridge.main.global.validation.TextSanitizer;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.hibernate.exception.ConstraintViolationException;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.core.NestedExceptionUtils;
@@ -32,6 +33,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
+import java.util.function.Supplier;
 import java.util.stream.Collectors;
 
 /**
@@ -88,7 +90,8 @@ public class CameraService {
                 .isActive(true)
                 .build();
 
-        Camera saved = cameraRepository.save(camera);
+        // id가 IDENTITY라 save()가 INSERT를 바로 실행한다 - 동시 등록의 제약 위반은 save()에서 터지므로 변환 범위에 넣는다
+        Camera saved = translateRoomConflict(() -> cameraRepository.save(camera));
         flushRoomChange();
         publishRegistered(saved);
         return CameraResponse.of(saved, recommendedFps);
@@ -175,8 +178,19 @@ public class CameraService {
      * 409({@code CAMERA_LABEL_DUPLICATED})로 바꾼다. 다른 제약 위반은 그대로 올린다.
      */
     private void flushRoomChange() {
-        try {
+        translateRoomConflict(() -> {
             cameraRepository.flush();
+            return null;
+        });
+    }
+
+    /**
+     * 방 제약({@code uq_camera_ward_label}) 위반만 409 {@code CAMERA_LABEL_DUPLICATED}로 바꾼다. 다른 제약 위반은 그대로 올린다.
+     * 새 등록은 {@code save()}(IDENTITY 즉시 INSERT)에서, 방 변경은 {@code flush()}(변경 감지)에서 위반이 난다.
+     */
+    private static <T> T translateRoomConflict(Supplier<T> write) {
+        try {
+            return write.get();
         } catch (DataIntegrityViolationException e) {
             if (isRoomConstraintViolation(e)) {
                 throw new CustomException(ErrorCode.CAMERA_LABEL_DUPLICATED);
@@ -185,7 +199,13 @@ public class CameraService {
         }
     }
 
+    // Hibernate가 알려주는 제약 이름을 먼저 보고, 없으면 DB 메시지(PostgreSQL은 제약 이름을 싣는다)로 판단한다
     private static boolean isRoomConstraintViolation(DataIntegrityViolationException e) {
+        for (Throwable cause = e; cause != null; cause = cause.getCause()) {
+            if (cause instanceof ConstraintViolationException violation && violation.getConstraintName() != null) {
+                return ROOM_UNIQUE_CONSTRAINT.equalsIgnoreCase(violation.getConstraintName());
+            }
+        }
         String message = NestedExceptionUtils.getMostSpecificCause(e).getMessage();
         return message != null && message.contains(ROOM_UNIQUE_CONSTRAINT);
     }

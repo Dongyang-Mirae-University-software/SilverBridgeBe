@@ -527,14 +527,12 @@ class CameraServiceTest {
         }
 
         @Test
-        @DisplayName("동시에 같은 방이 먼저 등록돼 DB 제약에 걸리면 같은 409로 바꾼다")
-        void 동시등록_제약위반_409() {
-            when(cameraRepository.save(any(Camera.class))).thenAnswer(inv -> inv.getArgument(0));
+        @DisplayName("새 등록 경합 - id가 IDENTITY라 save()에서 INSERT가 실행돼 제약에 걸려도 같은 409로 바꾼다")
+        void 새등록_경합_save에서_제약위반_409() {
             when(identifierFactory.newSessionId(WARD_ID)).thenReturn("ward_a9cC5f_new");
             when(identifierFactory.newDeviceId()).thenReturn("dev_new");
-            doThrow(new DataIntegrityViolationException("insert",
-                    new RuntimeException("duplicate key value violates unique constraint \"uq_camera_ward_label\"")))
-                    .when(cameraRepository).flush();
+            when(cameraRepository.save(any(Camera.class))).thenThrow(new DataIntegrityViolationException("insert",
+                    new RuntimeException("duplicate key value violates unique constraint \"uq_camera_ward_label\"")));
 
             assertThatThrownBy(() -> cameraService.register(WARD_ID, new CameraRegisterRequest("거실", null)))
                     .isInstanceOf(CustomException.class)
@@ -543,14 +541,39 @@ class CameraServiceTest {
         }
 
         @Test
-        @DisplayName("방 제약이 아닌 다른 DB 제약 위반은 바꾸지 않고 그대로 올린다")
-        void 다른제약위반_그대로() {
-            when(cameraRepository.save(any(Camera.class))).thenAnswer(inv -> inv.getArgument(0));
+        @DisplayName("Hibernate가 알려주는 제약 이름으로도 판정한다(메시지 문구에 기대지 않음)")
+        void 제약이름으로_판정() {
             when(identifierFactory.newSessionId(WARD_ID)).thenReturn("ward_a9cC5f_new");
             when(identifierFactory.newDeviceId()).thenReturn("dev_new");
-            doThrow(new DataIntegrityViolationException("insert",
-                    new RuntimeException("duplicate key value violates unique constraint \"uq_cameras_session\"")))
+            when(cameraRepository.save(any(Camera.class))).thenThrow(new DataIntegrityViolationException("insert",
+                    new org.hibernate.exception.ConstraintViolationException("dup", null, "uq_camera_ward_label")));
+
+            assertThatThrownBy(() -> cameraService.register(WARD_ID, new CameraRegisterRequest("거실", null)))
+                    .isInstanceOf(CustomException.class)
+                    .hasFieldOrPropertyWithValue("errorCode", ErrorCode.CAMERA_LABEL_DUPLICATED);
+        }
+
+        @Test
+        @DisplayName("방 변경 경합 - 변경 감지라 flush()에서 제약에 걸리면 같은 409로 바꾼다")
+        void 방변경_경합_flush에서_제약위반_409() {
+            Camera mine = camera(1L, WARD_ID, "s1", "dev_1", "거실");
+            when(cameraRepository.findById(1L)).thenReturn(Optional.of(mine));
+            doThrow(new DataIntegrityViolationException("update",
+                    new RuntimeException("duplicate key value violates unique constraint \"uq_camera_ward_label\"")))
                     .when(cameraRepository).flush();
+
+            assertThatThrownBy(() -> cameraService.update(WARD_ID, 1L, new CameraUpdateRequest("주방", null)))
+                    .isInstanceOf(CustomException.class)
+                    .hasFieldOrPropertyWithValue("errorCode", ErrorCode.CAMERA_LABEL_DUPLICATED);
+        }
+
+        @Test
+        @DisplayName("방 제약이 아닌 다른 DB 제약 위반은 바꾸지 않고 그대로 올린다")
+        void 다른제약위반_그대로() {
+            when(identifierFactory.newSessionId(WARD_ID)).thenReturn("ward_a9cC5f_new");
+            when(identifierFactory.newDeviceId()).thenReturn("dev_new");
+            when(cameraRepository.save(any(Camera.class))).thenThrow(new DataIntegrityViolationException("insert",
+                    new org.hibernate.exception.ConstraintViolationException("dup", null, "uq_cameras_session")));
 
             assertThatThrownBy(() -> cameraService.register(WARD_ID, new CameraRegisterRequest("거실", null)))
                     .isInstanceOf(DataIntegrityViolationException.class);
