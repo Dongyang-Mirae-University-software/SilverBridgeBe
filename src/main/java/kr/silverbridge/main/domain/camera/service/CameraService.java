@@ -3,9 +3,11 @@ package kr.silverbridge.main.domain.camera.service;
 import kr.silverbridge.main.domain.camera.dto.CameraOwner;
 import kr.silverbridge.main.domain.camera.dto.CameraRegisterRequest;
 import kr.silverbridge.main.domain.camera.dto.CameraResponse;
+import kr.silverbridge.main.domain.camera.dto.CameraRoomOption;
 import kr.silverbridge.main.domain.camera.dto.CameraUpdateRequest;
 import kr.silverbridge.main.domain.camera.dto.GuardianCameraView;
 import kr.silverbridge.main.domain.camera.entity.Camera;
+import kr.silverbridge.main.domain.camera.entity.CameraRoom;
 import kr.silverbridge.main.domain.camera.event.CameraDeletedEvent;
 import kr.silverbridge.main.domain.camera.event.CameraRegisteredEvent;
 import kr.silverbridge.main.domain.camera.repository.CameraRepository;
@@ -17,15 +19,21 @@ import kr.silverbridge.main.global.exception.ErrorCode;
 import kr.silverbridge.main.global.validation.TextSanitizer;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.hibernate.exception.ConstraintViolationException;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.ApplicationEventPublisher;
+import org.springframework.core.NestedExceptionUtils;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.Arrays;
 import java.util.Collection;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
+import java.util.function.Supplier;
 import java.util.stream.Collectors;
 
 /**
@@ -46,6 +54,9 @@ public class CameraService {
     private final CameraIdentifierFactory identifierFactory;
     private final ApplicationEventPublisher eventPublisher;
 
+    // 한 방에 카메라 1대 - V58 제약 이름(Camera 엔티티 @Table과 같다)
+    static final String ROOM_UNIQUE_CONSTRAINT = "uq_camera_ward_label";
+
     // 서버가 소유하는 권장 송출 fps (FE 매직상수 방지) — application.yaml camera.recommended-fps
     @Value("${camera.recommended-fps:5}")
     private int recommendedFps;
@@ -57,15 +68,19 @@ public class CameraService {
      */
     @Transactional
     public CameraResponse register(String wardId, CameraRegisterRequest request) {
-        String label = sanitizeLabel(request.label()); // 수정 경로와 같은 기준 (ANOM-G12 후속)
+        String label = toRoomLabel(request.label()); // 수정 경로와 같은 기준 (ANOM-G12 후속)
         Optional<Camera> existing = findOwnedByDeviceId(wardId, request.deviceId());
         if (existing.isPresent()) {
+            // 같은 기기 재등록: 같은 방이면 그대로 성공(멱등), 다른 카메라가 쓰는 방으로 옮기려 하면 409
             Camera camera = existing.get();
+            ensureRoomAvailable(wardId, label, camera.getId());
             camera.rename(label);
+            flushRoomChange();
             publishRegistered(camera);
             return CameraResponse.of(camera, recommendedFps);
         }
 
+        ensureRoomAvailable(wardId, label, null);
         Camera camera = Camera.builder()
                 .wardId(wardId)
                 .registeredBy(wardId)
@@ -75,9 +90,25 @@ public class CameraService {
                 .isActive(true)
                 .build();
 
-        Camera saved = cameraRepository.save(camera);
+        // id가 IDENTITY라 save()가 INSERT를 바로 실행한다 - 동시 등록의 제약 위반은 save()에서 터지므로 변환 범위에 넣는다
+        Camera saved = translateRoomConflict(() -> cameraRepository.save(camera));
+        flushRoomChange();
         publishRegistered(saved);
         return CameraResponse.of(saved, recommendedFps);
+    }
+
+    /**
+     * 등록 화면의 방 선택지 - 정해진 방 목록({@link CameraRoom}) 순서대로, 이 피보호자가 이미 카메라를 둔 방은
+     * {@code registered=true}("· 등록됨"). 목록은 서버가 소유한다(FE에 방 목록을 따로 두지 않게).
+     */
+    @Transactional(readOnly = true)
+    public List<CameraRoomOption> getRoomOptions(String wardId) {
+        Set<String> used = cameraRepository.findByWardIdOrderByCreatedAtDesc(wardId).stream()
+                .map(Camera::getLabel)
+                .collect(Collectors.toSet());
+        return Arrays.stream(CameraRoom.values())
+                .map(room -> new CameraRoomOption(room.getLabel(), used.contains(room.getLabel())))
+                .toList();
     }
 
     /**
@@ -103,7 +134,9 @@ public class CameraService {
         Camera camera = getOwnedCamera(wardId, cameraId);
 
         if (request.label() != null) {
-            camera.rename(sanitizeLabel(request.label()));
+            String label = toRoomLabel(request.label());
+            ensureRoomAvailable(wardId, label, camera.getId());
+            camera.rename(label);
         }
         if (request.isActive() != null) {
             if (request.isActive()) {
@@ -112,7 +145,69 @@ public class CameraService {
                 camera.deactivate();
             }
         }
+        flushRoomChange();
         return CameraResponse.of(camera, recommendedFps);
+    }
+
+    /**
+     * 방 이름을 정리한 뒤 정해진 방 목록({@link CameraRoom})에 있는지 확인한다. 목록 밖이면 400이다 -
+     * FE의 선택 버튼만 믿으면 API를 직접 부르는 요청이 임의 이름을 넣을 수 있다.
+     */
+    private static String toRoomLabel(String rawLabel) {
+        String label = sanitizeLabel(rawLabel);
+        return CameraRoom.fromLabel(label)
+                .map(CameraRoom::getLabel)
+                .orElseThrow(() -> new CustomException(ErrorCode.CAMERA_ROOM_INVALID));
+    }
+
+    /**
+     * 한 방에는 카메라 1대 - 같은 피보호자의 다른 카메라가 그 방을 쓰고 있으면 409다. 자기 자신({@code selfId})은 제외해
+     * 같은 방으로의 재등록·수정은 그대로 통과한다(멱등).
+     */
+    private void ensureRoomAvailable(String wardId, String label, Long selfId) {
+        cameraRepository.findByWardIdAndLabel(wardId, label)
+                .filter(other -> !other.getId().equals(selfId))
+                .ifPresent(other -> {
+                    throw new CustomException(ErrorCode.CAMERA_LABEL_DUPLICATED);
+                });
+    }
+
+    /**
+     * 방 변경을 즉시 반영해 DB 제약({@code uq_camera_ward_label})을 여기서 확인한다. 위 검사 뒤 같은 순간에 같은 방이
+     * 먼저 등록되면 제약이 막는데, 커밋 때 터지면 전역 핸들러가 일반 중복(DUPLICATE_VALUE)으로 답하므로 여기서 같은
+     * 409({@code CAMERA_LABEL_DUPLICATED})로 바꾼다. 다른 제약 위반은 그대로 올린다.
+     */
+    private void flushRoomChange() {
+        translateRoomConflict(() -> {
+            cameraRepository.flush();
+            return null;
+        });
+    }
+
+    /**
+     * 방 제약({@code uq_camera_ward_label}) 위반만 409 {@code CAMERA_LABEL_DUPLICATED}로 바꾼다. 다른 제약 위반은 그대로 올린다.
+     * 새 등록은 {@code save()}(IDENTITY 즉시 INSERT)에서, 방 변경은 {@code flush()}(변경 감지)에서 위반이 난다.
+     */
+    private static <T> T translateRoomConflict(Supplier<T> write) {
+        try {
+            return write.get();
+        } catch (DataIntegrityViolationException e) {
+            if (isRoomConstraintViolation(e)) {
+                throw new CustomException(ErrorCode.CAMERA_LABEL_DUPLICATED);
+            }
+            throw e;
+        }
+    }
+
+    // Hibernate가 알려주는 제약 이름을 먼저 보고, 없으면 DB 메시지(PostgreSQL은 제약 이름을 싣는다)로 판단한다
+    private static boolean isRoomConstraintViolation(DataIntegrityViolationException e) {
+        for (Throwable cause = e; cause != null; cause = cause.getCause()) {
+            if (cause instanceof ConstraintViolationException violation && violation.getConstraintName() != null) {
+                return ROOM_UNIQUE_CONSTRAINT.equalsIgnoreCase(violation.getConstraintName());
+            }
+        }
+        String message = NestedExceptionUtils.getMostSpecificCause(e).getMessage();
+        return message != null && message.contains(ROOM_UNIQUE_CONSTRAINT);
     }
 
     /**

@@ -1630,3 +1630,13 @@ REST API Key 단독 대비 보안 강화 — 인가코드 탈취 시 토큰 발�
 - L-1 피보호자 경로 파일 HTTP 테스트 없음 / L-2 설계 문서 204행 옛 시그니처 / L-3 옛 형식 픽스처(수용).
 - 후속 조치: M-1(테스트 Javadoc·정책 정정 + 쿨다운 사용처 구조 테스트)·L-1(피보호자 클립 HTTP 테스트 5건)·L-2(설계 문서 정정) 해소, L-3 수용 (`fix/qa-comprehensive-be-followup`).
 - 상세: `docs/(2026-10-05) audit-qa-comprehensive-be.md`
+
+## [2026-10-05] 카메라 방 선택(8개 고정·방마다 1대) + 피보호자 내 카메라 연결 상태 (branch `feature/camera-label-unique-ward-status`, V58)
+
+- 사용자 결정(피보호자 "내 카메라" 프로토타입 수정안): 방은 거실·침실·주방·화장실·현관·베란다·작은방·작은방2 중 선택, 이미 등록된 방은 선택 불가, 내 카메라에 연결됨/연결 안 됨 표시.
+- 방: 목록 밖 400 `CAMERA_ROOM_INVALID`, 같은 피보호자의 같은 방 409 `CAMERA_LABEL_DUPLICATED`(같은 기기 같은 방은 멱등), V58 `uq_camera_ward_label` + flush 시 409 변환. 선택지 API `GET /api/ward/camera/rooms`.
+- 상태: `GET /api/ward/camera/live` - 보호자 `/live`와 같은 기준(AI 1회 호출, 장애 시 `null`), 속도 제한 `camera-ward-live` 30/600. 기존 `GET /api/ward/camera`는 AI 호출 없이 유지(송출 기기 지연 방지).
+- PHASE 0: 중복 제한·방 목록 없음 확인, 운영 DB 중복 0(gosky 1대·vkcs 0대, 8개 방 밖 0), `CustomException`이 고정 문구만 받아 409 문구에 방 이름 미포함으로 변경.
+- 검증: 단위 1295 통과(카메라 114, 신규 17), `build` 통과, 통합 60 통과(vkcs, V58 4개 포함 - 작업 트리로 실행, push 없음). 기존 테스트의 "안방"·"방1"·"방2" 입력을 8개 방으로 교체.
+- 상세: `docs/(2026-10-05) feature-camera-room-and-ward-status.md`
+- 기능 점검(템플릿 B, PR #299): ✅ PASS. 🟠 H-1 새 등록 동시 경합이 `DUPLICATE_VALUE`로 나가던 문제(IDENTITY라 `save()`에서 위반) → `save()`도 변환 범위에 넣어 반영, 🟢 L-1 제약 이름 판정을 Hibernate `getConstraintName()` 우선으로. M-1 해당 없음(운영 8개 밖 0건), M-2 사용 중지 카메라도 방 점유(의도). `docs/(2026-10-05) audit-camera-room-and-ward-status.md`

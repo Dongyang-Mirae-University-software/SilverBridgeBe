@@ -1,7 +1,8 @@
 package kr.silverbridge.main.domain.camera.service;
 
 /**
- * 보호자 실시간 카메라 API의 속도 제한(보호자 ID 기준, 분·시간 이중 윈도우 - 2026-10-04 점검 L-4).
+ * 실시간 카메라 API의 속도 제한(호출한 사용자 ID 기준, 분·시간 이중 윈도우 - 2026-10-04 점검 L-4). 보호자 목록·상태·영상과
+ * 피보호자 "내 카메라" 목록(WARD_LIVE, 2026-10-05)이 대상이다.
  *
  * <p>호출마다 DB 조회와 AI 서버 호출이 붙어(스냅샷은 최대 5MB를 메모리에 올린다) 반복 호출이 그대로 AI 부하로
  * 증폭된다. 상한은 정상 화면 사용의 여러 배로 잡았다 - 목록은 FE가 15초마다(분당 4회) 부르고, 티켓은 영상을 다시
@@ -11,6 +12,8 @@ package kr.silverbridge.main.domain.camera.service;
 enum CameraStreamRateLimit {
 
     LIVE("camera-live", 30, 600),
+    // 피보호자 "내 카메라" 목록(본인 ID 기준) - 보호자 목록과 같은 상한, 키만 분리
+    WARD_LIVE("camera-ward-live", 30, 600),
     STATUS("camera-status", 30, 600),
     FRAME("camera-frame", 60, 1200),
     TICKET("camera-ticket", 20, 300);

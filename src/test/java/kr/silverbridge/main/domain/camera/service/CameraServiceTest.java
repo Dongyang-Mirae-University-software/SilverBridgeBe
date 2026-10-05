@@ -2,6 +2,7 @@ package kr.silverbridge.main.domain.camera.service;
 
 import kr.silverbridge.main.domain.camera.dto.CameraRegisterRequest;
 import kr.silverbridge.main.domain.camera.dto.CameraResponse;
+import kr.silverbridge.main.domain.camera.dto.CameraRoomOption;
 import kr.silverbridge.main.domain.camera.dto.CameraUpdateRequest;
 import kr.silverbridge.main.domain.camera.dto.GuardianCameraView;
 import kr.silverbridge.main.domain.camera.entity.Camera;
@@ -22,6 +23,7 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.context.ApplicationEventPublisher;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.test.util.ReflectionTestUtils;
 
 import java.util.List;
@@ -33,6 +35,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyCollection;
 import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -103,10 +106,10 @@ class CameraServiceTest {
                     .thenReturn(Optional.of(existing));
 
             CameraResponse res = cameraService.register(
-                    WARD_ID, new CameraRegisterRequest("안방", "dev_7Qs4Xu9Ld2"));
+                    WARD_ID, new CameraRegisterRequest("침실", "dev_7Qs4Xu9Ld2"));
 
             assertThat(res.sessionId()).isEqualTo("ward_a9cC5f_k3m9Q2");
-            assertThat(res.label()).as("방 이름은 갱신된다").isEqualTo("안방");
+            assertThat(res.label()).as("방 이름은 갱신된다").isEqualTo("침실");
             verify(cameraRepository, never()).save(any(Camera.class));
             verify(identifierFactory, never()).newSessionId();
         }
@@ -121,7 +124,7 @@ class CameraServiceTest {
             when(cameraRepository.save(any(Camera.class))).thenAnswer(inv -> inv.getArgument(0));
 
             CameraResponse res = cameraService.register(
-                    WARD_ID, new CameraRegisterRequest("방1", "dev_stolen"));
+                    WARD_ID, new CameraRegisterRequest("작은방", "dev_stolen"));
 
             assertThat(res.deviceId()).as("도용된 토큰이 아니라 새로 발급된 토큰").isEqualTo("dev_fresh222");
             assertThat(res.sessionId()).isEqualTo("ward_N3w1Q2aZ7pLx01Bc");
@@ -152,9 +155,9 @@ class CameraServiceTest {
                     .thenReturn(Optional.of(existing));
 
             CameraResponse res = cameraService.register(
-                    WARD_ID, new CameraRegisterRequest(" 안방 ", "dev_7Qs4Xu9Ld2"));
+                    WARD_ID, new CameraRegisterRequest(" 침실 ", "dev_7Qs4Xu9Ld2"));
 
-            assertThat(res.label()).isEqualTo("안방");
+            assertThat(res.label()).isEqualTo("침실");
         }
 
         @Test
@@ -180,7 +183,7 @@ class CameraServiceTest {
             Camera others = camera(9L, OTHER_WARD_ID, "ward_zz9Q1x_aaa", "dev_bbb", "거실");
             when(cameraRepository.findById(9L)).thenReturn(Optional.of(others));
 
-            assertThatThrownBy(() -> cameraService.update(WARD_ID, 9L, new CameraUpdateRequest("안방", null)))
+            assertThatThrownBy(() -> cameraService.update(WARD_ID, 9L, new CameraUpdateRequest("침실", null)))
                     .isInstanceOf(CustomException.class)
                     .hasFieldOrPropertyWithValue("errorCode", ErrorCode.CAMERA_NOT_AUTHORIZED);
         }
@@ -218,9 +221,9 @@ class CameraServiceTest {
             Camera mine = camera(1L, WARD_ID, "ward_a9cC5f_k3m", "dev_abc", "거실");
             when(cameraRepository.findById(1L)).thenReturn(Optional.of(mine));
 
-            CameraResponse res = cameraService.update(WARD_ID, 1L, new CameraUpdateRequest("방2", false));
+            CameraResponse res = cameraService.update(WARD_ID, 1L, new CameraUpdateRequest("작은방2", false));
 
-            assertThat(res.label()).isEqualTo("방2");
+            assertThat(res.label()).isEqualTo("작은방2");
             assertThat(res.isActive()).isFalse();
         }
 
@@ -242,9 +245,9 @@ class CameraServiceTest {
             Camera mine = camera(1L, WARD_ID, "ward_a9cC5f_k3m", "dev_abc", "거실");
             when(cameraRepository.findById(1L)).thenReturn(Optional.of(mine));
 
-            CameraResponse res = cameraService.update(WARD_ID, 1L, new CameraUpdateRequest("  안​방  ", null));
+            CameraResponse res = cameraService.update(WARD_ID, 1L, new CameraUpdateRequest("  침​실  ", null));
 
-            assertThat(res.label()).isEqualTo("안방");
+            assertThat(res.label()).isEqualTo("침실");
         }
 
         @Test
@@ -415,6 +418,180 @@ class CameraServiceTest {
             cameraService.deleteAllByWard(WARD_ID);
 
             verify(eventPublisher, never()).publishEvent(any(CameraDeletedEvent.class));
+        }
+    }
+
+    @Nested
+    @DisplayName("방 규칙 - 정해진 8개 방, 한 방에 카메라 1대 (2026-10-05)")
+    class RoomRules {
+
+        @Test
+        @DisplayName("목록에 없는 방 이름은 등록·수정 모두 CAMERA_ROOM_INVALID(400), 저장·변경 없음")
+        void 목록밖_방_거절() {
+            for (String label : List.of("안방", "서재", "방1", "작은 방", "거실2")) {
+                assertThatThrownBy(() -> cameraService.register(WARD_ID, new CameraRegisterRequest(label, null)))
+                        .as("register label=[%s]", label)
+                        .isInstanceOf(CustomException.class)
+                        .hasFieldOrPropertyWithValue("errorCode", ErrorCode.CAMERA_ROOM_INVALID);
+            }
+            verify(cameraRepository, never()).save(any(Camera.class));
+
+            Camera mine = camera(1L, WARD_ID, "ward_a9cC5f_k3m", "dev_abc", "거실");
+            when(cameraRepository.findById(1L)).thenReturn(Optional.of(mine));
+            assertThatThrownBy(() -> cameraService.update(WARD_ID, 1L, new CameraUpdateRequest("안방", null)))
+                    .isInstanceOf(CustomException.class)
+                    .hasFieldOrPropertyWithValue("errorCode", ErrorCode.CAMERA_ROOM_INVALID);
+            assertThat(mine.getLabel()).isEqualTo("거실");
+        }
+
+        @Test
+        @DisplayName("8개 방은 모두 등록할 수 있다(앞뒤 공백은 정리 후 통과)")
+        void 정해진_방_허용() {
+            when(cameraRepository.save(any(Camera.class))).thenAnswer(inv -> inv.getArgument(0));
+            when(identifierFactory.newSessionId()).thenReturn("ward_N3w1Q2aZ7pLx01Bc");
+            when(identifierFactory.newDeviceId()).thenReturn("dev_new");
+
+            for (String label : List.of("거실", "침실", "주방", "화장실", "현관", "베란다", "작은방", "작은방2", " 거실 ")) {
+                assertThat(cameraService.register(WARD_ID, new CameraRegisterRequest(label, null)).label())
+                        .isEqualTo(label.strip());
+            }
+        }
+
+        @Test
+        @DisplayName("새 등록 - 같은 방에 다른 카메라가 있으면 CAMERA_LABEL_DUPLICATED(409), 저장 없음")
+        void 새등록_같은방_409() {
+            when(cameraRepository.findByWardIdAndLabel(WARD_ID, "거실"))
+                    .thenReturn(Optional.of(camera(1L, WARD_ID, "s1", "dev_1", "거실")));
+
+            assertThatThrownBy(() -> cameraService.register(WARD_ID, new CameraRegisterRequest("거실", null)))
+                    .isInstanceOf(CustomException.class)
+                    .hasFieldOrPropertyWithValue("errorCode", ErrorCode.CAMERA_LABEL_DUPLICATED);
+            verify(cameraRepository, never()).save(any(Camera.class));
+            verify(identifierFactory, never()).newSessionId();
+        }
+
+        @Test
+        @DisplayName("같은 기기가 같은 방으로 재등록하면 그대로 성공한다(자기 자신은 중복이 아니다)")
+        void 재등록_같은방_멱등() {
+            Camera existing = camera(1L, WARD_ID, "ward_a9cC5f_k3m9Q2", "dev_7Qs4Xu9Ld2", "거실");
+            when(cameraRepository.findByWardIdAndDeviceId(WARD_ID, "dev_7Qs4Xu9Ld2")).thenReturn(Optional.of(existing));
+            when(cameraRepository.findByWardIdAndLabel(WARD_ID, "거실")).thenReturn(Optional.of(existing));
+
+            CameraResponse res = cameraService.register(WARD_ID, new CameraRegisterRequest("거실", "dev_7Qs4Xu9Ld2"));
+
+            assertThat(res.sessionId()).isEqualTo("ward_a9cC5f_k3m9Q2");
+            assertThat(res.label()).isEqualTo("거실");
+        }
+
+        @Test
+        @DisplayName("같은 기기라도 다른 카메라가 쓰는 방으로 옮기면 409, 방 이름은 그대로")
+        void 재등록_다른카메라방_409() {
+            Camera existing = camera(1L, WARD_ID, "s1", "dev_1", "거실");
+            when(cameraRepository.findByWardIdAndDeviceId(WARD_ID, "dev_1")).thenReturn(Optional.of(existing));
+            when(cameraRepository.findByWardIdAndLabel(WARD_ID, "주방"))
+                    .thenReturn(Optional.of(camera(2L, WARD_ID, "s2", "dev_2", "주방")));
+
+            assertThatThrownBy(() -> cameraService.register(WARD_ID, new CameraRegisterRequest("주방", "dev_1")))
+                    .isInstanceOf(CustomException.class)
+                    .hasFieldOrPropertyWithValue("errorCode", ErrorCode.CAMERA_LABEL_DUPLICATED);
+            assertThat(existing.getLabel()).isEqualTo("거실");
+        }
+
+        @Test
+        @DisplayName("방 이름 변경 - 다른 카메라가 쓰는 방이면 409, 같은 방 그대로면 성공")
+        void 수정_중복검사() {
+            Camera mine = camera(1L, WARD_ID, "s1", "dev_1", "거실");
+            when(cameraRepository.findById(1L)).thenReturn(Optional.of(mine));
+            when(cameraRepository.findByWardIdAndLabel(WARD_ID, "주방"))
+                    .thenReturn(Optional.of(camera(2L, WARD_ID, "s2", "dev_2", "주방")));
+            when(cameraRepository.findByWardIdAndLabel(WARD_ID, "거실")).thenReturn(Optional.of(mine));
+
+            assertThatThrownBy(() -> cameraService.update(WARD_ID, 1L, new CameraUpdateRequest("주방", null)))
+                    .isInstanceOf(CustomException.class)
+                    .hasFieldOrPropertyWithValue("errorCode", ErrorCode.CAMERA_LABEL_DUPLICATED);
+            assertThat(mine.getLabel()).isEqualTo("거실");
+
+            assertThat(cameraService.update(WARD_ID, 1L, new CameraUpdateRequest("거실", null)).label()).isEqualTo("거실");
+        }
+
+        @Test
+        @DisplayName("다른 피보호자의 같은 방 이름은 상관없다 - 조회 자체가 본인 wardId로 한정된다")
+        void 다른피보호자_같은방_허용() {
+            when(cameraRepository.save(any(Camera.class))).thenAnswer(inv -> inv.getArgument(0));
+            when(identifierFactory.newSessionId()).thenReturn("ward_N3w1Q2aZ7pLx01Bc");
+            when(identifierFactory.newDeviceId()).thenReturn("dev_new");
+
+            assertThat(cameraService.register(WARD_ID, new CameraRegisterRequest("거실", null)).label()).isEqualTo("거실");
+            verify(cameraRepository).findByWardIdAndLabel(WARD_ID, "거실");
+            verify(cameraRepository, never()).findByWardIdAndLabel(eq(OTHER_WARD_ID), any());
+        }
+
+        @Test
+        @DisplayName("새 등록 경합 - id가 IDENTITY라 save()에서 INSERT가 실행돼 제약에 걸려도 같은 409로 바꾼다")
+        void 새등록_경합_save에서_제약위반_409() {
+            when(identifierFactory.newSessionId()).thenReturn("ward_N3w1Q2aZ7pLx01Bc");
+            when(identifierFactory.newDeviceId()).thenReturn("dev_new");
+            when(cameraRepository.save(any(Camera.class))).thenThrow(new DataIntegrityViolationException("insert",
+                    new RuntimeException("duplicate key value violates unique constraint \"uq_camera_ward_label\"")));
+
+            assertThatThrownBy(() -> cameraService.register(WARD_ID, new CameraRegisterRequest("거실", null)))
+                    .isInstanceOf(CustomException.class)
+                    .hasFieldOrPropertyWithValue("errorCode", ErrorCode.CAMERA_LABEL_DUPLICATED);
+            verify(eventPublisher, never()).publishEvent(any());
+        }
+
+        @Test
+        @DisplayName("Hibernate가 알려주는 제약 이름으로도 판정한다(메시지 문구에 기대지 않음)")
+        void 제약이름으로_판정() {
+            when(identifierFactory.newSessionId()).thenReturn("ward_N3w1Q2aZ7pLx01Bc");
+            when(identifierFactory.newDeviceId()).thenReturn("dev_new");
+            when(cameraRepository.save(any(Camera.class))).thenThrow(new DataIntegrityViolationException("insert",
+                    new org.hibernate.exception.ConstraintViolationException("dup", null, "uq_camera_ward_label")));
+
+            assertThatThrownBy(() -> cameraService.register(WARD_ID, new CameraRegisterRequest("거실", null)))
+                    .isInstanceOf(CustomException.class)
+                    .hasFieldOrPropertyWithValue("errorCode", ErrorCode.CAMERA_LABEL_DUPLICATED);
+        }
+
+        @Test
+        @DisplayName("방 변경 경합 - 변경 감지라 flush()에서 제약에 걸리면 같은 409로 바꾼다")
+        void 방변경_경합_flush에서_제약위반_409() {
+            Camera mine = camera(1L, WARD_ID, "s1", "dev_1", "거실");
+            when(cameraRepository.findById(1L)).thenReturn(Optional.of(mine));
+            doThrow(new DataIntegrityViolationException("update",
+                    new RuntimeException("duplicate key value violates unique constraint \"uq_camera_ward_label\"")))
+                    .when(cameraRepository).flush();
+
+            assertThatThrownBy(() -> cameraService.update(WARD_ID, 1L, new CameraUpdateRequest("주방", null)))
+                    .isInstanceOf(CustomException.class)
+                    .hasFieldOrPropertyWithValue("errorCode", ErrorCode.CAMERA_LABEL_DUPLICATED);
+        }
+
+        @Test
+        @DisplayName("방 제약이 아닌 다른 DB 제약 위반은 바꾸지 않고 그대로 올린다")
+        void 다른제약위반_그대로() {
+            when(identifierFactory.newSessionId()).thenReturn("ward_N3w1Q2aZ7pLx01Bc");
+            when(identifierFactory.newDeviceId()).thenReturn("dev_new");
+            when(cameraRepository.save(any(Camera.class))).thenThrow(new DataIntegrityViolationException("insert",
+                    new org.hibernate.exception.ConstraintViolationException("dup", null, "uq_cameras_session")));
+
+            assertThatThrownBy(() -> cameraService.register(WARD_ID, new CameraRegisterRequest("거실", null)))
+                    .isInstanceOf(DataIntegrityViolationException.class);
+        }
+
+        @Test
+        @DisplayName("방 선택지 - 8개 방을 화면 순서대로, 이미 카메라가 있는 방만 registered=true")
+        void 방선택지() {
+            when(cameraRepository.findByWardIdOrderByCreatedAtDesc(WARD_ID)).thenReturn(List.of(
+                    camera(1L, WARD_ID, "s1", "dev_1", "거실"),
+                    camera(2L, WARD_ID, "s2", "dev_2", "작은방2")));
+
+            List<CameraRoomOption> options = cameraService.getRoomOptions(WARD_ID);
+
+            assertThat(options).extracting(CameraRoomOption::label)
+                    .containsExactly("거실", "침실", "주방", "화장실", "현관", "베란다", "작은방", "작은방2");
+            assertThat(options).filteredOn(CameraRoomOption::registered).extracting(CameraRoomOption::label)
+                    .containsExactly("거실", "작은방2");
         }
     }
 }

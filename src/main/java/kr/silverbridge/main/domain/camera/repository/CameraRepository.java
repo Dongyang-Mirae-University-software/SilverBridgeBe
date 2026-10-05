@@ -17,6 +17,9 @@ public interface CameraRepository extends JpaRepository<Camera, Long> {
     // 재등록 멱등 — 같은 피보호자·같은 기기의 기존 카메라
     Optional<Camera> findByWardIdAndDeviceId(String wardId, String deviceId);
 
+    // 한 방에는 카메라 1대 - 같은 피보호자의 같은 방 이름 카메라(DB uq_camera_ward_label와 같은 기준)
+    Optional<Camera> findByWardIdAndLabel(String wardId, String label);
+
     // AI 이상감지 신호(sessionId) → 소유 피보호자 매핑
     Optional<Camera> findBySessionId(String sessionId);
 

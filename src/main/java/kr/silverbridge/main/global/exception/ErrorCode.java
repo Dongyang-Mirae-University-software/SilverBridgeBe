@@ -102,6 +102,9 @@ public enum ErrorCode {
     CAMERA_NOT_AUTHORIZED(HttpStatus.FORBIDDEN, "본인이 등록한 카메라만 사용할 수 있습니다."),
     // 보호자 경로용 - 문구는 수신자 기준이라 피보호자용(CAMERA_NOT_AUTHORIZED)과 나눈다(2026-08-06 정책)
     CAMERA_NOT_CONNECTED(HttpStatus.FORBIDDEN, "연결된 피보호자의 카메라만 볼 수 있습니다."),
+    // 방은 정해진 목록(CameraRoom)에서만 고른다, 한 방에는 카메라 1대(2026-10-05)
+    CAMERA_ROOM_INVALID(HttpStatus.BAD_REQUEST, "선택할 수 없는 방입니다. 목록에서 방을 골라주세요."),
+    CAMERA_LABEL_DUPLICATED(HttpStatus.CONFLICT, "같은 방에 이미 등록된 카메라가 있습니다."),
     CAMERA_NOT_STREAMING(HttpStatus.NOT_FOUND, "카메라가 지금 영상을 보내고 있지 않습니다."),
     CAMERA_STREAM_TICKET_INVALID(HttpStatus.UNAUTHORIZED, "영상 연결이 만료되었습니다. 다시 시도해주세요."),
     CAMERA_STREAM_LIMIT_EXCEEDED(HttpStatus.TOO_MANY_REQUESTS,

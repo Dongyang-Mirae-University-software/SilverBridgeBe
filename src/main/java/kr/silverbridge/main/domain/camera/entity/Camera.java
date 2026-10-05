@@ -16,7 +16,7 @@ import lombok.NoArgsConstructor;
  *   <li>{@code sessionId} — 카메라 고유 SessionID. 백엔드 발급, AI 서버 sessionId·보호자 노출 키.</li>
  *   <li>{@code deviceId}  — 백엔드 발급 기기 토큰(FE가 localStorage에 영속). 재등록 dedup 키. 하드웨어 지문 아님.</li>
  * </ul>
- * {@code label}은 설치 위치(방 이름 — 거실/안방/방1~3 등). 소유권·인가는 문자열 파싱이 아니라 DB 행으로 판정한다.
+ * {@code label}은 설치 위치(방 이름 — {@link CameraRoom} 목록 중 하나, 피보호자당 방마다 1대). 소유권·인가는 문자열 파싱이 아니라 DB 행으로 판정한다.
  * FK 대신 {@code String wardId}로만 저장(프로젝트 관례 — connections/inquiries 동일). createdAt/updatedAt은 {@link BaseTimeEntity}.</p>
  */
 @Entity
@@ -26,7 +26,9 @@ import lombok.NoArgsConstructor;
         },
         uniqueConstraints = {
                 @UniqueConstraint(name = "uq_cameras_session", columnNames = "session_id"),
-                @UniqueConstraint(name = "uq_cameras_ward_device", columnNames = {"ward_id", "device_id"})
+                @UniqueConstraint(name = "uq_cameras_ward_device", columnNames = {"ward_id", "device_id"}),
+                // 한 방에 카메라 1대(V58, 2026-10-05)
+                @UniqueConstraint(name = "uq_camera_ward_label", columnNames = {"ward_id", "label"})
         })
 @Getter
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
@@ -50,7 +52,7 @@ public class Camera extends BaseTimeEntity {
     @Column(name = "device_id", nullable = false, length = 64)
     private String deviceId;
 
-    // 설치 위치(방 이름) — 거실/안방/방1/방2/방3 등
+    // 설치 위치(방 이름) — CameraRoom 목록 중 하나, 피보호자당 방마다 1대
     @Column(nullable = false, length = 30)
     private String label;
 

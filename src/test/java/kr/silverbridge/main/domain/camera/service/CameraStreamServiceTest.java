@@ -8,9 +8,11 @@ import kr.silverbridge.main.domain.camera.client.AiStreamUnavailableException;
 import kr.silverbridge.main.domain.camera.config.CameraStreamProperties;
 import kr.silverbridge.main.domain.camera.dto.CameraLiveStatusResponse;
 import kr.silverbridge.main.domain.camera.dto.CameraOwner;
+import kr.silverbridge.main.domain.camera.dto.CameraResponse;
 import kr.silverbridge.main.domain.camera.dto.GuardianCameraView;
 import kr.silverbridge.main.domain.camera.dto.GuardianLiveCameraView;
 import kr.silverbridge.main.domain.camera.dto.LiveAnalysisSnapshot;
+import kr.silverbridge.main.domain.camera.dto.WardLiveCameraView;
 import kr.silverbridge.main.domain.camera.service.CameraStreamService.StopReason;
 import kr.silverbridge.main.domain.camera.service.CameraStreamTicketService.StreamTicket;
 import kr.silverbridge.main.domain.user.repository.UserRepository;
@@ -38,6 +40,7 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.net.SocketTimeoutException;
 import java.time.Duration;
+import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -100,6 +103,75 @@ class CameraStreamServiceTest {
 
     private static GuardianCameraView camera(String sessionId, String label) {
         return new GuardianCameraView(sessionId, WARD_ID, "남궁명진", label, true);
+    }
+
+    @Nested
+    @DisplayName("피보호자 내 카메라 - 연결 상태 (2026-10-05)")
+    class WardLive {
+
+        private CameraResponse mine(Long id, String sessionId, String label) {
+            return new CameraResponse(id, sessionId, "dev_" + id, label, true, 5, OffsetDateTime.parse("2026-10-05T10:00:00+09:00"));
+        }
+
+        @Test
+        @DisplayName("본인 카메라에 송출 상태를 붙인다 - running·disconnected·offline(AI 목록에 없음), AI는 1번만 부른다")
+        void 상태_구분() {
+            OffsetDateTime last = OffsetDateTime.parse("2026-10-05T10:01:00+09:00");
+            when(cameraService.getMyCameras(WARD_ID)).thenReturn(List.of(
+                    mine(1L, "s1", "거실"), mine(2L, "s2", "주방"), mine(3L, "s3", "침실")));
+            when(aiStreamClient.fetchLiveStreams()).thenReturn(Map.of(
+                    "s1", new AiLiveStream("s1", "running", last),
+                    "s2", new AiLiveStream("s2", "disconnected", null)));
+
+            List<WardLiveCameraView> views = service.getWardLiveCameras(WARD_ID);
+
+            assertThat(views).extracting(WardLiveCameraView::label, WardLiveCameraView::status)
+                    .containsExactly(
+                            org.assertj.core.groups.Tuple.tuple("거실", "running"),
+                            org.assertj.core.groups.Tuple.tuple("주방", "disconnected"),
+                            org.assertj.core.groups.Tuple.tuple("침실", "offline"));
+            assertThat(views.get(0).lastFrameAt()).isEqualTo(last);
+            assertThat(views.get(0).id()).isEqualTo(1L);
+            assertThat(views.get(0).deviceId()).isEqualTo("dev_1");
+            verify(aiStreamClient).fetchLiveStreams();
+            verify(rateLimitService).check("camera-ward-live", WARD_ID, 30, 600);
+        }
+
+        @Test
+        @DisplayName("AI 장애면 목록은 그대로, 상태만 null(확인 중) - 연결 안 됨으로 채우지 않는다")
+        void AI장애_상태null() {
+            when(cameraService.getMyCameras(WARD_ID)).thenReturn(List.of(mine(1L, "s1", "거실")));
+            when(aiStreamClient.fetchLiveStreams()).thenThrow(new AiStreamUnavailableException("down"));
+
+            List<WardLiveCameraView> views = service.getWardLiveCameras(WARD_ID);
+
+            assertThat(views).singleElement().satisfies(v -> {
+                assertThat(v.label()).isEqualTo("거실");
+                assertThat(v.status()).isNull();
+                assertThat(v.lastFrameAt()).isNull();
+            });
+        }
+
+        @Test
+        @DisplayName("카메라가 없으면 AI를 부르지 않는다")
+        void 카메라없음_AI미호출() {
+            when(cameraService.getMyCameras(WARD_ID)).thenReturn(List.of());
+
+            assertThat(service.getWardLiveCameras(WARD_ID)).isEmpty();
+            verify(aiStreamClient, never()).fetchLiveStreams();
+        }
+
+        @Test
+        @DisplayName("속도 제한에 걸리면 본인 카메라 조회·AI 호출 없이 429")
+        void 속도제한() {
+            org.mockito.Mockito.doThrow(new TooManyRequestsException(60))
+                    .when(rateLimitService).check(anyString(), anyString(), org.mockito.ArgumentMatchers.anyInt(),
+                            org.mockito.ArgumentMatchers.anyInt());
+
+            assertThat(errorOf(() -> service.getWardLiveCameras(WARD_ID))).isEqualTo(ErrorCode.TOO_MANY_REQUESTS);
+            verify(cameraService, never()).getMyCameras(any());
+            verify(aiStreamClient, never()).fetchLiveStreams();
+        }
     }
 
     @Nested

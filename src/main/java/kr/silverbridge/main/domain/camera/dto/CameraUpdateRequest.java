@@ -15,7 +15,8 @@ import kr.silverbridge.main.global.validation.VisibleText;
 @Schema(description = "카메라 수정 요청 (부분 수정 — null 필드는 미변경)")
 public record CameraUpdateRequest(
 
-        @Schema(description = "설치 위치(방 이름). 보낼 경우 빈 값·공백만은 불가", example = "안방", nullable = true)
+        @Schema(description = "설치 위치(방). 보낼 경우 거실·침실·주방·화장실·현관·베란다·작은방·작은방2 중 하나, "
+                + "다른 카메라가 쓰는 방은 불가", example = "침실", nullable = true)
         @VisibleText(message = "설치 위치(방 이름)를 입력해주세요.")
         @NoControlChars
         @Size(max = 30, message = "설치 위치는 최대 30자입니다.")
