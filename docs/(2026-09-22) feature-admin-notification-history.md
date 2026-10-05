@@ -42,6 +42,7 @@
 | `NO_PHONE` | 등록된 전화번호 없음 | 문자·알림톡 |
 | `PROVIDER_REJECTED` | 발송사가 접수를 거부함 | Solapi `SolapiMessageNotReceivedException` |
 | `PROVIDER_ERROR` | 발송 서버 오류 | Solapi 빈 응답·알 수 없는 오류 |
+| `RATE_LIMITED` | 문자 발송 한도 초과로 생략됨 | SOS 문자 폴백이 수신자별 시간당 30건 초과(2026-10-05, `SmsFallbackLimiter`) |
 | `UNEXPECTED_ERROR` | 처리 중 오류 | 채널이 예외를 던지거나 null을 반환(디스패처가 격리) |
 
 - **예외 원문은 저장하지 않는다** - 토큰·전화번호가 섞일 수 있다.

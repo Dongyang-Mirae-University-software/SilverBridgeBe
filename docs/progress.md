@@ -1660,3 +1660,9 @@ REST API Key 단독 대비 보안 강화 — 인가코드 탈취 시 토큰 발�
 - 구현: `SmsFallbackProperties`·`SmsFallbackLimiter` 신규, `NotificationDispatcher.dispatchMandatory`에서 문자 직전 확인. 키는 (알림 종류, 수신자)로 wardId(표시 전용)를 쓰지 않음.
 - 검증: 단위 통과, `build -x test` 통과. Opus 적대적 검토 반영: TTL 없는 키 경합(원자 Lua)·실패 발송 환불 수정, 전원 초과 시 쿨다운 해제·보호자 단위 한도는 수용.
 - 상세: `docs/(2026-10-05) feature-sos-sms-fallback-cap.md`
+
+### [2026-10-05] SOS 문자 폴백 상한 영향 범위 점검 (템플릿 C, PR #305) - PASS
+
+- 🔴 0 · 🟠 0 · 🟡 1 · 🟢 4. 변경은 디스패처 문자 폴백 직전 한 곳이고 `ChannelFailureReason.RATE_LIMITED` 소비처(관리자 DTO·집계·이력 JSONB)는 모두 값을 문자열/라벨로 다뤄 깨지지 않음. 정책 종류는 `WARD_SOS` 하나뿐이며 기존 테스트가 고정.
+- 🟡 M-1: 새 사유가 관리자 알림 이력 계약·FE 타입(Notion)·프로젝트_설명·CLAUDE.md에 없던 drift - 정정 완료. 🟢 L-1 Swagger "항상 발송" 설명에 문자 상한 미기재(코드 변경이라 제안), L-2~L-4 수용.
+- 상세: `docs/(2026-10-05) audit-impact-sms-fallback-cap.md`
