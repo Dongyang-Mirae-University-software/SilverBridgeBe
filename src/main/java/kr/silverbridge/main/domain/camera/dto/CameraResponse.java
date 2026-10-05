@@ -17,7 +17,7 @@ public record CameraResponse(
         @Schema(description = "카메라 ID", example = "1")
         Long id,
 
-        @Schema(description = "카메라 고유 SessionID (AI sessionId)", example = "ward_a9cC5f_k3m9Q2")
+        @Schema(description = "카메라 고유 SessionID (AI sessionId)", example = "ward_k3m9Q2aZ7pLx01Bc")
         String sessionId,
 
         @Schema(description = "기기 토큰 (AI cameraIdentifier · FE localStorage 저장값)", example = "dev_7Qs4Xu9Ld2")

@@ -114,14 +114,16 @@ SilverBridge는 노인(피보호자)과 그 가족(보호자)을 연결하는 �
                    ▶ 태그(그룹) 규칙 (2026-08-07 통일): "<역할> - <도메인>"
                      역할은 공통 / 피보호자 / 보호자 / 관리자 4가지뿐이며,
                      "누가 쓰는지 → 무슨 기능인지" 두 단계로 읽히게 했습니다.
-                     현재(2026-09-30) 21개 태그 / 28개 컨트롤러 / 94개 엔드포인트가 전부 분류돼 있고,
+                     현재(2026-10-05) 22개 태그 / 31개 컨트롤러 / 103개 엔드포인트가 분류돼 있고,
                      표시 순서도 공통 → 피보호자 → 보호자 → 관리자로 고정입니다.
                      예) 공통 - 인증 / 공통 - 내 계정 / 공통 - 알림 설정 / 공통 - 공지사항 /
-                         피보호자 - 연결·SOS·복약·카메라 /
+                         피보호자 - 연결·SOS·복약·카메라·이상감지 영상 /
                          보호자 - 연결·SOS 이력·복약·이상감지·카메라·문의 /
                          관리자 - 공지사항·문의·대시보드·회원관리·연결 관리·이상감지·알림 이력
                      ⚠️ 태그 설명은 SwaggerConfig.tags()에 모아 둡니다 — 새 컨트롤러를 만들면
                        여기에 등록해야 설명 없는 태그가 뒤에 붙지 않습니다.
+                       (2026-10-05 기준 "피보호자 - 이상감지 영상"이 아직 등록돼 있지 않아
+                        설명 없이 맨 뒤에 붙습니다 - 코드 수정 필요)
 
 
 --------------------------------------------------------------------------------
@@ -155,7 +157,8 @@ SilverBridge는 노인(피보호자)과 그 가족(보호자)을 연결하는 �
         |  복약 체크 --------------->  |  --- 화면 즉시 갱신 --------> |
         |                              |                               |
     [카메라]---> [AI 서버] ------->    |  --- 화재 알림 ------------->  |
-                                       |  <-- "진짜였나요?" 답변 ----- |
+                     |                 |  <-- "진짜였나요?" 답변 ----- |
+                     +-- 영상·상태 --> |  --- 중계(연결된 보호자만) -> |
                                        |                               |
                                        |  --- 숫자 세기 --> [관리자 화면]
 
@@ -206,7 +209,7 @@ SilverBridge는 노인(피보호자)과 그 가족(보호자)을 연결하는 �
       전화받은 사람 말고 다른 가족도 상황을 알아야 하기 때문입니다.
 
 
-  ▶ ③ AI 이상감지 - 화재를 감지해서 관리자 통계까지  (자세히: 3-10, 3-11, 3-11-A, 3-11-B)
+  ▶ ③ AI 이상감지 - 화재를 감지해서 관리자 통계까지  (자세히: 3-10, 3-11, 3-11-A, 3-11-B, 3-11-D)
 
     이 프로젝트에서 가장 긴 흐름입니다. 6칸으로 이어집니다.
 
@@ -225,6 +228,8 @@ SilverBridge는 노인(피보호자)과 그 가족(보호자)을 연결하는 �
                             (카카오 알림톡은 보호자에게만 갑니다. 승인받은 문구가 보호자용이라서요.)
                          → 사람에게는 성기게 보냅니다: 보호자 5분, 본인 3분에 한 번
                             (기록은 촘촘히, 알림은 성기게 - 놀라게 하지 않으려고)
+                         → 알림과 따로, 감지 앞 3초 + 뒤 2초짜리 영상(5초 클립)을 AI에서 받아
+                            저장합니다(2026-10-04, 3-11-D). 클립이 실패해도 기록·알림은 그대로입니다.
                             |
     [5] 하나로 묶고 물어보기
                          화재가 이어지면 기록은 계속 쌓이지만, 그걸 하나의 "상황"으로 묶습니다.
@@ -322,7 +327,9 @@ SilverBridge는 노인(피보호자)과 그 가족(보호자)을 연결하는 �
 
   ▶ ⑦ 회원 탈퇴 - 두 걸음에 나눠서 지웁니다         (자세히: 7장 보안 정책)
 
-    탈퇴 신청 (본인 확인: 일반 가입은 비밀번호, 카카오는 "탈퇴"라고 입력)
+    탈퇴 신청 (본인 확인: 일반 가입은 비밀번호, 카카오는 "탈퇴" 또는 "회원탈퇴"라고 입력)
+      ※ 관리자는 스스로 탈퇴할 수 없습니다(403 ADMIN_CANNOT_WITHDRAW, 2026-10-02).
+        마지막 관리자가 지워지면 운영할 사람이 없어지기 때문입니다.
       → [1걸음] 계정을 "탈퇴 중"으로 바꿉니다
       → 그 사이에 정리할 일들을 합니다
            연결 끊고 상대에게 알리기 / 로그인 정보 지우기 / 등록했던 약 정리하기
@@ -357,6 +364,22 @@ SilverBridge는 노인(피보호자)과 그 가족(보호자)을 연결하는 �
     연결 대신 해 주기          → 시니어가 수락을 못 눌러 연결이 안 될 때 관리자가 대신
                                  연결하거나 끊습니다 (3-13). 동의 없이 정보를 여는
                                  조작이라 양쪽에 알리고 기록을 남깁니다
+    ⚠️ 관리자는 집 안 영상(실시간 카메라·이상감지 클립)을 볼 수 없습니다. 볼 수 있는 길을
+      만들지 마세요 - 이 서비스에서 가장 민감한 데이터입니다.
+
+
+  ▶ ⑨ 보호자 실시간 카메라 보기 - 백엔드가 중계합니다  (자세히: 3-10 안의 "실시간 보기")
+
+    보호자가 카메라 화면을 엶
+      → 백엔드가 "지금 연결된 피보호자의, 켜져 있는 등록 카메라인가"를 확인
+      → 확인되면 백엔드가 AI 서버에서 영상·상태를 받아 그대로 넘겨 줍니다
+         (브라우저는 AI 서버에 직접 붙지 않습니다. AI 키는 서버 안에만 있습니다)
+      → 영상(<img>)은 로그인 토큰 대신 1회용 티켓(60초)을 주소에 붙여 엽니다
+      → 보는 중에도 60초마다 연결·계정 상태를 다시 확인하고, 한 번에 최대 30분까지만 엽니다
+      → "지금 분석 중 / 정상 / 화재" 같은 상태는 화면 갱신(웹소켓)으로만 보냅니다(푸시 없음)
+
+    ※ 2026-10-03 전에는 FE 프록시가 AI 키를 붙여 모든 집 영상을 로그인 없이 볼 수 있었습니다.
+      그래서 "백엔드는 영상을 중계하지 않는다"던 설계를 뒤집고 백엔드가 인가 후 중계합니다.
 
 
   ▶ 모든 기능에 공통으로 적용되는 약속 (자꾸 잊게 되는 것들)
@@ -423,6 +446,15 @@ SilverBridge는 노인(피보호자)과 그 가족(보호자)을 연결하는 �
     → verificationNonce 누락/불일치 시 SMS_NOT_VERIFIED 400
       (phone 단일 식별만으로 인증 우회 가입하던 결함 차단 — H-5)
 
+  ※ 이메일은 소문자로 바꿔 저장·조회합니다 (2026-10-02, V55 비가역).
+    "User@Mail.com"과 "user@mail.com"은 같은 계정입니다. DB도 lower(email) 기준으로 중복을 막습니다.
+  ※ 일반 가입에서 "kakao_숫자@kakao.com" 형태의 이메일은 받지 않습니다 - 카카오 이메일이 없는
+    카카오 계정에 서버가 붙이는 가상 이메일과 겹쳐 남의 카카오 계정 자리를 선점할 수 있기 때문입니다.
+  ※ 이름 등 화면에 보이는 글자는 보이지 않는 문자·제어문자·채움 문자만으로 된 값을 막습니다
+    (global/validation의 TextSanitizer·@VisibleText·@NoControlChars - 도메인마다 따로 만들지 말 것).
+  ※ 인증번호 확인은 비교 전에 시도 횟수를 먼저 잡고 맞히면 돌려줍니다(동시 요청으로 5회를 넘지 못하게).
+    확인 API에도 IP 속도 제한이 있습니다. nonce 소비는 여전히 "모든 검증이 끝난 마지막"입니다.
+
 
   [ 3-2. 로그인 / 로그아웃 / 토큰 재발급 ]
   ─────────────────────────────
@@ -441,6 +473,10 @@ SilverBridge는 노인(피보호자)과 그 가족(보호자)을 연결하는 �
     → 폐기된 옛 refreshToken이 다시 들어왔는데 같은 사용자에게 다른
       refreshToken이 남아 있으면 도난 신호로 간주 → 해당 사용자의 모든
       refreshToken 강제 폐기 + access_log에 TOKEN_REUSE_DETECTED 기록 (H-3)
+    → 단, 다른 기기에서 다시 로그인해서 밀려난 refreshToken은 도난이 아니라 그냥
+      INVALID_TOKEN(401)입니다 (2026-10-02). 이걸 도난으로 보면 정상 사용자의 세션이 통째로 끊깁니다.
+      (사용자별 마지막 로그인 시각 refresh:login-at:{userId}로 구분)
+    → accessToken을 refresh 자리에 넣어도 정상 세션을 폐기하지 않고 거절만 합니다(typ 검사).
     → POST /api/auth/refresh 도 1분 10회 rate limit 적용 (M-8)
 
   로그아웃:
@@ -460,7 +496,11 @@ SilverBridge는 노인(피보호자)과 그 가족(보호자)을 연결하는 �
     - INACTIVE 안내는 비밀번호 검증을 통과한 본인에게만 노출 (H-1)
     - 로그인 실패 잠금은 user.id 기준으로 5회 실패 시 30분 잠금
       (LOGIN_LOCKED 429). 임의 이메일로 정상 사용자를 잠그는 DoS 차단 (H-2)
-      ※ 미가입 이메일은 잠금 카운터에 영향 없음
+      ※ 비밀번호를 비교하기 전에 시도를 먼저 잡아 동시 요청으로도 5회를 넘지 못합니다 (2026-10-02)
+      ※ 미가입 이메일도 같은 방식으로 셉니다(이메일 해시 기준) - 응답·잠금 동작만으로
+        가입 여부를 구분하지 못하게 하려는 것입니다 (2026-10-02, 예전엔 "영향 없음"이었음)
+      ※ 비밀번호 변경·탈퇴의 "현재 비밀번호" 확인 실패는 로그인과 별도로 userId별로 잠급니다
+        (user:pwfail·user:pwlock). 비밀번호 재설정·변경에 성공하면 잠금이 풀립니다.
       ※ 5회/30분 값은 application.yaml auth.login.* 로 외부화 (M-12)
     - INACTIVE 계정은 로그인 차단 + Refresh Token 즉시 삭제
       (login·kakaoLogin·refresh 세 경로 모두 일관 적용, H-4)
@@ -480,18 +520,24 @@ SilverBridge는 노인(피보호자)과 그 가족(보호자)을 연결하는 �
     → isNewUser=false, accessToken + refreshToken 반환
 
   신규 회원 가입 (4단계):
-    1) POST /api/auth/signin/kakao       → isNewUser=true, kakaoId/이메일 반환
+    1) POST /api/auth/signin/kakao       → isNewUser=true, kakaoId/이메일/pendingToken 반환
                                             (이름은 항상 null — 카카오 닉네임 미사용, 본인 실명 직접 입력)
     2) POST /api/auth/signup/sms/send    → 전화번호 SMS 발송
     3) POST /api/auth/signup/sms/verify  → SMS 인증 확인 → verificationNonce 반환
-    4) POST /api/auth/signup/kakao       → 역할(WARD/GUARDIAN) + 전화번호 + 성별 + 생년월일 +
-                                            우편번호 + 주소 + 상세주소 + verificationNonce 입력 후
-                                            최종 가입 (모든 필드 필수, 성공 시 201 Created)
+    4) POST /api/auth/signup/kakao       → kakaoId + pendingToken + 역할(WARD/GUARDIAN) + 전화번호 +
+                                            성별 + 생년월일 + 우편번호 + 주소 + 상세주소 +
+                                            verificationNonce 입력 후 최종 가입
+                                            (프로필 이미지 외 필수, 성공 시 201 Created)
 
   ※ 엔드포인트 정정: 로그인은 /api/auth/signin/kakao, 가입 완료는
     /api/auth/signup/kakao (과거 메모의 /api/auth/kakao·/kakao/register는 오기).
   ※ kakaoId는 1번 응답의 값을 4번까지 계속 사용합니다.
   ※ 3번 응답의 verificationNonce를 4번 요청에 첨부해야 가입됩니다 (H-5).
+  ※ pendingToken (2026-10-02): 1번 응답으로 받은 일회용 토큰을 4번에 함께 보내야 가입됩니다.
+    kakaoId만 알면 남의 가입 대기를 가로챌 수 있었던 문제를 막습니다. 서버에는 해시만 두고
+    30분 동안 유효합니다. 카카오 로그인을 다시 하면 새 토큰으로 바뀌어 옛 토큰은 안 됩니다.
+  ※ 프로필 이미지 주소는 카카오 CDN(kakaocdn.net, https)만 받습니다. http로 오면 https로 바꿔
+    저장하고, 그 밖의 주소는 이미지 없이 진행합니다. 파일 서버 삭제도 우리 파일 서버 주소에만 보냅니다.
   ※ isNewUser 값에 따라 응답 구조가 달라집니다.
   ※ 2026-05-25 보안 강화: 백엔드의 인가코드→토큰 교환 요청에 client_secret를 함께 전송합니다.
     값은 KAKAO_CLIENT_SECRET 환경변수로만 주입(코드/Git 비노출)하며, 카카오 콘솔
@@ -580,9 +626,10 @@ SilverBridge는 노인(피보호자)과 그 가족(보호자)을 연결하는 �
   회원 탈퇴:
     DELETE /api/user/me   → 계정·관련 데이터 영구 삭제(hard delete)
     → 일반(LOCAL) 가입자: password 필수
-    → 카카오(KAKAO) 가입자: confirmation 필드에 "탈퇴" 정확히 입력 필수
-      (비밀번호가 없어 accessToken 단독 탈취만으로 임의 삭제되던
+    → 카카오(KAKAO) 가입자: confirmation 필드에 "탈퇴" 또는 "회원탈퇴" 입력 필수
+      (2026-10-01 FE 안내 문구와 맞춤. 비밀번호가 없어 accessToken 단독 탈취만으로 임의 삭제되던
        위험 차단 — H-6, 불일치 시 WITHDRAW_CONFIRMATION_MISMATCH 400)
+    → 관리자(ADMIN)는 본인 탈퇴 불가 — 403 ADMIN_CANNOT_WITHDRAW (2026-10-02)
     → 2단계 처리 (2026-05-26 soft delete→hard delete 전환):
       1) withdraw(): 본인 확인 + deactivate() + UserWithdrawnEvent 발행 → 커밋
          AFTER_COMMIT 리스너가 user 행이 살아있는 동안 연결 해제(상대 알림)·
@@ -606,10 +653,18 @@ SilverBridge는 노인(피보호자)과 그 가족(보호자)을 연결하는 �
     → body: { "targetId": "피보호자 6자리 ID" }
     → "수락 대기(PENDING)" 상태로 저장됩니다
     → 피보호자에게 알림이 갑니다 (앱 푸시 + 보고 있는 화면에 즉시)
+    → 같은 (보호자, 피보호자) 쌍은 24시간에 5건까지만 신청할 수 있습니다 (2026-10-02).
+      6번째부터 429 CONNECTION_REQUEST_COOLDOWN(retryAfterSeconds = 남은 시간).
+      이미 대기·연결 중이라 거절된 요청(409)은 세지 않고, 피보호자가 수락하면 초기화됩니다.
+      거절·취소로는 초기화하지 않습니다(신청→거절 반복으로 제한이 풀리지 않게).
+      Redis 장애 시에는 제한 없이 통과시킵니다. 관리자 강제 연결에는 적용하지 않습니다.
 
   수락 / 거절 (피보호자):
     → POST   /api/ward/connection/{연결ID}/accept            → 연결됨(ACTIVE)  → 보호자에게 알림
     → DELETE /api/ward/connection/request/{연결ID}/refusal   → 거절됨          → 보호자에게 알림
+    ※ 수락할 때 양쪽 역할을 다시 확인합니다(2026-10-02). 신청 뒤 관리자가 역할을 바꿨으면
+      400 INVALID_CONNECTION_ROLE, 보호자가 정지·탈퇴 진행 중이면 400 CONNECTION_TARGET_NOT_ACTIVE.
+      같은 연결이 동시에 만들어지면 CONNECTION_ALREADY_EXISTS로 답합니다.
 
   목록 보기:
     → GET /api/guardian/connection/select    → 보호자: 내 피보호자 (연결된 사람 + 대기 중인 사람)
@@ -642,6 +697,9 @@ SilverBridge는 노인(피보호자)과 그 가족(보호자)을 연결하는 �
     ※ 취소할 때만 알림이 없는 건 실수가 아닙니다.
       거절은 "싫다"는 분명한 의사표시라 상대가 알아야 하지만, 신청을 없던 일로 하는 건
       굳이 알릴 일이 아니라고 판단했습니다. 나중에 "통일성" 때문에 알림을 붙이지 마세요.
+      단, 피보호자가 열어 둔 "받은 신청" 목록이 갱신되도록 화면 갱신 신호
+      (connection-request-cancelled)만 보냅니다(2026-10-01, 푸시·문자·알림 이력 없음).
+    ※ 관리자 강제 연결·해제 때 가는 화면 신호에는 type/title/body가 함께 실립니다(2026-10-02).
 
 
   긴급 SOS (피보호자만 누를 수 있습니다):
@@ -656,6 +714,12 @@ SilverBridge는 노인(피보호자)과 그 가족(보호자)을 연결하는 �
       · 짧은 시간(30초)에 여러 번 눌러도 알림은 한 번만 갑니다(놀라게 하지 않으려고).
         이 억제 장치에 문제가 생기면 억제를 포기하고 알림을 보냅니다 - 안 가는 것보다 낫기 때문입니다.
         ※ 기록은 누를 때마다 남습니다. 억제되는 건 알림뿐입니다.
+        ※ 알림이 보호자 누구에게도 전달되지 않았으면 이 30초 쉬기를 바로 풉니다(2026-10-02).
+          다시 눌렀을 때 알림이 막히지 않게 하려는 것입니다.
+      · SOS 알림은 전용 발송 줄(urgentNotificationExecutor)을 씁니다(2026-10-02).
+        연결·문의 같은 일반 알림이 밀려도 SOS·화재 알림은 기다리지 않습니다.
+      · 로그인 정보 저장소(Redis)가 고장 나도 SOS(POST /api/ward/sos)만은 통과시킵니다(2026-10-02).
+        다른 API는 이때 503입니다. 토큰 서명·만료 검사는 그대로 합니다(7장 참고).
       · 계속 누르면 몇 번째인지 알려줍니다 (2026-09-11 추가).
         30초가 지나 다시 알림이 나갈 때, 최근 10분 안에 누른 횟수가 2번 이상이면
           "OOO님이 계속 도움을 요청하고 있습니다. (최근 10분 내 N번째)"
@@ -680,9 +744,12 @@ SilverBridge는 노인(피보호자)과 그 가족(보호자)을 연결하는 �
   SOS 기록 보기 (보호자만):
     → GET /api/guardian/sos/history
       · 조건: wardId(안 보내면 연결된 피보호자 전원의 기록을 합쳐서) /
+              triggerType(선택, SOS_BUTTON·GUARDIAN_CALL - 2026-10-02) /
               page(기본 0) / size(기본 20, 최대 50)
       · 한 건에 들어 있는 것:
         { sosEventId, wardId, wardName, triggeredAt, location, triggerType }
+      · counts.all / counts.sosButton / counts.guardianCall: 경로별 전체 건수(2026-10-02).
+        triggerType·페이지와 상관없이 조회 범위 전체 기준이라 탭 숫자를 이 값으로 그리면 됩니다.
       · triggerType은 화면에 보여주기 위한 것일 뿐, 알림을 다르게 보내지 않습니다.
         (SOS 버튼이든 보호자에게 건 전화든 알림은 똑같이 나갑니다.)
       · 지금 연결되어 있는 피보호자의 기록만 볼 수 있습니다.
@@ -801,6 +868,13 @@ SilverBridge는 노인(피보호자)과 그 가족(보호자)을 연결하는 �
       - 같은 약·같은 날·같은 회차는 기록을 남겨 두 번 가지 않게 합니다(서버가 재시작돼도 마찬가지).
       - 문제가 생기면 MEDICATION_REMINDER_ENABLED=false 로 보내는 것만 멈출 수 있습니다.
         (등록·체크·조회는 그대로 동작합니다.)
+      - 2026-10-02 보강:
+        · 연결된 보호자가 한 명도 없는 피보호자의 약은 알림을 보내지 않습니다. 약은 지우지 않아
+          보호자가 다시 연결되면 그대로 이어집니다.
+        · 먹는 시각을 "이미 지난 시각"으로 고치면 그날 보낸 기록을 지우지 않습니다
+          (지난 시각으로 알림이 또 나가면 거짓 알림이 됩니다).
+        · 오늘 늦게 등록한 약은 그날 저녁 "체크되지 않은 약" 요약에서 뺍니다
+          (등록하기 전 시각의 약이 "체크 안 됨"으로 잡히지 않게).
 
 
   문의하기 / 고객센터 (2026-07-01 추가):
@@ -809,7 +883,7 @@ SilverBridge는 노인(피보호자)과 그 가족(보호자)을 연결하는 �
     상태 2가지: WAITING(답변 대기) / ANSWERED(답변 완료). 한글로 보여주는 건 프론트가 합니다.
 
     보호자가 쓰는 것:
-    → POST /api/guardian/inquiry        → 문의 쓰기 (처음엔 답변 대기)
+    → POST /api/guardian/inquiry        → 문의 쓰기 (처음엔 답변 대기, 1분 5건·1시간 30건까지 - 2026-10-02)
     → GET  /api/guardian/inquiry        → 내 문의 목록 (내가 쓴 것만, 최신순)
     → GET  /api/guardian/inquiry/{id}   → 내 문의 상세 (내가 쓴 것만)
                                           남의 문의를 보려 하면 "없다"고 숨기지 않고
@@ -835,6 +909,8 @@ SilverBridge는 노인(피보호자)과 그 가족(보호자)을 연결하는 �
     ※ 문의를 쓴 사람이 탈퇴하면 그 문의도 함께 지워집니다.
       답변한 관리자가 없어져도 답변 내용은 남습니다.
     ※ 관리자 화면의 "아직 답 못 한 문의" 숫자는 3-11-B의 운영 현황에 들어 있습니다.
+    ※ 관리자 목록 4종(회원·문의·이상감지·알림 이력)은 page(0 이상, 기본 0) / size(기본 20, 최대 50)로
+      같은 기준을 씁니다(2026-10-02). 공지·문의 목록의 본문은 100자로 줄여 내리고, 전문은 상세 API로 봅니다.
 
 
   [ 3-7. 푸시 알림(FCM) 토큰 관리 ]
@@ -1012,6 +1088,9 @@ SilverBridge는 노인(피보호자)과 그 가족(보호자)을 연결하는 �
     DELETE /api/admin/announcement/delete/{id}          → 공지 삭제
     + 공지 임시저장 API: /api/admin/announcement/draft/*
 
+  ※ 조회수는 DB에서 한 번에 올려(원자 증가) 동시에 열어도 빠지지 않습니다.
+    updated_at은 제목·내용이 바뀔 때만 갱신됩니다 - 조회수만 올라도 "수정됨"으로 보이던 문제(V56 트리거, 2026-10-02).
+
 
   [ 3-9. 공지사항 조회 (일반 사용자) ]
   ─────────────────────────────
@@ -1033,7 +1112,7 @@ SilverBridge는 노인(피보호자)과 그 가족(보호자)을 연결하는 �
   ※ 공지는 작성 즉시 게시되므로 별도 published 상태 없이 전부 조회됩니다.
 
 
-  [ 3-10. 이상감지 카메라 등록·관리 ]  (camera, 2026-07-13 추가)
+  [ 3-10. 이상감지 카메라 등록·관리 / 보호자 실시간 보기 ]  (camera, 2026-07-13 추가 / 실시간 보기 2026-10-03)
   ─────────────────────────────
   이상감지의 전제인 "이 카메라는 누구 집 것인가"를 백엔드가 소유권으로 관리합니다.
   소유자 = 피보호자(ward_id). 보호자는 ACTIVE 연결을 통해 전이 접근합니다(피보호자당 여러 대 = 방별).
@@ -1053,6 +1132,66 @@ SilverBridge는 노인(피보호자)과 그 가족(보호자)을 연결하는 �
     없는 카메라는 404. (2026-07-14 정책: 404 위장 → 403 명시 안내)
   ※ 카메라 등록 시 CameraRegisteredEvent가 발행돼 AI 세션 목록을 즉시 재요청합니다
     ("스트리밍 먼저, 등록 나중" 순서에서도 구독이 살아나도록).
+  ※ 등록·수정의 방 이름 검증은 같습니다(빈 값·보이지 않는 문자·제어문자 불가, 최대 30자),
+    기기 토큰은 최대 64자 (2026-10-02).
+  ※ camera.is_active는 화면 표시용입니다. 꺼도 감지·화재 알림은 계속됩니다(2026-10-02 결정).
+    알림을 끄는 뜻으로 쓰려면 정책부터 바꿔야 합니다. 단, 꺼진 카메라는 실시간 보기 대상이 아닙니다.
+  ※ 카메라를 지우면(CameraDeletedEvent) 그 카메라의 이상감지 영상 클립도 함께 지웁니다(3-11-D).
+
+  ▶ 실시간 보기 (보호자, 2026-10-03)
+    영상·상태는 FE → 백엔드 → AI 서버 순서로 중계합니다. 브라우저는 AI 서버에 직접 붙지 않고,
+    AI 키는 서버 안에서 X-API-Key 헤더로만 씁니다(FE에 AI 주소·키를 다시 내리지 말 것).
+
+    보호자(GUARDIAN 전용, Authorization: Bearer):
+    → GET  /api/guardian/camera/live                   → 볼 수 있는 카메라 목록
+                 [{ sessionId, wardId, wardName, label, status, lastFrameAt }]
+                 status = running / disconnected / offline, null = AI 장애로 확인 불가
+                 (모르는 값을 "꺼짐"으로 채우지 않습니다)
+    → GET  /api/guardian/camera/{sessionId}/status     → { status, lastFrameAt, fps, isAnalyzing, analysis }
+                 AI가 모르는 세션이면 offline. analysis = 받아 둔 최근 분석(없으면 null)
+    → GET  /api/guardian/camera/{sessionId}/latest-frame → 최근 한 장(image/jpeg, Cache-Control: no-store)
+    → POST /api/guardian/camera/{sessionId}/stream-ticket → { ticket, expiresInSeconds: 60 }
+    영상(<img src>):
+    → GET  /api/camera/stream/{sessionId}/mjpeg?ticket=  → MJPEG 중계 (이 경로 하나만 로그인 없이 열림)
+
+    ★ 볼 수 있는 범위: 지금 ACTIVE로 연결된 피보호자의, 켜져 있고 백엔드에 등록된 카메라만입니다.
+      모든 경로가 CameraService.getViewableCamera 한 곳을 지납니다(getMyWards 금지).
+      피보호자용·관리자용 시청 API는 없습니다.
+    ★ 티켓: <img>는 인증 헤더를 못 보내서, 한 사용자·한 카메라·60초·한 번만 쓰는 티켓을 주소에 붙입니다.
+      ⚠️ accessToken을 주소(쿼리)로 받지 마세요 - 프록시·접속 로그에 30분짜리 전권 토큰이 남습니다.
+      티켓을 쓸 때 계정 상태·토큰 무효화·연결을 다시 확인합니다.
+    ★ 보는 중에도: 60초마다 계정·연결·카메라·무효화를 다시 확인해 끊고, 영상 1건은 최대 30분입니다
+      (AI 영상은 스스로 끝나지 않습니다. FE는 새 티켓으로 다시 엽니다).
+      연결 해제·정지가 반영되기까지 최대 60초 늦을 수 있습니다(수용).
+    ★ 동시 시청: 서버 전체 20 / 한 사람 2 (넘으면 429). 영상 1건이 요청 스레드 1개를 붙들어서,
+      상한을 없애면 SOS·로그인 같은 다른 API까지 멈춥니다. 상한·티켓은 서버 1대 기준입니다.
+    ★ 속도 제한(보호자별, 분/시간 - 2026-10-04): 목록·상태 30/600, 스냅샷 60/1200, 티켓 20/300.
+      인가보다 먼저 걸고, Redis 장애 때는 막지 않습니다.
+    ★ AI 호출은 전체 8초 안에 끝냅니다(목록·상태·스냅샷). 리다이렉트는 따라가지 않습니다(키 유출 방지).
+      ⚠️ 영상 연결은 HttpURLConnection.disconnect()로 닫습니다. Spring 응답의 close()는 끝없는
+        영상을 끝까지 읽으려다 멈춥니다(자리·스레드 누수).
+
+    오류:
+      401 CAMERA_STREAM_TICKET_INVALID   티켓 없음·만료·재사용·다른 카메라용
+      403 CAMERA_NOT_CONNECTED           연결 안 됨·수락 대기·해제 ("연결된 피보호자의 카메라만 볼 수 있습니다.")
+                                         + [IDOR-ATTEMPT] WARN
+      403 INACTIVE_USER                  정지 계정이 티켓으로 영상 요청
+      404 CAMERA_NOT_FOUND               없는·꺼진·백엔드 미등록 카메라
+      404 CAMERA_NOT_STREAMING           AI가 그 세션을 모름(송출 안 함)·프레임 없음
+      429 CAMERA_STREAM_LIMIT_EXCEEDED   동시 시청 상한 / 429 TOO_MANY_REQUESTS(+Retry-After) 속도 제한
+      503 CAMERA_STREAM_UNAVAILABLE      AI 장애·키 미설정·서버 종료 중 / 티켓 저장소(Redis) 장애는 503 SERVICE_UNAVAILABLE
+
+    분석 상태(화면 갱신 전용): STOMP /topic/{보호자ID}/camera-analysis (4장)
+      { sessionId, wardId, status, detectedType, detectedTypeLabel, confidence, danger, analyzedAt(KST) }
+      - 상태가 바뀔 때만, 같은 카메라는 최소 2초 간격으로 ACTIVE 보호자에게만 보냅니다.
+      - 푸시·문자·알림 이력이 없습니다. 화재 알림(anomaly-detected)과 별개이니 섞지 마세요.
+      - AI 연결이 끊기면 status=null(확인 불가)을 보냅니다. 마지막 "정상"이 화면에 남지 않게 하려는 것입니다.
+      - 세션이 끝나면 status=offline(분석 값은 null). 꺼진 카메라에는 보내지 않습니다.
+      - 이 분석 작업 줄(liveAnalysisExecutor)이 넘쳐 버린 건 [LIVE-ANALYSIS-REJECTED] WARN입니다.
+        알림 유실([NOTIFY-REJECTED] ERROR)과 다른 것입니다 - 다음 상태 변화 때 최신 값이 다시 갑니다.
+
+    ⚠️ 남은 구멍: FE가 무인증 프록시(/api/streams/**)를 줄이고 NEXT_PUBLIC_STREAM_WS_URL을 지우기
+      전까지는 예전 구멍이 남아 있습니다. 상세 docs/(2026-10-03) feature-ai-stream-relay.md
 
 
   [ 3-11. AI 이상감지 (수신 → 판정 → 이력 → 알림) ]  (anomaly, 2026-07-13/07-14)
@@ -1087,6 +1226,9 @@ SilverBridge는 노인(피보호자)과 그 가족(보호자)을 연결하는 �
     이력은 촘촘히 남겨 화재 지속 구간의 타임라인을 확보하고, 사람에게 가는 알림은 성기게 보냅니다
     (보호자는 알림톡·SMS가 같은 간격으로 나가 과금·카카오 신고 리스크가 함께 걸립니다).
   - 발송 실패·WS 연결 실패·AI_API_KEY 미설정은 앱 기동을 막지 않습니다(구독만 비활성).
+  - 이력 저장이 실패하면 이력 쿨다운을 풉니다(2026-10-02). 이력은 없는데 쿨다운만 남아
+    다음 감지가 버려지는 일을 막습니다.
+  - 화재 알림은 SOS와 같은 긴급 발송 줄(urgentNotificationExecutor)을 씁니다(2026-10-02).
 
 
   [ 3-11-A. 이상감지 판정 - "진짜였나요?"를 보호자에게 물어보기 ]  (2026-09-01 추가)
@@ -1133,6 +1275,7 @@ SilverBridge는 노인(피보호자)과 그 가족(보호자)을 연결하는 �
       maxConfidence       가장 확실해 보였던 정도 (0~1)
       reviewStatus        지금 판정 상태 (아래 참고)
       myVerdict           내가 뭐라고 답했는지. 아직 안 했으면 null
+      clip · clipCount    이 상황의 5초 영상 - 최신 1건(없으면 null)과 개수 (2026-10-04, 3-11-D)
       (resolvedByAdmin은 관리자 정정 폐지와 함께 2026-09-21에 없어졌습니다)
 
   ▶ 판정 상태 4가지 (reviewStatus)
@@ -1173,7 +1316,10 @@ SilverBridge는 노인(피보호자)과 그 가족(보호자)을 연결하는 �
 
     - 상황이 끝나고(마지막 감지에서 10분) 1시간이 지나도 아무 답이 없으면 → 그 건에 대해 한 번
     - 그 뒤로는 하루에 한 번만, 저녁 8시에 "아직 답 안 하신 게 N건 있어요"로 묶어서
+      (저녁 8시 기준 2시간 안에 건별로 이미 물어본 상황은 요약에서 뺍니다 - 2026-10-02, 같은 건 두 번 묻기 방지)
     - 상황이 생긴 지 3일이 지나면 더 이상 묻지 않습니다
+    - 동수("엇갈림")가 된 상황에서 아직 답하지 않은 보호자에게는 동수 안내도 재촉도 가지 않습니다.
+      의도된 동작입니다(ANOM-G06) - 앱에서 직접 열어 답하는 길은 열려 있습니다.
 
     - 앱 푸시로만 보냅니다.
       문자는 반복해서 보내면 요금이 계속 나가고, 카카오 알림톡은 이런 반복 알림을 보내려면
@@ -1230,6 +1376,10 @@ SilverBridge는 노인(피보호자)과 그 가족(보호자)을 연결하는 �
     safetyEvents          : 지켜보는 사람이 없거나 장비가 빠진 곳들
                             - disconnectedCameras     화면이 안 들어오는 카메라 (※ AI 끊기면 null)
                             - wardsWithoutGuardian    연결된 보호자가 한 명도 없는 피보호자
+                            - wardsWithoutReachableGuardian  알림을 받을 수 있는 보호자가 없는 피보호자
+                                                      (보호자가 없거나, 있어도 전원 정지·탈퇴 진행 - 2026-10-02)
+                                                      ※ 정지는 연결이 남아 위 항목에 안 잡혀서 따로 둡니다.
+                                                        개수만 내리고 누구인지·정지 사유는 싣지 않습니다.
                             - wardsWithoutCamera      카메라를 한 대도 안 단 피보호자
                             - stalePendingConnections 7일 넘게 답이 없는 연결 요청
     todayAnomaly          : 오늘 이상감지 - 전체 건수, 종류별, 그리고 판정 결과 4가지
@@ -1357,6 +1507,59 @@ SilverBridge는 노인(피보호자)과 그 가족(보호자)을 연결하는 �
     관리자 화면(프론트)은 별도입니다. 서버는 준비됐습니다.
 
 
+  [ 3-11-D. 이상감지 5초 영상 클립 - 저장·열람·삭제 ]  (2026-10-04 추가, V57)
+  ─────────────────────────────
+  위험이 감지된 순간의 영상(감지 앞 3초 + 뒤 2초, WebM 약 1.9MB)을 백엔드가 AI 서버에서 받아
+  우리 서버 디스크에 저장합니다. 집 안 영상이라 이 서비스에서 가장 민감한 데이터입니다.
+
+  ▶ 만들어지는 길
+    danger=true 이력이 저장(커밋)된 뒤, 알림과는 다른 별도 리스너·전용 작업 줄(clipExecutor)에서
+    AI(POST /api/v1/live-streams/{sessionId}/clips)에 요청합니다.
+    - 클립이 실패해도 이력·알림에는 영향이 없습니다. 긴급 알림 줄에 태우지 마세요
+      (AI 응답이 최대 25초라 그동안 화재 알림이 줄을 섭니다).
+    - 클립 쿨다운(같은 카메라·종류 5분)은 이력·알림 쿨다운과 별개 키입니다.
+      Redis 장애 때는 클립을 건너뜁니다(이력·알림과 반대 - 부가 기능이라 AI 요청 폭주를 막으려고).
+    - 상황당 최대 12개, 디스크 여유가 1GB 미만이면 만들지 않습니다.
+    - 파일은 /data/clips에 UUID 이름으로 두고 DB에는 파일 이름만 적습니다.
+    - 완성 알림(푸시·화면)은 없습니다. 감지 뒤 약 3~10초 뒤에 생기니 이력 화면을 열 때 조회하면 됩니다.
+
+  ▶ 보는 API
+    → GET /api/guardian/anomaly/{incidentId}/clips      → 보호자: 그 상황의 클립 목록(최신순)
+    → GET /api/guardian/anomaly/clips/{clipId}/file     → 보호자: 영상 파일(video/webm, 구간 요청 206 지원)
+    → GET /api/ward/anomaly/{incidentId}/clips          → 피보호자 본인: 위와 같음
+    → GET /api/ward/anomaly/clips/{clipId}/file         → 피보호자 본인: 위와 같음
+    한 건: { clipId, incidentId, detectedAt, durationMs, width, height, sizeBytes, createdAt }
+           (durationMs·width·height는 null일 수 있음)
+    ※ <video src>는 인증 헤더를 못 보내므로 FE가 Authorization 헤더로 fetch → blob URL로 재생합니다.
+
+  ▶ 누가 볼 수 있나
+    - 보호자: 지금 ACTIVE로 연결된 피보호자의 클립만 (403 ANOMALY_NOT_AUTHORIZED + [IDOR-ATTEMPT])
+    - 피보호자 본인: 본인 집 클립이되, ACTIVE로 연결된 보호자가 1명 이상일 때만
+      (0명이면 404, 다시 연결되면 보입니다 - 연결이 끊겨도 파일은 지우지 않습니다).
+      남의 클립은 403 ANOMALY_CLIP_NOT_OWNED.
+    - 🚫 관리자는 볼 수 없습니다. 관리자 API·응답에 클립 정보를 싣지 마세요(테스트로 고정).
+    - 숨김·만료·없음은 모두 404 ANOMALY_CLIP_NOT_FOUND로, 이유를 나누지 않습니다.
+
+  ▶ "잘못 봤다"로 판정되면
+    판정과 같은 잠금 안에서 그때까지 저장된 클립을 바로 숨기고(HIDDEN), 24시간 뒤 여전히 숨김이면
+    실제로 지웁니다. 판정이 다시 바뀌면 숨김을 풉니다. 엇갈림·대기 중이면 숨기지 않습니다.
+    ※ 판정 뒤에 새로 저장된 클립은 공개입니다 - 오탐 판정 뒤 10분 안에 이어진 감지가 진짜 불일 수도
+      있어서, 숨기면 24시간 뒤 증거가 사라집니다(2026-10-04 사용자 결정).
+
+  ▶ 지워지는 길 5가지
+    보관 만료(최대 30일 - 설정으로 늘려도 30일로 자릅니다) / 오탐 24시간 / 피보호자 탈퇴 /
+    카메라 삭제(CameraDeletedEvent) / 고아 파일 청소(행 없는 파일은 매시 15분, 그 밖은 05:00 KST)
+    ⚠️ 새로 "회원 데이터 일괄 정리" 같은 길을 만들면 파일도 지우는지 확인하세요.
+      행은 FK CASCADE로 지워져도 파일은 남습니다.
+
+  ▶ 끄기·환경변수
+    ANOMALY_CLIP_ENABLED=false 는 만들기만 멈춥니다(보기·지우기·청소는 계속).
+    그 밖의 설정은 7장 "이상감지 영상 클립 환경변수" 참고.
+    ⚠️ 저장소는 서버 1대의 로컬 디스크라 docker-compose의 ./.data/clips 마운트가 꼭 있어야 합니다
+      (없으면 컨테이너를 다시 만들 때 사라집니다).
+  상세: docs/(2026-10-04) feature-anomaly-clip.md
+
+
   [ 3-12. 피보호자 SOS 동작 설정 ]  (sos_setting, 2026-07-23 추가)
   ─────────────────────────────
   환경설정 > "SOS 동작 설정"을 계정 단위로 보관합니다(종전에는 프론트 localStorage 전용이라
@@ -1418,9 +1621,15 @@ SilverBridge는 노인(피보호자)과 그 가족(보호자)을 연결하는 �
     상태만 바꾸면 이미 로그인해 둔 사람은 최대 30분 동안 그대로 쓸 수 있습니다.
     서버가 요청마다 회원 정보를 다시 읽지 않기 때문입니다.
     그래서 정지시킬 때 로그인 정보를 함께 지웁니다(탈퇴·비밀번호 변경과 같은 방식).
+    열려 있는 웹소켓 연결도 그 직후 서버가 닫습니다(2026-10-02, close 1008 AUTH_INVALIDATED).
+      - 비밀번호 변경·재설정, 역할 변경, 탈퇴 때도 똑같이 닫습니다. 정지 해제 때는 닫지 않습니다.
+      - 순서는 "토큰 무효화 → 닫기"입니다. 뒤집으면 닫힌 화면이 옛 토큰으로 바로 다시 붙습니다.
+      - FE는 1008/AUTH_INVALIDATED를 받으면 다시 붙지 말고 로그아웃하거나 토큰을 새로 받은 뒤 붙어야 합니다.
+      - 서버 1대 기준입니다(열린 연결 목록을 서버 메모리에 둡니다). 서버를 늘리면 다시 설계해야 합니다.
 
     그리고 정지된 계정에는 알림을 하나도 보내지 않습니다. 사용자가 끌 수 없는
-    SOS·화재 알림도 마찬가지입니다.
+    SOS·화재 알림도 마찬가지입니다. 화면 갱신(웹소켓)도 보내기 직전에 상태를 확인해
+    막습니다(2026-10-02, [WS-BLOCKED]).
       왜냐하면 정지는 보통 "계정을 도난당한 것 같다"고 잠그는 것인데, 그 상태에서 알림을
       계속 보내면 그 계정을 쥐고 있는 사람에게 피보호자가 언제 SOS를 눌렀는지,
       집에 불이 났는지를 실시간으로 알려 주는 셈이 됩니다.
@@ -1428,9 +1637,11 @@ SilverBridge는 노인(피보호자)과 그 가족(보호자)을 연결하는 �
       그 보호자들에게는 정상적으로 알림이 갑니다. 계정 정지는 이용을 막는 것이지
       안전망을 끄는 것이 아닙니다.
     ⚠️ 대신 받아들인 위험이 있습니다. 보호자가 한 명뿐인데 그 사람이 정지 상태면
-      그 피보호자의 SOS는 아무에게도 가지 않습니다. 로그에만 흔적이 남습니다.
-      "유일한 보호자입니다" 경고를 띄우는 안은 검토했지만, 정지 대상이 보안·법적 문제
-      계정으로 한정돼 경고를 봐도 관리자가 할 일이 같아서 만들지 않았습니다.
+      그 피보호자의 SOS는 아무에게도 가지 않습니다. 로그([NOTIFY-BLOCKED])에 흔적이 남고,
+      관리자 대시보드의 wardsWithoutReachableGuardian 숫자로 보입니다(2026-10-02, 3-11-B).
+      ※ 2026-09-09에는 "경고를 만들지 않는다"였으나, 정지가 만드는 사각지대가 어느 지표에도
+        안 잡혀 2026-10-02에 사용자 결정으로 바꿨습니다. 개수만 보여 주고 누구인지·정지 사유는
+        싣지 않으며, 피보호자 화면에는 표시하지 않습니다.
 
   ▶ 고칠 수 있는 것은 이름뿐입니다
 
@@ -1447,7 +1658,8 @@ SilverBridge는 노인(피보호자)과 그 가족(보호자)을 연결하는 �
     갑니다(2026-09-30 - 전에는 "보호자가 연결을 해제했습니다"로 나가 사실과 달랐습니다).
     아직 수락 전인 요청은 조용히 취소됩니다(수락 전 요청 취소는 원래도 알리지 않습니다).
 
-    피보호자를 보호자로 바꾸면 그 사람 앞으로 등록된 카메라는 지우고, 약은 중지합니다(2026-09-30).
+    피보호자를 보호자로 바꾸면 그 사람 앞으로 등록된 카메라는 지우고(그 카메라의 영상 클립도 함께,
+    2026-10-04), 약은 중지합니다(2026-09-30).
     남겨 두면 본인이 체크도 삭제도 할 수 없는 복약 알림이 계속 가기 때문입니다.
     보호자였던 사람이 남에게 등록해 준 약은 그대로 둡니다(일반 연결 해제와 같은 기준).
 
@@ -1635,10 +1847,23 @@ SilverBridge는 노인(피보호자)과 그 가족(보호자)을 연결하는 �
                                            ※ 푸시·문자는 없습니다(일상 동작이라 소음).
     /topic/{userId}/medication-stopped      등록 보호자 탈퇴로 약이 중지됨 (2026-08-04 추가)
                                            — 남은 ACTIVE 보호자만 수신. payload = wardId·stoppedCount
+    /topic/{userId}/camera-analysis         실시간 카메라 분석 상태 (2026-10-03 추가, 보호자만)
+                                           payload = sessionId·wardId·status·detectedType·detectedTypeLabel·
+                                           confidence·danger·analyzedAt(KST)
+                                           ※ 상태가 바뀔 때만, 같은 카메라 최소 2초 간격. 푸시·문자·이력 없음.
+                                           ※ status=null = AI 연결 끊김으로 확인 불가 / offline = 세션 종료.
+                                           ※ 화재 알림(anomaly-detected)과 별개입니다 (3-10 실시간 보기)
 
   ※ 보안: StompSubscriptionAuthorizationInterceptor가 구독 시점에
     {userId}가 인증 세션의 userId와 일치하는지 검증해, 타인의 실시간 알림
     도청을 차단합니다.
+  ※ 클라이언트가 보내는 SEND는 /app/ 으로 시작하는 주소만 받습니다(2026-10-02).
+    예전에는 로그인한 사용자가 SEND /topic/{상대 userId}/sos-triggered 로 가짜 SOS·화재 알림을
+    상대 화면에 띄울 수 있었습니다.
+  ※ 받는 사람이 정지·탈퇴 진행 계정이면 서버가 보내지 않습니다(2026-10-02, [WS-BLOCKED]).
+  ※ 토큰이 무효화되면(정지·비밀번호 변경/재설정·역할 변경·탈퇴) 서버가 열린 연결을
+    close 1008 / 사유 AUTH_INVALIDATED 로 닫습니다(2026-10-02). FE는 그대로 다시 붙지 말고
+    로그아웃하거나 토큰을 새로 받은 뒤 붙어야 합니다. 핸드셰이크는 Redis 장애 때 503으로 거부합니다.
 
 
 --------------------------------------------------------------------------------
@@ -1656,14 +1881,19 @@ SilverBridge는 노인(피보호자)과 그 가족(보호자)을 연결하는 �
   [ users — 회원 ]
   ─────────────────────────────
   id             : 회원 고유 ID (6자리 문자열)
-  email          : 이메일 주소 (중복 불가, 로그인 사용)
+  email          : 이메일 주소 (로그인 사용). 소문자로 저장하고 lower(email) 유니크 인덱스
+                   (uq_users_email_lower)로 대소문자만 다른 중복도 막습니다 (V55, 2026-10-02, 비가역)
   password       : 암호화된 비밀번호 (카카오 가입자는 NULL)
   name           : 이름
   phone          : 전화번호 (중복 불가, 선택)
   role           : 역할 — WARD(피보호자) / GUARDIAN(보호자) / ADMIN(관리자)
-  status         : 계정 상태 — ACTIVE(정상) / INACTIVE(비활성)
-                   ※ 탈퇴는 hard delete로 행 자체가 삭제됨 — INACTIVE는 탈퇴 처리 중
-                     과도 상태이거나 관리자 정지 등 비활성 계정을 의미 (3-5절 참고)
+  status         : 계정 상태 — ACTIVE(이용 중) / RESTRICTED(이용 제한, V47) / INACTIVE(탈퇴 진행 중)
+                   ※ 탈퇴는 hard delete로 행 자체가 삭제됨 — INACTIVE는 탈퇴 처리 중 과도 상태뿐입니다.
+                     ⚠️ 정지에 INACTIVE를 쓰면 10분 청소 작업이 계정을 영구 삭제합니다 - 정지는 RESTRICTED.
+                     상태 검사는 "!= ACTIVE"로 합니다(3-5, 3-13 참고).
+                     enum에 값을 더하면 chk_users_status CHECK 재정의 마이그레이션이 필요합니다.
+  status_reason  : 이용 제한 사유 (V49, 최대 200자). RESTRICTED일 때만 채우고 해제 시 지웁니다.
+                   변경 이력은 admin_audit_log가 담당합니다.
   provider       : 가입 방식 — LOCAL(이메일) / KAKAO(카카오)
   provider_id    : 카카오 고유 ID (일반 가입자는 NULL)
   profile_image  : 프로필 이미지 파일명 (NULL 시 기본 이미지)
@@ -1690,6 +1920,8 @@ SilverBridge는 노인(피보호자)과 그 가족(보호자)을 연결하는 �
   ※ 비밀번호 변경 시 해당 회원의 모든 refresh token 삭제 + 발급된
     accessToken도 Redis password:invalidate 로 즉시 무효화 (Critical-1).
   ※ refresh token 재사용(도난) 감지 시 해당 회원 토큰 전부 강제 폐기 (H-3).
+    단 다른 기기 로그인으로 밀려난 토큰은 도난으로 보지 않고 401 INVALID_TOKEN만 줍니다 (2026-10-02).
+  ※ 토큰마다 고유값(jti)을 넣어, 같은 초에 두 번 발급돼도 문자열이 겹치지 않습니다 (2026-10-02).
 
 
   [ access_log — 접근 로그 ]
@@ -1823,8 +2055,10 @@ SilverBridge는 노인(피보호자)과 그 가족(보호자)을 연결하는 �
   author_id  : 작성 관리자 ID (탈퇴 시 NULL)
   title      : 제목
   content    : 본문
+  view_count : 조회수 (V13, DB에서 원자 증가)
   created_at : 작성 일시
-  updated_at : 마지막 수정 일시
+  updated_at : 마지막 수정 일시 — 제목·내용이 바뀔 때만 갱신 (V56 트리거, 2026-10-02).
+               조회수 증가·작성자 탈퇴(author_id NULL)로는 바뀌지 않습니다.
 
   ※ 공지는 작성 즉시 게시됩니다 (별도 published 상태 없음).
 
@@ -1997,7 +2231,24 @@ SilverBridge는 노인(피보호자)과 그 가족(보호자)을 연결하는 �
   device_id     : 백엔드 발급 기기 토큰 (FE localStorage 보관, (ward_id, device_id) UNIQUE)
   label         : 설치 위치 = 방 이름 (거실·안방 등, 알림 문구에 그대로 쓰임)
   registered_by : 등록 주체 (SET NULL — 등록자 계정이 사라져도 소유자 기준으로 카메라는 유지)
-  is_active     : 사용 여부
+  is_active     : 사용 여부 — 화면 표시용. 꺼도 감지·화재 알림은 계속됩니다(2026-10-02 결정).
+                  꺼진 카메라는 실시간 보기·camera-analysis 대상에서 빠집니다.
+  created_at / updated_at
+  ※ 스트리밍 중인지는 이 테이블에 없습니다. AI 구독 상태에서 그때그때 얻습니다(3-11-B "모르는 값").
+
+  [ anomaly_clip — 이상감지 5초 영상 클립 ] (V57, 2026-10-04 추가, 3-11-D)
+  ─────────────────────────────
+  id              : 고유 번호
+  incident_id     : 어느 상황의 영상인지 (anomaly_incident FK, CASCADE)
+  ward_id         : 피보호자 (users FK, CASCADE - 탈퇴 시 행 삭제, 파일은 탈퇴 정리·고아 청소가 지움)
+  session_id      : 카메라 세션 (카메라 삭제 때 정리 키)
+  file_name       : 서버가 만든 UUID.webm (UNIQUE). 경로 전체는 저장하지 않습니다
+                    - 저장 위치는 anomaly.clip.storage-dir(/data/clips)
+  size_bytes      : 파일 크기
+  duration_ms · frame_count · width · height · clip_started_at : AI가 준 값 (없거나 형식이 틀리면 NULL)
+  detected_at     : AI에 요청한 감지 시각 (analyzedAt, 없으면 요청 시각)
+  status          : VISIBLE / HIDDEN (CHECK). HIDDEN이면 hidden_at이 반드시 있어야 함 (CHECK)
+  hidden_at       : 오탐으로 숨긴 시각 (24시간 뒤 삭제 기준)
   created_at / updated_at
 
   [ sos_setting — 피보호자 SOS 동작 설정 ] (2026-07-23 추가, V32)
@@ -2035,7 +2286,8 @@ SilverBridge는 노인(피보호자)과 그 가족(보호자)을 연결하는 �
   6. Redis 키 (임시 데이터)
 --------------------------------------------------------------------------------
 
-  모든 Redis 키는 global/util/RedisKeys.java 상수로 관리됩니다.
+  Redis 키 이름은 대부분 global/util/RedisKeys.java 상수로 관리합니다.
+  (이상감지·SOS 쿨다운 키는 각 도메인의 쿨다운 클래스에 있습니다.)
 
   ▶ SMS 인증
     sms:verify:{phone}           회원가입 SMS 인증코드 (5분)
@@ -2052,18 +2304,28 @@ SilverBridge는 노인(피보호자)과 그 가족(보호자)을 연결하는 �
                                    SMS sms:sendcount A-M3와 대칭. 가입 확인된 이메일만 카운트)
     password:sms:verify:{phone}    SMS 재설정 인증코드 (5분)
     password:sms:attempt:{phone}   SMS 오류 횟수 (5분)
-    password:invalidate:{userId}   비밀번호 변경 시각 — 이전 발급 accessToken
-                                   무효화 기준 (TTL = accessToken 만료시간, Critical-1)
+    password:invalidate:{userId}   토큰 무효화 시각(epoch 초) — 이보다 먼저 발급된(iat 초 기준)
+                                   accessToken을 401로 막습니다. 같은 초 발급은 허용(2026-10-02, 옛 ms 값도 읽음).
+                                   이름과 달리 비밀번호 변경·재설정·탈퇴·정지·역할 변경이 함께 씁니다.
+                                   (TTL = accessToken 만료시간, Critical-1)
 
   ▶ 카카오 OAuth
-    kakao:pending:{kakaoId}      신규 가입 임시 이메일 (10분)
+    kakao:pending:{kakaoId}      신규 가입 대기 (30분). 값 = pendingToken의 SHA-256 해시 + 이메일.
+                                 가입 완료 때 pendingToken을 대조합니다 (2026-10-02)
     ※ OAuth state 는 프론트 검증 모델 → Redis 미사용 (M-1)
 
   ▶ 로그인 보안
-    login:fail:{userId}          실패 횟수 (30분, user.id 기준 — H-2)
-    login:lock:{userId}          잠금 상태 (30분, user.id 기준 — H-2)
+    login:fail:{식별자}          실패 횟수 (30분). 가입 계정은 user.id(H-2), 미가입 이메일은
+                                 정규화 이메일의 SHA-256 (2026-10-02 - 응답을 가입 이메일과 같게)
+    login:lock:{식별자}          잠금 상태 (30분, 식별자 같음)
+    user:pwfail:{userId}         비밀번호 변경·탈퇴의 "현재 비밀번호" 확인 실패 횟수 (2026-10-02)
+    user:pwlock:{userId}         위 잠금 상태 - 로그인 잠금과 따로 둡니다
+                                 (탈취한 토큰으로 두드려도 본인 로그인까지 잠기지 않게)
+    refresh:login-at:{userId}    마지막 로그인에서 발급한 refresh의 iat(초). 이보다 오래된 refresh가
+                                 DB에 없으면 "밀려난 토큰"이라 전체 폐기 없이 401만 줍니다 (2026-10-02)
     logout:{SHA-256(accessToken)} 로그아웃 토큰 블랙리스트 (남은 만료시간)
                                  키는 토큰 원문이 아닌 해시 (M-6)
+    ※ 이 키들을 읽지 못하면(Redis 장애) 일반 API는 503, SOS만 통과입니다 (7장)
 
   ▶ 요청 속도 제한
     rate:{endpoint}:{identifier} IP 또는 userId 기반 1분 고정 윈도우 (최대 10회)
@@ -2073,6 +2335,11 @@ SilverBridge는 노인(피보호자)과 그 가족(보호자)을 연결하는 �
     rate:{endpoint}:1m:{ip}      비밀번호 재설정 send/resend 이중 윈도우 — 분 카운터 (2026-05-23)
     rate:{endpoint}:1h:{ip}      동 시간 카운터. pw-reset-email/pw-reset-sms = 1분 10회/1시간 30회
                                  (미가입 응답 노출에 따른 자동화 enumeration 방어, 한쪽 초과 시 429)
+                                 같은 분·시간 이중 윈도우를 userId 기준으로도 씁니다:
+                                 inquiry-create 5/30, camera-live·camera-status 30/600,
+                                 camera-frame 60/1200, camera-ticket 20/300 (2026-10-02~04)
+                                 ※ 속도 제한은 Redis 장애 시 fail-open입니다. 반대로 로그인 잠금·
+                                   인증번호 시도·발송 상한은 fail-closed(장애 중에 풀어 주지 않음)
 
   ▶ 이상감지 (2026-07-13 / 알림 쿨다운 2026-07-14)
     anomaly:cooldown:{sessionId}:{detectedType}
@@ -2086,10 +2353,28 @@ SilverBridge는 노인(피보호자)과 그 가족(보호자)을 연결하는 �
                                  보호자 쪽은 알림톡·SMS가 같은 간격으로 나가 과금·카카오 신고
                                  리스크가 함께 걸리므로 더 길게 잡는다.
                                  Redis 장애 시 fail-open (화재 알림을 인프라 장애로 삼키지 않는다)
+    anomaly:clip:{sessionId}:{detectedType}
+                                 5초 영상 클립 생성 쿨다운 (기본 5분, 2026-10-04). 이력·알림과 별개 키.
+                                 Redis 장애 시 fail-closed (클립을 건너뜀 - 부가 기능이라 AI 요청 폭주 방지)
+                                 재시도할 수 있는 실패면 쿨다운을 풀고, 401·422·키 미설정·503 CLIP_DISABLED는 풀지 않음
 
-  ▶ 기타
-    character:expression:{wardId} 최근 표정 캐시 (조회 API용)
-    ws:connected:{userId}        WebSocket 접속 상태 (12시간)
+  ▶ SOS
+    sos:notify:cooldown:{wardId} SOS 알림 쉬기 (30초, SET NX EX). 기록은 매번 남고 알림만 쉽니다.
+                                 Redis 장애 시 fail-open. 아무에게도 전달되지 않았으면 바로 지웁니다(2026-10-02)
+
+  ▶ 연결 요청
+    connection:request:count:{guardianId}:{wardId}
+                                 같은 쌍 연결 요청 수 (24시간 고정 윈도우, 5건까지 - 2026-10-02).
+                                 수락 시 삭제. Redis 장애 시 fail-open
+
+  ▶ 카메라 실시간 보기
+    camera:stream:ticket:{ticket} 영상 티켓 (60초, 1회 소비 GETDEL - 2026-10-03).
+                                 값 = "{userId}:{sessionId}:{발급 ms}". 저장소 장애 시 티켓 발급 503
+
+  ※ 예전 표에 있던 character:expression(표정 캐시)·ws:connected(접속 상태)는 지금 코드에 없습니다
+    (ws:connected는 읽는 곳이 없어 2026-10-02 삭제).
+  ※ 모든 쓰기에는 TTL이 있고, Redis는 maxmemory 256mb + noeviction입니다(9장). 가득 차도 키를
+    임의로 지우지 않습니다 - 잠금·블랙리스트가 사라지면 잠금 해제·로그아웃 토큰 부활이 생깁니다.
 
 
 --------------------------------------------------------------------------------
@@ -2104,7 +2389,30 @@ SilverBridge는 노인(피보호자)과 그 가족(보호자)을 연결하는 �
   - 비밀번호 변경/재설정 시 refreshToken 전부 삭제 + 발급된 accessToken도
     즉시 무효화 (password:invalidate + JWT 필터 iat 검증, Critical-1)
   - refresh token 재사용(도난) 감지 시 해당 회원 토큰 전부 강제 폐기 (H-3)
+    단 다른 기기 로그인으로 밀려난 토큰은 401 INVALID_TOKEN만 (2026-10-02, refresh:login-at)
+  - 토큰 무효화 시각은 초 단위로 비교합니다 - 같은 초에 발급된 토큰은 허용(최대 1초 수용).
+    밀리초로 비교하면 비밀번호 변경 직후 다시 로그인한 새 토큰까지 막혔습니다 (2026-10-02)
+  - 정지·역할 변경·탈퇴도 같은 무효화 경로를 탑니다(3-13). 무효화 직후 열린 웹소켓도 닫습니다(4장)
   - BCrypt strength 12 (M-11)
+
+  [ 인증 저장소(Redis) 장애 (2026-10-02) ]
+  - 로그아웃·무효화 키를 읽지 못하면 일반 API는 503 SERVICE_UNAVAILABLE([AUTH-STORE-UNAVAILABLE])
+  - POST /api/ward/sos 만 통과(fail-open, [AUTH-STORE-FAIL-OPEN] WARN). 서명·만료·typ 검사는 그대로.
+    Redis 장애 중 SOS가 막히면 안전망이 무너지기 때문입니다.
+    ⚠️ 그 대가로 Redis가 죽은 동안에는 로그아웃·정지된 토큰도 SOS 경로에서만은 통과할 수 있습니다(수용).
+      이 예외를 다른 경로로 넓히지 마세요.
+  - 웹소켓 핸드셰이크는 예외 없이 503으로 거부합니다.
+
+  [ 클라이언트 IP (2026-10-02) ]
+  - getRemoteAddr()를 직접 쓰지 말고 ClientIpResolver를 씁니다.
+  - app.client-ip.trusted-proxies(CLIENT_IP_TRUSTED_PROXIES)에 든 상대에게서 온 요청일 때만
+    X-Forwarded-For를 오른쪽부터 읽고, 믿을 수 없는 상대가 보낸 헤더는 무시합니다
+    (헤더를 꾸며 속도 제한·접속 로그 IP를 속이는 것 방지).
+  - 서버 .env.dev에 FE 서버 IP를 넣기 전에는 동작이 바뀌지 않습니다(사용자 소관).
+
+  [ 입력 정규화 (2026-10-02) ]
+  - 이메일은 소문자로 저장·조회(V55). 이름·화면 글자는 global/validation(TextSanitizer·@VisibleText·
+    @NoControlChars)으로 거릅니다. 오류 응답에는 code 필드가 있으니 FE는 문구가 아니라 code로 분기합니다.
 
   - @PreAuthorize로 Role 기반 엔드포인트 제한
     예: /api/guardian/** → GUARDIAN, /api/ward/** → WARD, /api/admin/** → ADMIN
@@ -2119,11 +2427,13 @@ SilverBridge는 노인(피보호자)과 그 가족(보호자)을 연결하는 �
   - 로그인 실패 응답 통합: 미가입 이메일 / 비밀번호 불일치 모두
     INVALID_CREDENTIALS(401) — 계정 enumeration 차단 (H-1)
   - INACTIVE 안내는 비밀번호 검증 통과한 본인에게만 노출 (H-1)
-  - user.id 기준 5회 실패 → 30분 잠금 (LOGIN_LOCKED 429).
-    미가입 이메일은 잠금 카운터 영향 없음 — 정상 사용자 DoS 차단 (H-2)
+  - user.id 기준 5회 실패 → 30분 잠금 (LOGIN_LOCKED 429). 임의 이메일로 정상 사용자를 잠그는 DoS 차단 (H-2)
+    비밀번호 비교 전에 시도를 먼저 잡아 동시 요청으로도 5회를 넘지 못합니다 (2026-10-02)
+    미가입 이메일도 이메일 해시 기준으로 똑같이 셉니다 - 잠금 동작으로 가입 여부를 알 수 없게 (2026-10-02)
+    비밀번호 변경·탈퇴의 현재 비밀번호 확인은 userId별 별도 잠금(user:pwfail·user:pwlock)
     잠금 횟수/시간은 application.yaml auth.login.* 로 외부화 (M-12)
-  - INACTIVE 계정은 로그인 차단 + Refresh Token 즉시 삭제
-    (login·kakaoLogin·refresh 세 경로 일관, H-4)
+  - ACTIVE가 아닌 계정(이용 제한·탈퇴 진행)은 로그인 차단 + Refresh Token 즉시 삭제
+    (login·kakaoLogin·refresh 세 경로 일관, H-4). 검사는 "!= ACTIVE" - 등호 비교 금지(2026-09-09)
 
   [ 관리자 보호 ]
   - 무언가를 바꾸는 관리자 작업(공지·회원 수정·강제 연결/해제·강제 탈퇴·문의 답변)은
@@ -2140,7 +2450,11 @@ SilverBridge는 노인(피보호자)과 그 가족(보호자)을 연결하는 �
     (signin은 A-H2에서 추가, token-refresh·kakao-login·pw-reset-confirm은 M-8에서 추가)
   - pw-reset-email/pw-reset-sms(send·resend)는 이중 윈도우 1분 10회 / 1시간 30회 (2026-05-23)
     — 미가입 응답 노출에 따른 자동화 enumeration·어뷰징 방어, 한쪽 초과 시 429
-  - userId 기반: sos-trigger, connection-request, fcm-register
+  - userId 기반: sos-trigger, connection-request, fcm-register,
+    inquiry-create(1분 5 / 1시간 30), 보호자 카메라 4종(3-10, 2026-10-04)
+  - 같은 (보호자, 피보호자) 쌍 연결 요청: 24시간 5건, 6번째부터 429 CONNECTION_REQUEST_COOLDOWN (2026-10-02)
+  - Redis 장애 시: 속도 제한은 fail-open, 로그인 잠금·인증번호 시도·발송 상한은 fail-closed.
+    두 부류를 같은 정책으로 합치지 마세요.
   - per-phone: SMS 발송(sms:sendcount) 1시간 10회 상한 (A-M3)
   - per-email: 비번재설정 메일 발송(password:email:sendcount) 1시간 10회 상한 (2026-05-23)
   - INCR+EXPIRE는 Lua 스크립트로 원자 처리 (RedisCounter, M-4/L-2)
@@ -2160,6 +2474,8 @@ SilverBridge는 노인(피보호자)과 그 가족(보호자)을 연결하는 �
   - CAMERA_NOT_AUTHORIZED(403) "본인이 등록한 카메라만 사용할 수 있습니다."
     INQUIRY_NOT_AUTHORIZED(403) "본인이 작성한 문의만 볼 수 있습니다."
     없는 자원은 그대로 404(*_NOT_FOUND).
+    이후 같은 형태로: SOS_NOT_AUTHORIZED, MEDICATION_NOT_AUTHORIZED/NOT_OWNED, ANOMALY_NOT_AUTHORIZED,
+    CAMERA_NOT_CONNECTED(보호자 실시간 보기, 2026-10-03), ANOMALY_CLIP_NOT_OWNED(피보호자 클립, 2026-10-04)
   - 수용한 노출은 "그 id의 자원이 존재한다"는 사실뿐 — 방 이름·세션ID·문의 본문 등 내용은
     절대 응답에 싣지 않습니다. 시도는 [IDOR-ATTEMPT] WARN(userId + 대상 id)으로 로깅합니다.
 
@@ -2167,6 +2483,15 @@ SilverBridge는 노인(피보호자)과 그 가족(보호자)을 연결하는 �
   - StompSubscriptionAuthorizationInterceptor가 SUBSCRIBE 시
     /topic/{userId}/... 의 userId를 세션 인증 userId와 비교
   - 타인 토픽 구독 시 거부 (IDOR 차단)
+  - 클라이언트 SEND는 /app/ 주소만 허용 - /topic/... 으로 가짜 SOS·화재 알림을 띄우는 것 차단 (2026-10-02)
+  - 받는 사람이 ACTIVE가 아니면 서버가 보내지 않음([WS-BLOCKED]), 토큰 무효화 시 열린 세션을
+    close 1008 AUTH_INVALIDATED로 닫음 (2026-10-02, 서버 1대 기준)
+
+  [ 집 안 영상 (2026-10-03 / 클립 2026-10-04) ]
+  - 실시간 영상·상태는 백엔드가 인가 후 중계합니다. AI 키는 서버 헤더(X-API-Key)로만, 로그·응답에 남기지 않습니다.
+  - <img> 영상은 1회용 60초 티켓으로만 엽니다. accessToken을 쿼리로 받지 마세요.
+  - 클립은 보호자(ACTIVE 연결)·피보호자 본인(연결된 보호자 1명 이상)만 볼 수 있고 관리자는 못 봅니다.
+  - 상세: 3-10 "실시간 보기", 3-11-D
 
   [ 파일 업로드 ]
   - 5MB 이하, JPG/PNG/WebP/GIF만 허용
@@ -2174,6 +2499,7 @@ SilverBridge는 노인(피보호자)과 그 가족(보호자)을 연결하는 �
 
   [ 페이지네이션 크기 제한 ]
   - ?size= 최대값 100 (초과 시 자동 제한)
+  - 관리자 목록 4종(회원·문의·이상감지·알림 이력)과 보호자 SOS·이상감지 이력은 최대 50 (2026-10-02 통일)
 
   [ 환경변수 무결성 검증 (시작 시) ]
   - SecurityConfigValidator: JWT_SECRET 필수 + 최소 32자 + 공개된 약한 기본값 거부,
@@ -2201,6 +2527,23 @@ SilverBridge는 노인(피보호자)과 그 가족(보호자)을 연결하는 �
   - ANOMALY_NOTIFY_COOLDOWN_MINUTES       기본 5 (보호자 알림 재발송 최소 간격)
   - ANOMALY_NOTIFY_SELF_COOLDOWN_MINUTES  기본 3 (피보호자 본인 알림 재발송 최소 간격)
                                   ※ 세 값은 코드 기본값과 두 서버 .env.dev가 동일하다(2026-07-28 일원화)
+  - ANOMALY_RESYNC_SECONDS        기본 60 (AI 세션 목록 재요청 주기, 0이면 끔 - 2026-10-01).
+                                  AI가 세션 목록 방송을 한 번 빠뜨리면 등록 카메라가 조용히 감시에서
+                                  빠지던 것을 막는 안전망입니다. 지우거나 길게 늘리지 마세요.
+
+  [ 카메라 실시간 보기 환경변수 (2026-10-03, 모두 선택) ]
+  - AI_HTTP_BASE_URL              기본 https://testai.gosky.kr (AI HTTP 주소. 키는 AI_API_KEY 공용)
+  - CAMERA_STREAM_CONNECT_TIMEOUT 3s / CAMERA_STREAM_READ_TIMEOUT 5s / CAMERA_STREAM_CALL_TIMEOUT 8s(호출 전체)
+  - CAMERA_STREAM_IDLE_TIMEOUT    15s (영상 무수신 제한) / CAMERA_STREAM_MAX_DURATION 30m (영상 1건 최대)
+  - CAMERA_STREAM_REVALIDATE      60s (시청 중 재확인) / CAMERA_STREAM_TICKET_TTL 60s
+  - CAMERA_STREAM_MAX_CONCURRENT  20 / CAMERA_STREAM_MAX_PER_USER 2
+
+  [ 이상감지 영상 클립 환경변수 (2026-10-04, 모두 선택 - 기본값이 AI 계약값) ]
+  - ANOMALY_CLIP_ENABLED(true, 생성만 끔) · ANOMALY_CLIP_STORAGE_DIR(/data/clips)
+  - ANOMALY_CLIP_PRE_SECONDS(3) · ANOMALY_CLIP_POST_SECONDS(2) · ANOMALY_CLIP_COOLDOWN_MINUTES(5)
+  - ANOMALY_CLIP_REQUEST_TIMEOUT(25s, 호출 전체 - 일반 10초 규칙의 예외: AI가 뒤 2초를 기다려 인코딩)
+  - ANOMALY_CLIP_MAX_BYTES(10485760) · ANOMALY_CLIP_RETENTION_DAYS(30, 상한 30)
+  - ANOMALY_CLIP_HIDDEN_GRACE_HOURS(24) · ANOMALY_CLIP_MAX_PER_INCIDENT(12) · ANOMALY_CLIP_MIN_FREE_DISK_MB(1024)
 
   [ 카카오 알림톡 환경변수 (2026-07-27 가동) ]
   - ALIMTALK_ENABLED              발송 전체 ON/OFF. false면 알림톡 채널이 항상 스킵
@@ -2230,9 +2573,23 @@ SilverBridge는 노인(피보호자)과 그 가족(보호자)을 연결하는 �
   - 배포로 서버가 내려갈 때 하던 일을 마치고 내려갑니다(graceful, 알림 대기열 최대 20초 대기).
   - 예약 작업 스레드 3개 - 복약 1분·판정 재촉 5분·탈퇴 청소 10분 + 새벽 정리 3종
     (토큰 03:00·FCM 토큰 04:00·알림 이력 04:30, 시각을 비껴 둠)
+    + 클립 청소 2종(2026-10-04: 고아 파일 매시 15분, 만료·오탐 05:00) - 지금 모두 8종입니다.
+    일일 작업을 같은 시각에 몰아 넣지 마세요.
   - 외부 연결에는 시간 제한이 있습니다: 카카오 로그인(연결 3초/응답 5초)·메일(연결·응답·쓰기 각 10초)·
-    파일 서버(연결 3초/응답 10초).
+    파일 서버(연결 3초/응답 10초)·FCM(연결 3초/응답 10초, 2026-09-30)·
+    Solapi 문자·알림톡(호출 10초, 2026-10-02 - SDK가 50초 고정이라 전용 작업 줄에서 10초만 기다림,
+    SOLAPI_CALL_TIMEOUT_SECONDS)·AI 카메라 API(호출 전체 8초)·AI 클립(호출 전체 25초).
     새 외부 연동을 붙일 때 시간 제한 없이 두지 마세요 - 느린 상대 때문에 요청 스레드가 붙잡힙니다.
+  - 작업 줄(executor)을 용도별로 나눴습니다. 넘치면 버리고 로그를 남기며, CallerRuns는 쓰지 않습니다.
+      notificationExecutor        일반 알림(연결·문의·복약 체크 등)        넘치면 [NOTIFY-REJECTED] ERROR
+      urgentNotificationExecutor  SOS·화재 알림 (4/8/200, 2026-10-02)     넘치면 [NOTIFY-REJECTED] ERROR
+      liveAnalysisExecutor        카메라 분석 상태 화면 신호 (2026-10-03)  넘치면 [LIVE-ANALYSIS-REJECTED] WARN
+      clipExecutor                5초 클립 생성 (2/2/20, 2026-10-04)      넘치면 [ANOMALY-CLIP-REJECTED] WARN
+    ⚠️ 긴급 리스너를 일반 줄로 되돌리거나 일반·클립 작업을 긴급 줄에 태우지 마세요.
+      분석·클립의 폐기는 알림 유실이 아니라 WARN입니다 - ERROR로 섞으면 진짜 알림 유실이 묻힙니다.
+  - Redis는 maxmemory 256mb + noeviction (2026-10-02). 가득 차면 쓰기가 오류가 되므로
+    INFO memory·DBSIZE를 점검하고 70~80%를 넘으면 원인 키를 확인합니다. allkeys-lru로 되돌리지 마세요.
+  - DB·Redis 포트는 127.0.0.1에만 엽니다(2026-09-30 C-1, 9장).
   - 실사용 주소(api.devdmu.gosky.kr)의 Swagger 공개는 관리 권한 밖이라 알고 둡니다.
 
 
@@ -2342,6 +2699,8 @@ SilverBridge는 노인(피보호자)과 그 가족(보호자)을 연결하는 �
     container_name : dmu-dev-api
     ports          : 127.0.0.1:6511:6511 (호스트 루프백만 publish — 외부 직접 접근 차단, A-M2)
                      ※ Swagger·API는 nginx 도메인 경유로 접근 (서버IP:6511 직접 접근 불가)
+    volumes        : ./.data/clips:/data/clips (이상감지 영상 클립, 2026-10-04)
+                     ※ 없으면 컨테이너를 다시 만들 때 클립이 사라집니다. .data/는 git에 안 올라갑니다.
     env_file       : .env.dev (DB_USERNAME/DB_PASSWORD, JWT_SECRET, KAKAO/SOLAPI/FIREBASE 등)
     depends_on     : db, redis (healthy 상태 대기)
     healthcheck    : /actuator/health 호출 (30초 간격, start_period 60초)
@@ -2365,8 +2724,14 @@ SilverBridge는 노인(피보호자)과 그 가족(보호자)을 연결하는 �
                        외부에서 DB를 볼 때: ssh -L 6513:127.0.0.1:6513 gosky
     volumes        : ./.data/redis (bind mount)
     command        : --appendonly yes --appendfsync everysec
-                     --maxmemory 256mb --maxmemory-policy allkeys-lru
+                     --maxmemory 256mb --maxmemory-policy noeviction  (2026-10-02, 예전 allkeys-lru)
                      ※ AOF로 재시작 시 SMS 인증코드·rate limit·블랙리스트 보존
+                     ※ noeviction: 메모리가 차도 로그인 잠금·로그아웃 블랙리스트·무효화 키를 임의로
+                       지우지 않습니다(지우면 잠금 해제·로그아웃 토큰 부활). 대신 가득 차면 쓰기가 오류가
+                       되므로 사용량을 점검합니다. allkeys-lru로 되돌리지 마세요.
+                     ※ CD는 api 서비스를 대상으로 돌기 때문에 redis·db 설정을 바꿨다면 두 서버에서
+                       반영됐는지 확인하고, 안 됐으면 docker compose -f docker-compose.dev.yml up -d redis 를
+                       직접 실행합니다(사용자 소관).
     healthcheck    : redis-cli ping
     resources      : 메모리 limit 320m
 
@@ -2411,15 +2776,17 @@ SilverBridge는 노인(피보호자)과 그 가족(보호자)을 연결하는 �
 --------------------------------------------------------------------------------
 
   단위 테스트(목 기반) + 통합 테스트(실제 DB) 두 층입니다 (JUnit 5 + Mockito + AssertJ).
-  2026-09-30 기준 단위 테스트 클래스 102개 / 712건, 통합 테스트 클래스 11개 / 31건, 실패 0.
+  2026-10-05 기준 단위 테스트 클래스 151개, 통합 테스트 클래스 22개입니다(파일 수 기준).
+  (2026-09-30에는 102개 / 712건, 11개 / 31건이었습니다. 건수는 빌드 리포트로 확인하세요.)
 
   ▶ 통합 테스트 (src/integrationTest, 2026-09-21 도입)
     실제 PostgreSQL 17(Testcontainers)을 띄워 목으로는 실행되지 않는 것을 확인합니다.
-    - Flyway V1~V54 전체 적용 + 엔티티와 스키마 일치
+    - Flyway V1~V57 전체 적용 + 엔티티와 스키마 일치
     - enum ↔ DB CHECK 동기화, ON CONFLICT·UNIQUE 같은 DB 제약
     - 관리자 이상감지 쿼리, 알림 이력 쿼리, SOS 반복 횟수 집계
     - 커밋 직후 정리 작업이 실제로 저장되는가(탈퇴 연결·약·FCM 토큰, 알림 이력)
     - 이상감지 판정 동시 응답(20회 반복)·감지 승계와 응답의 덮어쓰기
+    - 이상감지 클립 기록과 판정의 잠금 순서(동시 20회 × 2, AnomalyClipIntegrationTest)
     실행: vkcs에서 ~/SilverBridgeBe/tools/integration-test.sh [브랜치]
           (첫 실행 약 14분, 이후 약 30초. 배포 폴더는 건드리지 않습니다)
     CD가 배포 직전에 자동으로 돌리고 실패하면 배포를 멈춥니다.
@@ -2430,7 +2797,7 @@ SilverBridge는 노인(피보호자)과 그 가족(보호자)을 연결하는 �
     global/jwt/JwtAuthenticationFilterTest    인증 필터 — 로그아웃·비번무효화·refresh→access 차단 (A-H1)
     global/security/RateLimitServiceTest      요청 속도 제한 Redis 로직
     global/util/VerificationCodeValidatorTest SMS 인증코드 검증·오류 누적
-    global/util/ClientIpResolverTest          nginx X-Real-IP 기반 클라이언트 IP 판별
+    global/util/ClientIpResolverTest          클라이언트 IP 판별 (X-Real-IP 피어 + 신뢰 프록시일 때만 XFF)
     global/validation/PasswordFieldValidation 비밀번호 규칙(@ValidPassword)
     global/validation/BirthDateValidatorTest  생년월일 검증(미래·만14세·만120세 경계)
     global/websocket/JwtHandshakeInterceptorTest  WebSocket 핸드셰이크 인증
@@ -2443,6 +2810,9 @@ SilverBridge는 노인(피보호자)과 그 가족(보호자)을 연결하는 �
                                               미복용 요약·자정 경계·킬 스위치(11종, 76건)
     domain/notification/*                     채널 3종(FCM·SMS·알림톡)·디스패처 정책·수신 설정
     domain/camera/*, domain/inquiry/*, domain/admin/*  소유권 인가·문의 흐름·공지 임시저장
+    domain/camera/* (2026-10-03~)            실시간 보기 인가·티켓·동시 시청·AI 호출 시간 제한·
+                                              MJPEG disconnect(AiStreamClientTest)
+    domain/anomaly/* 클립 (2026-10-04~)       열람 범위·관리자 비노출(AdminAnomalyClipExposureTest)·삭제 경로
 
   ▶ 실행
     ./gradlew test                            → 전체 단위 테스트
@@ -2472,11 +2842,16 @@ SilverBridge는 노인(피보호자)과 그 가족(보호자)을 연결하는 �
   │   │   ├── event      연결 상태 변경 이벤트 (Requested/Accepted/Refused/Disconnected)
   │   │   └── listener   이벤트 수신 후 WebSocket + FCM 알림 (AFTER_COMMIT)
   │   ├── announcement   공지사항 엔티티
-  │   ├── camera         이상감지 카메라 소유권 (피보호자 등록 / 보호자 조회)
-  │   ├── anomaly        AI 이상감지 — WS 구독·판정·이력·알림
+  │   ├── camera         카메라 소유권(피보호자 등록 / 보호자 조회) + 보호자 실시간 보기 중계
+  │   │   ├── client     AiStreamClient (AI 목록·상태·스냅샷·MJPEG, X-API-Key 헤더)
+  │   │   ├── service    CameraService(getViewableCamera 인가) / CameraStreamService /
+  │   │   │              CameraStreamTicketService / CameraStreamSlots(동시 시청) / CameraStreamRateLimit
+  │   │   └── event      CameraRegisteredEvent / CameraDeletedEvent(클립 정리)
+  │   ├── anomaly        AI 이상감지 — WS 구독·판정·이력·알림·5초 클립
   │   │   ├── client     AiLiveStreamSubscriber (AI WS를 클라이언트로 구독)
-  │   │   ├── service    AnomalyJudge(판정) / AnomalyEventCooldown / AnomalyNotificationCooldown
-  │   │   └── listener   AnomalyNotificationListener (AFTER_COMMIT + @Async 발송)
+  │   │   ├── service    AnomalyJudge(판정) / AnomalyEventCooldown / AnomalyNotificationCooldown /
+  │   │   │              LiveAnalysisBroadcaster(camera-analysis) / 클립 저장·열람·청소
+  │   │   └── listener   AnomalyNotificationListener (AFTER_COMMIT + @Async 발송), 클립 생성 리스너
   │   ├── sos            피보호자 긴급 SOS + SOS 동작 설정(sos_setting) + 보호자용 이력 조회
   │   ├── medication     복약 — 등록(보호자)·복용 체크(피보호자)·알림 스케줄러
   │   │   ├── service    Guardian/Ward 서비스 + Planner(선점)·ReminderService(발송)·
@@ -2500,9 +2875,11 @@ SilverBridge는 노인(피보호자)과 그 가족(보호자)을 연결하는 �
       ├── exception      CustomException, GlobalExceptionHandler, ErrorCode
       ├── aop            공통 로그
       ├── util           RedisKeys, MaskingUtil, VerificationCodeValidator
-      ├── validation     ValidBirthDate/BirthDateValidator(생년월일), @ValidPassword(비밀번호)
+      ├── validation     ValidBirthDate/BirthDateValidator(생년월일), @ValidPassword(비밀번호),
+      │                  TextSanitizer·@VisibleText·@NoControlChars(화면 글자, 2026-10-02)
       └── websocket      JwtHandshakeInterceptor, StompSubscriptionAuthorizationInterceptor,
-                         WebSocketEventPublisher, presence 리스너
+                         WebSocketEventPublisher(+수신자 상태 포트), 세션 목록·닫기
+                         (WebSocketSessionRegistry·WebSocketSessionCloser, 2026-10-02)
 
   ※ global은 domain을 가져다 쓰지 않습니다(2026-09-30 정리 후 0건). 도메인 로직은 domain/ 아래에.
 
@@ -2646,7 +3023,11 @@ SilverBridge는 노인(피보호자)과 그 가족(보호자)을 연결하는 �
         카메라       : /camera (등록·목록·상세·수정·삭제·연결테스트)
         모델         : /models  (등록·목록·상세·활성화 등)
         스트림/이상감지: /stream-sessions, /live-streams/{id}/mjpeg,
-                        /live-streams/{id}/latest-analysis
+                        /live-streams/{id}/latest-analysis,
+                        POST /live-streams/{id}/clips (5초 클립, 2026-10-04 계약 v2)
+    - 백엔드와의 관계: 백엔드가 AI WS를 구독해 이상감지를 받고(3-11), 보호자 실시간 보기 영상·상태와
+      5초 클립을 AI_API_KEY(X-API-Key 헤더)로 받아 중계·저장합니다(3-10, 3-11-D).
+      브라우저가 AI에 직접 붙는 경로는 쓰지 않습니다.
         의료 챗      : POST /chat,  GET /chat/logs
         예약 연동    : POST /reservation-credentials (예약 API 키 저장)
     - 참고: 배포본은 로컬 SilverBridgeAi(개발용)보다 앞선 버전.

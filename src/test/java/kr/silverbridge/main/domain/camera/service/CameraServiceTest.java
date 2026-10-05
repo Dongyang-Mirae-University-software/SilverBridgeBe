@@ -85,7 +85,7 @@ class CameraServiceTest {
         @Test
         @DisplayName("최초 등록(deviceId 없음) → SessionID·DeviceID 신규 발급 후 저장, 권장 fps 함께 반환")
         void 최초등록_신규발급() {
-            when(identifierFactory.newSessionId(WARD_ID)).thenReturn("ward_a9cC5f_k3m9Q2");
+            when(identifierFactory.newSessionId()).thenReturn("ward_k3m9Q2aZ7pLx01Bc");
             when(identifierFactory.newDeviceId()).thenReturn("dev_7Qs4Xu9Ld2");
             when(cameraRepository.save(any(Camera.class))).thenAnswer(inv -> inv.getArgument(0));
 
@@ -94,12 +94,12 @@ class CameraServiceTest {
             assertThat(res)
                     .extracting(CameraResponse::sessionId, CameraResponse::deviceId,
                             CameraResponse::label, CameraResponse::recommendedFps)
-                    .containsExactly("ward_a9cC5f_k3m9Q2", "dev_7Qs4Xu9Ld2", "거실", RECOMMENDED_FPS);
+                    .containsExactly("ward_k3m9Q2aZ7pLx01Bc", "dev_7Qs4Xu9Ld2", "거실", RECOMMENDED_FPS);
             assertThat(res.isActive()).isTrue();
         }
 
         @Test
-        @DisplayName("같은 기기 재등록 → 기존 SessionID 재사용(신규 저장 없음), 방 이름만 갱신")
+        @DisplayName("같은 기기 재등록 → 기존 SessionID 재사용(옛 형식 ward_{wardId}_ 포함, 송출 설정을 깨지 않으려 교체하지 않는다 - 2026-10-05), 방 이름만 갱신")
         void 재등록_멱등() {
             Camera existing = camera(1L, WARD_ID, "ward_a9cC5f_k3m9Q2", "dev_7Qs4Xu9Ld2", "거실");
             when(cameraRepository.findByWardIdAndDeviceId(WARD_ID, "dev_7Qs4Xu9Ld2"))
@@ -111,7 +111,7 @@ class CameraServiceTest {
             assertThat(res.sessionId()).isEqualTo("ward_a9cC5f_k3m9Q2");
             assertThat(res.label()).as("방 이름은 갱신된다").isEqualTo("침실");
             verify(cameraRepository, never()).save(any(Camera.class));
-            verify(identifierFactory, never()).newSessionId(any());
+            verify(identifierFactory, never()).newSessionId();
         }
 
         @Test
@@ -119,7 +119,7 @@ class CameraServiceTest {
         void 타인_deviceId는_신규발급() {
             when(cameraRepository.findByWardIdAndDeviceId(WARD_ID, "dev_stolen"))
                     .thenReturn(Optional.empty());
-            when(identifierFactory.newSessionId(WARD_ID)).thenReturn("ward_a9cC5f_new111");
+            when(identifierFactory.newSessionId()).thenReturn("ward_N3w1Q2aZ7pLx01Bc");
             when(identifierFactory.newDeviceId()).thenReturn("dev_fresh222");
             when(cameraRepository.save(any(Camera.class))).thenAnswer(inv -> inv.getArgument(0));
 
@@ -127,7 +127,7 @@ class CameraServiceTest {
                     WARD_ID, new CameraRegisterRequest("작은방", "dev_stolen"));
 
             assertThat(res.deviceId()).as("도용된 토큰이 아니라 새로 발급된 토큰").isEqualTo("dev_fresh222");
-            assertThat(res.sessionId()).isEqualTo("ward_a9cC5f_new111");
+            assertThat(res.sessionId()).isEqualTo("ward_N3w1Q2aZ7pLx01Bc");
         }
     }
 
@@ -138,7 +138,7 @@ class CameraServiceTest {
         @Test
         @DisplayName("방 이름은 정리한 값으로 저장한다 - 앞뒤 공백·제로폭 문자 제거")
         void 등록_방이름_정리후저장() {
-            when(identifierFactory.newSessionId(WARD_ID)).thenReturn("ward_a9cC5f_k3m9Q2");
+            when(identifierFactory.newSessionId()).thenReturn("ward_k3m9Q2aZ7pLx01Bc");
             when(identifierFactory.newDeviceId()).thenReturn("dev_7Qs4Xu9Ld2");
             when(cameraRepository.save(any(Camera.class))).thenAnswer(inv -> inv.getArgument(0));
 
@@ -448,7 +448,7 @@ class CameraServiceTest {
         @DisplayName("8개 방은 모두 등록할 수 있다(앞뒤 공백은 정리 후 통과)")
         void 정해진_방_허용() {
             when(cameraRepository.save(any(Camera.class))).thenAnswer(inv -> inv.getArgument(0));
-            when(identifierFactory.newSessionId(WARD_ID)).thenReturn("ward_a9cC5f_new");
+            when(identifierFactory.newSessionId()).thenReturn("ward_N3w1Q2aZ7pLx01Bc");
             when(identifierFactory.newDeviceId()).thenReturn("dev_new");
 
             for (String label : List.of("거실", "침실", "주방", "화장실", "현관", "베란다", "작은방", "작은방2", " 거실 ")) {
@@ -467,7 +467,7 @@ class CameraServiceTest {
                     .isInstanceOf(CustomException.class)
                     .hasFieldOrPropertyWithValue("errorCode", ErrorCode.CAMERA_LABEL_DUPLICATED);
             verify(cameraRepository, never()).save(any(Camera.class));
-            verify(identifierFactory, never()).newSessionId(any());
+            verify(identifierFactory, never()).newSessionId();
         }
 
         @Test
@@ -518,7 +518,7 @@ class CameraServiceTest {
         @DisplayName("다른 피보호자의 같은 방 이름은 상관없다 - 조회 자체가 본인 wardId로 한정된다")
         void 다른피보호자_같은방_허용() {
             when(cameraRepository.save(any(Camera.class))).thenAnswer(inv -> inv.getArgument(0));
-            when(identifierFactory.newSessionId(WARD_ID)).thenReturn("ward_a9cC5f_new");
+            when(identifierFactory.newSessionId()).thenReturn("ward_N3w1Q2aZ7pLx01Bc");
             when(identifierFactory.newDeviceId()).thenReturn("dev_new");
 
             assertThat(cameraService.register(WARD_ID, new CameraRegisterRequest("거실", null)).label()).isEqualTo("거실");
@@ -529,7 +529,7 @@ class CameraServiceTest {
         @Test
         @DisplayName("새 등록 경합 - id가 IDENTITY라 save()에서 INSERT가 실행돼 제약에 걸려도 같은 409로 바꾼다")
         void 새등록_경합_save에서_제약위반_409() {
-            when(identifierFactory.newSessionId(WARD_ID)).thenReturn("ward_a9cC5f_new");
+            when(identifierFactory.newSessionId()).thenReturn("ward_N3w1Q2aZ7pLx01Bc");
             when(identifierFactory.newDeviceId()).thenReturn("dev_new");
             when(cameraRepository.save(any(Camera.class))).thenThrow(new DataIntegrityViolationException("insert",
                     new RuntimeException("duplicate key value violates unique constraint \"uq_camera_ward_label\"")));
@@ -543,7 +543,7 @@ class CameraServiceTest {
         @Test
         @DisplayName("Hibernate가 알려주는 제약 이름으로도 판정한다(메시지 문구에 기대지 않음)")
         void 제약이름으로_판정() {
-            when(identifierFactory.newSessionId(WARD_ID)).thenReturn("ward_a9cC5f_new");
+            when(identifierFactory.newSessionId()).thenReturn("ward_N3w1Q2aZ7pLx01Bc");
             when(identifierFactory.newDeviceId()).thenReturn("dev_new");
             when(cameraRepository.save(any(Camera.class))).thenThrow(new DataIntegrityViolationException("insert",
                     new org.hibernate.exception.ConstraintViolationException("dup", null, "uq_camera_ward_label")));
@@ -570,7 +570,7 @@ class CameraServiceTest {
         @Test
         @DisplayName("방 제약이 아닌 다른 DB 제약 위반은 바꾸지 않고 그대로 올린다")
         void 다른제약위반_그대로() {
-            when(identifierFactory.newSessionId(WARD_ID)).thenReturn("ward_a9cC5f_new");
+            when(identifierFactory.newSessionId()).thenReturn("ward_N3w1Q2aZ7pLx01Bc");
             when(identifierFactory.newDeviceId()).thenReturn("dev_new");
             when(cameraRepository.save(any(Camera.class))).thenThrow(new DataIntegrityViolationException("insert",
                     new org.hibernate.exception.ConstraintViolationException("dup", null, "uq_cameras_session")));
