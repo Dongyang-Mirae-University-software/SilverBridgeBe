@@ -110,6 +110,9 @@ public class SecurityConfig {
                         // 카메라 영상(MJPEG) - <img>가 헤더를 못 보내 1회용 스트림 티켓으로 인증한다(CameraStreamService).
                         // GET 영상 경로 하나만 연다 - 티켓 발급은 일반 인증 경로(/api/guardian/camera/**)다.
                         .requestMatchers(HttpMethod.GET, "/api/camera/stream/*/mjpeg").permitAll()
+                        // 세션 만료 후 이 기기 FCM 토큰 해제(XAREA-G01) - 만료된 access token을 본문으로 받아 서명으로 본인을
+                        // 확인하고 본인 소유 토큰만 지운다(FcmTokenReleaseService). 이 경로 하나만 연다.
+                        .requestMatchers(HttpMethod.POST, "/api/notifications/fcm-token/release").permitAll()
                         // 관리자 전용 경로
                         .requestMatchers("/api/admin/**").hasRole("ADMIN")
                         // 나머지는 인증 필요

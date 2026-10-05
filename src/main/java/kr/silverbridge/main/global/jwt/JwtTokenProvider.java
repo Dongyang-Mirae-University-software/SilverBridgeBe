@@ -14,6 +14,7 @@ import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.util.Date;
 import java.util.HexFormat;
+import java.util.Optional;
 import java.util.UUID;
 
 @Slf4j
@@ -142,6 +143,38 @@ public class JwtTokenProvider {
                 .expiration(new Date(System.currentTimeMillis() + expiration))
                 .signWith(getSigningKey())
                 .compact();
+    }
+
+    /**
+     * 만료된 것까지 포함해 <b>우리가 서명한 access 토큰</b>의 사용자 ID를 꺼낸다(XAREA-G01).
+     *
+     * <p>자동 로그아웃(세션 만료) 뒤 그 기기의 FCM 토큰을 지우는 데<b>만</b> 쓴다. 세션이 끝나 유효한 토큰이 없는데도
+     * "이 기기 알림을 꺼 달라"는 요청이 본인 것인지는 확인해야 해서, 서명은 검사하고 만료만 눈감는다.
+     * 인증 수단으로 쓰지 말 것 - 만료·로그아웃·무효화된 토큰도 통과한다. 할 수 있는 일을 줄이는(본인 기기 알림 해제)
+     * 용도라서만 허용한다.</p>
+     *
+     * <p>jjwt는 서명을 먼저 검증하고 만료를 나중에 본다 - 서명이 틀린 토큰은 만료 여부와 무관하게 거절된다.</p>
+     *
+     * @param maxExpiredMillis 만료 뒤 이 시간이 지난 토큰은 받지 않는다(오래 전 유출된 토큰의 재사용 범위를 좁힌다)
+     * @return 서명이 맞고 typ=access이며 만료 허용 범위 안이면 사용자 ID, 아니면 빈 값
+     */
+    public Optional<String> getAccessTokenSubjectAllowingExpired(String token, long maxExpiredMillis) {
+        Claims claims;
+        try {
+            claims = getClaims(token);
+        } catch (ExpiredJwtException e) {
+            claims = e.getClaims();
+            Date expiration = claims.getExpiration();
+            if (expiration == null || System.currentTimeMillis() - expiration.getTime() > maxExpiredMillis) {
+                return Optional.empty();
+            }
+        } catch (JwtException | IllegalArgumentException e) {
+            return Optional.empty();
+        }
+        if (!TYPE_ACCESS.equals(claims.get(CLAIM_TYPE, String.class))) {
+            return Optional.empty();
+        }
+        return Optional.ofNullable(claims.getSubject());
     }
 
     private Claims getClaims(String token) {
