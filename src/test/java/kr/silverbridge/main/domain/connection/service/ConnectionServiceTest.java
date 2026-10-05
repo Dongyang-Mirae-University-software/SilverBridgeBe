@@ -79,6 +79,71 @@ class ConnectionServiceTest {
     // ─── 보호자: 페어링 요청 ────────────────────────────────────────────────
 
     @Nested
+    @DisplayName("previewConnectionTarget - 요청 전 상대 확인 (CONN-G06)")
+    class PreviewTarget {
+
+        @Test
+        @DisplayName("요청 가능한 피보호자면 가린 이름만 돌려주고, 요청·이벤트는 만들지 않는다")
+        void 가린_이름만_준다() {
+            User ward = User.builder().id(WARD_ID).email("w@example.com").name("홍길동")
+                    .role(Role.WARD).status(Status.ACTIVE).provider(Provider.LOCAL)
+                    .phone("010-3333-4444").address("서울시 송파구").build();
+            when(userRepository.findById(GUARDIAN_ID)).thenReturn(Optional.of(guardian()));
+            when(userRepository.findById(WARD_ID)).thenReturn(Optional.of(ward));
+
+            var preview = connectionService.previewConnectionTarget(GUARDIAN_ID, WARD_ID);
+
+            assertThat(preview.targetId()).isEqualTo(WARD_ID);
+            assertThat(preview.maskedName()).isEqualTo("홍*동");
+            verify(connectionRepository, never()).saveAndFlush(any());
+            verify(connectionRepository, never()).save(any());
+            verify(eventPublisher, never()).publishEvent(any());
+            verify(requestLimiter, never()).checkAllowed(any(), any());
+        }
+
+        @Test
+        @DisplayName("ID는 대소문자를 바꾸지 않고 그대로 찾는다 - 대소문자만 다른 ID는 다른 사람일 수 있다")
+        void ID는_그대로_찾는다() {
+            when(userRepository.findById(GUARDIAN_ID)).thenReturn(Optional.of(guardian()));
+            when(userRepository.findById("wd0001")).thenReturn(Optional.empty());
+
+            CustomException ex = assertThrows(CustomException.class,
+                    () -> connectionService.previewConnectionTarget(GUARDIAN_ID, "wd0001"));
+
+            assertThat(ex.getErrorCode()).isEqualTo(ErrorCode.USER_NOT_FOUND);
+            verify(userRepository).findById("wd0001");
+            verify(userRepository, never()).findById(WARD_ID);
+        }
+
+        @Test
+        @DisplayName("요청과 같은 기준 - 보호자 ID면 400, 탈퇴·정지면 404, 이미 요청·연결이면 409")
+        void 요청과_같은_기준으로_거절() {
+            when(userRepository.findById(GUARDIAN_ID)).thenReturn(Optional.of(guardian()));
+
+            when(userRepository.findById(WARD_ID)).thenReturn(Optional.of(guardian()));
+            assertThat(assertThrows(CustomException.class,
+                    () -> connectionService.previewConnectionTarget(GUARDIAN_ID, WARD_ID)).getErrorCode())
+                    .isEqualTo(ErrorCode.INVALID_CONNECTION_ROLE);
+
+            when(userRepository.findById(WARD_ID)).thenReturn(Optional.of(inactiveWard()));
+            assertThat(assertThrows(CustomException.class,
+                    () -> connectionService.previewConnectionTarget(GUARDIAN_ID, WARD_ID)).getErrorCode())
+                    .isEqualTo(ErrorCode.USER_NOT_FOUND);
+
+            when(userRepository.findById(WARD_ID)).thenReturn(Optional.of(ward()));
+            when(connectionRepository.existsByGuardianIdAndWardIdAndStatusIn(
+                    GUARDIAN_ID, WARD_ID, List.of(ConnectionStatus.PENDING, ConnectionStatus.ACTIVE))).thenReturn(true);
+            assertThat(assertThrows(CustomException.class,
+                    () -> connectionService.previewConnectionTarget(GUARDIAN_ID, WARD_ID)).getErrorCode())
+                    .isEqualTo(ErrorCode.CONNECTION_ALREADY_EXISTS);
+
+            assertThat(assertThrows(CustomException.class,
+                    () -> connectionService.previewConnectionTarget(GUARDIAN_ID, GUARDIAN_ID)).getErrorCode())
+                    .isEqualTo(ErrorCode.CANNOT_CONNECT_SELF);
+        }
+    }
+
+    @Nested
     @DisplayName("requestConnectionAsGuardian")
     class RequestConnection {
 

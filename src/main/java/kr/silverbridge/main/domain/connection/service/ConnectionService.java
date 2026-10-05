@@ -2,6 +2,7 @@ package kr.silverbridge.main.domain.connection.service;
 
 import kr.silverbridge.main.domain.connection.dto.ConnectionRequestDto;
 import kr.silverbridge.main.domain.connection.dto.ConnectionResponse;
+import kr.silverbridge.main.domain.connection.dto.ConnectionTargetPreviewResponse;
 import kr.silverbridge.main.domain.connection.dto.PendingConnectionResponse;
 import kr.silverbridge.main.domain.connection.dto.WardListFilter;
 import kr.silverbridge.main.domain.connection.entity.Connection;
@@ -129,6 +130,23 @@ public class ConnectionService {
         ));
         log.info("연결 요청 생성: connectionId={}, guardianId={}, wardId={}",
                 connection.getId(), guardianId, wardId);
+    }
+
+    /**
+     * 보호자: 연결 요청 전 상대 확인(CONN-G06). 입력한 ID가 의도한 피보호자인지 <b>가린 이름</b>으로 확인하게 한다.
+     *
+     * <p>사용자 ID는 대소문자를 구분하는 6자리라(UserIdGenerator - 영문 대소문자+숫자) "ab1234"와 "AB1234"는
+     * 서로 다른 사람일 수 있다. 대소문자를 무시해 찾아 주면 엉뚱한 사람에게 요청이 갈 수 있어 정확히 일치하는 ID만 찾고,
+     * 대신 요청 전에 이름을 확인하는 단계를 둔다.</p>
+     *
+     * <p>판정 기준은 실제 요청과 <b>같다</b>(본인·역할·탈퇴/정지·이미 요청/연결) - 확인은 통과했는데 요청이 실패하는
+     * 엇갈림이 없게 한다. 응답은 가린 이름뿐이다(수락 전 연락처·주소 비노출 정책). 요청 자체가 이미 오류 코드로
+     * 존재·역할을 드러내므로 새로 드러나는 것은 가린 이름 하나이며, 호출 횟수는 컨트롤러가 제한한다.</p>
+     */
+    @Transactional(readOnly = true)
+    public ConnectionTargetPreviewResponse previewConnectionTarget(String guardianId, String targetId) {
+        User target = validateConnectionRequest(guardianId, targetId, Role.GUARDIAN, Role.WARD);
+        return ConnectionTargetPreviewResponse.of(target);
     }
 
     // 보호자: 페어링 요청 취소 (PENDING만)
@@ -401,7 +419,8 @@ public class ConnectionService {
 
     // ─── 내부 헬퍼 ────────────────────────────────────────────────
 
-    private void validateConnectionRequest(String requesterId, String targetId,
+    // 검증을 통과한 상대(target)를 돌려준다 - 요청 전 확인(previewConnectionTarget)이 같은 기준을 재사용한다.
+    private User validateConnectionRequest(String requesterId, String targetId,
                                            Role requesterRole, Role targetRole) {
         if (requesterId.equals(targetId)) {
             throw new CustomException(ErrorCode.CANNOT_CONNECT_SELF);
@@ -429,6 +448,7 @@ public class ConnectionService {
                 guardianId, wardId, List.of(ConnectionStatus.PENDING, ConnectionStatus.ACTIVE))) {
             throw new CustomException(ErrorCode.CONNECTION_ALREADY_EXISTS);
         }
+        return target;
     }
 
     private Connection getConnectionForGuardian(String guardianId, Long connectionId) {

@@ -98,4 +98,22 @@ class GuardianConnectionControllerSecurityTest {
         assertThatThrownBy(() -> controller.requestConnection("GD0001", request()))
                 .isInstanceOf(AuthenticationCredentialsNotFoundException.class);
     }
+
+    @Test
+    @DisplayName("요청 전 상대 확인(CONN-G06)도 보호자만 - 피보호자·관리자는 403, 보호자는 호출 횟수 제한을 거친다")
+    void 상대확인_권한과_속도제한() {
+        org.springframework.security.core.context.SecurityContextHolder.getContext().setAuthentication(
+                new org.springframework.security.authentication.TestingAuthenticationToken("WD0001", null, "ROLE_WARD"));
+        try {
+            assertThatThrownBy(() -> controller.previewConnectionTarget("WD0001", "WD0002"))
+                    .isInstanceOf(AccessDeniedException.class);
+
+            org.springframework.security.core.context.SecurityContextHolder.getContext().setAuthentication(
+                    new org.springframework.security.authentication.TestingAuthenticationToken("GD0001", null, "ROLE_GUARDIAN"));
+            assertThatNoException().isThrownBy(() -> controller.previewConnectionTarget("GD0001", "WD0001"));
+            org.mockito.Mockito.verify(rateLimitService).check("connection-preview", "GD0001", 10, 60);
+        } finally {
+            org.springframework.security.core.context.SecurityContextHolder.clearContext();
+        }
+    }
 }
