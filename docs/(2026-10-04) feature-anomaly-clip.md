@@ -78,7 +78,7 @@ AI WS 신호 → AnomalyDetectionService(이력 적재·커밋)
 |---|---|
 | 보관 만료(30일, 상한 30) | 청소(05:00) - 행 → 파일 |
 | 오탐 24시간 | 청소 - 조건부 삭제 |
-| 피보호자 탈퇴 | `UserWithdrawnEvent` **동기 AFTER_COMMIT** → `REQUIRES_NEW` 행 삭제 → 파일 삭제(purge CASCADE 전). 스윕 purge 경로는 행 CASCADE + 매시 고아 파일 청소(최대 약 1시간) |
+| 피보호자 탈퇴 | `UserWithdrawnEvent` **동기 AFTER_COMMIT** → `REQUIRES_NEW` 행 삭제 → 파일 삭제(purge CASCADE 전). 스윕 purge 경로는 행 CASCADE + 매시 고아 파일 청소(최대 약 2시간 - 매시 15분 청소가 수정 후 1시간 지난 파일만 지운다. 2026-10-05 정정) |
 | 카메라 삭제(`delete`·`deleteAllByWard`) | `CameraDeletedEvent`(camera → 이벤트, anomaly가 수신) 동기 AFTER_COMMIT → `REQUIRES_NEW` 행 삭제 → 파일. 상황 이력은 남는다 |
 | 고아 | 행 없는 파일·임시 파일(1시간 경과)은 **매시 15분**(점검 L-3), 파일 없는 행·카메라가 사라진 세션의 클립은 05:00 |
 
@@ -176,6 +176,7 @@ AI 서버보다 백엔드가 먼저 배포돼도 깨지지 않는다 - 클립 �
 
 - AI 클립 API 배포 확인(gosky, 서버 키로 호출): 범위 밖 파라미터 422 `CLIP_INVALID_PARAMS`(JSON) - 계약대로.
 - AI 쪽 대조 권장 2건 반영: ① 503 `CLIP_DISABLED` → `DISABLED`(재시도 안 함, 쿨다운 유지) ② 호출 제한 20 → **25초**.
+- **계약서 보충 (2026-10-05 QA 종합 점검)**: 계약서 본문에 빠져 있던 두 가지를 기록한다. ① 503 `CLIP_DISABLED`(AI 킬 스위치) - 백엔드는 `DISABLED`로 받아 재시도·쿨다운 해제를 하지 않는다. ② AI 인코딩 ffmpeg 추가 옵션 `-an`(음성 없음)·짝수 해상도 보정·`nice` - AI 내부 사항이며 백엔드 검증(EBML·10MB)에는 영향이 없다.
 - **drift 1건(동작 영향 없음)**: 없는 세션의 404가 `testai.gosky.kr` 앞단에서 **HTML 404 페이지로 바뀌어** 내려온다(계약은 JSON `STREAM_SESSION_NOT_FOUND`). 백엔드는 상태 코드로 `SESSION_NOT_FOUND`(재시도 가능)를 판정해 영향이 없고, 로그의 `errorCode`만 null이다. 프록시 설정은 AI·인프라 쪽 확인 사항.
 
 ## 11. 영향 범위 점검 반영 (템플릿 C, `docs/(2026-10-04) audit-impact-anomaly-clip.md`)
