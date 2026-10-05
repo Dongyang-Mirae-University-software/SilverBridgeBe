@@ -201,7 +201,7 @@ public interface CameraRepository extends JpaRepository<Camera, Long> {
   }
   Camera c = save(Camera.builder()
       .wardId(wardId).registeredBy(wardId).label(label)
-      .sessionId(factory.newSessionId(wardId))   // ward_{wardId}_{rand}, 유니크
+      .sessionId(factory.newSessionId())   // ward_{rand16}, 유니크 (2026-10-05부터 피보호자 ID 미포함, 옛: newSessionId(wardId) → ward_{wardId}_{rand})
       .deviceId(factory.newDeviceId())           // dev_{rand}, 유니크
       .isActive(true).build());
   return CameraResponse(c);            // 201 (deviceId 포함 반환 → FE가 localStorage 저장)

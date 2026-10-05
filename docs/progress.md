@@ -1622,3 +1622,11 @@ REST API Key 단독 대비 보안 강화 — 인가코드 탈취 시 토큰 발�
 - `./gradlew build` 통과, 단위 1300 / 0 실패. 통합 테스트 추가 1건은 vkcs 실행 필요.
 - 상세: `docs/(2026-10-05) fix-qa-comprehensive-be.md`
 - 배포: PR #297 머지 `17da651` → vkcs CD 성공 / gosky 수동 배포(api만 재생성), 두 서버 healthy·gosky AI WS 재연결 확인. 통합 테스트 vkcs 통과(`db572bd`).
+
+## [2026-10-05] 기능 점검(B) - QA 종합 점검 후속 PR #297
+
+- 결과: ✅ PASS (🔴0 🟠0 🟡1 🟢3). 세션 ID 발급 경로 단일·인가는 DB 행 + ACTIVE 연결·접두사 판별 코드 없음·응답 계약 무변경·AsyncConfig는 로그·Javadoc뿐.
+- 변이 테스트(결함 주입 후 원복): 쿨다운 fail-open / `no-store` 제거 / 연결 검사 생략 / 세션 ID 6자 / CallerRuns 5건은 신규 테스트가 모두 잡음. 쿨다운을 발행 쪽으로 옮기는 회귀는 못 잡음(M-1: 테스트 Javadoc·정책 문구 정정 필요).
+- L-1 피보호자 경로 파일 HTTP 테스트 없음 / L-2 설계 문서 204행 옛 시그니처 / L-3 옛 형식 픽스처(수용).
+- 후속 조치: M-1(테스트 Javadoc·정책 정정 + 쿨다운 사용처 구조 테스트)·L-1(피보호자 클립 HTTP 테스트 5건)·L-2(설계 문서 정정) 해소, L-3 수용 (`fix/qa-comprehensive-be-followup`).
+- 상세: `docs/(2026-10-05) audit-qa-comprehensive-be.md`
