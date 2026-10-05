@@ -60,11 +60,13 @@ public class NotificationDispatcher {
     private final NotificationSettingService settingService;
     private final NotificationRecipientResolver recipientResolver;
     private final NotificationLogService notificationLogService;
+    private final SmsFallbackLimiter smsFallbackLimiter;
 
     public NotificationDispatcher(List<NotificationChannel> channelBeans,
                                   NotificationSettingService settingService,
                                   NotificationRecipientResolver recipientResolver,
-                                  NotificationLogService notificationLogService) {
+                                  NotificationLogService notificationLogService,
+                                  SmsFallbackLimiter smsFallbackLimiter) {
         this.channels = new EnumMap<>(NotificationChannelType.class);
         for (NotificationChannel channel : channelBeans) {
             this.channels.put(channel.getType(), channel);
@@ -72,6 +74,7 @@ public class NotificationDispatcher {
         this.settingService = settingService;
         this.recipientResolver = recipientResolver;
         this.notificationLogService = notificationLogService;
+        this.smsFallbackLimiter = smsFallbackLimiter;
     }
 
     /**
@@ -253,12 +256,20 @@ public class NotificationDispatcher {
             log.warn("필수 알림 폴백 채널(SMS) 미구현 — 발송 불가: userId={}", userId);
             return Outcome.of(attempts);
         }
+        // 문자 폴백만 시간당 상한을 둔다(연타·호출 루프의 비용·피로 방어). 푸시·WS·이력은 영향이 없다.
+        if (!smsFallbackLimiter.tryAcquire(type, userId)) {
+            attempt(attempts, MANDATORY_FALLBACK, ChannelResult.failed(ChannelFailureReason.RATE_LIMITED));
+            log.warn("[SMS-FALLBACK-CAP] 필수 알림 문자 폴백이 시간당 상한을 넘어 생략: userId={}, type={}", userId, type);
+            return Outcome.of(attempts);
+        }
         ChannelResult fallback = sendQuietly(MANDATORY_FALLBACK, type, recipient, content);
         attempt(attempts, MANDATORY_FALLBACK, fallback);
         if (fallback.isDelivered()) {
             log.info("필수 알림 SMS 폴백 발송: userId={}", userId);
             return new Outcome(NotificationLogResult.SMS_FALLBACK, null, attempts);
         }
+        // 접수되지 않은 문자는 한도를 쓰지 않는다(번호 없음·발송사 장애 중 연타가 한도를 소진하지 않게).
+        smsFallbackLimiter.release(type, userId);
         log.warn("필수 알림 SMS 폴백 실패({}): userId={}", fallback.reason(), userId);
         return Outcome.of(attempts);
     }
