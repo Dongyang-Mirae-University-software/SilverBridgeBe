@@ -7,7 +7,10 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
+import org.springframework.mock.web.MockFilterChain;
 import org.springframework.mock.web.MockHttpServletRequest;
+import org.springframework.mock.web.MockHttpServletResponse;
+import org.springframework.web.filter.ForwardedHeaderFilter;
 
 import java.util.List;
 
@@ -183,5 +186,57 @@ class ClientIpResolverTest {
         // 172.32.x는 172.16.0.0/12 밖 - 비신뢰
         assertThat(ClientIpResolver.resolve(request("172.32.0.1", "127.0.0.1", "203.0.113.7")))
                 .isEqualTo("172.32.0.1");
+    }
+
+    /** 실제 ForwardedHeaderFilter가 감싼 요청으로 resolve를 호출한다(필터 안 거친 목 요청은 이 결함을 못 잡았다). */
+    private static String resolveThroughForwardedHeaderFilter(MockHttpServletRequest raw) throws Exception {
+        MockFilterChain chain = new MockFilterChain();
+        new ForwardedHeaderFilter().doFilter(raw, new MockHttpServletResponse(), chain);
+        HttpServletRequest wrapped = (HttpServletRequest) chain.getRequest();
+        if (raw.getHeader("X-Forwarded-For") != null) {
+            // 전달 헤더가 있을 때만 필터가 요청을 감싸고 그 헤더를 숨긴다 - 이 결함의 전제
+            assertThat(wrapped).isNotSameAs(raw);
+            assertThat(wrapped.getHeader("X-Forwarded-For")).isNull();
+        }
+        return ClientIpResolver.resolve(wrapped);
+    }
+
+    private static MockHttpServletRequest rawRequest(String realIp, String xff) {
+        MockHttpServletRequest raw = new MockHttpServletRequest();
+        raw.setRemoteAddr("172.18.0.1");
+        if (realIp != null) {
+            raw.addHeader("X-Real-IP", realIp);
+        }
+        if (xff != null) {
+            raw.addHeader("X-Forwarded-For", xff);
+        }
+        return raw;
+    }
+
+    @Test
+    @DisplayName("ForwardedHeaderFilter 통과 - 신뢰 피어면 XFF에서 사용자 IP를 꺼낸다")
+    void 필터_통과_신뢰_피어() throws Exception {
+        ClientIpResolver.configureTrustedProxies(List.of("192.168.0.0/16"));
+
+        assertThat(resolveThroughForwardedHeaderFilter(rawRequest("192.168.0.1", "203.0.113.7, 192.168.0.1")))
+                .isEqualTo("203.0.113.7");
+    }
+
+    @Test
+    @DisplayName("ForwardedHeaderFilter 통과 - 비신뢰 피어의 XFF 위조는 무시한다")
+    void 필터_통과_비신뢰_피어() throws Exception {
+        ClientIpResolver.configureTrustedProxies(List.of("192.168.0.0/16"));
+
+        assertThat(resolveThroughForwardedHeaderFilter(rawRequest("198.51.100.10", "6.6.6.6")))
+                .isEqualTo("198.51.100.10");
+    }
+
+    @Test
+    @DisplayName("ForwardedHeaderFilter 통과 - 신뢰 피어 + XFF 없음이면 피어")
+    void 필터_통과_XFF_없음() throws Exception {
+        ClientIpResolver.configureTrustedProxies(List.of("192.168.0.0/16"));
+
+        assertThat(resolveThroughForwardedHeaderFilter(rawRequest("192.168.0.1", null)))
+                .isEqualTo("192.168.0.1");
     }
 }
