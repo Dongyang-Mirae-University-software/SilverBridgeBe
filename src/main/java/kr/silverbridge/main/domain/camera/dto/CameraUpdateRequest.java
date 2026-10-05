@@ -22,6 +22,8 @@ public record CameraUpdateRequest(
         @Size(max = 30, message = "설치 위치는 최대 30자입니다.")
         String label,
 
-        @Schema(description = "사용/중지 토글", nullable = true)
+        @Schema(description = "사용/중지 토글. 사용 중지(false)는 화면 표시용 설정이라 화재 감지와 알림은 계속된다 "
+                + "(송출 중이면 감지·이력·보호자/본인 알림·감지 영상 저장 모두 그대로). "
+                + "꺼진 카메라는 보호자 실시간 카메라 화면(목록·영상·분석 상태)에서만 숨겨진다.", nullable = true)
         Boolean isActive
 ) {}

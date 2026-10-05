@@ -147,6 +147,12 @@ public class WardCameraController {
                     전달한 필드만 갱신합니다(null 필드는 미변경).
                     타인 카메라 ID로 요청하면 403("본인이 등록한 카메라만 사용할 수 있습니다.")으로 응답합니다.
                     방 이름은 등록과 같은 규칙입니다(정해진 8개 방 중 하나, 한 방에 1대).
+
+                    [사용 중지(isActive=false)]
+                    사용 중지해도 화재 감지와 알림은 계속됩니다(보호자 화면에서만 숨겨짐).
+                    - 송출 중이면 감지·이상감지 이력·보호자/본인 알림·감지 영상 저장이 그대로 이뤄집니다.
+                    - 보호자의 실시간 카메라 화면(목록·영상·분석 상태)에서만 빠집니다.
+                    - 감지를 멈추려면 송출을 끄거나 카메라를 삭제해야 합니다.
                     """)
     @ApiResponses({
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "수정된 카메라 반환"),
