@@ -54,6 +54,8 @@ public class WardSosController {
                        - WebSocket: /topic/{guardianId}/sos-triggered  → 보호자 웹 실시간 반응
                        - FCM 푸시:  "긴급 SOS" / "{피보호자}님이 긴급 도움을 요청했습니다."
                     긴급 알림은 필수 알림으로, 보호자의 알림 설정(ON/OFF)과 무관하게 항상 발송됩니다.
+                    같은 피보호자의 알림은 서버 설정 간격(기본 10초) 안에서는 한 번으로 합쳐집니다.
+                    이력은 누를 때마다 남고 요청은 차단(429)되지 않습니다. 보호자 누구에게도 전달되지 못했으면 간격이 바로 풀립니다.
 
                     [응답] data.sosEventId(이력 ID), data.triggeredAt(발생 시각)
 
