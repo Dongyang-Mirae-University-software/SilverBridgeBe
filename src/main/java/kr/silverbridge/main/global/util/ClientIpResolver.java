@@ -123,15 +123,23 @@ public final class ClientIpResolver {
         return peer;
     }
 
+    /**
+     * 전달 헤더도 래퍼를 벗긴 원래 요청에서 읽는다. ForwardedHeaderFilter가 감싼 요청은
+     * X-Forwarded-* 헤더를 숨기므로, 감싼 채 읽으면 항상 비어 피어로 되돌아간다(2026-10-05).
+     * 신뢰 여부는 위에서 피어로 이미 판정했으므로 원본 헤더를 읽어도 위조 방어는 그대로다.
+     */
     private static List<String> forwardedHops(HttpServletRequest request) {
+        ServletRequest original = unwrap(request);
         List<String> hops = new ArrayList<>();
-        Enumeration<String> headers = request.getHeaders(X_FORWARDED_FOR);
-        if (headers != null) {
-            while (headers.hasMoreElements()) {
-                addHops(hops, headers.nextElement());
+        if (original instanceof HttpServletRequest http) {
+            Enumeration<String> headers = http.getHeaders(X_FORWARDED_FOR);
+            if (headers != null) {
+                while (headers.hasMoreElements()) {
+                    addHops(hops, headers.nextElement());
+                }
+            } else {
+                addHops(hops, http.getHeader(X_FORWARDED_FOR));
             }
-        } else {
-            addHops(hops, request.getHeader(X_FORWARDED_FOR));
         }
         return hops;
     }
@@ -149,12 +157,17 @@ public final class ClientIpResolver {
      * getRemoteAddr()를 XFF 선두값(위조 가능)으로 바꾸므로 래퍼를 벗겨 원래 값을 읽는다.
      */
     private static String directPeerAddr(HttpServletRequest request) {
+        String addr = unwrap(request).getRemoteAddr();
+        return StringUtils.hasText(addr) ? addr.trim() : null;
+    }
+
+    /** 요청 래퍼를 끝까지 벗긴 원래(컨테이너) 요청 */
+    private static ServletRequest unwrap(ServletRequest request) {
         ServletRequest current = request;
         while (current instanceof ServletRequestWrapper wrapper) {
             current = wrapper.getRequest();
         }
-        String addr = current.getRemoteAddr();
-        return StringUtils.hasText(addr) ? addr.trim() : null;
+        return current;
     }
 
     private static boolean isTrusted(InetAddress address, List<Cidr> trusted) {
