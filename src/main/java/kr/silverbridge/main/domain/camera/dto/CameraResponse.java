@@ -26,7 +26,8 @@ public record CameraResponse(
         @Schema(description = "설치 위치(방 이름)", example = "거실")
         String label,
 
-        @Schema(description = "사용 여부")
+        @Schema(description = "사용 여부. false(사용 중지)여도 화재 감지와 알림은 계속되며, "
+                + "보호자 실시간 카메라 화면에서만 숨겨진다.")
         boolean isActive,
 
         @Schema(description = "권장 송출 프레임레이트(fps)", example = "5")

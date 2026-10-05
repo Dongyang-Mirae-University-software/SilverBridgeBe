@@ -157,6 +157,9 @@ public class AnomalyReviewReminderPlanner {
      *
      * <p>또 건별 재촉이 <b>오늘 요약 시각 - {@link #SUMMARY_MIN_GAP_AFTER_REMINDER}</b> 이후에 나간 상황은
      * 오늘 요약에서 빼고 다음 날로 넘긴다(ANOM-G09) - 반대 순서(재촉 직후 요약)로 연달아 도착하는 것을 막는다.</p>
+     *
+     * <p>보호자 단위로도 막는다 - 어떤 상황이든 건별 재촉을 받은 지 {@link #SUMMARY_MIN_GAP_AFTER_REMINDER}가
+     * 안 된 보호자는 이번 주기 요약에서 빠진다(다른 오래된 상황 때문에 재촉 직후 요약이 나가는 경로).</p>
      */
     @Transactional
     public List<AnomalyReviewSummaryTarget> claimSummaries() {
@@ -202,6 +205,16 @@ public class AnomalyReviewReminderPlanner {
             return List.of();
         }
 
+        // 상황 단위 제외만으로는 부족하다(ANOM-G09 재현) - 같은 보호자의 <b>다른</b> 오래된 미응답 상황이 남아 있으면
+        // 방금 건별 재촉을 받은 보호자에게 같은 주기에 요약까지 나간다(푸시 두 건이 몇 초 간격으로 도착).
+        // 마지막 건별 재촉으로부터 최소 간격이 지날 때까지 그 보호자의 요약을 미룬다. 선점 기록을 남기지 않으므로
+        // 버리는 게 아니라 다음 주기에 다시 판단된다(오늘 야간 전에 간격이 안 차면 다음 날 요약).
+        Set<String> recentlyReminded = reminderLogRepository
+                .findByGuardianIdInAndSentAtAfter(pendingCounts.keySet(), now.minus(SUMMARY_MIN_GAP_AFTER_REMINDER))
+                .stream()
+                .map(AnomalyReviewReminderLog::getGuardianId)
+                .collect(Collectors.toSet());
+
         LocalDate today = AnomalyReviewClock.toDate(now);
         Set<String> alreadySent = summaryLogRepository
                 .findBySummaryDateAndGuardianIdIn(today, pendingCounts.keySet()).stream()
@@ -213,7 +226,8 @@ public class AnomalyReviewReminderPlanner {
         List<AnomalyReviewSummaryTarget> targets = new ArrayList<>();
         for (Map.Entry<String, Integer> entry : pendingCounts.entrySet()) {
             String guardianId = entry.getKey();
-            if (alreadySent.contains(guardianId) || disabled.contains(guardianId)) {
+            if (alreadySent.contains(guardianId) || disabled.contains(guardianId)
+                    || recentlyReminded.contains(guardianId)) {
                 continue;
             }
             logs.add(AnomalyReviewSummaryLog.builder()

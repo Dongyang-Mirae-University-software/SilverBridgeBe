@@ -24,7 +24,8 @@ public record GuardianCameraView(
         @Schema(description = "설치 위치(방 이름)", example = "거실")
         String label,
 
-        @Schema(description = "사용 여부")
+        @Schema(description = "사용 여부. 이 목록에는 사용 중인 카메라만 오므로 항상 true다 "
+                + "(사용 중지된 카메라는 보호자 화면에서만 숨겨지고, 화재 감지와 알림은 계속된다).")
         boolean isActive
 ) {
     public static GuardianCameraView of(Camera camera, String wardName) {
