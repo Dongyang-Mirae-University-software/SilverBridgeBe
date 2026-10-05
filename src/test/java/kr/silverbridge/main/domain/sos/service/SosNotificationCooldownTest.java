@@ -1,9 +1,10 @@
 package kr.silverbridge.main.domain.sos.service;
 
+import kr.silverbridge.main.domain.sos.config.SosProperties;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.data.redis.core.StringRedisTemplate;
@@ -30,7 +31,12 @@ class SosNotificationCooldownTest {
     @Mock private StringRedisTemplate redisTemplate;
     @Mock private ValueOperations<String, String> valueOps;
 
-    @InjectMocks private SosNotificationCooldown cooldown;
+    private SosNotificationCooldown cooldown;
+
+    @BeforeEach
+    void setUp() {
+        cooldown = new SosNotificationCooldown(redisTemplate, new SosProperties());
+    }
 
     private static final String WARD_ID = "WD0001";
     private static final String KEY = "sos:notify:cooldown:" + WARD_ID;
@@ -39,9 +45,34 @@ class SosNotificationCooldownTest {
     @DisplayName("키 신규 설정(SET NX 성공) → 발송 허용(true) + 쿨다운 TTL로 시작")
     void tryAcquire_신규_허용() {
         when(redisTemplate.opsForValue()).thenReturn(valueOps);
-        when(valueOps.setIfAbsent(eq(KEY), eq("1"), eq(SosNotificationCooldown.COOLDOWN))).thenReturn(true);
+        when(valueOps.setIfAbsent(eq(KEY), eq("1"), eq(Duration.ofSeconds(10)))).thenReturn(true);
 
         assertThat(cooldown.tryAcquire(WARD_ID)).isTrue();
+    }
+
+    @Test
+    @DisplayName("기본 쿨다운 TTL은 10초 - 9초 뒤 재요청 생략·11초 뒤 발송은 Redis EX 만료가 보장한다")
+    void tryAcquire_기본_TTL_10초() {
+        when(redisTemplate.opsForValue()).thenReturn(valueOps);
+        when(valueOps.setIfAbsent(anyString(), anyString(), any(Duration.class))).thenReturn(true);
+
+        cooldown.tryAcquire(WARD_ID);
+
+        verify(valueOps).setIfAbsent(KEY, "1", Duration.ofSeconds(10));
+    }
+
+    @Test
+    @DisplayName("설정값이 TTL에 반영된다")
+    void tryAcquire_설정값_반영() {
+        SosProperties props = new SosProperties();
+        props.setNotifyCooldownSeconds(45);
+        SosNotificationCooldown custom = new SosNotificationCooldown(redisTemplate, props);
+        when(redisTemplate.opsForValue()).thenReturn(valueOps);
+        when(valueOps.setIfAbsent(anyString(), anyString(), any(Duration.class))).thenReturn(true);
+
+        custom.tryAcquire(WARD_ID);
+
+        verify(valueOps).setIfAbsent(KEY, "1", Duration.ofSeconds(45));
     }
 
     @Test

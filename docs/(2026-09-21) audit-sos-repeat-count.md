@@ -32,7 +32,7 @@
 SosService.trigger (@Transactional, 이력 save → SosTriggeredEvent 발행)
   → [커밋] → SosNotificationListener.handleSosTriggered (@Async notificationExecutor, AFTER_COMMIT)
       1) getActiveGuardianIds(wardId)          - 0명이면 종료
-      2) cooldown.tryAcquire(wardId)           - 30초 SET NX, Redis 장애 시 fail-open
+      2) cooldown.tryAcquire(wardId)           - 쿨다운 SET NX(2026-10-05부터 기본 10초), Redis 장애 시 fail-open
       3) countRecentOccurrences(wardId)  ← 신규 - 실패 시 1로 폴백
       4) 보호자별: WS sos-triggered + dispatcher.dispatch(WARD_SOS)  (repeatCount 추가)
 ```

@@ -156,6 +156,12 @@ medication:
       alert-time: ${MEDICATION_MISSED_ALERT_TIME:21:00}
       deadline-minutes: ${MEDICATION_MISSED_ALERT_DEADLINE_MINUTES:120}       # 이 시간이 지나면 그날 발송 포기
 
+# SOS. 코드 기본값과 서버 값을 같게 유지한다(이상감지 2026-07-28 교훈).
+sos:
+  # 같은 피보호자의 SOS 알림 최소 간격(초). 목적은 보호자 폰의 알림 폭주 방지이며 서버 부하 방어가 아니다.
+  # 이력은 쿨다운과 무관하게 전부 저장된다. 1~300 밖의 값은 기본 10으로 대체된다.
+  notify-cooldown-seconds: ${SOS_NOTIFY_COOLDOWN_SECONDS:10}
+
 anomaly:
   enabled: ${ANOMALY_ENABLED:true}
   ws-url: ${AI_WS_URL:wss://testai.gosky.kr/api/v1/ws/live}
