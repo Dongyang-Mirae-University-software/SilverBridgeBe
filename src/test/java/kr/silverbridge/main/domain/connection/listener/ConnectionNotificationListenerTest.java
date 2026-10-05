@@ -219,6 +219,21 @@ class ConnectionNotificationListenerTest {
         assertThat(wardFcm.getValue().body()).isEqualTo("관리자가 박보호님을 보호자로 연결했습니다.");
     }
 
+    @Test
+    @DisplayName("CONN-G02: 보호자 알림 발송이 예외로 끝나도 피보호자 화면 갱신 WS는 이미 나가 있다 - WS는 알림 설정·발송과 무관")
+    void handleForced_발송_실패해도_양쪽_WS는_나간다() {
+        org.mockito.Mockito.when(notificationDispatcher.dispatch(eq(GUARDIAN_ID), eq(WARD_ID),
+                        eq(NotificationType.CONNECTION_FORCED), org.mockito.ArgumentMatchers.any()))
+                .thenThrow(new IllegalStateException("설정 조회 실패"));
+
+        org.assertj.core.api.Assertions.assertThatThrownBy(() -> listener.handleForced(
+                        new ConnectionForcedEvent(CONNECTION_ID, GUARDIAN_ID, WARD_ID, GUARDIAN_NAME, "김피보")))
+                .isInstanceOf(IllegalStateException.class);
+
+        verify(webSocketEventPublisher).sendToUser(eq(GUARDIAN_ID), eq("connection-accepted"), anyMap());
+        verify(webSocketEventPublisher).sendToUser(eq(WARD_ID), eq("connection-accepted"), anyMap());
+    }
+
     @org.junit.jupiter.params.ParameterizedTest
     @org.junit.jupiter.params.provider.CsvSource({
             "GUARDIAN, WD0001, 보호자가 연결을 해제했습니다.",

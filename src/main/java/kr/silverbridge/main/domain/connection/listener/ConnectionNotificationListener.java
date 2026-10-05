@@ -93,13 +93,16 @@ public class ConnectionNotificationListener {
 
         // WS 이벤트명은 FE 호환을 위해 connection-accepted 그대로 두고, payload에 FCM과 같은 type·문구를 싣는다.
         // connectionId만 보내면 FE가 일반 수락으로 보고 "피보호자가 수락했습니다"를 띄운다 - 동의 없는 연결에 거짓 문구다(CONN-G01).
+        // 화면 갱신 신호(WS)는 알림 설정과 무관하게 양쪽에 먼저 보낸다(CONN-G02). 디스패처는 설정 조회(DB) 실패 등으로
+        // 예외를 낼 수 있는데, 보호자 쪽 발송이 실패해도 피보호자 화면의 목록 갱신 신호까지 함께 사라지지 않게 한다.
+        // 알림(FCM 등)은 그대로 SETTINGS_ONLY다 - 강제 채널로 올리지 않는다(CONN-G02 현행 유지 결정).
         webSocketEventPublisher.sendToUser(event.guardianId(), "connection-accepted",
                 forcedPayload(event.connectionId(), guardianTitle, guardianBody));
-        notificationDispatcher.dispatch(event.guardianId(), event.wardId(), NotificationType.CONNECTION_FORCED,
-                NotificationContent.of(guardianTitle, guardianBody, data));
-
         webSocketEventPublisher.sendToUser(event.wardId(), "connection-accepted",
                 forcedPayload(event.connectionId(), wardTitle, wardBody));
+
+        notificationDispatcher.dispatch(event.guardianId(), event.wardId(), NotificationType.CONNECTION_FORCED,
+                NotificationContent.of(guardianTitle, guardianBody, data));
         notificationDispatcher.dispatch(event.wardId(), event.wardId(), NotificationType.CONNECTION_FORCED,
                 NotificationContent.of(wardTitle, wardBody, data));
     }
