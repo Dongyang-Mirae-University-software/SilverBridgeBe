@@ -58,4 +58,9 @@ branch `feature/sos-sms-fallback-cap` · 마이그레이션 없음 · 근거: �
 
 ## 7. 배포 결과
 
-(머지·배포 후 이 절을 갱신한다)
+- PR #305 머지 커밋 `cbdea14` (브랜치 커밋 `15dd184`). CD run 37323774364 성공.
+- vkcs-linux: `cbdea14` 배포 후 healthy. 이어서 다른 PR(#306~#309)이 머지되어 최종 `e80f673`(CD run 37324392404 성공), healthy, 오류 0건.
+- gosky: `55d39cb` → `e80f673`(수동 배포 시점의 최신 dev - 내 변경 외에 #306~#309 QA 후속 수정이 함께 반영됨), healthy, Flyway "No migration necessary", `AI WS 연결됨`, 오류·BindException 0건.
+- 두 서버 같은 커밋(`e80f673`). 설정 키 `SMS_FALLBACK_MAX_PER_HOUR`는 서버 `.env.dev`에 없어 기본 30건으로 동작한다.
+- 상한 초과를 실제로 일으켜 보는 검증은 하지 않았다(실제 문자·보호자 알림이 발생한다). 동작은 단위 테스트로 갈음했고, 운영에서는 `[SMS-FALLBACK-CAP]`·`[SMS-FALLBACK-CAP-REDIS-DOWN]` 로그와 알림 이력 `RATE_LIMITED`로 확인한다.
+- 점검(템플릿 C)은 미실시 - `docs/audit-index.md`에 ❌로 등록.
