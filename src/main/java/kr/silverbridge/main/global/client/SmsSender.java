@@ -62,24 +62,31 @@ public class SmsSender {
     }
 
     /** SDK 호출 본체. {@link SolapiCallExecutor} 스레드에서 실행된다(테스트에서 느린 호출로 대체). */
+    // 로그에는 예외 클래스명·발송사 상태 코드만 남긴다(QA XCUT-G11 후속) - 실패 목록 문자열에는 수신·발신 번호가,
+    // 예외 메시지에는 응답 원문이 들어 있다(알림 이력 불변 규칙 ② 예외 원문 금지).
     Outcome sendNow(String phone, String text) {
-        DefaultMessageService messageService =
-                SolapiClient.INSTANCE.createInstance(apiKey, apiSecret);
-
         Message message = new Message();
         message.setFrom(senderPhone);
         message.setTo(phone);
         message.setText(text);
 
         try {
-            messageService.send(message);
+            deliver(message);
             return Outcome.SENT;
         } catch (SolapiMessageNotReceivedException e) {
-            log.error("SMS 발송 실패: {}", e.getFailedMessageList());
+            log.error("[SMS-SEND-REJECTED] SMS 접수 거부: error={} statusCodes={}",
+                    e.getClass().getSimpleName(), SolapiFailureCodes.statusCodes(e));
             return Outcome.REJECTED;
         } catch (SolapiEmptyResponseException | SolapiUnknownException e) {
-            log.error("SMS 오류: {}", e.getMessage());
+            log.error("[SMS-SEND-ERROR] SMS 발송 오류: error={}", e.getClass().getSimpleName());
             return Outcome.ERROR;
         }
+    }
+
+    /** SDK 전송 1회. 테스트에서 SDK 예외를 흉내 내려고 분리했다. */
+    void deliver(Message message)
+            throws SolapiMessageNotReceivedException, SolapiEmptyResponseException, SolapiUnknownException {
+        DefaultMessageService messageService = SolapiClient.INSTANCE.createInstance(apiKey, apiSecret);
+        messageService.send(message);
     }
 }

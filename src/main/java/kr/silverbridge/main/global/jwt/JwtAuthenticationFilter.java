@@ -80,10 +80,20 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
                     String role   = jwtTokenProvider.getRole(token);
 
                     // 비밀번호 변경·탈퇴·정지·역할 변경 이전에 발급된 토큰은 차단 (Critical-1)
-                    // 저장값이 숫자가 아닌 경우(손상된 키)도 Redis 오류와 같이 D1로 다룬다.
+                    // 저장값이 손상된 경우(숫자 아님·음수·먼 미래)도 Redis 오류와 같이 D1로 다룬다 - 일반 경로 503,
+                    // SOS만 통과. 손상 값을 "무효화 없음"으로 보고 통과시키지 않는다: 그 키는 정지·비밀번호 변경의
+                    // 흔적일 수 있어 통과시키면 무효화 보장이 깨진다. 401도 아니다 - 재로그인한 새 토큰도 같은 키에
+                    // 걸려 로그인 반복만 만든다(XCUT-G03). 로그 태그만 [AUTH-STORE-CORRUPT]로 나눈다.
                     boolean invalidated;
                     try {
                         invalidated = isInvalidatedByPasswordChange(token, userId);
+                    } catch (TokenInvalidation.CorruptValueException e) {
+                        logCorrupt("invalidate", userId, e, sosPath);
+                        if (!sosPath) {
+                            sendError(response, ErrorCode.SERVICE_UNAVAILABLE);
+                            return;
+                        }
+                        invalidated = false;
                     } catch (RuntimeException e) {
                         if (!sosPath) {
                             rejectStoreUnavailable(response, "invalidate", e);
@@ -143,11 +153,11 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
     }
 
     // 무효화 시각(초)보다 앞선 초에 발급된 토큰이면 무효 - 같은 초 발급은 허용 (TokenInvalidation, D2)
-    // 저장값이 숫자가 아니면 NumberFormatException을 그대로 던진다(호출자가 D1로 처리).
+    // 저장값이 손상됐으면 TokenInvalidation.CorruptValueException을 그대로 던진다(호출자가 D1로 처리).
     private boolean isInvalidatedByPasswordChange(String token, String userId) {
         String invalidatedAtStr = redisTemplate.opsForValue().get(RedisKeys.PASSWORD_INVALIDATE + userId);
         if (invalidatedAtStr == null) return false;
-        long invalidatedSec = TokenInvalidation.parseEpochSecond(invalidatedAtStr);
+        long invalidatedSec = TokenInvalidation.parseEpochSecond(invalidatedAtStr, System.currentTimeMillis());
         return TokenInvalidation.isRevoked(jwtTokenProvider.getIssuedAt(token), invalidatedSec);
     }
 
@@ -158,6 +168,13 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
         log.warn("[AUTH-STORE-UNAVAILABLE] 인증 저장소 조회 실패 - 503 응답 check={} error={}",
                 check, e.getClass().getSimpleName());
         sendError(response, ErrorCode.SERVICE_UNAVAILABLE);
+    }
+
+    // 손상 값 - 조회는 됐으나 값이 규칙에 맞지 않는다. 장애가 아니라 데이터 문제라 운영자 조치(키 삭제)가 필요해 ERROR.
+    // 저장값 원문은 남기지 않는다(고정 사유 코드만).
+    private void logCorrupt(String check, String userId, TokenInvalidation.CorruptValueException e, boolean sosPath) {
+        log.error("[AUTH-STORE-CORRUPT] 인증 저장소 값 손상 - {} check={} userId={} reason={}",
+                sosPath ? "SOS 경로라 검사 생략 후 통과" : "503 응답", check, userId, e.getMessage());
     }
 
     private void logSosFailOpen(String check, RuntimeException e) {

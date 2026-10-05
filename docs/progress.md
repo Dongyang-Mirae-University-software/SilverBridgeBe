@@ -1653,3 +1653,10 @@ REST API Key 단독 대비 보안 강화 — 인가코드 탈취 시 토큰 발�
 - 🔴 0 · 🟠 0 · 🟡 2 · 🟢 3. 인가·IDOR·이력·fail-open·해제 모두 불변 확인, 서버 두 곳 덮어쓰기 없음·경고 로그 0건.
 - 🟡 M-1: 빈 값·비숫자 환경변수는 대체되지 않고 기동 실패(BindException) - 프로브로 확인, 문서 문구 정정(코드 변경 없음). 🟡 M-2: SOS 입력 상한이 없어 문자 폴백 보호자는 연타 시 분당 최대 6건(이전 2건) - 수용, `SMS_FALLBACK` 관찰.
 - 상세: `docs/(2026-10-05) audit-sos-notify-cooldown.md`
+
+## [2026-10-05] SOS 문자 폴백 시간당 상한 30건 (branch `feature/sos-sms-fallback-cap`, 마이그레이션 없음)
+
+- 사용자 결정: 문자도 푸시와 같은 10초 쿨다운을 유지하되 학생 프로젝트 비용·피로를 위해 상한을 둔다(점검 M-2 후속). `WARD_SOS` 문자 폴백에만 수신자별 시간당 30건, 초과 시 문자만 생략(이력 `RATE_LIMITED`), 푸시·WS·SOS 이력 무관, Redis 장애 시 fail-open, 0이면 끔.
+- 구현: `SmsFallbackProperties`·`SmsFallbackLimiter` 신규, `NotificationDispatcher.dispatchMandatory`에서 문자 직전 확인. 키는 (알림 종류, 수신자)로 wardId(표시 전용)를 쓰지 않음.
+- 검증: 단위 통과, `build -x test` 통과. Opus 적대적 검토 반영: TTL 없는 키 경합(원자 Lua)·실패 발송 환불 수정, 전원 초과 시 쿨다운 해제·보호자 단위 한도는 수용.
+- 상세: `docs/(2026-10-05) feature-sos-sms-fallback-cap.md`

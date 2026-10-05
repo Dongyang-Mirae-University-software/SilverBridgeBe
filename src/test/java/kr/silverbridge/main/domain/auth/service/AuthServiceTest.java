@@ -431,6 +431,47 @@ class AuthServiceTest {
     }
 
     @Test
+    @DisplayName("가입 더블클릭 - 같은 nonce로 동시 2건이면 한 건만 저장되고 나머지는 SMS_NOT_VERIFIED, 저장 전에 막힌다 (AUTH-G16)")
+    void register_동시이중제출_한번만성공() throws Exception {
+        RegisterRequest req = registerRequest(TEST_EMAIL, "01012345678", Role.WARD);
+        when(req.getPassword()).thenReturn("Password1!");
+        when(userIdGenerator.generate()).thenReturn("abc123");
+        // SmsService.consumeVerification의 원자 소비(Lua)를 흉내 - 첫 호출만 성공
+        java.util.concurrent.atomic.AtomicBoolean consumed = new java.util.concurrent.atomic.AtomicBoolean(false);
+        org.mockito.Mockito.doAnswer(inv -> {
+            if (!consumed.compareAndSet(false, true)) {
+                throw new CustomException(ErrorCode.SMS_NOT_VERIFIED);
+            }
+            return null;
+        }).when(smsService).consumeVerification(anyString(), anyString());
+
+        int threads = 2;
+        java.util.concurrent.ExecutorService pool = java.util.concurrent.Executors.newFixedThreadPool(threads);
+        java.util.concurrent.CountDownLatch start = new java.util.concurrent.CountDownLatch(1);
+        java.util.List<java.util.concurrent.Future<ErrorCode>> results = new java.util.ArrayList<>();
+        for (int i = 0; i < threads; i++) {
+            results.add(pool.submit(() -> {
+                start.await();
+                try {
+                    authService.register(req);
+                    return null;
+                } catch (CustomException e) {
+                    return e.getErrorCode();
+                }
+            }));
+        }
+        start.countDown();
+        java.util.List<ErrorCode> codes = new java.util.ArrayList<>();
+        for (java.util.concurrent.Future<ErrorCode> f : results) {
+            codes.add(f.get(5, java.util.concurrent.TimeUnit.SECONDS));
+        }
+        pool.shutdownNow();
+
+        assertThat(codes).containsExactlyInAnyOrder(null, ErrorCode.SMS_NOT_VERIFIED);
+        verify(userRepository, org.mockito.Mockito.times(1)).save(any(User.class));
+    }
+
+    @Test
     @DisplayName("이메일 중복 확인도 소문자 기준 - 대문자 이메일로 확인해도 기존 계정과 겹치면 409 (AUTH-G09)")
     void checkEmail_대소문자무시() {
         kr.silverbridge.main.domain.auth.dto.EmailCheckRequest req =

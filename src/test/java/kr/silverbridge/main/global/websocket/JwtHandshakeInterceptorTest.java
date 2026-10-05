@@ -176,6 +176,19 @@ class JwtHandshakeInterceptorTest {
     }
 
     @Test
+    @DisplayName("무효화 값이 먼 미래(손상) → 거부 + 503 (HTTP 필터와 같은 기준, XCUT-G03)")
+    void 미래무효화값_503거부() {
+        when(valueOperations.get(RedisKeys.PASSWORD_INVALIDATE + USER_ID))
+                .thenReturn(String.valueOf(System.currentTimeMillis() / 1000 + 86_400));
+
+        boolean allowed = interceptor.beforeHandshake(requestWithToken(), response, wsHandler, attributes);
+
+        assertThat(allowed).isFalse();
+        assertThat(attributes).isEmpty();
+        verify(response).setStatusCode(HttpStatus.SERVICE_UNAVAILABLE);
+    }
+
+    @Test
     @DisplayName("일반 거부(로그아웃 토큰)는 503을 붙이지 않는다")
     void 로그아웃거부는_503아님() {
         when(redisTemplate.hasKey(RedisKeys.LOGOUT_TOKEN + HASH)).thenReturn(true);

@@ -246,7 +246,7 @@ class AnomalyReviewReminderPlannerTest {
                     .thenReturn(List.of(incident()));
             when(connectionService.getActiveGuardianIds(WARD_ID)).thenReturn(List.of(GUARDIAN_ID));
             when(feedbackRepository.findByIncidentIdIn(anyCollection())).thenReturn(List.of());
-            when(reminderLogRepository.findByIncidentIdIn(anyCollection())).thenReturn(List.of(reminderSentAt(sentAt)));
+            givenReminderLogs(reminderSentAt(sentAt));
             when(summaryLogRepository.findBySummaryDateAndGuardianIdIn(any(), anyCollection())).thenReturn(List.of());
             when(settingRepository.findByGuardianIdIn(anyCollection())).thenReturn(List.of());
         }
@@ -284,29 +284,107 @@ class AnomalyReviewReminderPlannerTest {
             assertThat(planner.claimSummaries()).isEmpty();
         }
 
-        @Test
-        @DisplayName("방금 재촉한 상황은 빼되 오래된 미응답 상황은 그대로 센다 (ANOM-G09)")
-        void onlyRecentReminderIsExcludedFromCount() {
-            AnomalyIncident older = incident();
+        /**
+         * 재촉 기록 저장소를 실제처럼 흉내 낸다 - 두 조회(상황 기준·보호자+시각 기준)가 <b>같은 기록 묶음</b>을 본다.
+         * 같은 주기에 앞서 커밋된 건별 재촉 선점 기록이 요약 판단에 그대로 보이는 상황을 재현하기 위해서다.
+         */
+        private void givenReminderLogs(AnomalyReviewReminderLog... logs) {
+            List<AnomalyReviewReminderLog> all = List.of(logs);
+            when(reminderLogRepository.findByIncidentIdIn(anyCollection())).thenAnswer(inv -> {
+                java.util.Collection<Long> ids = inv.getArgument(0);
+                return all.stream().filter(log -> ids.contains(log.getIncidentId())).toList();
+            });
+            when(reminderLogRepository.findByGuardianIdInAndSentAtAfter(anyCollection(), any())).thenAnswer(inv -> {
+                java.util.Collection<String> guardianIds = inv.getArgument(0);
+                OffsetDateTime after = inv.getArgument(1);
+                return all.stream()
+                        .filter(log -> guardianIds.contains(log.getGuardianId()) && log.getSentAt().isAfter(after))
+                        .toList();
+            });
+        }
+
+        private AnomalyIncident secondIncident() {
             AnomalyIncident recent = AnomalyIncident.builder()
                     .wardId(WARD_ID).sessionId("ward_a9cC5f_k3m").detectedType(DetectedType.FIRE)
                     .detectedAt(OffsetDateTime.of(2026, 9, 1, 13, 0, 0, 0, KST)).confidence(0.9).build();
             ReflectionTestUtils.setField(recent, "id", INCIDENT_ID + 1);
+            return recent;
+        }
+
+        /** 상황 2건(오래된 A + 새 B), 보호자 1명, 미응답, 오늘 요약 없음, 설정 기본값. */
+        private void givenTwoPendingIncidents() {
             when(incidentRepository.findByReviewStatusAndStartedAtGreaterThanEqual(any(), any()))
-                    .thenReturn(List.of(older, recent));
+                    .thenReturn(List.of(incident(), secondIncident()));
             when(connectionService.getActiveGuardianIds(WARD_ID)).thenReturn(List.of(GUARDIAN_ID));
             when(feedbackRepository.findByIncidentIdIn(anyCollection())).thenReturn(List.of());
-            when(reminderLogRepository.findByIncidentIdIn(anyCollection())).thenReturn(List.of(
-                    reminderSentAt(cutoff().minusHours(5)),
-                    AnomalyReviewReminderLog.builder().incidentId(INCIDENT_ID + 1).guardianId(GUARDIAN_ID)
-                            .sentAt(AnomalyReviewClock.now()).build()));
             when(summaryLogRepository.findBySummaryDateAndGuardianIdIn(any(), anyCollection())).thenReturn(List.of());
             when(settingRepository.findByGuardianIdIn(anyCollection())).thenReturn(List.of());
+        }
+
+        @Test
+        @DisplayName("같은 주기에 건별 재촉을 받은 보호자는 다른 오래된 미응답 상황이 있어도 요약을 미룬다 (ANOM-G09 재현)")
+        void sameCycleReminderDefersGuardianSummary() {
+            // QA 시나리오: 20시대, 오래된 미응답 상황 A(이미 재촉함) + 75분 전에 닫힌 상황 B.
+            // 같은 실행에서 B 건별 재촉이 먼저 선점·커밋되고, 이어지는 요약 판단이 그 기록을 본다.
+            givenTwoPendingIncidents();
+            givenReminderLogs(
+                    reminderSentAt(cutoff().minusHours(5)),
+                    AnomalyReviewReminderLog.builder().incidentId(INCIDENT_ID + 1).guardianId(GUARDIAN_ID)
+                            .sentAt(AnomalyReviewClock.now()).build());
+
+            assertThat(planner.claimSummaries()).isEmpty();
+            // 선점 기록을 남기지 않는다 - 남기면 오늘 요약이 "보낸 것"으로 굳어 간격이 찬 뒤에도 못 보낸다(하루 1건 UNIQUE)
+            verify(summaryLogRepository, never()).saveAll(anyCollection());
+        }
+
+        @Test
+        @DisplayName("이미 답해 PENDING을 벗어난 상황의 최근 재촉도 요약을 미룬다 - 그 푸시는 이미 나갔다 (ANOM-G09)")
+        void recentReminderOfAnsweredIncidentAlsoDefers() {
+            when(incidentRepository.findByReviewStatusAndStartedAtGreaterThanEqual(any(), any()))
+                    .thenReturn(List.of(incident()));
+            when(connectionService.getActiveGuardianIds(WARD_ID)).thenReturn(List.of(GUARDIAN_ID));
+            when(feedbackRepository.findByIncidentIdIn(anyCollection())).thenReturn(List.of());
+            when(summaryLogRepository.findBySummaryDateAndGuardianIdIn(any(), anyCollection())).thenReturn(List.of());
+            when(settingRepository.findByGuardianIdIn(anyCollection())).thenReturn(List.of());
+            // 후보(PENDING)에 없는 상황 99의 재촉이 방금 나갔다
+            givenReminderLogs(
+                    reminderSentAt(cutoff().minusHours(5)),
+                    AnomalyReviewReminderLog.builder().incidentId(99L).guardianId(GUARDIAN_ID)
+                            .sentAt(AnomalyReviewClock.now()).build());
+
+            assertThat(planner.claimSummaries()).isEmpty();
+        }
+
+        @Test
+        @DisplayName("다른 보호자가 받은 최근 재촉은 이 보호자의 요약을 막지 않는다 (ANOM-G09)")
+        void otherGuardiansRecentReminderDoesNotDefer() {
+            givenTwoPendingIncidents();
+            givenReminderLogs(
+                    reminderSentAt(cutoff().minusHours(5)),
+                    AnomalyReviewReminderLog.builder().incidentId(INCIDENT_ID + 1).guardianId(OTHER_GUARDIAN_ID)
+                            .sentAt(AnomalyReviewClock.now()).build());
 
             List<AnomalyReviewSummaryTarget> targets = planner.claimSummaries();
 
-            assertThat(targets).hasSize(1);
-            assertThat(targets.getFirst().pendingCount()).isEqualTo(1);
+            assertThat(targets).singleElement().satisfies(target -> {
+                assertThat(target.guardianId()).isEqualTo(GUARDIAN_ID);
+                assertThat(target.pendingCount()).isEqualTo(1);
+            });
+        }
+
+        @Test
+        @DisplayName("보호자 단위 미루기 기준은 지금 - 2시간이다 (ANOM-G09)")
+        void deferWindowIsNowMinusGap() {
+            givenRemindedAt(cutoff().minusHours(1));
+            OffsetDateTime before = AnomalyReviewClock.now();
+
+            planner.claimSummaries();
+
+            ArgumentCaptor<OffsetDateTime> captor = ArgumentCaptor.forClass(OffsetDateTime.class);
+            verify(reminderLogRepository).findByGuardianIdInAndSentAtAfter(eq(java.util.Set.of(GUARDIAN_ID)), captor.capture());
+            assertThat(captor.getValue())
+                    .isAfterOrEqualTo(before.minus(AnomalyReviewReminderPlanner.SUMMARY_MIN_GAP_AFTER_REMINDER))
+                    .isBeforeOrEqualTo(AnomalyReviewClock.now().minus(AnomalyReviewReminderPlanner.SUMMARY_MIN_GAP_AFTER_REMINDER));
         }
 
         @Test
@@ -400,7 +478,7 @@ class AnomalyReviewReminderPlannerTest {
         }
 
         @Test
-        @DisplayName("응답한 보호자에게만 안내한다 - 동수를 만든 보호자(sent=false 기록)는 빠지고, 미응답 보호자는 건별 재촉 몫이다")
+        @DisplayName("응답한 보호자에게만 안내한다 - 동수를 만든 보호자(sent=false 기록)와 미응답 보호자는 빠진다")
         void onlyOtherRespondentsAreClaimed() {
             tieWithTwoRespondents();
             // 동수를 만든 GUARDIAN은 응답 트랜잭션이 이미 sent=false로 기록해 두었다.
@@ -422,6 +500,35 @@ class AnomalyReviewReminderPlannerTest {
                         assertThat(log.getGuardianId()).isEqualTo(OTHER_GUARDIAN_ID);
                         assertThat(log.isSent()).isTrue();
                     });
+        }
+
+        @Test
+        @DisplayName("동수 상황의 미응답 보호자에게는 건별 재촉도 동수 안내도 가지 않는다 - 의도된 동작 (ANOM-G06)")
+        void unansweredGuardianOfTieGetsNothing() {
+            // 저장소를 실제처럼 흉내 낸다 - 상태 조건에 맞는 상황만 돌려준다. 이 상황은 동수(CONFLICTED)다.
+            AnomalyIncident tie = conflicted();
+            when(incidentRepository.findByReviewStatusAndLastDetectedAtLessThanEqualAndStartedAtGreaterThanEqual(
+                    any(), any(), any())).thenAnswer(inv ->
+                    inv.getArgument(0) == tie.getReviewStatus() ? List.of(tie) : List.of());
+            when(incidentRepository.findByReviewStatusAndStartedAtGreaterThanEqual(any(), any())).thenAnswer(inv ->
+                    inv.getArgument(0) == tie.getReviewStatus() ? List.of(tie) : List.of());
+            when(feedbackRepository.findByIncidentIdIn(anyCollection())).thenReturn(List.of(
+                    answer(GUARDIAN_ID, AnomalyVerdict.REAL), answer(OTHER_GUARDIAN_ID, AnomalyVerdict.FALSE_ALARM)));
+            when(connectionService.getActiveGuardianIds(WARD_ID))
+                    .thenReturn(List.of(GUARDIAN_ID, OTHER_GUARDIAN_ID, NOT_ANSWERED_GUARDIAN_ID));
+            when(reminderLogRepository.findByIncidentIdIn(anyCollection())).thenReturn(List.of());
+            when(conflictLogRepository.findByIncidentIdIn(anyCollection())).thenReturn(List.of());
+            when(settingRepository.findByGuardianIdIn(anyCollection())).thenReturn(List.of());
+
+            // 건별 재촉은 PENDING 상황만 본다 - 한 명이라도 답해 PENDING을 벗어나면 나머지 재촉은 멈춘다
+            assertThat(planner.claimReminders()).isEmpty();
+            verify(reminderLogRepository, never()).saveAll(anyCollection());
+
+            // 동수 안내는 응답한 보호자에게만 간다
+            assertThat(planner.claimConflicts())
+                    .extracting(AnomalyReviewReminderTarget::guardianId)
+                    .containsExactlyInAnyOrder(GUARDIAN_ID, OTHER_GUARDIAN_ID)
+                    .doesNotContain(NOT_ANSWERED_GUARDIAN_ID);
         }
 
         @Test

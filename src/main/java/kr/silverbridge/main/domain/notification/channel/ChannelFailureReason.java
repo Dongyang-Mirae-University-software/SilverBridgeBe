@@ -21,6 +21,8 @@ public enum ChannelFailureReason {
     PROVIDER_REJECTED("발송사가 접수를 거부함"),
     /** 발송사(Solapi) 통신 오류·빈 응답. */
     PROVIDER_ERROR("발송 서버 오류"),
+    /** 수신자별 시간당 문자 폴백 상한을 넘어 이번 문자를 보내지 않았다(연타·호출 루프 방어). */
+    RATE_LIMITED("문자 발송 한도 초과로 생략됨"),
     /** 채널 구현체가 예상하지 못한 예외를 던졌다(디스패처가 격리). */
     UNEXPECTED_ERROR("처리 중 오류");
 

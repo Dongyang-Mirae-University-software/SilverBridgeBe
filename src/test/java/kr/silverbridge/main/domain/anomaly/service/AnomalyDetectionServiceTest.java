@@ -234,6 +234,115 @@ class AnomalyDetectionServiceTest {
         verify(cooldown, never()).release(any(), any());
     }
 
+    /** 쿨다운을 실제처럼 흉내 낸다 - 키가 있으면 거절, release로 지운다(Redis SET NX / DEL). */
+    private java.util.Set<String> givenStatefulCooldown() {
+        java.util.Set<String> keys = new java.util.HashSet<>();
+        when(cooldown.tryAcquire(any(), any()))
+                .thenAnswer(inv -> keys.add(inv.getArgument(0) + ":" + inv.getArgument(1)));
+        doAnswer(inv -> keys.remove(inv.getArgument(0) + ":" + inv.getArgument(1)))
+                .when(cooldown).release(any(), any());
+        return keys;
+    }
+
+    @Test
+    @DisplayName("저장 실패 → 쿨다운 해제 → 쿨다운 안의 다음 신호가 이력으로 저장된다 (ANOM-G14)")
+    void saveFailure_thenNextSignalIsRecorded() {
+        java.util.Set<String> keys = givenStatefulCooldown();
+        AnomalySignal first = signal(OffsetDateTime.now());
+        AnomalySignal next = signal(OffsetDateTime.now());
+        when(judge.isAnomaly(any())).thenReturn(true);
+        givenRegisteredCamera();
+        givenIncident();
+        when(anomalyEventRepository.save(any(AnomalyEvent.class)))
+                .thenThrow(new org.springframework.dao.DataAccessResourceFailureException("db down"))
+                .thenAnswer(inv -> inv.getArgument(0));
+
+        assertThatThrownBy(() -> detectionService.handle(first))
+                .isInstanceOf(org.springframework.dao.DataAccessResourceFailureException.class);
+        assertThat(keys).as("실패한 신호는 쿨다운을 남기지 않는다").isEmpty();
+
+        assertThat(detectionService.handle(next)).as("다음 신호는 쿨다운에 막히지 않고 저장된다").isPresent();
+        verify(anomalyEventRepository, times(2)).save(any(AnomalyEvent.class));
+        verify(eventPublisher, times(1)).publishEvent(any(AnomalyDetectedEvent.class));
+        // 저장에 성공한 뒤에는 쿨다운이 확정돼 그 다음 프레임은 막힌다
+        assertThat(keys).containsExactly(SESSION_ID + ":" + DetectedType.FIRE);
+        assertThat(detectionService.handle(signal(OffsetDateTime.now()))).isEmpty();
+    }
+
+    @Test
+    @DisplayName("save()는 성공했지만 커밋이 실패해 롤백되면 쿨다운을 해제한다 - 다음 신호가 저장된다 (ANOM-G14)")
+    void commitFailure_releasesCooldownAfterRollback() {
+        java.util.Set<String> keys = givenStatefulCooldown();
+        AnomalySignal signal = signal(OffsetDateTime.now());
+        when(judge.isAnomaly(any())).thenReturn(true);
+        givenRegisteredCamera();
+        givenIncident();
+        when(anomalyEventRepository.save(any(AnomalyEvent.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        // @Transactional 경계를 흉내 낸다 - 메서드는 정상 반환, 이후 커밋 단계(flush 제약 위반 등)에서 롤백
+        org.springframework.transaction.support.TransactionSynchronizationManager.initSynchronization();
+        try {
+            assertThat(detectionService.handle(signal)).isPresent();
+            assertThat(keys).as("커밋 전에는 쿨다운이 잡혀 있다").isNotEmpty();
+            completeTransaction(org.springframework.transaction.support.TransactionSynchronization.STATUS_ROLLED_BACK);
+        } finally {
+            org.springframework.transaction.support.TransactionSynchronizationManager.clearSynchronization();
+        }
+
+        assertThat(keys).as("롤백되면 쿨다운을 해제한다").isEmpty();
+        assertThat(detectionService.handle(signal(OffsetDateTime.now()))).isPresent();
+    }
+
+    @Test
+    @DisplayName("커밋에 성공하면 쿨다운을 유지한다 - 커밋 후 동기화가 해제하지 않는다 (ANOM-G14)")
+    void commitSuccess_keepsCooldown() {
+        AnomalySignal signal = signal(OffsetDateTime.now());
+        when(judge.isAnomaly(signal)).thenReturn(true);
+        when(cooldown.tryAcquire(SESSION_ID, DetectedType.FIRE)).thenReturn(true);
+        givenRegisteredCamera();
+        givenIncident();
+        when(anomalyEventRepository.save(any(AnomalyEvent.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        org.springframework.transaction.support.TransactionSynchronizationManager.initSynchronization();
+        try {
+            detectionService.handle(signal);
+            completeTransaction(org.springframework.transaction.support.TransactionSynchronization.STATUS_COMMITTED);
+        } finally {
+            org.springframework.transaction.support.TransactionSynchronizationManager.clearSynchronization();
+        }
+
+        verify(cooldown, never()).release(any(), any());
+    }
+
+    @Test
+    @DisplayName("커밋 결과를 알 수 없을 때(STATUS_UNKNOWN)도 해제한다 - 남겨 두면 1분간 화재 신호를 버린다 (ANOM-G14)")
+    void unknownCompletion_releasesCooldown() {
+        AnomalySignal signal = signal(OffsetDateTime.now());
+        when(judge.isAnomaly(signal)).thenReturn(true);
+        when(cooldown.tryAcquire(SESSION_ID, DetectedType.FIRE)).thenReturn(true);
+        givenRegisteredCamera();
+        givenIncident();
+        when(anomalyEventRepository.save(any(AnomalyEvent.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        org.springframework.transaction.support.TransactionSynchronizationManager.initSynchronization();
+        try {
+            detectionService.handle(signal);
+            completeTransaction(org.springframework.transaction.support.TransactionSynchronization.STATUS_UNKNOWN);
+        } finally {
+            org.springframework.transaction.support.TransactionSynchronizationManager.clearSynchronization();
+        }
+
+        verify(cooldown).release(SESSION_ID, DetectedType.FIRE);
+    }
+
+    /** 트랜잭션 매니저가 커밋/롤백 뒤에 하는 일을 대신한다. */
+    private static void completeTransaction(int status) {
+        for (org.springframework.transaction.support.TransactionSynchronization sync
+                : org.springframework.transaction.support.TransactionSynchronizationManager.getSynchronizations()) {
+            sync.afterCompletion(status);
+        }
+    }
+
     @Test
     @DisplayName("미등록 세션은 쿨다운을 되돌리지 않는다 - 삭제된 카메라의 매 프레임 WARN 폭주 억제")
     void unknownSession_keepsCooldown() {
