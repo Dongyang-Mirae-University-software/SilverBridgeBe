@@ -57,4 +57,8 @@ branch `fix/sos-notify-cooldown-10s` · 마이그레이션 없음
 
 ## 8. 배포 결과
 
-(머지·배포 후 이 절을 갱신한다)
+- PR #302 머지 커밋 `28e83d2` (브랜치 커밋 `31fd3fd`). CD(`dev CD`, run 37296441036) 성공.
+- vkcs-linux: `28e83d2`, `dmu-dev-api` healthy, Flyway "No migration necessary", 기동 오류 없음, AI WS 재접속 확인.
+- gosky: 배포 전 `c4b709d`(롤백 기준) → `28e83d2`, healthy, Flyway 불변, 기동 오류 없음, AI WS 재접속 확인.
+- 두 서버 같은 커밋. SOS 실발송 검증은 보호자 알림이 나가므로 하지 않았다(설정 반영은 단위 테스트로 갈음).
+- 점검(템플릿 B)은 미실시 - `docs/audit-index.md`에 ❌로 등록.
