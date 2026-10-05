@@ -85,6 +85,12 @@ public class JwtHandshakeInterceptor implements HandshakeInterceptor {
                 log.warn("WebSocket 연결 거부: 무효화된 토큰 userId={}", userId);
                 return false;
             }
+        } catch (TokenInvalidation.CorruptValueException e) {
+            // 손상 값 - 조회 오류와 같이 503으로 거부하되 태그를 나눈다(HTTP 필터와 같은 기준, XCUT-G03)
+            log.error("[AUTH-STORE-CORRUPT] WebSocket 연결 거부: 인증 저장소 값 손상 userId={} reason={}",
+                    userId, e.getMessage());
+            response.setStatusCode(HttpStatus.SERVICE_UNAVAILABLE);
+            return false;
         } catch (RuntimeException e) {
             log.warn("[AUTH-STORE-UNAVAILABLE] WebSocket 연결 거부: 인증 저장소 조회 실패 userId={} error={}",
                     userId, e.getClass().getSimpleName());
@@ -97,11 +103,11 @@ public class JwtHandshakeInterceptor implements HandshakeInterceptor {
     }
 
     // 무효화 시각(초)보다 앞선 초에 발급(iat)된 토큰이면 무효 — JwtAuthenticationFilter와 같은 TokenInvalidation 규칙(D2).
-    // 저장값이 숫자가 아니면 NumberFormatException을 던진다(호출자가 저장소 오류로 처리).
+    // 저장값이 손상됐으면 TokenInvalidation.CorruptValueException을 던진다(호출자가 503으로 처리).
     private boolean isInvalidated(String token, String userId) {
         String invalidatedAtStr = redisTemplate.opsForValue().get(RedisKeys.PASSWORD_INVALIDATE + userId);
         if (invalidatedAtStr == null) return false;
-        long invalidatedSec = TokenInvalidation.parseEpochSecond(invalidatedAtStr);
+        long invalidatedSec = TokenInvalidation.parseEpochSecond(invalidatedAtStr, System.currentTimeMillis());
         return TokenInvalidation.isRevoked(jwtTokenProvider.getIssuedAt(token), invalidatedSec);
     }
 

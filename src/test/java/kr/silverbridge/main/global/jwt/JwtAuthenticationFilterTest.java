@@ -316,6 +316,61 @@ class JwtAuthenticationFilterTest {
         assertThat(r2.getStatus()).isEqualTo(503);
     }
 
+    @Test
+    @DisplayName("무효화 값이 먼 미래(손상) → 401(로그인 반복)이 아니라 503, 체인 미진행 (XCUT-G03)")
+    void futureInvalidationValueIs503() throws Exception {
+        MockHttpServletRequest request = bearer(access());
+        MockHttpServletResponse response = new MockHttpServletResponse();
+        stubInvalidate(String.valueOf(System.currentTimeMillis() / 1000 + 86_400));
+
+        filter.doFilterInternal(request, response, filterChain);
+
+        assertThat(response.getStatus()).isEqualTo(503);
+        assertThat(response.getContentAsString()).contains("SERVICE_UNAVAILABLE");
+        assertThat(SecurityContextHolder.getContext().getAuthentication()).isNull();
+        verify(filterChain, never()).doFilter(request, response);
+    }
+
+    @Test
+    @DisplayName("무효화 값이 음수(손상) → 503")
+    void negativeInvalidationValueIs503() throws Exception {
+        MockHttpServletRequest request = bearer(access());
+        MockHttpServletResponse response = new MockHttpServletResponse();
+        stubInvalidate("-1");
+
+        filter.doFilterInternal(request, response, filterChain);
+
+        assertThat(response.getStatus()).isEqualTo(503);
+        verify(filterChain, never()).doFilter(request, response);
+    }
+
+    @Test
+    @DisplayName("SOS 경로는 무효화 값이 먼 미래(손상)여도 통과한다")
+    void sosPathPassesOnFutureCorruptValue() throws Exception {
+        MockHttpServletRequest request = sosRequest(access());
+        MockHttpServletResponse response = new MockHttpServletResponse();
+        stubInvalidate(String.valueOf(System.currentTimeMillis() / 1000 + 86_400));
+
+        filter.doFilterInternal(request, response, filterChain);
+
+        assertThat(SecurityContextHolder.getContext().getAuthentication()).isNotNull();
+        verify(filterChain).doFilter(request, response);
+    }
+
+    @Test
+    @DisplayName("정상 값(과거 무효화)은 손상 처리와 무관하게 기존대로 401 - 정지·비밀번호 변경 보장 유지")
+    void validPastInvalidationStillRevokes() throws Exception {
+        String token = access();
+        MockHttpServletRequest request = bearer(token);
+        MockHttpServletResponse response = new MockHttpServletResponse();
+        stubInvalidate(String.valueOf(jwtTokenProvider.getIssuedAt(token) / 1000 + 1));
+
+        filter.doFilterInternal(request, response, filterChain);
+
+        assertThat(response.getStatus()).isEqualTo(401);
+        verify(filterChain, never()).doFilter(request, response);
+    }
+
     private String access() {
         return jwtTokenProvider.generateAccessToken(USER_ID, "user@example.com", "WARD");
     }
