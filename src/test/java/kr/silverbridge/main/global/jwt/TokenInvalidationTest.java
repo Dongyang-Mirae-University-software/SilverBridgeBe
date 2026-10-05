@@ -22,10 +22,35 @@ class TokenInvalidationTest {
     }
 
     @Test
-    @DisplayName("숫자가 아닌 값은 NumberFormatException - 호출자가 저장소 오류로 다룬다")
+    @DisplayName("숫자가 아닌 값은 CorruptValueException - 호출자가 손상 값으로 다룬다(원문은 메시지에 싣지 않는다)")
     void parseRejectsMalformed() {
         assertThatThrownBy(() -> TokenInvalidation.parseEpochSecond("abc"))
-                .isInstanceOf(NumberFormatException.class);
+                .isInstanceOf(TokenInvalidation.CorruptValueException.class)
+                .hasMessage("non-numeric");
+        assertThatThrownBy(() -> TokenInvalidation.parseEpochSecond("99999999999999999999999"))
+                .isInstanceOf(TokenInvalidation.CorruptValueException.class);
+    }
+
+    @Test
+    @DisplayName("시각 검사 - 지금·과거·시계 차이 이내 미래는 정상, 음수·먼 미래는 손상 (XCUT-G03)")
+    void parseWithNowRejectsImpossibleValues() {
+        long nowMs = 1_759_380_000_000L;
+        long nowSec = nowMs / 1000;
+        assertThat(TokenInvalidation.parseEpochSecond(String.valueOf(nowSec), nowMs)).isEqualTo(nowSec);
+        assertThat(TokenInvalidation.parseEpochSecond(String.valueOf(nowSec - 600), nowMs)).isEqualTo(nowSec - 600);
+        long edge = nowSec + TokenInvalidation.FUTURE_SKEW_SECONDS;
+        assertThat(TokenInvalidation.parseEpochSecond(String.valueOf(edge), nowMs)).isEqualTo(edge);
+        // 옛 ms 형식도 같은 규칙
+        assertThat(TokenInvalidation.parseEpochSecond(String.valueOf(nowMs), nowMs)).isEqualTo(nowSec);
+
+        assertThatThrownBy(() -> TokenInvalidation.parseEpochSecond(String.valueOf(edge + 1), nowMs))
+                .isInstanceOf(TokenInvalidation.CorruptValueException.class)
+                .hasMessage("future");
+        assertThatThrownBy(() -> TokenInvalidation.parseEpochSecond("-5", nowMs))
+                .isInstanceOf(TokenInvalidation.CorruptValueException.class)
+                .hasMessage("negative");
+        assertThatThrownBy(() -> TokenInvalidation.parseEpochSecond("{broken", nowMs))
+                .isInstanceOf(TokenInvalidation.CorruptValueException.class);
     }
 
     @Test
