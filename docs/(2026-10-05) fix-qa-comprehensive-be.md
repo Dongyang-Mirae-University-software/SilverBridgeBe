@@ -53,7 +53,7 @@
 ## 4. 검증
 
 - `./gradlew build` 통과 - 단위 테스트 **1300건 / 실패 0**.
-- 통합 테스트(추가 1건)는 로컬에 Docker가 없어 미실행 - vkcs에서 실행:
+- 통합 테스트: vkcs `integration-test.sh fix/qa-comprehensive-be` **통과**(`db572bd`, 캐시 아님). 명령:
   ```bash
   ~/SilverBridgeBe/tools/integration-test.sh fix/qa-comprehensive-be
   ```
@@ -76,3 +76,9 @@
 - 사용처 전수(세션 ID 4개 저장소)는 PHASE 0에서 이미 수행했다. 그래서 **템플릿 C 대신 범위를 좁힌 기능 점검(B)** 을 제안한다. 초안:
   - [모델: sonnet] 세션 ID 발급 경로 1곳·재등록 재사용 분기·Swagger 예시 일치 / 새 테스트 5종이 동작을 실제로 고정하는지(잠금·구현을 바꾸면 깨지는지) / 정책 문서와 코드 대조
   - 통합 테스트 vkcs 통과 확인 후 `docs/audit-index.md` 상태 갱신
+
+## 7. 배포 (2026-10-05)
+
+- PR #297 머지 `17da651` → vkcs CD 성공(배포 전 통합 테스트 포함), api healthy.
+- gosky 수동 배포: `git pull --ff-only origin dev` → `docker compose -f docker-compose.dev.yml up -d --build api`(추적되지 않는 파일 보존, db·redis 무변경). Flyway 57건 검증·기동·AI WS 재연결·healthy 확인.
+- 새 세션 ID 형식은 **배포 후 새로 등록하는 카메라부터** 적용된다. FE 전달 문구는 §5.
