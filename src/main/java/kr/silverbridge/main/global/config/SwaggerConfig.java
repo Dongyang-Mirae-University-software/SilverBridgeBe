@@ -80,6 +80,11 @@ public class SwaggerConfig {
                                 .description("이상감지 카메라 등록·목록·수정·삭제 (SessionID 발급)\n"
                                         + "※ 본인이 등록한 카메라만 다룰 수 있습니다.\n"
                                         + "※ WARD 역할 계정만 호출 가능."),
+                        new Tag().name("피보호자 - 이상감지 영상")
+                                .description("본인 집 이상감지 5초 영상 클립 목록 조회·파일 재생\n"
+                                        + "※ 연결된(ACTIVE) 보호자가 한 명 이상일 때만 보입니다(없으면 404, 다시 연결되면 보입니다).\n"
+                                        + "※ 파일은 Authorization 헤더로 fetch해 blob URL로 재생합니다.\n"
+                                        + "※ WARD 역할 계정만 호출 가능."),
 
                         // ── 보호자(GUARDIAN) 전용: 다른 역할이 호출하면 403 ────────────
                         new Tag().name("보호자 - 연결")
@@ -102,9 +107,12 @@ public class SwaggerConfig {
                                         + "※ 실제 위험이었는지는 보호자만 판정합니다(1인 1표, 번복 가능). 응답한 보호자의 다수결이며, 동수면 CONFLICTED로 보호자들이 다시 확인합니다.\n"
                                         + "※ 요청 시점에 ACTIVE 연결인 피보호자의 이력만 보입니다(연결 해제 시 과거 이력도 비공개).\n"
                                         + "※ 응답은 이미 나간 알림을 되돌리지 않습니다.\n"
+                                        + "※ 상황별 5초 영상 클립 목록·파일 재생도 여기 있습니다(오탐으로 확정되면 그때까지 저장된 클립은 숨김).\n"
                                         + "※ GUARDIAN 역할 계정만 호출 가능."),
                         new Tag().name("보호자 - 카메라")
-                                .description("연결된 피보호자의 카메라 목록 조회(실시간 영상 연동용)\n"
+                                .description("연결된 피보호자의 카메라 목록 + 실시간 보기(송출 상태·최근 한 장·영상 티켓)\n"
+                                        + "※ ACTIVE 연결된 피보호자의 켜져 있는 등록 카메라만 볼 수 있습니다.\n"
+                                        + "※ 영상(<img>)은 stream-ticket으로 받은 1회용 60초 티켓을 GET /api/camera/stream/{sessionId}/mjpeg?ticket= 에 붙여 엽니다.\n"
                                         + "※ GUARDIAN 역할 계정만 호출 가능."),
                         new Tag().name("보호자 - 문의")
                                 .description("고객센터 문의 작성 및 본인 문의 목록·상세 조회.\n"
