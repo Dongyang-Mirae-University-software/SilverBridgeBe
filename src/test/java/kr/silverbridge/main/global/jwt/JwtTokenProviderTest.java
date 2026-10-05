@@ -141,4 +141,56 @@ class JwtTokenProviderTest {
         assertThat(jwtTokenProvider.isRefreshToken(access)).isFalse();
         assertThat(jwtTokenProvider.isAccessToken(refresh)).isFalse();
     }
+
+    // ─── 만료 허용 subject 추출 (XAREA-G01: 세션 만료 뒤 이 기기 FCM 토큰 해제용) ───
+
+    private static final long ONE_DAY = 24 * 60 * 60 * 1000L;
+
+    @Test
+    @DisplayName("XAREA-G01: 만료됐어도 우리가 서명한 access 토큰이면 사용자 ID를 꺼낸다")
+    void allowExpired_만료된_access는_허용() {
+        properties.setAccessTokenExpiration(-60_000L); // 1분 전 만료
+        String expired = jwtTokenProvider.generateAccessToken("abc123", "user@example.com", "WARD");
+
+        assertThat(jwtTokenProvider.getAccessTokenSubjectAllowingExpired(expired, ONE_DAY)).contains("abc123");
+    }
+
+    @Test
+    @DisplayName("XAREA-G01: 유효한 access 토큰도 그대로 허용한다")
+    void allowExpired_유효한_access() {
+        String token = jwtTokenProvider.generateAccessToken("abc123", "user@example.com", "WARD");
+
+        assertThat(jwtTokenProvider.getAccessTokenSubjectAllowingExpired(token, ONE_DAY)).contains("abc123");
+    }
+
+    @Test
+    @DisplayName("XAREA-G01: 허용 범위보다 오래 전에 만료된 토큰은 거절한다")
+    void allowExpired_너무_오래된_만료는_거절() {
+        properties.setAccessTokenExpiration(-2 * ONE_DAY);
+        String old = jwtTokenProvider.generateAccessToken("abc123", "user@example.com", "WARD");
+
+        assertThat(jwtTokenProvider.getAccessTokenSubjectAllowingExpired(old, ONE_DAY)).isEmpty();
+    }
+
+    @Test
+    @DisplayName("XAREA-G01: 다른 키로 서명한 만료 토큰은 거절한다 - 서명을 만료보다 먼저 본다")
+    void allowExpired_서명이_틀리면_거절() {
+        JwtProperties other = new JwtProperties();
+        other.setSecret("another-secret-key-at-least-256-bits-long-for-hmac-sha256-xx");
+        other.setAccessTokenExpiration(-60_000L);
+        other.setRefreshTokenExpiration(ONE_DAY);
+        String forged = new JwtTokenProvider(other).generateAccessToken("abc123", "user@example.com", "WARD");
+
+        assertThat(jwtTokenProvider.getAccessTokenSubjectAllowingExpired(forged, ONE_DAY)).isEmpty();
+    }
+
+    @Test
+    @DisplayName("XAREA-G01: refresh 토큰·형식이 깨진 값은 거절한다")
+    void allowExpired_refresh와_깨진값은_거절() {
+        String refresh = jwtTokenProvider.generateRefreshToken("abc123");
+
+        assertThat(jwtTokenProvider.getAccessTokenSubjectAllowingExpired(refresh, ONE_DAY)).isEmpty();
+        assertThat(jwtTokenProvider.getAccessTokenSubjectAllowingExpired("not-a-jwt", ONE_DAY)).isEmpty();
+        assertThat(jwtTokenProvider.getAccessTokenSubjectAllowingExpired("", ONE_DAY)).isEmpty();
+    }
 }

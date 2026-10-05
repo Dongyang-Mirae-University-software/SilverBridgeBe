@@ -17,6 +17,25 @@ public final class MaskingUtil {
     }
 
     /**
+     * 이름 마스킹 - 첫 글자와 (3자 이상이면) 마지막 글자만 남긴다.
+     * 예: 홍길동 → 홍*동, 남궁민수 → 남**수, 홍길 → 홍*, 홍 → *
+     *
+     * <p>글자 단위는 코드포인트다(이모지 등 보조 문자가 반쪽으로 잘리지 않게). 앞뒤 공백은 무시한다.</p>
+     */
+    public static String maskName(String name) {
+        if (name == null || name.isBlank()) return "***";
+        int[] cps = name.strip().codePoints().toArray();
+        int n = cps.length;
+        if (n == 1) return "*";
+        StringBuilder sb = new StringBuilder().appendCodePoint(cps[0]);
+        if (n == 2) {
+            return sb.append('*').toString();
+        }
+        sb.append("*".repeat(n - 2));
+        return sb.appendCodePoint(cps[n - 1]).toString();
+    }
+
+    /**
      * 이메일 마스킹
      * 예: username@example.com → us***me@example.com  (5자 이상: 앞 2자 + *** + 뒤 2자)
      *     user@example.com    → u***r@example.com     (3~4자: 앞 1자 + *** + 뒤 1자)

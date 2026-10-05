@@ -339,6 +339,19 @@ class AdminUserServiceTest {
         }
 
         @Test
+        @DisplayName("CONN-G15: 회원 행을 먼저 잠그고 나서 읽고 연결을 정리한다 - 진행 중인 연결 요청을 정리 조회가 놓치지 않게")
+        void 역할_변경은_회원행_잠금_뒤에_연결을_정리한다() {
+            givenUser(user(USER_ID, "홍길동", Role.WARD, Status.ACTIVE));
+
+            service().updateUser(USER_ID, new AdminUserUpdateRequest(null, Role.GUARDIAN, null, null), ADMIN_ID);
+
+            org.mockito.InOrder order = org.mockito.Mockito.inOrder(userRepository, connectionService);
+            order.verify(userRepository).lockForAccountChange(USER_ID);
+            order.verify(userRepository).findById(USER_ID);
+            order.verify(connectionService).tearDownConnectionsOnRoleChange(USER_ID);
+        }
+
+        @Test
         @DisplayName("역할이 바뀌면 옛 역할의 토큰을 끊는 이벤트를 발행한다 - role 클레임이 만료까지 @PreAuthorize를 통과하면 안 된다")
         void 역할_변경은_토큰을_끊는다() {
             givenUser(user(USER_ID, "홍길동", Role.GUARDIAN, Status.ACTIVE));

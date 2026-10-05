@@ -52,6 +52,9 @@ public class AdminConnectionService {
      */
     @Transactional
     public AdminConnectionResponse forceConnect(AdminForceConnectRequest request, String adminId) {
+        // 역할 검사 전에 두 사람의 users 행을 잠근다(CONN-G15) - 다른 관리자의 역할 변경과 겹치면 역할이 어긋난
+        // ACTIVE 연결이 생길 수 있다. 보호자 연결 요청과 같은 잠금이다(UserRepository.lockForConnectionChange).
+        userRepository.lockForConnectionChange(List.of(request.guardianId(), request.wardId()));
         User guardian = getUserOrThrow(request.guardianId());
         User ward = getUserOrThrow(request.wardId());
 

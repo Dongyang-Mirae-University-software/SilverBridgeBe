@@ -8,6 +8,7 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import kr.silverbridge.main.domain.connection.dto.ConnectionRequestDto;
 import kr.silverbridge.main.domain.connection.dto.ConnectionResponse;
+import kr.silverbridge.main.domain.connection.dto.ConnectionTargetPreviewResponse;
 import kr.silverbridge.main.domain.connection.dto.WardListFilter;
 import kr.silverbridge.main.domain.connection.service.ConnectionService;
 import kr.silverbridge.main.global.response.ApiResponse;
@@ -82,6 +83,38 @@ public class GuardianConnectionController {
     public ResponseEntity<ApiResponse<List<ConnectionResponse>>> getMyConnectionRequests(
             @AuthenticationPrincipal String guardianId) {
         return ResponseEntity.ok(ApiResponse.ok(connectionService.getMyConnectionRequests(guardianId)));
+    }
+
+    @Operation(summary = "페어링 요청 전 상대 확인 (가린 이름)",
+            description = """
+                    [요청 헤더]
+                    Authorization: Bearer {accessToken}
+
+                    요청 버튼을 누르기 전에, 입력한 ID가 의도한 피보호자가 맞는지 확인하는 단계입니다.
+                    맞는 상대면 가린 이름(예: 홍*동)만 돌려줍니다. 연락처·주소는 수락 전이라 주지 않습니다.
+
+                    [ID 대소문자]
+                    사용자 ID는 영문 대소문자를 구분합니다(ab1234와 AB1234는 다른 사람일 수 있음).
+                    입력값을 대문자·소문자로 바꾸지 말고 그대로 보내 주세요.
+
+                    판정 기준은 실제 요청(POST /api/guardian/connection/request)과 같습니다.
+                    이 단계는 요청을 만들지 않고 알림도 보내지 않습니다.
+                    """)
+    @ApiResponses({
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "요청 가능한 상대 - targetId, maskedName"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "역할 불일치(피보호자가 아님) 또는 자기 자신", content = @Content),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "해당 ID의 이용 중인 회원 없음", content = @Content),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "409", description = "이미 연결되어 있거나 요청 중인 관계", content = @Content),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "429", description = "확인 요청이 너무 잦음 (1분 10회 / 1시간 60회)", content = @Content)
+    })
+    @GetMapping("/api/guardian/connection/preview")
+    public ResponseEntity<ApiResponse<ConnectionTargetPreviewResponse>> previewConnectionTarget(
+            @AuthenticationPrincipal String guardianId,
+            @Parameter(description = "연결할 상대 ID (6자리, 대소문자 구분)", example = "AB1234")
+            @RequestParam String targetId) {
+        // ID를 바꿔 가며 가린 이름을 모으는 시도를 막는다 - 실제 요청 제한(connection-request)과 별도로 센다
+        rateLimitService.check("connection-preview", guardianId, 10, 60);
+        return ResponseEntity.ok(ApiResponse.ok(connectionService.previewConnectionTarget(guardianId, targetId)));
     }
 
     @Operation(summary = "피보호자에게 페어링 요청",

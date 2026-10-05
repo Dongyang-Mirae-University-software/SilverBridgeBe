@@ -81,6 +81,21 @@ class AdminConnectionServiceTest {
         }
 
         @Test
+        @DisplayName("CONN-G15: 두 회원 행을 잠근 뒤에 역할을 읽는다 - 다른 관리자의 역할 변경과 겹쳐도 어긋난 연결을 만들지 않게")
+        void 회원행_잠금_뒤에_역할을_읽는다() {
+            givenUsers(Role.GUARDIAN, Status.ACTIVE, Role.WARD, Status.ACTIVE);
+            when(connectionService.forceConnect(eq(GUARDIAN_ID), eq(WARD_ID), eq(ADMIN_ID), anyString(), anyString()))
+                    .thenReturn(connection(42L, ConnectionStatus.ACTIVE));
+
+            adminConnectionService.forceConnect(request(), ADMIN_ID);
+
+            org.mockito.InOrder order = org.mockito.Mockito.inOrder(userRepository, connectionService);
+            order.verify(userRepository).lockForConnectionChange(java.util.List.of(GUARDIAN_ID, WARD_ID));
+            order.verify(userRepository).findById(GUARDIAN_ID);
+            order.verify(connectionService).forceConnect(eq(GUARDIAN_ID), eq(WARD_ID), eq(ADMIN_ID), anyString(), anyString());
+        }
+
+        @Test
         @DisplayName("역할이 맞지 않으면 400이고 연결하지 않는다")
         void 역할_불일치() {
             givenUsers(Role.WARD, Status.ACTIVE, Role.WARD, Status.ACTIVE);

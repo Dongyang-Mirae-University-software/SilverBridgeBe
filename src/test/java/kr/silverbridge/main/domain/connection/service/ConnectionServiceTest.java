@@ -79,6 +79,71 @@ class ConnectionServiceTest {
     // ─── 보호자: 페어링 요청 ────────────────────────────────────────────────
 
     @Nested
+    @DisplayName("previewConnectionTarget - 요청 전 상대 확인 (CONN-G06)")
+    class PreviewTarget {
+
+        @Test
+        @DisplayName("요청 가능한 피보호자면 가린 이름만 돌려주고, 요청·이벤트는 만들지 않는다")
+        void 가린_이름만_준다() {
+            User ward = User.builder().id(WARD_ID).email("w@example.com").name("홍길동")
+                    .role(Role.WARD).status(Status.ACTIVE).provider(Provider.LOCAL)
+                    .phone("010-3333-4444").address("서울시 송파구").build();
+            when(userRepository.findById(GUARDIAN_ID)).thenReturn(Optional.of(guardian()));
+            when(userRepository.findById(WARD_ID)).thenReturn(Optional.of(ward));
+
+            var preview = connectionService.previewConnectionTarget(GUARDIAN_ID, WARD_ID);
+
+            assertThat(preview.targetId()).isEqualTo(WARD_ID);
+            assertThat(preview.maskedName()).isEqualTo("홍*동");
+            verify(connectionRepository, never()).saveAndFlush(any());
+            verify(connectionRepository, never()).save(any());
+            verify(eventPublisher, never()).publishEvent(any());
+            verify(requestLimiter, never()).checkAllowed(any(), any());
+        }
+
+        @Test
+        @DisplayName("ID는 대소문자를 바꾸지 않고 그대로 찾는다 - 대소문자만 다른 ID는 다른 사람일 수 있다")
+        void ID는_그대로_찾는다() {
+            when(userRepository.findById(GUARDIAN_ID)).thenReturn(Optional.of(guardian()));
+            when(userRepository.findById("wd0001")).thenReturn(Optional.empty());
+
+            CustomException ex = assertThrows(CustomException.class,
+                    () -> connectionService.previewConnectionTarget(GUARDIAN_ID, "wd0001"));
+
+            assertThat(ex.getErrorCode()).isEqualTo(ErrorCode.USER_NOT_FOUND);
+            verify(userRepository).findById("wd0001");
+            verify(userRepository, never()).findById(WARD_ID);
+        }
+
+        @Test
+        @DisplayName("요청과 같은 기준 - 보호자 ID면 400, 탈퇴·정지면 404, 이미 요청·연결이면 409")
+        void 요청과_같은_기준으로_거절() {
+            when(userRepository.findById(GUARDIAN_ID)).thenReturn(Optional.of(guardian()));
+
+            when(userRepository.findById(WARD_ID)).thenReturn(Optional.of(guardian()));
+            assertThat(assertThrows(CustomException.class,
+                    () -> connectionService.previewConnectionTarget(GUARDIAN_ID, WARD_ID)).getErrorCode())
+                    .isEqualTo(ErrorCode.INVALID_CONNECTION_ROLE);
+
+            when(userRepository.findById(WARD_ID)).thenReturn(Optional.of(inactiveWard()));
+            assertThat(assertThrows(CustomException.class,
+                    () -> connectionService.previewConnectionTarget(GUARDIAN_ID, WARD_ID)).getErrorCode())
+                    .isEqualTo(ErrorCode.USER_NOT_FOUND);
+
+            when(userRepository.findById(WARD_ID)).thenReturn(Optional.of(ward()));
+            when(connectionRepository.existsByGuardianIdAndWardIdAndStatusIn(
+                    GUARDIAN_ID, WARD_ID, List.of(ConnectionStatus.PENDING, ConnectionStatus.ACTIVE))).thenReturn(true);
+            assertThat(assertThrows(CustomException.class,
+                    () -> connectionService.previewConnectionTarget(GUARDIAN_ID, WARD_ID)).getErrorCode())
+                    .isEqualTo(ErrorCode.CONNECTION_ALREADY_EXISTS);
+
+            assertThat(assertThrows(CustomException.class,
+                    () -> connectionService.previewConnectionTarget(GUARDIAN_ID, GUARDIAN_ID)).getErrorCode())
+                    .isEqualTo(ErrorCode.CANNOT_CONNECT_SELF);
+        }
+    }
+
+    @Nested
     @DisplayName("requestConnectionAsGuardian")
     class RequestConnection {
 
@@ -110,6 +175,40 @@ class ConnectionServiceTest {
             assertThat(event.wardId()).isEqualTo(WARD_ID);
             assertThat(event.guardianName()).isEqualTo("보호자");
             assertThat(event.relation()).isEqualTo(RELATION);
+        }
+
+        @Test
+        @DisplayName("CONN-G15: 두 회원 행을 잠근 뒤에 역할을 읽고 저장한다 - 역할 변경과 겹치면 커밋된 역할로 판정")
+        void 회원행_잠금_뒤에_역할을_읽는다() {
+            ConnectionRequestDto dto = requestDto(WARD_ID, RELATION);
+            when(userRepository.findById(GUARDIAN_ID)).thenReturn(Optional.of(guardian()));
+            when(userRepository.findById(WARD_ID)).thenReturn(Optional.of(ward()));
+
+            connectionService.requestConnectionAsGuardian(GUARDIAN_ID, dto);
+
+            InOrder order = inOrder(userRepository, connectionRepository);
+            order.verify(userRepository).lockForConnectionChange(List.of(GUARDIAN_ID, WARD_ID));
+            order.verify(userRepository).findById(GUARDIAN_ID);
+            order.verify(userRepository).findById(WARD_ID);
+            order.verify(connectionRepository).saveAndFlush(any(Connection.class));
+        }
+
+        @Test
+        @DisplayName("CONN-G15: 잠금을 기다리는 사이 상대가 보호자로 바뀌었으면 요청을 만들지 않는다")
+        void 잠금_뒤_바뀐_역할이면_거절() {
+            ConnectionRequestDto dto = requestDto(WARD_ID, RELATION);
+            when(userRepository.findById(GUARDIAN_ID)).thenReturn(Optional.of(guardian()));
+            // 역할 변경이 먼저 커밋돼 잠금 뒤의 조회가 바뀐 역할(GUARDIAN)을 읽은 상황
+            User changed = User.builder().id(WARD_ID).email("w@test.local").name("피보호자")
+                    .role(Role.GUARDIAN).status(Status.ACTIVE).provider(Provider.LOCAL).build();
+            when(userRepository.findById(WARD_ID)).thenReturn(Optional.of(changed));
+
+            CustomException ex = assertThrows(CustomException.class,
+                    () -> connectionService.requestConnectionAsGuardian(GUARDIAN_ID, dto));
+
+            assertThat(ex.getErrorCode()).isEqualTo(ErrorCode.INVALID_CONNECTION_ROLE);
+            verify(connectionRepository, never()).saveAndFlush(any());
+            verify(eventPublisher, never()).publishEvent(any());
         }
 
         @Test

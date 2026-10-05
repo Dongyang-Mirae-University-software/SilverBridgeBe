@@ -66,6 +66,16 @@ class SecurityConfigAccessDeniedTest {
         String user() {
             return "ok";
         }
+
+        @org.springframework.web.bind.annotation.PostMapping("/api/notifications/fcm-token/release")
+        String fcmRelease() {
+            return "ok";
+        }
+
+        @org.springframework.web.bind.annotation.DeleteMapping("/api/notifications/fcm-token")
+        String fcmDelete() {
+            return "ok";
+        }
     }
 
     @MockitoBean
@@ -115,5 +125,18 @@ class SecurityConfigAccessDeniedTest {
     void protectedPath() throws Exception {
         mockMvc.perform(get("/api/user/probe")).andExpect(status().isUnauthorized());
         mockMvc.perform(get("/api/user/probe").with(user("u1").roles("WARD"))).andExpect(status().isOk());
+    }
+
+    @Test
+    @DisplayName("XAREA-G01: 세션 만료 후 FCM 토큰 해제 경로만 인증 없이 열리고, 기존 삭제 경로는 그대로 401")
+    void fcmRelease_만_permitAll() throws Exception {
+        mockMvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders
+                        .post("/api/notifications/fcm-token/release"))
+                .andExpect(status().isOk());
+        mockMvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders
+                        .delete("/api/notifications/fcm-token"))
+                .andExpect(status().isUnauthorized());
+        mockMvc.perform(get("/api/notifications/fcm-token/release"))
+                .andExpect(status().isUnauthorized());
     }
 }

@@ -140,6 +140,10 @@ public class AdminUserService {
      */
     @Transactional
     public void updateUser(String userId, AdminUserUpdateRequest request, String adminId) {
+        // 대상 users 행을 먼저 잠근다(CONN-G15). 진행 중인 연결 요청이 있으면 그 커밋을 기다린 뒤 아래 연결 정리
+        // (tearDownConnectionsOnRoleChange)가 그 요청까지 보게 한다 - 잠금 없이는 정리 조회가 미커밋 요청을 못 보고
+        // 지나가 "보호자가 된 사용자 앞으로 PENDING"이 남았다. 커밋 때 UPDATE가 어차피 잡는 잠금을 앞당길 뿐이다.
+        userRepository.lockForAccountChange(userId);
         User user = getUserOrThrow(userId);
         validateNotAdmin(user, adminId);
         validateResultingCombination(user, request);
