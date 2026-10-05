@@ -125,7 +125,7 @@ public class SosNotificationListener {
             // 발송 자체(대상·채널·정지 계정 제외)는 이 판단과 무관하다 - 이미 끝난 발송의 결과만 본다.
             // WebSocket(sos-triggered)은 채널 추상화 밖이라 결과를 모른다 - 접속 중인 화면에 닿았어도 미전달로 본다.
             cooldown.release(event.wardId());
-            log.warn("[SOS-NO-DELIVERY] SOS 알림이 어느 보호자에게도 전달되지 않아 쿨다운 해제(재요청 시 재발송): "
+            log.warn("[SOS-NO-DELIVERY] SOS 알림이 어느 보호자에게도 전달되지 않아(발송 실패·문자 시간당 상한 초과 포함) 쿨다운 해제(재요청 시 재발송): "
                             + "wardId={}, sosEventId={}, 대상 보호자={}명",
                     event.wardId(), event.sosEventId(), guardianIds.size());
             return;
