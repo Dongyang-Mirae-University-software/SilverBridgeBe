@@ -478,7 +478,7 @@ class AnomalyReviewReminderPlannerTest {
         }
 
         @Test
-        @DisplayName("응답한 보호자에게만 안내한다 - 동수를 만든 보호자(sent=false 기록)는 빠지고, 미응답 보호자는 건별 재촉 몫이다")
+        @DisplayName("응답한 보호자에게만 안내한다 - 동수를 만든 보호자(sent=false 기록)와 미응답 보호자는 빠진다")
         void onlyOtherRespondentsAreClaimed() {
             tieWithTwoRespondents();
             // 동수를 만든 GUARDIAN은 응답 트랜잭션이 이미 sent=false로 기록해 두었다.
@@ -500,6 +500,35 @@ class AnomalyReviewReminderPlannerTest {
                         assertThat(log.getGuardianId()).isEqualTo(OTHER_GUARDIAN_ID);
                         assertThat(log.isSent()).isTrue();
                     });
+        }
+
+        @Test
+        @DisplayName("동수 상황의 미응답 보호자에게는 건별 재촉도 동수 안내도 가지 않는다 - 의도된 동작 (ANOM-G06)")
+        void unansweredGuardianOfTieGetsNothing() {
+            // 저장소를 실제처럼 흉내 낸다 - 상태 조건에 맞는 상황만 돌려준다. 이 상황은 동수(CONFLICTED)다.
+            AnomalyIncident tie = conflicted();
+            when(incidentRepository.findByReviewStatusAndLastDetectedAtLessThanEqualAndStartedAtGreaterThanEqual(
+                    any(), any(), any())).thenAnswer(inv ->
+                    inv.getArgument(0) == tie.getReviewStatus() ? List.of(tie) : List.of());
+            when(incidentRepository.findByReviewStatusAndStartedAtGreaterThanEqual(any(), any())).thenAnswer(inv ->
+                    inv.getArgument(0) == tie.getReviewStatus() ? List.of(tie) : List.of());
+            when(feedbackRepository.findByIncidentIdIn(anyCollection())).thenReturn(List.of(
+                    answer(GUARDIAN_ID, AnomalyVerdict.REAL), answer(OTHER_GUARDIAN_ID, AnomalyVerdict.FALSE_ALARM)));
+            when(connectionService.getActiveGuardianIds(WARD_ID))
+                    .thenReturn(List.of(GUARDIAN_ID, OTHER_GUARDIAN_ID, NOT_ANSWERED_GUARDIAN_ID));
+            when(reminderLogRepository.findByIncidentIdIn(anyCollection())).thenReturn(List.of());
+            when(conflictLogRepository.findByIncidentIdIn(anyCollection())).thenReturn(List.of());
+            when(settingRepository.findByGuardianIdIn(anyCollection())).thenReturn(List.of());
+
+            // 건별 재촉은 PENDING 상황만 본다 - 한 명이라도 답해 PENDING을 벗어나면 나머지 재촉은 멈춘다
+            assertThat(planner.claimReminders()).isEmpty();
+            verify(reminderLogRepository, never()).saveAll(anyCollection());
+
+            // 동수 안내는 응답한 보호자에게만 간다
+            assertThat(planner.claimConflicts())
+                    .extracting(AnomalyReviewReminderTarget::guardianId)
+                    .containsExactlyInAnyOrder(GUARDIAN_ID, OTHER_GUARDIAN_ID)
+                    .doesNotContain(NOT_ANSWERED_GUARDIAN_ID);
         }
 
         @Test
