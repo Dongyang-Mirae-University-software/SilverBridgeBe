@@ -134,15 +134,6 @@ public class AnomalyNotificationListener {
         };
     }
 
-    /** 보호자 문자 대체분의 행동 안내. 문자 길이 때문에 푸시보다 짧다. */
-    private static String guardianSmsGuidance(DetectedType type) {
-        return switch (type) {
-            case WEAPON -> "연락해 안전을 확인하고 위험하면 112에 신고해 주세요.";
-            case FALL -> "바로 연락해 안전을 확인해 주세요.";
-            default -> "앱에서 확인해 주세요.";
-        };
-    }
-
     /**
      * 본인 수신분의 행동 안내. 화재는 대피, 흉기는 피신·신고, 낙상은 대피가 아니라 도움 요청이다
      * (넘어진 사람에게 "대피"는 맞지 않는다). 신고는 안내 문구일 뿐 서버가 발신하지 않는다.
@@ -174,7 +165,13 @@ public class AnomalyNotificationListener {
             return "[실버브릿지] " + place + " " + what + " 감지. " + selfSmsGuidance(event.detectedType());
         }
         String home = hasText(event.wardName()) ? event.wardName() + "님 댁 " : "";
-        return "[실버브릿지] " + home + place + " " + what + " 감지. " + guardianSmsGuidance(event.detectedType());
+        String guidance = guardianGuidance(event.detectedType());
+        if (guidance.isEmpty()) {
+            return "[실버브릿지] " + home + place + " " + what + " 감지. 앱에서 확인해 주세요.";
+        }
+        // 흉기·낙상은 푸시 본문과 같은 문구(앱 이름만 앞에 붙인다)
+        return "[실버브릿지] " + home + place + " " + DetectedTypeLabel.withSubjectParticle(event.detectedType())
+                + " 감지되었습니다." + guidance;
     }
 
     private static boolean hasText(String v) {

@@ -253,9 +253,10 @@ class AnomalyNotificationListenerTest {
         assertThat(AnomalyNotificationListener.smsFallbackText(eventOf(DetectedType.FALL), true))
                 .isEqualTo("[실버브릿지] 거실에서 낙상 감지. 도움이 필요하면 보호자에게 연락해 주세요.");
         assertThat(AnomalyNotificationListener.smsFallbackText(eventOf(DetectedType.FALL), false))
-                .isEqualTo("[실버브릿지] 김순자님 댁 거실에서 낙상 감지. 바로 연락해 안전을 확인해 주세요.");
+                .isEqualTo("[실버브릿지] 김순자님 댁 거실에서 낙상이 감지되었습니다. 바로 연락해 안전을 확인해 주세요.");
         assertThat(AnomalyNotificationListener.smsFallbackText(eventOf(DetectedType.WEAPON), false))
-                .isEqualTo("[실버브릿지] 김순자님 댁 거실에서 흉기 감지. 연락해 안전을 확인하고 위험하면 112에 신고해 주세요.");
+                .isEqualTo("[실버브릿지] 김순자님 댁 거실에서 흉기가 감지되었습니다. "
+                        + "바로 연락해 안전을 확인하고, 위험하면 112에 신고해 주세요.");
         assertThat(AnomalyNotificationListener.smsFallbackText(eventOf(DetectedType.FIRE), false))
                 .isEqualTo("[실버브릿지] 김순자님 댁 거실에서 화재 감지. 앱에서 확인해 주세요.");
     }
