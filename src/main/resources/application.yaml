@@ -106,6 +106,14 @@ auth:
   login:
     max-attempts: ${AUTH_LOGIN_MAX_ATTEMPTS:5}        # 잠금 전 최대 실패 횟수
     lock-ttl-minutes: ${AUTH_LOGIN_LOCK_TTL_MINUTES:30} # 잠금 유지 시간(분)
+  # refresh 토큰 HttpOnly 쿠키 (XCUT-G31, 설계안 docs/(2026-10-02) design-refresh-token-httponly-cookie.md)
+  refresh-cookie:
+    enabled: ${AUTH_REFRESH_COOKIE_ENABLED:true}       # false면 쿠키 없이 기존(본문 전용) 동작 - 롤백 스위치
+    name: ${AUTH_REFRESH_COOKIE_NAME:careai_rt}
+    secure: ${AUTH_REFRESH_COOKIE_SECURE:true}         # 로컬 http 개발에서만 false
+    same-site: ${AUTH_REFRESH_COOKIE_SAME_SITE:Lax}
+    path: ${AUTH_REFRESH_COOKIE_PATH:/api/auth}
+    body-compat: ${AUTH_REFRESH_COOKIE_BODY_COMPAT:true} # 전환 기간: 본문 refreshToken 계속 내림·받음. FE 전환 완료 후 false
 
 kakao:
   rest-api-key: ${KAKAO_REST_API_KEY}

@@ -232,9 +232,15 @@ public class AuthService {
     // 같은 초 재발급의 UNIQUE 충돌(AUTH-G04)은 refresh 토큰의 jti로 막는다 - 삭제 후 저장 순서에 flush는 필요 없다.
     @Transactional
     public TokenRefreshResponse refresh(TokenRefreshRequest request) {
-        Optional<RefreshToken> opt = refreshTokenRepository.findByToken(request.getRefreshToken());
+        return refresh(request.getRefreshToken());
+    }
+
+    // 쿠키로 받은 토큰도 같은 경로를 탄다 - 회전·재사용 감지 규칙은 전달 방식과 무관하다 (XCUT-G31)
+    @Transactional
+    public TokenRefreshResponse refresh(String refreshTokenValue) {
+        Optional<RefreshToken> opt = refreshTokenRepository.findByToken(refreshTokenValue);
         if (opt.isEmpty()) {
-            detectAndHandleReuse(request.getRefreshToken());
+            detectAndHandleReuse(refreshTokenValue);
             throw new CustomException(ErrorCode.INVALID_TOKEN);
         }
         RefreshToken savedToken = opt.get();

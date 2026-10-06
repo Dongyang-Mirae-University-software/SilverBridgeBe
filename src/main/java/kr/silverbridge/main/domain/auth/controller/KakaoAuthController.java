@@ -5,12 +5,14 @@ import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletResponse;
 import jakarta.validation.Valid;
 import kr.silverbridge.main.domain.auth.dto.KakaoLoginRequest;
 import kr.silverbridge.main.domain.auth.dto.KakaoLoginResponse;
 import kr.silverbridge.main.domain.auth.dto.KakaoRegisterRequest;
 import kr.silverbridge.main.domain.auth.dto.LoginResponse;
 import kr.silverbridge.main.domain.auth.service.KakaoAuthService;
+import kr.silverbridge.main.global.jwt.RefreshCookieManager;
 import kr.silverbridge.main.global.response.ApiResponse;
 import kr.silverbridge.main.global.security.RateLimitService;
 import kr.silverbridge.main.global.util.ClientIpResolver;
@@ -26,6 +28,7 @@ public class KakaoAuthController {
 
     private final KakaoAuthService kakaoAuthService;
     private final RateLimitService rateLimitService;
+    private final RefreshCookieManager refreshCookieManager;
 
     @Operation(
             summary = "카카오 로그인",
@@ -34,7 +37,8 @@ public class KakaoAuthController {
                     isNewUser 값에 따라 이후 처리가 달라집니다.
 
                     [기존 회원 — isNewUser=false]
-                    accessToken, refreshToken이 반환됩니다. 바로 로그인 처리하세요.
+                    accessToken이 반환되고, refresh 토큰은 Set-Cookie 로 HttpOnly 쿠키(careai_rt)로 내려갑니다.
+                    (응답 본문의 refreshToken 은 전환 기간에만 있으며 곧 null이 됩니다 - 읽거나 저장하지 마세요)
                     → Header: Authorization: Bearer {accessToken}
 
                     [신규 회원 — isNewUser=true] 토큰 없음. 다음 값이 반환됩니다.
@@ -62,13 +66,19 @@ public class KakaoAuthController {
     })
     @PostMapping("/signin/kakao")
     public ApiResponse<KakaoLoginResponse> kakaoLogin(@Valid @RequestBody KakaoLoginRequest request,
-                                                      HttpServletRequest httpRequest) {
+                                                      HttpServletRequest httpRequest,
+                                                      HttpServletResponse httpResponse) {
         rateLimitService.check("kakao-login", ClientIpResolver.resolve(httpRequest));
-        return ApiResponse.ok(kakaoAuthService.kakaoLogin(
+        KakaoLoginResponse login = kakaoAuthService.kakaoLogin(
                 request,
                 ClientIpResolver.resolve(httpRequest),
                 httpRequest.getHeader("User-Agent")
-        ));
+        );
+        if (login.getRefreshToken() == null) {
+            return ApiResponse.ok(login); // 신규 회원 - 토큰 없음
+        }
+        refreshCookieManager.issue(httpResponse, login.getRefreshToken());
+        return ApiResponse.ok(login.withRefreshToken(refreshCookieManager.bodyValue(login.getRefreshToken())));
     }
 
     @Operation(
@@ -96,7 +106,8 @@ public class KakaoAuthController {
                     [토큰 사용 방법]
                     - accessToken: 이후 모든 API 요청 헤더에 포함
                       → Header: Authorization: Bearer {accessToken}
-                    - refreshToken: accessToken 만료(30분) 시 POST /api/auth/refresh 로 재발급
+                    - refreshToken: Set-Cookie 로 HttpOnly 쿠키가 내려가며, accessToken 만료(30분) 시
+                      POST /api/auth/refresh 를 본문 없이 호출하면 재발급 (상세는 해당 API 설명)
                     """
     )
     @ApiResponses({
@@ -109,13 +120,16 @@ public class KakaoAuthController {
     @PostMapping("/signup/kakao")
     @ResponseStatus(HttpStatus.CREATED)
     public ApiResponse<LoginResponse> kakaoRegister(@Valid @RequestBody KakaoRegisterRequest request,
-                                                    HttpServletRequest httpRequest) {
+                                                    HttpServletRequest httpRequest,
+                                                    HttpServletResponse httpResponse) {
         // 다른 공개 auth 엔드포인트와 동일한 IP RateLimit — pending 세션 선검증으로 실효 위험은 낮지만 방어 일관성 (L-S1-2)
         rateLimitService.check("kakao-signup", ClientIpResolver.resolve(httpRequest));
-        return ApiResponse.ok(kakaoAuthService.kakaoRegister(
+        LoginResponse login = kakaoAuthService.kakaoRegister(
                 request,
                 ClientIpResolver.resolve(httpRequest),
                 httpRequest.getHeader("User-Agent")
-        ));
+        );
+        refreshCookieManager.issue(httpResponse, login.getRefreshToken());
+        return ApiResponse.ok(login.withRefreshToken(refreshCookieManager.bodyValue(login.getRefreshToken())));
     }
 }
