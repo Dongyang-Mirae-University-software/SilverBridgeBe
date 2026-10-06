@@ -41,9 +41,17 @@ public class SecurityConfig {
     private final JwtTokenProvider jwtTokenProvider;
     private final StringRedisTemplate redisTemplate;
     private final ObjectMapper objectMapper;
+    private final RateLimitService rateLimitService;
 
     @Value("${app.cors.allowed-origins}")
     private String allowedOrigins;
+
+    // 로그인 사용자 기준 요청 제한(UserRateLimitFilter): 킬 스위치 + 사용자당 분당 상한
+    @Value("${app.user-rate-limit.enabled:true}")
+    private boolean userRateLimitEnabled;
+
+    @Value("${app.user-rate-limit.max-per-minute:600}")
+    private int userRateLimitPerMinute;
 
     @Bean
     public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
@@ -123,6 +131,12 @@ public class SecurityConfig {
                 .addFilterBefore(
                         new JwtAuthenticationFilter(jwtTokenProvider, redisTemplate, objectMapper),
                         UsernamePasswordAuthenticationFilter.class
+                )
+                // 인증이 끝난 뒤(JWT 필터 다음) 로그인 사용자 기준 요청 횟수를 제한한다. SOS·인증·WS 경로는 제외
+                .addFilterAfter(
+                        new UserRateLimitFilter(rateLimitService, objectMapper,
+                                userRateLimitEnabled, userRateLimitPerMinute),
+                        JwtAuthenticationFilter.class
                 );
 
         return http.build();

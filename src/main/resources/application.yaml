@@ -88,6 +88,11 @@ app:
     #    /ws만 403으로 조용히 막혀 "실시간 알림이 안 온다"로 나타난다(2026-09-01).
     #    프론트 로컬 dev 서버 포트(6510)를 반드시 포함할 것.
     allowed-origins: ${APP_CORS_ORIGINS:https://devdmu.gosky.kr,http://localhost:6510,http://localhost:3000,http://localhost:5173,http://localhost:8080}
+  # 로그인 사용자 기준 요청 제한(UserRateLimitFilter, 2026-10-06): 사용자당 1분 고정 윈도우.
+  # SOS 관련 경로(/api/ward/sos*, /api/guardian/sos*)·/api/auth/**·/ws/** 는 제외. Redis 장애 시 fail-open.
+  user-rate-limit:
+    enabled: ${USER_RATE_LIMIT_ENABLED:true}
+    max-per-minute: ${USER_RATE_LIMIT_PER_MINUTE:600}
   client-ip:
     # 신뢰 프록시(IP·CIDR, 쉼표 구분). 피어(nginx가 넘긴 X-Real-IP)가 여기 들면 X-Forwarded-For를
     # 오른쪽부터 읽어 처음 나오는 비신뢰 주소를 사용자 IP로 쓴다(AUTH-G28 - FE 서버 경유 요청이 한 IP로 합산되던 문제).

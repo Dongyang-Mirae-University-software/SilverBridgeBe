@@ -210,4 +210,28 @@ class RateLimitServiceTest {
         assertThatThrownBy(() -> rateLimitService.check("signin", "1.2.3.4"))
                 .isInstanceOf(IllegalStateException.class);
     }
+
+    // ─── 호출자가 상한을 정하는 1분 윈도우 - 로그인 사용자 기준 제한 (2026-10-06) ──────────
+
+    @Test
+    @DisplayName("사용자 기준: 상한(600) 경계까지는 통과하고 601번째는 429 예외(대기 시간 포함)")
+    void userLimit_boundary() {
+        when(redisCounter.incrementWithTtl("rate:user-api:7", 60L)).thenReturn(600L, 601L);
+        when(redisCounter.remainingTtlSeconds("rate:user-api:7")).thenReturn(33L);
+
+        assertThatCode(() -> rateLimitService.check("user-api", "7", 600)).doesNotThrowAnyException();
+        assertThatThrownBy(() -> rateLimitService.check("user-api", "7", 600))
+                .isInstanceOf(TooManyRequestsException.class)
+                .extracting("retryAfterSeconds")
+                .isEqualTo(33L);
+    }
+
+    @Test
+    @DisplayName("사용자 기준: Redis 장애 시 fail-open")
+    void userLimit_redisDown_failOpen() {
+        when(redisCounter.incrementWithTtl("rate:user-api:7", 60L))
+                .thenThrow(new RedisConnectionFailureException("down"));
+
+        assertThatCode(() -> rateLimitService.check("user-api", "7", 600)).doesNotThrowAnyException();
+    }
 }
