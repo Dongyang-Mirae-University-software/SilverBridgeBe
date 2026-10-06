@@ -34,4 +34,11 @@ RUN apt-get update && apt-get install -y --no-install-recommends curl \
 
 COPY --from=builder /app/build/libs/*.jar app.jar
 
-ENTRYPOINT ["java", "-jar", "app.jar"]
+# JVM 메모리 옵션 (2026-10-06). 컨테이너 한도(docker-compose.dev.yml api memory 1.5g)에 맞춘다.
+# - 옵션을 안 주면 힙이 한도의 25%(256MB)뿐이고 비힙(스레드·메타스페이스·코드 캐시)이 RSS 대부분을 차지해
+#   한도와의 여유를 가늠할 수 없었다. 힙 상한을 한도의 45%(약 690MB)로 두고 비힙 상한을 따로 막는다.
+# - 최악 합계: 힙 690 + 메타스페이스 256 + 코드 캐시 128 + 다이렉트 128 + 스레드 스택 약 150 = 약 1.35GB < 1.5GB.
+# - SerialGC는 이 크기에서 JVM이 고르던 값 그대로(작은 힙·낮은 CPU에 맞다). 명시만 한다.
+# 환경변수 JAVA_OPTS 로 덮어쓸 수 있다. exec 로 java 가 PID 1 이 되어야 종료 신호(우아한 종료)를 받는다.
+ENV JAVA_OPTS="-XX:MaxRAMPercentage=45 -XX:+UseSerialGC -XX:MaxMetaspaceSize=256m -XX:ReservedCodeCacheSize=128m -XX:MaxDirectMemorySize=128m"
+ENTRYPOINT ["sh", "-c", "exec java $JAVA_OPTS -jar app.jar"]
