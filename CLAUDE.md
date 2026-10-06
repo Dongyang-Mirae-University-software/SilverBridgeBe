@@ -145,6 +145,7 @@
 - **운영 설정**(2026-09-11): 알림 executor는 포화 시 폐기+ERROR 로그(CallerRuns 금지) / 우아한 종료 / 스케줄러 풀 3 / 외부 HTTP 클라이언트는 타임아웃 필수(Solapi 는 호출 시간 제한 10초로 감쌈) / Redis `noeviction`(`allkeys-lru` 금지) / 감사 로그 detail은 DB에만. 실사용 서버 Swagger 공개는 관리 밖 인프라라 수용.
 - **관리자 강제 연결**(2026-09-10): 피보호자 수락(=동의) 없이 만드는 관계라 **양쪽 알림 + 감사 로그 필수**. 문구는 전용 종류로(`CONNECTION_FORCED`·`DisconnectedBy.ADMIN`) — 기존 "수락했습니다"·"보호자가 해제했습니다"를 재사용하면 거짓이 된다. 같은 이유로 탈퇴 정리는 `DisconnectedBy.WITHDRAWN`, 역할 변경 정리는 `ADMIN`(2026-09-30).
 - **연결 알림 비대칭(의도)**: 거절 → 보호자 알림O / 요청 취소·탈퇴 PENDING 종료 → 무알림. "일관성" 명목으로 ②③에 알림 추가 금지. 단 보호자의 요청 취소는 피보호자 화면 갱신용 WS `connection-request-cancelled`만 보낸다(푸시·이력 없음, 2026-10-01). 같은 쌍 반복 요청은 24시간에 5건까지(6번째부터 429 `CONNECTION_REQUEST_COOLDOWN`, 수락 시 초기화, Redis 장애 시 fail-open, 2026-10-02).
+- **refresh 토큰 = HttpOnly 쿠키**(2026-10-06, `careai_rt`, `Path=/api/auth`, host-only, SameSite=Lax): 로그인·카카오·가입 완료·갱신 응답이 `Set-Cookie`로 내리고 `/refresh`가 쿠키를 읽는다(전환 기간엔 본문 `refreshToken`도 `body-compat` 플래그로 유지). 로그아웃·비밀번호 변경·탈퇴·갱신 거절(401/403/404) 때 만료시킨다. 회전·재사용 감지는 그대로. Path·Domain을 넓히거나 access 토큰을 쿠키 인증으로 받지 말 것 - 상세 rules 파일.
 - **비밀번호 재설정**: 미가입 404·카카오 400 명시(시니어 UX 우선) + IP/이메일 rate limit.
 - **카카오 OAuth**: `client_secret`는 `.env.dev`로만 주입(Git 평문 금지), 시작 시 fail-fast 검증.
 - **동기 AFTER_COMMIT 리스너 안의 쓰기 = `REQUIRES_NEW`**(2026-09-30, H-1·M-1): 기본 전파면 이미 커밋된 트랜잭션에 합류해 **쓰기와 그 안에서 발행한 이벤트가 조용히 사라진다**(탈퇴 시 상대 해제 알림이 이 이유로 한 번도 안 나갔다). 새 동기 리스너는 `WithdrawalListenerCommitIntegrationTest` 형태로 실 DB 검증.

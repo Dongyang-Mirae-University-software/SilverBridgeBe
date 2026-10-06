@@ -481,3 +481,13 @@
 - **강제 연결 WS는 알림보다 먼저 (CONN-G02)**: 양쪽 `connection-accepted` WS를 `dispatch`보다 먼저 보낸다(설정 DB 오류가 피보호자 화면 갱신을 막지 않게). 알림은 `SETTINGS_ONLY` 그대로.
 - **세션 만료 뒤 FCM 토큰 해제 (XAREA-G01)**: `POST /api/notifications/fcm-token/release`(본문 `{accessToken, token}`)만 만료된 access token(서명·`typ=access` 검사, 만료 후 refresh 수명 이내)을 받는다. 할 수 있는 일은 **본인 소유 FCM 토큰 삭제뿐**이다. 이 만료 허용 파싱(`getAccessTokenSubjectAllowingExpired`)을 인증 수단이나 다른 경로로 넓히지 말 것. 이 경로는 로그아웃 블랙리스트·무효화를 보지 않는다(잃는 것이 없는 조작). IP 기준 속도 제한 1분 10회. permitAll은 이 경로 하나뿐.
 - **보류 유지**: XCUT-G31(HttpOnly 쿠키)은 별도 세션에서 진행한다. **XCUT-G06(탭 경합) 직전 refresh 토큰 유예는 구현하지 않았다** - QA 재현 경로(옛 토큰을 약 30분 뒤 다시 냄)를 10초 유예가 해결하지 못하고, 유예 안에 새 쌍을 발급하면 계보가 갈라져 단일 기기 정책·회전 재사용 감지(H-3)가 약해지며 설계안 결정 질문 4번이 미결이다. 탭 간 갱신 직렬화는 FE 몫.
+
+## refresh 토큰 HttpOnly 쿠키 (2026-10-06, XCUT-G31·AUTH-G26)
+
+- **경위**: 로그인·갱신 응답 본문의 refresh 토큰을 FE가 비 HttpOnly 쿠키로 저장해 XSS 한 번이면 7일짜리 토큰이 읽혔다. 설계안 A안대로 BE가 `Set-Cookie`(HttpOnly·Secure·SameSite=Lax·`Path=/api/auth`·Max-Age 7일·Domain 없음, 이름 `careai_rt`)로 내린다. 결정 9개와 이유는 `docs/(2026-10-02) design-refresh-token-httponly-cookie.md` §5.
+- **불변 규칙 ①(쿠키 범위)**: Path를 `/api/auth` 밖으로 넓히거나 `Domain`을 지정하지 말 것(`gosky.kr`는 우리 소유가 아니라 다른 서브도메인에 노출된다). 쿠키는 `/refresh`·`/logout` 경로에만 실린다. **access 토큰을 쿠키로 받는 인증을 만들지 말 것**(인증 필터는 계속 Authorization 헤더만 읽는다).
+- **불변 규칙 ②(CSRF)**: 쿠키만으로 갱신할 때는 `Origin`이 있으면 `APP_CORS_ORIGINS`에 있어야 한다(없으면 403, 회전 전에). SameSite를 None으로 바꾸지 말 것. `Origin`이 없는 요청(FE 중계 서버)은 통과하는 것이 의도다.
+- **불변 규칙 ③(만료)**: 로그아웃·비밀번호 변경·탈퇴 성공 때와, **갱신이 401·403·404로 거절될 때** 같은 속성으로 Max-Age=0을 내린다(HttpOnly라 화면이 지울 수 없다). 429·5xx에는 지우지 않는다. 관리자 정지·역할 변경은 브라우저에 헤더를 줄 수 없어 다음 갱신 거절 때 지워진다.
+- **불변 규칙 ④(보안 규칙은 전달 방식과 무관)**: 회전·재사용 감지(H-3)·단일 기기 정책·AUTH-G03 단순 401은 `AuthService.refresh(String)` 한 곳에 있다. 쿠키 경로에서 따로 우회하거나 grace(유예)를 끼우지 말 것(XCUT-G06 유예는 여전히 보류).
+- **전환 기간**: `auth.refresh-cookie.body-compat`(기본 true)이면 본문 `refreshToken`을 내리고 받는다(본문 우선). FE 전환 배포 확인 후 7일 뒤 false로 바꾸면 응답 본문 값은 null(키 유지), 요청 본문은 무시된다. 그 뒤 본문 경로 코드를 삭제한다. 롤백은 `AUTH_REFRESH_COOKIE_ENABLED=false`.
+- **FE 프록시 주의**: FE `api/[...path]/route.ts`는 요청의 `cookie`·`origin` 헤더를 지운다 - `/auth/refresh`에 한해 `careai_rt`를 BE로 넘겨야 쿠키가 동작한다.
