@@ -155,7 +155,8 @@ public class FcmService {
                     ? ChannelFailureReason.ALL_TOKENS_EXPIRED
                     : ChannelFailureReason.PUSH_SERVER_ERROR);
         } catch (FirebaseMessagingException e) {
-            log.error("FCM 발송 실패", e);
+            // 예외 메시지에 기기 토큰이 섞일 수 있어 FCM 오류 코드(열거형)만 남긴다.
+            log.error("FCM 발송 실패: errorCode={}", e.getMessagingErrorCode());
             return ChannelResult.failed(ChannelFailureReason.PUSH_SERVER_ERROR);
         }
     }

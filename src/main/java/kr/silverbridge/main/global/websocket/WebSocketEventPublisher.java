@@ -39,7 +39,8 @@ public class WebSocketEventPublisher {
             messagingTemplate.convertAndSend(destination, payload);
             log.debug("WebSocket 발송: destination={}", destination);
         } catch (Exception e) {
-            log.warn("WebSocket 발송 실패: destination={}, error={}", destination, e.getMessage());
+            // 메시징 예외 메시지에는 payload(SOS·화재 내용)가 들어갈 수 있어 예외 클래스만 남긴다.
+            log.warn("WebSocket 발송 실패: destination={}, exception={}", destination, e.getClass().getSimpleName());
         }
     }
 

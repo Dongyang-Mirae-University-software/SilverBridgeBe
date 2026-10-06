@@ -47,7 +47,7 @@ public class SosNotificationCooldown {
             return Boolean.TRUE.equals(acquired);
         } catch (Exception e) {
             // 긴급 알림 우선: 쿨다운 인프라 장애가 SOS 알림을 막지 않도록 fail-open
-            log.warn("SOS 쿨다운 확인 실패 — 알림 강제 발송(fail-open): wardId={}, error={}", wardId, e.getMessage());
+            log.warn("SOS 쿨다운 확인 실패 — 알림 강제 발송(fail-open): wardId={}, exception={}", wardId, e.getClass().getSimpleName());
             return true;
         }
     }
@@ -67,8 +67,8 @@ public class SosNotificationCooldown {
         try {
             redisTemplate.delete(KEY_PREFIX + wardId);
         } catch (Exception e) {
-            log.warn("SOS 쿨다운 해제 실패 — {}초 뒤 자동 만료: wardId={}, error={}",
-                    cooldown.toSeconds(), wardId, e.getMessage());
+            log.warn("SOS 쿨다운 해제 실패 — {}초 뒤 자동 만료: wardId={}, exception={}",
+                    cooldown.toSeconds(), wardId, e.getClass().getSimpleName());
         }
     }
 }

@@ -63,7 +63,7 @@ public class FileServerClient {
                     .retrieve()
                     .toBodilessEntity();
         } catch (Exception e) {
-            log.warn("파일 서버 삭제 실패 (url={}): {}", fileUrl, e.getMessage());
+            log.warn("파일 서버 삭제 실패 (url={}): exception={}", fileUrl, e.getClass().getSimpleName());
         }
     }
 
@@ -135,10 +135,10 @@ public class FileServerClient {
             return url;
 
         } catch (RestClientException e) {
-            log.error("파일 서버 통신 실패: {}", e.getMessage());
+            log.error("파일 서버 통신 실패: exception={}", e.getClass().getSimpleName());
             throw new CustomException(ErrorCode.FILE_UPLOAD_FAILED);
         } catch (IOException e) {
-            log.error("파일 읽기 실패: {}", e.getMessage());
+            log.error("파일 읽기 실패: exception={}", e.getClass().getSimpleName());
             throw new CustomException(ErrorCode.FILE_UPLOAD_FAILED);
         }
     }

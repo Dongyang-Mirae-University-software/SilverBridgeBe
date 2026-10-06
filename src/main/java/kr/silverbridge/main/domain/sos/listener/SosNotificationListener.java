@@ -146,8 +146,8 @@ public class SosNotificationListener {
                     wardId, OffsetDateTime.now().minus(REPEAT_WINDOW));
             return Math.max(count, SINGLE_OCCURRENCE);
         } catch (Exception e) {
-            log.warn("SOS 반복 횟수 집계 실패 — 기본 문구로 발송(fail-open): wardId={}, error={}",
-                    wardId, e.getMessage());
+            log.warn("SOS 반복 횟수 집계 실패 — 기본 문구로 발송(fail-open): wardId={}, exception={}",
+                    wardId, e.getClass().getSimpleName());
             return SINGLE_OCCURRENCE;
         }
     }

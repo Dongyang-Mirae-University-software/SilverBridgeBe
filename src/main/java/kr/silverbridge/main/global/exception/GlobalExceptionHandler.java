@@ -90,7 +90,8 @@ public class GlobalExceptionHandler {
     // JSON 파싱 실패 / 요청 바디 형식 오류
     @ExceptionHandler(HttpMessageNotReadableException.class)
     public ResponseEntity<ApiResponse<Void>> handleMessageNotReadable(HttpMessageNotReadableException e) {
-        log.warn("HttpMessageNotReadableException: {}", e.getMessage());
+        // 메시지에 요청 바디의 값(비밀번호 등)이 섞일 수 있어 예외 클래스만 남긴다.
+        log.warn("HttpMessageNotReadableException: cause={}", e.getMostSpecificCause().getClass().getSimpleName());
         return ResponseEntity
                 .badRequest()
                 .body(ApiResponse.fail(ErrorCode.INVALID_INPUT, "요청 형식이 올바르지 않습니다. 입력값을 확인해주세요."));
@@ -125,7 +126,8 @@ public class GlobalExceptionHandler {
     // 쿼리 파라미터 / 경로 변수 타입 불일치 (예: 숫자 자리에 문자)
     @ExceptionHandler(MethodArgumentTypeMismatchException.class)
     public ResponseEntity<ApiResponse<Void>> handleTypeMismatch(MethodArgumentTypeMismatchException e) {
-        log.warn("MethodArgumentTypeMismatchException: {}", e.getMessage());
+        // 메시지에 사용자가 넣은 값이 그대로 들어가므로 파라미터 이름만 남긴다.
+        log.warn("MethodArgumentTypeMismatchException: parameter={}", e.getName());
         String message = String.format("'%s' 값의 형식이 올바르지 않습니다.", e.getName());
         return ResponseEntity.badRequest().body(ApiResponse.fail(ErrorCode.INVALID_INPUT, message));
     }
@@ -172,7 +174,9 @@ public class GlobalExceptionHandler {
 
         // 그 외(FK·NOT NULL·CHECK 등)는 서버 측 결함 — 진단을 위해 실제 원인을 ERROR로 남기고,
         // 사용자에겐 "중복"이 아닌 일반 서버 오류로 응답한다.
-        log.error("DataIntegrityViolation(non-unique, sqlState={}): {}", sqlState, e.getMostSpecificCause().getMessage());
+        // 원인 메시지에는 "Key (email)=(값)" 형태로 PII 가 들어가므로 SQLState 와 원인 클래스만 남긴다.
+        log.error("DataIntegrityViolation(non-unique, sqlState={}, cause={})", sqlState,
+                e.getMostSpecificCause().getClass().getSimpleName());
         return ResponseEntity
                 .internalServerError()
                 .body(ApiResponse.fail(ErrorCode.INTERNAL_SERVER_ERROR));

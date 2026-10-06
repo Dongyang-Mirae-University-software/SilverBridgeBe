@@ -125,7 +125,8 @@ public class JwtTokenProvider {
             log.warn("만료된 JWT 토큰: {}", e.getMessage());
             throw new CustomException(ErrorCode.EXPIRED_TOKEN);
         } catch (JwtException | IllegalArgumentException e) {
-            log.warn("유효하지 않은 JWT 토큰: {}", e.getMessage());
+            // 파싱 실패 메시지에 토큰 일부(헤더·페이로드)가 들어갈 수 있어 예외 클래스만 남긴다.
+            log.warn("유효하지 않은 JWT 토큰: exception={}", e.getClass().getSimpleName());
             throw new CustomException(ErrorCode.INVALID_TOKEN);
         }
     }
