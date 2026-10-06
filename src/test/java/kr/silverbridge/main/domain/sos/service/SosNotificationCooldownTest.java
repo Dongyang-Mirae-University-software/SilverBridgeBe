@@ -1,5 +1,8 @@
 package kr.silverbridge.main.domain.sos.service;
 
+import ch.qos.logback.classic.Logger;
+import ch.qos.logback.classic.spi.ILoggingEvent;
+import ch.qos.logback.core.read.ListAppender;
 import kr.silverbridge.main.domain.sos.config.SosProperties;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -7,6 +10,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.slf4j.LoggerFactory;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.data.redis.core.ValueOperations;
 
@@ -98,6 +102,31 @@ class SosNotificationCooldownTest {
         cooldown.release(WARD_ID);
 
         verify(redisTemplate).delete(KEY);
+    }
+
+    @Test
+    @DisplayName("장애 로그에는 예외 메시지 원문을 남기지 않는다 - 연결 주소·키 등이 섞일 수 있어 클래스명만 남긴다")
+    void 장애_로그에_예외_원문_없음() {
+        Logger logger = (Logger) LoggerFactory.getLogger(SosNotificationCooldown.class);
+        ListAppender<ILoggingEvent> appender = new ListAppender<>();
+        appender.start();
+        logger.addAppender(appender);
+        try {
+            when(redisTemplate.opsForValue()).thenThrow(new RuntimeException("SECRET-REDIS-HOST:6379 unreachable"));
+            when(redisTemplate.delete(KEY)).thenThrow(new IllegalStateException("SECRET-KEY-DETAIL"));
+
+            cooldown.tryAcquire(WARD_ID);
+            cooldown.release(WARD_ID);
+
+            assertThat(appender.list).hasSize(2);
+            assertThat(appender.list).allSatisfy(event -> assertThat(event.getFormattedMessage())
+                    .doesNotContain("SECRET")
+                    .contains(WARD_ID));
+            assertThat(appender.list.get(0).getFormattedMessage()).contains("RuntimeException");
+            assertThat(appender.list.get(1).getFormattedMessage()).contains("IllegalStateException");
+        } finally {
+            logger.detachAppender(appender);
+        }
     }
 
     @Test
