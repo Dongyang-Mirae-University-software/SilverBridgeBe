@@ -13,6 +13,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.util.List;
@@ -29,7 +30,10 @@ public class AnnouncementController {
     @Operation(
             summary = "공지 목록 조회",
             description = """
-                    공지 목록을 전체 반환합니다. 최신 공지가 먼저 반환됩니다.
+                    공지 목록을 나눠서 반환합니다. 최신 공지가 먼저 반환됩니다.
+
+                    - page(0부터, 기본 0)·size(기본 20, 최대 50)는 선택입니다. 응답은 배열 그대로이며, 생략하면 첫 20건입니다.
+                    - 목록의 content 는 앞 100자(이모지 1개=1자)로 축약된 미리보기입니다. 전체 본문은 공지 상세 조회로 받으세요.
 
                     [요청 헤더]
                     Authorization: Bearer {accessToken}
@@ -41,8 +45,10 @@ public class AnnouncementController {
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "500", description = "서버 내부 오류", content = @Content)
     })
     @GetMapping("/select")
-    public ApiResponse<List<AnnouncementResponse>> getAnnouncements() {
-        return ApiResponse.ok(announcementService.getAnnouncements());
+    public ApiResponse<List<AnnouncementResponse>> getAnnouncements(
+            @Parameter(description = "페이지 번호(0부터, 생략 시 0, 음수는 0으로 보정)") @RequestParam(defaultValue = "0") int page,
+            @Parameter(description = "페이지 크기(생략 시 20, 0 이하는 20, 최대 50)") @RequestParam(defaultValue = "20") int size) {
+        return ApiResponse.ok(announcementService.getAnnouncements(page, size));
     }
 
     @Operation(

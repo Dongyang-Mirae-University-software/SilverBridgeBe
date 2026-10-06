@@ -1672,3 +1672,8 @@ REST API Key 단독 대비 보안 강화 — 인가코드 탈취 시 토큰 발�
 - 영향 범위 점검(C) 후속 선택 항목을 모두 반영: Swagger 문자 상한 안내, `[SOS-NO-DELIVERY]` 문구에 상한 초과 포함 명시, `SmsFallbackLimiterUsageTest`(limiter는 디스패처 필수 알림 폴백에서만), `SmsFallbackLimiterRedisIntegrationTest`(실제 `redis:7.2`로 Lua 증가·환불 검증, 통합 스위트에 `spring-boot-starter-data-redis` 추가).
 - 검증: 단위 통과, vkcs 통합 테스트 71건 통과(새 Redis 테스트 6건 포함, 브랜치로 머지 전 실행).
 - 상세: `docs/(2026-10-05) audit-impact-sms-fallback-cap.md`
+
+## [2026-10-06] SOS 로그에서 예외 메시지 원문 제거 (branch `fix/sos-log-no-exception-message`, 마이그레이션 없음)
+
+- `SosNotificationCooldown`(확인·해제 실패)·`SosNotificationListener`(반복 횟수 집계 실패)의 `e.getMessage()`를 예외 클래스명으로 교체. 알림 이력·알림톡 로그의 "원문 금지, 클래스명만" 규칙과 맞춤. 로그 문구·키·fail-open 동작은 그대로.
+- `SosNotificationCooldownTest`에 로그 원문 미노출 검증 추가. 후속 점검에 남았던 항목 중 `FileServerClient`만 남음.
