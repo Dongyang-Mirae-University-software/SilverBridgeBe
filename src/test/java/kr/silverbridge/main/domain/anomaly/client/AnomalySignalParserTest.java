@@ -69,8 +69,6 @@ class AnomalySignalParserTest {
         assertThat(DetectedType.fromAi("fire")).isEqualTo(DetectedType.FIRE);
         assertThat(DetectedType.fromAi("fall")).isEqualTo(DetectedType.FALL);
         assertThat(DetectedType.fromAi("flood")).isEqualTo(DetectedType.UNKNOWN);
-        // 흉기는 라이브 탑재 전이라 아직 이상감지 대상이 아니다
-        assertThat(DetectedType.WEAPON.isDetectable()).isFalse();
     }
 
     @Test

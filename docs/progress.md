@@ -1677,3 +1677,10 @@ REST API Key 단독 대비 보안 강화 — 인가코드 탈취 시 토큰 발�
 
 - `SosNotificationCooldown`(확인·해제 실패)·`SosNotificationListener`(반복 횟수 집계 실패)의 `e.getMessage()`를 예외 클래스명으로 교체. 알림 이력·알림톡 로그의 "원문 금지, 클래스명만" 규칙과 맞춤. 로그 문구·키·fail-open 동작은 그대로.
 - `SosNotificationCooldownTest`에 로그 원문 미노출 검증 추가. 후속 점검에 남았던 항목 중 `FileServerClient`만 남음.
+
+## [2026-10-06] 이상감지 흉기·낙상 라이브 활성화 (branch `feature/anomaly-weapon-fall-live`, 마이그레이션 없음)
+
+- `DetectedType.isDetectable()`를 화재·낙상·흉기로 확대. 판정(DANGER 모드)·쿨다운·수신자·강제 FCM·알림톡 매핑은 무변경.
+- 알림 문구를 종류별로: 조사(화재가·흉기가·낙상이, `DetectedTypeLabel.withSubjectParticle`), 본인 안내 = 화재 대피 / 흉기 피신·112 연락 안내 / 낙상 도움 요청·SOS 안내. SMS 폴백 동일 기준.
+- 재촉·요약·동수 안내는 `DetectedTypeLabel`을 써서 변경 불필요, 알림톡은 `#{detectedTypeLabel}` 변수라 재심사 불요(확인).
+- 상세: `docs/(2026-10-06) feature-anomaly-weapon-fall-live.md`

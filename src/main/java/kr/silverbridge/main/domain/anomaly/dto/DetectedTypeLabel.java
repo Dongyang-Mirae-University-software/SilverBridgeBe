@@ -24,6 +24,15 @@ public final class DetectedTypeLabel {
         };
     }
 
+    /** 주격 조사까지 붙인 표기("화재가"·"낙상이"·"흉기가") - 받침 유무로 가/이를 고른다. */
+    public static String withSubjectParticle(DetectedType detectedType) {
+        String label = of(detectedType);
+        char last = label.charAt(label.length() - 1);
+        boolean hangul = last >= '가' && last <= '힣';
+        boolean hasBatchim = hangul && (last - '가') % 28 != 0;
+        return label + (hasBatchim ? "이" : "가");
+    }
+
     /**
      * 실시간 분석 상태 표시용(보호자 실시간 카메라 보기). 알림 문구({@link #of})와 달리 정상·확인 불가도 그대로 보여준다 -
      * 매 순간의 상태를 그리는 화면이라 "이상 상황"으로 뭉뚱그리면 정상 화면에 경고처럼 뜬다.

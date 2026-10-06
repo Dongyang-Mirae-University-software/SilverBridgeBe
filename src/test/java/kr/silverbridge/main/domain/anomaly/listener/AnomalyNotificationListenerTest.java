@@ -200,6 +200,60 @@ class AnomalyNotificationListenerTest {
                 .isEqualTo("[실버브릿지] 거실에서 화재 감지. 안전한 곳으로 대피해 주세요.");
     }
 
+    private AnomalyDetectedEvent eventOf(DetectedType type) {
+        return new AnomalyDetectedEvent(7L, INCIDENT_ID, WARD_ID, "김순자", SESSION_ID, "거실", type, DETECTED_AT);
+    }
+
+    @Test
+    @DisplayName("흉기: 보호자·본인 푸시 문구(조사 '가', 본인은 피신·112 안내)")
+    void 흉기_푸시_문구() {
+        when(connectionService.getActiveGuardianIds(WARD_ID)).thenReturn(List.of("GD0001"));
+        when(cooldown.tryAcquire(anyString(), eq(SESSION_ID), eq(DetectedType.WEAPON), anyBoolean())).thenReturn(true);
+
+        listener.handleAnomalyDetected(eventOf(DetectedType.WEAPON));
+
+        ArgumentCaptor<NotificationContent> guardian = ArgumentCaptor.forClass(NotificationContent.class);
+        verify(notificationDispatcher).dispatch(eq("GD0001"), any(), any(), guardian.capture());
+        assertThat(guardian.getValue().body()).isEqualTo("김순자님 댁 거실에서 흉기가 감지되었습니다.");
+        assertThat(guardian.getValue().data()).containsEntry("detectedType", "WEAPON")
+                .containsEntry("detectedTypeLabel", "흉기");
+
+        ArgumentCaptor<NotificationContent> self = ArgumentCaptor.forClass(NotificationContent.class);
+        verify(notificationDispatcher).dispatch(eq(WARD_ID), any(), any(), self.capture());
+        assertThat(self.getValue().body())
+                .isEqualTo("거실에서 흉기가 감지되었습니다. 안전한 곳으로 피하고 112에 연락해 주세요.");
+    }
+
+    @Test
+    @DisplayName("낙상: 보호자·본인 푸시 문구(조사 '이', 본인은 대피 대신 도움 요청 안내)")
+    void 낙상_푸시_문구() {
+        when(connectionService.getActiveGuardianIds(WARD_ID)).thenReturn(List.of("GD0001"));
+        when(cooldown.tryAcquire(anyString(), eq(SESSION_ID), eq(DetectedType.FALL), anyBoolean())).thenReturn(true);
+
+        listener.handleAnomalyDetected(eventOf(DetectedType.FALL));
+
+        ArgumentCaptor<NotificationContent> guardian = ArgumentCaptor.forClass(NotificationContent.class);
+        verify(notificationDispatcher).dispatch(eq("GD0001"), any(), any(), guardian.capture());
+        assertThat(guardian.getValue().body()).isEqualTo("김순자님 댁 거실에서 낙상이 감지되었습니다.");
+
+        ArgumentCaptor<NotificationContent> self = ArgumentCaptor.forClass(NotificationContent.class);
+        verify(notificationDispatcher).dispatch(eq(WARD_ID), any(), any(), self.capture());
+        assertThat(self.getValue().body()).isEqualTo(
+                "거실에서 낙상이 감지되었습니다. 괜찮으시면 보호자에게 연락해 주세요. 도움이 필요하면 SOS 버튼을 눌러 주세요.")
+                .doesNotContain("대피");
+    }
+
+    @Test
+    @DisplayName("문자 대체 문구: 흉기·낙상 본인분은 종류별 안내, 보호자분은 앱 확인 안내")
+    void 문자_대체_문구_종류별() {
+        assertThat(AnomalyNotificationListener.smsFallbackText(eventOf(DetectedType.WEAPON), true))
+                .isEqualTo("[실버브릿지] 거실에서 흉기 감지. 안전한 곳으로 피하고 112에 연락해 주세요.");
+        assertThat(AnomalyNotificationListener.smsFallbackText(eventOf(DetectedType.FALL), true))
+                .isEqualTo("[실버브릿지] 거실에서 낙상 감지. 도움이 필요하면 보호자에게 연락해 주세요.");
+        assertThat(AnomalyNotificationListener.smsFallbackText(eventOf(DetectedType.FALL), false))
+                .isEqualTo("[실버브릿지] 김순자님 댁 거실에서 낙상 감지. 앱에서 확인해 주세요.");
+    }
+
     @Test
     @DisplayName("문자 대체 문구: 이름·위치가 비면 그 부분만 뺀다")
     void 문자_대체_문구_빈값() {

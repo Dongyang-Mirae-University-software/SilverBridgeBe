@@ -73,8 +73,8 @@ public record AdminSafetyDashboardResponse(
     /**
      * 오늘(KST) 이상감지.
      *
-     * <p><b>낙상·흉기는 담지 않는다</b> - AI 모델 미탑재라 항상 0이고, 0을 보여주면 "그 위험은 없었다"로
-     * 오독된다. 같은 이유로 {@code byType}에는 <b>실제로 집계된 유형만</b> 들어간다.</p>
+     * <p>{@code byType}에는 <b>실제로 집계된 유형만</b> 들어간다. 0건인 유형을 0으로 채우면 "그 위험은 없었다"로
+     * 오독되는데, AI 모델이 꺼져 있어도 0이기 때문이다(낙상·흉기는 2026-10-06부터 감지 대상이라 발생하면 항목이 생긴다).</p>
      */
     @Schema(description = "오늘(KST) 이상감지 집계")
     public record TodayAnomaly(
