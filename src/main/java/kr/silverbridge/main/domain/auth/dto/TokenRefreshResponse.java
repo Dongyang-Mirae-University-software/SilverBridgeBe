@@ -12,6 +12,6 @@ public class TokenRefreshResponse {
     @Schema(description = "새로 발급된 Access Token. Authorization 헤더에 'Bearer {accessToken}' 형식으로 사용. 유효 시간: 30분", example = "eyJhbGciOiJIUzI1NiJ9...")
     private String accessToken;
 
-    @Schema(description = "새로 발급된 Refresh Token. 기존 refreshToken은 무효화되므로 반드시 이 값으로 교체하여 저장. 유효 시간: 7일", example = "eyJhbGciOiJIUzI1NiJ9...")
+    @Schema(description = "[전환 기간 전용, 곧 제거] 새 Refresh Token은 HttpOnly 쿠키(Set-Cookie)로 자동 교체된다. 화면 코드는 읽거나 저장하지 말 것. 쿠키 전용 전환이 끝나면 null이 된다. 유효 시간: 7일", nullable = true, example = "eyJhbGciOiJIUzI1NiJ9...")
     private String refreshToken;
 }

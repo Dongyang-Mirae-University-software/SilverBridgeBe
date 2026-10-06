@@ -6,12 +6,14 @@ import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletResponse;
 import jakarta.validation.Valid;
 import kr.silverbridge.main.domain.user.dto.PasswordChangeRequest;
 import kr.silverbridge.main.domain.user.dto.UserProfileResponse;
 import kr.silverbridge.main.domain.user.dto.UserUpdateRequest;
 import kr.silverbridge.main.domain.user.dto.WithdrawRequest;
 import kr.silverbridge.main.domain.user.service.UserService;
+import kr.silverbridge.main.global.jwt.RefreshCookieManager;
 import kr.silverbridge.main.global.response.ApiResponse;
 import kr.silverbridge.main.global.util.ClientIpResolver;
 import lombok.RequiredArgsConstructor;
@@ -31,6 +33,7 @@ import org.springframework.web.multipart.MultipartFile;
 public class UserController {
 
     private final UserService userService;
+    private final RefreshCookieManager refreshCookieManager;
 
     @Operation(
             summary = "내 정보 조회",
@@ -173,7 +176,7 @@ public class UserController {
                     """
     )
     @ApiResponses({
-            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "비밀번호 변경 성공 → 재로그인 필요"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "비밀번호 변경 성공 → 재로그인 필요 (refresh 쿠키 삭제)"),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "비밀번호 형식 위반(영문+숫자+특수문자 8자+ 아님) / 현재 비밀번호와 동일 / 카카오 계정", content = @Content),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "현재 비밀번호 불일치 또는 인증 토큰 만료", content = @Content),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "사용자를 찾을 수 없음", content = @Content),
@@ -181,8 +184,11 @@ public class UserController {
     })
     @PutMapping("/me/password")
     public ApiResponse<Void> changePassword(@AuthenticationPrincipal String userId,
-                                            @Valid @RequestBody PasswordChangeRequest request) {
+                                            @Valid @RequestBody PasswordChangeRequest request,
+                                            HttpServletResponse httpResponse) {
         userService.changePassword(userId, request.getCurrentPassword(), request.getNewPassword());
+        // 모든 refresh 토큰이 폐기됐으므로 브라우저의 refresh 쿠키도 치운다(HttpOnly라 화면이 지울 수 없다)
+        refreshCookieManager.clear(httpResponse);
         return ApiResponse.ok("비밀번호가 변경되었습니다. 다시 로그인해주세요.");
     }
 
@@ -201,7 +207,7 @@ public class UserController {
                     """
     )
     @ApiResponses({
-            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "회원 탈퇴 완료"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "회원 탈퇴 완료 (refresh 쿠키 삭제)"),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "입력값 유효성 검증 실패 또는 카카오 사용자 confirmation 불일치", content = @Content),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "비밀번호 불일치 또는 인증 토큰 만료", content = @Content),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "사용자를 찾을 수 없음", content = @Content),
@@ -210,7 +216,8 @@ public class UserController {
     @DeleteMapping("/me")
     public ApiResponse<Void> withdraw(@AuthenticationPrincipal String userId,
                                       @Valid @RequestBody WithdrawRequest request,
-                                      HttpServletRequest httpRequest) {
+                                      HttpServletRequest httpRequest,
+                                      HttpServletResponse httpResponse) {
         userService.withdraw(
                 userId,
                 request.getPassword(),
@@ -231,6 +238,7 @@ public class UserController {
                 log.error("[WITHDRAW-PURGE-FAILED] 영구 삭제 실패, 스윕 스케줄러가 회수 예정 userId={}", userId, retry);
             }
         }
+        refreshCookieManager.clear(httpResponse);
         return ApiResponse.ok("회원 탈퇴가 완료되었습니다.");
     }
 }

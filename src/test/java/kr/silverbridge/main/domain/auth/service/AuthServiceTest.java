@@ -537,6 +537,22 @@ class AuthServiceTest {
     }
 
     @Test
+    @DisplayName("쿠키로 받은 토큰(문자열 경로)도 재사용 감지 → 모든 token 폐기가 그대로 동작한다 (XCUT-G31)")
+    void refresh_쿠키경로_재사용감지_유지() {
+        when(refreshTokenRepository.findByToken("cookie-old-token")).thenReturn(Optional.empty());
+        when(jwtTokenProvider.validateToken("cookie-old-token")).thenReturn(true);
+        when(jwtTokenProvider.isRefreshToken("cookie-old-token")).thenReturn(true);
+        when(jwtTokenProvider.getUserId("cookie-old-token")).thenReturn(TEST_USER_ID);
+        when(refreshTokenRepository.existsByUserId(TEST_USER_ID)).thenReturn(true);
+
+        CustomException ex = assertThrows(CustomException.class, () -> authService.refresh("cookie-old-token"));
+
+        assertThat(ex.getErrorCode()).isEqualTo(ErrorCode.INVALID_TOKEN);
+        verify(refreshTokenRevocationService).revokeAll(TEST_USER_ID);
+        verify(accessLogService).log(TEST_USER_ID, kr.silverbridge.main.global.enums.AccessAction.TOKEN_REUSE_DETECTED);
+    }
+
+    @Test
     @DisplayName("다른 기기 로그인으로 밀려난 refresh → INVALID_TOKEN만, 새 기기 세션은 폐기하지 않는다 (AUTH-G03)")
     void refresh_로그인으로밀려난토큰_폐기없이_INVALID_TOKEN() {
         TokenRefreshRequest req = tokenRefreshRequest("superseded-token");
