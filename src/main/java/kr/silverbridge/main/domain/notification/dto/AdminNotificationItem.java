@@ -68,7 +68,7 @@ public record AdminNotificationItem(
         @Schema(description = "전송 완료된 채널만. 없으면 빈 배열(화면 \"-\")", example = "[\"SMS\"]")
         List<NotificationChannelType> deliveredChannels,
 
-        @Schema(description = "전송 결과", example = "SMS_FALLBACK")
+        @Schema(description = "전송 결과(SMS_FALLBACK = SOS·이상감지 푸시 미전달로 문자 대체)", example = "SMS_FALLBACK")
         NotificationLogResult result,
 
         @Schema(description = "보내지 않은 사유 (result=NOT_SENT일 때만)", example = "RESTRICTED_ACCOUNT")
