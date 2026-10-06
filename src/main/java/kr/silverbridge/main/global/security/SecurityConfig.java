@@ -83,7 +83,12 @@ public class SecurityConfig {
                                         + "font-src 'self' data:; "
                                         + "frame-ancestors 'none'; "
                                         + "object-src 'none'; "
-                                        + "base-uri 'self'")))
+                                        + "base-uri 'self'"))
+                        // Permissions-Policy (2026-10-06): API 서버는 화면을 내려주지 않아 브라우저 기능을 전부 막는다.
+                        // Swagger UI·WebSocket은 카메라·마이크·위치·결제 기능을 쓰지 않는다. 보호자 카메라 영상은 서버가
+                        // 중계하는 MJPEG(<img>)라 브라우저 카메라 권한과 무관하다.
+                        .permissionsPolicyHeader(pp -> pp.policy(
+                                "camera=(), microphone=(), geolocation=(), payment=()")))
 
                 // JWT 방식 — 서버에 세션 미사용
                 .sessionManagement(session ->

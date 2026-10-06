@@ -142,6 +142,22 @@ class SecurityConfigAccessDeniedTest {
                 .andExpect(status().isUnauthorized());
     }
     @Test
+    @DisplayName("응답에 Permissions-Policy 헤더가 붙는다 - 인증 응답·미인증 401 모두")
+    void permissionsPolicyHeader_present() throws Exception {
+        String expected = "camera=(), microphone=(), geolocation=(), payment=()";
+
+        mockMvc.perform(get("/api/user/probe").with(user("u1").roles("GUARDIAN")))
+                .andExpect(status().isOk())
+                .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers
+                        .header().string("Permissions-Policy", expected));
+
+        mockMvc.perform(get("/api/admin/probe"))
+                .andExpect(status().isUnauthorized())
+                .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers
+                        .header().string("Permissions-Policy", expected));
+    }
+
+    @Test
     @DisplayName("로그인 사용자 요청 제한이 보안 체인에 연결돼 있다 - 초과 시 JSON 429 + Retry-After, 미초과면 통과")
     void userRateLimit_wiredIntoChain() throws Exception {
         org.mockito.Mockito.doThrow(new kr.silverbridge.main.global.exception.TooManyRequestsException(30))
