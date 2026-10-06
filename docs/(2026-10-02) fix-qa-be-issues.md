@@ -51,5 +51,5 @@ ADMIN-G27/CONN-G08(대시보드 `wardsWithoutReachableGuardian`, 2026-09-09 "경
 
 - ANOM-G08: `camera.is_active`는 표시용이라고 **문서화로 종결**(코드 변경 없음).
 - CONN-G02: 강제 연결 FCM 승격 - 현행 유지 확정.
-- XCUT-G31: refresh HttpOnly 쿠키 - 설계안만 작성(`docs/(2026-10-02) design-refresh-token-httponly-cookie.md`, #286), 구현은 10/22 이후 결정(A안 추천, 결정 질문 9개).
+- XCUT-G31: refresh HttpOnly 쿠키 - 설계안만 작성(`docs/(2026-10-02) design-refresh-token-httponly-cookie.md`, #286), 구현은 별도 세션에서 진행(A안 추천, 결정 질문 9개).
 - CONN-G15: 경합 잔여 - 수용.

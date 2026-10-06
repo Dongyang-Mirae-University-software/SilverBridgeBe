@@ -434,7 +434,7 @@
 ### 남은 보류 (의도적으로 만들지 않았다)
 
 - **CONN-G02**: 강제 연결 알림의 FCM 승격 - **현행 유지로 확정**(`CONNECTION_FORCED`는 설정 기반 발송). 강제 채널로 올리지 말 것.
-- **XCUT-G31**: refresh 토큰 HttpOnly 쿠키 전환 - 설계안만 작성(`docs/(2026-10-02) design-refresh-token-httponly-cookie.md`), 구현은 10/22 이후 결정(A안 추천, 결정 질문 9개).
+- **XCUT-G31**: refresh 토큰 HttpOnly 쿠키 전환 - 설계안만 작성(`docs/(2026-10-02) design-refresh-token-httponly-cookie.md`), 구현은 별도 세션에서 진행한다(A안 추천, 결정 질문 9개).
 - **세션 강제 종료**: **구현됨**(2026-10-02 P15, #287) - 위 "관리자 회원관리" 규칙 ⑦의 "열린 WebSocket 세션" 항목 참조. 단일 인스턴스 한정.
 - **CONN-G15 경합 - 해소 (2026-10-05, PR #309)**: 연결을 새로 만드는 두 경로(`requestConnectionAsGuardian`·`AdminConnectionService.forceConnect`)는 역할을 읽기 전에 두 사람의 users 행을 `FOR SHARE`(id 순)로, 관리자 회원 수정(`AdminUserService.updateUser`)은 연결 정리 전에 대상 users 행을 `FOR NO KEY UPDATE`로 잠근다(순서 users → connection, 탈퇴 purge·클립 기록과 같아 교착 없음). 요청 생성은 INSERT라 `@Version`으로 못 막고, 역할 변경 쪽 조회가 미커밋 요청을 못 봐 보호자가 된 사용자 앞으로 PENDING이 남던 문제였다. **잠금을 빼거나 검증 뒤로 옮기지 말 것. 역할 변경 쪽을 `FOR UPDATE`로 바꾸지 말 것**(클립의 `FOR KEY SHARE`와 충돌). 수락 경로는 기존 행 UPDATE라 `@Version`으로 충분해 바꾸지 않았다. 실 DB 검증: `ConnectionRoleChangeRaceIntegrationTest`.
 - (ANOM-G08은 위 "카메라 등록·중지 카메라"로 종결.)
@@ -480,4 +480,4 @@
 - **연결 요청 전 상대 확인 (CONN-G06)**: 사용자 ID는 대소문자를 구분하고 서버는 정확히 일치하는 ID만 찾는다(대소문자 무시 조회는 엉뚱한 사람에게 요청이 간다). `GET /api/guardian/connection/preview?targetId=`는 `{targetId, maskedName}`만 돌려주고 판정은 실제 요청과 같은 `validateConnectionRequest`를 쓴다(요청·알림·카운트 없음, 보호자 기준 속도 제한). **수락 전 연락처·주소를 이 응답에 추가하지 말 것.** 2026-10-02의 "열거 위험으로 조회 API를 만들지 않는다"는 판단은 이 최소 안(가린 이름 + 기존 오류 코드가 이미 드러내는 정보)으로 갱신한다.
 - **강제 연결 WS는 알림보다 먼저 (CONN-G02)**: 양쪽 `connection-accepted` WS를 `dispatch`보다 먼저 보낸다(설정 DB 오류가 피보호자 화면 갱신을 막지 않게). 알림은 `SETTINGS_ONLY` 그대로.
 - **세션 만료 뒤 FCM 토큰 해제 (XAREA-G01)**: `POST /api/notifications/fcm-token/release`(본문 `{accessToken, token}`)만 만료된 access token(서명·`typ=access` 검사, 만료 후 refresh 수명 이내)을 받는다. 할 수 있는 일은 **본인 소유 FCM 토큰 삭제뿐**이다. 이 만료 허용 파싱(`getAccessTokenSubjectAllowingExpired`)을 인증 수단이나 다른 경로로 넓히지 말 것. 이 경로는 로그아웃 블랙리스트·무효화를 보지 않는다(잃는 것이 없는 조작). IP 기준 속도 제한 1분 10회. permitAll은 이 경로 하나뿐.
-- **보류 유지**: XCUT-G31(HttpOnly 쿠키)은 10/22 이후 결정. **XCUT-G06(탭 경합) 직전 refresh 토큰 유예는 구현하지 않았다** - QA 재현 경로(옛 토큰을 약 30분 뒤 다시 냄)를 10초 유예가 해결하지 못하고, 유예 안에 새 쌍을 발급하면 계보가 갈라져 단일 기기 정책·회전 재사용 감지(H-3)가 약해지며 설계안 결정 질문 4번이 미결이다. 탭 간 갱신 직렬화는 FE 몫.
+- **보류 유지**: XCUT-G31(HttpOnly 쿠키)은 별도 세션에서 진행한다. **XCUT-G06(탭 경합) 직전 refresh 토큰 유예는 구현하지 않았다** - QA 재현 경로(옛 토큰을 약 30분 뒤 다시 냄)를 10초 유예가 해결하지 못하고, 유예 안에 새 쌍을 발급하면 계보가 갈라져 단일 기기 정책·회전 재사용 감지(H-3)가 약해지며 설계안 결정 질문 4번이 미결이다. 탭 간 갱신 직렬화는 FE 몫.
