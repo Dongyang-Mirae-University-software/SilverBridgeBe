@@ -55,6 +55,15 @@ class AnomalyJudgeTest {
         }
 
         @Test
+        @DisplayName("낙상·흉기도 danger=true 이면 이상감지로 인정하고, danger=false 이면 무시한다")
+        void fallAndWeapon_followDanger() {
+            assertThat(judge.isAnomaly(signal(DetectedType.FALL, 0.4, true))).isTrue();
+            assertThat(judge.isAnomaly(signal(DetectedType.WEAPON, 0.55, true))).isTrue();
+            assertThat(judge.isAnomaly(signal(DetectedType.FALL, 0.9, false))).isFalse();
+            assertThat(judge.isAnomaly(signal(DetectedType.WEAPON, 0.9, false))).isFalse();
+        }
+
+        @Test
         @DisplayName("danger=false 이면 신뢰도가 임계를 넘어도 무시한다 (판정 책임은 AI)")
         void dangerFalse_ignoredEvenWithHighConfidence() {
             assertThat(judge.isAnomaly(signal(DetectedType.FIRE, 0.95, false))).isFalse();
@@ -65,13 +74,6 @@ class AnomalyJudgeTest {
         void nonDetectableType_ignored() {
             assertThat(judge.isAnomaly(signal(DetectedType.NORMAL, 0.9, true))).isFalse();
             assertThat(judge.isAnomaly(signal(DetectedType.UNKNOWN, 0.9, true))).isFalse();
-        }
-
-        @Test
-        @DisplayName("라이브 미탑재 종류(fall·weapon)는 아직 이상감지 대상이 아니다")
-        void notYetLiveTypes_ignored() {
-            assertThat(judge.isAnomaly(signal(DetectedType.FALL, 0.9, true))).isFalse();
-            assertThat(judge.isAnomaly(signal(DetectedType.WEAPON, 0.9, true))).isFalse();
         }
     }
 
