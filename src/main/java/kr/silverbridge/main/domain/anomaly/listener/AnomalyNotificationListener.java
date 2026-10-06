@@ -118,7 +118,29 @@ public class AnomalyNotificationListener {
         if (self) {
             return event.cameraLabel() + "에서 " + what + " 감지되었습니다. " + selfGuidance(event.detectedType());
         }
-        return event.wardName() + "님 댁 " + event.cameraLabel() + "에서 " + what + " 감지되었습니다.";
+        return event.wardName() + "님 댁 " + event.cameraLabel() + "에서 " + what + " 감지되었습니다."
+                + guardianGuidance(event.detectedType());
+    }
+
+    /**
+     * 보호자 수신분의 행동 안내(앞에 공백 포함, 없으면 빈 문자열). 화재는 기존 문구 그대로 두고, 흉기·낙상은
+     * 보호자가 바로 연락해 확인하도록 안내한다. 신고는 안내 문구일 뿐 서버가 발신하지 않는다.
+     */
+    private static String guardianGuidance(DetectedType type) {
+        return switch (type) {
+            case WEAPON -> " 바로 연락해 안전을 확인하고, 위험하면 112에 신고해 주세요.";
+            case FALL -> " 바로 연락해 안전을 확인해 주세요.";
+            default -> "";
+        };
+    }
+
+    /** 보호자 문자 대체분의 행동 안내. 문자 길이 때문에 푸시보다 짧다. */
+    private static String guardianSmsGuidance(DetectedType type) {
+        return switch (type) {
+            case WEAPON -> "연락해 안전을 확인하고 위험하면 112에 신고해 주세요.";
+            case FALL -> "바로 연락해 안전을 확인해 주세요.";
+            default -> "앱에서 확인해 주세요.";
+        };
     }
 
     /**
@@ -152,7 +174,7 @@ public class AnomalyNotificationListener {
             return "[실버브릿지] " + place + " " + what + " 감지. " + selfSmsGuidance(event.detectedType());
         }
         String home = hasText(event.wardName()) ? event.wardName() + "님 댁 " : "";
-        return "[실버브릿지] " + home + place + " " + what + " 감지. 앱에서 확인해 주세요.";
+        return "[실버브릿지] " + home + place + " " + what + " 감지. " + guardianSmsGuidance(event.detectedType());
     }
 
     private static boolean hasText(String v) {
