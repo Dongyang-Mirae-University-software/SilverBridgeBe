@@ -21,7 +21,7 @@ import java.util.concurrent.ConcurrentHashMap;
  * <p><b>CONFIDENCE 모드(폴백)</b> — AI의 danger 정식화 배포가 늦어지면(현 코드상 라이브 경로의 danger는
  * 항상 false) 이력이 조용히 0건이 된다. 그 공백을 임시로 메우기 위한 백엔드 자체 임계 판정이다.</p>
  *
- * <p>두 모드 모두 {@code normal}·{@code unknown}과 라이브 미탑재 종류는 무시한다
+ * <p>두 모드 모두 {@code normal}·{@code unknown}은 무시한다
  * ({@link kr.silverbridge.main.global.enums.DetectedType#isDetectable()}).</p>
  */
 @Slf4j
@@ -40,7 +40,7 @@ public class AnomalyJudge {
     /** 이 신호를 이상감지로 인정할지. */
     public boolean isAnomaly(AnomalySignal signal) {
         if (!signal.detectedType().isDetectable()) {
-            return false;   // normal·unknown·(미탑재 종류)
+            return false;   // normal·unknown
         }
 
         if (properties.getTriggerMode() == TriggerMode.CONFIDENCE) {

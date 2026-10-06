@@ -7,23 +7,22 @@ package kr.silverbridge.main.global.enums;
  * {@link #FIRE}로 받아, 같은 카메라의 화재·연기 감지가 한 상황으로 묶이고 알림·이력·통계가 모두 "화재"로 나간다.
  * 과거 SMOKE 이력은 V53이 FIRE로 옮겼다. SMOKE 값을 다시 만들지 말 것.</p>
  *
- * <p>라이브 경로에 실제 탑재된 모델은 화재뿐이라 {@link #FIRE}만 이상감지 대상이다({@link #isDetectable()}).
- * {@link #FALL}·{@link #WEAPON}은 AI가 학습 중인 모델의 자리만 잡아둔 값으로, 라이브 연결 시
- * {@code isDetectable()}에 추가해야 이력·알림 대상이 된다(현재는 수신해도 무시). 흉기 모델은 AI가
- * {@code knife}로 보내므로 {@link #WEAPON}으로 받는다.</p>
+ * <p>화재·낙상·흉기가 이상감지 대상이다({@link #isDetectable()}, 낙상·흉기는 2026-10-06 라이브 활성화).
+ * 위험 여부는 AI의 {@code danger}가 정하고(낙상은 AI가 일정 시간 넘어진 상태일 때만 true) 백엔드는 종류로
+ * 걸러내지 않는다. 흉기 모델은 AI가 {@code knife}로 보내므로 {@link #WEAPON}으로 받는다.</p>
  *
  * <p>{@link #NORMAL}(이상 없음)·{@link #UNKNOWN}(프레임 없음·모델 미로드·디코드 실패 = 에러 상태)은 항상 무시한다.</p>
  */
 public enum DetectedType {
     FIRE,
-    FALL,     // AI 학습 중 - 라이브 경로 미탑재
-    WEAPON,   // AI 학습 중 - 라이브 경로 미탑재 (AI 클래스명 knife)
+    FALL,
+    WEAPON,   // AI 클래스명 knife
     NORMAL,
     UNKNOWN;
 
-    /** 이상감지(이력 적재) 대상인지 여부. 현재 라이브에 탑재된 화재만 인정한다. */
+    /** 이상감지(이력 적재) 대상인지 여부. 화재·낙상·흉기만 인정하고 normal·unknown은 항상 무시한다. */
     public boolean isDetectable() {
-        return this == FIRE;
+        return this == FIRE || this == FALL || this == WEAPON;
     }
 
     /**

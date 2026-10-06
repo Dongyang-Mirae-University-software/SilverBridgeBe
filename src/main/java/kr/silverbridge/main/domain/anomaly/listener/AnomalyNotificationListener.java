@@ -111,25 +111,45 @@ public class AnomalyNotificationListener {
 
     /**
      * 알림 본문. 시니어/4050 대상이라 완곡어법 없이 "감지되었습니다"로 명시한다(설계 D-3).
-     * 본인에게는 상황 통지에 그치지 않고 대피 행동을 함께 지시한다.
+     * 본인에게는 상황 통지에 그치지 않고 종류에 맞는 행동 안내를 함께 준다({@link #selfGuidance}).
      */
     private String body(AnomalyDetectedEvent event, boolean self) {
-        String what = label(event.detectedType());
+        String what = DetectedTypeLabel.withSubjectParticle(event.detectedType());
         if (self) {
-            return event.cameraLabel() + "에서 " + what + "가 감지되었습니다. 안전한 곳으로 대피해 주세요.";
+            return event.cameraLabel() + "에서 " + what + " 감지되었습니다. " + selfGuidance(event.detectedType());
         }
-        return event.wardName() + "님 댁 " + event.cameraLabel() + "에서 " + what + "가 감지되었습니다.";
+        return event.wardName() + "님 댁 " + event.cameraLabel() + "에서 " + what + " 감지되었습니다.";
+    }
+
+    /**
+     * 본인 수신분의 행동 안내. 화재는 대피, 흉기는 피신·신고, 낙상은 대피가 아니라 도움 요청이다
+     * (넘어진 사람에게 "대피"는 맞지 않는다). 신고는 안내 문구일 뿐 서버가 발신하지 않는다.
+     */
+    private static String selfGuidance(DetectedType type) {
+        return switch (type) {
+            case WEAPON -> "안전한 곳으로 피하고 112에 연락해 주세요.";
+            case FALL -> "괜찮으시면 보호자에게 연락해 주세요. 도움이 필요하면 SOS 버튼을 눌러 주세요.";
+            default -> "안전한 곳으로 대피해 주세요.";
+        };
+    }
+
+    private static String selfSmsGuidance(DetectedType type) {
+        return switch (type) {
+            case WEAPON -> "안전한 곳으로 피하고 112에 연락해 주세요.";
+            case FALL -> "도움이 필요하면 보호자에게 연락해 주세요.";
+            default -> "안전한 곳으로 대피해 주세요.";
+        };
     }
 
     /**
      * 푸시가 전달되지 않아 문자로 대신 나갈 때의 문구(SMS 길이 안). 이름·위치가 비면 그 부분만 뺀다.
-     * 본인에게는 대피 행동을 함께 지시한다. 푸시 본문과 달리 앱 이름을 앞에 붙여 발신처를 알린다.
+     * 본인에게는 종류별 행동 안내를 함께 준다. 푸시 본문과 달리 앱 이름을 앞에 붙여 발신처를 알린다.
      */
     static String smsFallbackText(AnomalyDetectedEvent event, boolean self) {
         String what = label(event.detectedType());
         String place = hasText(event.cameraLabel()) ? event.cameraLabel() + "에서" : "등록된 카메라에서";
         if (self) {
-            return "[실버브릿지] " + place + " " + what + " 감지. 안전한 곳으로 대피해 주세요.";
+            return "[실버브릿지] " + place + " " + what + " 감지. " + selfSmsGuidance(event.detectedType());
         }
         String home = hasText(event.wardName()) ? event.wardName() + "님 댁 " : "";
         return "[실버브릿지] " + home + place + " " + what + " 감지. 앱에서 확인해 주세요.";
