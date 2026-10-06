@@ -76,7 +76,8 @@
 
 - 트리거: `dev` push(또는 수동 `workflow_dispatch`). 러너: self-hosted `[self-hosted, dev]`.
 - 동작: `git pull` → `docker compose -f docker-compose.dev.yml up -d --build api` → 이미지 정리.
-- **`dev` 머지 = 즉시 dev 환경 배포** 임을 항상 의식할 것. (문서만 변경 시 `cd.yml` paths-ignore로 배포 스킵)
+- ⚠️ **CD는 vkcs-linux만 배포한다.** **gosky는 수동 배포**(CD 미적용, 시연·AI 서버가 있는 쪽): `ssh gosky` → `cd /home/apps/SilverBridgeSky/SilverBridgeBe && git pull origin dev && docker compose -f docker-compose.dev.yml up -d --build api`. 코드 머지 뒤에는 **두 서버의 반영 여부**를 각각 확인한다(`git log --oneline -1` · `docker ps` · 기동 로그의 `AiLiveStreamSubscriber` 연결).
+- **`dev` 머지 = vkcs-linux 즉시 배포** 임을 항상 의식할 것. (문서만 변경 시 `cd.yml` paths-ignore로 배포 스킵)
 
 ---
 
