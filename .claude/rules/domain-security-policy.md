@@ -470,11 +470,12 @@
 
 ## 2026-10-05 QA(BE) 잔여 25건 처리 (PR #306·#307·#308·#309)
 
-> 항목별 결과·FE 전달은 Notion "QA(BE) → FE 전달". 아래는 코드만으로 드러나지 않는 결정만 적는다. Notion QA(BE)의 9/30 기준 설명 중 이미 고쳐진 항목이 섞여 있었다(MED-G16·ADMIN-G24·SOS-G12·MED-G05·XCUT-G19·AUTH-G08·XCUT-G16·FEUX-G11·FEUX-G12·FEUX-G34·XCUT-G30는 코드 변경 없이 종결, AUTH-G16은 동시 제출 테스트만 추가).
+> 항목별 결과·FE 전달은 Notion "QA(BE) → FE 전달". 아래는 코드만으로 드러나지 않는 결정만 적는다. Notion QA(BE)의 9/30 기준 설명 중 이미 고쳐진 항목이 섞여 있었다(MED-G16·SOS-G12·MED-G05·XCUT-G19·AUTH-G08·XCUT-G16·FEUX-G11·FEUX-G12·FEUX-G34·XCUT-G30는 코드 변경 없이 종결, AUTH-G16은 동시 제출 테스트만 추가).
 
 - **토큰 무효화 값이 손상되면 조회 오류와 똑같이 처리한다 (XCUT-G03)**: 숫자 아님·음수·현재 시각 +300초 초과면 일반 경로 503, `POST /api/ward/sos`만 통과, 로그만 `[AUTH-STORE-CORRUPT]` ERROR로 나눈다(`TokenInvalidation.parseEpochSecond`). **손상 값을 "무효화 없음"으로 통과시키지 말 것**(그 키가 정지·비밀번호 변경의 흔적일 수 있다). **401로 답하지도 말 것**(재로그인한 새 토큰까지 같은 키에 걸려 로그인 반복). 로그인 잠금 카운터의 Redis 오류는 fail-closed이며 응답이 503이 아니라 500이다(통일 여부는 미결).
 - **Redis 명령·연결 시간 제한 2초 (XCUT-G11)**: `REDIS_TIMEOUT`·`REDIS_CONNECT_TIMEOUT`. 인증 필터와 SOS 쿨다운이 Redis를 거치므로 제한이 없으면 Lettuce 기본 60초로 요청·긴급 알림 스레드가 묶인다. 블로킹 명령을 도입하면 다시 볼 것.
 - **미응답 요약은 보호자 단위로도 미룬다 (ANOM-G09)**: 상황 단위 제외(재촉이 요약 시각 -2시간 이후에 나간 상황 제외)에 더해, 어떤 상황이든 건별 재촉을 받은 지 2시간이 안 된 보호자는 그 주기에 요약을 선점하지 않고 다음 주기에 다시 판단한다(재촉 기록 전부 기준, 응답 여부 무관). 같은 보호자에게 오래된 다른 미응답 상황이 남아 있으면 같은 실행에서 재촉과 요약이 함께 나가던 문제였다. 저녁마다 새 재촉을 받는 보호자는 요약이 계속 밀릴 수 있으나 수용한다(건별 재촉으로 이미 알렸다). 선점 후 발송·UNIQUE는 그대로.
+- **공개 공지 목록도 나눠 받고 본문을 줄인다 (ADMIN-G24, 2026-10-06 정정)**: 위 "코드 변경 없이 종결" 목록에 ADMIN-G24를 넣은 것은 사실과 달랐다. 10/5(#306~#309)에는 관리자 공지·임시저장·내 문의 목록만 고쳐졌고 공개 `GET /api/commonness/announcement/select`는 전체·전문 반환이 남아 있었다. 10/6에 같은 공통 코드(`AdminPaging`·`TextSummary`)로 맞췄다: 선택 `page`(기본 0)/`size`(기본 20, 최대 50), 본문 앞 100자 축약, 최신순(+id 내림차순), 응답은 배열 그대로. 전체 본문은 상세 `GET .../select/detail/{id}`만 준다. 마이그레이션 없음.
 - **ANOM-G14**: 이력 쿨다운은 저장 전 선점, 메서드 안 예외는 즉시, 커밋 실패·결과 불명(`STATUS_UNKNOWN`)은 `afterCompletion`에서 해제한다(이미 구현돼 있었고 테스트로 고정). **ANOM-G06**: 동수 상황의 미응답 보호자는 재촉도 동수 안내도 받지 않는다 - 의도된 동작으로 확정(`unansweredGuardianOfTieGetsNothing`).
 - **ANOM-G08**: `camera.is_active`는 표시용이며 Swagger(`PATCH /api/ward/camera/{id}`·`isActive` 필드)에 "사용 중지해도 화재 감지와 알림은 계속된다(보호자 화면에서만 숨겨짐)"를 명시했다(`CameraIsActiveApiDocTest`). 감지·이력·클립은 `findOwnerBySessionId`(is_active 무시), 보호자 목록·시청·분석 상태만 꺼진 카메라를 뺀다.
 - **연결 요청 전 상대 확인 (CONN-G06)**: 사용자 ID는 대소문자를 구분하고 서버는 정확히 일치하는 ID만 찾는다(대소문자 무시 조회는 엉뚱한 사람에게 요청이 간다). `GET /api/guardian/connection/preview?targetId=`는 `{targetId, maskedName}`만 돌려주고 판정은 실제 요청과 같은 `validateConnectionRequest`를 쓴다(요청·알림·카운트 없음, 보호자 기준 속도 제한). **수락 전 연락처·주소를 이 응답에 추가하지 말 것.** 2026-10-02의 "열거 위험으로 조회 API를 만들지 않는다"는 판단은 이 최소 안(가린 이름 + 기존 오류 코드가 이미 드러내는 정보)으로 갱신한다.
