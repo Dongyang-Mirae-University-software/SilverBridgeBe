@@ -4,6 +4,9 @@ import jakarta.validation.ConstraintViolationException;
 import kr.silverbridge.main.global.response.ApiResponse;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.dao.QueryTimeoutException;
+import org.springframework.data.redis.RedisConnectionFailureException;
+import org.springframework.data.redis.RedisSystemException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
@@ -254,6 +257,19 @@ public class GlobalExceptionHandler {
         return ResponseEntity
                 .badRequest()
                 .body(ApiResponse.fail(ErrorCode.FILE_TOO_LARGE));
+    }
+
+    // 인증 저장소(Redis) 를 일시적으로 쓸 수 없음 - 연결 실패·타임아웃·명령 오류(메모리 가득 등).
+    // 서버 코드의 결함이 아니라 의존 서비스의 일시 장애라 500 이 아니라 503 으로 답한다(재시도하면 될 수 있다는 뜻).
+    // 로그인·비밀번호 확인 잠금, 인증번호 시도·발송 상한처럼 "장애 중에는 풀어주지 않는" 카운터(fail-closed)가
+    // Redis 예외를 그대로 던지므로 한 곳에서 받는다. fail-open 으로 삼키는 곳은 여기까지 오지 않아 영향이 없다.
+    // 예외 메시지에는 호스트·키 정보가 있을 수 있어 클래스명만 남긴다.
+    @ExceptionHandler({RedisConnectionFailureException.class, RedisSystemException.class, QueryTimeoutException.class})
+    public ResponseEntity<ApiResponse<Void>> handleStoreUnavailable(Exception e) {
+        log.warn("[STORE-UNAVAILABLE] 저장소 일시 장애 - 503 응답: exception={}", e.getClass().getSimpleName());
+        return ResponseEntity
+                .status(HttpStatus.SERVICE_UNAVAILABLE)
+                .body(ApiResponse.fail(ErrorCode.SERVICE_UNAVAILABLE));
     }
 
     // 예상치 못한 서버 오류 (최종 안전망)
