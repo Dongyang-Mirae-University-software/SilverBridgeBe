@@ -256,7 +256,8 @@ public class PasswordResetService {
         try {
             mailSender.send(message);
         } catch (MailException e) {
-            log.error("이메일 발송 실패: {}", e.getMessage());
+            // MailException 메시지에는 수신자 주소가 들어갈 수 있어 예외 클래스만 남긴다.
+            log.error("이메일 발송 실패: exception={}", e.getClass().getSimpleName());
             // 호출자(requestReset)는 send 성공 후에야 Redis 에 저장하므로 정리할 키 없음
             throw new CustomException(ErrorCode.INTERNAL_SERVER_ERROR);
         }

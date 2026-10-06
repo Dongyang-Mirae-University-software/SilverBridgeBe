@@ -49,7 +49,11 @@ public class ApiLoggingAspect {
             return result;
         } catch (Exception e) {
             long elapsed = System.currentTimeMillis() - start;
-            log.warn("[API] {} {} | 오류: {} | {}ms", method, uri, e.getMessage(), elapsed);
+            // 업무 예외(CustomException)의 문구는 고정 문구라 남기고, 그 외 예외는 메시지에 입력 값·PII 가 섞일 수 있어 클래스만 남긴다.
+            String reason = e instanceof kr.silverbridge.main.global.exception.CustomException
+                    ? e.getMessage()
+                    : e.getClass().getSimpleName();
+            log.warn("[API] {} {} | 오류: {} | {}ms", method, uri, reason, elapsed);
             throw e;
         } finally {
             MDC.remove(MDC_USER_ID);

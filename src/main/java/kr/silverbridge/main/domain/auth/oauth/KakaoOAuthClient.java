@@ -77,7 +77,7 @@ public class KakaoOAuthClient {
             log.error("카카오 토큰 발급 실패: status={}, errorCode={}", e.getStatusCode(), errorCode);
             throw new CustomException(mapTokenError(errorCode));
         } catch (RestClientException e) {
-            log.error("카카오 토큰 발급 실패 (네트워크 오류): {}", e.getMessage());
+            log.error("카카오 토큰 발급 실패 (네트워크 오류): exception={}", e.getClass().getSimpleName());
             throw new CustomException(ErrorCode.KAKAO_AUTH_ERROR);
         }
     }
@@ -95,7 +95,7 @@ public class KakaoOAuthClient {
             log.error("카카오 사용자 정보 조회 실패: status={}, code={}", e.getStatusCode(), apiCode);
             throw new CustomException(mapApiError(apiCode));
         } catch (RestClientException e) {
-            log.error("카카오 사용자 정보 조회 실패 (네트워크 오류): {}", e.getMessage());
+            log.error("카카오 사용자 정보 조회 실패 (네트워크 오류): exception={}", e.getClass().getSimpleName());
             throw new CustomException(ErrorCode.KAKAO_AUTH_ERROR);
         }
     }

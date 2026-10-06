@@ -225,8 +225,10 @@ public class NotificationDispatcher {
             }
             return result;
         } catch (Exception e) {
-            // 한 채널 실패가 다른 채널 발송을 막지 않도록 격리. 구조 결함 진단을 위해 스택 포함 (L-S2-6)
-            log.error("채널 발송 실패: userId={}, channel={}", recipient.userId(), channelType, e);
+            // 한 채널 실패가 다른 채널 발송을 막지 않도록 격리. 예외 메시지·스택에는 토큰·전화번호가 섞일 수 있어
+            // (알림 이력 불변 규칙 ②) 예외 클래스만 남긴다.
+            log.error("채널 발송 실패: userId={}, channel={}, exception={}",
+                    recipient.userId(), channelType, e.getClass().getName());
             return ChannelResult.failed(ChannelFailureReason.UNEXPECTED_ERROR);
         }
     }
