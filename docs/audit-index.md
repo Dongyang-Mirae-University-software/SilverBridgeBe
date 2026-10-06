@@ -9,6 +9,7 @@
 
 | 머지 | 기능 | 상태 | 점검 문서 | 잔여 이슈 |
 |---|---|---|---|---|
+| (2026-10-06) | 이상감지 흉기·낙상 라이브 활성화 (`DetectedType.isDetectable`·종류별 알림 문구, 마이그레이션 없음) | ❌ | - (시연 후 템플릿 C 제안) | - |
 | #305 (2026-10-05) | SOS 문자 폴백 시간당 상한 30건 (`SmsFallbackLimiter`, `NotificationDispatcher` 폴백 경로) | ✅ | `(2026-10-05) audit-impact-sms-fallback-cap.md` (템플릿 C) | - (M-1 사유 `RATE_LIMITED` 문서·FE 계약 정정 반영 / L-1 Swagger 문구 제안·L-2~L-4 수용) |
 | #302 (2026-10-05) | SOS 알림 쿨다운 30초 → 10초 + `sos.notify-cooldown-seconds` 설정 분리 | ✅ | `(2026-10-05) audit-sos-notify-cooldown.md` (템플릿 B) | - (M-1 빈 값·비숫자는 기동 실패 - 문서 정정 반영 / M-2 문자 폴백 상한 3배 수용·`SMS_FALLBACK` 관찰) · L-1~L-3 기록 |
 | #299 (2026-10-05) | 카메라 방 선택 8개 고정·방마다 1대 + 피보호자 내 카메라 연결 상태 (`/api/ward/camera/rooms`·`/live`, V58) | ✅ | `(2026-10-05) audit-camera-room-and-ward-status.md` (템플릿 B) | - (H-1 새 등록 경합 409 코드·L-1 제약 이름 판정 반영, M-1 해당 없음, M-2 의도, L-2 수용) |
