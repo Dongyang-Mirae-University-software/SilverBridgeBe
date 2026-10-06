@@ -37,11 +37,13 @@ services:
       options:
         max-size: "10m"
         max-file: "5"
-    # dev 환경 기본 리소스 ceiling
+    # dev 환경 기본 리소스 ceiling. 1g -> 1.5g (2026-10-06): 대기 중에도 약 700MB를 써 클립 처리·부하가 겹치면
+    # 한도에 닿을 수 있었다. JVM 힙·비힙 상한은 Dockerfile의 JAVA_OPTS(합계 약 1.35GB)가 이 한도 안에 맞춘다.
+    # 서버 여유: gosky 가용 약 9GB / vkcs-linux 약 33GB.
     deploy:
       resources:
         limits:
-          memory: 1g
+          memory: 1536m
 
   db:
     image: postgres:17
