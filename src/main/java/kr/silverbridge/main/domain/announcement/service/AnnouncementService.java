@@ -1,5 +1,6 @@
 package kr.silverbridge.main.domain.announcement.service;
 
+import kr.silverbridge.main.domain.admin.support.AdminPaging;
 import kr.silverbridge.main.domain.announcement.dto.AnnouncementResponse;
 import kr.silverbridge.main.domain.announcement.entity.Announcement;
 import kr.silverbridge.main.domain.announcement.repository.AnnouncementRepository;
@@ -29,11 +30,12 @@ public class AnnouncementService {
     private final AnnouncementRepository announcementRepository;
     private final UserRepository userRepository;
 
-    // 공지 목록 조회 (최신순 + 작성자 이름 배치 조회)
+    // 공지 목록 조회 (최신순 + 작성자 이름 배치 조회, 선택 페이징·본문 축약 - ADMIN-G24)
     @Transactional(readOnly = true)
-    public List<AnnouncementResponse> getAnnouncements() {
-        List<Announcement> announcements = announcementRepository.findAll(
-                Sort.by(Sort.Direction.DESC, "createdAt"));
+    public List<AnnouncementResponse> getAnnouncements(int page, int size) {
+        // id 내림차순을 함께 둬 같은 시각의 공지가 페이지 사이에서 겹치거나 빠지지 않게 한다
+        List<Announcement> announcements = announcementRepository.findAll(AdminPaging.of(page, size,
+                Sort.by(Sort.Direction.DESC, "createdAt").and(Sort.by(Sort.Direction.DESC, "id")))).getContent();
 
         Set<String> authorIds = announcements.stream()
                 .map(Announcement::getAuthorId)
@@ -43,7 +45,7 @@ public class AnnouncementService {
                 .collect(Collectors.toMap(User::getId, u -> u));
 
         return announcements.stream()
-                .map(a -> AnnouncementResponse.of(a, authorMap.get(a.getAuthorId())))
+                .map(a -> AnnouncementResponse.ofSummary(a, authorMap.get(a.getAuthorId())))
                 .toList();
     }
 

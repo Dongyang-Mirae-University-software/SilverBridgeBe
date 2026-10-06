@@ -1,6 +1,7 @@
 package kr.silverbridge.main.domain.announcement.dto;
 
 import io.swagger.v3.oas.annotations.media.Schema;
+import kr.silverbridge.main.domain.admin.support.TextSummary;
 import kr.silverbridge.main.domain.announcement.entity.Announcement;
 import kr.silverbridge.main.domain.user.entity.User;
 
@@ -22,7 +23,7 @@ public record AnnouncementResponse(
         @Schema(description = "제목", example = "서비스 점검 안내")
         String title,
 
-        @Schema(description = "내용", example = "2025년 5월 1일 오전 2시부터 4시까지 서버 점검이 예정되어 있습니다.")
+        @Schema(description = "내용. 목록 조회에서는 앞 100자(이모지 1개=1자)로 축약된 미리보기이고, 상세 조회는 전체입니다.", example = "2025년 5월 1일 오전 2시부터 4시까지 서버 점검이 예정되어 있습니다.")
         String content,
 
         @Schema(description = "조회수 (상세 조회 시마다 1 증가)", example = "42")
@@ -34,6 +35,13 @@ public record AnnouncementResponse(
         @Schema(description = "마지막 수정 일시", example = "2025-06-01T08:30:00+09:00")
         OffsetDateTime updatedAt
 ) {
+
+    /** 목록용 - 본문을 앞 100자로 축약한다(ADMIN-G24). */
+    public static AnnouncementResponse ofSummary(Announcement announcement, User author) {
+        AnnouncementResponse full = of(announcement, author);
+        return new AnnouncementResponse(full.id, full.authorName, full.title,
+                TextSummary.forList(full.content), full.viewCount, full.createdAt, full.updatedAt);
+    }
 
     public static AnnouncementResponse of(Announcement announcement, User author) {
         return new AnnouncementResponse(
