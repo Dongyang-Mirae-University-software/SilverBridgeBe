@@ -55,6 +55,27 @@ public class RateLimitService {
     }
 
     /**
+     * 최대 횟수를 호출자가 정하는 1분 고정 윈도우 검사 (2026-10-06, 로그인 사용자 기준 제한용).
+     * 초과 시 {@link TooManyRequestsException}, Redis 장애 시 fail-open - 기본 {@link #check(String, String)}와 같다.
+     *
+     * @param maxPerMinute 1분 윈도우 최대 허용 횟수
+     */
+    public void check(String endpoint, String identifier, int maxPerMinute) {
+        String key = RedisKeys.RATE_LIMIT + endpoint + ":" + identifier;
+
+        long count;
+        try {
+            count = redisCounter.incrementWithTtl(key, WINDOW_SECONDS);
+        } catch (DataAccessException e) {
+            logRedisDown(endpoint, e);
+            return;
+        }
+        if (count > maxPerMinute) {
+            throw new TooManyRequestsException(retryAfter(key, WINDOW_SECONDS));
+        }
+    }
+
+    /**
      * 분 + 시간 이중 윈도우 속도 제한 검사 (2026-05-23 추가).
      * <p>
      * 비밀번호 재설정처럼 <b>미가입 여부가 응답으로 노출되는</b> 엔드포인트의 자동화 enumeration·

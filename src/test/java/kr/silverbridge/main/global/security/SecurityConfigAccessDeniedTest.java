@@ -82,6 +82,8 @@ class SecurityConfigAccessDeniedTest {
     private JwtTokenProvider jwtTokenProvider;
     @MockitoBean
     private StringRedisTemplate redisTemplate;
+    @MockitoBean
+    private RateLimitService rateLimitService;
 
     @Autowired
     private WebApplicationContext context;
@@ -138,5 +140,20 @@ class SecurityConfigAccessDeniedTest {
                 .andExpect(status().isUnauthorized());
         mockMvc.perform(get("/api/notifications/fcm-token/release"))
                 .andExpect(status().isUnauthorized());
+    }
+    @Test
+    @DisplayName("로그인 사용자 요청 제한이 보안 체인에 연결돼 있다 - 초과 시 JSON 429 + Retry-After, 미초과면 통과")
+    void userRateLimit_wiredIntoChain() throws Exception {
+        org.mockito.Mockito.doThrow(new kr.silverbridge.main.global.exception.TooManyRequestsException(30))
+                .when(rateLimitService).check("user-api", "u9", 600);
+
+        mockMvc.perform(get("/api/user/probe").with(user("u9").roles("GUARDIAN")))
+                .andExpect(status().isTooManyRequests())
+                .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.header().string("Retry-After", "30"))
+                .andExpect(jsonPath("$.code").value("TOO_MANY_REQUESTS"))
+                .andExpect(jsonPath("$.data.retryAfterSeconds").value(30));
+
+        mockMvc.perform(get("/api/user/probe").with(user("u1").roles("GUARDIAN")))
+                .andExpect(status().isOk());
     }
 }
