@@ -188,4 +188,29 @@ class AnomalyNotificationListenerTest {
                 "detectedType", "detectedTypeLabel", "detectedAt", "anomalyEventId", "incidentId");
         assertThat(data.get("type")).isEqualTo(NotificationType.ANOMALY_DETECTED.name());
     }
+
+    // ─── 문자 대체 문구(푸시 미전달 시) ────────────────────────────
+
+    @Test
+    @DisplayName("문자 대체 문구: 보호자분은 이름·위치·유형과 앱 확인 안내, 본인분은 대피 안내")
+    void 문자_대체_문구() {
+        assertThat(AnomalyNotificationListener.smsFallbackText(event, false))
+                .isEqualTo("[실버브릿지] 김순자님 댁 거실에서 화재 감지. 앱에서 확인해 주세요.");
+        assertThat(AnomalyNotificationListener.smsFallbackText(event, true))
+                .isEqualTo("[실버브릿지] 거실에서 화재 감지. 안전한 곳으로 대피해 주세요.");
+    }
+
+    @Test
+    @DisplayName("문자 대체 문구: 이름·위치가 비면 그 부분만 뺀다")
+    void 문자_대체_문구_빈값() {
+        AnomalyDetectedEvent noName = new AnomalyDetectedEvent(7L, INCIDENT_ID, WARD_ID, " ", SESSION_ID, "거실",
+                DetectedType.FIRE, null);
+        AnomalyDetectedEvent noPlace = new AnomalyDetectedEvent(7L, INCIDENT_ID, WARD_ID, "김순자", SESSION_ID, null,
+                DetectedType.FIRE, null);
+        assertThat(AnomalyNotificationListener.smsFallbackText(noName, false))
+                .isEqualTo("[실버브릿지] 거실에서 화재 감지. 앱에서 확인해 주세요.");
+        assertThat(AnomalyNotificationListener.smsFallbackText(noPlace, false))
+                .isEqualTo("[실버브릿지] 김순자님 댁 등록된 카메라에서 화재 감지. 앱에서 확인해 주세요.");
+        assertThat(AnomalyNotificationListener.smsFallbackText(noPlace, false).length()).isLessThan(45);
+    }
 }

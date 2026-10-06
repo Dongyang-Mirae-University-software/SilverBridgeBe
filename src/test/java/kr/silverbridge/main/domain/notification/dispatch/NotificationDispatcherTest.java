@@ -345,14 +345,105 @@ class NotificationDispatcherTest {
         verify(smsChannel).send(any(), any(), any());
     }
 
+    private final NotificationContent anomalyContent = NotificationContent.of("이상 상황 감지", "푸시 본문",
+            Map.of("type", "ANOMALY_DETECTED"), "[실버브릿지] 문자 대체 문구");
+
     @Test
-    @DisplayName("이상감지: FCM 전달에 실패해도 SMS로 폴백하지 않는다(문자는 사용자 선택)")
-    void 이상감지_FCM미전달_SMS폴백없음() {
-        // WARD_SOS와 결정적으로 다른 지점(D-2). 폴백하면 문자를 선택하지 않은 사용자에게 과금·발송이 발생한다.
+    @DisplayName("이상감지: 푸시가 전달되지 않고 다른 채널도 없으면 문자로 대신 보낸다(대체 문구 사용)")
+    void 이상감지_푸시미전달_문자대체() {
         given(settingService.enabledChannels(USER_ID)).willReturn(EnumSet.noneOf(NotificationChannelType.class));
         when(fcmChannel.send(any(), any(), any())).thenReturn(ChannelResult.failed(ChannelFailureReason.NO_DEVICE));
 
-        dispatcher.dispatch(USER_ID, NotificationType.ANOMALY_DETECTED, content);
+        NotificationLogResult result = dispatcher.dispatch(USER_ID, NotificationType.ANOMALY_DETECTED, anomalyContent);
+
+        ArgumentCaptor<NotificationContent> sent = ArgumentCaptor.forClass(NotificationContent.class);
+        verify(smsChannel).send(eq(NotificationType.ANOMALY_DETECTED), any(), sent.capture());
+        assertThat(sent.getValue().title()).isNull();
+        assertThat(sent.getValue().body()).isEqualTo("[실버브릿지] 문자 대체 문구");
+        assertThat(result).isEqualTo(NotificationLogResult.SMS_FALLBACK);
+    }
+
+    @Test
+    @DisplayName("이상감지: 본인 알림도 같은 규칙으로 문자 대체된다")
+    void 이상감지_본인_문자대체() {
+        given(settingService.enabledChannels(USER_ID)).willReturn(EnumSet.noneOf(NotificationChannelType.class));
+        when(fcmChannel.send(any(), any(), any())).thenReturn(ChannelResult.failed(ChannelFailureReason.NO_DEVICE));
+
+        dispatcher.dispatch(USER_ID, NotificationType.ANOMALY_DETECTED_SELF, anomalyContent);
+
+        verify(smsChannel).send(eq(NotificationType.ANOMALY_DETECTED_SELF), any(), any());
+    }
+
+    @Test
+    @DisplayName("이상감지: 푸시가 전달되면 문자를 보내지 않는다")
+    void 이상감지_푸시성공_문자없음() {
+        given(settingService.enabledChannels(USER_ID)).willReturn(EnumSet.noneOf(NotificationChannelType.class));
+
+        dispatcher.dispatch(USER_ID, NotificationType.ANOMALY_DETECTED, anomalyContent);
+
+        verify(smsChannel, never()).send(any(), any(), any());
+        verifyNoInteractions(smsFallbackLimiter);
+    }
+
+    @Test
+    @DisplayName("이상감지: 사용자가 켠 문자로 이미 전달됐으면 대체 문자를 또 보내지 않는다(중복 금지)")
+    void 이상감지_켠문자로_전달됨_중복없음() {
+        given(settingService.enabledChannels(USER_ID)).willReturn(EnumSet.of(NotificationChannelType.SMS));
+        when(fcmChannel.send(any(), any(), any())).thenReturn(ChannelResult.failed(ChannelFailureReason.NO_DEVICE));
+
+        NotificationLogResult result = dispatcher.dispatch(USER_ID, NotificationType.ANOMALY_DETECTED, anomalyContent);
+
+        verify(smsChannel, org.mockito.Mockito.times(1)).send(any(), any(), any());
+        assertThat(result).isEqualTo(NotificationLogResult.DELIVERED);
+    }
+
+    @Test
+    @DisplayName("이상감지: 켜 둔 문자가 이미 실패했으면 같은 번호로 다시 보내지 않는다")
+    void 이상감지_켠문자_실패시_재시도없음() {
+        given(settingService.enabledChannels(USER_ID)).willReturn(EnumSet.of(NotificationChannelType.SMS));
+        when(fcmChannel.send(any(), any(), any())).thenReturn(ChannelResult.failed(ChannelFailureReason.NO_DEVICE));
+        when(smsChannel.send(any(), any(), any())).thenReturn(ChannelResult.failed(ChannelFailureReason.NO_PHONE));
+
+        dispatcher.dispatch(USER_ID, NotificationType.ANOMALY_DETECTED, anomalyContent);
+
+        verify(smsChannel, org.mockito.Mockito.times(1)).send(any(), any(), any());
+    }
+
+    @Test
+    @DisplayName("이상감지: 상한을 넘으면 문자를 보내지 않고 RATE_LIMITED로 기록한다")
+    void 이상감지_상한초과_미발송_기록() {
+        given(settingService.enabledChannels(USER_ID)).willReturn(EnumSet.noneOf(NotificationChannelType.class));
+        when(fcmChannel.send(any(), any(), any())).thenReturn(ChannelResult.failed(ChannelFailureReason.NO_DEVICE));
+        when(smsFallbackLimiter.tryAcquire(NotificationType.ANOMALY_DETECTED, USER_ID)).thenReturn(false);
+
+        dispatcher.dispatch(USER_ID, NotificationType.ANOMALY_DETECTED, anomalyContent);
+
+        verify(smsChannel, never()).send(any(), any(), any());
+        NotificationLog log = recordedLog();
+        assertThat(log.getResult()).isEqualTo(NotificationLogResult.FAILED);
+        assertThat(log.getChannelResults()).anyMatch(a -> a.channel() == NotificationChannelType.SMS
+                && a.reason() == ChannelFailureReason.RATE_LIMITED);
+    }
+
+    @Test
+    @DisplayName("이상감지: 문자가 접수되지 않으면 센 한도를 돌려준다")
+    void 이상감지_문자실패_한도환불() {
+        given(settingService.enabledChannels(USER_ID)).willReturn(EnumSet.noneOf(NotificationChannelType.class));
+        when(fcmChannel.send(any(), any(), any())).thenReturn(ChannelResult.failed(ChannelFailureReason.NO_DEVICE));
+        when(smsChannel.send(any(), any(), any())).thenReturn(ChannelResult.failed(ChannelFailureReason.NO_PHONE));
+
+        dispatcher.dispatch(USER_ID, NotificationType.ANOMALY_DETECTED, anomalyContent);
+
+        verify(smsFallbackLimiter).release(NotificationType.ANOMALY_DETECTED, USER_ID);
+    }
+
+    @Test
+    @DisplayName("재촉·동수 안내는 푸시가 안 가도 문자로 대체하지 않는다(범위 밖)")
+    void 재촉은_문자대체_없음() {
+        given(settingService.enabledChannels(USER_ID)).willReturn(EnumSet.of(NotificationChannelType.FCM));
+        when(fcmChannel.send(any(), any(), any())).thenReturn(ChannelResult.failed(ChannelFailureReason.NO_DEVICE));
+
+        dispatcher.dispatch(USER_ID, NotificationType.ANOMALY_REVIEW_REQUIRED, content);
 
         verify(smsChannel, never()).send(any(), any(), any());
     }
@@ -386,7 +477,7 @@ class NotificationDispatcherTest {
         assertThat(NotificationType.ANOMALY_DETECTED_SELF.policy())
                 .isEqualTo(NotificationType.ANOMALY_DETECTED.policy());
 
-        // SOS만 SMS 폴백을 갖는다. 이상감지는 FCM 고정 + 설정 채널(폴백 없음).
+        // 문자 대체는 SOS(전용 정책)와 이상감지(FCM 고정 + 설정 채널 + 전 채널 실패 시 문자 대체, 2026-10-06)만 가진다.
         assertThat(NotificationType.WARD_SOS.policy())
                 .isEqualTo(NotificationType.Policy.FORCED_PUSH_WITH_SMS_FALLBACK);
         assertThat(NotificationType.ANOMALY_DETECTED.policy())

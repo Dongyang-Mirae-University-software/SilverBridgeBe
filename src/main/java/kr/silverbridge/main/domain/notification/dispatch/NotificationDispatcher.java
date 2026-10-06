@@ -32,7 +32,7 @@ import java.util.function.Function;
  * <ol>
  *   <li>{@link NotificationType.Policy#SETTINGS_ONLY} → 사용자 설정({@link NotificationSettingService})의 활성 채널로만 발송.</li>
  *   <li>{@link NotificationType.Policy#FORCED_PUSH_WITH_SMS_FALLBACK} → 설정 무시 FCM 강제 발송, <b>실제 전달 실패 시</b> SMS 폴백(결과 기반, M-S2-1).</li>
- *   <li>{@link NotificationType.Policy#FORCED_PUSH_PLUS_SETTINGS} → FCM은 항상 + 나머지 채널은 설정대로. <b>SMS 폴백 없음</b>(이상감지).</li>
+ *   <li>{@link NotificationType.Policy#FORCED_PUSH_PLUS_SETTINGS} → FCM은 항상 + 나머지 채널은 설정대로. <b>아무 채널로도 전달되지 않았을 때만</b> 문자 대체(이상감지, 2026-10-06).</li>
  * </ol>
  *
  * <p><b>이용 제한·탈퇴 진행 계정에는 어떤 채널로도 보내지 않는다</b>(강제 FCM 포함) —
@@ -160,11 +160,14 @@ public class NotificationDispatcher {
     }
 
     /**
-     * FCM 고정 + 나머지 채널은 사용자 설정대로(이상감지).
+     * FCM 고정 + 나머지 채널은 사용자 설정대로(이상감지), 그래도 <b>아무에게도 전달되지 않았으면 문자 대체</b>.
      *
      * <p>대상 = {@code {FCM} ∪ 사용자 활성 채널}. FCM은 사용자가 꺼도 발송하고, SMS·알림톡은 켠 경우에만 추가된다.
-     * <b>푸시 전달 실패해도 SMS로 폴백하지 않는다</b>(D-2) — 문자는 사용자가 선택하는 채널이라 폴백이 그 선택을
-     * 뒤집기 때문. 대신 미전달을 WARN으로 남겨 "아무에게도 안 갔는데 아무도 모르는" 침묵을 막는다.</p>
+     * 푸시 전달 실패 기준은 SOS와 같다(토큰 없음·전 토큰 만료·발송 예외).</p>
+     *
+     * <p>대체 문자는 <b>전 채널이 전달 실패</b>이고 <b>사용자가 켠 문자를 시도하지 않았을 때만</b> 나간다. 푸시가
+     * 실패해도 알림톡·문자로 전달됐으면 중복이라 보내지 않고, 켜 둔 문자가 이미 실패했다면 같은 번호로 다시 보내도
+     * 같은 결과이므로 보태지 않는다. 문구는 {@link NotificationContent#smsFallbackText()}가 있으면 그것을 쓴다.</p>
      */
     private Outcome dispatchForcedPushPlusSettings(NotificationRecipient recipient, NotificationType type,
                                                    NotificationContent content) {
@@ -181,12 +184,15 @@ public class NotificationDispatcher {
             }
         }
 
-        if (!pushDelivered) {
-            // 토큰 없음·전 토큰 만료·발송 예외 — SMS 폴백을 하지 않는 정책이라 로그가 유일한 감지 수단이다.
-            log.warn("[NOTIFY-UNDELIVERED] 푸시 미전달(SMS 폴백 안 함 - 문자는 사용자 선택): userId={}, type={}",
-                    recipient.userId(), type);
+        if (pushDelivered || attempts.stream().anyMatch(ChannelAttempt::delivered)) {
+            return Outcome.of(attempts);
         }
-        return Outcome.of(attempts);
+        if (targets.contains(MANDATORY_FALLBACK) || !channels.containsKey(MANDATORY_FALLBACK)) {
+            log.warn("[NOTIFY-UNDELIVERED] 푸시 미전달, 문자 대체 불가(이미 시도했거나 채널 없음): userId={}, type={}",
+                    recipient.userId(), type);
+            return Outcome.of(attempts);
+        }
+        return smsFallback(recipient, type, content, attempts);
     }
 
     /**
@@ -258,21 +264,33 @@ public class NotificationDispatcher {
             log.warn("필수 알림 폴백 채널(SMS) 미구현 — 발송 불가: userId={}", userId);
             return Outcome.of(attempts);
         }
-        // 문자 폴백만 시간당 상한을 둔다(연타·호출 루프의 비용·피로 방어). 푸시·WS·이력은 영향이 없다.
+        return smsFallback(recipient, type, content, attempts);
+    }
+
+    /**
+     * 푸시 미전달 시 문자 대체 발송(SOS·이상감지 공용). 시간당 상한을 두고, 접수되지 않은 문자는 한도를 돌려준다.
+     * 문자 폴백만 상한이 걸리며 푸시·WS·이력은 영향이 없다(연타·호출 루프의 비용·피로 방어).
+     */
+    private Outcome smsFallback(NotificationRecipient recipient, NotificationType type, NotificationContent content,
+                                List<ChannelAttempt> attempts) {
+        String userId = recipient.userId();
         if (!smsFallbackLimiter.tryAcquire(type, userId)) {
             attempt(attempts, MANDATORY_FALLBACK, ChannelResult.failed(ChannelFailureReason.RATE_LIMITED));
             log.warn("[SMS-FALLBACK-CAP] 필수 알림 문자 폴백이 시간당 상한을 넘어 생략: userId={}, type={}", userId, type);
             return Outcome.of(attempts);
         }
-        ChannelResult fallback = sendQuietly(MANDATORY_FALLBACK, type, recipient, content);
+        NotificationContent smsContent = content.smsFallbackText() == null || content.smsFallbackText().isBlank()
+                ? content
+                : NotificationContent.of(null, content.smsFallbackText(), content.data());
+        ChannelResult fallback = sendQuietly(MANDATORY_FALLBACK, type, recipient, smsContent);
         attempt(attempts, MANDATORY_FALLBACK, fallback);
         if (fallback.isDelivered()) {
-            log.info("필수 알림 SMS 폴백 발송: userId={}", userId);
+            log.info("필수 알림 SMS 폴백 발송: userId={}, type={}", userId, type);
             return new Outcome(NotificationLogResult.SMS_FALLBACK, null, attempts);
         }
         // 접수되지 않은 문자는 한도를 쓰지 않는다(번호 없음·발송사 장애 중 연타가 한도를 소진하지 않게).
         smsFallbackLimiter.release(type, userId);
-        log.warn("필수 알림 SMS 폴백 실패({}): userId={}", fallback.reason(), userId);
+        log.warn("필수 알림 SMS 폴백 실패({}): userId={}, type={}", fallback.reason(), userId, type);
         return Outcome.of(attempts);
     }
 

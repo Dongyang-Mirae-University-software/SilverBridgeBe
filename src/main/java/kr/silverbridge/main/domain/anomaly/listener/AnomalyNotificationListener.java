@@ -37,7 +37,8 @@ import java.util.Map;
  * <ul>
  *   <li><b>WebSocket</b>({@code anomaly-detected}) — 채널 추상화 밖, 사용자 설정과 무관하게 항상 발송.</li>
  *   <li><b>{@link NotificationDispatcher}</b> + {@link NotificationType#ANOMALY_DETECTED} —
- *       FCM은 설정을 무시하고 항상, SMS·알림톡은 사용자가 켠 경우에만 추가 발송.</li>
+ *       FCM은 설정을 무시하고 항상, SMS·알림톡은 사용자가 켠 경우에만 추가 발송. 어느 채널로도 전달되지 않으면
+ *       문자를 대신 보낸다(2026-10-06, 문구는 {@link #smsFallbackText}).</li>
  * </ul>
  *
  * <p>수신자별 발송을 try/catch로 감싸 한 명 실패가 나머지 발송을 막지 않게 격리한다.</p>
@@ -95,7 +96,7 @@ public class AnomalyNotificationListener {
                 // (data["type"]은 계속 ANOMALY_DETECTED — 클라이언트 계약은 그대로 둔다)
                 notificationDispatcher.dispatch(userId, event.wardId(),
                         self ? NotificationType.ANOMALY_DETECTED_SELF : NotificationType.ANOMALY_DETECTED,
-                        NotificationContent.of(TITLE, body(event, self), data));
+                        NotificationContent.of(TITLE, body(event, self), data, smsFallbackText(event, self)));
                 sent++;
             } catch (Exception e) {
                 // 한 수신자 발송 실패가 나머지 발송을 막지 않도록 격리. 원인 진단을 위해 스택 포함
@@ -121,6 +122,24 @@ public class AnomalyNotificationListener {
     }
 
     /**
+     * 푸시가 전달되지 않아 문자로 대신 나갈 때의 문구(SMS 길이 안). 이름·위치가 비면 그 부분만 뺀다.
+     * 본인에게는 대피 행동을 함께 지시한다. 푸시 본문과 달리 앱 이름을 앞에 붙여 발신처를 알린다.
+     */
+    static String smsFallbackText(AnomalyDetectedEvent event, boolean self) {
+        String what = label(event.detectedType());
+        String place = hasText(event.cameraLabel()) ? event.cameraLabel() + "에서" : "등록된 카메라에서";
+        if (self) {
+            return "[실버브릿지] " + place + " " + what + " 감지. 안전한 곳으로 대피해 주세요.";
+        }
+        String home = hasText(event.wardName()) ? event.wardName() + "님 댁 " : "";
+        return "[실버브릿지] " + home + place + " " + what + " 감지. 앱에서 확인해 주세요.";
+    }
+
+    private static boolean hasText(String v) {
+        return v != null && !v.isBlank();
+    }
+
+    /**
      * 감지 시각 표기(KST). 알림톡 승인 템플릿의 {@code #{detectedAt}}에 그대로 들어간다.
      *
      * <p>AI fallback 페이로드엔 {@code analyzedAt}이 없어 null일 수 있는데, 그대로 두면 승인 문구가
@@ -135,7 +154,7 @@ public class AnomalyNotificationListener {
 
     // 알림 문구용 표기. DetectedType(global enum)은 AI 계약을 표현하는 값이라 UI 문자열을 넣지 않는다.
     /** 이력·재촉 화면과 같은 단어를 쓰도록 표시 문구는 한 곳({@link DetectedTypeLabel})에서만 정한다. */
-    private String label(DetectedType detectedType) {
+    private static String label(DetectedType detectedType) {
         return DetectedTypeLabel.of(detectedType);
     }
 }
