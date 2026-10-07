@@ -21,7 +21,8 @@ import java.nio.charset.StandardCharsets;
  * AI 챗 중계(2026-10-07). <b>AI에 넘기는 사용자 ID는 항상 호출자의 토큰 ID</b>다 - 요청 본문의 userId는 DTO에
  * 필드가 없어 받지 않고, 기록 조회도 토큰 ID로만 묻는다(남의 기록 조회 IDOR 차단).
  *
- * <p>상담 내용은 민감 정보라 메시지·응답 본문은 로그에 남기지 않는다(userId·길이·소요 시간까지만).</p>
+ * <p>상담 내용은 민감 정보라 메시지·응답 본문은 로그에 남기지 않는다(userId·길이·소요 시간까지만). 기록 응답은
+ * {@link ChatLogProjection} 허용 목록으로 걸러 AI 내부 정보(contextJson·upstreamMeta 등)를 FE에 내리지 않는다.</p>
  */
 @Slf4j
 @Service
@@ -59,16 +60,27 @@ public class ChatRelayService {
 
     public JsonNode logs(String guardianId) {
         rateLimitService.check(LOGS_ENDPOINT, guardianId, LOGS_PER_MINUTE, LOGS_PER_HOUR);
-        return aiChatClient.logs(guardianId);
+        JsonNode projected = ChatLogProjection.projectAll(aiChatClient.logs(guardianId));
+        if (projected == null) {
+            log.warn("[CHAT-RELAY] AI 기록 목록 형식 이상: call=logs");
+            throw new CustomException(ErrorCode.CHAT_UNAVAILABLE);
+        }
+        return projected;
     }
 
     public JsonNode logDetail(String guardianId, long chatId) {
         rateLimitService.check(LOGS_ENDPOINT, guardianId, LOGS_PER_MINUTE, LOGS_PER_HOUR);
-        return aiChatClient.logDetail(guardianId, chatId).orElseThrow(() -> {
+        JsonNode detail = aiChatClient.logDetail(guardianId, chatId).orElseThrow(() -> {
             // AI는 없는 기록과 남의 기록을 구분하지 않고 404로 답한다 - 둘 다 여기로 온다(내용 없이 id만 남긴다)
             log.info("[CHAT-LOG-NOT-FOUND] userId={}, chatId={}", guardianId, chatId);
             return new CustomException(ErrorCode.CHAT_LOG_NOT_FOUND);
         });
+        JsonNode projected = ChatLogProjection.project(detail);
+        if (projected == null) {
+            log.warn("[CHAT-RELAY] AI 기록 상세 형식 이상: call=log-detail");
+            throw new CustomException(ErrorCode.CHAT_UNAVAILABLE);
+        }
+        return projected;
     }
 
     private void validate(ChatRelayRequest request) {

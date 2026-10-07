@@ -1759,3 +1759,10 @@ REST API Key 단독 대비 보안 강화 — 인가코드 탈취 시 토큰 발�
 - 보호자 토큰 전체 경로 실호출은 테스트 계정이 없어 미확인(FE 교체 후 확인). 점검 중 AI `chat_logs`에 테스트 1건(`AUDIT-CHAT-TEST`) 남음.
 - 상세: `docs/(2026-10-07) audit-chat-relay.md`
 
+---
+
+## [2026-10-07] 챗 중계 점검 후속 - 기록 응답 허용 목록·테스트 보강
+
+- M-2: 기록 목록·상세를 `ChatLogProjection` 허용 목록으로 걸러 `contextJson`·`upstreamMeta`·`decisionTrace`·`userId`를 내리지 않음. 테스트 보강으로 chat 테스트 43개.
+- M-1(AI 서버 `CHAT_REQUIRE_USER_ID=true`): 에이전트 실행은 권한 판정에서 거부돼 **사용자가 직접 적용**(2026-10-07 17:32, gosky). 무 `userId` 상세 조회 200 → 422 실측, 백엔드 AI WS 자동 재연결 확인. 상세 `docs/(2026-10-07) audit-chat-relay.md` 후속 절.
+

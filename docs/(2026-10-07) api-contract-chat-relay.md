@@ -30,9 +30,11 @@ FE가 `/api/streams/v1/chat*`로 부르던 챗봇 호출을 **백엔드 API로 �
 
 쿼리 파라미터 없음(`userId` 보내지 않는다). `data` = 본인 기록 배열(최신순, 없으면 `[]`).
 
+각 기록에는 FE가 쓰는 필드만 담긴다(2026-10-07 점검 반영): `id`, `chatNo`, `sessionId`, `message`, `reply`, `engine`, `modelName`, `intent`, `type`, `tool`, `toolData`, `ui`, `riskLevel`, `recommendedAction`, `reservationRequired`, `createdAt`. 이전에 AI가 함께 내리던 `contextJson`·`upstreamMeta`·`decisionTrace`·`userId`는 **오지 않는다**(현재 화면은 쓰지 않으므로 변경 불요).
+
 ## 3. 기록 상세 `GET /api/guardian/chat/logs/{chatId}`
 
-본인 기록만. 없는 기록과 남의 기록 모두 404.
+본인 기록만. 없는 기록과 남의 기록 모두 404. 응답 필드는 목록과 같다.
 
 ## 오류 code (FE는 문구가 아니라 `code`로 분기)
 

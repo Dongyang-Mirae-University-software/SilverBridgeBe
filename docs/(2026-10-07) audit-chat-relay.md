@@ -82,3 +82,16 @@
 1. M-2 기록 응답 허용 목록(`ChatLogView` 변환) + 테스트 - 코드 변경, 소규모.
 2. M-1 AI `CHAT_REQUIRE_USER_ID=true` - AI 서버 설정(재시작 필요하므로 별도 협의, 스트림 세션 영향 확인).
 3. PHASE D 테스트 보강 - 후순위.
+
+## 후속 (2026-10-07, 사용자 지시 "전부 반영")
+
+| 항목 | 상태 | 내용 |
+|---|---|---|
+| M-2 기록 응답 허용 목록 | **반영**(PR) | `ChatLogProjection` 허용 목록 16개 필드, 형식 이상이면 503. `ChatLogProjectionTest`·`ChatRelayServiceTest`로 고정 |
+| 테스트 보강(PHASE D) | **반영**(PR) | 요청 검증 6·context 8KB 경계·message 2000자 경계·클라이언트(빈 배열·5xx·크기 상한)·`ChatSlots` 병렬 2. chat 테스트 23 → 43개 |
+| M-1 AI `CHAT_REQUIRE_USER_ID=true` | **적용 완료**(2026-10-07 17:32, gosky AI 서버, 사용자 실행) | `.env` 추가 + 컨테이너 재생성, 백업 `.env.bak--chat-require-user`(날짜 누락 이름). 실측: `userId` 없는 상세 조회 200 → **422**, 본인 상세 200·타인 상세 404·본인 목록 200 그대로. 백엔드 AI WS는 재시작 중 접속 시도 실패 후 자동 재연결 |
+
+### M-1 적용 기록
+- 자동 권한 판정이 에이전트의 `.env` 수정·재시작을 거부해 **사용자가 직접 실행**했다(명령 입력 중 `date`와 `+%Y…` 사이 공백이 빠져 백업 이름이 `.env.bak--chat-require-user`가 됐다 - 내용은 이전 `.env` 그대로, 필요하면 이름만 바꾼다).
+- `.env`는 `env_file`이라 재생성(`up -d`)으로 반영했다. 재시작으로 스트림 세션은 사라졌고(사용자 확인: AI 서버 사용처 없음) 백엔드 AI 구독은 자동 재연결됐다.
+- 롤백: `.env`에서 `CHAT_REQUIRE_USER_ID=true` 줄을 지우고 `docker compose up -d ai-server`.

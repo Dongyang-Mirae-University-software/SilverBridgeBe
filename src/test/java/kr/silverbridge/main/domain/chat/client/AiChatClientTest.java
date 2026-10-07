@@ -82,6 +82,14 @@ class AiChatClientTest {
             ex.close();
         } else if (path.equals("/api/v1/chat")) {
             json(ex, 200, "{\"success\":true,\"message\":\"ok\",\"data\":{\"reply\":\"안녕하세요\",\"riskLevel\":\"low\"}}");
+        } else if (path.equals("/api/v1/chat/logs") && ex.getRequestURI().getRawQuery().contains("EMPTY")) {
+            json(ex, 200, "{\"success\":true,\"data\":[]}");
+        } else if (path.equals("/api/v1/chat/logs") && ex.getRequestURI().getRawQuery().contains("FAIL")) {
+            json(ex, 500, "{}");
+        } else if (path.equals("/api/v1/chat/logs") && ex.getRequestURI().getRawQuery().contains("HUGE")) {
+            json(ex, 200, "{\"data\":[{\"message\":\"" + "x".repeat(4096) + "\"}]}");
+        } else if (path.equals("/api/v1/chat/logs/9")) {
+            json(ex, 500, "{}");
         } else if (path.equals("/api/v1/chat/logs")) {
             json(ex, 200, "{\"success\":true,\"data\":[{\"id\":1},{\"id\":2}]}");
         } else if (path.equals("/api/v1/chat/logs/7")) {
@@ -191,5 +199,32 @@ class AiChatClientTest {
     @DisplayName("기록 상세 404 → 빈 값(없는 기록과 남의 기록을 구분하지 않는다)")
     void logDetail_404() {
         assertThat(client.logDetail("U00001", 999)).isEmpty();
+    }
+
+    @Test
+    @DisplayName("기록이 없으면 빈 배열을 그대로 돌려준다(오류로 보지 않는다)")
+    void logs_빈배열() {
+        assertThat(client.logs("EMPTY")).isEmpty();
+    }
+
+    @Test
+    @DisplayName("기록 목록·상세의 AI 5xx → CHAT_UNAVAILABLE")
+    void logs_AI5xx() {
+        assertThatThrownBy(() -> client.logs("FAIL"))
+                .isInstanceOfSatisfying(CustomException.class,
+                        e -> assertThat(e.getErrorCode()).isEqualTo(ErrorCode.CHAT_UNAVAILABLE));
+        assertThatThrownBy(() -> client.logDetail("U00001", 9))
+                .isInstanceOfSatisfying(CustomException.class,
+                        e -> assertThat(e.getErrorCode()).isEqualTo(ErrorCode.CHAT_UNAVAILABLE));
+    }
+
+    @Test
+    @DisplayName("응답이 크기 상한을 넘으면 CHAT_UNAVAILABLE")
+    void logs_크기상한() {
+        properties.setMaxLogsBytes(1024);
+
+        assertThatThrownBy(() -> client.logs("HUGE"))
+                .isInstanceOfSatisfying(CustomException.class,
+                        e -> assertThat(e.getErrorCode()).isEqualTo(ErrorCode.CHAT_UNAVAILABLE));
     }
 }
