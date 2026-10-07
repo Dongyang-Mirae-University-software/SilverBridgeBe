@@ -1725,6 +1725,12 @@ REST API Key 단독 대비 보안 강화 — 인가코드 탈취 시 토큰 발�
 
 ---
 
+## [2026-10-07] AI 챗봇 백엔드 중계
+
+- FE 프록시 축소(ad44cb6)로 막힌 챗봇을 `POST /api/guardian/chat`·`GET .../chat/logs`·`.../logs/{chatId}`(보호자 전용)로 대체. 사용자 ID는 토큰에서만, 호출 전체 130초, 동시 10/1인 1·속도 제한·킬 스위치, 본문 로그 금지. 마이그레이션 없음.
+- 발견: 옛 FE는 전송에 `userId: 1`을 고정으로 보내 AI 기록 112건이 한 버킷에 섞임(실제 users.id 기록 0건).
+- 상세: `docs/(2026-10-07) feature-chat-relay.md`, FE 계약 `docs/(2026-10-07) api-contract-chat-relay.md`
+
 ### [2026-10-07] 낙상 클립 점검 후속 H-1~H-4 반영 (branch `fix/anomaly-clip-followup`, 마이그레이션 없음)
 
 - H-1 정지·탈퇴 진행 계정 차단(`NOT_SENT`)은 알림 쿨다운을 풀지 않음(`FAILED`·예외만 해제) / H-2 Javadoc / H-3 낙상 전달 테스트 / H-4 gosky 9.0초 클립 확인으로 종결.

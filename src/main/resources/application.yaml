@@ -298,3 +298,18 @@ logging:
   structured:
     format:
       console: ${LOGGING_STRUCTURED_FORMAT:}
+
+# AI 챗봇 중계(2026-10-07) - FE → 백엔드 → AI. 사용자 ID는 토큰에서만 꺼내 AI에 넣는다.
+chat:
+  relay:
+    enabled: ${CHAT_RELAY_ENABLED:true}                     # false면 메시지 전송만 503(기록 조회는 계속)
+    ai-base-url: ${AI_HTTP_BASE_URL:https://testai.gosky.kr}
+    api-key: ${AI_API_KEY:}                                 # 서버 안에서만 헤더로 사용(평문 커밋 금지)
+    connect-timeout: ${CHAT_RELAY_CONNECT_TIMEOUT:3s}
+    call-timeout: ${CHAT_RELAY_CALL_TIMEOUT:130s}           # 챗 전송 호출 전체 - AI 상한(120초)보다 약간 길게
+    logs-call-timeout: ${CHAT_RELAY_LOGS_CALL_TIMEOUT:15s}  # 기록 조회 호출 전체
+    max-concurrent: ${CHAT_RELAY_MAX_CONCURRENT:10}         # 전송 1건이 요청 스레드를 최대 130초 붙든다
+    max-per-user: ${CHAT_RELAY_MAX_PER_USER:1}
+    per-minute: ${CHAT_RELAY_PER_MINUTE:10}
+    per-hour: ${CHAT_RELAY_PER_HOUR:120}
+    max-message-chars: ${CHAT_RELAY_MAX_MESSAGE_CHARS:2000}
