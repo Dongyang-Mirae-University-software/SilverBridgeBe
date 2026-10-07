@@ -118,6 +118,7 @@ class GuardianAnomalyHistoryFilterTest {
         assertThat(summary.total()).isEqualTo(10);
         assertThat(summary.pendingCount()).isEqualTo(2);
         assertThat(summary.conflictedCount()).isEqualTo(1);
+        assertThat(summary.needsReviewCount()).isEqualTo(3);
         assertThat(summary.byType().fire()).isEqualTo(5);
         assertThat(summary.byType().fall()).isEqualTo(5);
         assertThat(summary.byType().weapon()).isZero();
