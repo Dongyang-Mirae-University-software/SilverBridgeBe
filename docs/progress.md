@@ -1749,3 +1749,13 @@ REST API Key 단독 대비 보안 강화 — 인가코드 탈취 시 토큰 발�
 
 - 판정 PASS (Critical·High·Medium 없음, Low 3건 수용·선택). 인가 순서·필터 위치·응답 형태 보존 확인.
 - 상세: `docs/(2026-10-07) audit-anomaly-history-type-filter.md`
+
+---
+
+## [2026-10-07] AI 챗봇 중계 기능 점검 (템플릿 B, 코드 수정 없음)
+
+- 판정 PASS(🔴🟠 0, 🟡 2, 🟢 5). 실서버 AI 직접 호출로 계약 확인: 전송 200·12.7초(`medgemma`)·응답 키가 FE 매핑과 일치, 소유자 검증 정상(타인 상세 404·목록 0건).
+- 🟡 M-1: AI 상세 조회는 `userId`가 선택이라 AI 직접 호출로는 남의 상세가 열림(중계 경유는 안전, `CHAT_REQUIRE_USER_ID` 권고). 🟡 M-2: 기록 응답이 `contextJson`·`upstreamMeta` 등 AI 내부 정보를 그대로 내림(허용 목록 제안).
+- 보호자 토큰 전체 경로 실호출은 테스트 계정이 없어 미확인(FE 교체 후 확인). 점검 중 AI `chat_logs`에 테스트 1건(`AUDIT-CHAT-TEST`) 남음.
+- 상세: `docs/(2026-10-07) audit-chat-relay.md`
+
