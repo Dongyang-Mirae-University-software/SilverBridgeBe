@@ -1766,3 +1766,10 @@ REST API Key 단독 대비 보안 강화 — 인가코드 탈취 시 토큰 발�
 - M-2: 기록 목록·상세를 `ChatLogProjection` 허용 목록으로 걸러 `contextJson`·`upstreamMeta`·`decisionTrace`·`userId`를 내리지 않음. 테스트 보강으로 chat 테스트 43개.
 - M-1(AI 서버 `CHAT_REQUIRE_USER_ID=true`): 에이전트 실행은 권한 판정에서 거부돼 **사용자가 직접 적용**(2026-10-07 17:32, gosky). 무 `userId` 상세 조회 200 → 422 실측, 백엔드 AI WS 자동 재연결 확인. 상세 `docs/(2026-10-07) audit-chat-relay.md` 후속 절.
 
+---
+
+## [2026-10-07] 카메라 권장 송출 fps 5 → 10
+
+- `camera.recommended-fps` 기본값 10(동시 1~3대 기준, AI 1장 19.2ms 실측 → 1대 사용률 약 19%). 응답 형식·판정·쿨다운·클립 구간 불변, 마이그레이션 없음, 두 서버 `.env.dev`에 해당 키 없음.
+- 메시지 처리 부담: 정상 프레임은 DB·Redis 0회, 위험 프레임은 쿨다운 때문에 fps와 무관. 송출 중 카메라는 새로고침해야 새 값을 받는다.
+- 상세: `docs/(2026-10-07) feature-camera-fps-10.md`

@@ -137,10 +137,11 @@ file-server:
   base-url: ${FILE_SERVER_BASE_URL:https://v1api.gosky.kr}
 
 # 이상감지 카메라 — 피보호자 송출 권장 프레임레이트(카메라 등록 응답으로 내려줌).
-# 화재/연기는 느리게 변하고 AI 서버가 5프레임마다 추론(STREAM_SAMPLE_EVERY_N_FRAMES=5)하므로
-# 5fps면 충분(과한 fps는 대역폭·GPU 낭비). 필요 시 CAMERA_RECOMMENDED_FPS로 조정.
+# 10fps(2026-10-07, 5에서 상향): 동시 송출 1~3대 기준 실측 근거 - AI 1장 19.2ms(스레드 1개, 초당 최대 52장)라
+# 1대×10장 = 사용률 약 19%, 2대 약 38%. 동시 4대 이상 쓰면 낮추거나 AI 분석 스레드를 늘릴 것.
+# 필요 시 CAMERA_RECOMMENDED_FPS로 조정(두 서버 .env.dev에는 없어 이 기본값이 그대로 쓰인다).
 camera:
-  recommended-fps: ${CAMERA_RECOMMENDED_FPS:5}
+  recommended-fps: ${CAMERA_RECOMMENDED_FPS:10}
   # 보호자 실시간 카메라 보기 - AI 영상·상태를 백엔드가 인가 후 중계(2026-10-03). 브라우저는 AI에 직접 붙지 않는다.
   stream:
     ai-base-url: ${AI_HTTP_BASE_URL:https://testai.gosky.kr}

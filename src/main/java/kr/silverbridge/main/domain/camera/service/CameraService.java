@@ -58,7 +58,7 @@ public class CameraService {
     static final String ROOM_UNIQUE_CONSTRAINT = "uq_camera_ward_label";
 
     // 서버가 소유하는 권장 송출 fps (FE 매직상수 방지) — application.yaml camera.recommended-fps
-    @Value("${camera.recommended-fps:5}")
+    @Value("${camera.recommended-fps:10}")
     private int recommendedFps;
 
     /**
