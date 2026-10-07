@@ -1684,3 +1684,10 @@ REST API Key 단독 대비 보안 강화 — 인가코드 탈취 시 토큰 발�
 - 알림 문구를 종류별로: 조사(화재가·흉기가·낙상이, `DetectedTypeLabel.withSubjectParticle`), 본인 안내 = 화재 대피 / 흉기 피신·112 연락 안내 / 낙상 도움 요청·SOS 안내. SMS 폴백 동일 기준.
 - 재촉·요약·동수 안내는 `DetectedTypeLabel`을 써서 변경 불필요, 알림톡은 `#{detectedTypeLabel}` 변수라 재심사 불요(확인).
 - 상세: `docs/(2026-10-06) feature-anomaly-weapon-fall-live.md`
+
+---
+
+### [2026-10-07] 낙상 클립 구간 분리 (branch `feature/fall-clip-window`, 마이그레이션 없음)
+
+- 낙상은 AI에서 6초 유지 뒤 danger라 앞 3초 클립에는 넘어지는 순간이 없다. 낙상 전용 `anomaly.clip.fall-pre-seconds`·`fall-post-seconds`를 추가하고 낙상일 때만 사용(나머지 종류 불변). **기본값 3/2라 AI 반영 순서와 무관하게 배포 가능**, AI 앞 상한 8·합계 10 반영 뒤 서버 env에서 8/1로 올린다. 범위 밖 값은 clamp.
+- 상세 `docs/(2026-10-07) feature-fall-clip-window.md`.

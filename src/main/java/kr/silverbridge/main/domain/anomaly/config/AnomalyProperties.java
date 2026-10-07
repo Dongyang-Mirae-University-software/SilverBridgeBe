@@ -1,5 +1,6 @@
 package kr.silverbridge.main.domain.anomaly.config;
 
+import kr.silverbridge.main.global.enums.DetectedType;
 import lombok.Getter;
 import lombok.Setter;
 import org.springframework.boot.context.properties.ConfigurationProperties;
@@ -122,6 +123,22 @@ public class AnomalyProperties {
         /** 감지 뒤 구간(초). AI가 0~3을 검증한다. */
         private double postSeconds = 2;
 
+        /** 낙상 클립 앞 구간 상한(초). AI 새 계약(앞 상한 8). */
+        public static final double FALL_PRE_MAX = 8;
+        /** 낙상 클립 뒤 구간 상한(초). */
+        public static final double FALL_POST_MAX = 3;
+        /** 낙상 클립 앞+뒤 합계 상한(초). AI 새 계약(합계 상한 10). */
+        public static final double FALL_TOTAL_MAX = 10;
+
+        /**
+         * 낙상 클립 앞 구간(초). 낙상은 AI에서 6초 유지돼야 danger가 되어 감지 시점에는 이미 누워 있다 - 넘어지는 순간을 담으려고
+         * 앞 구간을 따로 둔다. 기본 3은 일반 클립과 같다(AI가 앞 상한 8·합계 10을 반영한 뒤에만 8/1로 올린다).
+         */
+        private double fallPreSeconds = 3;
+
+        /** 낙상 클립 뒤 구간(초). */
+        private double fallPostSeconds = 2;
+
         /**
          * 같은 (카메라, 유형)의 클립 최소 간격(분). 보호자 알림 쿨다운과 같은 5분이 기본이지만 키·설정은 따로다 -
          * 알림 빈도를 바꿀 때 디스크·AI 부하가 함께 흔들리지 않게 한다.
@@ -149,6 +166,29 @@ public class AnomalyProperties {
 
         /** 저장 루트의 여유 공간이 이보다 적으면 만들지 않는다(MB). 디스크가 차면 DB·로그까지 함께 멈춘다. */
         private long minFreeDiskMb = 1024;
+
+        /** 종류별 앞 구간(초). 낙상만 낙상 값(범위 밖이면 잘라 쓴다), 나머지는 {@code preSeconds}. */
+        public double preSecondsFor(DetectedType type) {
+            return type == DetectedType.FALL ? fallWindow()[0] : preSeconds;
+        }
+
+        /** 종류별 뒤 구간(초). */
+        public double postSecondsFor(DetectedType type) {
+            return type == DetectedType.FALL ? fallWindow()[1] : postSeconds;
+        }
+
+        /** 낙상 구간을 AI 계약 범위(pre 0~8, post 0~3, 합계 1~10)로 자른다. 오타 하나로 낙상 클립이 사라지지 않게 한다. */
+        private double[] fallWindow() {
+            double pre = Math.min(Math.max(fallPreSeconds, 0), FALL_PRE_MAX);
+            double post = Math.min(Math.max(fallPostSeconds, 0), FALL_POST_MAX);
+            if (pre + post > FALL_TOTAL_MAX) {
+                pre = FALL_TOTAL_MAX - post;
+            }
+            if (pre + post < 1) {
+                pre = 1 - post;
+            }
+            return new double[] {pre, post};
+        }
 
         /** 실제로 적용되는 보관 기간 - 1 ~ {@value #MAX_RETENTION_DAYS}일로 자른다. */
         public int effectiveRetentionDays() {

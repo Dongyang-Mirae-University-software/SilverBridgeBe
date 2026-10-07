@@ -217,8 +217,10 @@ anomaly:
   clip:
     enabled: ${ANOMALY_CLIP_ENABLED:true}                     # 킬 스위치. false면 생성만 멈추고 열람·삭제·청소는 그대로
     storage-dir: ${ANOMALY_CLIP_STORAGE_DIR:/data/clips}      # 컨테이너 내부 경로. 호스트 ./.data/clips 마운트 필요
-    pre-seconds: ${ANOMALY_CLIP_PRE_SECONDS:3}                # 감지 앞 구간(AI 상한 5)
+    pre-seconds: ${ANOMALY_CLIP_PRE_SECONDS:3}                # 감지 앞 구간(AI 상한 5, 낙상은 아래 별도)
     post-seconds: ${ANOMALY_CLIP_POST_SECONDS:2}              # 감지 뒤 구간(AI 상한 3)
+    fall-pre-seconds: ${ANOMALY_CLIP_FALL_PRE_SECONDS:3}      # 낙상 앞 구간(AI 앞 상한 8). 낙상은 6초 유지 뒤 danger라 따로. AI 반영 후에만 8로
+    fall-post-seconds: ${ANOMALY_CLIP_FALL_POST_SECONDS:2}    # 낙상 뒤 구간(AI 상한 3, 앞+뒤 합계 상한 10). AI 반영 후에만 1로
     cooldown-minutes: ${ANOMALY_CLIP_COOLDOWN_MINUTES:5}      # 같은 카메라·유형 클립 최소 간격(알림 쿨다운과 별개 키)
     request-timeout: ${ANOMALY_CLIP_REQUEST_TIMEOUT:25s}      # AI 호출 전체 제한(AI 상한 20초 + 전송 여유 5초)
     max-bytes: ${ANOMALY_CLIP_MAX_BYTES:10485760}             # 클립 최대 크기(10MB). 넘으면 저장하지 않는다

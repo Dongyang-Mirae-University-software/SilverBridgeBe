@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import kr.silverbridge.main.domain.anomaly.config.AnomalyProperties;
 import kr.silverbridge.main.domain.camera.config.CameraStreamProperties;
+import kr.silverbridge.main.global.enums.DetectedType;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.scheduling.TaskScheduler;
 import org.springframework.stereotype.Component;
@@ -130,9 +131,10 @@ public class AiClipClient {
     /**
      * 클립을 요청한다.
      *
-     * @param detectedAt 감지 시각. null이면 보내지 않는다(계약상 AI가 요청 수신 시각을 쓴다)
+     * @param detectedAt   감지 시각. null이면 보내지 않는다(계약상 AI가 요청 수신 시각을 쓴다)
+     * @param detectedType 감지 종류. 앞·뒤 구간을 종류별로 고른다(낙상만 따로, null이면 일반 값)
      */
-    public ClipResult requestClip(String sessionId, OffsetDateTime detectedAt) {
+    public ClipResult requestClip(String sessionId, OffsetDateTime detectedAt, DetectedType detectedType) {
         if (!StringUtils.hasText(streamProperties.getApiKey())) {
             log.warn("[ANOMALY-CLIP] AI_API_KEY 미설정 - 클립 요청 불가: sessionId={}", sessionId);
             return ClipResult.fail(Outcome.NOT_CONFIGURED, null, null);
@@ -144,7 +146,7 @@ public class AiClipClient {
         HttpURLConnection connection = null;
         ScheduledFuture<?> deadline = null;
         try {
-            byte[] payload = objectMapper.writeValueAsBytes(requestBody(detectedAt, clip));
+            byte[] payload = objectMapper.writeValueAsBytes(requestBody(detectedAt, clip, detectedType));
             connection = open(uri(sessionId), limit, payload.length);
             HttpURLConnection target = connection;
             // 연결·전송·헤더 대기 단계는 연결을 끊으면 바로 빠져나온다. 본문 수신 중에는 readBounded가 마감을 확인한다.
@@ -215,13 +217,14 @@ public class AiClipClient {
         return connection;
     }
 
-    private Map<String, Object> requestBody(OffsetDateTime detectedAt, AnomalyProperties.Clip clip) {
+    private Map<String, Object> requestBody(OffsetDateTime detectedAt, AnomalyProperties.Clip clip,
+                                           DetectedType detectedType) {
         Map<String, Object> body = new LinkedHashMap<>();
         if (detectedAt != null) {
             body.put("detectedAt", DateTimeFormatter.ISO_INSTANT.format(detectedAt.toInstant()));
         }
-        body.put("preSeconds", clip.getPreSeconds());
-        body.put("postSeconds", clip.getPostSeconds());
+        body.put("preSeconds", clip.preSecondsFor(detectedType));
+        body.put("postSeconds", clip.postSecondsFor(detectedType));
         return body;
     }
 

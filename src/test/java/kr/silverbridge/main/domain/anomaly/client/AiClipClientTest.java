@@ -8,6 +8,7 @@ import kr.silverbridge.main.domain.anomaly.client.AiClipClient.ClipResult;
 import kr.silverbridge.main.domain.anomaly.client.AiClipClient.Outcome;
 import kr.silverbridge.main.domain.anomaly.config.AnomalyProperties;
 import kr.silverbridge.main.domain.camera.config.CameraStreamProperties;
+import kr.silverbridge.main.global.enums.DetectedType;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -170,7 +171,7 @@ class AiClipClientTest {
     void 정상_요청과_응답() throws IOException {
         OffsetDateTime detectedAt = OffsetDateTime.of(2026, 10, 4, 10, 0, 5, 0, ZoneOffset.ofHours(9));
 
-        ClipResult result = client().requestClip("ok", detectedAt);
+        ClipResult result = client().requestClip("ok", detectedAt, DetectedType.FIRE);
 
         assertThat(result.isOk()).isTrue();
         assertThat(result.body()).isEqualTo(WEBM);
@@ -188,9 +189,58 @@ class AiClipClientTest {
     }
 
     @Test
+    @DisplayName("기본 설정이면 전 종류가 3/2로 나간다(낙상 설정을 올리기 전과 동작이 같다)")
+    void 기본값이면_전종류_3_2() throws IOException {
+        for (DetectedType type : DetectedType.values()) {
+            client().requestClip("ok", null, type);
+            JsonNode body = objectMapper.readTree(receivedBody.get());
+            assertThat(body.path("preSeconds").asDouble()).as(type.name()).isEqualTo(3.0);
+            assertThat(body.path("postSeconds").asDouble()).as(type.name()).isEqualTo(2.0);
+        }
+    }
+
+    @Test
+    @DisplayName("낙상 값을 올리면 낙상만 8/1로 나가고 화재·흉기는 기존 3/2 그대로")
+    void 낙상만_별도_구간() throws IOException {
+        anomalyProperties.getClip().setFallPreSeconds(8);
+        anomalyProperties.getClip().setFallPostSeconds(1);
+
+        client().requestClip("ok", null, DetectedType.FALL);
+        JsonNode fall = objectMapper.readTree(receivedBody.get());
+        assertThat(fall.path("preSeconds").asDouble()).isEqualTo(8.0);
+        assertThat(fall.path("postSeconds").asDouble()).isEqualTo(1.0);
+
+        for (DetectedType type : new DetectedType[] {DetectedType.FIRE, DetectedType.WEAPON}) {
+            client().requestClip("ok", null, type);
+            JsonNode body = objectMapper.readTree(receivedBody.get());
+            assertThat(body.path("preSeconds").asDouble()).as(type.name()).isEqualTo(3.0);
+            assertThat(body.path("postSeconds").asDouble()).as(type.name()).isEqualTo(2.0);
+        }
+    }
+
+    @Test
+    @DisplayName("낙상 값이 AI 계약 범위(pre 0~8, post 0~3, 합계 1~10)를 벗어나면 잘라서 보낸다")
+    void 낙상_범위_밖은_자른다() {
+        AnomalyProperties.Clip clip = anomalyProperties.getClip();
+
+        clip.setFallPreSeconds(20);
+        clip.setFallPostSeconds(1);
+        assertThat(clip.preSecondsFor(DetectedType.FALL)).isEqualTo(8.0);
+
+        clip.setFallPreSeconds(8);
+        clip.setFallPostSeconds(9);
+        assertThat(clip.postSecondsFor(DetectedType.FALL)).isEqualTo(3.0);
+        assertThat(clip.preSecondsFor(DetectedType.FALL) + clip.postSecondsFor(DetectedType.FALL)).isEqualTo(10.0);
+
+        clip.setFallPreSeconds(-5);
+        clip.setFallPostSeconds(0);
+        assertThat(clip.preSecondsFor(DetectedType.FALL) + clip.postSecondsFor(DetectedType.FALL)).isEqualTo(1.0);
+    }
+
+    @Test
     @DisplayName("감지 시각이 없으면 detectedAt을 보내지 않는다(AI가 수신 시각을 쓴다)")
     void 감지시각_없으면_생략() throws IOException {
-        client().requestClip("ok", null);
+        client().requestClip("ok", null, DetectedType.FIRE);
 
         assertThat(objectMapper.readTree(receivedBody.get()).has("detectedAt")).isFalse();
     }
@@ -198,7 +248,7 @@ class AiClipClientTest {
     @Test
     @DisplayName("헤더가 없거나 형식이 틀리면 그 값은 null(0으로 채우지 않는다), 오프셋 없는 시각은 UTC로 읽는다")
     void 헤더_누락은_null() {
-        ClipResult result = client().requestClip("nometa", null);
+        ClipResult result = client().requestClip("nometa", null, DetectedType.FIRE);
 
         assertThat(result.isOk()).isTrue();
         assertThat(result.meta().durationMs()).isNull();
@@ -209,19 +259,19 @@ class AiClipClientTest {
     @Test
     @DisplayName("200이어도 WebM(EBML) 시그니처가 아니면 저장하지 않는다")
     void 시그니처_불일치_거부() {
-        assertThat(client().requestClip("notwebm", null).outcome()).isEqualTo(Outcome.INVALID_RESPONSE);
+        assertThat(client().requestClip("notwebm", null, DetectedType.FIRE).outcome()).isEqualTo(Outcome.INVALID_RESPONSE);
     }
 
     @Test
     @DisplayName("크기 상한을 넘으면 저장하지 않는다")
     void 크기_상한_초과() {
-        assertThat(client().requestClip("huge", null).outcome()).isEqualTo(Outcome.TOO_LARGE);
+        assertThat(client().requestClip("huge", null, DetectedType.FIRE).outcome()).isEqualTo(Outcome.TOO_LARGE);
     }
 
     @Test
     @DisplayName("응답 제한을 넘으면 UNAVAILABLE(재시도 가능)")
     void 응답_시간초과() {
-        ClipResult result = client().requestClip("slow", null);
+        ClipResult result = client().requestClip("slow", null, DetectedType.FIRE);
 
         assertThat(result.outcome()).isEqualTo(Outcome.UNAVAILABLE);
         assertThat(result.outcome().isRetryable()).isTrue();
@@ -232,7 +282,7 @@ class AiClipClientTest {
     void 전체_시간제한() {
         long started = System.nanoTime();
 
-        ClipResult result = client().requestClip("drip", null);
+        ClipResult result = client().requestClip("drip", null, DetectedType.FIRE);
 
         long elapsedMillis = (System.nanoTime() - started) / 1_000_000;
         assertThat(result.outcome()).isEqualTo(Outcome.UNAVAILABLE);
@@ -243,7 +293,7 @@ class AiClipClientTest {
     @Test
     @DisplayName("리다이렉트는 따라가지 않는다(키 헤더 유출 방지) - 장애로 본다")
     void 리다이렉트_미추종() {
-        ClipResult result = client().requestClip("moved", null);
+        ClipResult result = client().requestClip("moved", null, DetectedType.FIRE);
 
         assertThat(result.outcome()).isEqualTo(Outcome.UNAVAILABLE);
         assertThat(redirectFollowed).isFalse();
@@ -263,7 +313,7 @@ class AiClipClientTest {
     })
     @DisplayName("계약서 오류 응답을 결과 코드로 바꾼다 - 키·파라미터 결함·AI 킬 스위치(503 CLIP_DISABLED)는 재시도하지 않는다")
     void 오류_매핑(String session, Outcome expected, boolean retryable) {
-        ClipResult result = client().requestClip(session, null);
+        ClipResult result = client().requestClip(session, null, DetectedType.FIRE);
 
         assertThat(result.outcome()).isEqualTo(expected);
         assertThat(result.outcome().isRetryable()).isEqualTo(retryable);
@@ -273,7 +323,7 @@ class AiClipClientTest {
     @Test
     @DisplayName("오류 본문의 errorCode를 꺼낸다(로그용)")
     void 오류코드_추출() {
-        assertThat(client().requestClip("e429", null).errorCode()).isEqualTo("CLIP_BUSY");
+        assertThat(client().requestClip("e429", null, DetectedType.FIRE).errorCode()).isEqualTo("CLIP_BUSY");
     }
 
     @Test
@@ -281,7 +331,7 @@ class AiClipClientTest {
     void 키_미설정() {
         streamProperties.setApiKey("");
 
-        ClipResult result = client().requestClip("ok", null);
+        ClipResult result = client().requestClip("ok", null, DetectedType.FIRE);
 
         assertThat(result.outcome()).isEqualTo(Outcome.NOT_CONFIGURED);
         assertThat(result.outcome().isRetryable()).isFalse();
@@ -291,7 +341,7 @@ class AiClipClientTest {
     @Test
     @DisplayName("세션 ID의 '/'는 인코딩돼 다른 AI 경로를 가리키지 못한다")
     void 세션ID_경로_인코딩() {
-        client().requestClip("a/../../health", null);
+        client().requestClip("a/../../health", null, DetectedType.FIRE);
 
         assertThat(receivedRawPath.get()).isEqualTo("/api/v1/live-streams/a%2F..%2F..%2Fhealth/clips");
     }
