@@ -76,7 +76,7 @@ public class AnomalyClipCaptureService {
 
         // 감지 시각이 없으면(AI fallback 페이로드) 보내지 않는다 - 계약상 AI가 요청 수신 시각을 쓴다
         OffsetDateTime requestedAt = OffsetDateTime.now();
-        ClipResult result = aiClipClient.requestClip(event.sessionId(), event.detectedAt());
+        ClipResult result = aiClipClient.requestClip(event.sessionId(), event.detectedAt(), event.detectedType());
         if (!result.isOk()) {
             // 로그는 AiClipClient가 남겼다. 다시 보내도 같은 실패(키·파라미터 결함)면 쿨다운을 유지해 AI를 두드리지 않는다.
             return !result.outcome().isRetryable();

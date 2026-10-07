@@ -89,7 +89,7 @@ class AnomalyClipCaptureServiceTest {
     @DisplayName("정상 - AI 요청 → 파일 저장 → 행 기록, 쿨다운은 유지한다")
     void 정상_저장() {
         readyToRequest();
-        when(aiClipClient.requestClip(SESSION, DETECTED_AT)).thenReturn(ok());
+        when(aiClipClient.requestClip(SESSION, DETECTED_AT, DetectedType.FIRE)).thenReturn(ok());
         when(storage.write(WEBM)).thenReturn("f.webm");
         AnomalyClip saved = mock(AnomalyClip.class);
         when(saved.getStatus()).thenReturn(AnomalyClipStatus.VISIBLE);
@@ -145,7 +145,7 @@ class AnomalyClipCaptureServiceTest {
     @DisplayName("재시도 가능한 AI 실패면 쿨다운을 풀어 다음 감지에서 다시 시도한다")
     void 재시도_가능_실패(Outcome outcome) {
         readyToRequest();
-        when(aiClipClient.requestClip(SESSION, DETECTED_AT)).thenReturn(fail(outcome));
+        when(aiClipClient.requestClip(SESSION, DETECTED_AT, DetectedType.FIRE)).thenReturn(fail(outcome));
 
         service.capture(event());
 
@@ -158,7 +158,7 @@ class AnomalyClipCaptureServiceTest {
     @DisplayName("키·파라미터 결함(다시 보내도 같은 실패)이면 쿨다운을 유지해 AI를 두드리지 않는다")
     void 재시도_불가_실패(Outcome outcome) {
         readyToRequest();
-        when(aiClipClient.requestClip(SESSION, DETECTED_AT)).thenReturn(fail(outcome));
+        when(aiClipClient.requestClip(SESSION, DETECTED_AT, DetectedType.FIRE)).thenReturn(fail(outcome));
 
         service.capture(event());
 
@@ -182,7 +182,7 @@ class AnomalyClipCaptureServiceTest {
     @DisplayName("파일 쓰기에 실패하면 쿨다운을 푼다")
     void 쓰기_실패() {
         readyToRequest();
-        when(aiClipClient.requestClip(SESSION, DETECTED_AT)).thenReturn(ok());
+        when(aiClipClient.requestClip(SESSION, DETECTED_AT, DetectedType.FIRE)).thenReturn(ok());
         when(storage.write(WEBM)).thenThrow(new UncheckedIOException(new IOException("disk")));
 
         service.capture(event());
@@ -195,7 +195,7 @@ class AnomalyClipCaptureServiceTest {
     @DisplayName("행 기록이 예외로 실패하면 파일을 지우고 쿨다운을 푼다(예외는 밖으로 나가지 않는다)")
     void 기록_실패() {
         readyToRequest();
-        when(aiClipClient.requestClip(SESSION, DETECTED_AT)).thenReturn(ok());
+        when(aiClipClient.requestClip(SESSION, DETECTED_AT, DetectedType.FIRE)).thenReturn(ok());
         when(storage.write(WEBM)).thenReturn("f.webm");
         when(clipService.record(any())).thenThrow(new IllegalStateException("db down"));
 
@@ -209,7 +209,7 @@ class AnomalyClipCaptureServiceTest {
     @DisplayName("상황·카메라가 사라졌거나 상한이면(기록 안 함) 파일을 지우고 쿨다운은 유지한다")
     void 기록_안함() {
         readyToRequest();
-        when(aiClipClient.requestClip(SESSION, DETECTED_AT)).thenReturn(ok());
+        when(aiClipClient.requestClip(SESSION, DETECTED_AT, DetectedType.FIRE)).thenReturn(ok());
         when(storage.write(WEBM)).thenReturn("f.webm");
         when(clipService.record(any())).thenReturn(Optional.empty());
 
@@ -225,7 +225,7 @@ class AnomalyClipCaptureServiceTest {
         readyToRequest();
         AnomalyDetectedEvent noTime = new AnomalyDetectedEvent(11L, 37L, "WD0001", "김영희", SESSION, "거실",
                 DetectedType.FIRE, null);
-        when(aiClipClient.requestClip(SESSION, null)).thenReturn(ok());
+        when(aiClipClient.requestClip(SESSION, null, DetectedType.FIRE)).thenReturn(ok());
         when(storage.write(WEBM)).thenReturn("f.webm");
         when(clipService.record(any())).thenReturn(Optional.empty());
         OffsetDateTime before = OffsetDateTime.now();
