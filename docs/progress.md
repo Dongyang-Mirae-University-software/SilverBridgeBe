@@ -1715,3 +1715,10 @@ REST API Key 단독 대비 보안 강화 — 인가코드 탈취 시 토큰 발�
 - 두 서버 모두 `d02dff8`, 이미지가 #323 포함, 컨테이너 env 8/1 적용, 헬스 정상·ERROR 0. 이전 점검(`audit-anomaly-1006-bundle.md`)의 결론은 인용하고 비어 있던 운영 반영·#324 회귀만 점검. 🔴🟠🟡 0, 🟢 4(H-1~H-4).
 - 남은 확인: 첫 낙상 클립이 실제로 약 9초분으로 저장되는지.
 - 상세: `docs/(2026-10-07) audit-fall-clip-followup.md`
+
+---
+
+## [2026-10-07] 낙상 클립 구간 8/1 실서버 검증
+
+- gosky 낙상 클립 2건: 클립 53 = 6.0초(AI 반영 직전·버퍼 미충전 추정), 클립 54(14:11) = **9.0초(앞 8 + 뒤 1)**, 0.64MB(FHD 3.4MB 추정보다 훨씬 작음, 10MB 상한 무관). `[ANOMALY-CLIP]` 실패·422 없음 -> 3/2 롤백 불필요.
+- 두 서버 `.env.dev`·api 컨테이너 모두 `ANOMALY_CLIP_FALL_PRE_SECONDS=8`·`POST=1` 반영. vkcs도 `AI_API_KEY`가 설정돼 AI WS 연결·클립 동작 중(CLAUDE.md·`feature-anomaly-clip.md` 문구 정정).
