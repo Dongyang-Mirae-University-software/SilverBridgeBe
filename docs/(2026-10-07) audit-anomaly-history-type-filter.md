@@ -38,9 +38,9 @@
 ## 이슈
 | 등급 | ID | 내용 | 제안 |
 |---|---|---|---|
-| 🟢 Low | L-1 | 요약 `total`은 FIRE·FALL·WEAPON 합이고 `type` 없는 목록 `totalElements`는 모든 행을 센다. `detected_type`에 CHECK가 없어 이론상 다른 값이 있으면 어긋난다. 코드는 NORMAL·UNKNOWN을 저장하지 않고 SMOKE는 V53이 FIRE로 옮겨 현재는 같다. | 수용. 어긋남이 보이면 `total`을 전 행 합으로 바꾼다 |
-| 🟢 Low | L-2 | 요약 API에 별도 속도 제한이 없다. 이력 조회도 없고 보호자 카메라 API만 제한이 있다(영상 비용 때문). | 수용 (이력과 일관) |
-| 🟢 Low | L-3 | HTTP 테스트가 `needsReviewCount` JSON 키를 단언하지 않는다 (서비스 테스트는 값을 단언). | 선택. 한 줄 추가 |
+| 🟢 Low | L-1 | 요약 `total`은 FIRE·FALL·WEAPON 합이고 `type` 없는 목록 `totalElements`는 모든 행을 센다. `detected_type`에 CHECK가 없어 이론상 다른 값이 있으면 어긋난다. 코드는 NORMAL·UNKNOWN을 저장하지 않고 SMOKE는 V53이 FIRE로 옮겨 현재는 같다. | **반영 (2026-10-07)**: `total`을 전 행 합으로 변경 + 단위 테스트 |
+| 🟢 Low | L-2 | (정정) 요약 API 전용 제한은 없지만 `UserRateLimitFilter`가 로그인 사용자 전체 요청에 1분 단위 제한을 이미 건다(SOS·인증·WS 제외). 처음 "제한 없음"이라 적은 것은 틀렸다. | 해당 없음 - 코드 변경 불필요 |
+| 🟢 Low | L-3 | HTTP 테스트가 `needsReviewCount` JSON 키를 단언하지 않는다 (서비스 테스트는 값을 단언). | **반영 (2026-10-07)**: 요약 JSON 전 필드 단언 추가 |
 
 ## 종합 판정
 **PASS** - Critical·High·Medium 없음. 인가 순서·필터 위치·응답 형태 보존 모두 확인. 통합 테스트 vkcs 통과(`321e5ea`), 두 서버 배포 반영 확인(`e942b09`).

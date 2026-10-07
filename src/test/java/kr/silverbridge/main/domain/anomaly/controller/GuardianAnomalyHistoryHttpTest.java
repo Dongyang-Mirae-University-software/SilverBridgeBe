@@ -91,11 +91,16 @@ class GuardianAnomalyHistoryHttpTest {
     @Test
     @DisplayName("요약 경로는 history/summary로 응답한다")
     void summaryRoute() throws Exception {
-        when(service.getHistorySummary("GD0001", "WD0001")).thenReturn(GuardianAnomalyHistorySummary.EMPTY);
+        when(service.getHistorySummary("GD0001", "WD0001")).thenReturn(
+                new GuardianAnomalyHistorySummary(10, 2, 1, 3, new GuardianAnomalyHistorySummary.ByType(6, 3, 1)));
 
         mockMvc.perform(get("/api/guardian/anomaly/history/summary").param("wardId", "WD0001"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.data.total").value(0))
-                .andExpect(jsonPath("$.data.byType.weapon").value(0));
+                .andExpect(jsonPath("$.data.total").value(10))
+                .andExpect(jsonPath("$.data.pendingCount").value(2))
+                .andExpect(jsonPath("$.data.conflictedCount").value(1))
+                .andExpect(jsonPath("$.data.needsReviewCount").value(3))
+                .andExpect(jsonPath("$.data.byType.fire").value(6))
+                .andExpect(jsonPath("$.data.byType.weapon").value(1));
     }
 }

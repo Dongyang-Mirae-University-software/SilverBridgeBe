@@ -11,7 +11,7 @@ import io.swagger.v3.oas.annotations.media.Schema;
 @Schema(description = "보호자 이상감지 이력 건수 요약 (type 필터와 무관, 조회 범위 전체 기준)")
 public record GuardianAnomalyHistorySummary(
 
-        @Schema(description = "전체 상황 수 (= byType 합 = type 없이 이력을 조회했을 때의 totalElements)", example = "12")
+        @Schema(description = "전체 상황 수 (= type 없이 이력을 조회했을 때의 totalElements. 정상적으로는 byType 합과 같다)", example = "12")
         long total,
 
         @Schema(description = "아직 아무도 응답하지 않은 상황 수 (PENDING)", example = "3")
