@@ -1,6 +1,8 @@
 package kr.silverbridge.main.domain.anomaly.service;
 
 import kr.silverbridge.main.domain.anomaly.dto.AnomalyFeedbackResponse;
+import kr.silverbridge.main.domain.anomaly.dto.AnomalyTypeFilter;
+import kr.silverbridge.main.domain.anomaly.dto.GuardianAnomalyHistorySummary;
 import kr.silverbridge.main.domain.anomaly.dto.AnomalyIncidentItem;
 import kr.silverbridge.main.domain.anomaly.entity.AnomalyIncident;
 import kr.silverbridge.main.domain.anomaly.entity.AnomalyIncidentFeedback;
@@ -13,6 +15,7 @@ import kr.silverbridge.main.domain.camera.service.CameraService;
 import kr.silverbridge.main.domain.connection.service.ConnectionService;
 import kr.silverbridge.main.domain.user.entity.User;
 import kr.silverbridge.main.domain.user.repository.UserRepository;
+import kr.silverbridge.main.global.enums.DetectedType;
 import kr.silverbridge.main.global.exception.CustomException;
 import kr.silverbridge.main.global.exception.ErrorCode;
 import kr.silverbridge.main.global.response.PageResponse;
@@ -68,17 +71,20 @@ public class GuardianAnomalyService {
      * 이상감지 이력 조회(상황 최신순).
      *
      * @param wardId 특정 피보호자만 볼 때 지정. {@code null}·공백이면 ACTIVE 연결된 피보호자 전원
+     * @param type   감지 유형 필터. {@code null}이면 전체. 인가(wardId 검증) 뒤에 쿼리 안에서 건다
      * @throws CustomException {@code ANOMALY_NOT_AUTHORIZED} - wardId를 지정했으나 ACTIVE 연결이 아닐 때
      */
     @Transactional(readOnly = true)
-    public PageResponse<AnomalyIncidentItem> getHistory(String guardianId, String wardId, int page, int size) {
+    public PageResponse<AnomalyIncidentItem> getHistory(String guardianId, String wardId, AnomalyTypeFilter type,
+                                                        int page, int size) {
         Pageable pageable = PageRequest.of(Math.max(page, 0), normalizeSize(size));
         List<String> wardIds = resolveVisibleWardIds(guardianId, wardId);
         if (wardIds.isEmpty()) {
             return PageResponse.of(Page.empty(pageable));
         }
 
-        Page<AnomalyIncident> incidents = anomalyIncidentRepository.findByWardIdInOrderByStartedAtDesc(wardIds, pageable);
+        Page<AnomalyIncident> incidents = anomalyIncidentRepository.findHistory(
+                wardIds, type == null ? null : type.toDetectedType(), pageable);
         List<AnomalyIncident> content = incidents.getContent();
 
         Map<String, String> wardNames = resolveWardNames(content);
@@ -99,6 +105,43 @@ public class GuardianAnomalyService {
                     clip == null ? null : clip.latest(),
                     clip == null ? 0 : clip.count());
         }));
+    }
+
+    /**
+     * 이력 화면의 건수 요약. 이력 조회와 같은 인가({@code resolveVisibleWardIds})를 먼저 거치고,
+     * 집계는 DB에서 (유형, 판정) GROUP BY로 한다. 유형 필터와 무관하게 조회 범위 전체를 센다.
+     *
+     * @throws CustomException {@code ANOMALY_NOT_AUTHORIZED} - wardId를 지정했으나 ACTIVE 연결이 아닐 때
+     */
+    @Transactional(readOnly = true)
+    public GuardianAnomalyHistorySummary getHistorySummary(String guardianId, String wardId) {
+        List<String> wardIds = resolveVisibleWardIds(guardianId, wardId);
+        if (wardIds.isEmpty()) {
+            return GuardianAnomalyHistorySummary.EMPTY;
+        }
+        long fire = 0;
+        long fall = 0;
+        long weapon = 0;
+        long pending = 0;
+        long conflicted = 0;
+        for (AnomalyIncidentRepository.GuardianTypeStatusCount row
+                : anomalyIncidentRepository.countForGuardianSummary(wardIds)) {
+            if (row.getDetectedType() == DetectedType.FIRE) {
+                fire += row.getTotal();
+            } else if (row.getDetectedType() == DetectedType.FALL) {
+                fall += row.getTotal();
+            } else if (row.getDetectedType() == DetectedType.WEAPON) {
+                weapon += row.getTotal();
+            }
+            if (row.getReviewStatus() == AnomalyReviewStatus.PENDING) {
+                pending += row.getTotal();
+            } else if (row.getReviewStatus() == AnomalyReviewStatus.CONFLICTED) {
+                conflicted += row.getTotal();
+            }
+        }
+        return new GuardianAnomalyHistorySummary(fire + fall + weapon, pending, conflicted,
+                pending + conflicted,
+                new GuardianAnomalyHistorySummary.ByType(fire, fall, weapon));
     }
 
     /**

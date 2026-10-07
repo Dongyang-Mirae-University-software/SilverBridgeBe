@@ -12,6 +12,8 @@ import kr.silverbridge.main.domain.anomaly.dto.AnomalyFeedbackResponse;
 import kr.silverbridge.main.domain.anomaly.dto.AnomalyIncidentItem;
 import kr.silverbridge.main.domain.anomaly.dto.AnomalyReminderSettingRequest;
 import kr.silverbridge.main.domain.anomaly.dto.AnomalyReminderSettingResponse;
+import kr.silverbridge.main.domain.anomaly.dto.AnomalyTypeFilter;
+import kr.silverbridge.main.domain.anomaly.dto.GuardianAnomalyHistorySummary;
 import kr.silverbridge.main.domain.anomaly.service.AnomalyClipAccessService;
 import kr.silverbridge.main.domain.anomaly.service.GuardianAnomalySettingService;
 import kr.silverbridge.main.domain.anomaly.service.GuardianAnomalyService;
@@ -58,6 +60,14 @@ public class GuardianAnomalyController {
                     - 지정: 해당 피보호자의 이력만 (연결이 ACTIVE가 아니면 403)
                     - 생략: ACTIVE 연결된 피보호자 전원의 이력을 합쳐서 최신순 (연결이 없으면 빈 페이지)
 
+                    [type 파라미터]
+                    - FIRE(화재, 연기 포함) · FALL(낙상) · WEAPON(흉기) 중 하나. 생략하면 전체
+                    - 연기는 서버에서 화재로 합쳐 저장되므로 SMOKE 값은 없습니다
+                    - 대문자만 허용하며, 그 밖의 값(소문자·NORMAL·UNKNOWN 등)은 400입니다
+                    - 필터는 서버에서 걸리므로 totalElements·totalPages도 필터 기준입니다
+                    - wardId와 함께 쓸 수 있고, 연결 검증(403)이 먼저 적용됩니다
+                    - 탭 건수는 이 응답이 아니라 GET /api/guardian/anomaly/history/summary 로 받으세요
+
                     [응답] data: PageResponse<AnomalyIncidentItem>
                     - reviewStatus: PENDING(확인 필요) · REAL(실제 위험) · FALSE_ALARM(오탐) · CONFLICTED(보호자 응답 동수 - 다시 확인 필요)
                     - myVerdict: 내가 낸 응답. 아직 응답하지 않았으면 null
@@ -69,6 +79,7 @@ public class GuardianAnomalyController {
                     """)
     @ApiResponses({
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "이상감지 이력 페이지 반환 (연결된 피보호자가 없으면 빈 content)"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "type 값이 FIRE·FALL·WEAPON이 아님", content = @Content),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "인증 토큰 없음 또는 만료", content = @Content),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "보호자 권한 필요 / 연결되지 않은 피보호자 지정", content = @Content)
     })
@@ -76,10 +87,44 @@ public class GuardianAnomalyController {
     public ResponseEntity<ApiResponse<PageResponse<AnomalyIncidentItem>>> getHistory(
             @AuthenticationPrincipal String guardianId,
             @Parameter(description = "특정 피보호자만 조회 (생략 시 연결된 피보호자 전원)") @RequestParam(required = false) String wardId,
+            @Parameter(description = "감지 유형 필터: FIRE·FALL·WEAPON (생략 시 전체)") @RequestParam(required = false) AnomalyTypeFilter type,
             @Parameter(description = "페이지 번호 (0-based)") @RequestParam(defaultValue = "0") int page,
             @Parameter(description = "페이지 크기 (최대 50)") @RequestParam(defaultValue = "20") int size) {
         return ResponseEntity.ok(ApiResponse.ok(
-                guardianAnomalyService.getHistory(guardianId, wardId, page, size)));
+                guardianAnomalyService.getHistory(guardianId, wardId, type, page, size)));
+    }
+
+    @Operation(summary = "이상감지 이력 건수 요약 (보호자 전용)",
+            description = """
+                    [요청 헤더]
+                    Authorization: Bearer {accessToken}
+
+                    이력 화면의 탭 건수·"확인 필요" 건수용 요약입니다. 이력 조회(history)와 같은 범위·같은 인가를 씁니다.
+
+                    [wardId 파라미터]
+                    - 지정: 그 피보호자만 (ACTIVE 연결이 아니면 403)
+                    - 생략: ACTIVE 연결된 피보호자 전원 (연결이 없으면 전부 0)
+
+                    [응답] data
+                    - total: 전체 상황 수 (= byType 합 = type 없이 history를 조회했을 때의 totalElements)
+                    - pendingCount: 아직 아무도 응답하지 않은 상황(PENDING)
+                    - conflictedCount: 보호자 응답이 동수라 다시 확인이 필요한 상황(CONFLICTED)
+                    - needsReviewCount: 헤더 "확인 필요 N건"용 = pendingCount + conflictedCount
+                    - byType.fire / fall / weapon: 유형별 건수. 연기는 fire에 포함. 세 값을 항상 내려주며 0은 실제로 센 값입니다
+
+                    [주의]
+                    - history의 type 필터·페이지와 무관하게 항상 조회 범위 전체를 셉니다(탭을 골라도 숫자가 변하지 않음)
+                    """)
+    @ApiResponses({
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "건수 요약"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "인증 토큰 없음 또는 만료", content = @Content),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "보호자 권한 필요 / 연결되지 않은 피보호자 지정", content = @Content)
+    })
+    @GetMapping("/api/guardian/anomaly/history/summary")
+    public ResponseEntity<ApiResponse<GuardianAnomalyHistorySummary>> getHistorySummary(
+            @AuthenticationPrincipal String guardianId,
+            @Parameter(description = "특정 피보호자만 (생략 시 연결된 피보호자 전원)") @RequestParam(required = false) String wardId) {
+        return ResponseEntity.ok(ApiResponse.ok(guardianAnomalyService.getHistorySummary(guardianId, wardId)));
     }
 
     @Operation(summary = "이상감지 오탐 응답 (보호자 전용)",
