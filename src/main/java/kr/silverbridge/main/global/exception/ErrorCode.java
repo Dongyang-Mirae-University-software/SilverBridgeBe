@@ -132,7 +132,14 @@ public enum ErrorCode {
     // 비공개 사유(오탐·연결 상태)를 응답으로 구분해 알리지 않는다
     ANOMALY_CLIP_NOT_FOUND(HttpStatus.NOT_FOUND, "영상을 찾을 수 없습니다."),
     // 피보호자 경로용 - 보호자 경로는 ANOMALY_NOT_AUTHORIZED를 쓴다(문구는 수신자 기준, 2026-08-06 정책)
-    ANOMALY_CLIP_NOT_OWNED(HttpStatus.FORBIDDEN, "본인 집의 이상감지 영상만 볼 수 있습니다.");
+    ANOMALY_CLIP_NOT_OWNED(HttpStatus.FORBIDDEN, "본인 집의 이상감지 영상만 볼 수 있습니다."),
+
+    // AI 챗봇 중계 (2026-10-07). AI 오류 문구는 그대로 내리지 않고 고정 문구만 쓴다
+    CHAT_UNAVAILABLE(HttpStatus.SERVICE_UNAVAILABLE, "AI 상담 서버에 연결할 수 없습니다. 잠시 후 다시 시도해주세요."),
+    CHAT_TIMEOUT(HttpStatus.GATEWAY_TIMEOUT, "AI 상담 응답이 너무 오래 걸립니다. 잠시 후 다시 시도해주세요."),
+    CHAT_INVALID_REQUEST(HttpStatus.BAD_REQUEST, "상담 요청 형식이 올바르지 않습니다."),
+    CHAT_LOG_NOT_FOUND(HttpStatus.NOT_FOUND, "상담 기록을 찾을 수 없습니다."),
+    CHAT_LIMIT_EXCEEDED(HttpStatus.TOO_MANY_REQUESTS, "이전 상담 응답을 기다리는 중입니다. 잠시 후 다시 시도해주세요.");
 
     private final HttpStatus status;
     private final String message;

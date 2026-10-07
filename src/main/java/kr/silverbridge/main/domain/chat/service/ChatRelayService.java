@@ -1,0 +1,111 @@
+package kr.silverbridge.main.domain.chat.service;
+
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ObjectNode;
+import kr.silverbridge.main.domain.chat.client.AiChatClient;
+import kr.silverbridge.main.domain.chat.config.ChatRelayProperties;
+import kr.silverbridge.main.domain.chat.dto.ChatRelayRequest;
+import kr.silverbridge.main.global.exception.CustomException;
+import kr.silverbridge.main.global.exception.ErrorCode;
+import kr.silverbridge.main.global.security.RateLimitService;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.stereotype.Service;
+import org.springframework.util.StringUtils;
+
+import java.nio.charset.StandardCharsets;
+
+/**
+ * AI 챗 중계(2026-10-07). <b>AI에 넘기는 사용자 ID는 항상 호출자의 토큰 ID</b>다 - 요청 본문의 userId는 DTO에
+ * 필드가 없어 받지 않고, 기록 조회도 토큰 ID로만 묻는다(남의 기록 조회 IDOR 차단).
+ *
+ * <p>상담 내용은 민감 정보라 메시지·응답 본문은 로그에 남기지 않는다(userId·길이·소요 시간까지만).</p>
+ */
+@Slf4j
+@Service
+@RequiredArgsConstructor
+public class ChatRelayService {
+
+    private static final int MAX_CONTEXT_BYTES = 8 * 1024;
+    private static final String SEND_ENDPOINT = "chat-send";
+    private static final String LOGS_ENDPOINT = "chat-logs";
+    private static final int LOGS_PER_MINUTE = 30;
+    private static final int LOGS_PER_HOUR = 600;
+
+    private final AiChatClient aiChatClient;
+    private final ChatSlots slots;
+    private final RateLimitService rateLimitService;
+    private final ChatRelayProperties properties;
+    private final ObjectMapper objectMapper;
+
+    public JsonNode send(String guardianId, ChatRelayRequest request) {
+        if (!properties.isEnabled()) {
+            throw new CustomException(ErrorCode.CHAT_UNAVAILABLE);
+        }
+        validate(request);
+        byte[] body = buildBody(guardianId, request);
+
+        rateLimitService.check(SEND_ENDPOINT, guardianId, properties.getPerMinute(), properties.getPerHour());
+        long startedAt = System.nanoTime();
+        try (ChatSlots.Slot ignored = slots.acquire(guardianId)) {
+            JsonNode reply = aiChatClient.send(body);
+            log.info("[CHAT-RELAY] 전송 완료: userId={}, elapsedMs={}", guardianId,
+                    (System.nanoTime() - startedAt) / 1_000_000);
+            return reply;
+        }
+    }
+
+    public JsonNode logs(String guardianId) {
+        rateLimitService.check(LOGS_ENDPOINT, guardianId, LOGS_PER_MINUTE, LOGS_PER_HOUR);
+        return aiChatClient.logs(guardianId);
+    }
+
+    public JsonNode logDetail(String guardianId, long chatId) {
+        rateLimitService.check(LOGS_ENDPOINT, guardianId, LOGS_PER_MINUTE, LOGS_PER_HOUR);
+        return aiChatClient.logDetail(guardianId, chatId).orElseThrow(() -> {
+            // AI는 없는 기록과 남의 기록을 구분하지 않고 404로 답한다 - 둘 다 여기로 온다(내용 없이 id만 남긴다)
+            log.info("[CHAT-LOG-NOT-FOUND] userId={}, chatId={}", guardianId, chatId);
+            return new CustomException(ErrorCode.CHAT_LOG_NOT_FOUND);
+        });
+    }
+
+    private void validate(ChatRelayRequest request) {
+        boolean hasMessage = StringUtils.hasText(request.message());
+        if (!hasMessage && request.uiSelection() == null) {
+            throw new CustomException(ErrorCode.CHAT_INVALID_REQUEST);
+        }
+        if (hasMessage && request.message().length() > properties.getMaxMessageChars()) {
+            throw new CustomException(ErrorCode.CHAT_INVALID_REQUEST);
+        }
+    }
+
+    /** AI 요청 본문. {@code userId}는 인자로 받은 토큰 ID로 <b>마지막에 덮어쓴다</b>. */
+    private byte[] buildBody(String guardianId, ChatRelayRequest request) {
+        ObjectNode body = objectMapper.createObjectNode();
+        body.put("message", request.message() == null ? "" : request.message());
+        if (StringUtils.hasText(request.sessionId())) {
+            body.put("sessionId", request.sessionId());
+        }
+        if (request.history() != null) {
+            body.set("history", objectMapper.valueToTree(request.history()));
+        }
+        if (request.context() != null && !request.context().isEmpty()) {
+            JsonNode context = objectMapper.valueToTree(request.context());
+            if (context.toString().getBytes(StandardCharsets.UTF_8).length > MAX_CONTEXT_BYTES) {
+                throw new CustomException(ErrorCode.CHAT_INVALID_REQUEST);
+            }
+            body.set("context", context);
+        }
+        if (request.uiSelection() != null) {
+            body.set("uiSelection", objectMapper.valueToTree(request.uiSelection()));
+        }
+        body.put("userId", guardianId);
+        try {
+            return objectMapper.writeValueAsBytes(body);
+        } catch (JsonProcessingException e) {
+            throw new CustomException(ErrorCode.CHAT_INVALID_REQUEST);
+        }
+    }
+}
