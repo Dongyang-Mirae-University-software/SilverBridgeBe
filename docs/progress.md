@@ -1722,3 +1722,12 @@ REST API Key 단독 대비 보안 강화 — 인가코드 탈취 시 토큰 발�
 
 - gosky 낙상 클립 2건: 클립 53 = 6.0초(AI 반영 직전·버퍼 미충전 추정), 클립 54(14:11) = **9.0초(앞 8 + 뒤 1)**, 0.64MB(FHD 3.4MB 추정보다 훨씬 작음, 10MB 상한 무관). `[ANOMALY-CLIP]` 실패·422 없음 -> 3/2 롤백 불필요.
 - 두 서버 `.env.dev`·api 컨테이너 모두 `ANOMALY_CLIP_FALL_PRE_SECONDS=8`·`POST=1` 반영. vkcs도 `AI_API_KEY`가 설정돼 AI WS 연결·클립 동작 중(CLAUDE.md·`feature-anomaly-clip.md` 문구 정정).
+
+---
+
+## [2026-10-07] AI 챗봇 백엔드 중계
+
+- FE 프록시 축소(ad44cb6)로 막힌 챗봇을 `POST /api/guardian/chat`·`GET .../chat/logs`·`.../logs/{chatId}`(보호자 전용)로 대체. 사용자 ID는 토큰에서만, 호출 전체 130초, 동시 10/1인 1·속도 제한·킬 스위치, 본문 로그 금지. 마이그레이션 없음.
+- 발견: 옛 FE는 전송에 `userId: 1`을 고정으로 보내 AI 기록 112건이 한 버킷에 섞임(실제 users.id 기록 0건).
+- 상세: `docs/(2026-10-07) feature-chat-relay.md`, FE 계약 `docs/(2026-10-07) api-contract-chat-relay.md`
+
