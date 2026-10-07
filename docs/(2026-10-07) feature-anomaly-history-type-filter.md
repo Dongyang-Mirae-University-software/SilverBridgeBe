@@ -9,7 +9,7 @@
 
 ## 범위
 1. `GET /api/guardian/anomaly/history` 에 `type`(FIRE | FALL | WEAPON, 생략 시 전체) 추가. 필터는 쿼리 안에서 건다(`findHistory`) - `totalElements`·`totalPages`도 필터 기준.
-2. `GET /api/guardian/anomaly/history/summary?wardId=` 신설 - `{ total, pendingCount, conflictedCount, byType{fire,fall,weapon} }`.
+2. `GET /api/guardian/anomaly/history/summary?wardId=` 신설 - `{ total, pendingCount, conflictedCount, needsReviewCount, byType{fire,fall,weapon} }`.
 
 ## 정책 결정
 - **필터 enum은 보호자용 `AnomalyTypeFilter`를 새로 둔다.** `DetectedType`을 그대로 받으면 NORMAL·UNKNOWN이 400이 아니라 빈 목록이 된다(관리자 `AdminAnomalyTypeFilter`와 같은 판단). 관리자 enum 이름을 바꾸지 않아 관리자 API 영향 없음.
@@ -17,7 +17,7 @@
 - 요약의 유형 건수는 type 필터와 무관하게 **조회 범위(wardId) 전체** 기준 - 탭을 골라도 숫자가 변하지 않는다.
 - 인가는 이력과 같은 `resolveVisibleWardIds`(ACTIVE 연결만, 위반 403 + `[IDOR-ATTEMPT]`)를 먼저 거친다. 연결이 없으면 전부 0인 빈 요약.
 - **`byType`은 세 유형을 항상 담는다.** "0건인 유형은 항목을 만들지 말 것"은 AI 모델이 없던 유형이 0건으로 보여 "안전"으로 읽히는 것을 막으려던 규칙(관리자 `byType`)이다. 낙상·흉기는 10/6부터 라이브라 0이 실제로 센 값이며, 항목이 빠지면 FE가 탭 건수를 undefined로 처리해야 한다. 관리자 `byType`은 그대로.
-- **"확인 필요"는 서버가 한 값으로 정하지 않는다.** `pendingCount`(PENDING)와 `conflictedCount`(CONFLICTED)를 따로 내리고 화면이 합산 여부를 정한다. (FE 코드가 로컬에 없어 정의를 확인하지 못했다.)
+- **"확인 필요"는 `needsReviewCount` = `pendingCount`(PENDING) + `conflictedCount`(CONFLICTED)** (사용자 결정 2026-10-07 - 보호자가 확인할 일이 남은 상황 전체). 두 값도 따로 내린다.
 - 정렬: `startedAt DESC, id DESC` (동률 시 페이지 경계 안정).
 - 시그니처: `getHistory(guardianId, wardId, type, page, size)` 5인자로 교체(호출부 컨트롤러 1곳·테스트만).
 

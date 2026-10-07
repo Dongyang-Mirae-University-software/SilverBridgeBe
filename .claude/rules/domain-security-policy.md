@@ -465,7 +465,7 @@
 - **불변 규칙 ①**: 이력 `type` 파라미터는 전용 `AnomalyTypeFilter`(FIRE·FALL·WEAPON)로 받는다. `DetectedType`을 그대로 받으면 NORMAL·UNKNOWN이 400이 아니라 빈 목록이 되어 "그 유형은 0건"으로 오독된다(`WardListFilter`·`AdminAnomalyTypeFilter`와 같은 판단). 필터는 반드시 쿼리 안에서 건다(조회 후 필터 금지 - 페이지 크기·totalElements가 어긋난다).
 - **불변 규칙 ②**: 요약(`/history/summary`)은 이력과 같은 `resolveVisibleWardIds` 인가를 먼저 거치고(ACTIVE 연결만, `getMyWards` 금지), 유형 건수는 type 필터와 무관한 **조회 범위 전체** 기준이다.
 - **`byType`은 세 유형을 항상 담는다**: 관리자 `byType`("0건 유형은 항목을 만들지 말 것")과 다르다. 그 규칙은 AI 모델이 없던 유형의 0이 "안전"으로 읽히는 것을 막으려던 것인데, 낙상·흉기는 2026-10-06부터 라이브라 0이 실제로 센 값이다. 관리자 쪽을 이것에 맞춰 바꾸지 말 것.
-- "확인 필요"는 `pendingCount`·`conflictedCount`를 따로 내리고 합산은 화면이 정한다.
+- "확인 필요"(`needsReviewCount`) = `pendingCount`(PENDING) + `conflictedCount`(CONFLICTED) - 보호자가 확인할 일이 남은 상황 전체다(2026-10-07 사용자 결정). 두 값도 따로 내린다.
 
 ## 이상감지 영상 클립 - 보는 사람은 좁게, 지우는 길은 넓게 (2026-10-04)
 

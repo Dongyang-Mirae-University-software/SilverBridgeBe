@@ -17,16 +17,19 @@ public record GuardianAnomalyHistorySummary(
         @Schema(description = "아직 아무도 응답하지 않은 상황 수 (PENDING)", example = "3")
         long pendingCount,
 
-        @Schema(description = "보호자 응답이 동수로 갈려 다시 확인이 필요한 상황 수 (CONFLICTED). '확인 필요'를 pendingCount만으로 셀지 둘의 합으로 셀지는 화면이 정한다",
-                example = "1")
+        @Schema(description = "보호자 응답이 동수로 갈려 다시 확인이 필요한 상황 수 (CONFLICTED)", example = "1")
         long conflictedCount,
+
+        @Schema(description = "헤더 '확인 필요 N건'용 = pendingCount + conflictedCount (보호자가 확인할 일이 남은 상황 전체)",
+                example = "4")
+        long needsReviewCount,
 
         @Schema(description = "유형별 상황 수. FIRE(연기 포함)·FALL·WEAPON을 항상 모두 담는다")
         ByType byType
 ) {
 
     public static final GuardianAnomalyHistorySummary EMPTY =
-            new GuardianAnomalyHistorySummary(0, 0, 0, new ByType(0, 0, 0));
+            new GuardianAnomalyHistorySummary(0, 0, 0, 0, new ByType(0, 0, 0));
 
     public record ByType(
             @Schema(description = "화재(연기 포함)", example = "8") long fire,

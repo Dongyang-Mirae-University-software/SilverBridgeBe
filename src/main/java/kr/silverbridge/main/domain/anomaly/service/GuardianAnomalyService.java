@@ -140,6 +140,7 @@ public class GuardianAnomalyService {
             }
         }
         return new GuardianAnomalyHistorySummary(fire + fall + weapon, pending, conflicted,
+                pending + conflicted,
                 new GuardianAnomalyHistorySummary.ByType(fire, fall, weapon));
     }
 

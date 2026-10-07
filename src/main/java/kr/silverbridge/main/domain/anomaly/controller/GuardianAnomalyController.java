@@ -109,11 +109,11 @@ public class GuardianAnomalyController {
                     - total: 전체 상황 수 (= byType 합 = type 없이 history를 조회했을 때의 totalElements)
                     - pendingCount: 아직 아무도 응답하지 않은 상황(PENDING)
                     - conflictedCount: 보호자 응답이 동수라 다시 확인이 필요한 상황(CONFLICTED)
+                    - needsReviewCount: 헤더 "확인 필요 N건"용 = pendingCount + conflictedCount
                     - byType.fire / fall / weapon: 유형별 건수. 연기는 fire에 포함. 세 값을 항상 내려주며 0은 실제로 센 값입니다
 
                     [주의]
                     - history의 type 필터·페이지와 무관하게 항상 조회 범위 전체를 셉니다(탭을 골라도 숫자가 변하지 않음)
-                    - "확인 필요 N건"을 어떻게 셀지(pendingCount만 / 둘의 합)는 화면이 정합니다
                     """)
     @ApiResponses({
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "건수 요약"),
