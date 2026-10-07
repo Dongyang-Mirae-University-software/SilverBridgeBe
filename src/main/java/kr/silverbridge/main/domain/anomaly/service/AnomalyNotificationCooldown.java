@@ -47,7 +47,7 @@ public class AnomalyNotificationCooldown {
      * @return 발송 가능하면 {@code true}. Redis 장애 시에도 {@code true}(fail-open).
      */
     public boolean tryAcquire(String userId, String sessionId, DetectedType detectedType, boolean self) {
-        String key = KEY_PREFIX + userId + ":" + sessionId + ":" + detectedType.name();
+        String key = key(userId, sessionId, detectedType);
         Duration cooldown = Duration.ofMinutes(self
                 ? properties.getNotifySelfCooldownMinutes()
                 : properties.getNotifyCooldownMinutes());
@@ -55,10 +55,28 @@ public class AnomalyNotificationCooldown {
             Boolean acquired = redisTemplate.opsForValue().setIfAbsent(key, "1", cooldown);
             return Boolean.TRUE.equals(acquired);
         } catch (Exception e) {
-            // 긴급 알림 우선: 쿨다운 인프라 장애가 화재 알림을 막지 않도록 fail-open
-            log.warn("[ANOMALY] 알림 쿨다운 확인 실패 — 알림 강제 발송(fail-open): userId={}, error={}",
-                    userId, e.getMessage());
+            // 긴급 알림 우선: 쿨다운 인프라 장애가 화재 알림을 막지 않도록 fail-open (예외 원문은 남기지 않는다)
+            log.warn("[ANOMALY] 알림 쿨다운 확인 실패 — 알림 강제 발송(fail-open): userId={}, exception={}",
+                    userId, e.getClass().getSimpleName());
             return true;
         }
+    }
+
+    /**
+     * 이 수신자의 쿨다운을 푼다. 발송했지만 <b>어느 채널로도 전달되지 않았을 때</b>(푸시 토큰 없음·문자 발송사 장애·시간당
+     * 상한 초과 등) 쓴다 - 한 번도 닿지 않은 알림에 쿨다운을 적용하면 다시 알릴 가장 필요한 순간을 쿨다운만큼 막는다
+     * (SOS-G09와 같은 판단, 수신자 단위). 해제 실패는 삼킨다(쿨다운 시간 뒤 자동 만료).
+     */
+    public void release(String userId, String sessionId, DetectedType detectedType) {
+        try {
+            redisTemplate.delete(key(userId, sessionId, detectedType));
+        } catch (Exception e) {
+            log.warn("[ANOMALY] 알림 쿨다운 해제 실패 — 쿨다운 시간 뒤 자동 만료: userId={}, exception={}",
+                    userId, e.getClass().getSimpleName());
+        }
+    }
+
+    private static String key(String userId, String sessionId, DetectedType detectedType) {
+        return KEY_PREFIX + userId + ":" + sessionId + ":" + detectedType.name();
     }
 }

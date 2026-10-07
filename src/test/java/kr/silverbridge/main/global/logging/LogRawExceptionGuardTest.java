@@ -35,7 +35,9 @@ class LogRawExceptionGuardTest {
             "domain/notification/service/FcmService.java",
             "domain/notification/dispatch/NotificationDispatcher.java",
             "domain/sos/service/SosNotificationCooldown.java",
-            "domain/sos/listener/SosNotificationListener.java");
+            "domain/sos/listener/SosNotificationListener.java",
+            "domain/anomaly/service/AnomalyNotificationCooldown.java",
+            "domain/anomaly/listener/AnomalyNotificationListener.java");
 
     @Test
     void guarded_files_do_not_log_exception_messages() throws IOException {

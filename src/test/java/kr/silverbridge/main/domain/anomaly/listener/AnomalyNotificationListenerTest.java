@@ -5,6 +5,7 @@ import kr.silverbridge.main.domain.anomaly.service.AnomalyNotificationCooldown;
 import kr.silverbridge.main.domain.connection.service.ConnectionService;
 import kr.silverbridge.main.domain.notification.channel.NotificationContent;
 import kr.silverbridge.main.domain.notification.dispatch.NotificationDispatcher;
+import kr.silverbridge.main.domain.notification.entity.NotificationLogResult;
 import kr.silverbridge.main.domain.notification.dispatch.NotificationType;
 import kr.silverbridge.main.global.enums.DetectedType;
 import kr.silverbridge.main.global.websocket.WebSocketEventPublisher;
@@ -273,5 +274,74 @@ class AnomalyNotificationListenerTest {
         assertThat(AnomalyNotificationListener.smsFallbackText(noPlace, false))
                 .isEqualTo("[실버브릿지] 김순자님 댁 등록된 카메라에서 화재 감지. 앱에서 확인해 주세요.");
         assertThat(AnomalyNotificationListener.smsFallbackText(noPlace, false).length()).isLessThan(45);
+    }
+
+    // ─── 전달 0건이면 쿨다운을 푼다 (2026-10-07 점검 Y-1, SOS-G09와 같은 판단·수신자 단위) ───
+
+    @Test
+    @DisplayName("전달된 수신자의 쿨다운은 유지하고, 전달되지 않은 수신자의 쿨다운만 푼다")
+    void 미전달_수신자만_쿨다운_해제() {
+        when(connectionService.getActiveGuardianIds(WARD_ID)).thenReturn(List.of("GD0001"));
+        when(cooldown.tryAcquire(anyString(), eq(SESSION_ID), eq(DetectedType.FIRE), anyBoolean())).thenReturn(true);
+        when(notificationDispatcher.dispatch(eq("GD0001"), any(), any(), any())).thenReturn(NotificationLogResult.FAILED);
+        when(notificationDispatcher.dispatch(eq(WARD_ID), any(), any(), any())).thenReturn(NotificationLogResult.DELIVERED);
+
+        listener.handleAnomalyDetected(event);
+
+        verify(cooldown).release("GD0001", SESSION_ID, DetectedType.FIRE);
+        verify(cooldown, never()).release(eq(WARD_ID), anyString(), any());
+    }
+
+    @Test
+    @DisplayName("문자 대체로 전달된 수신자(SMS_FALLBACK)는 전달로 보아 쿨다운을 유지한다")
+    void 문자대체_전달은_쿨다운_유지() {
+        when(connectionService.getActiveGuardianIds(WARD_ID)).thenReturn(List.of("GD0001"));
+        when(cooldown.tryAcquire(anyString(), eq(SESSION_ID), eq(DetectedType.FIRE), anyBoolean())).thenReturn(true);
+        when(notificationDispatcher.dispatch(any(), any(), any(), any())).thenReturn(NotificationLogResult.SMS_FALLBACK);
+
+        listener.handleAnomalyDetected(event);
+
+        verify(cooldown, never()).release(anyString(), anyString(), any());
+    }
+
+    @Test
+    @DisplayName("보내지 않음(NOT_SENT, 정지 계정 등)도 미전달이라 쿨다운을 푼다")
+    void 보내지않음도_미전달() {
+        when(connectionService.getActiveGuardianIds(WARD_ID)).thenReturn(List.of("GD0001"));
+        when(cooldown.tryAcquire(anyString(), eq(SESSION_ID), eq(DetectedType.FIRE), anyBoolean())).thenReturn(true);
+        when(notificationDispatcher.dispatch(any(), any(), any(), any())).thenReturn(NotificationLogResult.NOT_SENT);
+
+        listener.handleAnomalyDetected(event);
+
+        verify(cooldown).release("GD0001", SESSION_ID, DetectedType.FIRE);
+        verify(cooldown).release(WARD_ID, SESSION_ID, DetectedType.FIRE);
+    }
+
+    @Test
+    @DisplayName("발송 중 예외로 끝난 수신자도 쿨다운을 푼다(전달되지 않았다)")
+    void 예외_수신자_쿨다운_해제() {
+        when(connectionService.getActiveGuardianIds(WARD_ID)).thenReturn(List.of("GD0001"));
+        when(cooldown.tryAcquire(anyString(), eq(SESSION_ID), eq(DetectedType.FIRE), anyBoolean())).thenReturn(true);
+        doThrow(new RuntimeException("원문 - 로그에 남으면 안 되는 값"))
+                .when(notificationDispatcher).dispatch(eq("GD0001"), any(), any(), any());
+        when(notificationDispatcher.dispatch(eq(WARD_ID), any(), any(), any())).thenReturn(NotificationLogResult.DELIVERED);
+
+        listener.handleAnomalyDetected(event);
+
+        verify(cooldown).release("GD0001", SESSION_ID, DetectedType.FIRE);
+        verify(cooldown, never()).release(eq(WARD_ID), anyString(), any());
+    }
+
+    @Test
+    @DisplayName("쿨다운에 걸려 생략한 수신자의 쿨다운은 건드리지 않는다(남이 잡은 키를 지우면 안 된다)")
+    void 쿨다운_생략_수신자는_해제하지_않는다() {
+        when(connectionService.getActiveGuardianIds(WARD_ID)).thenReturn(List.of("GD0001"));
+        when(cooldown.tryAcquire(eq("GD0001"), anyString(), any(), eq(false))).thenReturn(false);
+        when(cooldown.tryAcquire(eq(WARD_ID), anyString(), any(), eq(true))).thenReturn(true);
+        when(notificationDispatcher.dispatch(eq(WARD_ID), any(), any(), any())).thenReturn(NotificationLogResult.DELIVERED);
+
+        listener.handleAnomalyDetected(event);
+
+        verify(cooldown, never()).release(eq("GD0001"), anyString(), any());
     }
 }

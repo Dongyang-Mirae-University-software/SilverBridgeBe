@@ -74,4 +74,43 @@ class AnomalyNotificationCooldownTest {
 
         assertThat(cooldown.tryAcquire("GD0001", SESSION_ID, DetectedType.FIRE, false)).isTrue();
     }
+
+    @Test
+    @DisplayName("같은 카메라의 화재와 흉기는 쿨다운 키가 달라 서로 막지 않는다")
+    void 종류별_키_분리() {
+        when(redisTemplate.opsForValue()).thenReturn(valueOperations);
+        when(valueOperations.setIfAbsent(anyString(), eq("1"), any(Duration.class))).thenReturn(true);
+
+        cooldown.tryAcquire("GD0001", SESSION_ID, DetectedType.FIRE, false);
+        cooldown.tryAcquire("GD0001", SESSION_ID, DetectedType.WEAPON, false);
+        cooldown.tryAcquire("GD0001", SESSION_ID, DetectedType.FALL, false);
+
+        ArgumentCaptor<String> keys = ArgumentCaptor.forClass(String.class);
+        org.mockito.Mockito.verify(valueOperations, org.mockito.Mockito.times(3))
+                .setIfAbsent(keys.capture(), eq("1"), any(Duration.class));
+        assertThat(keys.getAllValues()).doesNotHaveDuplicates()
+                .allMatch(k -> k.startsWith("anomaly:notify:GD0001:" + SESSION_ID + ":"));
+    }
+
+    @Test
+    @DisplayName("release는 tryAcquire와 같은 키를 지운다")
+    void release_같은키_삭제() {
+        when(redisTemplate.opsForValue()).thenReturn(valueOperations);
+        when(valueOperations.setIfAbsent(anyString(), eq("1"), any(Duration.class))).thenReturn(true);
+
+        cooldown.tryAcquire("GD0001", SESSION_ID, DetectedType.WEAPON, false);
+        cooldown.release("GD0001", SESSION_ID, DetectedType.WEAPON);
+
+        ArgumentCaptor<String> acquired = ArgumentCaptor.forClass(String.class);
+        org.mockito.Mockito.verify(valueOperations).setIfAbsent(acquired.capture(), eq("1"), any(Duration.class));
+        org.mockito.Mockito.verify(redisTemplate).delete(acquired.getValue());
+    }
+
+    @Test
+    @DisplayName("release 중 Redis 장애는 삼킨다(쿨다운 시간 뒤 자동 만료)")
+    void release_장애_삼킴() {
+        when(redisTemplate.delete(anyString())).thenThrow(new RuntimeException("Redis down"));
+
+        cooldown.release("GD0001", SESSION_ID, DetectedType.FIRE);   // 예외 없이 끝나야 한다
+    }
 }
