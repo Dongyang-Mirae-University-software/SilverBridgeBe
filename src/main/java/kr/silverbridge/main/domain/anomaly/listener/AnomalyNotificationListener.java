@@ -5,6 +5,7 @@ import kr.silverbridge.main.domain.anomaly.event.AnomalyDetectedEvent;
 import kr.silverbridge.main.domain.anomaly.service.AnomalyNotificationCooldown;
 import kr.silverbridge.main.domain.connection.service.ConnectionService;
 import kr.silverbridge.main.domain.notification.channel.NotificationContent;
+import kr.silverbridge.main.domain.notification.entity.NotificationLogResult;
 import kr.silverbridge.main.domain.notification.dispatch.NotificationDispatcher;
 import kr.silverbridge.main.domain.notification.dispatch.NotificationType;
 import kr.silverbridge.main.global.enums.DetectedType;
@@ -81,7 +82,7 @@ public class AnomalyNotificationListener {
                 // 보호자가 알림에서 바로 오탐 응답을 하려면 판정 단위(상황) 식별자가 필요하다.
                 Map.entry("incidentId", String.valueOf(event.incidentId())));
 
-        int sent = 0;
+        int delivered = 0;
         for (String userId : recipients) {
             boolean self = userId.equals(event.wardId());
             try {
@@ -94,19 +95,29 @@ public class AnomalyNotificationListener {
                 webSocketEventPublisher.sendToUser(userId, "anomaly-detected", data);
                 // 본인은 별도 타입으로 보낸다 — 승인된 알림톡 템플릿이 보호자용 문구라 본인에게 나가면 안 된다.
                 // (data["type"]은 계속 ANOMALY_DETECTED — 클라이언트 계약은 그대로 둔다)
-                notificationDispatcher.dispatch(userId, event.wardId(),
+                NotificationLogResult result = notificationDispatcher.dispatch(userId, event.wardId(),
                         self ? NotificationType.ANOMALY_DETECTED_SELF : NotificationType.ANOMALY_DETECTED,
                         NotificationContent.of(TITLE, body(event, self), data, smsFallbackText(event, self)));
-                sent++;
+                if (result != null && result.isDelivered()) {
+                    delivered++;
+                } else {
+                    // 어느 채널로도 전달되지 않았다(문자 대체까지 실패·상한 초과·정지 계정 차단 등). 한 번도 닿지 않은
+                    // 알림에 쿨다운을 남기면 재감지 때 다시 알릴 기회를 쿨다운만큼 막으므로 이 수신자만 푼다(SOS-G09와
+                    // 같은 판단). WebSocket은 결과를 모르므로 미전달로 본다 - 재감지 때 화면 알림이 한 번 더 갈 수 있다(수용).
+                    cooldown.release(userId, event.sessionId(), event.detectedType());
+                }
             } catch (Exception e) {
-                // 한 수신자 발송 실패가 나머지 발송을 막지 않도록 격리. 원인 진단을 위해 스택 포함
-                log.error("[ANOMALY] 알림 발송 실패: userId={}, anomalyEventId={}",
-                        userId, event.anomalyEventId(), e);
+                // 한 수신자 발송 실패가 나머지 발송을 막지 않도록 격리. 예외 원문·스택은 남기지 않는다
+                // (수신자·본문·SQL 값이 섞일 수 있다 - 2026-10-06 로그 원문 정책). 클래스명만으로 진단한다.
+                log.error("[ANOMALY] 알림 발송 실패: userId={}, anomalyEventId={}, exception={}",
+                        userId, event.anomalyEventId(), e.getClass().getSimpleName());
+                // 여기까지 왔다면 쿨다운을 잡은 뒤의 발송 단계에서 실패한 것 - 전달되지 않았으므로 같은 이유로 푼다.
+                cooldown.release(userId, event.sessionId(), event.detectedType());
             }
         }
 
-        log.info("[ANOMALY] 이상감지 알림 발송: anomalyEventId={}, 대상={}명, 발송={}건",
-                event.anomalyEventId(), recipients.size(), sent);
+        log.info("[ANOMALY] 이상감지 알림 발송: anomalyEventId={}, 대상={}명, 전달={}명",
+                event.anomalyEventId(), recipients.size(), delivered);
     }
 
     /**
@@ -155,7 +166,9 @@ public class AnomalyNotificationListener {
     }
 
     /**
-     * 푸시가 전달되지 않아 문자로 대신 나갈 때의 문구(SMS 길이 안). 이름·위치가 비면 그 부분만 뺀다.
+     * 푸시가 전달되지 않아 문자로 대신 나갈 때의 문구. 이름·위치가 비면 그 부분만 뺀다. 화재 문구와 본인 문구는 SMS(90바이트)
+     * 안이지만 흉기·낙상 보호자 문구는 푸시와 같은 안내를 담아 길다 - 발송사가 LMS로 자동 전환한다(건당 비용만 늘고
+     * 전달은 같다, 2026-10-07 점검 G-1).
      * 본인에게는 종류별 행동 안내를 함께 준다. 푸시 본문과 달리 앱 이름을 앞에 붙여 발신처를 알린다.
      */
     static String smsFallbackText(AnomalyDetectedEvent event, boolean self) {

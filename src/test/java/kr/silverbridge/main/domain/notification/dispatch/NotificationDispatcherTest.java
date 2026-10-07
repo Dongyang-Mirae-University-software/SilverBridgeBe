@@ -437,6 +437,54 @@ class NotificationDispatcherTest {
         verify(smsFallbackLimiter).release(NotificationType.ANOMALY_DETECTED, USER_ID);
     }
 
+    /** 알림톡 채널이 등록된 디스패처. 기본 setUp은 알림톡을 등록하지 않아 이 조합이 비어 있었다(2026-10-07 점검). */
+    private NotificationDispatcher dispatcherWithAlimtalk(ChannelResult alimtalkResult) {
+        NotificationChannel alimtalkChannel = org.mockito.Mockito.mock(NotificationChannel.class);
+        lenient().when(alimtalkChannel.getType()).thenReturn(NotificationChannelType.KAKAO_ALIMTALK);
+        lenient().when(alimtalkChannel.send(any(), any(), any())).thenReturn(alimtalkResult);
+        return new NotificationDispatcher(List.of(fcmChannel, smsChannel, alimtalkChannel), settingService,
+                recipientResolver, notificationLogService, smsFallbackLimiter);
+    }
+
+    @Test
+    @DisplayName("이상감지: 푸시는 실패했어도 알림톡이 전달됐으면 문자로 대체하지 않는다(중복 금지)")
+    void 이상감지_알림톡_전달_대체없음() {
+        given(settingService.enabledChannels(USER_ID)).willReturn(EnumSet.of(NotificationChannelType.KAKAO_ALIMTALK));
+        when(fcmChannel.send(any(), any(), any())).thenReturn(ChannelResult.failed(ChannelFailureReason.NO_DEVICE));
+
+        NotificationLogResult result = dispatcherWithAlimtalk(ChannelResult.delivered())
+                .dispatch(USER_ID, NotificationType.ANOMALY_DETECTED, anomalyContent);
+
+        verify(smsChannel, never()).send(any(), any(), any());
+        verifyNoInteractions(smsFallbackLimiter);
+        assertThat(result).isEqualTo(NotificationLogResult.DELIVERED);
+    }
+
+    @Test
+    @DisplayName("이상감지: 푸시와 알림톡이 모두 실패하면 문자로 대체한다")
+    void 이상감지_알림톡_실패_문자대체() {
+        given(settingService.enabledChannels(USER_ID)).willReturn(EnumSet.of(NotificationChannelType.KAKAO_ALIMTALK));
+        when(fcmChannel.send(any(), any(), any())).thenReturn(ChannelResult.failed(ChannelFailureReason.NO_DEVICE));
+
+        NotificationLogResult result = dispatcherWithAlimtalk(ChannelResult.failed(ChannelFailureReason.PROVIDER_ERROR))
+                .dispatch(USER_ID, NotificationType.ANOMALY_DETECTED, anomalyContent);
+
+        verify(smsChannel).send(eq(NotificationType.ANOMALY_DETECTED), any(), any());
+        assertThat(result).isEqualTo(NotificationLogResult.SMS_FALLBACK);
+    }
+
+    @Test
+    @DisplayName("이상감지 본인분: 알림톡이 대상 아님(템플릿 매핑 없음)으로 스킵돼도 푸시가 실패하면 문자로 대체한다")
+    void 이상감지_본인_알림톡_스킵_문자대체() {
+        given(settingService.enabledChannels(USER_ID)).willReturn(EnumSet.of(NotificationChannelType.KAKAO_ALIMTALK));
+        when(fcmChannel.send(any(), any(), any())).thenReturn(ChannelResult.failed(ChannelFailureReason.NO_DEVICE));
+
+        dispatcherWithAlimtalk(ChannelResult.notApplicable())
+                .dispatch(USER_ID, NotificationType.ANOMALY_DETECTED_SELF, anomalyContent);
+
+        verify(smsChannel).send(eq(NotificationType.ANOMALY_DETECTED_SELF), any(), any());
+    }
+
     @Test
     @DisplayName("재촉·동수 안내는 푸시가 안 가도 문자로 대체하지 않는다(범위 밖)")
     void 재촉은_문자대체_없음() {
