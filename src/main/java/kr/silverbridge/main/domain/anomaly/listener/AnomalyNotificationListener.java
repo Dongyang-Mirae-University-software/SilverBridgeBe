@@ -100,8 +100,11 @@ public class AnomalyNotificationListener {
                         NotificationContent.of(TITLE, body(event, self), data, smsFallbackText(event, self)));
                 if (result != null && result.isDelivered()) {
                     delivered++;
+                } else if (result == NotificationLogResult.NOT_SENT) {
+                    // 보내지 않음 = 정지·탈퇴 진행 계정 차단. 다시 시도해도 차단되므로 쿨다운을 그대로 둔다(풀면 감지가
+                    // 이어지는 동안 이력 쿨다운 간격마다 차단 WARN·이력 행이 쌓인다).
                 } else {
-                    // 어느 채널로도 전달되지 않았다(문자 대체까지 실패·상한 초과·정지 계정 차단 등). 한 번도 닿지 않은
+                    // 시도했지만 어느 채널로도 전달되지 않았다(문자 대체까지 실패·상한 초과 등). 한 번도 닿지 않은
                     // 알림에 쿨다운을 남기면 재감지 때 다시 알릴 기회를 쿨다운만큼 막으므로 이 수신자만 푼다(SOS-G09와
                     // 같은 판단). WebSocket은 결과를 모르므로 미전달로 본다 - 재감지 때 화면 알림이 한 번 더 갈 수 있다(수용).
                     cooldown.release(userId, event.sessionId(), event.detectedType());

@@ -10,8 +10,8 @@
 | 구분 | 결과 |
 |---|---|
 | #323 코드·운영 반영 | ✅ 양호. 🔴 0 / 🟠 0 / 🟡 0 / 🟢 3 |
-| #324 회귀 | ✅ 동작 정합. 🟢 1(알림 차단 수신자의 반복 시도) |
-| 남은 확인 | **첫 낙상 클립 1건 생성(길이 약 9초분) - 실제 낙상이 감지돼야 확인 가능** |
+| #324 회귀 | ✅ 동작 정합. 🟢 1(알림 차단 수신자의 반복 시도) - **반영 완료** |
+| 남은 확인 | 없음 - gosky에서 낙상 클립 9.0초 생성 확인(2026-10-07) |
 
 ## 운영 반영 (Part 3 G-7 확인)
 
@@ -29,23 +29,29 @@
 
 ## 이슈
 
-### 🟢 H-1 알림 차단 수신자의 쿨다운 해제로 시도가 잦아짐 (#324 부작용)
+### 🟢 H-1 알림 차단 수신자의 쿨다운 해제로 시도가 잦아짐 (#324 부작용) - ✅ 반영
 - 위치: `AnomalyNotificationListener.java:101-108`
 - 근거: 이전 점검 Y-1 제안은 "차단(NOT_SENT)이 아니면" 해제였지만, 구현은 `FAILED`·`NOT_SENT`를 모두 해제한다(`fix-anomaly-1006-audit.md`에 명시). 이용 제한 계정은 `dispatch()`가 `[NOTIFY-BLOCKED]` WARN으로 막고 미전달이므로 쿨다운이 풀린다.
 - 시나리오: 정지된 보호자가 ACTIVE 연결에 남아 있으면 감지가 이어지는 동안 이력 쿨다운(1분)마다 dispatch가 재시도돼 WARN 로그와 `notification_log` 행이 분당 1건 쌓인다(이전에는 5분당 1건). 발송 자체는 막혀 있어 영향 없음, 화재가 길게 이어질 때만 노이즈.
 - 제안: 수정 불요 판단 가능. 노이즈가 문제 되면 `NOT_SENT` 중 정지 차단 사유만 해제 대상에서 제외.
 
-### 🟢 H-2 Javadoc 구간 값이 낡음
+### 🟢 H-2 Javadoc 구간 값이 낡음 - ✅ 반영
 - 위치: `AnomalyProperties.java:149`(requestTimeout "뒤 구간(2초)")
 - 낙상은 뒤 구간이 1초라 이 설명은 일반 클립 기준이다. 동작 영향 없음, 다음 수정 때 "일반 클립 기준"으로 한정하면 충분.
 
-### 🟢 H-3 낙상 구간이 `AnomalyClipCaptureService`까지 전달되는 테스트 부재
+### 🟢 H-3 낙상 구간이 `AnomalyClipCaptureService`까지 전달되는 테스트 부재 - ✅ 반영
 - 근거: `AiClipClientTest`가 종류별 구간 선택(기본·8/1·clamp)을 고정하지만, `AnomalyClipCaptureServiceTest`는 `DetectedType.FIRE`만 쓴다. `capture`가 `event.detectedType()`을 `requestClip` 세 번째 인자로 넘기는 한 줄(`:79`)은 FALL 이벤트로 검증되지 않는다. 다른 값을 넘기게 바뀌어도 단위 테스트가 못 잡는다.
 - 제안: FALL 이벤트로 `requestClip(SESSION, DETECTED_AT, DetectedType.FALL)` 호출을 검증하는 테스트 1건 추가(코드 변경 없음).
 
-### 🟢 H-4 첫 낙상 클립 생성 미확인
+### 🟢 H-4 첫 낙상 클립 생성 미확인 - ✅ 확인(gosky 9.0초)
 - 운영에서 낙상 감지가 아직 발생하지 않아 9초 클립이 실제로 만들어지는지(AI 응답·크기·재생) 확인하지 못했다. 첫 낙상 클립이 저장되면 `[ANOMALY-CLIP] 클립 저장` 로그의 `sizeBytes`(약 3.4MB 예상, 10MB 상한)와 재생 길이를 확인한다.
 - 실패 시 증상: AI가 422(범위 오류)나 인코딩 시간 초과면 `[ANOMALY-CLIP] AI 호출 실패` 로그가 남고 클립이 없다. 이때는 두 env를 지우고 `up -d api`로 3/2로 되돌린다.
 
 ## 결정이 필요한 것
 없음. 제안은 모두 선택 사항(H-3 테스트 1건 추가가 가장 가치가 있다).
+
+## 반영 (branch `fix/anomaly-clip-followup`, 마이그레이션 없음)
+- H-1: 리스너가 `NOT_SENT`(정지·탈퇴 진행 계정 차단)는 쿨다운을 풀지 않고 `FAILED`·예외만 푼다(원래 Y-1 제안과 같음). 기존 테스트 `보내지않음도_미전달`을 `보내지않음은_쿨다운_유지`로 바꿨다 - #324에서 `NOT_SENT`도 푼다고 고정했던 결정을 좁힌 것. 정책 문서 반영.
+- H-2: `requestTimeout` Javadoc을 "일반 2초, 낙상 1초"로.
+- H-3: `AnomalyClipCaptureServiceTest`에 낙상 종류가 `requestClip`·쿨다운 키로 전달되는 테스트 1건.
+- H-4: 실서버(gosky) 낙상 클립 9.0초 생성 확인됨.
