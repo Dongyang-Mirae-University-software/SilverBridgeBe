@@ -524,7 +524,7 @@
 - **불변 규칙 ⑤(키는 서버 안에서만)**: `X-API-Key` 헤더만, 리다이렉트 미추종, 키는 로그·응답에 남기지 않는다(영상 중계 ④와 같음). `AI_API_KEY`·`AI_HTTP_BASE_URL`을 공유한다.
 - **남의 기록 상세는 404**: AI가 없는 기록과 남의 기록을 구분하지 않아 `404 CHAT_LOG_NOT_FOUND`로 같게 답한다(`[CHAT-LOG-NOT-FOUND]` INFO, userId·chatId만). `[IDOR-ATTEMPT]` 403은 구분이 불가능해 쓰지 않는다.
 - **기록 응답은 허용 목록으로 거른다 (2026-10-07 점검 M-2)**: AI 기록에는 `contextJson`(요청 때 보낸 프로필 사본 `userContext` 포함)·`upstreamMeta`·`decisionTrace`·`userId`가 함께 오는데 FE는 쓰지 않는다. `ChatLogProjection.ALLOWED_FIELDS`에 있는 필드만 내린다(AI가 새 필드를 더해도 자동으로 빠진다 - 차단 목록으로 바꾸지 말 것). FE가 새 필드를 쓰게 되면 목록에 더하고, 내부 정보 필드를 더하지 말 것(`ChatLogProjectionTest`가 고정). AI 응답 형식이 이상하면 503이다.
-- **AI 상세 조회의 `userId` 필수화는 AI 서버 설정이다 (점검 M-1)**: AI `GET /api/v1/chat/logs/{id}`는 `CHAT_REQUIRE_USER_ID=false`면 `userId` 없이도 200이라 추측 가능한 `chat_id`로 남의 상세가 열린다. 중계는 항상 `userId`를 붙이므로 백엔드 경유로는 노출되지 않는다. AI 서버 `.env`에 `CHAT_REQUIRE_USER_ID=true`를 두고 재생성해야 막힌다(적용 여부는 `docs/(2026-10-07) audit-chat-relay.md` 후속 절 참조).
+- **AI 상세 조회의 `userId` 필수화는 AI 서버 설정이다 (점검 M-1)**: AI `GET /api/v1/chat/logs/{id}`는 `CHAT_REQUIRE_USER_ID=false`면 `userId` 없이도 200이라 추측 가능한 `chat_id`로 남의 상세가 열린다. 중계는 항상 `userId`를 붙이므로 백엔드 경유로는 노출되지 않는다. **gosky AI 서버 `.env`에 `CHAT_REQUIRE_USER_ID=true`를 적용했다(2026-10-07, 무 `userId` 상세 조회 422 실측)** - 이 줄을 지우거나 새 AI 서버를 띄울 때 빠뜨리면 다시 열린다. 내용은 `docs/(2026-10-07) audit-chat-relay.md` 후속 절.
 - **킬 스위치** `chat.relay.enabled=false`는 **전송만** 503으로 멈춘다(기록 조회는 계속).
 - **FE 프록시에 챗 경로를 되살리지 말 것**: 프록시는 AI 키를 붙여 아무 경로나 넘기던 구멍이라 FE가 줄인 것이 맞다. AI 쪽 `CHAT_REQUIRE_USER_ID` 강화는 별도 결정(AI 서버 범위).
 

@@ -1764,5 +1764,5 @@ REST API Key 단독 대비 보안 강화 — 인가코드 탈취 시 토큰 발�
 ## [2026-10-07] 챗 중계 점검 후속 - 기록 응답 허용 목록·테스트 보강
 
 - M-2: 기록 목록·상세를 `ChatLogProjection` 허용 목록으로 걸러 `contextJson`·`upstreamMeta`·`decisionTrace`·`userId`를 내리지 않음. 테스트 보강으로 chat 테스트 43개.
-- M-1(AI 서버 `CHAT_REQUIRE_USER_ID=true`)은 .env 수정·재시작이 권한 판정에서 거부돼 미적용 - 사용자 실행 필요(`docs/(2026-10-07) audit-chat-relay.md` 후속 절).
+- M-1(AI 서버 `CHAT_REQUIRE_USER_ID=true`): 에이전트 실행은 권한 판정에서 거부돼 **사용자가 직접 적용**(2026-10-07 17:32, gosky). 무 `userId` 상세 조회 200 → 422 실측, 백엔드 AI WS 자동 재연결 확인. 상세 `docs/(2026-10-07) audit-chat-relay.md` 후속 절.
 
