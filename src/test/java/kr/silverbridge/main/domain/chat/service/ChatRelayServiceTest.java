@@ -207,4 +207,63 @@ class ChatRelayServiceTest {
         verify(aiChatClient, never()).send(any());
         assertThat(service.logs(ME)).isNotNull();
     }
+
+    @Test
+    @DisplayName("기록 목록·상세는 허용된 필드만 내리고 AI 내부 정보(contextJson·upstreamMeta·decisionTrace·userId)는 뺀다")
+    void 기록_응답은_허용목록만() throws Exception {
+        String raw = "{\"id\":5,\"userId\":\"GRD001\",\"message\":\"두통\",\"reply\":\"쉬세요\","
+                + "\"contextJson\":\"{\\\"userContext\\\":{\\\"phone\\\":\\\"01012345678\\\"}}\","
+                + "\"upstreamMeta\":{\"router\":\"x\"},\"decisionTrace\":[\"a\"],\"toolData\":{\"k\":1},"
+                + "\"createdAt\":\"2026-10-07T10:00:00\"}";
+        when(aiChatClient.logs(ME)).thenReturn(objectMapper.readTree("[" + raw + "]"));
+        when(aiChatClient.logDetail(ME, 5L)).thenReturn(Optional.of(objectMapper.readTree(raw)));
+
+        JsonNode list = service.logs(ME);
+        JsonNode detail = service.logDetail(ME, 5L);
+
+        for (JsonNode item : new JsonNode[]{list.get(0), detail}) {
+            assertThat(item.get("message").asText()).isEqualTo("두통");
+            assertThat(item.get("toolData").get("k").asInt()).isEqualTo(1);
+            assertThat(item.has("contextJson")).isFalse();
+            assertThat(item.has("upstreamMeta")).isFalse();
+            assertThat(item.has("decisionTrace")).isFalse();
+            assertThat(item.has("userId")).isFalse();
+            assertThat(item.toString()).doesNotContain("01012345678");
+        }
+    }
+
+    @Test
+    @DisplayName("AI 기록 응답 형식이 이상하면(목록이 배열 아님·상세가 객체 아님) CHAT_UNAVAILABLE")
+    void 기록_형식_이상() throws Exception {
+        when(aiChatClient.logs(ME)).thenReturn(objectMapper.readTree("{\"not\":\"array\"}"));
+        when(aiChatClient.logDetail(ME, 5L)).thenReturn(Optional.of(objectMapper.readTree("[1]")));
+
+        assertThatThrownBy(() -> service.logs(ME)).isInstanceOfSatisfying(CustomException.class,
+                e -> assertThat(e.getErrorCode()).isEqualTo(ErrorCode.CHAT_UNAVAILABLE));
+        assertThatThrownBy(() -> service.logDetail(ME, 5L)).isInstanceOfSatisfying(CustomException.class,
+                e -> assertThat(e.getErrorCode()).isEqualTo(ErrorCode.CHAT_UNAVAILABLE));
+    }
+
+    @Test
+    @DisplayName("context는 직렬화 8192바이트까지 허용, 8193바이트부터 400")
+    void context_8KB_경계() throws Exception {
+        when(aiChatClient.send(any())).thenReturn(objectMapper.readTree("{}"));
+        // {"k":"<n자>"} = n + 8 바이트
+        ChatRelayRequest atLimit = new ChatRelayRequest("안녕", null, null, Map.of("k", "a".repeat(8184)), null);
+        ChatRelayRequest over = new ChatRelayRequest("안녕", null, null, Map.of("k", "a".repeat(8185)), null);
+
+        service.send(ME, atLimit);
+        assertThatThrownBy(() -> service.send(ME, over)).isInstanceOfSatisfying(CustomException.class,
+                e -> assertThat(e.getErrorCode()).isEqualTo(ErrorCode.CHAT_INVALID_REQUEST));
+    }
+
+    @Test
+    @DisplayName("message는 2000자까지 허용(경계)")
+    void message_2000자_허용() throws Exception {
+        when(aiChatClient.send(any())).thenReturn(objectMapper.readTree("{}"));
+
+        service.send(ME, msg("가".repeat(2000)));
+
+        verify(aiChatClient).send(any());
+    }
 }

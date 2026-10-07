@@ -69,7 +69,7 @@ public class GuardianChatController {
                     Authorization: Bearer {accessToken}
 
                     로그인한 보호자 본인의 상담 기록만 최신순으로 반환합니다(쿼리로 userId를 받지 않습니다).
-                    data는 AI 기록 배열 그대로입니다. 기록이 없으면 빈 배열입니다.
+                    data는 기록 배열이며, FE가 쓰는 필드(id·message·reply·engine·intent·type·tool·toolData·ui·riskLevel·createdAt 등)만 담깁니다(AI 내부 정보 제외). 기록이 없으면 빈 배열입니다.
 
                     [오류 code] CHAT_UNAVAILABLE(503) / CHAT_TIMEOUT(504) / TOO_MANY_REQUESTS(429)
                     """)
@@ -89,7 +89,7 @@ public class GuardianChatController {
                     [요청 헤더]
                     Authorization: Bearer {accessToken}
 
-                    본인 기록만 조회됩니다. 없는 기록과 남의 기록은 구분하지 않고 모두 404 CHAT_LOG_NOT_FOUND입니다.
+                    본인 기록만 조회됩니다. 없는 기록과 남의 기록은 구분하지 않고 모두 404 CHAT_LOG_NOT_FOUND입니다. 응답 필드는 목록과 같습니다.
                     """)
     @ApiResponses({
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "기록 상세"),
