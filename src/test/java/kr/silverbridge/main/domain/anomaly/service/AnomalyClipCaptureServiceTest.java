@@ -86,6 +86,23 @@ class AnomalyClipCaptureServiceTest {
     }
 
     @Test
+    @DisplayName("낙상 이벤트는 낙상 종류 그대로 AI 요청(구간 선택)과 쿨다운 키에 쓰인다")
+    void 낙상_종류가_전달된다() {
+        when(eventRepository.findById(11L)).thenReturn(Optional.of(AnomalyEvent.builder()
+                .wardId("WD0001").sessionId(SESSION).detectedType(DetectedType.FALL)
+                .confidence(0.9).danger(true).incidentId(37L).build()));
+        when(cooldown.tryAcquire(SESSION, DetectedType.FALL)).thenReturn(true);
+        when(storage.hasEnoughSpace()).thenReturn(true);
+        when(aiClipClient.requestClip(SESSION, DETECTED_AT, DetectedType.FALL)).thenReturn(fail(Outcome.REJECTED));
+
+        service.capture(new AnomalyDetectedEvent(11L, 37L, "WD0001", "김영희", SESSION, "거실",
+                DetectedType.FALL, DETECTED_AT));
+
+        verify(aiClipClient).requestClip(SESSION, DETECTED_AT, DetectedType.FALL);
+        verify(aiClipClient, never()).requestClip(SESSION, DETECTED_AT, DetectedType.FIRE);
+    }
+
+    @Test
     @DisplayName("정상 - AI 요청 → 파일 저장 → 행 기록, 쿨다운은 유지한다")
     void 정상_저장() {
         readyToRequest();
