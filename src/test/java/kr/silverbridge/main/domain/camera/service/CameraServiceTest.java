@@ -62,7 +62,7 @@ class CameraServiceTest {
     private static final String WARD_ID = "a9cC5f";
     private static final String OTHER_WARD_ID = "zz9Q1x";
     private static final String GUARDIAN_ID = "GRD001";
-    private static final int RECOMMENDED_FPS = 5;
+    private static final int RECOMMENDED_FPS = 10;
 
     @BeforeEach
     void setUp() {
