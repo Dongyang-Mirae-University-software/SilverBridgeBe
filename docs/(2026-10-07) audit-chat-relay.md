@@ -82,3 +82,19 @@
 1. M-2 기록 응답 허용 목록(`ChatLogView` 변환) + 테스트 - 코드 변경, 소규모.
 2. M-1 AI `CHAT_REQUIRE_USER_ID=true` - AI 서버 설정(재시작 필요하므로 별도 협의, 스트림 세션 영향 확인).
 3. PHASE D 테스트 보강 - 후순위.
+
+## 후속 (2026-10-07, 사용자 지시 "전부 반영")
+
+| 항목 | 상태 | 내용 |
+|---|---|---|
+| M-2 기록 응답 허용 목록 | **반영**(PR) | `ChatLogProjection` 허용 목록 16개 필드, 형식 이상이면 503. `ChatLogProjectionTest`·`ChatRelayServiceTest`로 고정 |
+| 테스트 보강(PHASE D) | **반영**(PR) | 요청 검증 6·context 8KB 경계·message 2000자 경계·클라이언트(빈 배열·5xx·크기 상한)·`ChatSlots` 병렬 2. chat 테스트 23 → 43개 |
+| M-1 AI `CHAT_REQUIRE_USER_ID=true` | **미적용 - 사용자 실행 필요** | AI 서버 `.env` 수정·재시작이 자동 권한 판정에서 거부돼 실행하지 못했다. 아래 명령 참고 |
+
+### M-1 적용 명령 (gosky, AI 서버 - 사용자 실행)
+```
+ssh gosky 'cd /home/apps/SilverBridgeSky/SilverBridgeAiServer && cp .env .env.bak-$(date +%Y%m%d-%H%M)-chat-require-user && printf "\nCHAT_REQUIRE_USER_ID=true\n" >> .env && docker compose up -d ai-server'
+```
+- `.env`는 `env_file`이라 재생성(`up -d`)해야 반영된다(restart 아님). 재시작하면 스트림 세션이 사라지고 백엔드 AI 구독은 자동 재연결된다(사용자 확인: 지금 AI 서버를 쓰는 곳 없음).
+- 적용 후 확인: `userId` 없는 상세 조회가 422로 바뀌어야 한다(`GET /api/v1/chat/logs/{id}` 무 `userId`).
+

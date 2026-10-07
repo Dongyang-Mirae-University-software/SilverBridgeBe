@@ -24,7 +24,7 @@
   마지막에 토큰 ID로 덮어쓴다. 기록 목록·상세도 토큰 ID로만 AI에 묻는다. 기존 `"1"` 기록은 이전하지 않는다.
 - **남의 기록 상세**: AI가 없는 기록과 남의 기록을 구분하지 않고 404를 주므로 `404 CHAT_LOG_NOT_FOUND`로 같게 답하고
   `[CHAT-LOG-NOT-FOUND]` INFO(userId·chatId만)를 남긴다. `[IDOR-ATTEMPT]` WARN은 구분이 불가능해 쓰지 않았다.
-- **응답**: 공용 `ApiResponse.ok(data)`, `data`는 AI 응답의 `data` 그대로(언래핑 1회).
+- **응답**: 공용 `ApiResponse.ok(data)`, 전송은 AI 응답의 `data` 그대로(언래핑 1회), **기록 목록·상세는 허용 목록 필드만**(`ChatLogProjection`, 2026-10-07 점검 M-2 - `contextJson`·`upstreamMeta`·`decisionTrace`·`userId` 제외).
 - **호출 제한**: 전송 전체 130초(AI 120초 + 여유, 마감 시 연결을 끊는다), 기록 조회 15초. 일반 외부 호출 규칙(8~10초)의 예외.
 - **상한**: 동시 전송 전체 10 / 1인 1(인스턴스 메모리, 초과 429 `CHAT_LIMIT_EXCEEDED`), 속도 제한 전송 분 10·시간 120,
   기록 조회 분 30·시간 600(Redis 장애 시 fail-open). 메시지 2000자, history 24개, context 8KB.
