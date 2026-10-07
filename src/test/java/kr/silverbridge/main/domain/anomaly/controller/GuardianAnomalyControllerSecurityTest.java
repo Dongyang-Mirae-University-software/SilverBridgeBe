@@ -68,12 +68,12 @@ class GuardianAnomalyControllerSecurityTest {
     @WithMockUser(roles = "GUARDIAN")
     @DisplayName("GUARDIAN → 이력 조회·판정·재촉 설정 허용")
     void guardian_허용() {
-        when(guardianAnomalyService.getHistory(anyString(), any(), anyInt(), anyInt()))
+        when(guardianAnomalyService.getHistory(anyString(), any(), any(), anyInt(), anyInt()))
                 .thenReturn(new PageResponse<>(List.of(), 0, 20, 0, 0, true));
         when(settingService.getSetting(anyString())).thenReturn(new AnomalyReminderSettingResponse(true));
         when(settingService.updateSetting(anyString(), any())).thenReturn(new AnomalyReminderSettingResponse(false));
 
-        assertThatNoException().isThrownBy(() -> controller.getHistory("GD0001", null, 0, 20));
+        assertThatNoException().isThrownBy(() -> controller.getHistory("GD0001", null, null, 0, 20));
         assertThatNoException().isThrownBy(() -> controller.submitFeedback("GD0001", 37L, feedback()));
         assertThatNoException().isThrownBy(() -> controller.getReminderSetting("GD0001"));
         assertThatNoException().isThrownBy(() ->
@@ -84,7 +84,7 @@ class GuardianAnomalyControllerSecurityTest {
     @WithMockUser(roles = "WARD")
     @DisplayName("피보호자(WARD) → 403 (본인 상황이라도 1차 판정은 보호자만 한다)")
     void ward_거부() {
-        assertThatThrownBy(() -> controller.getHistory("WD0001", null, 0, 20))
+        assertThatThrownBy(() -> controller.getHistory("WD0001", null, null, 0, 20))
                 .isInstanceOf(AccessDeniedException.class);
         assertThatThrownBy(() -> controller.submitFeedback("WD0001", 37L, feedback()))
                 .isInstanceOf(AccessDeniedException.class);
@@ -96,9 +96,35 @@ class GuardianAnomalyControllerSecurityTest {
     @WithMockUser(roles = "ADMIN")
     @DisplayName("관리자(ADMIN) → 403 (관리자는 2차 정정만, 1차 판정 경로는 없다)")
     void admin_거부() {
-        assertThatThrownBy(() -> controller.getHistory("AD0001", null, 0, 20))
+        assertThatThrownBy(() -> controller.getHistory("AD0001", null, null, 0, 20))
                 .isInstanceOf(AccessDeniedException.class);
         assertThatThrownBy(() -> controller.submitFeedback("AD0001", 37L, feedback()))
+                .isInstanceOf(AccessDeniedException.class);
+    }
+
+    @Test
+    @WithMockUser(roles = "GUARDIAN")
+    @DisplayName("GUARDIAN → 이력 건수 요약 허용")
+    void guardian_요약_허용() {
+        when(guardianAnomalyService.getHistorySummary(anyString(), any()))
+                .thenReturn(kr.silverbridge.main.domain.anomaly.dto.GuardianAnomalyHistorySummary.EMPTY);
+
+        assertThatNoException().isThrownBy(() -> controller.getHistorySummary("GD0001", null));
+    }
+
+    @Test
+    @WithMockUser(roles = "WARD")
+    @DisplayName("피보호자(WARD) → 이력 건수 요약 403")
+    void ward_요약_거부() {
+        assertThatThrownBy(() -> controller.getHistorySummary("WD0001", null))
+                .isInstanceOf(AccessDeniedException.class);
+    }
+
+    @Test
+    @WithMockUser(roles = "ADMIN")
+    @DisplayName("관리자(ADMIN) → 이력 건수 요약 403")
+    void admin_요약_거부() {
+        assertThatThrownBy(() -> controller.getHistorySummary("AD0001", null))
                 .isInstanceOf(AccessDeniedException.class);
     }
 

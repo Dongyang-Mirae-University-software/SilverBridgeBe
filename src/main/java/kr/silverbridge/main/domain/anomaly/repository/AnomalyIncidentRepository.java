@@ -43,8 +43,41 @@ public interface AnomalyIncidentRepository extends JpaRepository<AnomalyIncident
     /**
      * 보호자 이력 목록 - 연결된 피보호자들의 상황을 최신순으로. 정렬 기준이 {@code startedAt}인 이유는
      * 통계의 날짜 소속과 목록의 순서가 어긋나지 않게 하기 위함이다(둘 다 "언제 시작된 상황인가"를 본다).
+     * 동률이면 id 내림차순이라 페이지 경계에서 중복·누락이 생기지 않는다.
+     *
+     * <p>{@code type}이 null이면 전체다(관리자 {@link #searchForAdmin}과 같은 동적 필터). 필터는 쿼리 안에서 걸어
+     * 페이지 크기·전체 건수가 필터 기준으로 맞는다.</p>
      */
-    Page<AnomalyIncident> findByWardIdInOrderByStartedAtDesc(Collection<String> wardIds, Pageable pageable);
+    @Query("""
+            SELECT i FROM AnomalyIncident i
+            WHERE i.wardId IN :wardIds
+              AND (:type IS NULL OR i.detectedType = :type)
+            ORDER BY i.startedAt DESC, i.id DESC
+            """)
+    Page<AnomalyIncident> findHistory(@Param("wardIds") Collection<String> wardIds,
+                                      @Param("type") DetectedType type,
+                                      Pageable pageable);
+
+    /**
+     * 보호자 이력 요약 - 인가된 피보호자 범위의 상황을 (유형, 판정 상태)별로 센다. 유형 필터는 받지 않는다
+     * (탭 건수는 탭을 골라도 그대로여야 한다).
+     */
+    @Query("""
+            SELECT i.detectedType AS detectedType, i.reviewStatus AS reviewStatus, COUNT(i) AS total
+            FROM AnomalyIncident i
+            WHERE i.wardId IN :wardIds
+            GROUP BY i.detectedType, i.reviewStatus
+            """)
+    List<GuardianTypeStatusCount> countForGuardianSummary(@Param("wardIds") Collection<String> wardIds);
+
+    /** {@link #countForGuardianSummary} 한 행. */
+    interface GuardianTypeStatusCount {
+        DetectedType getDetectedType();
+
+        AnomalyReviewStatus getReviewStatus();
+
+        long getTotal();
+    }
 
     /**
      * 건별 재촉 후보 - 아직 아무도 응답하지 않았고, <b>상황이 닫힌 뒤 유예까지 지났으며</b>, 마감 전인 것.
