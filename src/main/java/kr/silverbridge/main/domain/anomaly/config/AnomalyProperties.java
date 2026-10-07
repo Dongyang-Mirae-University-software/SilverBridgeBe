@@ -146,7 +146,7 @@ public class AnomalyProperties {
         private long cooldownMinutes = 5;
 
         /**
-         * AI 호출 전체 제한. 일반 외부 호출(10초)보다 길다 - AI는 뒤 구간(2초)을 기다린 뒤 인코딩하고, 계약상 처리 상한이
+         * AI 호출 전체 제한. 일반 외부 호출(10초)보다 길다 - AI는 뒤 구간(일반 2초, 낙상 1초)을 기다린 뒤 인코딩하고, 계약상 처리 상한이
          * 요청 수신부터 20초다. 상한 직전에 끝난 응답도 받도록 전송 여유 5초를 더한다(계약 v2 대조 권장 22~25초).
          * 연결 제한은 영상 중계와 같은 {@code camera.stream.connect-timeout}을 쓴다.
          */

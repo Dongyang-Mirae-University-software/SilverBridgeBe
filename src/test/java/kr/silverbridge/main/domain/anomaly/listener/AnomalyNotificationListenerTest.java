@@ -305,16 +305,15 @@ class AnomalyNotificationListenerTest {
     }
 
     @Test
-    @DisplayName("보내지 않음(NOT_SENT, 정지 계정 등)도 미전달이라 쿨다운을 푼다")
-    void 보내지않음도_미전달() {
+    @DisplayName("보내지 않음(NOT_SENT, 정지 계정 차단)은 쿨다운을 풀지 않는다 - 다시 시도해도 차단되므로 분당 재시도를 만들지 않는다")
+    void 보내지않음은_쿨다운_유지() {
         when(connectionService.getActiveGuardianIds(WARD_ID)).thenReturn(List.of("GD0001"));
         when(cooldown.tryAcquire(anyString(), eq(SESSION_ID), eq(DetectedType.FIRE), anyBoolean())).thenReturn(true);
         when(notificationDispatcher.dispatch(any(), any(), any(), any())).thenReturn(NotificationLogResult.NOT_SENT);
 
         listener.handleAnomalyDetected(event);
 
-        verify(cooldown).release("GD0001", SESSION_ID, DetectedType.FIRE);
-        verify(cooldown).release(WARD_ID, SESSION_ID, DetectedType.FIRE);
+        verify(cooldown, never()).release(anyString(), anyString(), any());
     }
 
     @Test
