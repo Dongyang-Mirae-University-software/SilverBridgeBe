@@ -122,10 +122,13 @@ public class GuardianAnomalyService {
         long fire = 0;
         long fall = 0;
         long weapon = 0;
+        long all = 0;
         long pending = 0;
         long conflicted = 0;
         for (AnomalyIncidentRepository.GuardianTypeStatusCount row
                 : anomalyIncidentRepository.countForGuardianSummary(wardIds)) {
+            // total은 유형과 무관하게 모든 행을 센다 - type 없는 이력의 totalElements와 항상 같아야 한다(점검 L-1)
+            all += row.getTotal();
             if (row.getDetectedType() == DetectedType.FIRE) {
                 fire += row.getTotal();
             } else if (row.getDetectedType() == DetectedType.FALL) {
@@ -139,7 +142,7 @@ public class GuardianAnomalyService {
                 conflicted += row.getTotal();
             }
         }
-        return new GuardianAnomalyHistorySummary(fire + fall + weapon, pending, conflicted,
+        return new GuardianAnomalyHistorySummary(all, pending, conflicted,
                 pending + conflicted,
                 new GuardianAnomalyHistorySummary.ByType(fire, fall, weapon));
     }

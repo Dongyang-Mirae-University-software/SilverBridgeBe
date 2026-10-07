@@ -106,7 +106,7 @@ public class GuardianAnomalyController {
                     - 생략: ACTIVE 연결된 피보호자 전원 (연결이 없으면 전부 0)
 
                     [응답] data
-                    - total: 전체 상황 수 (= byType 합 = type 없이 history를 조회했을 때의 totalElements)
+                    - total: 전체 상황 수 (= type 없이 history를 조회했을 때의 totalElements)
                     - pendingCount: 아직 아무도 응답하지 않은 상황(PENDING)
                     - conflictedCount: 보호자 응답이 동수라 다시 확인이 필요한 상황(CONFLICTED)
                     - needsReviewCount: 헤더 "확인 필요 N건"용 = pendingCount + conflictedCount
