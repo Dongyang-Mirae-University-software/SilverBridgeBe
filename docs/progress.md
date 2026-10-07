@@ -1742,3 +1742,10 @@ REST API Key 단독 대비 보안 강화 — 인가코드 탈취 시 토큰 발�
 
 - `GET /api/guardian/anomaly/history?type=FIRE|FALL|WEAPON`(생략 시 전체, 쿼리 내 필터) + `GET /api/guardian/anomaly/history/summary`(total·pendingCount·conflictedCount·byType 3종 항상, type 필터 무관). 인가는 기존 ACTIVE 연결 그대로.
 - 상세: `docs/(2026-10-07) feature-anomaly-history-type-filter.md`
+
+---
+
+## [2026-10-07] 보호자 이상감지 이력 유형 필터·요약 기능 점검 (템플릿 B)
+
+- 판정 PASS (Critical·High·Medium 없음, Low 3건 수용·선택). 인가 순서·필터 위치·응답 형태 보존 확인.
+- 상세: `docs/(2026-10-07) audit-anomaly-history-type-filter.md`
