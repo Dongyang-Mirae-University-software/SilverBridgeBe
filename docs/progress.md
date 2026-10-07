@@ -1729,3 +1729,10 @@ REST API Key 단독 대비 보안 강화 — 인가코드 탈취 시 토큰 발�
 
 - H-1 정지·탈퇴 진행 계정 차단(`NOT_SENT`)은 알림 쿨다운을 풀지 않음(`FAILED`·예외만 해제) / H-2 Javadoc / H-3 낙상 전달 테스트 / H-4 gosky 9.0초 클립 확인으로 종결.
 - 상세: `docs/(2026-10-07) audit-fall-clip-followup.md`
+
+---
+
+## [2026-10-07] 보호자 이상감지 이력 유형 필터 + 건수 요약 (branch `feature/anomaly-history-type-filter`, 마이그레이션 없음)
+
+- `GET /api/guardian/anomaly/history?type=FIRE|FALL|WEAPON`(생략 시 전체, 쿼리 내 필터) + `GET /api/guardian/anomaly/history/summary`(total·pendingCount·conflictedCount·byType 3종 항상, type 필터 무관). 인가는 기존 ACTIVE 연결 그대로.
+- 상세: `docs/(2026-10-07) feature-anomaly-history-type-filter.md`
