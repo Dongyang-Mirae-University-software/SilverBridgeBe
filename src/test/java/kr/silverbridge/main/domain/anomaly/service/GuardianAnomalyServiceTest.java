@@ -94,11 +94,11 @@ class GuardianAnomalyServiceTest {
         void historyOfUnconnectedWardIsForbidden() {
             when(connectionService.isActiveConnection(GUARDIAN_ID, WARD_ID)).thenReturn(false);
 
-            assertThatThrownBy(() -> service.getHistory(GUARDIAN_ID, WARD_ID, 0, 20))
+            assertThatThrownBy(() -> service.getHistory(GUARDIAN_ID, WARD_ID, null, 0, 20))
                     .isInstanceOf(CustomException.class)
                     .hasFieldOrPropertyWithValue("errorCode", ErrorCode.ANOMALY_NOT_AUTHORIZED);
 
-            verify(incidentRepository, never()).findByWardIdInOrderByStartedAtDesc(any(), any());
+            verify(incidentRepository, never()).findHistory(any(), any(), any());
         }
 
         @Test
@@ -120,8 +120,8 @@ class GuardianAnomalyServiceTest {
         void noConnectionReturnsEmptyPage() {
             when(connectionService.getActiveWardIds(GUARDIAN_ID)).thenReturn(List.of());
 
-            assertThat(service.getHistory(GUARDIAN_ID, null, 0, 20).content()).isEmpty();
-            verify(incidentRepository, never()).findByWardIdInOrderByStartedAtDesc(any(), any());
+            assertThat(service.getHistory(GUARDIAN_ID, null, null, 0, 20).content()).isEmpty();
+            verify(incidentRepository, never()).findHistory(any(), any(), any());
         }
 
         @Test
