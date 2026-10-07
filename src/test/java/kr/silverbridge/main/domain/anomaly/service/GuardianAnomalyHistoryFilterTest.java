@@ -125,6 +125,21 @@ class GuardianAnomalyHistoryFilterTest {
     }
 
     @Test
+    @DisplayName("요약: total은 세 유형 밖의 행도 센다 - type 없는 이력 totalElements와 어긋나지 않게")
+    void summaryTotalCountsEveryRow() {
+        when(connectionService.getActiveWardIds(GUARDIAN_ID)).thenReturn(List.of(WARD_ID));
+        List<AnomalyIncidentRepository.GuardianTypeStatusCount> rows = List.of(
+                row(DetectedType.FIRE, AnomalyReviewStatus.REAL, 2),
+                row(DetectedType.UNKNOWN, AnomalyReviewStatus.PENDING, 1));
+        when(incidentRepository.countForGuardianSummary(List.of(WARD_ID))).thenReturn(rows);
+
+        GuardianAnomalyHistorySummary summary = service.getHistorySummary(GUARDIAN_ID, null);
+
+        assertThat(summary.total()).isEqualTo(3);
+        assertThat(summary.byType().fire()).isEqualTo(2);
+    }
+
+    @Test
     @DisplayName("요약: 연결 없는 wardId는 403이고 집계하지 않는다")
     void summaryUnconnectedWardIsForbidden() {
         when(connectionService.isActiveConnection(GUARDIAN_ID, WARD_ID)).thenReturn(false);
