@@ -19,6 +19,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 
+import java.time.OffsetDateTime;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
@@ -81,6 +82,30 @@ public class GuardianSosService {
         return SosHistoryPage.of(
                 events.map(event -> SosHistoryItem.of(event, names.get(event.getWardId()))),
                 countByTriggerType(wardIds));
+    }
+
+    /**
+     * 대시보드용 - {@code from} 이후 건수와 가장 최근 1건. 인가는 {@link #getHistory}와 같다.
+     * 연결된 피보호자가 없으면 {@code (0, null)}이다(범위 안에서 실제로 센 값이라 "모르는 값"이 아니다).
+     *
+     * @throws CustomException {@code SOS_NOT_AUTHORIZED} - wardId를 지정했으나 ACTIVE 연결이 아닐 때
+     */
+    @Transactional(readOnly = true)
+    public RecentSos getRecent(String guardianId, String wardId, OffsetDateTime from) {
+        List<String> wardIds = resolveVisibleWardIds(guardianId, wardId);
+        if (wardIds.isEmpty()) {
+            return new RecentSos(0, null);
+        }
+        long count = sosEventRepository.countByWardIdInAndCreatedAtGreaterThanEqual(wardIds, from);
+        List<SosEvent> latest = sosEventRepository
+                .findByWardIdInOrderByCreatedAtDesc(wardIds, PageRequest.of(0, 1)).getContent();
+        SosHistoryItem item = latest.isEmpty() ? null
+                : SosHistoryItem.of(latest.get(0), resolveWardNames(latest).get(latest.get(0).getWardId()));
+        return new RecentSos(count, item);
+    }
+
+    /** {@link #getRecent} 결과 - {@code count}는 {@code from} 이후, {@code latest}는 기간과 무관한 가장 최근 1건. */
+    public record RecentSos(long count, SosHistoryItem latest) {
     }
 
     /** 인가된 피보호자 범위의 경로별 전체 건수. 집계에 없는 경로는 0건이다(범위 안에서 실제로 센 값). */

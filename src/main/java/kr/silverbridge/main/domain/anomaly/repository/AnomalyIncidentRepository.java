@@ -70,6 +70,20 @@ public interface AnomalyIncidentRepository extends JpaRepository<AnomalyIncident
             """)
     List<GuardianTypeStatusCount> countForGuardianSummary(@Param("wardIds") Collection<String> wardIds);
 
+    /**
+     * 보호자 대시보드용 - 인가된 피보호자 범위에서 <b>확인이 필요한</b>(판정 상태가 주어진 값들) 상황을 최신순으로.
+     * 호출부가 {@code PageRequest.of(0, 1)}로 가장 최근 1건만 받는다. 정렬 기준은 {@link #findHistory}와 같다.
+     */
+    @Query("""
+            SELECT i FROM AnomalyIncident i
+            WHERE i.wardId IN :wardIds
+              AND i.reviewStatus IN :statuses
+            ORDER BY i.startedAt DESC, i.id DESC
+            """)
+    List<AnomalyIncident> findLatestByStatuses(@Param("wardIds") Collection<String> wardIds,
+                                               @Param("statuses") Collection<AnomalyReviewStatus> statuses,
+                                               Pageable pageable);
+
     /** {@link #countForGuardianSummary} 한 행. */
     interface GuardianTypeStatusCount {
         DetectedType getDetectedType();

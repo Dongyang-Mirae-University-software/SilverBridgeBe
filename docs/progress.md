@@ -1773,3 +1773,10 @@ REST API Key 단독 대비 보안 강화 — 인가코드 탈취 시 토큰 발�
 - `camera.recommended-fps` 기본값 10(동시 1~3대 기준, AI 1장 19.2ms 실측 → 1대 사용률 약 19%). 응답 형식·판정·쿨다운·클립 구간 불변, 마이그레이션 없음, 두 서버 `.env.dev`에 해당 키 없음.
 - 메시지 처리 부담: 정상 프레임은 DB·Redis 0회, 위험 프레임은 쿨다운 때문에 fps와 무관. 송출 중 카메라는 새로고침해야 새 값을 받는다.
 - 상세: `docs/(2026-10-07) feature-camera-fps-10.md`
+
+---
+
+## [2026-10-08] 보호자 대시보드 통합 API
+
+- `GET /api/guardian/dashboard?wardId=` 신설(`domain/dashboard`). 이상감지(확인 필요)·SOS(이번 달 KST)·복약(미체크)만 담고, 정서·활동·병원 예약은 BE 데이터가 없어 필드를 만들지 않음. 칸 실패는 0이 아니라 null + `unavailable`. SOS "해결됨" 없음. 마이그레이션 없음.
+- 상세: `docs/(2026-10-08) feature-guardian-dashboard-api.md`

@@ -148,6 +148,38 @@ public class GuardianAnomalyService {
     }
 
     /**
+     * 대시보드용 - 확인이 필요한(PENDING·CONFLICTED) 상황 중 가장 최근 1건. 없으면 {@code null}.
+     * 인가·항목 조립은 {@link #getHistory}와 같다(같은 {@code resolveVisibleWardIds}).
+     *
+     * @throws CustomException {@code ANOMALY_NOT_AUTHORIZED} - wardId를 지정했으나 ACTIVE 연결이 아닐 때
+     */
+    @Transactional(readOnly = true)
+    public AnomalyIncidentItem getLatestNeedsReview(String guardianId, String wardId) {
+        List<String> wardIds = resolveVisibleWardIds(guardianId, wardId);
+        if (wardIds.isEmpty()) {
+            return null;
+        }
+        List<AnomalyIncident> found = anomalyIncidentRepository.findLatestByStatuses(
+                wardIds, List.of(AnomalyReviewStatus.PENDING, AnomalyReviewStatus.CONFLICTED),
+                PageRequest.of(0, 1));
+        if (found.isEmpty()) {
+            return null;
+        }
+        AnomalyIncident incident = found.get(0);
+        Map<String, String> wardNames = resolveWardNames(found);
+        Map<String, String> cameraLabels = cameraService.findLabelsBySessionIds(Set.of(incident.getSessionId()));
+        Map<Long, AnomalyVerdict> myVerdicts = resolveMyVerdicts(guardianId, found);
+        AnomalyClipService.ClipSummary clip = clipService.summarize(List.of(incident.getId())).get(incident.getId());
+        return AnomalyIncidentItem.of(
+                incident,
+                wardNames.get(incident.getWardId()),
+                cameraLabels.get(incident.getSessionId()),
+                myVerdicts.get(incident.getId()),
+                clip == null ? null : clip.latest(),
+                clip == null ? 0 : clip.count());
+    }
+
+    /**
      * 오탐 응답. 같은 상황에 다시 호출하면 <b>번복</b>(1인 1표)이며, 그때마다 응답 전체를 다시 집계해
      * 상황의 판정 상태를 재계산한다.
      *
