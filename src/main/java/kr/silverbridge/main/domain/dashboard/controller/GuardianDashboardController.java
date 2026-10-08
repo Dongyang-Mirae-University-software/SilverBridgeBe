@@ -37,7 +37,7 @@ public class GuardianDashboardController {
 
                     [wardId 파라미터]
                     - 지정: 해당 피보호자만 (ACTIVE 연결이 아니면 403)
-                    - 생략: ACTIVE 연결된 피보호자 전원 합산 (연결이 없으면 칸은 모두 null, pendingActions는 0, wards는 빈 배열)
+                    - 생략: ACTIVE 연결된 피보호자 전원 합산 (연결이 없으면 wards는 빈 배열이고 건수는 모두 0, latest/mostUrgent는 null - 조회 실패가 아니라 실제로 센 0입니다)
                     - 보호자 ID는 토큰에서만 읽습니다. guardianId 파라미터는 없습니다.
 
                     [pendingActions - "확인이 필요한 일 N건"]
@@ -64,7 +64,7 @@ public class GuardianDashboardController {
                     - 체크 누락과 실제 미복용을 서버는 구분하지 못합니다. 문구는 '체크되지 않았습니다'로 쓰고 '안 드셨습니다'로 단정하지 마세요
 
                     [칸 실패]
-                    한 칸이 실패해도 전체가 500이 되지 않습니다. 실패한 칸은 0이 아니라 null이고, 칸 이름이 unavailable에 담깁니다.
+                    한 칸이 실패해도 전체가 500이 되지 않습니다. 실패한 칸은 0이 아니라 null이고, 칸 이름이 unavailable에 담깁니다(칸 null = 조회 실패. 연결 없음과 구분됩니다).
                     null을 0건으로 표시하지 마세요(재시도 또는 '확인 중' 표시).
                     """)
     @ApiResponses({
