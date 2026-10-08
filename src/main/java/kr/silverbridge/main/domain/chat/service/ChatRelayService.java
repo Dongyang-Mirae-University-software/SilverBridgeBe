@@ -41,7 +41,7 @@ public class ChatRelayService {
     private final ChatRelayProperties properties;
     private final ObjectMapper objectMapper;
 
-    public JsonNode send(String guardianId, ChatRelayRequest request) {
+    public Object send(String guardianId, ChatRelayRequest request) {
         if (!properties.isEnabled()) {
             throw new CustomException(ErrorCode.CHAT_UNAVAILABLE);
         }
@@ -54,21 +54,21 @@ public class ChatRelayService {
             JsonNode reply = aiChatClient.send(body);
             log.info("[CHAT-RELAY] 전송 완료: userId={}, elapsedMs={}", guardianId,
                     (System.nanoTime() - startedAt) / 1_000_000);
-            return reply;
+            return plain(reply);
         }
     }
 
-    public JsonNode logs(String guardianId) {
+    public Object logs(String guardianId) {
         rateLimitService.check(LOGS_ENDPOINT, guardianId, LOGS_PER_MINUTE, LOGS_PER_HOUR);
         JsonNode projected = ChatLogProjection.projectAll(aiChatClient.logs(guardianId));
         if (projected == null) {
             log.warn("[CHAT-RELAY] AI 기록 목록 형식 이상: call=logs");
             throw new CustomException(ErrorCode.CHAT_UNAVAILABLE);
         }
-        return projected;
+        return plain(projected);
     }
 
-    public JsonNode logDetail(String guardianId, long chatId) {
+    public Object logDetail(String guardianId, long chatId) {
         rateLimitService.check(LOGS_ENDPOINT, guardianId, LOGS_PER_MINUTE, LOGS_PER_HOUR);
         JsonNode detail = aiChatClient.logDetail(guardianId, chatId).orElseThrow(() -> {
             // AI는 없는 기록과 남의 기록을 구분하지 않고 404로 답한다 - 둘 다 여기로 온다(내용 없이 id만 남긴다)
@@ -80,7 +80,15 @@ public class ChatRelayService {
             log.warn("[CHAT-RELAY] AI 기록 상세 형식 이상: call=log-detail");
             throw new CustomException(ErrorCode.CHAT_UNAVAILABLE);
         }
-        return projected;
+        return plain(projected);
+    }
+
+    /**
+     * 웹 응답으로 내보낼 값은 Jackson 2 노드가 아니라 일반 객체(Map·List·값)여야 한다.
+     * Boot 4 웹 변환기는 Jackson 3라 Jackson 2 JsonNode 를 bean 으로 직렬화해 버린다(2026-10-08).
+     */
+    private Object plain(JsonNode node) {
+        return objectMapper.convertValue(node, Object.class);
     }
 
     private void validate(ChatRelayRequest request) {
