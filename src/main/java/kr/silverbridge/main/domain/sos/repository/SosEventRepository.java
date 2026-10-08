@@ -66,6 +66,13 @@ public interface SosEventRepository extends JpaRepository<SosEvent, Long> {
      */
     long countByWardIdAndCreatedAtGreaterThanEqual(String wardId, OffsetDateTime from);
 
+    /**
+     * 보호자 대시보드용 - 인가된 피보호자 범위에서 {@code from} 이후 발생한 SOS 건수("이번 달").
+     *
+     * @param wardIds <b>인가된(ACTIVE 연결) 목록만</b> 넘겨야 한다(IDOR 방지)
+     */
+    long countByWardIdInAndCreatedAtGreaterThanEqual(Collection<String> wardIds, OffsetDateTime from);
+
     /** 경로별 건수 프로젝션. */
     interface TriggerTypeCount {
         SosTriggerType getTriggerType();

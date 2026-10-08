@@ -114,6 +114,7 @@ public enum ErrorCode {
     // SOS 이력 조회 (처리(ACK) 기능 철회로 SOS_EVENT_NOT_FOUND 제거 - 2026-08-26, V39)
     // 연결되지 않은 피보호자의 이력 접근 — 404 위장 대신 그대로 안내한다(2026-07-14 정책)
     SOS_NOT_AUTHORIZED(HttpStatus.FORBIDDEN, "연결된 피보호자의 SOS 이력만 볼 수 있습니다."),
+    DASHBOARD_NOT_AUTHORIZED(HttpStatus.FORBIDDEN, "연결된 피보호자의 대시보드만 볼 수 있습니다."),
 
     // 복약 알림
     MEDICATION_NOT_FOUND(HttpStatus.NOT_FOUND, "복약 정보를 찾을 수 없습니다."),
