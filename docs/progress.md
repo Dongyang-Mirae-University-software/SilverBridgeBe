@@ -1795,3 +1795,10 @@ REST API Key 단독 대비 보안 강화 — 인가코드 탈취 시 토큰 발�
 - `POST /api/guardian/chat`·`GET .../logs`·`.../logs/{id}` 응답 data 에 AI 답변 대신 JsonNode 속성(array·bigDecimal·nodeType…)이 내려가던 결함 수정. Boot 4 웹 변환기(Jackson 3)가 Jackson 2 `JsonNode` 를 bean 으로 직렬화한 것이 원인. `ChatRelayService` 가 허용 필드 필터 뒤 `convertValue(node, Object.class)` 로 일반 객체를 반환하고 컨트롤러는 `ApiResponse<Object>`. 경로·DTO·허용 필드·인가·제한·오류 code 변경 없음, 마이그레이션 없음.
 - 재발 방지: `GuardianChatControllerHttpTest`(실제 HTTP 변환기 + 반환 타입 가드). 같은 결함은 다른 곳에 없음(전수 grep).
 - 상세: `docs/(2026-10-08) fix-chat-response-jackson-node.md`
+
+---
+
+## [2026-10-08] 보호자 대시보드 API 기능 점검
+
+- 템플릿 B 점검 완료(코드 변경 없음): 정책 위반 없음, 잔여 Low 3건(D-1 null 의미 둘·D-2 서비스 단위 테스트 공백·D-3 늦은 등록 약). gosky 실서버 읽기 전용 확인(401/403/직렬화 정상), 데이터 칸은 테스트 계정 연결 0명이라 미검증.
+- 상세: `docs/(2026-10-08) audit-guardian-dashboard-api.md`
