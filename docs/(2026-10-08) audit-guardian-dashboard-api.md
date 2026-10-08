@@ -4,7 +4,7 @@
 
 ## 결론
 
-High/Medium 없음. 정책 위반 없음. 잔여는 **데이터 칸의 실서버 미검증**과 테스트 공백 1건, 표시 모호성 1건(Low).
+High/Medium 없음. 정책 위반 없음. Low 이슈 D-1(null 의미)·D-2(테스트 공백)와 데이터 칸 실서버 미검증은 **같은 날 후속 PR 로 모두 해소**했다(아래 "후속 반영"). 남은 것은 수용한 Low(D-3~D-5)뿐.
 
 ## 실서버 확인 (gosky, 읽기 전용, 테스트 보호자 계정)
 
@@ -18,7 +18,7 @@ High/Medium 없음. 정책 위반 없음. 잔여는 **데이터 칸의 실서버
 | JSON 직렬화 | 정상(10/8 챗 응답의 Jackson 2 타입 사고와 같은 문제 없음 - 이 DTO 는 record·표준 타입만) |
 
 - vkcs-linux 는 이 계정이 로그인 401(해당 서버에 계정 없음 추정) -> 정책대로 반복하지 않고 멈췄다. 같은 코드가 CD 로 배포돼 기동 로그에 ERROR 없음만 확인.
-- ⚠️ **이 계정은 ACTIVE 연결 피보호자가 0명이라 이상감지·SOS·복약 칸의 값은 실서버에서 못 봤다.** 값 조립은 단위 테스트(목)와 쿼리 통합 테스트(vkcs 실 DB)로만 검증됐다. 연결된 테스트 피보호자 데이터가 있는 계정으로 `latest`/`mostUrgent`/개별 API 일치를 한 번 확인해야 한다.
+- 1차 확인 때는 계정에 ACTIVE 연결 피보호자가 0명이라 데이터 칸을 못 봤다 -> 아래 "실서버 재확인"에서 해소.
 
 ## 정책 대조 (rules 파일)
 
@@ -56,3 +56,25 @@ High/Medium 없음. 정책 위반 없음. 잔여는 **데이터 칸의 실서버
 
 - D-2 는 작은 테스트 PR 로 처리 권장. D-1 은 사용자 결정(FE 와 협의) 후.
 - 연결된 테스트 데이터로 데이터 칸 실서버 확인 1회.
+
+## 실서버 재확인 (gosky, 연결된 피보호자 1명, 읽기 전용)
+
+대시보드 값을 개별 API 와 대조했다. 전부 일치.
+
+| 항목 | 대시보드 | 개별 API |
+|---|---|---|
+| 이상감지 확인 필요 건수 | 15 | 15 (`/history/summary`) |
+| 이상감지 최신 확인 필요 1건 | 상황 #95 (흉기, PENDING) | 이력 목록의 같은 #95 |
+| SOS 이번 달(KST) | 3 | 3 (이력 목록에서 KST 월 시작 이후로 직접 센 값, 전체 16건 중) |
+| SOS 최근 1건 | 같은 건 | 이력 첫 항목 |
+| 복약 미체크 | 1 (점심 15:02) | 1 (`/api/guardian/medication`에서 현재 KST 시각 기준으로 직접 센 값) |
+| `pendingActions.total` / 칩 `pendingCount` | 16 (= 15 + 1) / 16 | - |
+| `wardId` 지정 / 없는 `wardId` | 200, 합계 동일 / 403 | - |
+
+`unavailable` 은 비어 있었다. 최신 상황의 `cameraLabel` 이 null 인 것은 카메라가 삭제된 상황이라 이력 API 와 같은 의도된 동작.
+
+## 후속 반영 (PR: `feature/dashboard-empty-and-tests`)
+
+- **D-1 해소(권장안 b)**: 연결 0명이면 `anomalyDetection{needsReviewCount:0, latest:null}`·`sos{thisMonthCount:0, latest:null}`·`medication{uncheckedCount:0, mostUrgent:null}`·`pendingActions` 0·`wards: []`·`unavailable: []`. 연결 없음의 0 은 실제로 센 값이고 SOS 이력 API 의 `counts 0` 과 같은 기준이다. **이제 칸 `null` 은 조회 실패에만 쓴다.** FE 는 칸이 null 일 때만 "확인 중"으로 그리면 된다. Swagger·기능 문서·테스트 갱신.
+- **D-2 해소**: `GuardianAnomalyServiceTest.LatestNeedsReview`(연결 0명·403 시 저장소 미호출·없으면 null·PENDING+CONFLICTED 1건 조회) 4건, `GuardianSosServiceTest.getRecent_*`(연결 0명·403·기간 0건이어도 최근 1건·탈퇴 익명 NPE 없음) 4건 추가.
+- D-3~D-5 는 수용(변경 없음).
