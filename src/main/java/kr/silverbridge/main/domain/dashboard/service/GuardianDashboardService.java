@@ -72,7 +72,10 @@ public class GuardianDashboardService {
     public GuardianDashboardResponse getDashboard(String guardianId, String wardId) {
         List<String> wardIds = resolveVisibleWardIds(guardianId, wardId);
         if (wardIds.isEmpty()) {
-            return new GuardianDashboardResponse(new PendingActions(0L, 0L, 0L), List.of(), null, null, null, List.of());
+            // 연결된 피보호자가 없으면 센 결과가 실제로 0이다("모르는 값"이 아니다) - 칸 null 은 조회 실패만 뜻하게 한다.
+            // SOS 이력 API 가 연결 0명에 counts 0 을 주는 것과 같은 기준이다.
+            return new GuardianDashboardResponse(new PendingActions(0L, 0L, 0L), List.of(),
+                    new AnomalyDetection(0, null), new Sos(0, null), new Medication(0, null), List.of());
         }
         String scope = StringUtils.hasText(wardId) ? wardId : null;
         List<String> unavailable = new ArrayList<>();

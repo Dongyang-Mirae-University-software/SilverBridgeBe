@@ -60,16 +60,20 @@ class GuardianDashboardServiceTest {
     }
 
     @Test
-    @DisplayName("연결 0명 → 하위 서비스를 호출하지 않고 빈 응답")
+    @DisplayName("연결 0명 → 하위 서비스를 호출하지 않고 0 값 응답(칸 null 은 조회 실패 전용)")
     void 연결없음_빈응답() {
         when(connectionService.getActiveWardIds("G1")).thenReturn(List.of());
 
         GuardianDashboardResponse res = service.getDashboard("G1", null);
 
         assertThat(res.wards()).isEmpty();
-        assertThat(res.anomalyDetection()).isNull();
-        assertThat(res.sos()).isNull();
-        assertThat(res.medication()).isNull();
+        assertThat(res.pendingActions().total()).isZero();
+        assertThat(res.anomalyDetection().needsReviewCount()).isZero();
+        assertThat(res.anomalyDetection().latest()).isNull();
+        assertThat(res.sos().thisMonthCount()).isZero();
+        assertThat(res.sos().latest()).isNull();
+        assertThat(res.medication().uncheckedCount()).isZero();
+        assertThat(res.medication().mostUrgent()).isNull();
         assertThat(res.unavailable()).isEmpty();
         verifyNoInteractions(anomalyService, sosService, medicationService);
     }
