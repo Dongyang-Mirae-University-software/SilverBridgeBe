@@ -9,7 +9,7 @@
 
 | 머지 | 기능 | 상태 | 점검 문서 | 잔여 이슈 |
 |---|---|---|---|---|
-| (2026-10-08) feature/guardian-notification-preference | 보호자 알림 종류 설정 - `GET·PUT /api/guardian/notification-type-setting` (복약 계정 토글 V59, 필수 알림 잠금, 재촉 위임) | ⚠️ | `(2026-10-08) audit-impact-guardian-notification-preference.md` (템플릿 C, 실서버 호출 포함) | 🔴🟠 0 · 🟡 M-1 복약 카드가 계정 토글 OFF를 반영하지 않음(FE 안내로 처리 제안) / M-2 OFF 건은 알림 이력에 안 남음(수용) · 🟢 L-1~L-3 |
+| (2026-10-08) feature/guardian-notification-preference | 보호자 알림 종류 설정 - `GET·PUT /api/guardian/notification-type-setting` (복약 계정 토글 V59, 필수 알림 잠금, 재촉 위임) | ✅ | `(2026-10-08) audit-impact-guardian-notification-preference.md` (템플릿 C, 실서버 호출 포함) | - (M-1 Swagger+FE 전달·M-2 DEBUG 로그·L-1 ON CONFLICT·L-3 조회 1회 반영 2026-10-08 `feature/guardian-pref-audit-fixes` / L-2 역할 변경 후 잔존 행은 유지 결정) |
 | #334 (2026-10-08) | 보호자 대시보드 통합 API - `GET /api/guardian/dashboard` (이상감지·SOS·복약 칸, 마이그레이션 없음) | ✅ | `(2026-10-08) audit-guardian-dashboard-api.md` (템플릿 B, 실서버 gosky 연결 피보호자로 개별 API 대조 전부 일치) | D-1(연결 0명 null->0 값)·D-2(서비스 단위 테스트) 후속 PR 로 해소. 수용: D-3 늦게 등록한 약 미체크 포함 / D-4 피보호자 수만큼 summary 호출 |
 | #327 (2026-10-07) | AI 챗봇 백엔드 중계 - `/api/guardian/chat*`, 토큰 userId·본문 로그 금지·130초 호출 (마이그레이션 없음) | ⚠️ | `(2026-10-07) audit-chat-relay.md` (템플릿 B, 실서버 AI 계약 실측 포함) | 🔴🟠 0 · 🟡 M-2 기록 응답 허용 목록 **반영**(PR) / M-1 AI 상세 조회 userId 선택 - AI 서버 `CHAT_REQUIRE_USER_ID=true` **적용 완료**(2026-10-07 사용자 실행, 무 userId 상세 조회 200→422 실측) · 🟢 L-1~L-5·테스트 보강 / 보호자 토큰 전체 경로 실호출은 FE 교체 후 확인 |
 | #328·#329 (2026-10-07) | 보호자 이상감지 이력 유형 필터 + 건수 요약 (`type`·`/history/summary`, 마이그레이션 없음) | ✅ | `(2026-10-07) audit-anomaly-history-type-filter.md` (템플릿 B) | - (Low 3건 전부 처리 2026-10-07: L-1 `total` 전 행 합·L-3 테스트 반영, L-2는 전역 사용자 제한이 이미 있어 해당 없음) / 통합 테스트 vkcs 통과·두 서버 배포 확인 |

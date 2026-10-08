@@ -1,6 +1,5 @@
 package kr.silverbridge.main.domain.notification.service;
 
-import java.util.Collection;
 import java.util.Set;
 import java.util.stream.Collectors;
 import kr.silverbridge.main.domain.anomaly.service.GuardianAnomalySettingService;
@@ -49,14 +48,13 @@ public class GuardianNotificationPreferenceService {
         return toResponse(guardianId);
     }
 
-    /** 미복용 요약을 계정 차원에서 <b>끈</b> 보호자. 행이 없으면 기본값 ON이라 포함되지 않는다. */
+    /**
+     * 미복용 요약을 계정 차원에서 <b>끈</b> 보호자 전체. 행이 없으면 기본값 ON이라 포함되지 않는다.
+     * 끄겠다고 누른 사람만 행이 있어 규모가 작다 - 발송 스케줄러가 실행마다 한 번 읽는다.
+     */
     @Transactional(readOnly = true)
-    public Set<String> medicationDisabledGuardians(Collection<String> guardianIds) {
-        if (guardianIds.isEmpty()) {
-            return Set.of();
-        }
-        return repository.findByGuardianIdIn(guardianIds).stream()
-                .filter(preference -> !preference.isMedicationEnabled())
+    public Set<String> medicationDisabledGuardians() {
+        return repository.findByMedicationEnabledFalse().stream()
                 .map(GuardianNotificationPreference::getGuardianId)
                 .collect(Collectors.toSet());
     }

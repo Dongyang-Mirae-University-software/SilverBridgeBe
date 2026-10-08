@@ -40,11 +40,10 @@ public class GuardianAnomalySettingService {
             return getSetting(guardianId);
         }
 
+        // 행이 없으면 ON CONFLICT DO NOTHING으로 넣고(동시 최초 저장 흡수), 어느 쪽이든 행을 읽어 값을 갱신한다.
+        settingRepository.insertIfAbsent(guardianId, reviewReminderEnabled);
         GuardianAnomalySetting setting = settingRepository.findByGuardianId(guardianId)
-                .orElseGet(() -> settingRepository.save(GuardianAnomalySetting.builder()
-                        .guardianId(guardianId)
-                        .reviewReminderEnabled(DEFAULT_REVIEW_REMINDER_ENABLED)
-                        .build()));
+                .orElseThrow(() -> new IllegalStateException("재촉 설정 저장 후 행을 찾지 못함"));
         setting.changeReviewReminderEnabled(reviewReminderEnabled);
 
         return new AnomalyReminderSettingResponse(setting.isReviewReminderEnabled());

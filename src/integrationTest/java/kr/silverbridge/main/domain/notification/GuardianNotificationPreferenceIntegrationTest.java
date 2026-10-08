@@ -42,6 +42,7 @@ class GuardianNotificationPreferenceIntegrationTest extends PostgresIntegrationT
 
     @Autowired private GuardianNotificationPreferenceService service;
     @Autowired private GuardianNotificationPreferenceRepository repository;
+    @Autowired private kr.silverbridge.main.domain.anomaly.repository.GuardianAnomalySettingRepository anomalySettingRepository;
     @Autowired private UserRepository userRepository;
 
     @BeforeEach
@@ -61,11 +62,40 @@ class GuardianNotificationPreferenceIntegrationTest extends PostgresIntegrationT
 
         service.updateSettings(GUARDIAN_ID, new GuardianNotificationTypeSettingRequest(null, false));
         assertThat(service.getSettings(GUARDIAN_ID).medication().enabled()).isFalse();
-        assertThat(service.medicationDisabledGuardians(List.of(GUARDIAN_ID))).containsExactly(GUARDIAN_ID);
+        assertThat(service.medicationDisabledGuardians()).contains(GUARDIAN_ID);
 
         service.updateSettings(GUARDIAN_ID, new GuardianNotificationTypeSettingRequest(null, true));
         assertThat(service.getSettings(GUARDIAN_ID).medication().enabled()).isTrue();
         assertThat(repository.count()).isEqualTo(1);
+    }
+
+    @Test
+    @DisplayName("재촉 설정도 동시에 처음 저장해도 모두 성공한다 (guardian_anomaly_setting ON CONFLICT)")
+    void 재촉_동시_최초저장() throws Exception {
+        ExecutorService pool = Executors.newFixedThreadPool(CONCURRENCY);
+        try {
+            for (int round = 0; round < ROUNDS; round++) {
+                anomalySettingRepository.deleteAll(anomalySettingRepository.findAll());
+                CyclicBarrier start = new CyclicBarrier(CONCURRENCY);
+                CompletableFuture<?>[] futures = new CompletableFuture<?>[CONCURRENCY];
+                for (int i = 0; i < CONCURRENCY; i++) {
+                    futures[i] = CompletableFuture.runAsync(() -> {
+                        try {
+                            start.await(10, TimeUnit.SECONDS);
+                        } catch (Exception e) {
+                            throw new IllegalStateException(e);
+                        }
+                        service.updateSettings(GUARDIAN_ID, new GuardianNotificationTypeSettingRequest(false, null));
+                    }, pool);
+                }
+                CompletableFuture.allOf(futures).get(30, TimeUnit.SECONDS);
+
+                assertThat(anomalySettingRepository.findByGuardianId(GUARDIAN_ID)).as("round %d", round)
+                        .hasValueSatisfying(s -> assertThat(s.isReviewReminderEnabled()).isFalse());
+            }
+        } finally {
+            pool.shutdownNow();
+        }
     }
 
     @Test

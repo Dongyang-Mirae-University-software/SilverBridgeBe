@@ -1,6 +1,5 @@
 package kr.silverbridge.main.domain.notification.repository;
 
-import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 import kr.silverbridge.main.domain.notification.entity.GuardianNotificationPreference;
@@ -13,8 +12,8 @@ public interface GuardianNotificationPreferenceRepository extends JpaRepository<
 
     Optional<GuardianNotificationPreference> findByGuardianId(String guardianId);
 
-    /** 발송 판정용 벌크 조회. 행이 없는 보호자는 기본값(ON)이다. */
-    List<GuardianNotificationPreference> findByGuardianIdIn(Collection<String> guardianIds);
+    /** 발송 판정용. 끈 보호자만 행이 의미를 가지므로 OFF 행만 읽는다(행이 없는 보호자는 기본값 ON). */
+    List<GuardianNotificationPreference> findByMedicationEnabledFalse();
 
     /**
      * 행이 없을 때만 넣는다. 반환 0 = 이미 있음(동시 요청이 먼저 넣음). 조회 후 save는 동시 최초 저장에서
