@@ -1,6 +1,7 @@
 package kr.silverbridge.main.domain.medication.service;
 
 import kr.silverbridge.main.domain.connection.service.ConnectionService;
+import kr.silverbridge.main.domain.notification.service.GuardianNotificationPreferenceService;
 import kr.silverbridge.main.domain.medication.config.MedicationProperties;
 import kr.silverbridge.main.domain.medication.entity.Medication;
 import kr.silverbridge.main.domain.medication.entity.MedicationIntake;
@@ -62,6 +63,7 @@ public class MedicationMissedAlertPlanner {
     private final MedicationMissedAlertLogRepository missedAlertLogRepository;
     private final GuardianMedicationSettingRepository guardianSettingRepository;
     private final GuardianMedicationSettingService guardianSettingService;
+    private final GuardianNotificationPreferenceService preferenceService;
     private final ConnectionService connectionService;
     private final UserRepository userRepository;
     private final MedicationProperties properties;
@@ -127,6 +129,14 @@ public class MedicationMissedAlertPlanner {
                     .toList();
             if (pending.isEmpty()) {
                 continue;
+            }
+            // 보호자 계정 차원에서 미복용 요약을 끈 사람은 선점 기록도 만들지 않는다(피보호자별 설정과 AND).
+            Set<String> accountDisabled = preferenceService.medicationDisabledGuardians(pending);
+            if (!accountDisabled.isEmpty()) {
+                pending = pending.stream().filter(guardianId -> !accountDisabled.contains(guardianId)).toList();
+                if (pending.isEmpty()) {
+                    continue;
+                }
             }
             Map<String, GuardianMissedAlertSetting> settings =
                     guardianSettingService.findSettings(wardId, pending);
