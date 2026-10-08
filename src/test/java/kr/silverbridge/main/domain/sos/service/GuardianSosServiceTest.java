@@ -236,6 +236,71 @@ class GuardianSosServiceTest {
 
     // ─── 헬퍼 ────────────────────────────────────────────────────
 
+    // ---- 대시보드용 getRecent (이번 달 건수 + 최근 1건) ----
+
+    @Test
+    @DisplayName("getRecent: 연결된 피보호자 없음 → (0, null), 쿼리 없음")
+    void getRecent_연결없음() {
+        when(connectionService.getActiveWardIds(GUARDIAN_ID)).thenReturn(List.of());
+
+        GuardianSosService.RecentSos result = guardianSosService.getRecent(GUARDIAN_ID, null, OffsetDateTime.now());
+
+        assertThat(result.count()).isZero();
+        assertThat(result.latest()).isNull();
+        verifyNoInteractions(sosEventRepository);
+    }
+
+    @Test
+    @DisplayName("getRecent: ACTIVE 아닌 피보호자 지정 → 403 SOS_NOT_AUTHORIZED, 쿼리 없음")
+    void getRecent_연결없는피보호자_거부() {
+        when(connectionService.isActiveConnection(GUARDIAN_ID, OTHER_WARD_ID)).thenReturn(false);
+
+        assertThatThrownBy(() -> guardianSosService.getRecent(GUARDIAN_ID, OTHER_WARD_ID, OffsetDateTime.now()))
+                .isInstanceOf(CustomException.class)
+                .hasFieldOrPropertyWithValue("errorCode", ErrorCode.SOS_NOT_AUTHORIZED);
+
+        verifyNoInteractions(sosEventRepository);
+    }
+
+    @Test
+    @DisplayName("getRecent: 인가된 피보호자 범위로 기간 건수와 최근 1건을 가져온다(최근 1건은 기간 무관)")
+    void getRecent_건수와_최근1건() {
+        OffsetDateTime from = OffsetDateTime.parse("2026-10-01T00:00:00+09:00");
+        SosEvent latest = sosEvent(9L, WARD_ID, from.minusDays(3), "침실", SosTriggerType.SOS_BUTTON);
+        when(connectionService.getActiveWardIds(GUARDIAN_ID)).thenReturn(List.of(WARD_ID));
+        when(sosEventRepository.countByWardIdInAndCreatedAtGreaterThanEqual(List.of(WARD_ID), from)).thenReturn(0L);
+        when(sosEventRepository.findByWardIdInOrderByCreatedAtDesc(any(), any(Pageable.class)))
+                .thenReturn(new PageImpl<>(List.of(latest), PageRequest.of(0, 1), 1));
+        when(userRepository.findAllById(any())).thenReturn(List.of(user(WARD_ID, WARD_NAME)));
+
+        GuardianSosService.RecentSos result = guardianSosService.getRecent(GUARDIAN_ID, null, from);
+
+        // 이번 달 0건이어도 지난 SOS 가 있으면 최근 1건은 내려간다 - 0 과 "없음"을 구분
+        assertThat(result.count()).isZero();
+        assertThat(result.latest().sosEventId()).isEqualTo(9L);
+        assertThat(result.latest().wardName()).isEqualTo(WARD_NAME);
+        ArgumentCaptor<Pageable> page = ArgumentCaptor.forClass(Pageable.class);
+        verify(sosEventRepository).findByWardIdInOrderByCreatedAtDesc(any(), page.capture());
+        assertThat(page.getValue().getPageSize()).isEqualTo(1);
+    }
+
+    @Test
+    @DisplayName("getRecent: 탈퇴한 피보호자의 익명 최근 1건(wardId=null)도 NPE 없이 이름 없이 반환")
+    void getRecent_탈퇴피보호자_익명() {
+        SosEvent anonymous = sosEvent(3L, null, OffsetDateTime.now());
+        when(connectionService.getActiveWardIds(GUARDIAN_ID)).thenReturn(List.of(WARD_ID));
+        when(sosEventRepository.countByWardIdInAndCreatedAtGreaterThanEqual(any(), any())).thenReturn(1L);
+        when(sosEventRepository.findByWardIdInOrderByCreatedAtDesc(any(), any(Pageable.class)))
+                .thenReturn(new PageImpl<>(List.of(anonymous), PageRequest.of(0, 1), 1));
+
+        GuardianSosService.RecentSos result = guardianSosService.getRecent(GUARDIAN_ID, null, OffsetDateTime.now());
+
+        assertThat(result.count()).isEqualTo(1);
+        assertThat(result.latest().wardId()).isNull();
+        assertThat(result.latest().wardName()).isNull();
+        verifyNoInteractions(userRepository);
+    }
+
     private static SosEvent sosEvent(long id, String wardId, OffsetDateTime createdAt) {
         return sosEvent(id, wardId, createdAt, null, null);
     }

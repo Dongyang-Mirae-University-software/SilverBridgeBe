@@ -67,6 +67,65 @@ class GuardianAnomalyServiceTest {
                 incidentRepository, feedbackRepository, conflictLogRepository, connectionService, cameraService, userRepository, clipService);
     }
 
+    @Nested
+    @DisplayName("대시보드용 최신 확인 필요 1건")
+    class LatestNeedsReview {
+
+        @Test
+        @DisplayName("연결된 피보호자 없음 → null, 저장소 조회 없음")
+        void 연결없음() {
+            when(connectionService.getActiveWardIds(GUARDIAN_ID)).thenReturn(List.of());
+
+            assertThat(service.getLatestNeedsReview(GUARDIAN_ID, null)).isNull();
+
+            verify(incidentRepository, never()).findLatestByStatuses(any(), any(), any());
+        }
+
+        @Test
+        @DisplayName("ACTIVE 아닌 피보호자 지정 → 403 ANOMALY_NOT_AUTHORIZED, 저장소 조회 없음")
+        void 연결없는_피보호자_거부() {
+            when(connectionService.isActiveConnection(GUARDIAN_ID, "WD0009")).thenReturn(false);
+
+            assertThatThrownBy(() -> service.getLatestNeedsReview(GUARDIAN_ID, "WD0009"))
+                    .isInstanceOf(CustomException.class)
+                    .hasFieldOrPropertyWithValue("errorCode", ErrorCode.ANOMALY_NOT_AUTHORIZED);
+
+            verify(incidentRepository, never()).findLatestByStatuses(any(), any(), any());
+        }
+
+        @Test
+        @DisplayName("확인 필요 상황이 없으면 null")
+        void 없으면_null() {
+            when(connectionService.getActiveWardIds(GUARDIAN_ID)).thenReturn(List.of(WARD_ID));
+            when(incidentRepository.findLatestByStatuses(any(), any(), any())).thenReturn(List.of());
+
+            assertThat(service.getLatestNeedsReview(GUARDIAN_ID, null)).isNull();
+        }
+
+        @Test
+        @DisplayName("인가된 범위·PENDING+CONFLICTED·1건만 조회하고 이력 항목 형식으로 돌려준다")
+        void 최신_1건() {
+            AnomalyIncident found = incident();
+            org.springframework.test.util.ReflectionTestUtils.setField(found, "id", INCIDENT_ID);
+            when(connectionService.getActiveWardIds(GUARDIAN_ID)).thenReturn(List.of(WARD_ID));
+            when(incidentRepository.findLatestByStatuses(any(), any(), any())).thenReturn(List.of(found));
+
+            var item = service.getLatestNeedsReview(GUARDIAN_ID, null);
+
+            assertThat(item.incidentId()).isEqualTo(INCIDENT_ID);
+            assertThat(item.wardId()).isEqualTo(WARD_ID);
+            @SuppressWarnings("unchecked")
+            org.mockito.ArgumentCaptor<java.util.Collection<AnomalyReviewStatus>> statuses =
+                    org.mockito.ArgumentCaptor.forClass(java.util.Collection.class);
+            org.mockito.ArgumentCaptor<org.springframework.data.domain.Pageable> page =
+                    org.mockito.ArgumentCaptor.forClass(org.springframework.data.domain.Pageable.class);
+            verify(incidentRepository).findLatestByStatuses(eq(List.of(WARD_ID)), statuses.capture(), page.capture());
+            assertThat(statuses.getValue())
+                    .containsExactlyInAnyOrder(AnomalyReviewStatus.PENDING, AnomalyReviewStatus.CONFLICTED);
+            assertThat(page.getValue().getPageSize()).isEqualTo(1);
+        }
+    }
+
     private AnomalyIncident incident() {
         return AnomalyIncident.builder()
                 .wardId(WARD_ID)

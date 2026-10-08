@@ -16,7 +16,7 @@
 ## 계약
 
 - 경로: `GET /api/guardian/dashboard?wardId=` (GUARDIAN 전용). 요청서의 `guardianId` 는 받지 않는다 - 보호자는 토큰에서만. 요청서의 값은 화면상 피보호자 칩이라 `wardId` 로 해석했다.
-- `wardId` 지정: ACTIVE 연결 확인(아니면 403 `DASHBOARD_NOT_AUTHORIZED` + `[IDOR-ATTEMPT]`). 생략: ACTIVE 연결 전원 합산. 연결 0명: `wards: []`, 칸 null, `pendingActions` 0.
+- `wardId` 지정: ACTIVE 연결 확인(아니면 403 `DASHBOARD_NOT_AUTHORIZED` + `[IDOR-ATTEMPT]`). 생략: ACTIVE 연결 전원 합산. 연결 0명: `wards: []`, 건수 전부 0, `latest`/`mostUrgent` null (실제로 센 0 - 칸 null 은 조회 실패 전용, 2026-10-08 점검 D-1 반영).
 - 응답 최상위: `pendingActions{total,anomaly,medication}` · `wards[{wardId,wardName,pendingCount}]` · `anomalyDetection{needsReviewCount,latest}` · `sos{thisMonthCount,latest}` · `medication{uncheckedCount,mostUrgent}` · `unavailable[]`.
 - `anomalyDetection.latest` = 기존 `AnomalyIncidentItem`(이력 API 와 같은 형식, `clip`/`clipCount` 포함). 영상 재생은 기존 클립 API.
 - `sos.latest` = 기존 `SosHistoryItem`. 이번 달이 아니어도 가장 최근 1건.
