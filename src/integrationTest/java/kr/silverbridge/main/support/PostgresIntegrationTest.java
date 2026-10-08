@@ -29,7 +29,10 @@ import org.testcontainers.postgresql.PostgreSQLContainer;
 @Import(JpaAuditingConfig.class)
 public abstract class PostgresIntegrationTest {
 
-    protected static final PostgreSQLContainer POSTGRES = new PostgreSQLContainer("postgres:17");
+    // 컨텍스트마다 커넥션 풀(최대 10)이 캐시에 남는다. 설정이 다른 테스트 클래스가 열 개를 넘으면 기본 max_connections(100)가
+    // 모자라 "too many clients already"로 무관한 테스트가 깨지므로 테스트 컨테이너 한도를 올려 둔다(운영 DB와 무관).
+    protected static final PostgreSQLContainer POSTGRES = new PostgreSQLContainer("postgres:17")
+            .withCommand("postgres", "-c", "max_connections=300");
 
     static {
         POSTGRES.start();
