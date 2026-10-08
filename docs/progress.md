@@ -1780,3 +1780,10 @@ REST API Key 단독 대비 보안 강화 — 인가코드 탈취 시 토큰 발�
 
 - `GET /api/guardian/dashboard?wardId=` 신설(`domain/dashboard`). 이상감지(확인 필요)·SOS(이번 달 KST)·복약(미체크)만 담고, 정서·활동·병원 예약은 BE 데이터가 없어 필드를 만들지 않음. 칸 실패는 0이 아니라 null + `unavailable`. SOS "해결됨" 없음. 마이그레이션 없음.
 - 상세: `docs/(2026-10-08) feature-guardian-dashboard-api.md`
+
+---
+
+## [2026-10-08] 보호자 알림 종류 설정 API
+
+- `GET·PUT /api/guardian/notification-type-setting` 신설. sos·anomalyDetection 은 `required` 잠금, 재촉은 기존 설정에 위임, 복약 미복용 요약은 계정 토글(V59 `guardian_notification_preference`)과 피보호자별 설정의 AND. 정서 변화·병원 예약은 BE 발송이 없어 만들지 않음.
+- 상세: `docs/(2026-10-08) feature-guardian-notification-preference.md`
