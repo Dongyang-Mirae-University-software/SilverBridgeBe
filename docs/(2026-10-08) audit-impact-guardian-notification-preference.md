@@ -51,7 +51,12 @@
 ### 🟢 L-3 - 플래너의 피보호자별 조회
 계정 토글 조회가 피보호자별 루프 안에서 1회씩 실행된다(`pending`이 있을 때만). 기존 `getActiveGuardianIds`·`findSettings`와 같은 패턴이고 건수가 적어 수용.
 
-## 후속
+## 후속 처리 (2026-10-08, `feature/guardian-pref-audit-fixes`)
 
-- M-1 FE 전달 (복약 카드 안내) + Swagger 문구 보강 여부는 사용자 판단.
-- 나머지는 기록만.
+| # | 처리 |
+|---|---|
+| M-1 | **반영**: `medication-alert-setting` PUT Swagger에 "계정 토글이 꺼져 있으면 이 값이 true여도 요약이 오지 않는다" 명시. BE 응답은 바꾸지 않음. FE 안내는 Notion 「프론트엔드 전달 내용」에 전달 |
+| M-2 | **반영**: 계정 토글 OFF로 제외되면 플래너가 `[MED-MISSED-ACCOUNT-OFF]` DEBUG 로그(건수만, 식별자 없음)를 남김. 이력 행은 여전히 만들지 않음(피보호자별 OFF와 동일) |
+| L-1 | **반영**: `GuardianAnomalySettingService.updateSetting`을 `INSERT ... ON CONFLICT DO NOTHING` 후 재조회로 변경. 통합 테스트에 동시 최초 저장 20회 추가 |
+| L-3 | **반영**: 계정 토글 조회를 피보호자 루프 밖으로 빼 실행마다 1회(`findByMedicationEnabledFalse`, OFF 행만)로 줄임. 서비스 메서드는 `medicationDisabledGuardians()`(인자 없음) |
+| L-2 | **유지(결정)**: 역할 변경 시 행을 지우지 않는다. 동작 영향이 없고 보호자로 돌아오면 설정이 복원된다. 지우려면 관리자 역할 변경 경로(`AdminUserService.applyRole`)에 정리를 추가해야 하는데, 그 경로의 영향 범위가 이득보다 크다 |

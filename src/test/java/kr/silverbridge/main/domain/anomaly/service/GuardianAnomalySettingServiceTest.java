@@ -57,16 +57,29 @@ class GuardianAnomalySettingServiceTest {
     }
 
     @Test
-    @DisplayName("행이 없는 상태에서 끄면 행을 만들어 저장한다")
+    @DisplayName("행이 없는 상태에서 끄면 ON CONFLICT 삽입 후 읽은 행을 갱신한다")
     void createsRowWhenTurningOff() {
-        when(settingRepository.findByGuardianId(GUARDIAN_ID)).thenReturn(Optional.empty());
-        when(settingRepository.save(any(GuardianAnomalySetting.class)))
-                .thenAnswer(invocation -> invocation.getArgument(0));
+        GuardianAnomalySetting inserted =
+                GuardianAnomalySetting.builder().guardianId(GUARDIAN_ID).reviewReminderEnabled(false).build();
+        when(settingRepository.insertIfAbsent(GUARDIAN_ID, false)).thenReturn(1);
+        when(settingRepository.findByGuardianId(GUARDIAN_ID)).thenReturn(Optional.of(inserted));
 
         AnomalyReminderSettingResponse response = service.updateSetting(GUARDIAN_ID, false);
 
         assertThat(response.reviewReminderEnabled()).isFalse();
-        verify(settingRepository).save(any(GuardianAnomalySetting.class));
+        verify(settingRepository, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("동시 요청이 먼저 넣었으면(0건) 그 행을 읽어 이 요청의 값으로 갱신한다")
+    void concurrentFirstSaveIsAbsorbed() {
+        GuardianAnomalySetting existing =
+                GuardianAnomalySetting.builder().guardianId(GUARDIAN_ID).reviewReminderEnabled(true).build();
+        when(settingRepository.insertIfAbsent(GUARDIAN_ID, false)).thenReturn(0);
+        when(settingRepository.findByGuardianId(GUARDIAN_ID)).thenReturn(Optional.of(existing));
+
+        assertThat(service.updateSetting(GUARDIAN_ID, false).reviewReminderEnabled()).isFalse();
+        assertThat(existing.isReviewReminderEnabled()).isFalse();
     }
 
     @Test

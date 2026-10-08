@@ -104,11 +104,9 @@ class GuardianNotificationPreferenceServiceTest {
     @Test
     @DisplayName("계정 차원에서 복약을 끈 보호자만 골라낸다 (행 없음 = ON)")
     void 끈_보호자만() {
-        GuardianNotificationPreference off = GuardianNotificationPreference.of("GD0002", false);
-        GuardianNotificationPreference on = GuardianNotificationPreference.of("GD0003", true);
-        when(repository.findByGuardianIdIn(List.of("GD0001", "GD0002", "GD0003"))).thenReturn(List.of(off, on));
+        when(repository.findByMedicationEnabledFalse())
+                .thenReturn(List.of(GuardianNotificationPreference.of("GD0002", false)));
 
-        assertThat(service.medicationDisabledGuardians(List.of("GD0001", "GD0002", "GD0003")))
-                .containsExactly("GD0002");
+        assertThat(service.medicationDisabledGuardians()).containsExactly("GD0002");
     }
 }

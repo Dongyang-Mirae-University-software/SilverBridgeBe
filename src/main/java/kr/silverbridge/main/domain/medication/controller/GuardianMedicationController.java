@@ -298,6 +298,8 @@ public class GuardianMedicationController {
                     - 이 알림은 "약을 안 드셨다"가 아니라 "체크되지 않았다"를 알립니다 -
                       실제로는 복용하고 체크만 안 한 경우가 있을 수 있습니다.
                     - 이 설정은 복약 요약 알림에만 적용됩니다. SOS 등 필수 알림에는 영향이 없습니다.
+                    - 보호자 계정 전체 토글(GET /api/guardian/notification-type-setting 의 medication.enabled)이
+                      꺼져 있으면 이 값이 true여도 요약은 오지 않습니다(둘 다 켜져야 발송). 화면에서 안내해 주세요.
                     """)
     @ApiResponses({
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "변경 완료. data: 적용된 설정"),

@@ -90,7 +90,7 @@ class MedicationMissedAlertPlannerTest {
     void 계정토글_OFF는_선점없음() {
         stubOneMissed();
         when(connectionService.getActiveGuardianIds(WARD_ID)).thenReturn(List.of(GUARDIAN_A, GUARDIAN_B));
-        when(preferenceService.medicationDisabledGuardians(any())).thenReturn(java.util.Set.of(GUARDIAN_A));
+        when(preferenceService.medicationDisabledGuardians()).thenReturn(java.util.Set.of(GUARDIAN_A));
 
         List<MedicationMissedAlertTarget> claimed = planner.claimMissedAlerts();
 
@@ -105,7 +105,7 @@ class MedicationMissedAlertPlannerTest {
     void 전원_계정토글_OFF() {
         stubOneMissed();
         when(connectionService.getActiveGuardianIds(WARD_ID)).thenReturn(List.of(GUARDIAN_A));
-        when(preferenceService.medicationDisabledGuardians(any())).thenReturn(java.util.Set.of(GUARDIAN_A));
+        when(preferenceService.medicationDisabledGuardians()).thenReturn(java.util.Set.of(GUARDIAN_A));
 
         assertThat(planner.claimMissedAlerts()).isEmpty();
         verify(missedAlertLogRepository, never()).saveAll(any());

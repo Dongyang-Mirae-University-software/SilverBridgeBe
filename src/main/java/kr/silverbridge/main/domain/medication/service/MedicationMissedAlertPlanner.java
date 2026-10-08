@@ -111,6 +111,8 @@ public class MedicationMissedAlertPlanner {
                 .collect(Collectors.toSet());
 
         GuardianMissedAlertSetting defaultSetting = guardianSettingService.defaultSetting();
+        // 계정 차원에서 끈 보호자는 소수라 피보호자마다 조회하지 않고 이번 실행에 한 번만 읽는다.
+        Set<String> accountDisabled = preferenceService.medicationDisabledGuardians();
         List<MedicationMissedAlertLog> logs = new ArrayList<>();
         List<Claim> claims = new ArrayList<>();
         for (Map.Entry<String, List<Medication>> entry : byWard.entrySet()) {
@@ -131,9 +133,13 @@ public class MedicationMissedAlertPlanner {
                 continue;
             }
             // 보호자 계정 차원에서 미복용 요약을 끈 사람은 선점 기록도 만들지 않는다(피보호자별 설정과 AND).
-            Set<String> accountDisabled = preferenceService.medicationDisabledGuardians(pending);
             if (!accountDisabled.isEmpty()) {
+                int before = pending.size();
                 pending = pending.stream().filter(guardianId -> !accountDisabled.contains(guardianId)).toList();
+                if (pending.size() < before) {
+                    // 관리자 알림 이력에는 남지 않는 건이라 "왜 안 갔지" 확인용 흔적만 남긴다(식별자 없이 건수만).
+                    log.debug("[MED-MISSED-ACCOUNT-OFF] 계정 토글 OFF로 제외: {}명", before - pending.size());
+                }
                 if (pending.isEmpty()) {
                     continue;
                 }
