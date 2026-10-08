@@ -10,6 +10,7 @@ import kr.silverbridge.main.domain.medication.repository.GuardianMedicationSetti
 import kr.silverbridge.main.domain.medication.repository.MedicationIntakeRepository;
 import kr.silverbridge.main.domain.medication.repository.MedicationMissedAlertLogRepository;
 import kr.silverbridge.main.domain.medication.repository.MedicationRepository;
+import kr.silverbridge.main.domain.notification.service.GuardianNotificationPreferenceService;
 import kr.silverbridge.main.domain.user.entity.User;
 import kr.silverbridge.main.domain.user.repository.UserRepository;
 import org.junit.jupiter.api.Assumptions;
@@ -53,6 +54,7 @@ class MedicationMissedAlertPlannerTest {
     @Mock private MedicationMissedAlertLogRepository missedAlertLogRepository;
     @Mock private GuardianMedicationSettingRepository guardianSettingRepository;
     @Mock private GuardianMedicationSettingService guardianSettingService;
+    @Mock private GuardianNotificationPreferenceService preferenceService;
     @Mock private ConnectionService connectionService;
     @Mock private UserRepository userRepository;
 
@@ -79,7 +81,46 @@ class MedicationMissedAlertPlannerTest {
         setDefaultAlertTime(MedicationClock.now().toLocalTime());
         planner = new MedicationMissedAlertPlanner(
                 medicationRepository, intakeRepository, missedAlertLogRepository,
-                guardianSettingRepository, guardianSettingService, connectionService, userRepository, properties);
+                guardianSettingRepository, guardianSettingService, preferenceService,
+                connectionService, userRepository, properties);
+    }
+
+    @Test
+    @DisplayName("계정 토글을 끈 보호자는 선점 기록도 만들지 않고, 켠 보호자만 받는다")
+    void 계정토글_OFF는_선점없음() {
+        stubOneMissed();
+        when(connectionService.getActiveGuardianIds(WARD_ID)).thenReturn(List.of(GUARDIAN_A, GUARDIAN_B));
+        when(preferenceService.medicationDisabledGuardians(any())).thenReturn(java.util.Set.of(GUARDIAN_A));
+
+        List<MedicationMissedAlertTarget> claimed = planner.claimMissedAlerts();
+
+        assertThat(claimed).extracting(MedicationMissedAlertTarget::guardianId).containsExactly(GUARDIAN_B);
+        ArgumentCaptor<List<MedicationMissedAlertLog>> captor = ArgumentCaptor.forClass(List.class);
+        verify(missedAlertLogRepository).saveAll(captor.capture());
+        assertThat(captor.getValue()).extracting(MedicationMissedAlertLog::getGuardianId).containsExactly(GUARDIAN_B);
+    }
+
+    @Test
+    @DisplayName("전원이 계정 토글 OFF면 선점도 발송도 없다")
+    void 전원_계정토글_OFF() {
+        stubOneMissed();
+        when(connectionService.getActiveGuardianIds(WARD_ID)).thenReturn(List.of(GUARDIAN_A));
+        when(preferenceService.medicationDisabledGuardians(any())).thenReturn(java.util.Set.of(GUARDIAN_A));
+
+        assertThat(planner.claimMissedAlerts()).isEmpty();
+        verify(missedAlertLogRepository, never()).saveAll(any());
+    }
+
+    @Test
+    @DisplayName("계정 ON + 피보호자별 OFF면 발송하지 않는다 (AND)")
+    void 계정ON_피보호자별OFF() {
+        stubOneMissed();
+        when(connectionService.getActiveGuardianIds(WARD_ID)).thenReturn(List.of(GUARDIAN_A));
+        when(guardianSettingService.findSettings(any(), any())).thenReturn(Map.of(
+                GUARDIAN_A, new GuardianMissedAlertSetting(false, MedicationClock.now().toLocalTime())));
+
+        assertThat(planner.claimMissedAlerts()).isEmpty();
+        verify(missedAlertLogRepository, never()).saveAll(any());
     }
 
     @Test
