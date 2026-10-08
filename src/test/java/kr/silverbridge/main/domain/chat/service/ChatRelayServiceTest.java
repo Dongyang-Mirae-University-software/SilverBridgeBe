@@ -69,7 +69,7 @@ class ChatRelayServiceTest {
         JsonNode reply = objectMapper.readTree("{\"reply\":\"ok\"}");
         when(aiChatClient.send(any())).thenReturn(reply);
 
-        assertThat(service.send(ME, request)).isSameAs(reply);
+        assertThat(service.send(ME, request)).isEqualTo(java.util.Map.of("reply", "ok"));
 
         ArgumentCaptor<byte[]> body = ArgumentCaptor.forClass(byte[].class);
         verify(aiChatClient).send(body.capture());
@@ -218,8 +218,8 @@ class ChatRelayServiceTest {
         when(aiChatClient.logs(ME)).thenReturn(objectMapper.readTree("[" + raw + "]"));
         when(aiChatClient.logDetail(ME, 5L)).thenReturn(Optional.of(objectMapper.readTree(raw)));
 
-        JsonNode list = service.logs(ME);
-        JsonNode detail = service.logDetail(ME, 5L);
+        JsonNode list = objectMapper.valueToTree(service.logs(ME));
+        JsonNode detail = objectMapper.valueToTree(service.logDetail(ME, 5L));
 
         for (JsonNode item : new JsonNode[]{list.get(0), detail}) {
             assertThat(item.get("message").asText()).isEqualTo("두통");

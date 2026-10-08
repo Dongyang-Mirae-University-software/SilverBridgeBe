@@ -536,3 +536,8 @@
 - **불변 규칙 ②(복약 = 계정 AND 피보호자별)**: 계정 토글이 OFF면 `MedicationMissedAlertPlanner`가 **선점 기록도 만들지 않는다**(선점 후 발송·UNIQUE 불변). `MEDICATION_STOPPED`(조치가 필요한 안내)는 게이트하지 않는다.
 - **불변 규칙 ③(재촉은 저장소를 늘리지 않는다)**: `anomalyReviewReminder`는 기존 `guardian_anomaly_setting`에 위임한다. 같은 값을 새 테이블에 복제하지 말 것.
 - **불변 규칙 ④(정서 변화·병원 예약 설정 금지)**: BE가 발송하지 않는 알림의 토글은 보내지 못하는 약속을 저장하는 거짓 UI다. 발송 기능이 생기기 전에는 필드·컬럼을 만들지 말 것.
+
+## 웹 응답에 Jackson 2 타입을 싣지 말 것 (2026-10-08)
+
+- Spring Boot 4 웹 응답 변환기는 Jackson 3(`tools.jackson`)이다. `com.fasterxml.jackson.databind` 의 `JsonNode`·`ObjectNode` 를 컨트롤러가 반환하면 모르는 타입이라 bean getter(array·nodeType…)가 직렬화된다(챗 중계가 이 때문에 한때 사용 불가).
+- 응답 경계(서비스)에서 일반 객체·DTO 로 바꾼 뒤 반환한다. 컨트롤러 테스트는 실제 HTTP 직렬화를 거친다(`GuardianChatControllerHttpTest`).

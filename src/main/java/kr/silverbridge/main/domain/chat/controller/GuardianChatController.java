@@ -1,6 +1,5 @@
 package kr.silverbridge.main.domain.chat.controller;
 
-import com.fasterxml.jackson.databind.JsonNode;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
@@ -58,7 +57,7 @@ public class GuardianChatController {
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "504", description = "CHAT_TIMEOUT", content = @Content)
     })
     @PostMapping("/api/guardian/chat")
-    public ResponseEntity<ApiResponse<JsonNode>> send(@AuthenticationPrincipal String guardianId,
+    public ResponseEntity<ApiResponse<Object>> send(@AuthenticationPrincipal String guardianId,
                                                       @Valid @RequestBody ChatRelayRequest request) {
         return noStore(chatRelayService.send(guardianId, request));
     }
@@ -80,7 +79,7 @@ public class GuardianChatController {
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "503", description = "CHAT_UNAVAILABLE", content = @Content)
     })
     @GetMapping("/api/guardian/chat/logs")
-    public ResponseEntity<ApiResponse<JsonNode>> logs(@AuthenticationPrincipal String guardianId) {
+    public ResponseEntity<ApiResponse<Object>> logs(@AuthenticationPrincipal String guardianId) {
         return noStore(chatRelayService.logs(guardianId));
     }
 
@@ -98,12 +97,12 @@ public class GuardianChatController {
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "503", description = "CHAT_UNAVAILABLE", content = @Content)
     })
     @GetMapping("/api/guardian/chat/logs/{chatId}")
-    public ResponseEntity<ApiResponse<JsonNode>> logDetail(@AuthenticationPrincipal String guardianId,
+    public ResponseEntity<ApiResponse<Object>> logDetail(@AuthenticationPrincipal String guardianId,
                                                            @PathVariable long chatId) {
         return noStore(chatRelayService.logDetail(guardianId, chatId));
     }
 
-    private static ResponseEntity<ApiResponse<JsonNode>> noStore(JsonNode data) {
+    private static ResponseEntity<ApiResponse<Object>> noStore(Object data) {
         return ResponseEntity.ok().cacheControl(CacheControl.noStore()).body(ApiResponse.ok(data));
     }
 }

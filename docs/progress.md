@@ -1787,3 +1787,11 @@ REST API Key 단독 대비 보안 강화 — 인가코드 탈취 시 토큰 발�
 
 - `GET·PUT /api/guardian/notification-type-setting` 신설. sos·anomalyDetection 은 `required` 잠금, 재촉은 기존 설정에 위임, 복약 미복용 요약은 계정 토글(V59 `guardian_notification_preference`)과 피보호자별 설정의 AND. 정서 변화·병원 예약은 BE 발송이 없어 만들지 않음.
 - 상세: `docs/(2026-10-08) feature-guardian-notification-preference.md`
+
+---
+
+## [2026-10-08] 챗 중계 응답 직렬화 수정 (긴급)
+
+- `POST /api/guardian/chat`·`GET .../logs`·`.../logs/{id}` 응답 data 에 AI 답변 대신 JsonNode 속성(array·bigDecimal·nodeType…)이 내려가던 결함 수정. Boot 4 웹 변환기(Jackson 3)가 Jackson 2 `JsonNode` 를 bean 으로 직렬화한 것이 원인. `ChatRelayService` 가 허용 필드 필터 뒤 `convertValue(node, Object.class)` 로 일반 객체를 반환하고 컨트롤러는 `ApiResponse<Object>`. 경로·DTO·허용 필드·인가·제한·오류 code 변경 없음, 마이그레이션 없음.
+- 재발 방지: `GuardianChatControllerHttpTest`(실제 HTTP 변환기 + 반환 타입 가드). 같은 결함은 다른 곳에 없음(전수 grep).
+- 상세: `docs/(2026-10-08) fix-chat-response-jackson-node.md`
