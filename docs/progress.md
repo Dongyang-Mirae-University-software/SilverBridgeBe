@@ -1816,3 +1816,10 @@ REST API Key 단독 대비 보안 강화 — 인가코드 탈취 시 토큰 발�
 
 - 템플릿 B 점검 완료: PASS(🔴0·🟠0·🟡1·🟢4). 잔여 M-1 탈퇴 시 AI 서버 상담 기록이 남음(AI에 삭제 API 없음, 정책 결정 필요), 실서버 피보호자 호출은 WARD 테스트 계정이 없어 미검증.
 - 상세: `docs/(2026-10-09) audit-ward-chat-relay.md`
+
+---
+
+## [2026-10-09] 탈퇴 시 AI 상담 기록 삭제 (피보호자 챗 점검 M-1)
+
+- AI 서버 `DELETE /api/v1/chat/logs?userId=`(PR #10) + 백엔드 `ChatLogPurgeListener`(탈퇴 AFTER_COMMIT, 비동기 전용 executor, best-effort). 마이그레이션 없음. **배포 순서: AI 서버 먼저.**
+- 상세: `docs/(2026-10-09) feature-chat-log-purge-on-withdraw.md`

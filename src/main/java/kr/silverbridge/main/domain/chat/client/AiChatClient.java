@@ -78,6 +78,20 @@ public class AiChatClient {
         return Optional.of(dataOf(response, "log-detail"));
     }
 
+    /**
+     * 회원의 상담 기록 전체 삭제(회원 탈퇴 정리용, 2026-10-09). AI의 {@code DELETE /api/v1/chat/logs?userId=}.
+     * 성공하면 돌아오고, 실패(미설정·통신 오류·4xx/5xx·시간 초과)는 {@link CustomException}이다 - 호출부(탈퇴 리스너)가 삼킨다.
+     * 400·404·422도 성공으로 보지 않는다(옛 AI 서버는 이 경로가 없어 405/404가 오는데 "지웠다"고 믿으면 안 된다).
+     */
+    public void deleteLogs(String userId) {
+        AiResponse response = call("logs-delete", "DELETE", logsUri(userId), null,
+                properties.getLogsCallTimeout(), properties.getMaxLogsBytes());
+        if (response.status() != 200) {
+            log.warn("[CHAT-RELAY] AI 기록 삭제 응답 이상: status={}", response.status());
+            throw new CustomException(ErrorCode.CHAT_UNAVAILABLE);
+        }
+    }
+
     private JsonNode dataOf(AiResponse response, String call) {
         try {
             JsonNode data = objectMapper.readTree(response.body()).path("data");

@@ -4,6 +4,7 @@ import kr.silverbridge.main.domain.anomaly.listener.AnomalyClipCleanupListener;
 import kr.silverbridge.main.domain.anomaly.listener.AnomalyClipListener;
 import kr.silverbridge.main.domain.anomaly.listener.AnomalyNotificationListener;
 import kr.silverbridge.main.domain.auth.listener.KakaoRegisterEventListener;
+import kr.silverbridge.main.domain.chat.listener.ChatLogPurgeListener;
 import kr.silverbridge.main.domain.connection.listener.ConnectionNotificationListener;
 import kr.silverbridge.main.domain.inquiry.listener.InquiryNotificationListener;
 import kr.silverbridge.main.domain.medication.listener.MedicationIntakeNotificationListener;
@@ -60,6 +61,12 @@ class NotificationExecutorAssignmentTest {
     }
 
     @Test
+    @DisplayName("탈퇴 시 AI 챗 기록 삭제는 전용 executor다 - 알림 풀(FCM·SMS)과 폐기 로그를 섞지 않는다, 2026-10-09")
+    void 챗_기록_삭제_리스너_executor() {
+        assertThat(asyncQualifiers(ChatLogPurgeListener.class)).containsExactly("chatPurgeExecutor");
+    }
+
+    @Test
     @DisplayName("리스너가 가리키는 executor 이름은 AsyncConfig에 빈으로 존재한다(오타 시 기본 executor로 새지 않게)")
     void executor_이름이_빈으로_존재() {
         Set<String> beanNames = Arrays.stream(AsyncConfig.class.getDeclaredMethods())
@@ -67,7 +74,7 @@ class NotificationExecutorAssignmentTest {
                 .filter(b -> b != null)
                 .flatMap(b -> Arrays.stream(b.name()))
                 .collect(Collectors.toSet());
-        assertThat(beanNames).contains(URGENT, GENERAL, CLIP);
+        assertThat(beanNames).contains(URGENT, GENERAL, CLIP, "chatPurgeExecutor");
     }
 
     private static Set<String> asyncQualifiers(Class<?> type) {

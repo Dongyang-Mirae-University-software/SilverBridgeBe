@@ -88,6 +88,20 @@ public class AsyncConfig {
                         + "active={}, queue={}", pool.getActiveCount(), pool.getQueue().size()));
     }
 
+    /**
+     * 회원 탈퇴 시 AI 서버의 상담 기록 삭제(ChatLogPurgeListener) 전용(2026-10-09).
+     *
+     * <p>AI 호출 하나가 최대 15초(기록 조회와 같은 제한)를 기다린다. 알림 풀에 태우면 FCM·SMS 발송이 그 뒤에 줄을 서고, 폐기가
+     * {@code [NOTIFY-REJECTED]} ERROR로 섞인다. 탈퇴는 드문 이벤트라 작게 두고 넘치면 폐기한다(CallerRuns 금지 - 탈퇴
+     * 요청 스레드가 AI를 기다리지 않게). 폐기·실패한 건은 AI 쪽에 남으므로 {@code [CHAT-PURGE-REJECTED]} WARN을 추적 단서로 둔다.</p>
+     */
+    @Bean(name = "chatPurgeExecutor")
+    public Executor chatPurgeExecutor() {
+        return newExecutor("chat-purge-", 1, 2, 100, (task, pool) ->
+                log.warn("[CHAT-PURGE-REJECTED] 탈퇴 챗 기록 삭제 폐기 - AI 서버에 기록이 남을 수 있다: active={}, queue={}",
+                        pool.getActiveCount(), pool.getQueue().size()));
+    }
+
     private static ThreadPoolTaskExecutor newExecutor(String name, String threadNamePrefix,
                                                       int corePoolSize, int maxPoolSize, int queueCapacity) {
         return newExecutor(threadNamePrefix, corePoolSize, maxPoolSize, queueCapacity, (task, pool) ->
