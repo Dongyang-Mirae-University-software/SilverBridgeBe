@@ -48,6 +48,7 @@
 ## 이슈
 
 ### 🟡 M-1. 탈퇴해도 AI 서버의 상담 기록이 남는다 (보호자 경로부터 존재, 피보호자로 확대)
+- **조치(2026-10-09)**: AI 서버 `DELETE /api/v1/chat/logs`(PR #10) + 백엔드 `ChatLogPurgeListener`로 해소. 상세 `docs/(2026-10-09) feature-chat-log-purge-on-withdraw.md`. 이미 탈퇴해 남은 기존 기록은 지우지 않는다.
 - 근거: 탈퇴 리스너(`UserWithdrawnEvent` 소비자)에 챗 정리가 없고, AI 챗 라우터(`chat_router.py`)에도 삭제 엔드포인트가 없다(POST·GET 목록·GET 상세뿐).
 - 영향: "탈퇴 = hard delete, 탈퇴자가 남긴 데이터를 붙들지 않는다"와 어긋난다. 피보호자 경로가 열리면서 고령 사용자의 건강 상담이 대상에 들어가 민감도가 커졌다. 사용자 ID는 6자 영숫자라 같은 ID로 재가입할 확률은 사실상 없고, 백엔드 경유로는 남의 기록을 볼 수 없다(노출이 아니라 잔존 문제).
 - 조치안: AI 팀에 `DELETE /api/v1/chat/logs?userId=` 요청 -> 백엔드에서 탈퇴 AFTER_COMMIT 리스너(`REQUIRES_NEW`, 실패는 삼킴)로 호출. 또는 보관 기간 정책을 정해 AI에서 만료 삭제. 정책 결정이 먼저 필요하다(사용자 결정 사항).

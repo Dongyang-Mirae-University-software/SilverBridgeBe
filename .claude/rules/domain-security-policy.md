@@ -529,6 +529,11 @@
 - **기록 응답은 허용 목록으로 거른다 (2026-10-07 점검 M-2)**: AI 기록에는 `contextJson`(요청 때 보낸 프로필 사본 `userContext` 포함)·`upstreamMeta`·`decisionTrace`·`userId`가 함께 오는데 FE는 쓰지 않는다. `ChatLogProjection.ALLOWED_FIELDS`에 있는 필드만 내린다(AI가 새 필드를 더해도 자동으로 빠진다 - 차단 목록으로 바꾸지 말 것). FE가 새 필드를 쓰게 되면 목록에 더하고, 내부 정보 필드를 더하지 말 것(`ChatLogProjectionTest`가 고정). AI 응답 형식이 이상하면 503이다.
 - **AI 상세 조회의 `userId` 필수화는 AI 서버 설정이다 (점검 M-1)**: AI `GET /api/v1/chat/logs/{id}`는 `CHAT_REQUIRE_USER_ID=false`면 `userId` 없이도 200이라 추측 가능한 `chat_id`로 남의 상세가 열린다. 중계는 항상 `userId`를 붙이므로 백엔드 경유로는 노출되지 않는다. **gosky AI 서버 `.env`에 `CHAT_REQUIRE_USER_ID=true`를 적용했다(2026-10-07, 무 `userId` 상세 조회 422 실측)** - 이 줄을 지우거나 새 AI 서버를 띄울 때 빠뜨리면 다시 열린다. 내용은 `docs/(2026-10-07) audit-chat-relay.md` 후속 절.
 - **킬 스위치** `chat.relay.enabled=false`는 **전송만** 503으로 멈춘다(기록 조회는 계속).
+- **불변 규칙 ⑥(탈퇴하면 AI의 상담 기록도 지운다, 2026-10-09 점검 M-1)**: 상담 기록은 AI 서버 DB에 있어 회원 행 CASCADE가 닿지 않는다. `ChatLogPurgeListener`가 `UserWithdrawnEvent` AFTER_COMMIT에서 AI `DELETE /api/v1/chat/logs?userId=`를 부른다(보호자·피보호자·관리자 강제 탈퇴 모두 같은 파이프라인).
+  - **비동기 + 전용 `chatPurgeExecutor`**(1/2/100, 포화 시 폐기 + `[CHAT-PURGE-REJECTED]` WARN, CallerRuns 금지). 이벤트가 `userId`를 들고 있어 회원 행이 필요 없으므로 클립 삭제처럼 동기일 필요가 없다 - AI 호출(최대 15초)이 탈퇴 응답을 붙들지 않게 한다. 알림 풀에 태우지 말 것(`NotificationExecutorAssignmentTest`가 고정).
+  - **best-effort**: 실패는 삼키고 `[CHAT-PURGE-FAILED]` WARN에 userId와 예외 클래스명만 남긴다(상담 내용·AI 오류 문구 금지, `LogRawExceptionGuardTest`). 삭제 성공은 AI가 200을 줄 때뿐이다 - 404/405(옛 AI 서버)를 성공으로 보지 말 것.
+  - **수용한 한계**: 스윕 purge 경로·AI 장애·executor 포화로 놓친 건은 AI에 남는다(재시도 없음). **AI 서버가 삭제 API를 갖춘 버전으로 반영되기 전에 탈퇴하면 그 건은 지워지지 않는다**(배포 순서: AI 먼저). 킬 스위치는 삭제에 영향이 없다.
+  - 같은 AI 서버의 예약 자격 증명(`reservation_credentials`)은 이번 범위 밖이다 - 탈퇴 시 정리 여부는 별도로 확인할 것.
 - **FE 프록시에 챗 경로를 되살리지 말 것**: 프록시는 AI 키를 붙여 아무 경로나 넘기던 구멍이라 FE가 줄인 것이 맞다. AI 쪽 `CHAT_REQUIRE_USER_ID` 강화는 별도 결정(AI 서버 범위).
 
 
