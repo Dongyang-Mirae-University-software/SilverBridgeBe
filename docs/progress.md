@@ -1804,3 +1804,10 @@ REST API Key 단독 대비 보안 강화 — 인가코드 탈취 시 토큰 발�
 - 상세: `docs/(2026-10-08) audit-guardian-dashboard-api.md`
 
 - 후속(같은 날): D-1 연결 0명이면 칸을 0 값으로(칸 null=조회 실패 전용)·D-2 서비스 단위 테스트 8건 추가·gosky 연결 피보호자로 개별 API 대조 일치.
+
+---
+
+## [2026-10-09] 피보호자 AI 챗봇 중계 API
+
+- `POST /api/ward/chat`·`GET /api/ward/chat/logs`·`.../logs/{chatId}` 추가(`WardChatController`, WARD 전용). 보호자와 같은 `ChatRelayService`·응답 스펙·한도. 마이그레이션 없음, 보호자 API 무변경.
+- 상세: `docs/(2026-10-09) feature-ward-chat-relay.md`

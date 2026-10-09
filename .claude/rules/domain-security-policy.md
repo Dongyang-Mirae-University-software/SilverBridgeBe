@@ -518,7 +518,10 @@
 
 - **경위**: FE 보안 수정(ad44cb6)이 `/api/streams` 프록시를 송출 3개 경로로 줄여 챗봇(`POST /v1/chat`·`GET /v1/chat/logs`)이 막혔다. 영상 중계(2026-10-03)와 같은 방식으로 **FE → 백엔드 → AI**로 바꿨다. 상세 `docs/(2026-10-07) feature-chat-relay.md`·`api-contract-chat-relay.md`.
 - **불변 규칙 ①(사용자 ID는 토큰에서만)**: `ChatRelayRequest`에 `userId` 필드가 없고, AI로 나가는 본문의 `userId`는 `@AuthenticationPrincipal`로 받은 ID로 **마지막에 덮어쓴다**. 기록 목록·상세도 토큰 ID로만 AI에 묻는다(쿼리·본문으로 받지 말 것) - 그렇지 않으면 남의 상담 기록을 읽는다(AI는 `userId` 없이 부르면 전체를, `CHAT_REQUIRE_USER_ID`가 꺼져 있으면 상세도 소유자 없이 준다). 옛 FE는 `userId: 1` 고정이라 기존 기록 112건이 한 버킷에 섞여 있다 - 새 API에서는 안 보이며 이전하지 않는다.
-- **불변 규칙 ②(보호자 전용)**: 클래스 레벨 `@PreAuthorize("hasRole('GUARDIAN')")`. 피보호자용 챗 화면이 생기면 이 정책부터 바꿀 것. 새 경로는 인증 필수(permitAll 금지).
+- **불변 규칙 ②(역할별 컨트롤러)**: 보호자 `GuardianChatController`(`hasRole('GUARDIAN')`)와 피보호자 `WardChatController`(`hasRole('WARD')`, 2026-10-09)가 따로 있고 **관리자용은 없다**. 새 경로는 인증 필수(permitAll 금지).
+  - **두 컨트롤러는 같은 `ChatRelayService`를 쓰고 로직을 복제하지 말 것.** 서비스는 역할을 모른다(토큰의 사용자 ID만 사용).
+  - **피보호자의 상담 내용을 보호자·관리자에게 노출하는 경로를 만들지 말 것**(의료 상담 = 본인만). 보호자가 연결된 피보호자의 기록을 보려면 이 정책부터 바꿔야 한다.
+  - `context.role`·`guardianId`는 클라이언트 값 그대로 AI에 전달한다(AI는 분기에 쓰지 않음). 권한 판단 근거로 삼지 말 것.
 - **불변 규칙 ③(본문 로그 금지)**: 의료 상담은 민감 정보다. 메시지·응답·기록·context 본문과 AI 오류 문구는 로그·예외 메시지·알림 이력·감사 로그에 남기지 않는다(userId·소요 시간·상태 코드·예외 클래스명까지). AI 오류 본문은 읽지 않고 상태 코드로만 판단해 고정 문구로 답한다. 응답은 `Cache-Control: no-store`. `ChatRelayLogGuardTest`가 chat 패키지 로그 인자를 고정하고 `LogRawExceptionGuardTest` 목록에도 들어 있다.
 - **불변 규칙 ④(호출 시간 예외)**: 챗은 모델 생성이라 전체 제한을 130초(`chat.relay.call-timeout`, AI `CHAT_UPSTREAM_TIMEOUT_SEC=120` + 여유)로 둔다 - 일반 외부 호출 8~10초 규칙의 예외. 그만큼 요청 스레드를 붙들므로 **동시 상한(전체 10 / 1인 1, 인스턴스 메모리)을 없애지 말 것**(SOS·로그인까지 멈춘다). AI 값을 줄이면 이 값도 함께 본다. 마감 시 연결을 끊는다(영상 중계 L-3와 같은 방식).
 - **불변 규칙 ⑤(키는 서버 안에서만)**: `X-API-Key` 헤더만, 리다이렉트 미추종, 키는 로그·응답에 남기지 않는다(영상 중계 ④와 같음). `AI_API_KEY`·`AI_HTTP_BASE_URL`을 공유한다.
