@@ -1811,3 +1811,8 @@ REST API Key 단독 대비 보안 강화 — 인가코드 탈취 시 토큰 발�
 
 - `POST /api/ward/chat`·`GET /api/ward/chat/logs`·`.../logs/{chatId}` 추가(`WardChatController`, WARD 전용). 보호자와 같은 `ChatRelayService`·응답 스펙·한도. 마이그레이션 없음, 보호자 API 무변경.
 - 상세: `docs/(2026-10-09) feature-ward-chat-relay.md`
+
+## [2026-10-09] 피보호자 AI 챗봇 중계 기능 점검
+
+- 템플릿 B 점검 완료: PASS(🔴0·🟠0·🟡1·🟢4). 잔여 M-1 탈퇴 시 AI 서버 상담 기록이 남음(AI에 삭제 API 없음, 정책 결정 필요), 실서버 피보호자 호출은 WARD 테스트 계정이 없어 미검증.
+- 상세: `docs/(2026-10-09) audit-ward-chat-relay.md`
