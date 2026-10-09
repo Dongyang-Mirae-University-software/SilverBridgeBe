@@ -40,7 +40,7 @@ class LogRawExceptionGuardTest {
             "domain/anomaly/listener/AnomalyNotificationListener.java",
             "domain/chat/client/AiChatClient.java",
             "domain/chat/service/ChatRelayService.java",
-            "domain/chat/listener/ChatLogPurgeListener.java");
+            "domain/chat/listener/AiMemberDataPurgeListener.java");
 
     @Test
     void guarded_files_do_not_log_exception_messages() throws IOException {

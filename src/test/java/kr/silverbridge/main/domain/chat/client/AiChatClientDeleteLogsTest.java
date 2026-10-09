@@ -40,6 +40,7 @@ class AiChatClientDeleteLogsTest {
     void setUp() throws IOException {
         server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
         server.createContext("/api/v1/chat/logs", this::handle);
+        server.createContext("/api/v1/reservation-credentials", this::handle);
         server.setExecutor(Executors.newCachedThreadPool());
         server.start();
         properties = new ChatRelayProperties();
@@ -104,5 +105,26 @@ class AiChatClientDeleteLogsTest {
 
         assertThatThrownBy(() -> client.deleteLogs("aB3x9Z")).isInstanceOf(CustomException.class);
         assertThat(method.get()).isNull();
+    }
+
+    @Test
+    @DisplayName("예약 API 키 삭제는 DELETE /api/v1/reservation-credentials?userId= 로 키 헤더와 함께 보낸다")
+    void 예약키_삭제_요청_형태() {
+        assertThatNoException().isThrownBy(() -> client.deleteReservationCredential("aB3x9Z"));
+
+        assertThat(method.get()).isEqualTo("DELETE");
+        assertThat(key.get()).isEqualTo(KEY);
+        assertThat(rawUri.get()).isEqualTo("/api/v1/reservation-credentials?userId=aB3x9Z");
+    }
+
+    @Test
+    @DisplayName("예약 API 키 삭제도 200이 아니면 실패다 - 옛 AI 서버의 404/405를 성공으로 보지 않는다")
+    void 예약키_비정상_응답은_실패() {
+        for (int status : new int[]{404, 405, 422, 500}) {
+            responseStatus = status;
+            assertThatThrownBy(() -> client.deleteReservationCredential("aB3x9Z"))
+                    .as("status %d", status)
+                    .isInstanceOf(CustomException.class);
+        }
     }
 }
