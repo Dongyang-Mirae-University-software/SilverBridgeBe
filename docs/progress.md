@@ -1834,3 +1834,8 @@ REST API Key 단독 대비 보안 강화 — 인가코드 탈취 시 토큰 발�
 
 - AI `DELETE /api/v1/reservation-credentials`(AI PR #11) + 백엔드 `AiMemberDataPurgeListener`(상담 기록·예약 API 키 항목별 독립). `WithdrawalAiPurgeIntegrationTest` 추가. 마이그레이션 없음. **배포 순서: AI 서버 먼저.**
 - 상세: `docs/(2026-10-09) feature-chat-log-purge-on-withdraw.md` 추가 절
+
+## [2026-10-09] AI 서버 탈퇴자 데이터 대조 (점검 L-3)
+
+- 두 백엔드 회원 DB와 AI `chat_logs`·`reservation_credentials` 대조: 탈퇴한 실제 회원 데이터 0건, 회원 없는 ID는 옛 형식·테스트 ID뿐. `AUDIT-CHAT-TEST` 1건만 삭제, 나머지(`1`번 112건·`990001~4`·예약 키 정수 ID)는 결정 보류.
+- 상세: `docs/(2026-10-09) audit-chat-log-purge-on-withdraw.md` L-3
