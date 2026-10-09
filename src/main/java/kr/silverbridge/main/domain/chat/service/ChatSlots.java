@@ -13,7 +13,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
  * 진행 중인 챗 전송의 자리(동시 상한). 전송 1건이 요청 스레드를 최대 130초 붙들므로 상한 없이 열면
- * SOS·로그인 같은 일반 API까지 멈춘다 - 서버 전체·보호자 1명 두 단계로 막는다.
+ * SOS·로그인 같은 일반 API까지 멈춘다 - 서버 전체·사용자 1명 두 단계로 막는다.
  * 상한은 이 인스턴스 기준이다(단일 서버 전제).
  */
 @Slf4j
@@ -41,7 +41,7 @@ public class ChatSlots {
             return current + 1;
         });
         if (!reserved[0]) {
-            log.info("[CHAT-LIMIT] 보호자 동시 전송 상한: userId={}", userId);
+            log.info("[CHAT-LIMIT] 사용자 동시 전송 상한: userId={}", userId);
             throw new CustomException(ErrorCode.CHAT_LIMIT_EXCEEDED);
         }
         if (!global.tryAcquire()) {

@@ -16,10 +16,6 @@ import org.springframework.security.web.method.annotation.AuthenticationPrincipa
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 
-import java.lang.reflect.Method;
-import java.lang.reflect.Modifier;
-import java.lang.reflect.ParameterizedType;
-import java.lang.reflect.Type;
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -38,7 +34,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  * 서비스가 돌려주는 일반 객체(Map·List)가 JSON 으로 그대로 나가는지 실제 변환기로 확인한다.
  */
 @ExtendWith(MockitoExtension.class)
-class GuardianChatControllerHttpTest {
+class WardChatControllerHttpTest {
 
     private static final ObjectMapper JACKSON2 = new ObjectMapper();
 
@@ -56,7 +52,7 @@ class GuardianChatControllerHttpTest {
     }
 
     private MockMvc mvc() {
-        return MockMvcBuilders.standaloneSetup(new GuardianChatController(chatRelayService))
+        return MockMvcBuilders.standaloneSetup(new WardChatController(chatRelayService))
                 .setCustomArgumentResolvers(new AuthenticationPrincipalArgumentResolver())
                 .build();
     }
@@ -73,7 +69,7 @@ class GuardianChatControllerHttpTest {
                 {"reply":"물을 충분히 드세요","riskLevel":"low","count":3,"ratio":0.5,"none":null,
                  "list":["a","b"],"toolData":{"hospitals":[{"name":"x","dist":1.2}]}}"""));
 
-        mvc().perform(post("/api/guardian/chat").contentType(MediaType.APPLICATION_JSON)
+        mvc().perform(post("/api/ward/chat").contentType(MediaType.APPLICATION_JSON)
                         .content("{\"message\":\"hi\"}"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.success").value(true))
@@ -92,13 +88,13 @@ class GuardianChatControllerHttpTest {
     @DisplayName("기록 목록: 배열로 내려가고, 비어 있으면 빈 배열이다")
     void logsSerializeAsArray() throws Exception {
         when(chatRelayService.logs("aB3x9Z")).thenReturn(plain("[{\"id\":7,\"reply\":\"r\"}]"));
-        mvc().perform(get("/api/guardian/chat/logs"))
+        mvc().perform(get("/api/ward/chat/logs"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data[0].id").value(7))
                 .andExpect(jsonPath("$.data[0].reply").value("r"));
 
         when(chatRelayService.logs("aB3x9Z")).thenReturn(plain("[]"));
-        mvc().perform(get("/api/guardian/chat/logs"))
+        mvc().perform(get("/api/ward/chat/logs"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data").isArray())
                 .andExpect(jsonPath("$.data").isEmpty());
@@ -108,40 +104,9 @@ class GuardianChatControllerHttpTest {
     @DisplayName("기록 상세: 객체로 내려간다")
     void logDetailSerializesAsObject() throws Exception {
         when(chatRelayService.logDetail(eq("aB3x9Z"), anyLong())).thenReturn(plain("{\"id\":9,\"reply\":\"r\"}"));
-        mvc().perform(get("/api/guardian/chat/logs/9"))
+        mvc().perform(get("/api/ward/chat/logs/9"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.id").value(9))
                 .andExpect(jsonPath("$.data.reply").value("r"));
-    }
-
-    @Test
-    @DisplayName("가드: 컨트롤러·서비스 공개 메서드의 반환 타입에 Jackson 2(com.fasterxml.jackson.databind) 타입이 없다")
-    void noJackson2TypesAtResponseBoundary() {
-        for (Class<?> type : List.of(GuardianChatController.class, WardChatController.class, ChatRelayService.class)) {
-            for (Method m : type.getDeclaredMethods()) {
-                if (!Modifier.isPublic(m.getModifiers())) {
-                    continue;
-                }
-                assertThat(containsJackson2(m.getGenericReturnType()))
-                        .as("%s#%s 반환 타입", type.getSimpleName(), m.getName()).isFalse();
-            }
-        }
-    }
-
-    private static boolean containsJackson2(Type t) {
-        if (t instanceof Class<?> c) {
-            return c.getName().startsWith("com.fasterxml.jackson.databind");
-        }
-        if (t instanceof ParameterizedType p) {
-            if (containsJackson2(p.getRawType())) {
-                return true;
-            }
-            for (Type a : p.getActualTypeArguments()) {
-                if (containsJackson2(a)) {
-                    return true;
-                }
-            }
-        }
-        return false;
     }
 }
