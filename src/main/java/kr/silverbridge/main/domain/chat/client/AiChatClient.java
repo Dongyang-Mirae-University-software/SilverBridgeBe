@@ -38,6 +38,7 @@ public class AiChatClient {
 
     private static final String API_KEY_HEADER = "X-API-Key";
     private static final String CHAT_PATH = "/api/v1/chat";
+    private static final String RESERVATION_CREDENTIAL_PATH = "/api/v1/reservation-credentials";
 
     private final ChatRelayProperties properties;
     private final ObjectMapper objectMapper;
@@ -84,10 +85,23 @@ public class AiChatClient {
      * 400·404·422도 성공으로 보지 않는다(옛 AI 서버는 이 경로가 없어 405/404가 오는데 "지웠다"고 믿으면 안 된다).
      */
     public void deleteLogs(String userId) {
-        AiResponse response = call("logs-delete", "DELETE", logsUri(userId), null,
+        deleteByUser("logs-delete", logsUri(userId));
+    }
+
+    /**
+     * 회원의 예약 API 키 삭제(회원 탈퇴 정리용, 2026-10-09). AI의 {@code DELETE /api/v1/reservation-credentials?userId=}.
+     * 성공 기준과 실패 처리는 {@link #deleteLogs}와 같다. 키 값은 요청·응답·로그 어디에도 싣지 않는다.
+     */
+    public void deleteReservationCredential(String userId) {
+        deleteByUser("reservation-credential-delete",
+                base(RESERVATION_CREDENTIAL_PATH).queryParam("userId", "{userId}").encode().buildAndExpand(userId).toUri());
+    }
+
+    private void deleteByUser(String call, URI uri) {
+        AiResponse response = call(call, "DELETE", uri, null,
                 properties.getLogsCallTimeout(), properties.getMaxLogsBytes());
         if (response.status() != 200) {
-            log.warn("[CHAT-RELAY] AI 기록 삭제 응답 이상: status={}", response.status());
+            log.warn("[CHAT-RELAY] AI 회원 데이터 삭제 응답 이상: call={}, status={}", call, response.status());
             throw new CustomException(ErrorCode.CHAT_UNAVAILABLE);
         }
     }
