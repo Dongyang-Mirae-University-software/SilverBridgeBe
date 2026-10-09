@@ -171,6 +171,27 @@ class ChatRelayServiceTest {
     }
 
     @Test
+    @DisplayName("보호자·피보호자가 같은 서비스를 써도 AI에는 각자 토큰 ID만 가고, 한도·동시 자리는 사용자 ID별로 따로 센다")
+    void 역할이_달라도_사용자별로_격리() throws Exception {
+        JsonNode reply = objectMapper.readTree("{\"reply\":\"ok\"}");
+        when(aiChatClient.send(any())).thenAnswer(inv -> {
+            // 보호자 전송이 진행 중이어도 피보호자 전송은 막히지 않는다
+            service.send("WRD001", msg("피보호자"));
+            return reply;
+        }).thenReturn(reply);
+        when(aiChatClient.logs(anyString())).thenReturn(objectMapper.readTree("[]"));
+
+        service.send(ME, msg("보호자"));
+        service.logs("WRD001");
+
+        verify(rateLimitService).check(eq("chat-send"), eq("GRD001"), anyInt(), anyInt());
+        verify(rateLimitService).check(eq("chat-send"), eq("WRD001"), anyInt(), anyInt());
+        verify(aiChatClient).logs("WRD001");
+        verify(aiChatClient, never()).logs("GRD001");
+        assertThat(slots.activeUsers()).isZero();
+    }
+
+    @Test
     @DisplayName("AI 실패여도 자리를 돌려준다")
     void 실패해도_자리_반환() {
         when(aiChatClient.send(any())).thenThrow(new CustomException(ErrorCode.CHAT_UNAVAILABLE));
