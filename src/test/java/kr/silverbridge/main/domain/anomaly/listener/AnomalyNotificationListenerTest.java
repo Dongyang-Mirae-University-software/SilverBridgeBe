@@ -95,6 +95,59 @@ class AnomalyNotificationListenerTest {
     }
 
     @Test
+    @DisplayName("WS payload에 푸시와 같은 title·body를 수신자별로 싣고 기존 필드는 유지하며, FCM data에는 싣지 않는다")
+    void ws_payload_title_body() {
+        when(connectionService.getActiveGuardianIds(WARD_ID)).thenReturn(List.of("GD0001"));
+        when(cooldown.tryAcquire(anyString(), eq(SESSION_ID), eq(DetectedType.FIRE), anyBoolean())).thenReturn(true);
+
+        listener.handleAnomalyDetected(event);
+
+        @SuppressWarnings("unchecked")
+        ArgumentCaptor<Map<String, String>> ws = ArgumentCaptor.forClass(Map.class);
+        verify(webSocketEventPublisher).sendToUser(eq("GD0001"), eq("anomaly-detected"), ws.capture());
+        assertThat(ws.getValue())
+                .containsEntry("title", "화재 감지")
+                .containsEntry("body", "김순자님 댁 거실에서 화재가 감지되었습니다.")
+                .containsEntry("type", "ANOMALY_DETECTED").containsEntry("wardId", WARD_ID)
+                .containsEntry("wardName", "김순자").containsEntry("location", "거실")
+                .containsEntry("sessionId", SESSION_ID).containsEntry("detectedType", "FIRE")
+                .containsEntry("detectedTypeLabel", "화재").containsEntry("detectedAt", "2026-07-23 14:20")
+                .containsEntry("anomalyEventId", "7").containsKey("incidentId");
+
+        @SuppressWarnings("unchecked")
+        ArgumentCaptor<Map<String, String>> wsSelf = ArgumentCaptor.forClass(Map.class);
+        verify(webSocketEventPublisher).sendToUser(eq(WARD_ID), eq("anomaly-detected"), wsSelf.capture());
+        assertThat(wsSelf.getValue().get("body"))
+                .isEqualTo("거실에서 화재가 감지되었습니다. 안전한 곳으로 대피해 주세요.");
+
+        ArgumentCaptor<NotificationContent> fcm = ArgumentCaptor.forClass(NotificationContent.class);
+        verify(notificationDispatcher).dispatch(eq("GD0001"), any(), any(), fcm.capture());
+        assertThat(fcm.getValue().title()).isEqualTo(ws.getValue().get("title"));
+        assertThat(fcm.getValue().body()).isEqualTo(ws.getValue().get("body"));
+        assertThat(fcm.getValue().data()).doesNotContainKeys("title", "body");
+    }
+
+    @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.CsvSource({"FIRE,화재가", "FALL,낙상이", "WEAPON,흉기가"})
+    @DisplayName("종류별 조사와 제목이 WS·푸시 본문에 맞게 들어간다(보호자·본인 모두)")
+    void 종류별_조사와_제목(DetectedType type, String subject) {
+        AnomalyDetectedEvent e = new AnomalyDetectedEvent(7L, INCIDENT_ID, WARD_ID, "김순자", SESSION_ID, "거실", type, DETECTED_AT);
+        when(connectionService.getActiveGuardianIds(WARD_ID)).thenReturn(List.of("GD0001"));
+        when(cooldown.tryAcquire(anyString(), eq(SESSION_ID), eq(type), anyBoolean())).thenReturn(true);
+
+        listener.handleAnomalyDetected(e);
+
+        @SuppressWarnings("unchecked")
+        ArgumentCaptor<Map<String, String>> ws = ArgumentCaptor.forClass(Map.class);
+        verify(webSocketEventPublisher, org.mockito.Mockito.times(2))
+                .sendToUser(anyString(), eq("anomaly-detected"), ws.capture());
+        assertThat(ws.getAllValues()).hasSize(2).allSatisfy(m -> {
+            assertThat(m.get("body")).contains(subject + " 감지되었습니다");
+            assertThat(m.get("title")).endsWith(" 감지").doesNotContain("이상 상황");
+        });
+    }
+
+    @Test
     @DisplayName("보호자에겐 '누구 댁 어디' 문구, 본인에겐 대피 안내 문구를 보낸다")
     void 문구_수신자별_구분() {
         when(connectionService.getActiveGuardianIds(WARD_ID)).thenReturn(List.of("GD0001"));
@@ -104,7 +157,7 @@ class AnomalyNotificationListenerTest {
 
         ArgumentCaptor<NotificationContent> guardian = ArgumentCaptor.forClass(NotificationContent.class);
         verify(notificationDispatcher).dispatch(eq("GD0001"), any(), any(), guardian.capture());
-        assertThat(guardian.getValue().title()).isEqualTo("이상 상황 감지");
+        assertThat(guardian.getValue().title()).isEqualTo("화재 감지");
         assertThat(guardian.getValue().body()).isEqualTo("김순자님 댁 거실에서 화재가 감지되었습니다.");
         assertThat(guardian.getValue().data())
                 .containsEntry("type", "ANOMALY_DETECTED")
