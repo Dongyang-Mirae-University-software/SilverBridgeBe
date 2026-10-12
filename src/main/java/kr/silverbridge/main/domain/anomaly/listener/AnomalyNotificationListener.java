@@ -21,6 +21,7 @@ import java.time.OffsetDateTime;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -48,8 +49,6 @@ import java.util.Map;
 @Component
 @RequiredArgsConstructor
 public class AnomalyNotificationListener {
-
-    private static final String TITLE = "이상 상황 감지";
 
     /** AI analyzedAt은 UTC 오프셋이라 표시 직전 KST로 변환한다(컨테이너 TZ에 의존하지 않는다). */
     private static final ZoneId DISPLAY_ZONE = ZoneId.of("Asia/Seoul");
@@ -92,12 +91,19 @@ public class AnomalyNotificationListener {
                     continue;
                 }
 
-                webSocketEventPublisher.sendToUser(userId, "anomaly-detected", data);
+                // 제목·본문은 푸시와 같은 값을 WS에도 싣는다(FE 대체 문구의 조사 오류 방지 - 문구는 BE 한 곳).
+                // 수신자별 복사본에만 넣는다 - 공유 data는 FCM data·알림톡 변수로도 쓰여 title·body가 섞이면 안 된다.
+                String title = title(event);
+                String body = body(event, self);
+                Map<String, String> wsPayload = new HashMap<>(data);
+                wsPayload.put("title", title);
+                wsPayload.put("body", body);
+                webSocketEventPublisher.sendToUser(userId, "anomaly-detected", wsPayload);
                 // 본인은 별도 타입으로 보낸다 — 승인된 알림톡 템플릿이 보호자용 문구라 본인에게 나가면 안 된다.
                 // (data["type"]은 계속 ANOMALY_DETECTED — 클라이언트 계약은 그대로 둔다)
                 NotificationLogResult result = notificationDispatcher.dispatch(userId, event.wardId(),
                         self ? NotificationType.ANOMALY_DETECTED_SELF : NotificationType.ANOMALY_DETECTED,
-                        NotificationContent.of(TITLE, body(event, self), data, smsFallbackText(event, self)));
+                        NotificationContent.of(title, body, data, smsFallbackText(event, self)));
                 if (result != null && result.isDelivered()) {
                     delivered++;
                 } else if (result == NotificationLogResult.NOT_SENT) {
@@ -121,6 +127,11 @@ public class AnomalyNotificationListener {
 
         log.info("[ANOMALY] 이상감지 알림 발송: anomalyEventId={}, 대상={}명, 전달={}명",
                 event.anomalyEventId(), recipients.size(), delivered);
+    }
+
+    /** 알림 제목. 종류가 한눈에 보이도록 "화재 감지"처럼 명시한다(푸시·WS 공통). */
+    private static String title(AnomalyDetectedEvent event) {
+        return label(event.detectedType()) + " 감지";
     }
 
     /**
