@@ -1881,3 +1881,9 @@ REST API Key 단독 대비 보안 강화 — 인가코드 탈취 시 토큰 발�
 
 - 두 서버 `.env.dev`에 `NOTIFICATION_EMAIL_ENABLED=true` 추가(백업 `.env.dev.bak-20261013-2131`), `up -d api`로 재생성, healthy·ERROR 0건. 영향 범위 점검(템플릿 C): High 0 / Medium 1(복약 요약 스케줄러 스레드의 SMTP 대기) / Low 3.
 - 상세: `docs/(2026-10-13) audit-impact-email-notification.md`
+
+## [2026-10-13] 영상 전송 방식 전환 대비 - BE 몫 (1부 적용·2·3부 설계)
+
+- 1부: gosky `.env.dev`에 `CAMERA_RECOMMENDED_FPS=15` 추가(백업 `.env.dev.bak-20261013-2151`) 후 `up -d api`(코드·마이그레이션 없음, vkcs-linux 미적용). 낙상 클립 9초 = 135장으로 AI 버퍼 상한 150에 여유 0이라 프레임 크기 측정 필요. 도착 fps·간격 측정은 송출 시작 후 기록 예정
+- 2·3부: 전환안 A/B/C별 BE 변경 범위·불변 규칙 체크리스트·정책 문서 갱신 계획만 작성(결정 대기, 코드·문서 수정 없음)
+- 상세: `docs/(2026-10-13) design-video-transport-be.md`
