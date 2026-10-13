@@ -15,10 +15,10 @@ import java.util.Set;
  */
 public enum NotificationType {
 
-    CONNECTION_REQUEST(Policy.SETTINGS_ONLY),
-    CONNECTION_ACCEPTED(Policy.SETTINGS_ONLY),
-    CONNECTION_REFUSED(Policy.SETTINGS_ONLY),
-    CONNECTION_DISCONNECTED(Policy.SETTINGS_ONLY),
+    CONNECTION_REQUEST(Policy.SETTINGS_ONLY, Email.ALLOWED),
+    CONNECTION_ACCEPTED(Policy.SETTINGS_ONLY, Email.ALLOWED),
+    CONNECTION_REFUSED(Policy.SETTINGS_ONLY, Email.ALLOWED),
+    CONNECTION_DISCONNECTED(Policy.SETTINGS_ONLY, Email.ALLOWED),
 
     /**
      * 관리자가 강제로 연결함 → <b>보호자·피보호자 양쪽</b>에게 알림.
@@ -27,10 +27,10 @@ public enum NotificationType {
      * 강제 연결은 피보호자가 수락한 적이 없는데 "수락했습니다"로 나간다. 특히 <b>피보호자는 자기도 모르게
      * 연결된 것</b>이라 반드시 알아야 하고, 원래 수락하는 쪽이라 "연결됨" 알림 경로 자체가 없었다.</p>
      */
-    CONNECTION_FORCED(Policy.SETTINGS_ONLY),
+    CONNECTION_FORCED(Policy.SETTINGS_ONLY, Email.ALLOWED),
 
     // 문의 답변 완료 → 작성자(보호자)에게 알림. 긴급하지 않으므로 사용자 설정을 따른다.
-    INQUIRY_ANSWERED(Policy.SETTINGS_ONLY),
+    INQUIRY_ANSWERED(Policy.SETTINGS_ONLY, Email.ALLOWED),
 
     /**
      * 등록 보호자 탈퇴로 복약 일정이 중지됨 → <b>남은 보호자</b>에게 알림.
@@ -66,7 +66,7 @@ public enum NotificationType {
      * <p>강제 발송이 아닌 이유 — 매일 반복될 수 있는 알림이라, 보호자가 이것만 끌 수 없으면 앱 알림을
      * 통째로 꺼버려 SOS·이상감지 같은 필수 알림까지 함께 죽는다.</p>
      */
-    MEDICATION_MISSED(Policy.SETTINGS_ONLY),
+    MEDICATION_MISSED(Policy.SETTINGS_ONLY, Email.ALLOWED),
 
     // 피보호자 긴급 SOS. 생명 관련이라 설정을 무시하고 강제 발송하며, 푸시 미전달 시 SMS로 폴백한다.
     WARD_SOS(Policy.FORCED_PUSH_WITH_SMS_FALLBACK),
@@ -113,6 +113,14 @@ public enum NotificationType {
      */
     ANOMALY_REVIEW_CONFLICTED(Policy.SETTINGS_ONLY, EnumSet.of(NotificationChannelType.FCM));
 
+    /**
+     * 이메일 허용 표시. 이메일은 즉시성이 보장되지 않는 채널이라 <b>기본은 제외</b>이고, 안내성 종류만 이
+     * 값으로 명시해 연다(2026-10-13). 새 종류는 아무것도 적지 않으면 메일로 나가지 않는다.
+     */
+    public enum Email {
+        ALLOWED
+    }
+
     /** 알림 종류별 채널 결정 규칙. */
     public enum Policy {
         /** 사용자 설정의 활성 채널로만 발송. */
@@ -134,8 +142,19 @@ public enum NotificationType {
     private final Policy policy;
     private final Set<NotificationChannelType> allowedChannels;
 
+    /** 기본: 이메일을 뺀 전 채널. 이메일은 {@link Email#ALLOWED}를 명시한 안내성 종류만 쓴다. */
     NotificationType(Policy policy) {
+        this(policy, withoutEmail());
+    }
+
+    NotificationType(Policy policy, Email email) {
         this(policy, EnumSet.allOf(NotificationChannelType.class));
+    }
+
+    private static Set<NotificationChannelType> withoutEmail() {
+        Set<NotificationChannelType> channels = EnumSet.allOf(NotificationChannelType.class);
+        channels.remove(NotificationChannelType.EMAIL);
+        return channels;
     }
 
     NotificationType(Policy policy, Set<NotificationChannelType> allowedChannels) {
@@ -148,8 +167,9 @@ public enum NotificationType {
     }
 
     /**
-     * 이 알림이 <b>사용자 설정에 따라</b> 쓸 수 있는 채널. 기본값은 전 채널(제한 없음)이라 기존 타입의
-     * 동작은 그대로다.
+     * 이 알림이 <b>사용자 설정에 따라</b> 쓸 수 있는 채널. 기본값은 <b>이메일을 뺀 전 채널</b>이다(이메일은
+     * {@link Email#ALLOWED}를 명시한 안내성 종류만). 긴급 종류(SOS·이상감지)는 이메일이 "전달됨"으로 잡혀
+     * 문자 대체를 막지 않도록 제외 상태를 유지해야 한다.
      *
      * <p>디스패처는 사용자가 켠 채널과 이 집합의 <b>교집합</b>으로만 설정 기반 발송을 한다. 종류별로
      * "문자까지 보낼 일은 아니다"를 표현하기 위한 것이며, <b>강제 채널(FCM)은 이 값으로 줄어들지 않는다</b> —

@@ -35,7 +35,8 @@ public class NotificationSettingController {
 
                     [기본값]
                     설정한 적 없는 채널은 기본값으로 표시됩니다 — FCM은 기본 ON, 나머지는 기본 OFF.
-                    (EMAIL은 발송 미구현. KAKAO_ALIMTALK은 승인된 템플릿이 있는 알림 종류만 발송됩니다.)
+                    (EMAIL은 연결·문의 답변·복약 미복용 요약 같은 안내성 알림만 발송되며, 긴급 알림(SOS·이상감지)에는 쓰이지 않습니다.
+                    카카오 가입 시 이메일이 없는 계정(가상 주소)은 보낼 수 없습니다. KAKAO_ALIMTALK은 승인된 템플릿이 있는 알림 종류만 발송됩니다.)
 
                     [요청 헤더] Authorization: Bearer {accessToken}
                     """
@@ -64,7 +65,7 @@ public class NotificationSettingController {
 
                     [참고]
                     - SMS 인증번호 등 인증 알림은 이 설정과 무관하게 항상 발송됩니다(끌 수 없음).
-                    - EMAIL은 설정값만 저장되며 실제 발송은 추후 단계에서 지원됩니다.
+                    - EMAIL은 안내성 알림에만 발송됩니다(서버 운영 스위치가 꺼져 있으면 설정값만 저장되고 발송되지 않습니다).
 
                     [요청 헤더] Authorization: Bearer {accessToken}
                     """

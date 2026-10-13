@@ -550,3 +550,13 @@
 
 - Spring Boot 4 웹 응답 변환기는 Jackson 3(`tools.jackson`)이다. `com.fasterxml.jackson.databind` 의 `JsonNode`·`ObjectNode` 를 컨트롤러가 반환하면 모르는 타입이라 bean getter(array·nodeType…)가 직렬화된다(챗 중계가 이 때문에 한때 사용 불가).
 - 응답 경계(서비스)에서 일반 객체·DTO 로 바꾼 뒤 반환한다. 컨트롤러 테스트는 실제 HTTP 직렬화를 거친다(`GuardianChatControllerHttpTest`).
+
+## 이메일 알림 채널 - 안내성 알림 전용, 긴급 알림의 전달 수단이 아니다 (2026-10-13)
+
+- **경위**: 알림 채널 추상화에 EMAIL enum만 있던 것을 구현했다(`EmailNotificationChannel`, 비밀번호 재설정과 같은 `JavaMailSender`·`spring.mail`). 상세 `docs/(2026-10-13) feature-email-notification.md`.
+- **불변 규칙 ①(허용 종류는 명시한 것만)**: `NotificationType.allowedChannels()` 기본값이 **이메일을 뺀 전 채널**이다. 이메일은 `Email.ALLOWED`를 적은 안내성 종류(연결 5종·`INQUIRY_ANSWERED`·`MEDICATION_MISSED`)만 쓴다. 새 종류는 아무것도 안 적으면 메일로 나가지 않는다(`NotificationTypeEmailPolicyTest`가 허용 집합을 고정). 기본값을 다시 전 채널로 되돌리지 말 것 - 복약 알림처럼 하루 여러 번 나가는 종류가 전부 메일로 간다.
+- **불변 규칙 ②(긴급 알림 제외)**: `WARD_SOS`·`ANOMALY_DETECTED`·`ANOMALY_DETECTED_SELF`는 이메일을 쓰지 않는다. 이메일은 접수만 돼도 "전달됨"으로 잡혀 **이상감지 문자 대체(어느 채널도 전달되지 않았을 때만)를 막고**, 즉시성이 보장되지 않아 푸시 미전달 시 알림이 늦어진다. 이메일을 긴급 알림의 전달 수단으로 승격하지 말 것(`NotificationDispatcherEmailTest`).
+- **불변 규칙 ③(수신 주소)**: 계정 이메일만 쓴다. 카카오 가입 시 서버가 부여한 가상 이메일 `kakao_숫자@kakao.com`은 메일함이 없으므로 보내지 않고 `NO_EMAIL`로 기록한다(전화번호 없음 `NO_PHONE`과 대칭, 이력에서는 실패로 보인다).
+- **불변 규칙 ④(로그·이력)**: 수신 주소·본문·예외 원문을 로그·이력에 남기지 않는다(`MailException`은 클래스명만, 사유는 고정 코드 `PROVIDER_ERROR`). `LogRawExceptionGuardTest` 대상에 채널 파일을 더했다. 이메일 본문은 push와 같은 제목·본문이라 피보호자 이름·장소가 메일에 남는다(관리자 알림 이력과 같은 수준, 수용).
+- **불변 규칙 ⑤(기본 OFF·킬 스위치)**: 사용자 설정 기본값은 FCM만 ON이고, V60이 구현체 도입 전에 저장돼 있던 `EMAIL=true` 행을 모두 OFF로 되돌렸다(비가역, 명시적으로 다시 켠 사용자만 받는다). `notification.email.enabled`(기본 false)가 꺼져 있으면 빈이 없어 설정이 ON이어도 발송되지 않고 설정값은 보존된다(`NOT_SENT / NO_ENABLED_CHANNEL`).
+- **수용한 한계**: SMTP 호출은 연결·읽기 각 10초 제한뿐이라 호출 전체 시간 제한은 없고 `notificationExecutor` 스레드를 최대 그만큼 붙든다(긴급 풀은 이메일을 쓰지 않아 영향 없음). Gmail SMTP 일일 발송 한도에 걸리면 `PROVIDER_ERROR`로 기록된다. 정지·탈퇴 진행 계정 차단은 기존 `dispatch()` 한 곳 그대로다.

@@ -17,6 +17,8 @@ public enum ChannelFailureReason {
     PUSH_SERVER_ERROR("푸시 서버 오류"),
     /** 문자·알림톡 수신 번호가 없다. */
     NO_PHONE("등록된 전화번호 없음"),
+    /** 이메일 수신 주소가 없거나 카카오 가입 시 서버가 부여한 가상 이메일(kakao_숫자@kakao.com)이라 보낼 수 없다. */
+    NO_EMAIL("사용 가능한 이메일 주소 없음"),
     /** 발송사(Solapi)가 접수를 거부했다. */
     PROVIDER_REJECTED("발송사가 접수를 거부함"),
     /** 발송사(Solapi) 통신 오류·빈 응답. */
