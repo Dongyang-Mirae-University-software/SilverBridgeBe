@@ -559,4 +559,5 @@
 - **불변 규칙 ③(수신 주소)**: 계정 이메일만 쓴다. 카카오 가입 시 서버가 부여한 가상 이메일 `kakao_숫자@kakao.com`은 메일함이 없으므로 보내지 않고 `NO_EMAIL`로 기록한다(전화번호 없음 `NO_PHONE`과 대칭, 이력에서는 실패로 보인다).
 - **불변 규칙 ④(로그·이력)**: 수신 주소·본문·예외 원문을 로그·이력에 남기지 않는다(`MailException`은 클래스명만, 사유는 고정 코드 `PROVIDER_ERROR`). `LogRawExceptionGuardTest` 대상에 채널 파일을 더했다. 이메일 본문은 push와 같은 제목·본문이라 피보호자 이름·장소가 메일에 남는다(관리자 알림 이력과 같은 수준, 수용).
 - **불변 규칙 ⑤(기본 OFF·킬 스위치)**: 사용자 설정 기본값은 FCM만 ON이고, V60이 구현체 도입 전에 저장돼 있던 `EMAIL=true` 행을 모두 OFF로 되돌렸다(비가역, 명시적으로 다시 켠 사용자만 받는다). `notification.email.enabled`(기본 false)가 꺼져 있으면 빈이 없어 설정이 ON이어도 발송되지 않고 설정값은 보존된다(`NOT_SENT / NO_ENABLED_CHANNEL`).
+- **운영 상태(2026-10-13)**: 두 서버 `.env.dev`에 `NOTIFICATION_EMAIL_ENABLED=true`로 활성화했다(코드 기본값은 false). 복약 미복용 요약은 스케줄러 스레드에서 동기 발송이라 SMTP 지연이 그 스레드를 붙든다(점검 M-1, 상세 `docs/(2026-10-13) audit-impact-email-notification.md`).
 - **수용한 한계**: SMTP 호출은 연결·읽기 각 10초 제한뿐이라 호출 전체 시간 제한은 없고 `notificationExecutor` 스레드를 최대 그만큼 붙든다(긴급 풀은 이메일을 쓰지 않아 영향 없음). Gmail SMTP 일일 발송 한도에 걸리면 `PROVIDER_ERROR`로 기록된다. 정지·탈퇴 진행 계정 차단은 기존 `dispatch()` 한 곳 그대로다.
