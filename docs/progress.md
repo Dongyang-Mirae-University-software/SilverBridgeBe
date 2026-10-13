@@ -1871,3 +1871,8 @@ REST API Key 단독 대비 보안 강화 — 인가코드 탈취 시 토큰 발�
 
 - WS `anomaly-detected`에 푸시와 같은 `title`·`body`를 수신자별로 실어 FE 대체 문구의 조사 오류("화재이")를 없앴다. 제목은 종류별("화재 감지" 등). 마이그레이션 없음.
 - 상세: `docs/(2026-10-12) fix-anomaly-ws-title-body.md`
+
+## [2026-10-13] 이메일 알림 채널
+
+- `EmailNotificationChannel` 추가. 안내성 종류(연결·문의 답변·복약 미복용 요약)만 허용, 긴급·반복 알림 제외, 카카오 가상 이메일은 `NO_EMAIL`. 기본값에서 이메일을 빼고 허용 종류만 명시. V60이 기존 `EMAIL=true` 설정을 OFF로 초기화(gosky 4건). 킬 스위치 `notification.email.enabled` 기본 false.
+- 상세: `docs/(2026-10-13) feature-email-notification.md`
