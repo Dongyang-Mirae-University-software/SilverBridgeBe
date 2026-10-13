@@ -37,6 +37,7 @@ public class EmailNotificationChannel implements NotificationChannel {
             + "- 알림 설정에서 이메일 알림을 끌 수 있습니다.";
 
     private final JavaMailSender mailSender;
+    private final EmailSendExecutor sendExecutor;
 
     @Override
     public NotificationChannelType getType() {
@@ -46,9 +47,15 @@ public class EmailNotificationChannel implements NotificationChannel {
     @Override
     public ChannelResult send(NotificationType type, NotificationRecipient recipient, NotificationContent content) {
         String to = recipient.email();
-        if (to == null || to.isBlank() || VIRTUAL_KAKAO_EMAIL.matcher(to.trim()).matches()) {
-            log.warn("이메일 알림 건너뜀(사용 가능한 주소 없음): userId={}", recipient.userId());
+        if (to == null || to.isBlank()) {
+            log.warn("이메일 알림 건너뜀(주소 없음): userId={}", recipient.userId());
             return ChannelResult.failed(ChannelFailureReason.NO_EMAIL);
+        }
+        if (VIRTUAL_KAKAO_EMAIL.matcher(to.trim()).matches()) {
+            // 메일함이 없는 계정이라 고장이 아니라 "이 채널의 대상이 아님"이다 - 실패로 세면 관리자 실패율을
+            // 부풀려 진짜 장애가 묻힌다(알림 이력 불변 규칙 ③). 이력에는 남기지 않는다.
+            log.debug("이메일 알림 대상 아님(카카오 가상 이메일): userId={}", recipient.userId());
+            return ChannelResult.notApplicable();
         }
 
         SimpleMailMessage message = new SimpleMailMessage();
@@ -56,8 +63,9 @@ public class EmailNotificationChannel implements NotificationChannel {
         message.setSubject(SUBJECT_PREFIX + subject(content));
         message.setText(text(content));
         try {
-            mailSender.send(message);
-            return ChannelResult.delivered();
+            // 호출 전체 시간 제한 안에서 실행(점검 M-1). 초과·풀 포화는 통신 오류와 같게 실패 처리.
+            boolean completed = sendExecutor.run(() -> mailSender.send(message));
+            return completed ? ChannelResult.delivered() : ChannelResult.failed(ChannelFailureReason.PROVIDER_ERROR);
         } catch (MailException e) {
             // 예외 메시지에는 수신 주소가 들어갈 수 있어 클래스명만 남긴다.
             log.warn("이메일 알림 발송 실패: userId={}, exception={}", recipient.userId(), e.getClass().getSimpleName());

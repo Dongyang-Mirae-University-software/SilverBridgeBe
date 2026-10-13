@@ -33,6 +33,7 @@ class LogRawExceptionGuardTest {
             "domain/auth/oauth/KakaoOAuthClient.java",
             "domain/notification/service/AlimtalkSender.java",
             "domain/notification/channel/EmailNotificationChannel.java",
+            "domain/notification/channel/EmailSendExecutor.java",
             "domain/notification/service/FcmService.java",
             "domain/notification/dispatch/NotificationDispatcher.java",
             "domain/sos/service/SosNotificationCooldown.java",

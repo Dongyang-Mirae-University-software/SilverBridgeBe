@@ -12,7 +12,7 @@
 | A | 허용 종류: `CONNECTION_REQUEST/ACCEPTED/REFUSED/DISCONNECTED/FORCED`, `INQUIRY_ANSWERED`, `MEDICATION_MISSED`. `MEDICATION_STOPPED`는 제외(보수적). |
 | A-2 | `allowedChannels` 기본값을 "이메일을 뺀 전 채널"로 변경, 허용 종류만 `Email.ALLOWED` 명시. 새 종류는 자동으로 메일 제외. |
 | B | `WARD_SOS`·`ANOMALY_DETECTED`·`_SELF` 제외(A-2로 자동). |
-| C | 카카오 가상 이메일(`^kakao_\d+@kakao\.com$`)·빈 주소는 `NO_EMAIL` 실패로 기록. |
+| C | 카카오 가상 이메일(`^kakao_\d+@kakao\.com$`)은 발송 제외. 처음엔 `NO_EMAIL` 실패 기록이었으나 점검 L-1로 "대상 아님"(이력 미기록)으로 변경. 빈 주소만 `NO_EMAIL` 실패. |
 | D | 기본 OFF. 서버 DB 확인 결과 gosky에 `EMAIL=true` 4건(vkcs 0건)이 있어 V60이 OFF로 초기화. |
 | E | push와 같은 제목·본문. 제목 `[실버브릿지] {title}`, 하단에 끄는 방법 안내. |
 | F | `notification.email.enabled`(`NOTIFICATION_EMAIL_ENABLED`, 기본 false). |

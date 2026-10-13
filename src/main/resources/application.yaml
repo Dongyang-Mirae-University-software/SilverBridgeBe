@@ -250,6 +250,8 @@ notification:
   # false면 채널 빈이 없어 사용자 설정이 ON이어도 발송되지 않는다(설정값은 보존).
   email:
     enabled: ${NOTIFICATION_EMAIL_ENABLED:false}
+    # SMTP 호출 전체 시간 제한(초). 연결·읽기·쓰기 제한과 별개로, 스케줄러 스레드가 오래 묶이지 않게 한다.
+    call-timeout-seconds: ${NOTIFICATION_EMAIL_CALL_TIMEOUT_SECONDS:10}
   alimtalk:
     # 카카오 알림톡(Solapi 경유) — 카카오톡 채팅으로 도착하는 유일한 현실적 경로(전화번호 기반, 친구추가 불필요).
     # ⚠️ 승인된 템플릿 문구만 발송 가능(변수만 치환). 종류별 템플릿이 없으면 채널이 조용히 스킵된다.

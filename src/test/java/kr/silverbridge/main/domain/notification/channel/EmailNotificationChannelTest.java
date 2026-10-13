@@ -2,20 +2,22 @@ package kr.silverbridge.main.domain.notification.channel;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 
+import java.time.Duration;
 import java.util.Map;
 import kr.silverbridge.main.domain.notification.dispatch.NotificationType;
 import kr.silverbridge.main.global.enums.Status;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.ArgumentCaptor;
-import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.mail.MailSendException;
@@ -26,7 +28,12 @@ import org.springframework.mail.javamail.JavaMailSender;
 class EmailNotificationChannelTest {
 
     @Mock private JavaMailSender mailSender;
-    @InjectMocks private EmailNotificationChannel channel;
+    private EmailNotificationChannel channel;
+
+    @BeforeEach
+    void setUp() {
+        channel = new EmailNotificationChannel(mailSender, new EmailSendExecutor(Duration.ofSeconds(2)));
+    }
 
     private final NotificationContent content =
             NotificationContent.of("연결 요청", "홍길동님이 연결을 요청했습니다.", Map.of());
@@ -68,13 +75,23 @@ class EmailNotificationChannelTest {
     }
 
     @ParameterizedTest
-    @ValueSource(strings = {"", "  ", "kakao_1234567890@kakao.com", "KAKAO_42@Kakao.com"})
-    @DisplayName("주소가 비었거나 카카오 가상 이메일이면 보내지 않고 NO_EMAIL로 돌려준다")
-    void send_주소없음_가상이메일(String email) {
+    @ValueSource(strings = {"", "  "})
+    @DisplayName("주소가 비어 있으면 보내지 않고 NO_EMAIL 실패로 돌려준다")
+    void send_주소없음(String email) {
         ChannelResult result = channel.send(NotificationType.CONNECTION_REQUEST, recipient(email), content);
 
         assertThat(result.status()).isEqualTo(ChannelResult.Status.FAILED);
         assertThat(result.reason()).isEqualTo(ChannelFailureReason.NO_EMAIL);
+        verify(mailSender, never()).send(any(SimpleMailMessage.class));
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"kakao_1234567890@kakao.com", "KAKAO_42@Kakao.com"})
+    @DisplayName("카카오 가상 이메일은 발송하지 않고 실패가 아닌 '대상 아님'으로 돌려준다 (실패율 오염 방지)")
+    void send_가상이메일_대상아님(String email) {
+        ChannelResult result = channel.send(NotificationType.CONNECTION_REQUEST, recipient(email), content);
+
+        assertThat(result.status()).isEqualTo(ChannelResult.Status.NOT_APPLICABLE);
         verify(mailSender, never()).send(any(SimpleMailMessage.class));
     }
 
@@ -105,5 +122,23 @@ class EmailNotificationChannelTest {
         assertThat(result.status()).isEqualTo(ChannelResult.Status.FAILED);
         assertThat(result.reason()).isEqualTo(ChannelFailureReason.PROVIDER_ERROR);
         assertThat(result.reason().label()).doesNotContain("guardian@example.com");
+    }
+
+    @Test
+    @DisplayName("SMTP가 제한 시간 안에 끝나지 않으면 기다리지 않고 PROVIDER_ERROR로 돌려준다 (점검 M-1)")
+    void send_시간초과() {
+        EmailNotificationChannel slow = new EmailNotificationChannel(mailSender,
+                new EmailSendExecutor(Duration.ofSeconds(1)));
+        doAnswer(invocation -> {
+            Thread.sleep(3000);
+            return null;
+        }).when(mailSender).send(any(SimpleMailMessage.class));
+
+        long started = System.nanoTime();
+        ChannelResult result = slow.send(NotificationType.CONNECTION_REQUEST, recipient("guardian@example.com"), content);
+        long elapsedMillis = (System.nanoTime() - started) / 1_000_000;
+
+        assertThat(result.reason()).isEqualTo(ChannelFailureReason.PROVIDER_ERROR);
+        assertThat(elapsedMillis).isLessThan(2500);
     }
 }
