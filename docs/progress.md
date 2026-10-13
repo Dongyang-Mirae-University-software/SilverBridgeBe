@@ -1876,3 +1876,8 @@ REST API Key 단독 대비 보안 강화 — 인가코드 탈취 시 토큰 발�
 
 - `EmailNotificationChannel` 추가. 안내성 종류(연결·문의 답변·복약 미복용 요약)만 허용, 긴급·반복 알림 제외, 카카오 가상 이메일은 `NO_EMAIL`. 기본값에서 이메일을 빼고 허용 종류만 명시. V60이 기존 `EMAIL=true` 설정을 OFF로 초기화(gosky 4건). 킬 스위치 `notification.email.enabled` 기본 false.
 - 상세: `docs/(2026-10-13) feature-email-notification.md`
+
+## [2026-10-13] 이메일 알림 채널 활성화·영향 범위 점검
+
+- 두 서버 `.env.dev`에 `NOTIFICATION_EMAIL_ENABLED=true` 추가(백업 `.env.dev.bak-20261013-2131`), `up -d api`로 재생성, healthy·ERROR 0건. 영향 범위 점검(템플릿 C): High 0 / Medium 1(복약 요약 스케줄러 스레드의 SMTP 대기) / Low 3.
+- 상세: `docs/(2026-10-13) audit-impact-email-notification.md`
