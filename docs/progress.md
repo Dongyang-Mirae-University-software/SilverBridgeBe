@@ -1897,3 +1897,9 @@ REST API Key 단독 대비 보안 강화 — 인가코드 탈취 시 토큰 발�
 
 - gosky 테스트 계정으로 복약 미복용 요약을 발송해 `FCM`·`EMAIL` 채널이 모두 `DELIVERED`(SMTP 접수)로 기록됨을 확인하고 설정·임시 약은 원복. 받은편지함 도착은 미확인.
 - 상세: `docs/(2026-10-13) audit-impact-email-notification.md` L-3
+
+## [2026-10-14] 영상 전송 방식 전환 대비 - fps 15 시험 측정과 10 복귀
+
+- gosky 15fps 시험: AI 보고 fps 중앙값 14.7이나 송출 중 19.9초 끊김 1회, 10fps 재측정은 9.99(최대 간격 0.68초)이나 13초 뒤 송출 중단 - 송출 지속이 짧아 15 유지 여부는 판단 보류. 프레임 크기 약 0.1MB라 클립 바이트 상한 우려는 해당 없음
+- gosky `.env.dev`에서 `CAMERA_RECOMMENDED_FPS` 제거 후 `up -d api`(기본 10 복귀, 백업 `.env.dev.bak-20261014-0945`), 코드·마이그레이션 없음
+- 상세: `docs/(2026-10-13) design-video-transport-be.md` 2절
