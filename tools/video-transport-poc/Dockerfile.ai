@@ -1,0 +1,8 @@
+FROM python:3.12-slim
+
+# 감지 모델·torch 없이 변환·수신 경로만 시험하는 최소 의존성(운영 AI 이미지가 아니다)
+RUN pip install --no-cache-dir \
+    fastapi==0.139.0 "uvicorn[standard]==0.51.0" sqlalchemy==2.0.51 pydantic==2.13.4 python-dotenv==1.2.2 \
+    opencv-python-headless python-multipart imageio-ffmpeg==0.6.0 websockets requests numpy
+
+WORKDIR /app

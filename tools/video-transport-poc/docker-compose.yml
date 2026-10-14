@@ -1,0 +1,115 @@
+# 영상 전송 H.264 PoC 시험 인스턴스 (2026-10-14) - 운영 dev 스택(dmu-dev-*)과 완전히 분리된 별도 프로젝트.
+#
+#  - 전용 Postgres·Redis(호스트 포트 없음, 컨테이너 안에서만 보인다). 개발 DB·Redis와 키·데이터를 섞지 않는다.
+#  - BE: 운영과 같은 이미지(dmu-api:dev)에 시험용 jar를 마운트한다.
+#  - AI: 운영 앱이 아니라 tools/ingest_poc/poc_app.py(감지 모델 없음, 변환·수신 경로만).
+#  - 모든 비밀은 이 디렉터리의 .env(setup.sh가 무작위로 만든다)에만 있고 실제 서비스 키가 아니다.
+#  - 호스트 포트는 127.0.0.1에만 묶는다.
+name: wspoc
+
+services:
+  db:
+    image: postgres:17
+    environment:
+      POSTGRES_DB: poc
+      POSTGRES_USER: poc
+      POSTGRES_PASSWORD: ${POC_DB_PASSWORD}
+    tmpfs:
+      - /var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U poc -d poc"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+
+  redis:
+    image: redis:7.2
+    command: ["redis-server", "--save", "", "--appendonly", "no"]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+
+  ai:
+    build:
+      context: .
+      dockerfile: Dockerfile.ai
+    working_dir: /app
+    command: ["uvicorn", "tools.ingest_poc.poc_app:app", "--host", "0.0.0.0", "--port", "8000", "--log-level", "info"]
+    environment:
+      API_KEY: ${POC_AI_KEY}
+      DATABASE_URL: sqlite:////tmp/poc.db
+      STREAM_STATE_BACKEND: memory
+      FIRE_SMOKE_ENABLED: "false"
+      KNIFE_ENABLED: "false"
+      FALL_ENABLED: "false"
+      INGEST_WS_ENABLED: "true"
+      CLIP_ENABLED: "true"
+      CLIP_MAX_FRAMES: "150"
+      POC_RECORD_DIR: /poc_frames
+      PYTHONUNBUFFERED: "1"
+    volumes:
+      - ./ai-src:/app:ro
+      - ./frames:/poc_frames
+    ports:
+      - "127.0.0.1:6592:8000"
+    mem_limit: 2g
+
+  be:
+    image: dmu-api:dev
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    volumes:
+      - ./app.jar:/app/app.jar:ro
+    environment:
+      TZ: Asia/Seoul
+      JAVA_OPTS: "-XX:MaxRAMPercentage=45 -XX:+UseSerialGC -XX:MaxMetaspaceSize=256m -XX:ReservedCodeCacheSize=128m -XX:MaxDirectMemorySize=128m"
+      DB_HOST: db
+      DB_NAME: poc
+      DB_USERNAME: poc
+      DB_PASSWORD: ${POC_DB_PASSWORD}
+      REDIS_HOST: redis
+      JWT_SECRET: ${POC_JWT_SECRET}
+      KAKAO_CLIENT_SECRET: ${POC_KAKAO_SECRET}
+      KAKAO_REST_API_KEY: poc-not-real
+      KAKAO_REDIRECT_URI: http://localhost/poc
+      MAIL_USERNAME: poc@example.invalid
+      MAIL_PASSWORD: poc-not-real
+      SOLAPI_API_KEY: poc-not-real
+      SOLAPI_API_SECRET: poc-not-real
+      SOLAPI_SENDER_PHONE: "01000000000"
+      FIREBASE_SERVICE_ACCOUNT_BASE64: ${POC_FIREBASE_B64}
+      ALIMTALK_ENABLED: "false"
+      NOTIFICATION_EMAIL_ENABLED: "false"
+      ANOMALY_ENABLED: "false"
+      MANAGEMENT_HEALTH_MAIL_ENABLED: "false"   # 더미 SMTP 계정으로 외부 메일 서버에 접속하지 않게 한다
+      AI_API_KEY: ${POC_AI_KEY}
+      AI_HTTP_BASE_URL: http://ai:8000
+      APP_CORS_ORIGINS: http://localhost
+      CAMERA_RECOMMENDED_FPS: "15"
+      CAMERA_UPLOAD_WS_URL: ws://be:6511/ws/camera-upload
+      CAMERA_WS_H264_SESSION_IDS: ${POC_WS_H264_SESSION_IDS:-}
+    ports:
+      - "127.0.0.1:6591:6511"
+    mem_limit: 1536m
+
+  # 시험 클라이언트(합성 영상 송출·측정). AI와 같은 이미지(ffmpeg·opencv·websockets 포함).
+  harness:
+    build:
+      context: .
+      dockerfile: Dockerfile.ai
+    profiles: ["tools"]
+    working_dir: /poc
+    command: ["sleep", "infinity"]
+    environment:
+      POC_AI_KEY: ${POC_AI_KEY}
+      POC_JWT_SECRET: ${POC_JWT_SECRET}
+      POC_BE_URL: http://be:6511
+      POC_AI_URL: http://ai:8000
+    volumes:
+      - ./harness:/poc
+      - ./frames:/poc_frames:ro
