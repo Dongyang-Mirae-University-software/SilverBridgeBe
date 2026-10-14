@@ -133,11 +133,12 @@ JPEG 대역폭은 장면에 따라 8~23Mbps로 변하고 H.264는 1.5Mbps로 고
 
 ## 9. 시험 환경 처리
 
-시험 인스턴스는 정지했고 운영 서비스(`dmu-dev-*`, `silverbridge-ai-server`)는 건드리지 않았다. 재개를 대비해 보존한다.
+시험 환경은 **정리해서 삭제했다**(2026-10-14). 운영 서비스(`dmu-dev-*`, `silverbridge-ai-server`)는 시험 중은 물론 정리 중에도 건드리지 않았고 정리 전후 상태가 같다(GPU 사용 8,907MiB 동일).
 
-| 위치 | 내용 | 시작 방법 |
-|---|---|---|
-| vkcs-linux `~/ws-poc` | compose(`wspoc`), `.env`(무작위 비밀, 실제 서비스 키 아님), 하니스 | `docker compose --env-file .env up -d db redis ai be` |
-| gosky `/home/apps/ws-poc-gosky` | 시험 AI 컨테이너(`wspoc-ai-gosky`, 127.0.0.1:6592), 하니스 | `./h.sh` 래퍼, `docker start wspoc-ai-gosky` |
+| 위치 | 삭제한 것 |
+|---|---|
+| vkcs-linux | compose 프로젝트 `wspoc`(db·redis·ai·be·harness 컨테이너, 네트워크), 이미지 `wspoc-ai`·`wspoc-harness`, `~/ws-poc`(비밀 `.env`·합성 프레임 포함) |
+| gosky | 컨테이너 `wspoc-ai-gosky`, `/home/apps/ws-poc-gosky`(시험 env·합성 프레임·하니스). 운영 이미지·모델은 읽기 전용으로만 썼으므로 변경 없음 |
+| 로컬 | 작업용 워크트리 4개(브랜치는 보존), 임시 가상환경 |
 
-폐기하려면 두 디렉터리와 컨테이너·이미지(`wspoc-*`)를 삭제하면 된다(운영과 공유하는 볼륨 없음).
+재개할 때 필요한 도구는 모두 보존 브랜치에 들어 있다: BE `feature/video-transport-ws-upload`의 `tools/video-transport-poc/`(compose·하니스·측정 스크립트·`run_matrix.sh`·`fallback_matrix.sh`·`stability.sh`·`bandwidth_matrix.sh`·`parity.py`), AI `feature/ingest-ws-h264`의 `tools/ingest_poc/poc_app.py`. 시험 인스턴스를 다시 띄우려면 BE 브랜치의 `tools/video-transport-poc/README` 대신 `docker-compose.yml`·`setup.sh` 머리 주석을 따른다(무작위 비밀은 `setup.sh`가 새로 만든다).
