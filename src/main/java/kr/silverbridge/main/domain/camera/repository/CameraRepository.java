@@ -42,6 +42,13 @@ public interface CameraRepository extends JpaRepository<Camera, Long> {
     @Query("select c.sessionId from Camera c where lower(c.label) like concat('%', :keyword, '%') escape '\\'")
     List<String> findSessionIdsByLabelContaining(@Param("keyword") String keyword);
 
+    /**
+     * 서비스 전체 카메라 등록 상한 검사를 한 줄로 세우는 트랜잭션 수준 어드바이저리 락(커밋·롤백 때 자동 해제).
+     * 카운트 → INSERT 사이의 경합으로 상한을 넘지 않게 한다. 새 카메라를 만드는 경로에서만 잡는다.
+     */
+    @Query(value = "select 1 from (select pg_advisory_xact_lock(:key)) t", nativeQuery = true)
+    int lockTotalLimit(@Param("key") long key);
+
     // ===== 관리자 대시보드 집계 =====
 
     /** 활성(isActive=true) 카메라 수 - 대시보드 "끊김" 계산의 분모(ADMIN-G20). 비활성 카메라는 구독 대상이 아니다. */

@@ -9,6 +9,7 @@
 
 | 머지 | 기능 | 상태 | 점검 문서 | 잔여 이슈 |
 |---|---|---|---|---|
+| (2026-10-14) feature/camera-total-limit | 서비스 전체 카메라 등록 상한 3대 - `camera.max-total`·409 `CAMERA_LIMIT_REACHED`·어드바이저리 락 (마이그레이션 없음) | ❌ | - | - |
 | #343 (2026-10-13) | 이메일 알림 채널 - `EmailNotificationChannel`, 안내성 종류만 허용(`Email.ALLOWED`), 긴급·반복 제외, 가상 이메일 `NO_EMAIL`, V60 기존 EMAIL 설정 OFF 초기화, 두 서버 스위치 활성화 | ✅ | `(2026-10-13) audit-impact-email-notification.md` (템플릿 C) | - (M-1 호출 전체 시간 제한 `EmailSendExecutor`·L-1 가상 이메일 `NOT_APPLICABLE`·L-2 문서 정정 반영 2026-10-13 `fix/email-channel-audit-findings`) / L-3 실서버 SMTP 접수 확인 완료(gosky 2026-10-13, `MEDICATION_MISSED` FCM+EMAIL `DELIVERED`, 받은편지함 도착은 미확인) · FE 전달: 가상 이메일 계정 토글 숨김 권장·알림 이력 사유 `NO_EMAIL` 매핑 |
 | (2026-10-12) fix/anomaly-ws-title-body | 이상감지 WS `anomaly-detected`에 `title`·`body` 추가 + 종류별 제목 (마이그레이션 없음) | ❌ | - (범위 작아 점검 B 생략 가능, 판단 `(2026-10-12) fix-anomaly-ws-title-body.md`) | - |
 | (2026-10-08) feature/guardian-notification-preference | 보호자 알림 종류 설정 - `GET·PUT /api/guardian/notification-type-setting` (복약 계정 토글 V59, 필수 알림 잠금, 재촉 위임) | ✅ | `(2026-10-08) audit-impact-guardian-notification-preference.md` (템플릿 C, 실서버 호출 포함) | - (M-1 Swagger+FE 전달·M-2 DEBUG 로그·L-1 ON CONFLICT·L-3 조회 1회 반영 2026-10-08 `feature/guardian-pref-audit-fixes` / L-2 역할 변경 후 잔존 행은 유지 결정) |

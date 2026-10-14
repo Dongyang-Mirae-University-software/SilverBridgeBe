@@ -105,6 +105,9 @@ public enum ErrorCode {
     // 방은 정해진 목록(CameraRoom)에서만 고른다, 한 방에는 카메라 1대(2026-10-05)
     CAMERA_ROOM_INVALID(HttpStatus.BAD_REQUEST, "선택할 수 없는 방입니다. 목록에서 방을 골라주세요."),
     CAMERA_LABEL_DUPLICATED(HttpStatus.CONFLICT, "같은 방에 이미 등록된 카메라가 있습니다."),
+    // 서비스 전체 등록 상한(camera.max-total) - AI 동시 분석 한계를 코드로 보장한다(2026-10-14)
+    CAMERA_LIMIT_REACHED(HttpStatus.CONFLICT,
+            "현재 서비스에서 등록할 수 있는 카메라를 모두 사용했습니다. 등록된 카메라를 정리한 뒤 다시 시도해주세요."),
     CAMERA_NOT_STREAMING(HttpStatus.NOT_FOUND, "카메라가 지금 영상을 보내고 있지 않습니다."),
     CAMERA_STREAM_TICKET_INVALID(HttpStatus.UNAUTHORIZED, "영상 연결이 만료되었습니다. 다시 시도해주세요."),
     CAMERA_STREAM_LIMIT_EXCEEDED(HttpStatus.TOO_MANY_REQUESTS,
