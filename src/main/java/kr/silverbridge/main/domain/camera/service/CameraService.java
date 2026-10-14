@@ -61,6 +61,13 @@ public class CameraService {
     @Value("${camera.recommended-fps:10}")
     private int recommendedFps;
 
+    // 서비스 전체 카메라 등록 상한(0 이하면 끔) - 15fps 기준 AI 동시 분석 3대까지(2026-10-14). 새 카메라 등록에만 적용
+    @Value("${camera.max-total:3}")
+    private int maxTotal;
+
+    // 전체 상한 검사용 어드바이저리 락 키(앱 내 고유 값)
+    private static final long TOTAL_LIMIT_LOCK_KEY = 5_100_001L;
+
     /**
      * 카메라 등록/재등록. {@code (wardId, deviceId)} 기준 멱등 —
      * 같은 기기가 다시 등록하면 기존 SessionID를 그대로 재사용하고 방 이름만 갱신한다.
@@ -81,6 +88,7 @@ public class CameraService {
         }
 
         ensureRoomAvailable(wardId, label, null);
+        ensureTotalLimit();
         Camera camera = Camera.builder()
                 .wardId(wardId)
                 .registeredBy(wardId)
@@ -170,6 +178,21 @@ public class CameraService {
                 .ifPresent(other -> {
                     throw new CustomException(ErrorCode.CAMERA_LABEL_DUPLICATED);
                 });
+    }
+
+    /**
+     * 서비스 전체 등록 수가 상한이면 409 {@code CAMERA_LIMIT_REACHED}다. 새 카메라를 만드는 경로에서만 부른다
+     * (같은 기기 재등록·수정·삭제는 영향이 없다). 어드바이저리 락으로 동시 등록도 한 줄로 세워 상한을 넘지 않는다.
+     */
+    private void ensureTotalLimit() {
+        if (maxTotal <= 0) {
+            return;
+        }
+        cameraRepository.lockTotalLimit(TOTAL_LIMIT_LOCK_KEY);
+        if (cameraRepository.count() >= maxTotal) {
+            log.info("[CAMERA-LIMIT] 전체 등록 상한 도달: max={}", maxTotal);
+            throw new CustomException(ErrorCode.CAMERA_LIMIT_REACHED);
+        }
     }
 
     /**

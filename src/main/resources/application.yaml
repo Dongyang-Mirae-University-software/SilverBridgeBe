@@ -142,6 +142,10 @@ file-server:
 # 필요 시 CAMERA_RECOMMENDED_FPS로 조정(두 서버 .env.dev에는 없어 이 기본값이 그대로 쓰인다).
 camera:
   recommended-fps: ${CAMERA_RECOMMENDED_FPS:10}
+  # 서비스 전체 카메라 등록 상한(2026-10-14, 학생 프로젝트 규모). 15fps 기준 AI 동시 분석이 3대(사용률 약 86%)까지라
+  # 등록 수를 3으로 묶어 동시 송출 상한을 보장한다. 새 카메라 등록에만 적용(같은 기기 재등록·삭제는 무관).
+  # AI 분석 스레드를 늘리면 CAMERA_MAX_TOTAL로 올린다. 0 이하면 끈다.
+  max-total: ${CAMERA_MAX_TOTAL:3}
   # 보호자 실시간 카메라 보기 - AI 영상·상태를 백엔드가 인가 후 중계(2026-10-03). 브라우저는 AI에 직접 붙지 않는다.
   stream:
     ai-base-url: ${AI_HTTP_BASE_URL:https://testai.gosky.kr}

@@ -1903,3 +1903,10 @@ REST API Key 단독 대비 보안 강화 — 인가코드 탈취 시 토큰 발�
 - gosky 15fps 시험: AI 보고 fps 중앙값 14.7이나 송출 중 19.9초 끊김 1회, 10fps 재측정은 9.99(최대 간격 0.68초)이나 13초 뒤 송출 중단 - 송출 지속이 짧아 15 유지 여부는 판단 보류. 프레임 크기 약 0.1MB라 클립 바이트 상한 우려는 해당 없음
 - gosky `.env.dev`에서 `CAMERA_RECOMMENDED_FPS` 제거 후 `up -d api`(기본 10 복귀, 백업 `.env.dev.bak-20261014-0945`), 코드·마이그레이션 없음
 - 상세: `docs/(2026-10-13) design-video-transport-be.md` 2절
+
+## [2026-10-14] 서비스 전체 카메라 등록 상한 3대
+
+- gosky 15fps 유지 결정(`CAMERA_RECOMMENDED_FPS=15`) 후, AI 동시 분석 한계(3대·사용률 약 86%)를 코드로 보장하려고 `camera.max-total`(기본 3, 0=끔)을 추가. 새 등록만 막고(409 `CAMERA_LIMIT_REACHED`) 재등록·삭제는 무관, 동시 등록은 어드바이저리 락. 마이그레이션 없음
+- 단위 `CameraTotalLimitTest` 5건·전체 빌드 통과. 통합 `CameraTotalLimitConcurrencyIntegrationTest`(동시 8×5회)는 vkcs에서 실행 예정
+- 배포 뒤 gosky 기존 카메라 3대·클립 초기화(이상감지 이력 유지)
+- 상세: `docs/(2026-10-14) feature-camera-total-limit.md`
