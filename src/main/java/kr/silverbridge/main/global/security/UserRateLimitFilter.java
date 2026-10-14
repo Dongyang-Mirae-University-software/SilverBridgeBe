@@ -71,7 +71,8 @@ public class UserRateLimitFilter extends OncePerRequestFilter {
             try {
                 rateLimitService.check(ENDPOINT, userId, maxPerMinute);
             } catch (TooManyRequestsException e) {
-                log.warn("[USER-RATE-LIMIT] 사용자 요청 제한 초과 retryAfter={}s", e.getRetryAfterSeconds());
+                log.warn("[USER-RATE-LIMIT] 사용자 요청 제한 초과 userId={} method={} path={} retryAfter={}s",
+                        userId, request.getMethod(), pathTemplate(request), e.getRetryAfterSeconds());
                 writeTooManyRequests(response, e);
                 return;
             } catch (RuntimeException e) {
@@ -94,6 +95,23 @@ public class UserRateLimitFilter extends OncePerRequestFilter {
         return path.equals("/api/auth") || path.startsWith("/api/auth/")
                 || path.equals("/ws") || path.startsWith("/ws/")
                 || SOS_PATH.matcher(path).matches();
+    }
+
+    /**
+     * 로그용 경로 템플릿 - 쿼리스트링은 버리고(토큰·티켓이 실릴 수 있다) 숫자·긴 식별자 구간은 {id}로 치환한다.
+     * 사용자 입력이 로그에 그대로 남거나 경로가 무한히 늘어나지 않게 길이도 자른다.
+     */
+    static String pathTemplate(HttpServletRequest request) {
+        String path = request.getRequestURI();
+        if (path == null) return "-";
+        StringBuilder sb = new StringBuilder();
+        for (String segment : path.split("/")) {
+            if (segment.isEmpty()) continue;
+            boolean idLike = segment.matches("\\d+") || (segment.length() >= 12 && segment.matches("[A-Za-z0-9_-]+"));
+            sb.append('/').append(idLike ? "{id}" : segment);
+        }
+        String result = sb.length() == 0 ? "/" : sb.toString();
+        return result.length() > 100 ? result.substring(0, 100) : result;
     }
 
     private String authenticatedUserId() {
