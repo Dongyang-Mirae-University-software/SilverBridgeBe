@@ -22,4 +22,8 @@
 - FE: 409 `CAMERA_LIMIT_REACHED`일 때 `error.message`를 그대로 보여 주면 된다(코드로 분기 가능).
 
 ## 초기화 기록
-(적용 후 기입)
+- 2026-10-14 10:45 gosky, 사용자 확인 후 실행. 백업: gosky 로그인 홈의 `camera-reset-backup-20261014-1044.sql`(camera·anomaly_clip·anomaly_incident 데이터, `pg_dump --data-only`).
+- `delete from camera`를 한 트랜잭션으로 실행: **카메라 3행 삭제**. 직후 건수: camera 0 / anomaly_clip 13 / anomaly_incident 47 / anomaly_event 97.
+- 이상감지 이력(event·incident)은 유지했다. `anomaly_clip` 행·파일 13건도 남아 있다(`camera` FK로 지워지지 않는 구조) - 삭제 이벤트를 거치지 않았으므로 보관 만료(최대 30일)·오탐 24시간 등 기존 삭제 경로로 정리된다. 이력에서의 위치(방 이름) 표시는 카메라 행이 없어 빈칸일 수 있다.
+- vkcs-linux는 카메라 0건이라 초기화 대상이 없었다.
+- 직접 SQL 삭제라 `CameraDeletedEvent`가 발행되지 않았다(클립 즉시 정리 없음). 다음 초기화는 가능하면 피보호자 본인 삭제 경로를 쓴다.
