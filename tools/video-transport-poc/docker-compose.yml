@@ -44,7 +44,7 @@ services:
       FIRE_SMOKE_ENABLED: "false"
       KNIFE_ENABLED: "false"
       FALL_ENABLED: "false"
-      INGEST_WS_ENABLED: "true"
+      INGEST_WS_ENABLED: ${POC_INGEST_ENABLED:-true}   # 폴백 시험에서 끈다(fallback_matrix.sh)
       CLIP_ENABLED: "true"
       CLIP_MAX_FRAMES: "150"
       POC_RECORD_DIR: /poc_frames
@@ -91,6 +91,7 @@ services:
       AI_HTTP_BASE_URL: http://ai:8000
       APP_CORS_ORIGINS: http://localhost
       CAMERA_RECOMMENDED_FPS: "15"
+      CAMERA_UPLOAD_TICKET_ENABLED: ${POC_TICKET_ENABLED:-true}   # 킬 스위치 시험용
       CAMERA_UPLOAD_WS_URL: ws://be:6511/ws/camera-upload
       CAMERA_WS_H264_SESSION_IDS: ${POC_WS_H264_SESSION_IDS:-}
     ports:

@@ -54,6 +54,8 @@ SCENES = {
     "busy": "mandelbrot=size=1280x720:rate={fps}:maxiter=200",
 }
 SOURCE_SECONDS = 20
+# 감지 일치 시험용 합성 장면: 절차적으로 만든 불꽃(ffmpeg 가 아니라 numpy). 'fire' 는 화면 아래쪽 전체, 'smallfire' 는 작은 영역.
+GENERATED_SCENES = {"fire", "smallfire"}
 
 
 def b64url(data: bytes) -> str:
@@ -89,8 +91,61 @@ def source_path(scene: str, fps: int) -> Path:
     return WORK / f"source_{scene}_{fps}.mp4"
 
 
+def _fire_palette() -> np.ndarray:
+    # 검정 -> 빨강 -> 주황 -> 노랑 -> 흰색 (37단계, BGR)
+    anchors = [(0, (0, 0, 0)), (8, (0, 0, 120)), (18, (0, 90, 230)), (28, (30, 200, 255)), (36, (220, 255, 255))]
+    palette = np.zeros((37, 3), dtype=np.uint8)
+    for (i0, c0), (i1, c1) in zip(anchors, anchors[1:]):
+        for i in range(i0, i1 + 1):
+            f = (i - i0) / max(1, i1 - i0)
+            palette[i] = [int(c0[k] + (c1[k] - c0[k]) * f) for k in range(3)]
+    return palette
+
+
+def generate_fire_source(scene: str, fps: int, out: Path) -> None:
+    """Doom fire 알고리즘으로 만든 가상 불꽃 영상. smallfire 는 전체 화면의 작은 구석에만 불꽃을 둔다(작은 대상 보존 확인)."""
+    rng = np.random.default_rng(7)
+    palette = _fire_palette()
+    fw, fh = (320, 180) if scene == "fire" else (96, 72)
+    fire = np.zeros((fh, fw), dtype=np.int16)
+    fire[-1, :] = 36
+    background = np.zeros((HEIGHT, WIDTH, 3), dtype=np.uint8)
+    for y in range(HEIGHT):  # 어두운 실내 느낌의 세로 그라디언트
+        background[y, :, :] = (28 + y // 12, 30 + y // 14, 34 + y // 16)
+    cv2.rectangle(background, (80, 440), (420, 700), (60, 70, 85), -1)
+    cv2.rectangle(background, (900, 120), (1180, 560), (45, 55, 70), -1)
+    cmd = [FFMPEG, "-v", "error", "-y", "-f", "rawvideo", "-pix_fmt", "bgr24", "-s", f"{WIDTH}x{HEIGHT}", "-r", str(fps),
+           "-i", "-", "-c:v", "libx264", "-crf", "10", "-pix_fmt", "yuv420p", str(out)]
+    proc = subprocess.Popen(cmd, stdin=subprocess.PIPE)
+    for _ in range(SOURCE_SECONDS * fps):
+        decay = rng.integers(0, 3, size=(fh - 1, fw))
+        shift = rng.integers(-1, 2, size=(fh - 1, fw))
+        cols = np.clip(np.arange(fw)[None, :] + shift, 0, fw - 1)
+        rows = np.arange(1, fh)[:, None]
+        fire[:-1, :] = np.clip(fire[rows, cols] - decay, 0, 36)
+        layer = palette[fire]
+        frame = background.copy()
+        if scene == "fire":
+            big = cv2.resize(layer, (WIDTH, HEIGHT), interpolation=cv2.INTER_LINEAR)
+            mask = (fire.max() > 0) * (cv2.resize(fire.astype(np.uint8), (WIDTH, HEIGHT)) > 2)
+            frame[mask] = big[mask]
+        else:
+            region = cv2.resize(layer, (240, 180), interpolation=cv2.INTER_LINEAR)
+            mask = cv2.resize(fire.astype(np.uint8), (240, 180)) > 2
+            roi = frame[460:640, 940:1180]
+            roi[mask] = region[mask]
+        proc.stdin.write(frame.tobytes())
+    proc.stdin.close()
+    proc.wait()
+
+
 def prepare(fps: int) -> None:
     WORK.mkdir(parents=True, exist_ok=True)
+    for scene in GENERATED_SCENES:
+        out = source_path(scene, fps)
+        if not out.exists():
+            generate_fire_source(scene, fps, out)
+            print("원본 생성", out.name)
     for scene, lavfi in SCENES.items():
         out = source_path(scene, fps)
         if out.exists():
@@ -183,21 +238,64 @@ def analyze_frames(directory: str, sources: list[np.ndarray], limit: int = 120) 
     }
 
 
+# ---------------------------------------------------------------- 업링크 모델(대역폭 제약 시험)
+
+class Link:
+    """단일 업링크 FIFO. 송신 바이트는 용량(mbps)으로 직렬화되고, 앞선 전송이 끝나야 다음이 나간다(큐 대기 = 지연 누적).
+
+    실제 회선의 근사다: TCP 백프레셔·버퍼블로트·무선 변동은 모사하지 않는다. 두 경로가 같은 링크 모델을 쓰므로 비교는 공정하다.
+    """
+
+    def __init__(self, mbps: float) -> None:
+        self.bps = mbps * 1_000_000.0
+        self.free_at = time.monotonic()
+        self._lock = threading.Lock()
+
+    def backlog_bytes(self) -> float:
+        with self._lock:
+            return max(0.0, self.free_at - time.monotonic()) * self.bps / 8.0
+
+    def reserve(self, nbytes: int) -> float:
+        """nbytes 를 큐 뒤에 넣고, 마지막 바이트가 링크를 빠져나가는 시각(monotonic)을 돌려준다."""
+        with self._lock:
+            start = max(time.monotonic(), self.free_at)
+            self.free_at = start + nbytes * 8.0 / self.bps
+            return self.free_at
+
+
+def latency_summary(values: list[float]) -> dict:
+    if not values:
+        return {}
+    ordered = sorted(values)
+    return {
+        "p50": round(ordered[len(ordered) // 2] * 1000, 1),
+        "p95": round(ordered[min(len(ordered) - 1, int(len(ordered) * 0.95))] * 1000, 1),
+        "max": round(ordered[-1] * 1000, 1),
+    }
+
+
 # ---------------------------------------------------------------- JPEG 경로
 
-def run_jpeg(session_id: str, sources: list[np.ndarray], seconds: int, fps: int) -> dict:
+def run_jpeg(session_id: str, sources: list[np.ndarray], seconds: int, fps: int, link: "Link | None" = None) -> dict:
     """FE 현행 JPEG 경로: 프레임마다 JPEG(0.8)를 /frame 에 POST. 동시 2건, 밀리면 건너뛴다."""
     pool = ThreadPoolExecutor(max_workers=2)
     in_flight = threading.Semaphore(2)
     lock = threading.Lock()
     stats = {"sent": 0, "bytes": 0, "skipped": 0, "errors": 0}
+    latencies: list[float] = []
     http = requests.Session()
 
-    def post(payload: bytes) -> None:
+    def post(payload: bytes, captured_at: float) -> None:
         try:
+            if link is not None:
+                wait = link.reserve(len(payload)) - time.monotonic()
+                if wait > 0:
+                    time.sleep(wait)
             response = http.post(f"{AI}/api/v1/stream-sessions/{session_id}/frame", headers=ai_headers(), timeout=10,
                                  files={"frame": ("frame.jpg", payload, "image/jpeg")})
             response.raise_for_status()
+            with lock:
+                latencies.append(time.monotonic() - captured_at)
         except Exception:
             with lock:
                 stats["errors"] += 1
@@ -220,19 +318,20 @@ def run_jpeg(session_id: str, sources: list[np.ndarray], seconds: int, fps: int)
         payload = buf.tobytes()
         stats["sent"] += 1
         stats["bytes"] += len(payload)
-        pool.submit(post, payload)
+        pool.submit(post, payload, target)
     pool.shutdown(wait=True)
-    return {"transport": "jpeg", **stats, "elapsedSec": round(time.monotonic() - start, 1)}
+    return {"transport": "jpeg", **stats, "elapsedSec": round(time.monotonic() - start, 1),
+            "latencyMs": latency_summary(latencies)}
 
 
 # ---------------------------------------------------------------- H.264 경로
 
-def encode_h264(sources: list[np.ndarray], frames: int, fps: int) -> list[tuple[bool, bytes]]:
+def encode_h264(sources: list[np.ndarray], frames: int, fps: int, bitrate_kbps: int = 1500) -> list[tuple[bool, bytes]]:
     """원본 프레임을 FE 와 같은 설정(Baseline, 1.5Mbps, 키프레임 2초, 슬라이스 1개, annexb)으로 인코딩해 액세스 유닛 목록으로."""
     cmd = [
         FFMPEG, "-v", "error", "-f", "rawvideo", "-pix_fmt", "bgr24", "-s", f"{WIDTH}x{HEIGHT}", "-r", str(fps), "-i", "-",
         "-c:v", "libx264", "-pix_fmt", "yuv420p", "-profile:v", "baseline", "-preset", "ultrafast", "-tune", "zerolatency",
-        "-b:v", "1500k", "-maxrate", "1500k", "-bufsize", "1500k", "-g", str(fps * 2), "-bf", "0", "-threads", "1",
+        "-b:v", f"{bitrate_kbps}k", "-maxrate", f"{bitrate_kbps}k", "-bufsize", f"{bitrate_kbps}k", "-g", str(fps * 2), "-bf", "0", "-threads", "1",
         "-x264-params", "repeat-headers=1:sliced-threads=0:keyint=%d:min-keyint=%d:scenecut=0" % (fps * 2, fps * 2),
         "-f", "h264", "-",
     ]
@@ -275,6 +374,52 @@ def split_access_units(stream: bytes) -> list[tuple[bool, bytes]]:
             units.append((key, stream[current:cut]))
             current, key = cut, False
     return units
+
+
+async def run_h264_direct(session_id: str, aus: list[tuple[bool, bytes]], seconds: int, fps: int, link: "Link | None" = None) -> dict:
+    """BE 중계 없이 AI ingest-ws 에 직접 붙는다. BE 중계는 바이트를 해석하지 않으므로(vkcs 시험으로 확인) 변환·감지 결과는 같다."""
+    import websockets
+
+    url = f"{AI.replace('http', 'ws')}/api/v1/stream-sessions/{session_id}/ingest-ws"
+    config = json.dumps({"type": "config", "codec": "avc1.42E01F", "width": WIDTH, "height": HEIGHT,
+                         "framerate": fps, "format": "annexb"})
+    stats = {"sent": 0, "bytes": 0, "keyframes": 0, "keyframeRequests": 0, "closeCodes": [], "skipped": 0}
+    latencies: list[float] = []
+    need_key = False
+    total, interval = seconds * fps, 1.0 / fps
+    try:
+        connection = websockets.connect(url, max_size=None, ping_interval=None, additional_headers=ai_headers())
+    except TypeError:
+        connection = websockets.connect(url, max_size=None, ping_interval=None, extra_headers=ai_headers())
+    start = time.monotonic()
+    async with connection as ws:
+        await ws.send(config)
+        for index in range(total):
+            delay = (start + index * interval) - time.monotonic()
+            if delay > 0:
+                await asyncio.sleep(delay)
+            is_key, au = aus[index % len(aus)]
+            captured_at = start + index * interval
+            message = int(index * interval * 1_000_000).to_bytes(8, "big") + (b"\x01" if is_key else b"\x00") + au
+            if link is not None:
+                # FE 규칙: 송신 대기(512KB)가 쌓이면 건너뛰고, 델타를 버렸으면 다음 키프레임부터 다시 시작한다
+                if link.backlog_bytes() > 512 * 1024 or (need_key and not is_key):
+                    stats["skipped"] += 1
+                    need_key = True
+                    continue
+                need_key = False
+                wait = link.reserve(len(message)) - time.monotonic()
+                if wait > 0:
+                    await asyncio.sleep(wait)
+            await ws.send(message)
+            latencies.append(time.monotonic() - captured_at)
+            stats["sent"] += 1
+            stats["bytes"] += len(message)
+            stats["keyframes"] += 1 if is_key else 0
+        await ws.close()
+        stats["closeCodes"].append(ws.close_code)
+    return {"transport": "h264-direct", **stats, "elapsedSec": round(time.monotonic() - start, 1),
+            "latencyMs": latency_summary(latencies)}
 
 
 def issue_ticket(camera_id: int) -> dict:
@@ -342,25 +487,49 @@ async def run_h264(camera_id: int, aus: list[tuple[bool, bytes]], seconds: int, 
 
 # ---------------------------------------------------------------- run
 
+def analysis_buckets(directory: str, fps: int) -> list[dict]:
+    """감지 결과를 원본 프레임 번호(idx) 기준 1초 구간으로 묶는다: 구간별 danger 여부·최대 신뢰도·대표 종류."""
+    path = Path(directory) / "analysis.json"
+    if not path.exists():
+        return []
+    rows = json.loads(path.read_text())
+    buckets: dict[int, dict] = {}
+    for row in rows:
+        sec = int(row["idx"] // fps)
+        b = buckets.setdefault(sec, {"sec": sec, "n": 0, "danger": False, "maxConf": 0.0, "type": "normal", "boxes": 0})
+        b["n"] += 1
+        b["danger"] = b["danger"] or bool(row.get("danger"))
+        conf = float(row.get("conf") or 0.0)
+        if conf >= b["maxConf"]:
+            b["maxConf"] = round(conf, 4)
+            if row.get("type") not in (None, "normal", "unknown"):
+                b["type"] = row["type"]
+        b["boxes"] = max(b["boxes"], int(row.get("boxes") or 0))
+    return [buckets[k] for k in sorted(buckets)]
+
+
 def run(args: argparse.Namespace) -> None:
     state = load_state()
-    if not state:
+    if not state and not args.direct:
         raise SystemExit("register 먼저")
     sources = load_source_frames(args.scene, args.fps)
-    session_id = state["sessionId"]
-    create_ai_session(session_id, state["deviceId"])
+    session_id = args.session_id or (state or {}).get("sessionId") or "ward_pocdirect0001"
+    create_ai_session(session_id, (state or {}).get("deviceId", "poc-device"))
 
     aus: list[tuple[bool, bytes]] = []
-    if args.mode == "h264":
+    if args.mode in ("h264", "h264direct"):
         encode_frames = min(args.seconds, 60) * args.fps
-        aus = encode_h264(sources, encode_frames, args.fps)
+        aus = encode_h264(sources, encode_frames, args.fps, args.bitrate)
         print(f"인코딩 완료 AU={len(aus)} bytes={sum(len(a) for _, a in aus)}", flush=True)
 
     record_start(session_id)
     marker = WORK / f"window_{args.name}.json"
     marker.write_text(json.dumps({"start": time.time()}))
+    link = Link(args.cap_mbps) if args.cap_mbps else None
     if args.mode == "jpeg":
-        sender = run_jpeg(session_id, sources, args.seconds, args.fps)
+        sender = run_jpeg(session_id, sources, args.seconds, args.fps, link)
+    elif args.mode == "h264direct":
+        sender = asyncio.run(run_h264_direct(session_id, aus, args.seconds, args.fps, link))
     else:
         sender = asyncio.run(run_h264(state["cameraId"], aus, args.seconds, args.fps, args.reconnects))
     time.sleep(1.5)  # 마지막 프레임이 AI에서 처리되도록
@@ -373,6 +542,7 @@ def run(args: argparse.Namespace) -> None:
         "sender": sender, "received": {k: v for k, v in received.items() if k != "dir"}, "quality": quality,
         "bytesPerSecondSent": round(sender["bytes"] / max(1.0, sender["elapsedSec"])),
         "frameDir": mapped_dir,
+        "analysis": analysis_buckets(mapped_dir, args.fps) if mapped_dir else [],
     }
     out = WORK / f"result_{args.name}.json"
     out.write_text(json.dumps(result, ensure_ascii=False, indent=2))
@@ -386,13 +556,19 @@ def main() -> None:
     p.add_argument("--fps", type=int, default=15)
     sub.add_parser("register")
     r = sub.add_parser("run")
-    r.add_argument("--mode", choices=["jpeg", "h264"], required=True)
-    r.add_argument("--scene", choices=list(SCENES), default="busy")
+    r.add_argument("--mode", choices=["jpeg", "h264", "h264direct"], required=True)
+    r.add_argument("--scene", choices=list(SCENES) + sorted(GENERATED_SCENES), default="busy")
+    r.add_argument("--direct", action="store_true", help="BE 없이 AI 에 직접(상태 파일 불필요)")
+    r.add_argument("--session-id", default=None)
+    r.add_argument("--cap-mbps", type=float, default=0.0, help="송신 업링크 한도(Mbps). 0 이면 제한 없음")
+    r.add_argument("--bitrate", type=int, default=1500, help="H.264 비트레이트(kbps). FE 기본은 1500")
     r.add_argument("--seconds", type=int, default=120)
     r.add_argument("--fps", type=int, default=15)
     r.add_argument("--reconnects", type=int, default=0)
     r.add_argument("--name", default=None)
     args = parser.parse_args()
+    if args.cmd == "run" and args.mode == "h264direct":
+        args.direct = True
     if args.cmd == "prepare":
         prepare(args.fps)
     elif args.cmd == "register":
