@@ -159,6 +159,22 @@ camera:
     ticket-ttl: ${CAMERA_STREAM_TICKET_TTL:60s}
     max-concurrent-streams: ${CAMERA_STREAM_MAX_CONCURRENT:20}  # 영상 1건 = 요청 스레드 1개 + AI 연결 1개
     max-streams-per-user: ${CAMERA_STREAM_MAX_PER_USER:2}
+  # 송출 H.264 WebSocket 중계 PoC(2026-10-14). 브라우저 -> BE(/ws/camera-upload) -> AI(ingest-ws).
+  # 통합 계약: docs/(2026-10-14) design-video-transport-contract.md. 기본은 전부 꺼진 상태(= 지금과 동일, jpeg).
+  upload:
+    ticket-enabled: ${CAMERA_UPLOAD_TICKET_ENABLED:true}       # 킬 스위치. false면 새 수립만 막는다(열린 연결은 이어 감)
+    ws-url: ${CAMERA_UPLOAD_WS_URL:}                           # 응답으로 내리는 공개 wss 주소(예: wss://api.devdmu.gosky.kr/ws/camera-upload). 비면 발급 503
+    ws-h264-session-ids: ${CAMERA_WS_H264_SESSION_IDS:}        # ws-h264를 쓸 sessionId 목록(쉼표). 기본 비어 있음 = 전부 jpeg
+    ai-ws-base-url: ${CAMERA_UPLOAD_AI_WS_BASE_URL:}           # 비면 camera.stream.ai-base-url 의 스킴만 ws(s)로 바꿔 쓴다
+    ai-connect-timeout: ${CAMERA_UPLOAD_AI_CONNECT_TIMEOUT:3s}
+    ticket-ttl: ${CAMERA_UPLOAD_TICKET_TTL:60s}
+    revalidate-interval: ${CAMERA_UPLOAD_REVALIDATE:60s}       # 수립 후 계정·카메라·무효화 재확인. 최대 수명은 두지 않는다
+    idle-timeout: ${CAMERA_UPLOAD_IDLE_TIMEOUT:15s}            # 무수신 종료
+    max-message-bytes: ${CAMERA_UPLOAD_MAX_MESSAGE_BYTES:262144}
+    max-fps-factor: ${CAMERA_UPLOAD_MAX_FPS_FACTOR:2.0}        # 초당 메시지 상한 = recommended-fps x 배수(AI는 1.5배로 더 안쪽)
+    max-connections: ${CAMERA_UPLOAD_MAX_CONNECTIONS:5}        # 세션당 1연결(새 연결이 교체), 전체 동시 상한
+    send-time-limit: ${CAMERA_UPLOAD_SEND_TIME_LIMIT:5s}
+    send-buffer-bytes: ${CAMERA_UPLOAD_SEND_BUFFER_BYTES:1048576}
 
 # AI 이상감지 수신 (1단계 — 수신·판정·이력. 보호자 알림 발송은 2단계).
 # 백엔드가 AI WS에 클라이언트로 붙어 latest_analysis를 받는다(AI 서버 무변경 — 웹훅 없음).

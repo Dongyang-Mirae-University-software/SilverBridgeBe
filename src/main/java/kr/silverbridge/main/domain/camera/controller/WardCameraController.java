@@ -10,11 +10,14 @@ import kr.silverbridge.main.domain.camera.dto.CameraRegisterRequest;
 import kr.silverbridge.main.domain.camera.dto.CameraResponse;
 import kr.silverbridge.main.domain.camera.dto.CameraRoomOption;
 import kr.silverbridge.main.domain.camera.dto.CameraUpdateRequest;
+import kr.silverbridge.main.domain.camera.dto.UploadTicketResponse;
 import kr.silverbridge.main.domain.camera.dto.WardLiveCameraView;
 import kr.silverbridge.main.domain.camera.service.CameraService;
 import kr.silverbridge.main.domain.camera.service.CameraStreamService;
+import kr.silverbridge.main.domain.camera.service.CameraUploadService;
 import kr.silverbridge.main.global.response.ApiResponse;
 import lombok.RequiredArgsConstructor;
+import org.springframework.http.CacheControl;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
@@ -41,6 +44,7 @@ public class WardCameraController {
 
     private final CameraService cameraService;
     private final CameraStreamService cameraStreamService;
+    private final CameraUploadService cameraUploadService;
 
     @Operation(summary = "카메라 등록 (재등록 시 멱등)",
             description = """
@@ -193,5 +197,48 @@ public class WardCameraController {
             @Parameter(description = "카메라 ID") @PathVariable Long id) {
         cameraService.delete(wardId, id);
         return ResponseEntity.ok(ApiResponse.ok("카메라가 삭제되었습니다."));
+    }
+
+    @Operation(summary = "영상 송출(WebSocket H.264) 티켓 발급",
+            description = """
+                    [요청 헤더]
+                    Authorization: Bearer {accessToken}
+
+                    응답의 uploadUrl 에 `?ticket={ticket}`을 붙여 WebSocket 으로 연결합니다(access token 을 쿼리에 싣지 않습니다).
+                    티켓은 **본인 카메라 한 세션·60초·1회용**이며 시청 티켓(st_)과 서로 쓸 수 없습니다.
+
+                    [언제 쓰나]
+                    카메라 응답의 transport 가 "ws-h264" 이고 브라우저가 VideoEncoder(H.264)를 지원할 때만 호출합니다.
+                    그 밖이거나 이 API·연결이 실패하면(409·429·503·연결 오류) 기존 JPEG 송출을 그대로 씁니다.
+
+                    [메시지 계약]
+                    - 첫 메시지(텍스트): {"type":"config","codec":"avc1.42E01F","width":W,"height":H,"framerate":F,"format":"annexb"}
+                    - 이후(바이너리): [8B 타임스탬프(us)][1B 플래그 bit0=키프레임][H.264 Annex B]. 해상도·회전이 바뀌면 새 config 후 키프레임
+                    - 서버 -> 클라이언트(텍스트): {"type":"keyframe_request"}
+                    - 종료: close 1008 `AUTH_INVALIDATED`(권한 변경 - 재연결하지 말고 티켓을 한 번만 다시 받아 시도, 실패 시 JPEG),
+                      1013 `REPLACED`(같은 카메라의 새 연결로 교체됨 - 재연결 금지), 1009 `MESSAGE_TOO_LARGE`, 1008 `RATE_LIMITED`
+
+                    [오류]
+                    - 403 CAMERA_NOT_AUTHORIZED: 본인 카메라가 아님 / 404 CAMERA_NOT_FOUND
+                    - 409 CAMERA_UPLOAD_NOT_ENABLED: 이 카메라는 ws-h264 대상이 아님(transport 가 jpeg)
+                    - 429: 속도 제한(사용자 기준 분 20회 / 시간 300회) + Retry-After
+                    - 503 CAMERA_UPLOAD_UNAVAILABLE / SERVICE_UNAVAILABLE: 기능 꺼짐·저장소 장애 -> JPEG 로 폴백
+                    """)
+    @ApiResponses({
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "티켓과 업로드 주소"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "인증 토큰 없음 또는 만료", content = @Content),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "피보호자 권한 필요 / CAMERA_NOT_AUTHORIZED(본인 카메라가 아님)", content = @Content),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "CAMERA_NOT_FOUND", content = @Content),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "409", description = "CAMERA_UPLOAD_NOT_ENABLED", content = @Content),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "429", description = "요청 한도 초과", content = @Content),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "503", description = "기능 꺼짐·저장소 장애(JPEG 로 폴백)", content = @Content)
+    })
+    @PostMapping("/api/ward/camera/{id}/upload-ticket")
+    public ResponseEntity<ApiResponse<UploadTicketResponse>> issueUploadTicket(
+            @AuthenticationPrincipal String wardId,
+            @Parameter(description = "카메라 ID") @PathVariable Long id) {
+        // 티켓은 1회용 자격이라 응답을 캐시하지 않는다
+        return ResponseEntity.ok().cacheControl(CacheControl.noStore())
+                .body(ApiResponse.ok(cameraUploadService.issueTicket(wardId, id)));
     }
 }

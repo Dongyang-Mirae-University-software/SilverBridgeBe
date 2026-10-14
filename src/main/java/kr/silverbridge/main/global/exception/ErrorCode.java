@@ -112,6 +112,10 @@ public enum ErrorCode {
     CAMERA_STREAM_TICKET_INVALID(HttpStatus.UNAUTHORIZED, "영상 연결이 만료되었습니다. 다시 시도해주세요."),
     CAMERA_STREAM_LIMIT_EXCEEDED(HttpStatus.TOO_MANY_REQUESTS,
             "동시에 볼 수 있는 영상 수를 넘었습니다. 다른 영상을 닫고 다시 시도해주세요."),
+    // 송출(ws-h264) 업로드 자격 - 시청 티켓(CAMERA_STREAM_TICKET_INVALID)과 코드를 나눠 FE가 구분하게 한다(2026-10-14)
+    CAMERA_UPLOAD_TICKET_INVALID(HttpStatus.UNAUTHORIZED, "영상 전송 연결이 만료되었습니다. 다시 시도해주세요."),
+    CAMERA_UPLOAD_NOT_ENABLED(HttpStatus.CONFLICT, "이 카메라는 새 영상 전송 방식을 사용하지 않습니다."),
+    CAMERA_UPLOAD_UNAVAILABLE(HttpStatus.SERVICE_UNAVAILABLE, "영상 전송 기능을 지금 사용할 수 없습니다. 기본 방식으로 전송합니다."),
     CAMERA_STREAM_UNAVAILABLE(HttpStatus.SERVICE_UNAVAILABLE, "카메라 영상 서버에 연결할 수 없습니다. 잠시 후 다시 시도해주세요."),
 
     // SOS 이력 조회 (처리(ACK) 기능 철회로 SOS_EVENT_NOT_FOUND 제거 - 2026-08-26, V39)

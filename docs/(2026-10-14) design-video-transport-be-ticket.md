@@ -1,6 +1,6 @@
 # 송출용 1회용 업로드 자격(upload ticket) 발급 설계 - 백엔드 (2026-10-14)
 
-> 상태: **설계안, 승인 대기(코드·`.env`·배포 변경 없음)**. 코드는 [전환-AI] 설계 확정 뒤 구현한다.
+> 상태: **초안 - 통합 계약(`(2026-10-14) design-video-transport-contract.md`)으로 대체됨.** 이 문서의 D1 안 A(AI가 BE 내부 API로 소비)·3-1~3-3·4부 항목 3·5는 폐기됐고, BE가 WS를 중계하는 구조로 구현했다(정정 표는 계약 4절). 발급 API·티켓 규칙·`transport`·Redis 장애 정책은 그대로 유효하다.
 > 근거: `(2026-10-13) design-video-transport-be.md` 3-1·3-2·3-3, `.claude/rules/domain-security-policy.md` "보호자 실시간 카메라 보기", 현행 시청 티켓(`CameraStreamTicketService`).
 > 범위: **송출(피보호자 기기 -> AI)** 방향의 자격만. 시청 방향 전환(WebRTC·WS 시청)은 이 문서 밖이다.
 

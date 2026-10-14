@@ -16,7 +16,10 @@ enum CameraStreamRateLimit {
     WARD_LIVE("camera-ward-live", 30, 600),
     STATUS("camera-status", 30, 600),
     FRAME("camera-frame", 60, 1200),
-    TICKET("camera-ticket", 20, 300);
+    TICKET("camera-ticket", 20, 300),
+    // 송출 업로드 티켓(피보호자 본인 ID 기준). 정상 사용은 송출 시작·네트워크 끊김 재연결뿐이라 분 20회면 넉넉하고,
+    // 재연결 폭주는 그 위에서 막는다(2026-10-14)
+    UPLOAD_TICKET("camera-upload-ticket", 20, 300);
 
     final String endpoint;
     final int perMinute;

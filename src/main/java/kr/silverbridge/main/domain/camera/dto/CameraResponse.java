@@ -34,9 +34,13 @@ public record CameraResponse(
         int recommendedFps,
 
         @Schema(description = "등록 일시", example = "2026-07-09T10:00:00+09:00")
-        OffsetDateTime createdAt
+        OffsetDateTime createdAt,
+
+        @Schema(description = "**송출** 방식(시청 방식 아님): jpeg(기본, 기존 JPEG 업로드) / ws-h264(H.264 WebSocket 송출). "
+                + "ws-h264여도 FE가 지원·티켓 발급·연결에 실패하면 같은 세션을 jpeg로 되돌린다", example = "jpeg")
+        String transport
 ) {
-    public static CameraResponse of(Camera camera, int recommendedFps) {
+    public static CameraResponse of(Camera camera, int recommendedFps, String transport) {
         return new CameraResponse(
                 camera.getId(),
                 camera.getSessionId(),
@@ -44,7 +48,8 @@ public record CameraResponse(
                 camera.getLabel(),
                 camera.isActive(),
                 recommendedFps,
-                camera.getCreatedAt()
+                camera.getCreatedAt(),
+                transport
         );
     }
 }

@@ -3,6 +3,7 @@ package kr.silverbridge.main.domain.camera.controller;
 import kr.silverbridge.main.domain.camera.dto.CameraUpdateRequest;
 import kr.silverbridge.main.domain.camera.service.CameraService;
 import kr.silverbridge.main.domain.camera.service.CameraStreamService;
+import kr.silverbridge.main.domain.camera.service.CameraUploadService;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -47,6 +48,9 @@ class CameraControllerSecurityTest {
 
     @MockitoBean
     private CameraStreamService cameraStreamService;
+
+    @MockitoBean
+    private CameraUploadService cameraUploadService;
 
     @Autowired
     private WardCameraController wardController;
@@ -150,5 +154,26 @@ class CameraControllerSecurityTest {
     @DisplayName("관리자(ADMIN)도 영상 티켓을 받을 수 없다(403)")
     void admin_티켓_거부() {
         assertThatThrownBy(() -> guardianController.issueStreamTicket("AD0001", "s1")).isInstanceOf(AccessDeniedException.class);
+    }
+
+    @Test
+    @WithMockUser(roles = "WARD")
+    @DisplayName("WARD 역할 → 송출 티켓 발급 허용")
+    void ward_송출티켓_허용() {
+        assertThatNoException().isThrownBy(() -> wardController.issueUploadTicket("WD0001", 1L));
+    }
+
+    @Test
+    @WithMockUser(roles = "GUARDIAN")
+    @DisplayName("보호자는 송출 티켓을 발급할 수 없다(403) - 보호자용 송출 자격 API는 만들지 않는다")
+    void guardian_송출티켓_거부() {
+        assertThatThrownBy(() -> wardController.issueUploadTicket("GD0001", 1L)).isInstanceOf(AccessDeniedException.class);
+    }
+
+    @Test
+    @WithMockUser(roles = "ADMIN")
+    @DisplayName("관리자는 송출 티켓을 발급할 수 없다(403)")
+    void admin_송출티켓_거부() {
+        assertThatThrownBy(() -> wardController.issueUploadTicket("AD0001", 1L)).isInstanceOf(AccessDeniedException.class);
     }
 }

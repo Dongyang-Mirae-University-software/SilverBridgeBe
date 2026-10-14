@@ -1,6 +1,6 @@
 # 영상 전송 H.264 PoC - 통합 계약 (2026-10-14)
 
-> 상태: **초안, GO/NO-GO 승인 대기(코드·`.env`·배포 변경 없음)**
+> 상태: **GO 승인됨(2026-10-14). AI·BE 구현 완료(플래그 꺼짐), FE·시험·측정 대기. `.env`·배포 변경 없음**
 > 범위: 송출(피보호자 기기 -> AI)만 H.264로 바꾼다. 시청(BE의 MJPEG 중계)은 변경 없음. **안 B-lite**.
 > 근거: BE `(2026-10-13) design-video-transport-be.md`·`(2026-10-14) design-video-transport-be-ticket.md`, FE `(2026-10-14) design-video-transport-fe.md`(develop), AI `(2026-10-14) design-video-transport-ai.md`(브랜치 `docs/video-transport-ai-design`).
 > 이 문서가 세 저장소 문서와 어긋나면 **이 문서가 우선**한다(4절 정정 표).
@@ -137,3 +137,21 @@ FE(피보호자) --wss, 1회용 업로드 티켓--> BE /ws/camera-upload --내�
 ## 7. 구현 순서 요약
 
 AI(ingest-ws, 플래그 off) -> BE(티켓·WS 중계, 플래그 off) -> FE(h264Sender, PoC 플래그 off) -> 시험 인스턴스 합성 영상 -> gosky 실기기 1대 -> 판정 -> 저장소마다 PR(순서 AI -> BE -> FE, 모두 플래그 off로 먼저 배포).
+
+## 8. 구현 중 확정·정정한 것 (2026-10-14, PHASE 1·2)
+
+| # | 항목 | 내용 |
+|---|---|---|
+| 1 | ③ sessionId 바인딩 | 핸드셰이크는 sessionId를 **티켓에서만** 얻는다(URL·메시지로 받지 않음). 비교할 외부 값이 없어 "불일치 시 `[IDOR-ATTEMPT]`"는 해당 없다. 소유 확인은 소비 시점에 다시 한다(발급 뒤 삭제·이전이면 404) |
+| 2 | ③ Origin 순서 | 등록 API가 붙이는 Origin 검사는 사용자 인터셉터 **뒤**다. 계약 순서(Origin -> 소비)를 지키려고 `OriginHandshakeInterceptor`를 먼저 직접 붙였다 |
+| 3 | ③ AI 연결 시점 | AI 연결을 핸드셰이크 안에서 맺는다(최대 3초). AI 장애·플래그 꺼짐이면 연결이 성공하기 전에 503이라 FE가 바로 JPEG로 폴백한다. 대가: AI가 느리면 핸드셰이크가 그만큼 걸린다 |
+| 4 | ④ 속도 | 초당 메시지 상한 = `recommended-fps x 2`(최소 5). 초과 close `1008 RATE_LIMITED`. AI의 `x1.5`는 더 안쪽(드롭 + 키프레임 재요청)이다 |
+| 5 | ⑤ 재확인에 플래그 포함 | 재확인이 `ws-h264-session-ids`에서 빠졌는지도 본다 - 롤백(env 한 줄 + `up -d`)이 열린 연결도 60초 안에 닫는다. 킬 스위치(`ticket-enabled`)는 재확인에 포함하지 않는다(새 수립만) |
+| 6 | ⑤ 즉시 종료 | 핸들러를 세션 추적 데코레이터로 감싸 토큰 무효화(정지·비밀번호 변경·역할 변경·탈퇴) 때 `WebSocketSessionCloser`가 즉시 닫는다(60초 재확인은 이중 방어) |
+| 7 | ⑨ 연결 상한 | 같은 세션 교체는 자리를 더 쓰지 않는다. 자리가 없는 새 세션은 수립 전 503 |
+| 8 | 종료 코드 | BE 발신: 1008 `AUTH_INVALIDATED`·`RATE_LIMITED` / 1009 `MESSAGE_TOO_LARGE` / 1000 `IDLE_TIMEOUT` / 1013 `REPLACED`·`BUSY` / 1011 `UPSTREAM_BACKPRESSURE`·`UPSTREAM_ERROR`·`UPSTREAM_CLOSED` / 1001 `SERVER_SHUTDOWN`. AI가 먼저 닫으면 그 코드·사유(`INGEST_DISABLED` 등)를 허용 목록 안에서 그대로 전한다 |
+| 9 | 1013의 호환성 | Java(Tomcat) 클라이언트는 수신한 1013을 1002로 본다(브라우저는 정상). BE의 AI 연결이 Tomcat 클라이언트라 AI가 보낸 1013은 1011로 바뀐다. FE는 1013을 "교체됨 - 재연결 금지"로 처리하되 1002·1011도 폴백 대상이다 |
+| 10 | FE 필요 사항 | 컨테이너 바이너리 버퍼를 `max-message-bytes + 1KB`로 올렸다(기본 8KB면 키프레임이 1009). 텍스트 상한 4KB(config) |
+| 11 | AI 실측 | `-fflags nobuffer`는 프레임을 잃는다. 출력은 입력보다 1장 늦다(15fps 약 67ms - 변환 지연 p99 100ms에 포함). WebCodecs가 프레임당 슬라이스 1개를 내는지는 FE 실기기 확인 필요 |
+
+BE 구현: `domain/camera/upload/*`(`CameraUploadRelay`·`CameraUploadConnections`·`CameraUploadHandshakeInterceptor`·`CameraUploadHandler`·`CameraUploadWebSocketConfig`), `domain/camera/service/CameraUpload{Service,TicketService}`·`CameraTransport`. 시험: 단위 + 실제 Tomcat 종단(`CameraUploadRelayEndToEndTest`, 가짜 AI 서버 포함, 12건).

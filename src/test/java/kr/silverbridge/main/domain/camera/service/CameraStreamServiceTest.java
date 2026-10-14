@@ -110,7 +110,7 @@ class CameraStreamServiceTest {
     class WardLive {
 
         private CameraResponse mine(Long id, String sessionId, String label) {
-            return new CameraResponse(id, sessionId, "dev_" + id, label, true, 5, OffsetDateTime.parse("2026-10-05T10:00:00+09:00"));
+            return new CameraResponse(id, sessionId, "dev_" + id, label, true, 5, OffsetDateTime.parse("2026-10-05T10:00:00+09:00"), "jpeg");
         }
 
         @Test

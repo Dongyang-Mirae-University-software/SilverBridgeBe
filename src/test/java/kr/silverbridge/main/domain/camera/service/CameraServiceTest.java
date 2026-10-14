@@ -594,4 +594,63 @@ class CameraServiceTest {
                     .containsExactly("거실", "작은방2");
         }
     }
+
+    @Nested
+    @DisplayName("송출(ws-h264) 소유 확인과 transport 값")
+    class UploadOwnership {
+
+        @Test
+        @DisplayName("본인 카메라면 sessionId를 돌려준다 - 꺼진(is_active=false) 카메라도 통과한다")
+        void 본인_카메라_비활성도_통과() {
+            Camera inactive = Camera.builder().id(1L).wardId(WARD_ID).registeredBy(WARD_ID)
+                    .sessionId("ward_a1").deviceId("dev_1").label("거실").isActive(false).build();
+            when(cameraRepository.findById(1L)).thenReturn(Optional.of(inactive));
+
+            assertThat(cameraService.getOwnedSessionId(WARD_ID, 1L)).isEqualTo("ward_a1");
+        }
+
+        @Test
+        @DisplayName("타인 카메라면 403 CAMERA_NOT_AUTHORIZED, 없으면 404")
+        void 타인_없음() {
+            when(cameraRepository.findById(1L)).thenReturn(Optional.of(camera(1L, OTHER_WARD_ID, "ward_a1", "dev_1", "거실")));
+            when(cameraRepository.findById(2L)).thenReturn(Optional.empty());
+
+            assertThatThrownBy(() -> cameraService.getOwnedSessionId(WARD_ID, 1L))
+                    .isInstanceOf(CustomException.class)
+                    .extracting(e -> ((CustomException) e).getErrorCode()).isEqualTo(ErrorCode.CAMERA_NOT_AUTHORIZED);
+            assertThatThrownBy(() -> cameraService.getOwnedSessionId(WARD_ID, 2L))
+                    .isInstanceOf(CustomException.class)
+                    .extracting(e -> ((CustomException) e).getErrorCode()).isEqualTo(ErrorCode.CAMERA_NOT_FOUND);
+        }
+
+        @Test
+        @DisplayName("예외 없는 소유 판정: 본인 세션만 true")
+        void 소유_판정() {
+            when(cameraRepository.findBySessionId("ward_a1"))
+                    .thenReturn(Optional.of(camera(1L, WARD_ID, "ward_a1", "dev_1", "거실")));
+            when(cameraRepository.findBySessionId("ward_b1"))
+                    .thenReturn(Optional.of(camera(2L, OTHER_WARD_ID, "ward_b1", "dev_2", "침실")));
+            when(cameraRepository.findBySessionId("ward_none")).thenReturn(Optional.empty());
+
+            assertThat(cameraService.isOwnedSession(WARD_ID, "ward_a1")).isTrue();
+            assertThat(cameraService.isOwnedSession(WARD_ID, "ward_b1")).isFalse();
+            assertThat(cameraService.isOwnedSession(WARD_ID, "ward_none")).isFalse();
+        }
+
+        @Test
+        @DisplayName("transport: 플래그 목록에 든 세션만 ws-h264, 기본(비어 있음)은 jpeg")
+        void transport_값() {
+            when(cameraRepository.findByWardIdOrderByCreatedAtDesc(WARD_ID)).thenReturn(List.of(
+                    camera(1L, WARD_ID, "ward_a1", "dev_1", "거실"),
+                    camera(2L, WARD_ID, "ward_a2", "dev_2", "침실")));
+
+            // 플래그를 걸지 않은 서버 = 전부 jpeg(현재와 동일)
+            assertThat(cameraService.getMyCameras(WARD_ID)).extracting(CameraResponse::transport)
+                    .containsExactly("jpeg", "jpeg");
+
+            ReflectionTestUtils.setField(cameraService, "wsH264SessionIds", "ward_a1");
+            assertThat(cameraService.getMyCameras(WARD_ID)).extracting(CameraResponse::transport)
+                    .containsExactly("ws-h264", "jpeg");
+        }
+    }
 }

@@ -42,7 +42,14 @@ class LogRawExceptionGuardTest {
             "domain/anomaly/listener/AnomalyNotificationListener.java",
             "domain/chat/client/AiChatClient.java",
             "domain/chat/service/ChatRelayService.java",
-            "domain/chat/listener/AiMemberDataPurgeListener.java");
+            "domain/chat/listener/AiMemberDataPurgeListener.java",
+            // 송출(ws-h264) 중계 - 티켓·프레임·AI 키·AI 주소 원문을 로그에 남기지 않는다(2026-10-14)
+            "domain/camera/service/CameraUploadTicketService.java",
+            "domain/camera/service/CameraUploadService.java",
+            "domain/camera/upload/CameraUploadRelay.java",
+            "domain/camera/upload/CameraUploadConnections.java",
+            "domain/camera/upload/CameraUploadHandshakeInterceptor.java",
+            "domain/camera/upload/CameraUploadHandler.java");
 
     @Test
     void guarded_files_do_not_log_exception_messages() throws IOException {

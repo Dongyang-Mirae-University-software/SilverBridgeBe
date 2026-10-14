@@ -61,6 +61,10 @@ public class CameraService {
     @Value("${camera.recommended-fps:10}")
     private int recommendedFps;
 
+    // 송출 방식 플래그 - 목록(쉼표)에 든 sessionId만 transport=ws-h264. 기본 비어 있음(2026-10-14, camera.upload.ws-h264-session-ids)
+    @Value("${camera.upload.ws-h264-session-ids:}")
+    private String wsH264SessionIds;
+
     // 서비스 전체 카메라 등록 상한(0 이하면 끔) - 15fps 기준 AI 동시 분석 3대까지(2026-10-14). 새 카메라 등록에만 적용
     @Value("${camera.max-total:3}")
     private int maxTotal;
@@ -84,7 +88,7 @@ public class CameraService {
             camera.rename(label);
             flushRoomChange();
             publishRegistered(camera);
-            return CameraResponse.of(camera, recommendedFps);
+            return CameraResponse.of(camera, recommendedFps, transportOf(camera));
         }
 
         ensureRoomAvailable(wardId, label, null);
@@ -102,7 +106,7 @@ public class CameraService {
         Camera saved = translateRoomConflict(() -> cameraRepository.save(camera));
         flushRoomChange();
         publishRegistered(saved);
-        return CameraResponse.of(saved, recommendedFps);
+        return CameraResponse.of(saved, recommendedFps, transportOf(saved));
     }
 
     /**
@@ -132,7 +136,7 @@ public class CameraService {
     @Transactional(readOnly = true)
     public List<CameraResponse> getMyCameras(String wardId) {
         return cameraRepository.findByWardIdOrderByCreatedAtDesc(wardId).stream()
-                .map(camera -> CameraResponse.of(camera, recommendedFps))
+                .map(camera -> CameraResponse.of(camera, recommendedFps, transportOf(camera)))
                 .toList();
     }
 
@@ -154,7 +158,7 @@ public class CameraService {
             }
         }
         flushRoomChange();
-        return CameraResponse.of(camera, recommendedFps);
+        return CameraResponse.of(camera, recommendedFps, transportOf(camera));
     }
 
     /**
@@ -340,6 +344,31 @@ public class CameraService {
                 .filter(Camera::isActive)
                 .map(camera -> connectionService.isActiveConnection(guardianId, camera.getWardId()))
                 .orElse(false);
+    }
+
+    /**
+     * 송출(WebSocket) 티켓 발급용 소유 확인 - 본인 카메라의 sessionId를 돌려준다. 없으면 404, <b>타인 것이면 403 +
+     * [IDOR-ATTEMPT]</b>({@link #getOwnedCamera}와 같은 기준). {@code is_active}는 보지 않는다(꺼진 카메라도 감지는 계속된다).
+     */
+    @Transactional(readOnly = true)
+    public String getOwnedSessionId(String wardId, Long cameraId) {
+        return getOwnedCamera(wardId, cameraId).getSessionId();
+    }
+
+    /**
+     * 예외 없는 소유 판정 - 송출 핸드셰이크·주기 재확인용. {@code is_active}를 보지 않는다. 로그는 남기지 않는다
+     * (재확인은 정상 경로라 IDOR 시도가 아니다).
+     */
+    @Transactional(readOnly = true)
+    public boolean isOwnedSession(String wardId, String sessionId) {
+        return cameraRepository.findBySessionId(sessionId)
+                .map(camera -> camera.getWardId().equals(wardId))
+                .orElse(false);
+    }
+
+    // 송출 방식(jpeg 기본 / ws-h264 = 서버 플래그 목록에 든 세션) - 시청 방식과 무관
+    private String transportOf(Camera camera) {
+        return CameraTransport.resolve(camera.getSessionId(), wsH264SessionIds);
     }
 
     /**

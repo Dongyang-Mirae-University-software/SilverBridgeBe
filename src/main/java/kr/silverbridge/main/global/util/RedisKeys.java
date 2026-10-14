@@ -65,6 +65,11 @@ public final class RedisKeys {
     // <img>는 Authorization 헤더를 못 보내서 access token 대신 이 티켓을 영상 주소에 붙인다.
     public static final String CAMERA_STREAM_TICKET = "camera:stream:ticket:";
 
+    // ── 카메라 송출(업로드) 티켓 (2026-10-14, 영상 전송 H.264 PoC) ──────────
+    // 키: 티켓 문자열(ut_...). 값: "{wardId}:{sessionId}:{발급 epoch ms}". TTL 60초, 1회 소비(GETDEL).
+    // 시청 티켓(st_, camera:stream:ticket:)과 접두사·키가 모두 달라 서로 소비할 수 없다 - 합치지 말 것.
+    public static final String CAMERA_UPLOAD_TICKET = "camera:upload:ticket:";
+
     // ws:connected:(WebSocket 접속 상태)는 2026-10-02 삭제 - 쓰기만 하고 읽는 곳이 없었고, CONNECTED 프레임에
     // 세션 속성이 없어 실제로는 기록도 되지 않았다(XCUT-G30). 접속 여부가 필요해지면 연결 수 카운터로 새로 설계할 것.
 }
