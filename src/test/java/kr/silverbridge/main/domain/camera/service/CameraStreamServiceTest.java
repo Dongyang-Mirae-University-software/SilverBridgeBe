@@ -133,6 +133,7 @@ class CameraStreamServiceTest {
             assertThat(views.get(0).lastFrameAt()).isEqualTo(last);
             assertThat(views.get(0).id()).isEqualTo(1L);
             assertThat(views.get(0).deviceId()).isEqualTo("dev_1");
+            assertThat(views).extracting(WardLiveCameraView::recommendedFps).containsOnly(5);
             verify(aiStreamClient).fetchLiveStreams();
             verify(rateLimitService).check("camera-ward-live", WARD_ID, 30, 600);
         }

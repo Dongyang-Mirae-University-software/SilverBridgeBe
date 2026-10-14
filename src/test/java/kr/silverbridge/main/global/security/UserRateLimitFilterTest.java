@@ -177,4 +177,26 @@ class UserRateLimitFilterTest {
 
         verifyNoInteractions(rateLimitService);
     }
+
+    @ParameterizedTest(name = "{0} -> {1}")
+    @CsvSource({
+            "/api/guardian/medication/123/intake, /api/guardian/medication/{id}/intake",
+            "/api/camera/stream/ward_k3m9Q2aZ7pLx01Bc/mjpeg, /api/camera/stream/{id}/mjpeg",
+            "/api/guardian/dashboard, /api/guardian/dashboard"
+    })
+    @DisplayName("로그용 경로 템플릿은 숫자·긴 식별자 구간을 {id}로 바꾼다")
+    void pathTemplateMasksIds(String uri, String expected) {
+        assertThat(UserRateLimitFilter.pathTemplate(new MockHttpServletRequest("GET", uri))).isEqualTo(expected);
+    }
+
+    @Test
+    @DisplayName("로그용 경로 템플릿에는 쿼리스트링(ticket·token)이 들어가지 않고 길이가 제한된다")
+    void pathTemplateDropsQueryAndCapsLength() {
+        MockHttpServletRequest request = new MockHttpServletRequest("GET", "/api/camera/stream/x/mjpeg");
+        request.setQueryString("ticket=SECRET");
+        assertThat(UserRateLimitFilter.pathTemplate(request)).doesNotContain("SECRET").doesNotContain("ticket");
+
+        MockHttpServletRequest longPath = new MockHttpServletRequest("GET", "/api/" + "a/".repeat(200));
+        assertThat(UserRateLimitFilter.pathTemplate(longPath).length()).isLessThanOrEqualTo(100);
+    }
 }

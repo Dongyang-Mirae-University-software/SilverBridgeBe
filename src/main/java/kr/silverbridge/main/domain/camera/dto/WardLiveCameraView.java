@@ -26,11 +26,13 @@ public record WardLiveCameraView(
         @Schema(description = "마지막 프레임 수신 시각", nullable = true)
         OffsetDateTime lastFrameAt,
         @Schema(description = "등록 일시", example = "2026-10-05T10:00:00+09:00")
-        OffsetDateTime createdAt
+        OffsetDateTime createdAt,
+        @Schema(description = "서버 권장 송출 fps(`GET /api/ward/camera`의 같은 이름 필드와 같은 값)", example = "15")
+        int recommendedFps
 ) {
 
     public static WardLiveCameraView of(CameraResponse camera, String status, OffsetDateTime lastFrameAt) {
         return new WardLiveCameraView(camera.id(), camera.sessionId(), camera.deviceId(), camera.label(),
-                status, lastFrameAt, camera.createdAt());
+                status, lastFrameAt, camera.createdAt(), camera.recommendedFps());
     }
 }

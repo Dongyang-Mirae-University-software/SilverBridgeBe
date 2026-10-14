@@ -1920,3 +1920,9 @@ REST API Key 단독 대비 보안 강화 — 인가코드 탈취 시 토큰 발�
 
 - 사용자 결정으로 보류했던 AI 옛 데이터 삭제: 상담 기록 172건(`1`·`990001~4`), 예약 API 키 8행(정수 ID). 삭제 전 두 백엔드 회원 DB와 재대조, 회원 있는 ID·`latprobe01`은 유지. audit-index #340 ✅.
 - FE: 챗 연동 확인(PR #36으로 반영됨). `silver-bridge-fe-dev-web`의 `unhealthy`는 헬스체크가 `localhost`(IPv6로 풀림)를 쓰던 것이 원인 - FE PR #40(`127.0.0.1`) 머지 후 gosky 재생성, `healthy` 확인. (PR #37은 develop이 userId 쿼리 제거를 먼저 반영해 닫음)
+
+## [2026-10-14] 카메라 송출 끊김 후속(백엔드 몫)
+
+- gosky fps 15 유지 확인(`.env.dev`·컨테이너 15, 요청 상한 600·`max-total` 3은 기본값). 설계 문서의 "10 복귀" 서술 정정
+- `[USER-RATE-LIMIT]` 로그에 userId·method·경로 템플릿 추가, `WardLiveCameraView.recommendedFps` 가산. 마이그레이션 없음, STOMP 헤더 토큰은 제외
+- 단위 테스트 `UserRateLimitFilterTest`·`CameraStreamServiceTest` 등 통과
