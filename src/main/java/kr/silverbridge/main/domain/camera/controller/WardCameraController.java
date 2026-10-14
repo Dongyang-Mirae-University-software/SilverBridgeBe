@@ -55,6 +55,10 @@ public class WardCameraController {
                     - 한 방에는 카메라 1대. 다른 카메라가 쓰는 방이면 409 CAMERA_LABEL_DUPLICATED
                     - 같은 기기가 같은 방으로 다시 등록하면 그대로 성공(멱등)
 
+                    [전체 등록 상한] (2026-10-14)
+                    - 서비스 전체(모든 사용자 합산) 카메라 등록 수가 상한(기본 3)이면 새 카메라 등록은 409 CAMERA_LIMIT_REACHED
+                    - 같은 기기 재등록·방 이름 변경·삭제는 상한과 무관. 응답 message를 그대로 안내하면 된다
+
                     [FE 사용법]
                     1. localStorage에 저장된 deviceId가 있으면 함께 전송 → 같은 기기로 인식되어 기존 SessionID 재사용(방 이름만 갱신)
                     2. 없으면 deviceId 생략 → 서버가 신규 SessionID·DeviceID 발급
@@ -67,7 +71,7 @@ public class WardCameraController {
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "방 이름 누락·형식 오류 / CAMERA_ROOM_INVALID(목록에 없는 방)", content = @Content),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "인증 토큰 없음 또는 만료", content = @Content),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "피보호자 권한 필요", content = @Content),
-            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "409", description = "CAMERA_LABEL_DUPLICATED(그 방에 이미 다른 카메라가 있음)", content = @Content)
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "409", description = "CAMERA_LABEL_DUPLICATED(그 방에 이미 다른 카메라가 있음) / CAMERA_LIMIT_REACHED(서비스 전체 등록 상한 도달)", content = @Content)
     })
     @PostMapping("/api/ward/camera")
     public ResponseEntity<ApiResponse<CameraResponse>> register(

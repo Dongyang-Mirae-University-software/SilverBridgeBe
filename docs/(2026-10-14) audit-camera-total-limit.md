@@ -28,9 +28,9 @@
 ## D. 이슈
 | # | 등급 | 내용 | 제안 |
 |---|---|---|---|
-| M-1 | 🟡 Medium(수용 제안) | 전체 상한이 3이라 **한 피보호자 계정이 방 3개를 등록하면 슬롯을 독점**해 다른 사용자가 등록할 수 없다. 관리자 카메라 삭제 API가 없어 풀려면 DB 수동 삭제(또는 그 사용자의 역할 변경·강제 탈퇴)뿐이다 | 학생 프로젝트 규모라 수용. 운영이 부담되면 피보호자당 상한(예: 1~2)을 추가하거나 관리자 삭제 API를 별도 검토 |
-| L-1 | 🟢 Low | Swagger 409 설명(`WardCameraController` 등록 `@ApiResponse`)에 `CAMERA_LIMIT_REACHED`가 빠져 있다(`CAMERA_LABEL_DUPLICATED`만) | 설명 한 줄 추가(코드 변경, 별도 PR) |
-| L-2 | 🟢 Low | 신규 통합 테스트(`CameraTotalLimitConcurrencyIntegrationTest`)가 vkcs 스크립트 "통과"는 확인했으나 리포트 파일(컨테이너 내부)로 실행 건수를 직접 확인하지 못했다 | 다음 vkcs 실행 때 테스트 리포트 위치를 확인해 건수 확인 |
+| M-1 | 🟡 Medium(수용 확정, 2026-10-14) | 전체 상한이 3이라 **한 피보호자 계정이 방 3개를 등록하면 슬롯을 독점**해 다른 사용자가 등록할 수 없다. 관리자 카메라 삭제 API가 없어 풀려면 DB 수동 삭제(또는 그 사용자의 역할 변경·강제 탈퇴)뿐이다 | 학생 프로젝트 규모라 수용(문서화). 운영이 부담되면 피보호자당 상한(예: 1~2)을 추가하거나 관리자 삭제 API를 별도 검토 |
+| L-1 | 🟢 Low ✅ 반영 | Swagger 409 설명(`WardCameraController` 등록 `@ApiResponse`)에 `CAMERA_LIMIT_REACHED`가 빠져 있다(`CAMERA_LABEL_DUPLICATED`만) | 설명 추가(2026-10-14, `CameraTotalLimitApiDocTest`로 고정) |
+| L-2 | 🟢 Low ✅ 확인 | 신규 통합 테스트(`CameraTotalLimitConcurrencyIntegrationTest`)가 vkcs 스크립트 "통과"는 확인했으나 리포트 파일(컨테이너 내부)로 실행 건수를 직접 확인하지 못했다 | vkcs CD 리포트(`~/sb-it-reports/latest`)에서 1건 실행·실패 0 확인 |
 
 ## E. 이어서 알려둘 점(범위 밖)
 - 클립 행·파일은 카메라 삭제 후에도 남는다(기존 구조). 이번 gosky 초기화에서 13건이 남았고 보관 만료 경로로 정리된다.
