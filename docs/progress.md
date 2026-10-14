@@ -1915,3 +1915,8 @@ REST API Key 단독 대비 보안 강화 — 인가코드 탈취 시 토큰 발�
 
 - 점검(High 0 / Medium 1 / Low 2): L-1 등록 Swagger에 `CAMERA_LIMIT_REACHED` 명시(`CameraTotalLimitApiDocTest`), L-2 vkcs CD 리포트로 통합 테스트 1건 실행·실패 0 확인, M-1 한 계정 슬롯 독점은 수용(정책 문서화). FE는 서버 `message`를 그대로 표시해 코드 변경 없음
 - 상세: `docs/(2026-10-14) audit-camera-total-limit.md`
+
+## [2026-10-14] AI 옛 데이터 정리 + FE 헬스체크 수정 배포
+
+- 사용자 결정으로 보류했던 AI 옛 데이터 삭제: 상담 기록 172건(`1`·`990001~4`), 예약 API 키 8행(정수 ID). 삭제 전 두 백엔드 회원 DB와 재대조, 회원 있는 ID·`latprobe01`은 유지. audit-index #340 ✅.
+- FE: 챗 연동 확인(PR #36으로 반영됨). `silver-bridge-fe-dev-web`의 `unhealthy`는 헬스체크가 `localhost`(IPv6로 풀림)를 쓰던 것이 원인 - FE PR #40(`127.0.0.1`) 머지 후 gosky 재생성, `healthy` 확인. (PR #37은 develop이 userId 쿼리 제거를 먼저 반영해 닫음)
