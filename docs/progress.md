@@ -1892,3 +1892,8 @@ REST API Key 단독 대비 보안 강화 — 인가코드 탈취 시 토큰 발�
 
 - M-1: SMTP 호출 전체 시간 제한(`EmailSendExecutor`, 풀 4·큐 10, 기본 10초, `NOTIFICATION_EMAIL_CALL_TIMEOUT_SECONDS`). L-1: 카카오 가상 이메일은 실패가 아닌 "대상 아님"으로 처리. 마이그레이션 없음.
 - 상세: `docs/(2026-10-13) audit-impact-email-notification.md`
+
+## [2026-10-13] 이메일 채널 실서버 확인
+
+- gosky 테스트 계정으로 복약 미복용 요약을 발송해 `FCM`·`EMAIL` 채널이 모두 `DELIVERED`(SMTP 접수)로 기록됨을 확인하고 설정·임시 약은 원복. 받은편지함 도착은 미확인.
+- 상세: `docs/(2026-10-13) audit-impact-email-notification.md` L-3
