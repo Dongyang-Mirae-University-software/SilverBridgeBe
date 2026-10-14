@@ -1,6 +1,6 @@
 # 송출용 1회용 업로드 자격(upload ticket) 발급 설계 - 백엔드 (2026-10-14)
 
-> 상태: **설계안, 승인 대기(코드·`.env`·배포 변경 없음)**. 코드는 [전환-AI] 설계 확정 뒤 구현한다.
+> 상태: **종결 - 현행 JPEG 유지(C) 확정, H.264 보류(2026-10-14).** 결과·판정: `(2026-10-14) result-video-transport-h264-poc.md`. 이 문서의 구조(AI가 BE 내부 API로 소비)는 BE가 WS를 중계하는 구조로 대체돼 구현됐으나 머지하지 않았다. 재개할 때만 참고한다.
 > 근거: `(2026-10-13) design-video-transport-be.md` 3-1·3-2·3-3, `.claude/rules/domain-security-policy.md` "보호자 실시간 카메라 보기", 현행 시청 티켓(`CameraStreamTicketService`).
 > 범위: **송출(피보호자 기기 -> AI)** 방향의 자격만. 시청 방향 전환(WebRTC·WS 시청)은 이 문서 밖이다.
 

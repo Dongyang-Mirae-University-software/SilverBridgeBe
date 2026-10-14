@@ -1926,3 +1926,11 @@ REST API Key 단독 대비 보안 강화 — 인가코드 탈취 시 토큰 발�
 - gosky fps 15 유지 확인(`.env.dev`·컨테이너 15, 요청 상한 600·`max-total` 3은 기본값). 설계 문서의 "10 복귀" 서술 정정
 - `[USER-RATE-LIMIT]` 로그에 userId·method·경로 템플릿 추가, `WardLiveCameraView.recommendedFps` 가산. 마이그레이션 없음, STOMP 헤더 토큰은 제외
 - 단위 테스트 `UserRateLimitFilterTest`·`CameraStreamServiceTest` 등 통과
+
+## [2026-10-14] 영상 전송 H.264 PoC 종결 - 현행 JPEG 유지(C) 확정
+
+- 안 B-lite(송출만 H.264, 시청 MJPEG 중계 유지)를 AI·BE·FE 3개 저장소에 구현하고 시험했다. 브랜치는 머지하지 않고 보존: BE `feature/video-transport-ws-upload`, AI `feature/ingest-ws-h264`, FE `feature/h264-sender`.
+- 결과: 감지 일치 100%(누락 0, 합성 장면)·30분 안정·폴백 전부 통과, 전송량 JPEG의 7~23%, AI CPU +4.5%p(gosky). 그러나 우리 환경(유선 1Gbps / Wi-Fi 100Mbps / 5G 무제한, 시연·시험용)은 대역폭이 병목이 아니라 **이점이 없어 JPEG 유지**로 확정. 운영 코드·설정 변경 없음.
+- 시험 중 잡은 결함(브랜치에서 수정): WS 핸드셰이크 Origin 검사가 티켓 소비 뒤에 실행됨(BE), `-fflags nobuffer` 프레임 유실·출력 1프레임 대기(AI, AUD로 해소).
+- 재개 조건: 현장 업링크 15Mbps 미만 실측 / 상시 24시간 카메라 전환 / 카메라 대수 증가. 상세·시험 환경 보존 위치: `docs/(2026-10-14) result-video-transport-h264-poc.md`.
+
