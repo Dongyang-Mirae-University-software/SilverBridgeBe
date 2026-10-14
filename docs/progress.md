@@ -1910,3 +1910,8 @@ REST API Key 단독 대비 보안 강화 — 인가코드 탈취 시 토큰 발�
 - 단위 `CameraTotalLimitTest` 5건·전체 빌드 통과. 통합 `CameraTotalLimitConcurrencyIntegrationTest`(동시 8×5회)는 vkcs에서 실행 예정
 - 배포 뒤 gosky 기존 카메라 3대·클립 초기화(이상감지 이력 유지)
 - 상세: `docs/(2026-10-14) feature-camera-total-limit.md`
+
+## [2026-10-14] 카메라 전체 등록 상한 점검 결과 반영
+
+- 점검(High 0 / Medium 1 / Low 2): L-1 등록 Swagger에 `CAMERA_LIMIT_REACHED` 명시(`CameraTotalLimitApiDocTest`), L-2 vkcs CD 리포트로 통합 테스트 1건 실행·실패 0 확인, M-1 한 계정 슬롯 독점은 수용(정책 문서화). FE는 서버 `message`를 그대로 표시해 코드 변경 없음
+- 상세: `docs/(2026-10-14) audit-camera-total-limit.md`
