@@ -74,3 +74,6 @@
 - 배포: `ssh gosky` → `cd /home/apps/SilverBridgeSky/SilverBridgeAiServer && git pull --ff-only origin main && docker compose up -d --build ai-server`. 재시작하면 송출 세션이 끊겨 **카메라를 다시 연결**해야 한다.
 - 기동 직후 백엔드 AI 구독은 502로 몇 번 실패하다가 AI 기동이 끝나면 붙는다(정상, 이번에는 10:12:37 연결).
 - `[LIVE-INFER]` 요약은 60초(`STREAM_INFER_LOG_INTERVAL_SEC`)가 지난 뒤 **다음 프레임이 올 때** 찍힌다. 송출이 1분 안에 끝나면 그 구간은 출력되지 않으므로 효과 확인은 2분 이상 송출한 뒤 두 번째 창부터 본다.
+
+
+- **되돌림 (2026-10-15)**: 운영 영향 확인 후 AI PR #17을 AI PR #18(main `95558ec`)로 되돌렸다. gosky 재시작 완료, 감지기 3개 정상 로드.
