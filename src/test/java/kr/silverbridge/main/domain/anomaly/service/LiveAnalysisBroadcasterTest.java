@@ -13,6 +13,9 @@ import kr.silverbridge.main.global.websocket.WebSocketRecipientStatusPort;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import kr.silverbridge.main.domain.camera.dto.CameraLiveStatus;
+import java.util.ArrayList;
+import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
@@ -151,6 +154,76 @@ class LiveAnalysisBroadcasterTest {
         verify(messagingTemplate, times(2)).convertAndSend(eq("/topic/G1/camera-analysis"), payload.capture());
         assertThat(((LiveAnalysisMessage) payload.getAllValues().get(0)).status()).isEqualTo("running");
         assertThat(((LiveAnalysisMessage) payload.getAllValues().get(1)).status()).isEqualTo("offline");
+    }
+
+    @Nested
+    @DisplayName("간격 제한에 걸린 마지막 변화 - 뒤따르는 결과가 없어도 2초 뒤에 보낸다 (2026-10-15)")
+    class TrailingSend {
+
+        private final List<Runnable> scheduled = new ArrayList<>();
+        private final List<Long> delays = new ArrayList<>();
+        private LiveAnalysisBroadcaster trailing;
+
+        @BeforeEach
+        void setUpTrailing() {
+            WebSocketEventPublisher publisher = new WebSocketEventPublisher(messagingTemplate, recipientStatusPort);
+            trailing = new LiveAnalysisBroadcaster(cameraService, connectionService, publisher, Runnable::run, now::get,
+                    (task, delayMillis) -> {
+                        scheduled.add(task);
+                        delays.add(delayMillis);
+                    }, null);
+        }
+
+        @Test
+        @DisplayName("송출 중 → 2초 안에 끔(stopped): 다음 결과가 없어도 예약 시점에 offline을 보낸다")
+        void 끈직후_마지막상태_전달() {
+            when(connectionService.getActiveGuardianIds(WARD_ID)).thenReturn(List.of("G1"));
+
+            trailing.onSessionStatus(SESSION_ID, "running");       // 발송 1
+            now.addAndGet(500);
+            trailing.onSessionStatus(SESSION_ID, "stopped");       // 2초 안 - 미루고 남은 1.5초 뒤로 예약
+            verify(messagingTemplate, times(1)).convertAndSend(anyString(), any(Object.class));
+            assertThat(delays).containsExactly(1_500L);
+
+            now.addAndGet(1_500);
+            scheduled.get(0).run();
+
+            ArgumentCaptor<Object> payload = ArgumentCaptor.forClass(Object.class);
+            verify(messagingTemplate, times(2)).convertAndSend(eq("/topic/G1/camera-analysis"), payload.capture());
+            assertThat(((LiveAnalysisMessage) payload.getAllValues().get(1)).status()).isEqualTo(CameraLiveStatus.OFFLINE);
+        }
+
+        @Test
+        @DisplayName("바뀐 게 없으면 예약하지 않고, 미룬 변화가 여러 번이어도 세션당 예약은 1건이다")
+        void 예약_중복없음() {
+            when(connectionService.getActiveGuardianIds(WARD_ID)).thenReturn(List.of("G1"));
+
+            trailing.onSessionStatus(SESSION_ID, "running");       // 발송
+            trailing.onSessionStatus(SESSION_ID, "running");       // 같은 상태 - 예약 없음
+            assertThat(scheduled).isEmpty();
+
+            now.addAndGet(100);
+            trailing.onSessionStatus(SESSION_ID, "disconnected");  // 미룸 - 예약 1
+            now.addAndGet(100);
+            trailing.onSessionStatus(SESSION_ID, "stopped");       // 미룸 - 이미 예약돼 있음
+            assertThat(scheduled).hasSize(1);
+        }
+
+        @Test
+        @DisplayName("예약이 돌기 전에 세션이 끝나 상태가 지워졌으면 보내지 않는다(꺼짐은 이미 알렸다)")
+        void 세션종료후_예약_무시() {
+            when(connectionService.getActiveGuardianIds(WARD_ID)).thenReturn(List.of("G1"));
+
+            trailing.onSessionStatus(SESSION_ID, "running");       // 발송 1
+            now.addAndGet(500);
+            trailing.onSessionStatus(SESSION_ID, "disconnected");  // 미룸 + 예약
+            trailing.onSessionsEnded(List.of(SESSION_ID));         // 발송 2 (offline) + 상태 삭제
+
+            now.addAndGet(2_000);
+            scheduled.get(0).run();
+
+            verify(messagingTemplate, times(2)).convertAndSend(anyString(), any(Object.class));
+        }
     }
 
     @Test
