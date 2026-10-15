@@ -1,5 +1,6 @@
 package kr.silverbridge.main.domain.anomaly.service;
 
+import jakarta.annotation.PreDestroy;
 import kr.silverbridge.main.domain.anomaly.dto.AnomalySignal;
 import kr.silverbridge.main.domain.anomaly.dto.DetectedTypeLabel;
 import kr.silverbridge.main.domain.anomaly.dto.LiveAnalysisMessage;
@@ -21,8 +22,12 @@ import java.util.Collection;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.Executor;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.TimeUnit;
 import java.util.function.LongSupplier;
 import java.util.function.UnaryOperator;
 
@@ -55,6 +60,19 @@ public class LiveAnalysisBroadcaster implements LiveAnalysisSnapshotPort {
     private final WebSocketEventPublisher webSocketEventPublisher;
     private final Executor executor;
     private final LongSupplier clock;
+    private final Delayer delayer;
+    /** 2초 간격 제한에 걸려 미룬 변화를 다시 보내기로 예약해 둔 세션(세션당 예약 1건). */
+    private final Set<String> pendingRetry = ConcurrentHashMap.newKeySet();
+    private final ScheduledExecutorService retryScheduler;
+
+    /**
+     * 미룬 변화를 다시 보내는 예약. 간격 제한에 걸린 변화는 예전에는 <b>다음 결과가 와야</b> 나갔는데, 카메라를
+     * 끈 직후처럼 뒤따르는 결과가 없으면 마지막 상태가 영영 전달되지 않아 보호자 화면에 '켜짐'이 남았다(2026-10-15).
+     */
+    @FunctionalInterface
+    interface Delayer {
+        void schedule(Runnable task, long delayMillis);
+    }
 
     /** 세션별 마지막 상태. 등록 카메라 세션만 들어오므로 카메라 대수만큼만 쌓인다(종료 시 제거). */
     private final Map<String, State> states = new ConcurrentHashMap<>();
@@ -64,16 +82,48 @@ public class LiveAnalysisBroadcaster implements LiveAnalysisSnapshotPort {
                                    ConnectionService connectionService,
                                    WebSocketEventPublisher webSocketEventPublisher,
                                    @Qualifier("liveAnalysisExecutor") Executor executor) {
-        this(cameraService, connectionService, webSocketEventPublisher, executor, System::currentTimeMillis);
+        this(cameraService, connectionService, webSocketEventPublisher, executor, System::currentTimeMillis,
+                newRetryScheduler());
+    }
+
+    private LiveAnalysisBroadcaster(CameraService cameraService, ConnectionService connectionService,
+                                    WebSocketEventPublisher webSocketEventPublisher, Executor executor,
+                                    LongSupplier clock, ScheduledExecutorService retryScheduler) {
+        this(cameraService, connectionService, webSocketEventPublisher, executor, clock,
+                (task, delayMillis) -> retryScheduler.schedule(task, delayMillis, TimeUnit.MILLISECONDS), retryScheduler);
+    }
+
+    private static ScheduledExecutorService newRetryScheduler() {
+        return Executors.newSingleThreadScheduledExecutor(runnable -> {
+            Thread thread = new Thread(runnable, "live-analysis-retry");
+            thread.setDaemon(true);
+            return thread;
+        });
+    }
+
+    /** 테스트용 - 미룬 변화를 다시 보내는 예약을 하지 않는다(다음 결과에서만 보낸다). */
+    LiveAnalysisBroadcaster(CameraService cameraService, ConnectionService connectionService,
+                            WebSocketEventPublisher webSocketEventPublisher, Executor executor, LongSupplier clock) {
+        this(cameraService, connectionService, webSocketEventPublisher, executor, clock, (task, delayMillis) -> { }, null);
     }
 
     LiveAnalysisBroadcaster(CameraService cameraService, ConnectionService connectionService,
-                            WebSocketEventPublisher webSocketEventPublisher, Executor executor, LongSupplier clock) {
+                            WebSocketEventPublisher webSocketEventPublisher, Executor executor, LongSupplier clock,
+                            Delayer delayer, ScheduledExecutorService retryScheduler) {
         this.cameraService = cameraService;
         this.connectionService = connectionService;
         this.webSocketEventPublisher = webSocketEventPublisher;
         this.executor = executor;
         this.clock = clock;
+        this.delayer = delayer;
+        this.retryScheduler = retryScheduler;
+    }
+
+    @PreDestroy
+    void shutdownRetryScheduler() {
+        if (retryScheduler != null) {
+            retryScheduler.shutdownNow();
+        }
     }
 
     /** AI {@code latest_analysis} 수신. */
@@ -126,17 +176,50 @@ public class LiveAnalysisBroadcaster implements LiveAnalysisSnapshotPort {
     private void update(String sessionId, UnaryOperator<State> change) {
         long now = clock.getAsLong();
         State[] toSend = {null};
+        long[] retryAfter = {0};
         states.compute(sessionId, (key, current) -> {
             State next = change.apply(current == null ? State.EMPTY : current);
-            String changeKey = next.changeKey();
-            if (!changeKey.equals(next.sentKey()) && now - next.sentAt() >= MIN_INTERVAL_MILLIS) {
-                next = next.markSent(changeKey, now);
-                toSend[0] = next;
-            }
-            return next;
+            return decide(next, now, toSend, retryAfter);
         });
-        if (toSend[0] != null) {
-            dispatch(sessionId, toSend[0]);
+        afterDecide(sessionId, toSend[0], retryAfter[0]);
+    }
+
+    // 미뤄 둔 변화를 지금 보낸다. 그 사이 세션이 끝나 상태가 지워졌으면 보내지 않는다(꺼짐은 이미 알렸다).
+    private void flushPending(String sessionId) {
+        pendingRetry.remove(sessionId);
+        long now = clock.getAsLong();
+        State[] toSend = {null};
+        long[] retryAfter = {0};
+        states.computeIfPresent(sessionId, (key, current) -> decide(current, now, toSend, retryAfter));
+        afterDecide(sessionId, toSend[0], retryAfter[0]);
+    }
+
+    // 바뀐 상태를 보낼지 정한다. 간격 제한에 걸리면 남은 시간을 retryAfter 로 돌려준다.
+    private static State decide(State next, long now, State[] toSend, long[] retryAfter) {
+        String changeKey = next.changeKey();
+        if (changeKey.equals(next.sentKey())) {
+            return next;
+        }
+        long elapsed = now - next.sentAt();
+        if (elapsed >= MIN_INTERVAL_MILLIS) {
+            State sent = next.markSent(changeKey, now);
+            toSend[0] = sent;
+            return sent;
+        }
+        retryAfter[0] = MIN_INTERVAL_MILLIS - elapsed;
+        return next;
+    }
+
+    private void afterDecide(String sessionId, State toSend, long retryAfter) {
+        if (toSend != null) {
+            dispatch(sessionId, toSend);
+        }
+        if (retryAfter > 0 && pendingRetry.add(sessionId)) {
+            try {
+                delayer.schedule(() -> flushPending(sessionId), retryAfter);
+            } catch (RuntimeException e) {
+                pendingRetry.remove(sessionId);   // 종료 중 등 - 다음 결과가 오면 그때 보낸다
+            }
         }
     }
 
