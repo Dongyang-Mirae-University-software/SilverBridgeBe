@@ -25,6 +25,10 @@ import java.util.concurrent.atomic.AtomicBoolean;
  * 먼저 멈추는 단계({@link #getPhase()} 최댓값)에서 열린 AI 연결을 모두 닫아 중계 루프를 빠져나오게 한다 -
  * 그러지 않으면 배포마다 종료가 최대 대기 시간만큼 늘어나 큐에 있던 알림 처리까지 밀린다.</p>
  *
+ * <p><b>같은 카메라 재시청</b>: 같은 보호자가 같은 카메라를 다시 열면 이전 중계를 먼저 닫고 새로 연다. 화면을 다시
+ * 열거나 송출이 껐다 켜지면 이전 영상 연결이 재확인 주기(60초)·30분 상한까지 자리를 쥔 채 남아, 상한(1인 2개)은
+ * 지키면서도 정작 보려는 영상이 거절됐다(2026-10-15 gosky). 다른 카메라의 중계는 건드리지 않는다 - 상한 정책은 그대로다.</p>
+ *
  * <p>상한은 이 인스턴스 기준이다(서버 1대 운영 전제). 여러 대로 늘리면 Redis 등 공유 카운터로 옮길 것.</p>
  */
 @Slf4j
@@ -44,13 +48,15 @@ public class CameraStreamSlots implements SmartLifecycle {
 
     /**
      * 자리를 잡는다. 반드시 {@link Slot#close()}로 돌려줘야 한다(try-with-resources).
+     * 같은 보호자의 같은 카메라 중계가 이미 열려 있으면 그것을 닫아 자리를 돌려받은 뒤 잡는다.
      *
      * @throws CustomException 상한 초과 429, 종료 중 503
      */
-    public Slot acquire(String userId) {
+    public Slot acquire(String userId, String sessionId) {
         if (!running) {
             throw new CustomException(ErrorCode.CAMERA_STREAM_UNAVAILABLE);
         }
+        replaceSameSession(userId, sessionId);
         boolean[] reserved = {false};
         perUser.compute(userId, (key, count) -> {
             int current = count == null ? 0 : count;
@@ -69,9 +75,19 @@ public class CameraStreamSlots implements SmartLifecycle {
             log.warn("[CAMERA-STREAM-LIMIT] 서버 전체 동시 시청 상한 - 요청 거부: userId={}", userId);
             throw new CustomException(ErrorCode.CAMERA_STREAM_LIMIT_EXCEEDED);
         }
-        Slot slot = new Slot(userId);
+        Slot slot = new Slot(userId, sessionId);
         active.add(slot);
         return slot;
+    }
+
+    // 이전 중계를 닫으면 그 AI 연결이 끊겨 중계 루프가 스스로 빠져나오고, 자리는 여기서 바로 돌아온다(close는 한 번만 반납).
+    private void replaceSameSession(String userId, String sessionId) {
+        for (Slot previous : active) {
+            if (previous.userId.equals(userId) && previous.sessionId.equals(sessionId)) {
+                log.info("[CAMERA-STREAM] 같은 카메라 다시 열기 - 이전 중계 정리: userId={}, sessionId={}", userId, sessionId);
+                previous.close();
+            }
+        }
     }
 
     /** 종료 중이면 중계 루프가 스스로 빠져나온다. */
@@ -116,11 +132,13 @@ public class CameraStreamSlots implements SmartLifecycle {
     public final class Slot implements AutoCloseable {
 
         private final String userId;
+        private final String sessionId;
         private final AtomicBoolean released = new AtomicBoolean();
         private volatile Closeable connection;
 
-        private Slot(String userId) {
+        private Slot(String userId, String sessionId) {
             this.userId = userId;
+            this.sessionId = sessionId;
         }
 
         /** 종료 처리에서 닫을 AI 연결을 붙인다. */
