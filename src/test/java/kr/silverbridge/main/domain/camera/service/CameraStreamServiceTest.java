@@ -469,6 +469,61 @@ class CameraStreamServiceTest {
     }
 
     @Nested
+    @DisplayName("피보호자 내 카메라 - 찍히는 장면 (2026-10-15)")
+    class WardLatestFrame {
+
+        private static final long CAMERA_ID = 7L;
+
+        @Test
+        @DisplayName("본인 카메라면 그 세션의 마지막 장면을 돌려준다(피보호자 ID 기준 분 30·시간 600 제한)")
+        void 본인카메라_장면() {
+            byte[] jpeg = {(byte) 0xFF, (byte) 0xD8};
+            when(cameraService.getOwnedSessionId(WARD_ID, CAMERA_ID)).thenReturn(SESSION_ID);
+            when(aiStreamClient.fetchLatestFrame(SESSION_ID)).thenReturn(Optional.of(jpeg));
+
+            assertThat(service.getWardLatestFrame(WARD_ID, CAMERA_ID)).isEqualTo(jpeg);
+            verify(rateLimitService).check("camera-ward-frame", WARD_ID, 30, 600);
+        }
+
+        @Test
+        @DisplayName("남의 카메라면 AI를 부르기 전에 막힌다(403 - 소유권 검사는 CameraService 한 곳)")
+        void 남의카메라_AI미호출() {
+            when(cameraService.getOwnedSessionId(WARD_ID, CAMERA_ID))
+                    .thenThrow(new CustomException(ErrorCode.CAMERA_NOT_AUTHORIZED));
+
+            assertThat(errorOf(() -> service.getWardLatestFrame(WARD_ID, CAMERA_ID)))
+                    .isEqualTo(ErrorCode.CAMERA_NOT_AUTHORIZED);
+            verify(aiStreamClient, never()).fetchLatestFrame(anyString());
+        }
+
+        @Test
+        @DisplayName("받은 장면이 없으면 404 CAMERA_NOT_STREAMING, AI 장애면 503")
+        void 장면없음_AI장애() {
+            when(cameraService.getOwnedSessionId(WARD_ID, CAMERA_ID)).thenReturn(SESSION_ID);
+            when(aiStreamClient.fetchLatestFrame(SESSION_ID)).thenReturn(Optional.empty());
+            assertThat(errorOf(() -> service.getWardLatestFrame(WARD_ID, CAMERA_ID)))
+                    .isEqualTo(ErrorCode.CAMERA_NOT_STREAMING);
+
+            when(aiStreamClient.fetchLatestFrame(SESSION_ID)).thenThrow(new AiStreamUnavailableException("down"));
+            assertThat(errorOf(() -> service.getWardLatestFrame(WARD_ID, CAMERA_ID)))
+                    .isEqualTo(ErrorCode.CAMERA_STREAM_UNAVAILABLE);
+        }
+
+        @Test
+        @DisplayName("한도를 넘으면 429 - 소유권 조회·AI 호출 전에 막힌다")
+        void 한도초과_조기차단() {
+            org.mockito.Mockito.doThrow(new TooManyRequestsException(30))
+                    .when(rateLimitService).check(anyString(), anyString(), org.mockito.ArgumentMatchers.anyInt(),
+                            org.mockito.ArgumentMatchers.anyInt());
+
+            assertThat(errorOf(() -> service.getWardLatestFrame(WARD_ID, CAMERA_ID)))
+                    .isEqualTo(ErrorCode.TOO_MANY_REQUESTS);
+            verify(cameraService, never()).getOwnedSessionId(anyString(), org.mockito.ArgumentMatchers.anyLong());
+            verify(aiStreamClient, never()).fetchLatestFrame(anyString());
+        }
+    }
+
+    @Nested
     @DisplayName("속도 제한 (점검 L-4)")
     class RateLimit {
 

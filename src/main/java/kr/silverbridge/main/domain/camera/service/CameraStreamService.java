@@ -157,6 +157,23 @@ public class CameraStreamService {
         }
     }
 
+    /**
+     * 피보호자 "내 카메라" - 본인 카메라가 지금(꺼졌으면 마지막으로) 보낸 장면(JPEG, 2026-10-15).
+     *
+     * <p>다른 기기로 등록한 카메라가 어느 방을 비추는지 알아보는 용도다. 그 기기가 이미 보낸 프레임만 돌려줄 뿐
+     * 카메라를 켜거나 끄지 않는다. 실시간 영상(MJPEG)·티켓은 그대로 보호자 전용이다.</p>
+     */
+    public byte[] getWardLatestFrame(String wardId, Long cameraId) {
+        rateLimit(CameraStreamRateLimit.WARD_FRAME, wardId);
+        String sessionId = cameraService.getOwnedSessionId(wardId, cameraId);
+        try {
+            return aiStreamClient.fetchLatestFrame(sessionId)
+                    .orElseThrow(() -> new CustomException(ErrorCode.CAMERA_NOT_STREAMING));
+        } catch (AiStreamUnavailableException e) {
+            throw new CustomException(ErrorCode.CAMERA_STREAM_UNAVAILABLE);
+        }
+    }
+
     /** 영상 1회용 티켓. 인가를 통과한 카메라에만 발급한다. */
     public StreamTicketResponse issueTicket(String guardianId, String sessionId) {
         rateLimit(CameraStreamRateLimit.TICKET, guardianId);

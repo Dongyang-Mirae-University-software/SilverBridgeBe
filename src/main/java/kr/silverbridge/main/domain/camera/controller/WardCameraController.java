@@ -15,6 +15,8 @@ import kr.silverbridge.main.domain.camera.service.CameraService;
 import kr.silverbridge.main.domain.camera.service.CameraStreamService;
 import kr.silverbridge.main.global.response.ApiResponse;
 import lombok.RequiredArgsConstructor;
+import org.springframework.http.CacheControl;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
@@ -141,6 +143,38 @@ public class WardCameraController {
     public ResponseEntity<ApiResponse<List<WardLiveCameraView>>> getMyLiveCameras(
             @AuthenticationPrincipal String wardId) {
         return ResponseEntity.ok(ApiResponse.ok(cameraStreamService.getWardLiveCameras(wardId)));
+    }
+
+    @Operation(summary = "내 카메라가 찍는 장면 (정지 화면)",
+            description = """
+                    [요청 헤더]
+                    Authorization: Bearer {accessToken}
+
+                    본인 카메라가 지금 보내고 있는 장면(꺼져 있으면 마지막으로 보낸 장면)을 JPEG로 돌려줍니다.
+                    다른 기기로 등록한 카메라가 어느 방을 비추는지 알아보는 용도입니다(2026-10-15).
+                    카메라를 켜거나 끄지 않습니다. 실시간 영상은 보호자만 볼 수 있습니다.
+
+                    [FE 사용법]
+                    - Authorization 헤더로 fetch → blob URL로 <img>에 표시. 송출 중이면 3초마다 다시 부르면 됩니다.
+                    - 장면 시각은 GET /api/ward/camera/live 의 lastFrameAt 을 쓰세요.
+                    - 404 CAMERA_NOT_STREAMING = 아직 받은 장면이 없음(AI 서버 재시작 뒤 등)
+                    """)
+    @ApiResponses({
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "JPEG"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "인증 토큰 없음 또는 만료", content = @Content),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "피보호자 권한 필요 / 본인이 등록한 카메라가 아님", content = @Content),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "CAMERA_NOT_FOUND / CAMERA_NOT_STREAMING(받은 장면 없음)", content = @Content),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "429", description = "너무 잦은 조회(분 30회·시간 600회)", content = @Content),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "503", description = "CAMERA_STREAM_UNAVAILABLE(AI 서버 응답 없음)", content = @Content)
+    })
+    @GetMapping("/api/ward/camera/{id}/latest-frame")
+    public ResponseEntity<byte[]> getLatestFrame(
+            @AuthenticationPrincipal String wardId,
+            @Parameter(description = "카메라 ID") @PathVariable Long id) {
+        return ResponseEntity.ok()
+                .contentType(MediaType.IMAGE_JPEG)
+                .cacheControl(CacheControl.noStore())
+                .body(cameraStreamService.getWardLatestFrame(wardId, id));
     }
 
     @Operation(summary = "카메라 수정 (방 이름 변경 / 사용 토글)",
