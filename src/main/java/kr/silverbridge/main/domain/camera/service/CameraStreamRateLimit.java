@@ -16,6 +16,8 @@ enum CameraStreamRateLimit {
     WARD_LIVE("camera-ward-live", 30, 600),
     STATUS("camera-status", 30, 600),
     FRAME("camera-frame", 60, 1200),
+    // 피보호자 "내 카메라"의 찍히는 장면 보기(본인 ID 기준, 2026-10-15) - FE가 3초마다(분당 20회) 부른다
+    WARD_FRAME("camera-ward-frame", 30, 600),
     TICKET("camera-ticket", 20, 300);
 
     final String endpoint;

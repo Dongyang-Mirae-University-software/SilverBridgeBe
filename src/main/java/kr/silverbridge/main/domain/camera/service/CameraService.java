@@ -404,6 +404,16 @@ public class CameraService {
     }
 
     /**
+     * 피보호자 본인 카메라의 세션 ID - "내 카메라" 화면의 찍히는 장면 보기용(2026-10-15).
+     * 없으면 404, 남의 카메라면 403 + {@code [IDOR-ATTEMPT]}({@link #getOwnedCamera}와 같은 기준).
+     * 사용 중지한 카메라도 본인 것이라 허용한다.
+     */
+    @Transactional(readOnly = true)
+    public String getOwnedSessionId(String wardId, Long cameraId) {
+        return getOwnedCamera(wardId, cameraId).getSessionId();
+    }
+
+    /**
      * 조회 + 소유권 검증. 없으면 404, <b>타인 것이면 403 + 명시적 안내</b>.
      *
      * <p>이전에는 타인 카메라를 404로 위장했으나(존재 노출 차단), 무슨 일인지 알 수 없는 오류로 시니어가 이탈하는

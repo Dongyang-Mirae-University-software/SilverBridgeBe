@@ -146,6 +146,23 @@ class CameraControllerSecurityTest {
     }
 
     @Test
+    @WithMockUser(roles = "WARD")
+    @DisplayName("피보호자(WARD)는 본인 카메라의 찍히는 장면(정지 화면)을 볼 수 있다 (2026-10-15)")
+    void ward_찍히는장면_허용() {
+        when(cameraStreamService.getWardLatestFrame(anyString(), org.mockito.ArgumentMatchers.anyLong()))
+                .thenReturn(new byte[0]);
+
+        assertThatNoException().isThrownBy(() -> wardController.getLatestFrame("WD0001", 1L));
+    }
+
+    @Test
+    @WithMockUser(roles = "GUARDIAN")
+    @DisplayName("보호자(GUARDIAN)는 피보호자용 찍히는 장면 API를 쓸 수 없다(403 - 보호자는 자기 경로로 본다)")
+    void guardian_피보호자장면_거부() {
+        assertThatThrownBy(() -> wardController.getLatestFrame("GD0001", 1L)).isInstanceOf(AccessDeniedException.class);
+    }
+
+    @Test
     @WithMockUser(roles = "ADMIN")
     @DisplayName("관리자(ADMIN)도 영상 티켓을 받을 수 없다(403)")
     void admin_티켓_거부() {
