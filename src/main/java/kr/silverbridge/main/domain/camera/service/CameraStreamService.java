@@ -180,7 +180,7 @@ public class CameraStreamService {
         }
         cameraService.getViewableCamera(userId, sessionId);
 
-        try (CameraStreamSlots.Slot slot = slots.acquire(userId)) {
+        try (CameraStreamSlots.Slot slot = slots.acquire(userId, sessionId)) {
             AiMjpegStream aiStream;
             try {
                 aiStream = aiStreamClient.openMjpeg(sessionId);
