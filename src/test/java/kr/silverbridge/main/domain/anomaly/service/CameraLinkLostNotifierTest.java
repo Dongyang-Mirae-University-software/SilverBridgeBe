@@ -46,6 +46,7 @@ class CameraLinkLostNotifierTest {
     @Mock private UserRepository userRepository;
     @Mock private NotificationDispatcher dispatcher;
     @Mock private StringRedisTemplate redisTemplate;
+    @Mock private kr.silverbridge.main.domain.notification.service.GuardianNotificationPreferenceService preferenceService;
     @Mock private ValueOperations<String, String> valueOps;
     @Mock private ScheduledFuture<Object> future;
 
@@ -56,7 +57,7 @@ class CameraLinkLostNotifierTest {
     void setUp() {
         properties = new AnomalyProperties();
         notifier = new CameraLinkLostNotifier(properties, taskScheduler, Runnable::run, cameraService,
-                connectionService, userRepository, dispatcher, redisTemplate);
+                connectionService, userRepository, dispatcher, redisTemplate, preferenceService);
         lenient().when(redisTemplate.opsForValue()).thenReturn(valueOps);
     }
 
@@ -153,5 +154,53 @@ class CameraLinkLostNotifierTest {
         scheduledTask().run();
 
         verify(valueOps, never()).setIfAbsent(anyString(), anyString(), any(Duration.class));
+    }
+
+    @Test
+    @DisplayName("안내를 끈 보호자는 빼고 보낸다")
+    void 끈_보호자_제외() {
+        stubSchedule();
+        when(cameraService.findOwnerBySessionId(SESSION)).thenReturn(Optional.of(new CameraOwner("W1", "거실")));
+        when(connectionService.getActiveGuardianIds("W1")).thenReturn(List.of("G1", "G2"));
+        when(preferenceService.cameraLinkLostDisabledGuardians()).thenReturn(Set.of("G2"));
+        when(valueOps.setIfAbsent(anyString(), eq("1"), any(Duration.class))).thenReturn(true);
+        when(userRepository.findById("W1")).thenReturn(Optional.empty());
+
+        notifier.onLost(Set.of(SESSION));
+        scheduledTask().run();
+
+        verify(dispatcher).dispatch(eq("G1"), eq("W1"), eq(NotificationType.CAMERA_LINK_LOST), any());
+        verify(dispatcher, never()).dispatch(eq("G2"), anyString(), any(), any());
+    }
+
+    @Test
+    @DisplayName("전원이 껐으면 쿨다운도 쓰지 않는다")
+    void 전원_끄면_쿨다운_안씀() {
+        stubSchedule();
+        when(cameraService.findOwnerBySessionId(SESSION)).thenReturn(Optional.of(new CameraOwner("W1", "거실")));
+        when(connectionService.getActiveGuardianIds("W1")).thenReturn(List.of("G1"));
+        when(preferenceService.cameraLinkLostDisabledGuardians()).thenReturn(Set.of("G1"));
+
+        notifier.onLost(Set.of(SESSION));
+        scheduledTask().run();
+
+        verify(valueOps, never()).setIfAbsent(anyString(), anyString(), any(Duration.class));
+        verify(dispatcher, never()).dispatch(anyString(), anyString(), any(), any());
+    }
+
+    @Test
+    @DisplayName("설정 조회가 실패하면 전원에게 보낸다")
+    void 설정조회_실패시_전원() {
+        stubSchedule();
+        when(cameraService.findOwnerBySessionId(SESSION)).thenReturn(Optional.of(new CameraOwner("W1", "거실")));
+        when(connectionService.getActiveGuardianIds("W1")).thenReturn(List.of("G1"));
+        when(preferenceService.cameraLinkLostDisabledGuardians()).thenThrow(new IllegalStateException("db"));
+        when(valueOps.setIfAbsent(anyString(), eq("1"), any(Duration.class))).thenReturn(true);
+        when(userRepository.findById("W1")).thenReturn(Optional.empty());
+
+        notifier.onLost(Set.of(SESSION));
+        scheduledTask().run();
+
+        verify(dispatcher).dispatch(eq("G1"), eq("W1"), eq(NotificationType.CAMERA_LINK_LOST), any());
     }
 }

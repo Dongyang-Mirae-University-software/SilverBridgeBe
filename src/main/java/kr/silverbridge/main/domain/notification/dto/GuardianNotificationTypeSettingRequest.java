@@ -9,5 +9,6 @@ import io.swagger.v3.oas.annotations.media.Schema;
 @Schema(description = "보호자 알림 종류별 수신 설정 변경 (null = 변경 안 함)")
 public record GuardianNotificationTypeSettingRequest(
         @Schema(description = "판정 확인 요청(재촉) 수신 여부", example = "false") Boolean anomalyReviewReminder,
-        @Schema(description = "복약 미복용 요약 수신 여부", example = "false") Boolean medication) {
+        @Schema(description = "복약 미복용 요약 수신 여부", example = "false") Boolean medication,
+        @Schema(description = "카메라 연결 끊김 안내 수신 여부", example = "false") Boolean cameraLinkLost) {
 }

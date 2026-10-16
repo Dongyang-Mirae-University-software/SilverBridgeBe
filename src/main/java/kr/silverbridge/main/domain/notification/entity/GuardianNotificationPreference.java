@@ -31,6 +31,10 @@ public class GuardianNotificationPreference extends BaseTimeEntity {
     @Column(name = "medication_enabled", nullable = false)
     private boolean medicationEnabled;
 
+    /** 카메라 연결 끊김 안내(CAMERA_LINK_LOST) 수신 여부. 기본 ON. */
+    @Column(name = "camera_link_lost_enabled", nullable = false)
+    private boolean cameraLinkLostEnabled = true;
+
     public static GuardianNotificationPreference of(String guardianId, boolean medicationEnabled) {
         GuardianNotificationPreference preference = new GuardianNotificationPreference();
         preference.guardianId = guardianId;
@@ -40,5 +44,9 @@ public class GuardianNotificationPreference extends BaseTimeEntity {
 
     public void changeMedicationEnabled(boolean enabled) {
         this.medicationEnabled = enabled;
+    }
+
+    public void changeCameraLinkLostEnabled(boolean enabled) {
+        this.cameraLinkLostEnabled = enabled;
     }
 }

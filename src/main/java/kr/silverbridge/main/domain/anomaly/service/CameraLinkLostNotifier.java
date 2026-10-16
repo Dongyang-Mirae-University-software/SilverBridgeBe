@@ -5,6 +5,7 @@ import kr.silverbridge.main.domain.camera.dto.CameraOwner;
 import kr.silverbridge.main.domain.camera.service.CameraService;
 import kr.silverbridge.main.domain.connection.service.ConnectionService;
 import kr.silverbridge.main.domain.notification.channel.NotificationContent;
+import kr.silverbridge.main.domain.notification.service.GuardianNotificationPreferenceService;
 import kr.silverbridge.main.domain.notification.dispatch.NotificationDispatcher;
 import kr.silverbridge.main.domain.notification.dispatch.NotificationType;
 import kr.silverbridge.main.domain.user.repository.UserRepository;
@@ -21,6 +22,7 @@ import java.util.Collection;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.Executor;
 import java.util.concurrent.ScheduledFuture;
@@ -32,7 +34,7 @@ import java.util.concurrent.ScheduledFuture;
  * ({@code grace-seconds}) 안에 송출이 복구되어 다시 구독되면 보내지 않는다 - 대부분 이 안에 돌아온다.</p>
  *
  * <ul>
- *   <li>수신자는 <b>ACTIVE 보호자</b>다(피보호자 본인은 기기 앞에 있는 사람이 아닐 수 있어 보호자가 안내받아 조치한다).</li>
+ *   <li>수신자는 <b>ACTIVE 보호자 중 이 안내를 끄지 않은 사람</b>이다(피보호자 본인은 기기 앞에 있는 사람이 아닐 수 있어 보호자가 안내받아 조치한다).</li>
  *   <li>카메라당 쿨다운(기본 6시간)은 Redis. 확인에 실패하면 <b>보내지 않는다</b>(fail-closed) - 위험 알림이 아니라
  *       확인 요청이라 장애 중 반복 발송이 더 해롭다.</li>
  *   <li>발송은 {@code notificationExecutor}에서 한다(스케줄러 스레드가 FCM 응답을 기다리지 않는다).</li>
@@ -55,6 +57,7 @@ public class CameraLinkLostNotifier {
     private final UserRepository userRepository;
     private final NotificationDispatcher dispatcher;
     private final StringRedisTemplate redisTemplate;
+    private final GuardianNotificationPreferenceService preferenceService;
 
     /** 유예 중인 세션. 복구되면 {@link #onRecovered}가 지우고, 작업이 실행될 때 남아 있어야만 발송한다. */
     private final Map<String, ScheduledFuture<?>> pending = new ConcurrentHashMap<>();
@@ -66,7 +69,8 @@ public class CameraLinkLostNotifier {
                                   ConnectionService connectionService,
                                   UserRepository userRepository,
                                   NotificationDispatcher dispatcher,
-                                  StringRedisTemplate redisTemplate) {
+                                  StringRedisTemplate redisTemplate,
+                                  GuardianNotificationPreferenceService preferenceService) {
         this.properties = properties;
         this.taskScheduler = taskScheduler;
         this.executor = executor;
@@ -75,6 +79,7 @@ public class CameraLinkLostNotifier {
         this.userRepository = userRepository;
         this.dispatcher = dispatcher;
         this.redisTemplate = redisTemplate;
+        this.preferenceService = preferenceService;
     }
 
     /** 재접속 뒤 목록에서 사라진 등록 카메라 세션들. 유예 뒤에도 돌아오지 않으면 알린다. */
@@ -124,9 +129,9 @@ public class CameraLinkLostNotifier {
                 return;   // 그 사이 카메라가 삭제됐다
             }
             String wardId = owner.get().wardId();
-            List<String> guardianIds = connectionService.getActiveGuardianIds(wardId);
+            List<String> guardianIds = receivers(wardId);
             if (guardianIds.isEmpty()) {
-                return;   // 알릴 사람이 없으면 쿨다운도 쓰지 않는다
+                return;   // 알릴 사람이 없으면(전원이 끔 포함) 쿨다운도 쓰지 않는다
             }
             if (!acquireCooldown(sessionId)) {
                 return;
@@ -144,6 +149,21 @@ public class CameraLinkLostNotifier {
         } catch (RuntimeException e) {
             log.warn("[CAMERA-LINK-LOST-FAILED] 처리 실패: sessionId={}, error={}",
                     sessionId, e.getClass().getSimpleName());
+        }
+    }
+
+    // ACTIVE 보호자 중 이 안내를 끈 사람을 뺀다. 설정 조회가 실패하면 모두에게 보낸다(끈 사람에게 한 번 더 가는 쪽이 낫다).
+    private List<String> receivers(String wardId) {
+        List<String> guardianIds = connectionService.getActiveGuardianIds(wardId);
+        if (guardianIds.isEmpty()) {
+            return guardianIds;
+        }
+        try {
+            Set<String> disabled = preferenceService.cameraLinkLostDisabledGuardians();
+            return guardianIds.stream().filter(id -> !disabled.contains(id)).toList();
+        } catch (RuntimeException e) {
+            log.warn("[CAMERA-LINK-LOST] 수신 설정 조회 실패 - 전원에게 안내: error={}", e.getClass().getSimpleName());
+            return guardianIds;
         }
     }
 

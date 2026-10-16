@@ -45,7 +45,7 @@ class GuardianNotificationTypeSettingControllerSecurityTest {
     void guardian_허용() {
         assertThatNoException().isThrownBy(() -> controller.getSettings("GD0001"));
         assertThatNoException().isThrownBy(() ->
-                controller.updateSettings("GD0001", new GuardianNotificationTypeSettingRequest(null, false)));
+                controller.updateSettings("GD0001", new GuardianNotificationTypeSettingRequest(null, false, null)));
     }
 
     @Test
@@ -54,14 +54,14 @@ class GuardianNotificationTypeSettingControllerSecurityTest {
     void 보호자_아니면_거부() {
         assertThatThrownBy(() -> controller.getSettings("WD0001")).isInstanceOf(AccessDeniedException.class);
         assertThatThrownBy(() -> controller.updateSettings("WD0001",
-                new GuardianNotificationTypeSettingRequest(null, false))).isInstanceOf(AccessDeniedException.class);
+                new GuardianNotificationTypeSettingRequest(null, false, null))).isInstanceOf(AccessDeniedException.class);
     }
 
     @Test
-    @DisplayName("요청에는 변경 가능한 두 종류만 있고 userId·필수 알림 필드는 없다")
+    @DisplayName("요청에는 변경 가능한 세 종류만 있고 userId·필수 알림 필드는 없다")
     void 요청_필드_고정() {
         assertThat(Arrays.stream(GuardianNotificationTypeSettingRequest.class.getRecordComponents())
                 .map(RecordComponent::getName))
-                .containsExactlyInAnyOrder("anomalyReviewReminder", "medication");
+                .containsExactlyInAnyOrder("anomalyReviewReminder", "medication", "cameraLinkLost");
     }
 }
