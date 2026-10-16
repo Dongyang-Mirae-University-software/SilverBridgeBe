@@ -21,6 +21,7 @@ public final class NotificationTypeLabel {
             case CONNECTION_REQUEST, CONNECTION_ACCEPTED, CONNECTION_REFUSED, CONNECTION_DISCONNECTED,
                  CONNECTION_FORCED -> "연결";
             case INQUIRY_ANSWERED -> "문의";
+            case CAMERA_LINK_LOST -> "카메라";
         };
     }
 }

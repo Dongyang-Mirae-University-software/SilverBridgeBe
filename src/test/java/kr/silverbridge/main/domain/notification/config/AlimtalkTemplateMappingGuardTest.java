@@ -52,6 +52,7 @@ class AlimtalkTemplateMappingGuardTest {
                 NotificationType.ANOMALY_DETECTED_SELF.name(),
                 NotificationType.ANOMALY_REVIEW_REQUIRED.name(),
                 NotificationType.ANOMALY_REVIEW_CONFLICTED.name(),
+                NotificationType.CAMERA_LINK_LOST.name(),
                 NotificationType.MEDICATION_REMINDER.name(),
                 NotificationType.MEDICATION_MISSED.name(),
                 NotificationType.MEDICATION_STOPPED.name(),

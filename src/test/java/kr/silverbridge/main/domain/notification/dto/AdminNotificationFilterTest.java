@@ -31,13 +31,14 @@ class AdminNotificationFilterTest {
     }
 
     @Test
-    @DisplayName("기타 탭은 판정 요청·연결·문의다(SOS·이상감지·복약 밖의 전부)")
+    @DisplayName("기타 탭은 판정 요청·연결·문의·카메라 끊김이다(SOS·이상감지·복약 밖의 전부)")
     void 기타_탭_구성() {
         assertThat(AdminNotificationCategory.OTHER.types()).containsExactlyInAnyOrder(
                 NotificationType.ANOMALY_REVIEW_REQUIRED, NotificationType.ANOMALY_REVIEW_CONFLICTED,
                 NotificationType.CONNECTION_REQUEST, NotificationType.CONNECTION_ACCEPTED,
                 NotificationType.CONNECTION_REFUSED, NotificationType.CONNECTION_DISCONNECTED,
-                NotificationType.CONNECTION_FORCED, NotificationType.INQUIRY_ANSWERED);
+                NotificationType.CONNECTION_FORCED, NotificationType.INQUIRY_ANSWERED,
+                NotificationType.CAMERA_LINK_LOST);
     }
 
     @Test

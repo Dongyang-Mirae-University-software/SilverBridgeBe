@@ -1934,3 +1934,9 @@ REST API Key 단독 대비 보안 강화 — 인가코드 탈취 시 토큰 발�
 - 시험 중 잡은 결함(브랜치에서 수정): WS 핸드셰이크 Origin 검사가 티켓 소비 뒤에 실행됨(BE), `-fflags nobuffer` 프레임 유실·출력 1프레임 대기(AI, AUD로 해소).
 - 재개 조건: 현장 업링크 15Mbps 미만 실측 / 상시 24시간 카메라 전환 / 카메라 대수 증가. 상세·시험 환경 보존 위치: `docs/(2026-10-14) result-video-transport-h264-poc.md`.
 - 시험 환경 정리: vkcs `wspoc` 스택·이미지·`~/ws-poc`, gosky `wspoc-ai-gosky`·`/home/apps/ws-poc-gosky`, 로컬 워크트리 삭제(브랜치 보존). 운영 서비스 변경 없음.
+
+## [2026-10-16] 이상감지 동시 위험 처리 · AI 연결 끊김 감지
+
+- `results[]`의 위험 종류를 각각 판정(흉기+낙상 동시 시 낙상 누락 해소), 재접속 뒤 사라진 등록 카메라 OFFLINE 표시, 유예 2분 뒤 보호자 FCM 1회(`CAMERA_LINK_LOST`, 카메라당 6시간)
+- 수신 3×resync 동안 없으면 연결 닫아 재접속, 재접속 상한 60→20초(+지터), 위험 종류 불명·danger 필드 없음 WARN, 낙상 클립 기본값 8/1
+- 마이그레이션 없음. 상세 `docs/(2026-10-16) feature-anomaly-multi-danger-and-ai-link-health.md`
