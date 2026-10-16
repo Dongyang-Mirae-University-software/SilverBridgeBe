@@ -23,6 +23,7 @@ import org.springframework.transaction.annotation.Transactional;
 public class GuardianNotificationPreferenceService {
 
     private static final boolean DEFAULT_MEDICATION_ENABLED = true;
+    private static final boolean DEFAULT_CAMERA_LINK_LOST_ENABLED = true;
 
     private final GuardianNotificationPreferenceRepository repository;
     private final GuardianAnomalySettingService anomalySettingService;
@@ -42,6 +43,12 @@ public class GuardianNotificationPreferenceService {
                     .orElseThrow(() -> new IllegalStateException("알림 종류 설정 동시 저장 후 행을 찾지 못함"))
                     .changeMedicationEnabled(medication);
         }
+        Boolean cameraLinkLost = request.cameraLinkLost();
+        if (cameraLinkLost != null && repository.insertCameraLinkLostIfAbsent(guardianId, cameraLinkLost) == 0) {
+            repository.findByGuardianId(guardianId)
+                    .orElseThrow(() -> new IllegalStateException("알림 종류 설정 동시 저장 후 행을 찾지 못함"))
+                    .changeCameraLinkLostEnabled(cameraLinkLost);
+        }
         if (request.anomalyReviewReminder() != null) {
             anomalySettingService.updateSetting(guardianId, request.anomalyReviewReminder());
         }
@@ -59,14 +66,27 @@ public class GuardianNotificationPreferenceService {
                 .collect(Collectors.toSet());
     }
 
+    /**
+     * 카메라 연결 끊김 안내를 계정 차원에서 <b>끈</b> 보호자 전체. 행이 없으면 기본값 ON이라 포함되지 않는다.
+     * 알림 대상 보호자를 좁히는 데만 쓴다 - 이상감지 발생·SOS 같은 필수 알림에는 쓰지 않는다.
+     */
+    @Transactional(readOnly = true)
+    public Set<String> cameraLinkLostDisabledGuardians() {
+        return repository.findByCameraLinkLostEnabledFalse().stream()
+                .map(GuardianNotificationPreference::getGuardianId)
+                .collect(Collectors.toSet());
+    }
+
     private GuardianNotificationTypeSettingResponse toResponse(String guardianId) {
-        boolean medication = repository.findByGuardianId(guardianId)
-                .map(GuardianNotificationPreference::isMedicationEnabled)
-                .orElse(DEFAULT_MEDICATION_ENABLED);
+        GuardianNotificationPreference preference = repository.findByGuardianId(guardianId).orElse(null);
+        boolean medication = preference != null ? preference.isMedicationEnabled() : DEFAULT_MEDICATION_ENABLED;
+        boolean cameraLinkLost = preference != null
+                ? preference.isCameraLinkLostEnabled() : DEFAULT_CAMERA_LINK_LOST_ENABLED;
         return new GuardianNotificationTypeSettingResponse(
                 TypeSetting.locked(),
                 TypeSetting.locked(),
                 TypeSetting.optional(anomalySettingService.getSetting(guardianId).reviewReminderEnabled()),
-                TypeSetting.optional(medication));
+                TypeSetting.optional(medication),
+                TypeSetting.optional(cameraLinkLost));
     }
 }

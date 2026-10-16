@@ -52,3 +52,10 @@ AI 실시간 분석은 종류별 결과 `results[]`(화재·흉기·낙상 각�
 ## 테스트
 
 `AnomalySignalParserMultiDangerTest`(화재+흉기·흉기+낙상·중복·옛 형식) / `AiLiveStreamSubscriberTest`(종류별 판정·격리·재접속 뒤 사라진/돌아온 세션·수신 없음 닫기) / `CameraLinkLostNotifierTest`(유예·복구·쿨다운·Redis 장애·킬 스위치) / `AiClipClientTest`(낙상 8/1).
+
+## 후속 (2026-10-16) - 보호자 알림 종류 설정에 `cameraLinkLost` 추가 (V61)
+
+- `GET·PUT /api/guardian/notification-type-setting`에 `cameraLinkLost`(끌 수 있음, 기본 ON, `required=false`) 추가. 요청의 `null`은 변경 없음.
+- `guardian_notification_preference.camera_link_lost_enabled BOOLEAN NOT NULL DEFAULT TRUE`(V61, 컬럼 추가만 - 비가역 DDL 없음, 백필 불필요).
+- `CameraLinkLostNotifier`가 ACTIVE 보호자에서 끈 사람을 빼고 보낸다. 전원이 껐으면 쿨다운도 쓰지 않는다. 설정 조회가 실패하면 전원에게 보낸다(끈 사람에게 한 번 더 가는 쪽이 낫다).
+- **게이트는 이 알림 하나뿐이다** - 이상감지 발생·SOS 필수 알림 경로와 디스패처는 이 설정을 읽지 않는다(`GuardianNotificationPreferenceUsageGuardTest`에 `CameraLinkLostNotifier`만 추가).

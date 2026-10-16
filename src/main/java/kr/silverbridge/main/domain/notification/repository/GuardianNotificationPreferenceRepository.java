@@ -15,6 +15,20 @@ public interface GuardianNotificationPreferenceRepository extends JpaRepository<
     /** 발송 판정용. 끈 보호자만 행이 의미를 가지므로 OFF 행만 읽는다(행이 없는 보호자는 기본값 ON). */
     List<GuardianNotificationPreference> findByMedicationEnabledFalse();
 
+    /** 발송 판정용. 카메라 연결 끊김 안내를 끈 보호자만 읽는다(행이 없는 보호자는 기본값 ON). */
+    List<GuardianNotificationPreference> findByCameraLinkLostEnabledFalse();
+
+    /** 카메라 연결 끊김 안내 설정을 행이 없을 때만 넣는다(복약 값은 기본 ON). 반환 0 = 이미 있음. */
+    @Modifying
+    @Query(value = """
+            INSERT INTO guardian_notification_preference
+                (guardian_id, medication_enabled, camera_link_lost_enabled, created_at, updated_at)
+            VALUES (:guardianId, TRUE, :cameraLinkLostEnabled, now(), now())
+            ON CONFLICT (guardian_id) DO NOTHING
+            """, nativeQuery = true)
+    int insertCameraLinkLostIfAbsent(@Param("guardianId") String guardianId,
+                                     @Param("cameraLinkLostEnabled") boolean cameraLinkLostEnabled);
+
     /**
      * 행이 없을 때만 넣는다. 반환 0 = 이미 있음(동시 요청이 먼저 넣음). 조회 후 save는 동시 최초 저장에서
      * UNIQUE 위반 500이 나므로 DB가 충돌을 흡수하게 한다(알림 채널 설정 USER-G12와 같은 패턴).

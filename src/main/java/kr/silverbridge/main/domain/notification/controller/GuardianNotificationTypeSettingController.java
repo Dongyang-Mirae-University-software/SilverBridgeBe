@@ -33,6 +33,7 @@ public class GuardianNotificationTypeSettingController {
                                             이상감지 발생 알림의 푸시는 어떤 설정으로도 꺼지지 않습니다.
                       - anomalyReviewReminder : 판정 확인 요청(재촉) 알림. 기본 true
                       - medication        : 복약 미복용 요약 알림. 기본 true
+                      - cameraLinkLost    : 카메라 연결 끊김 안내(AI 서버 연결이 끊긴 뒤 돌아오지 않은 카메라). 기본 true
                     required=true 항목은 FE가 잠금 표시만 하면 됩니다.
 
                     [참고]
@@ -52,12 +53,13 @@ public class GuardianNotificationTypeSettingController {
 
     @Operation(summary = "알림 종류별 수신 설정 변경 (보호자 전용)",
             description = """
-                    변경 가능한 종류(anomalyReviewReminder, medication)만 받습니다. null/생략은 변경하지 않습니다.
+                    변경 가능한 종류(anomalyReviewReminder, medication, cameraLinkLost)만 받습니다. null/생략은 변경하지 않습니다.
                     sos·anomalyDetection 등 필수 알림이나 알 수 없는 키를 보내도 무시되며 저장되지 않습니다.
 
                     [복약] 끄면 미복용 요약이 오지 않습니다. 피보호자별 미복용 요약 설정
                     (/api/guardian/ward/{wardId}/medication-alert-setting)과 둘 다 켜져 있어야 발송됩니다.
                     등록 보호자 탈퇴로 약이 중지됐다는 안내는 이 설정과 무관하게 갑니다.
+                    [카메라 연결 끊김] 끄면 이 안내만 오지 않습니다. 화재·SOS 같은 필수 알림에는 영향이 없습니다.
                     [재촉] 기존 /api/guardian/anomaly/reminder-setting 과 같은 값입니다.
                     응답으로 변경 후 전체 설정을 반환합니다.
                     """)

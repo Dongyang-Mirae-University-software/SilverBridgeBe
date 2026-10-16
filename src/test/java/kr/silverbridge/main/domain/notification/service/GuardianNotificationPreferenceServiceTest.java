@@ -54,7 +54,7 @@ class GuardianNotificationPreferenceServiceTest {
         when(repository.findByGuardianId(GUARDIAN)).thenReturn(Optional.empty());
         when(anomalySettingService.getSetting(GUARDIAN)).thenReturn(new AnomalyReminderSettingResponse(true));
 
-        service.updateSettings(GUARDIAN, new GuardianNotificationTypeSettingRequest(null, null));
+        service.updateSettings(GUARDIAN, new GuardianNotificationTypeSettingRequest(null, null, null));
 
         verify(repository, never()).insertIfAbsent(anyString(), anyBoolean());
         verify(anomalySettingService, never()).updateSetting(anyString(), anyBoolean());
@@ -67,7 +67,7 @@ class GuardianNotificationPreferenceServiceTest {
         when(repository.findByGuardianId(GUARDIAN)).thenReturn(Optional.empty());
         when(anomalySettingService.getSetting(GUARDIAN)).thenReturn(new AnomalyReminderSettingResponse(true));
 
-        service.updateSettings(GUARDIAN, new GuardianNotificationTypeSettingRequest(null, false));
+        service.updateSettings(GUARDIAN, new GuardianNotificationTypeSettingRequest(null, false, null));
 
         verify(repository).insertIfAbsent(GUARDIAN, false);
         verify(anomalySettingService, never()).updateSetting(anyString(), anyBoolean());
@@ -82,7 +82,7 @@ class GuardianNotificationPreferenceServiceTest {
         when(anomalySettingService.getSetting(GUARDIAN)).thenReturn(new AnomalyReminderSettingResponse(true));
 
         GuardianNotificationTypeSettingResponse response =
-                service.updateSettings(GUARDIAN, new GuardianNotificationTypeSettingRequest(null, false));
+                service.updateSettings(GUARDIAN, new GuardianNotificationTypeSettingRequest(null, false, null));
 
         assertThat(existing.isMedicationEnabled()).isFalse();
         assertThat(response.medication().enabled()).isFalse();
@@ -95,7 +95,7 @@ class GuardianNotificationPreferenceServiceTest {
         when(anomalySettingService.getSetting(GUARDIAN)).thenReturn(new AnomalyReminderSettingResponse(false));
 
         GuardianNotificationTypeSettingResponse response =
-                service.updateSettings(GUARDIAN, new GuardianNotificationTypeSettingRequest(false, null));
+                service.updateSettings(GUARDIAN, new GuardianNotificationTypeSettingRequest(false, null, null));
 
         verify(anomalySettingService).updateSetting(GUARDIAN, false);
         assertThat(response.anomalyReviewReminder().enabled()).isFalse();
@@ -108,5 +108,57 @@ class GuardianNotificationPreferenceServiceTest {
                 .thenReturn(List.of(GuardianNotificationPreference.of("GD0002", false)));
 
         assertThat(service.medicationDisabledGuardians()).containsExactly("GD0002");
+    }
+
+    @Test
+    @DisplayName("카메라 연결 끊김 안내는 기본 ON이고 필수 잠금이 아니다")
+    void 카메라끊김_기본값() {
+        when(repository.findByGuardianId(GUARDIAN)).thenReturn(Optional.empty());
+        when(anomalySettingService.getSetting(GUARDIAN)).thenReturn(new AnomalyReminderSettingResponse(true));
+
+        GuardianNotificationTypeSettingResponse response = service.getSettings(GUARDIAN);
+
+        assertThat(response.cameraLinkLost().enabled()).isTrue();
+        assertThat(response.cameraLinkLost().required()).isFalse();
+    }
+
+    @Test
+    @DisplayName("행이 없을 때 카메라 끊김 안내를 끄면 새 행을 넣고 복약 값은 건드리지 않는다")
+    void 카메라끊김_끄기_신규() {
+        when(repository.insertCameraLinkLostIfAbsent(GUARDIAN, false)).thenReturn(1);
+        when(repository.findByGuardianId(GUARDIAN))
+                .thenReturn(Optional.of(GuardianNotificationPreference.of(GUARDIAN, true)));
+        when(anomalySettingService.getSetting(GUARDIAN)).thenReturn(new AnomalyReminderSettingResponse(true));
+
+        service.updateSettings(GUARDIAN, new GuardianNotificationTypeSettingRequest(null, null, false));
+
+        verify(repository).insertCameraLinkLostIfAbsent(GUARDIAN, false);
+        verify(repository, never()).insertIfAbsent(anyString(), anyBoolean());
+    }
+
+    @Test
+    @DisplayName("이미 행이 있으면(동시 저장 포함) 기존 행의 카메라 끊김 값을 바꾼다")
+    void 카메라끊김_끄기_기존행() {
+        GuardianNotificationPreference existing = GuardianNotificationPreference.of(GUARDIAN, true);
+        when(repository.insertCameraLinkLostIfAbsent(GUARDIAN, false)).thenReturn(0);
+        when(repository.findByGuardianId(GUARDIAN)).thenReturn(Optional.of(existing));
+        when(anomalySettingService.getSetting(GUARDIAN)).thenReturn(new AnomalyReminderSettingResponse(true));
+
+        GuardianNotificationTypeSettingResponse response =
+                service.updateSettings(GUARDIAN, new GuardianNotificationTypeSettingRequest(null, null, false));
+
+        assertThat(existing.isCameraLinkLostEnabled()).isFalse();
+        assertThat(existing.isMedicationEnabled()).isTrue();
+        assertThat(response.cameraLinkLost().enabled()).isFalse();
+    }
+
+    @Test
+    @DisplayName("카메라 끊김 안내를 끈 보호자만 골라낸다 (행 없음 = ON)")
+    void 카메라끊김_끈_보호자만() {
+        GuardianNotificationPreference off = GuardianNotificationPreference.of("GD0002", true);
+        off.changeCameraLinkLostEnabled(false);
+        when(repository.findByCameraLinkLostEnabledFalse()).thenReturn(List.of(off));
+
+        assertThat(service.cameraLinkLostDisabledGuardians()).containsExactly("GD0002");
     }
 }
