@@ -243,6 +243,41 @@ class LiveAnalysisBroadcasterTest {
     }
 
     @Test
+    @DisplayName("AI 재접속 뒤 돌아오지 않은 카메라 - 끊길 때 확인 불가(null)를 보냈어도 offline을 명시해 화면이 null에 멈추지 않는다 (2026-10-16)")
+    void 재접속뒤_사라진_카메라는_offline으로_바뀐다() {
+        when(connectionService.getActiveGuardianIds(WARD_ID)).thenReturn(List.of("G1"));
+        broadcaster.onAnalysis(signal(DetectedType.NORMAL, false, 0.1));   // 송출 중 상태 (발송 1)
+        broadcaster.clear();                                                // AI 연결 끊김 -> 확인 불가 null (발송 2)
+
+        broadcaster.onSessionsOffline(Set.of(SESSION_ID));                  // 재접속 뒤 목록에 없음 -> offline (발송 3)
+
+        ArgumentCaptor<Object> payload = ArgumentCaptor.forClass(Object.class);
+        verify(messagingTemplate, times(3)).convertAndSend(eq("/topic/G1/camera-analysis"), payload.capture());
+        LiveAnalysisMessage unknown = (LiveAnalysisMessage) payload.getAllValues().get(1);
+        LiveAnalysisMessage offline = (LiveAnalysisMessage) payload.getAllValues().get(2);
+        assertThat(unknown.status()).as("끊긴 동안은 확인 불가").isNull();
+        assertThat(offline.status()).isEqualTo("offline");
+        assertThat(offline.sessionId()).isEqualTo(SESSION_ID);
+        assertThat(offline.wardId()).isEqualTo(WARD_ID);
+        assertThat(offline.detectedType()).isNull();
+        assertThat(broadcaster.findLatest(SESSION_ID)).isEmpty();
+    }
+
+    @Test
+    @DisplayName("보낸 적 없는 세션도 offline을 명시하고, 정지 보호자에게는 보내지 않는다")
+    void 상태없는_세션도_offline_정지보호자_제외() {
+        when(connectionService.getActiveGuardianIds(WARD_ID)).thenReturn(List.of("G1", "G2"));
+        when(recipientStatusPort.findStatus("G2")).thenReturn(Optional.of(Status.RESTRICTED));
+
+        broadcaster.onSessionsOffline(Set.of(SESSION_ID));
+
+        ArgumentCaptor<Object> payload = ArgumentCaptor.forClass(Object.class);
+        verify(messagingTemplate).convertAndSend(eq("/topic/G1/camera-analysis"), payload.capture());
+        verify(messagingTemplate, never()).convertAndSend(eq("/topic/G2/camera-analysis"), any(Object.class));
+        assertThat(((LiveAnalysisMessage) payload.getValue()).status()).isEqualTo("offline");
+    }
+
+    @Test
     @DisplayName("삭제·비활성(꺼진) 카메라는 아무에게도 보내지 않는다 - 영상·목록과 같은 기준 (점검 L-1)")
     void 주인없음_미발송() {
         when(cameraService.findActiveOwnerBySessionId(SESSION_ID)).thenReturn(Optional.empty());
