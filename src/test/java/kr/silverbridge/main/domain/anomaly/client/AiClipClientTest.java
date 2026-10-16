@@ -189,13 +189,14 @@ class AiClipClientTest {
     }
 
     @Test
-    @DisplayName("기본 설정이면 전 종류가 3/2로 나간다(낙상 설정을 올리기 전과 동작이 같다)")
-    void 기본값이면_전종류_3_2() throws IOException {
+    @DisplayName("기본 설정이면 낙상만 8/1(운영 env와 같은 값), 나머지 종류는 3/2로 나간다 (2026-10-16)")
+    void 기본값이면_낙상만_8_1() throws IOException {
         for (DetectedType type : DetectedType.values()) {
             client().requestClip("ok", null, type);
             JsonNode body = objectMapper.readTree(receivedBody.get());
-            assertThat(body.path("preSeconds").asDouble()).as(type.name()).isEqualTo(3.0);
-            assertThat(body.path("postSeconds").asDouble()).as(type.name()).isEqualTo(2.0);
+            boolean fall = type == DetectedType.FALL;
+            assertThat(body.path("preSeconds").asDouble()).as(type.name()).isEqualTo(fall ? 8.0 : 3.0);
+            assertThat(body.path("postSeconds").asDouble()).as(type.name()).isEqualTo(fall ? 1.0 : 2.0);
         }
     }
 

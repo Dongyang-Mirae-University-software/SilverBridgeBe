@@ -150,6 +150,17 @@ public class LiveAnalysisBroadcaster implements LiveAnalysisSnapshotPort {
     }
 
     /**
+     * AI 재접속 뒤 목록에 돌아오지 않은 등록 카메라 - 끊길 때 이미 "확인 불가"(status=null)를 보냈으므로 상태가 남아 있지
+     * 않다. 그대로 두면 화면이 확인 불가에 영구히 멈추므로 <b>꺼짐을 명시</b>한다(2026-10-16). 간격 제한 없이 바로 보낸다.
+     */
+    public void onSessionsOffline(Collection<String> sessionIds) {
+        for (String sessionId : sessionIds) {
+            states.remove(sessionId);
+            dispatch(sessionId, new State(CameraLiveStatus.OFFLINE, null, null, 0));
+        }
+    }
+
+    /**
      * AI 연결이 끊겼다 - 받아 둔 결과가 현재 상태라고 보장할 수 없어 비우고, 화면에 이미 상태를 보낸 세션에는
      * <b>"확인 불가"(status=null)</b>를 알린다(2026-10-03 점검 M-1). 비우기만 하면 재접속을 기다리는 동안 화면에
      * 마지막 "송출 중·정상"이 그대로 남아, 모르는 값을 아는 값처럼 보여준다(대시보드와 같은 원칙).

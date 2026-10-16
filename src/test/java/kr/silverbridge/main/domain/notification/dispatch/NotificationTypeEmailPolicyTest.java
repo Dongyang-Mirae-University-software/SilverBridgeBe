@@ -37,7 +37,8 @@ class NotificationTypeEmailPolicyTest {
     void 긴급_종류_제외() {
         for (NotificationType type : EnumSet.of(NotificationType.WARD_SOS, NotificationType.ANOMALY_DETECTED,
                 NotificationType.ANOMALY_DETECTED_SELF, NotificationType.MEDICATION_REMINDER,
-                NotificationType.ANOMALY_REVIEW_REQUIRED, NotificationType.ANOMALY_REVIEW_CONFLICTED)) {
+                NotificationType.ANOMALY_REVIEW_REQUIRED, NotificationType.ANOMALY_REVIEW_CONFLICTED,
+                NotificationType.CAMERA_LINK_LOST)) {
             assertThat(type.allowedChannels()).as(type.name()).doesNotContain(NotificationChannelType.EMAIL);
         }
     }

@@ -111,7 +111,17 @@ public enum NotificationType {
      * <p>채널·정책은 {@link #ANOMALY_REVIEW_REQUIRED}와 같다 - FCM만, 설정 기반(재촉 끄기 설정을 따른다),
      * 알림톡 매핑 금지, 강제 채널로 승격 금지. 누가 무엇이라 답했는지는 문구에 싣지 않는다.</p>
      */
-    ANOMALY_REVIEW_CONFLICTED(Policy.SETTINGS_ONLY, EnumSet.of(NotificationChannelType.FCM));
+    ANOMALY_REVIEW_CONFLICTED(Policy.SETTINGS_ONLY, EnumSet.of(NotificationChannelType.FCM)),
+
+    /**
+     * 카메라 영상 끊김 안내 → <b>ACTIVE 보호자</b>에게(2026-10-16). AI 서버 연결이 끊겼다 복구됐는데 유예 시간이
+     * 지나도 감시 목록에 돌아오지 않은 카메라가 대상이다 - 그 사이 화재·낙상·흉기 감시가 멈춰 있다.
+     *
+     * <p>{@link #ANOMALY_REVIEW_REQUIRED}와 같이 <b>FCM만</b>, 설정 기반이다. 카메라당 6시간 쿨다운으로 절제한다.
+     * 알림톡 매핑 금지(다발성 메시지 - 별도 승인 필요), 이메일 제외, 강제 채널로 승격하지 말 것 - 이 알림은
+     * 위험 발생이 아니라 "감시 상태 확인 요청"이다.</p>
+     */
+    CAMERA_LINK_LOST(Policy.SETTINGS_ONLY, EnumSet.of(NotificationChannelType.FCM));
 
     /**
      * 이메일 허용 표시. 이메일은 즉시성이 보장되지 않는 채널이라 <b>기본은 제외</b>이고, 안내성 종류만 이

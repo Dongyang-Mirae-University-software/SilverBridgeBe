@@ -49,13 +49,14 @@ class AiLiveStreamSubscriberTest {
     @Mock private TaskScheduler taskScheduler;
     @Mock private WebSocketSession session;
     @Mock private LiveAnalysisBroadcaster liveAnalysisBroadcaster;
+    @Mock private kr.silverbridge.main.domain.anomaly.service.CameraLinkLostNotifier linkLostNotifier;
 
     private AiLiveStreamSubscriber subscriber;
 
     @BeforeEach
     void setUp() throws Exception {
         subscriber = new AiLiveStreamSubscriber(new AnomalyProperties(), signalParser, detectionService,
-                cameraService, new ObjectMapper(), taskScheduler, liveAnalysisBroadcaster);
+                cameraService, new ObjectMapper(), taskScheduler, liveAnalysisBroadcaster, linkLostNotifier);
         lenient().when(session.isOpen()).thenReturn(true);
         subscriber.afterConnectionEstablished(session);   // 연결 → {"action":"list"} 1건 발송
     }
@@ -175,6 +176,7 @@ class AiLiveStreamSubscriberTest {
     void 분석신호_판정후_실시간상태로_전달() throws Exception {
         AnomalySignal signal = new AnomalySignal(SESSION_ID, DetectedType.NORMAL, 0.1, false, null);
         when(signalParser.parse(any())).thenReturn(Optional.of(signal));
+        when(signalParser.expand(any(), org.mockito.ArgumentMatchers.eq(signal))).thenReturn(java.util.List.of(signal));
 
         subscriber.handleTextMessage(session, new TextMessage("{\"type\":\"latest_analysis\"}"));
 
@@ -212,5 +214,93 @@ class AiLiveStreamSubscriberTest {
 
         // 연결 시 1회 + 종료 시 1회
         verify(liveAnalysisBroadcaster, times(2)).clear();
+    }
+
+    @Test
+    @DisplayName("동시 위험이면 종류마다 판정하고, 화면 상태는 대표 1건만 보낸다 (2026-10-16)")
+    void 동시위험_종류별_판정() throws Exception {
+        AnomalySignal weapon = new AnomalySignal(SESSION_ID, DetectedType.WEAPON, 0.9, true, null);
+        AnomalySignal fall = new AnomalySignal(SESSION_ID, DetectedType.FALL, 0.8, true, null);
+        when(signalParser.parse(any())).thenReturn(Optional.of(weapon));
+        when(signalParser.expand(any(), org.mockito.ArgumentMatchers.eq(weapon)))
+                .thenReturn(java.util.List.of(weapon, fall));
+
+        subscriber.handleTextMessage(session, new TextMessage("{\"type\":\"latest_analysis\"}"));
+
+        verify(detectionService).handle(weapon);
+        verify(detectionService).handle(fall);
+        verify(liveAnalysisBroadcaster, times(1)).onAnalysis(any());
+        verify(liveAnalysisBroadcaster).onAnalysis(weapon);
+    }
+
+    @Test
+    @DisplayName("한 종류의 처리 실패가 다른 종류를 막지 않는다")
+    void 종류_하나_실패해도_나머지_처리() throws Exception {
+        AnomalySignal weapon = new AnomalySignal(SESSION_ID, DetectedType.WEAPON, 0.9, true, null);
+        AnomalySignal fall = new AnomalySignal(SESSION_ID, DetectedType.FALL, 0.8, true, null);
+        when(signalParser.parse(any())).thenReturn(Optional.of(weapon));
+        when(signalParser.expand(any(), org.mockito.ArgumentMatchers.eq(weapon)))
+                .thenReturn(java.util.List.of(weapon, fall));
+        when(detectionService.handle(weapon)).thenThrow(new IllegalStateException("db"));
+
+        subscriber.handleTextMessage(session, new TextMessage("{\"type\":\"latest_analysis\"}"));
+
+        verify(detectionService).handle(fall);
+    }
+
+    @Test
+    @DisplayName("재접속 뒤 첫 목록에서 빠진 등록 카메라는 꺼짐으로 알리고 끊김 알림 유예를 시작한다")
+    void 재접속뒤_사라진_세션() throws Exception {
+        when(cameraService.findOwnerBySessionId(SESSION_ID))
+                .thenReturn(Optional.of(new CameraOwner("WD0001", "거실")));
+        subscriber.handleTextMessage(session, liveStreams(SESSION_ID));   // 구독
+        subscriber.afterConnectionClosed(session, org.springframework.web.socket.CloseStatus.GOING_AWAY);
+        subscriber.afterConnectionEstablished(session);                   // 재접속(구독 기록 비움)
+
+        subscriber.handleTextMessage(session, liveStreams());             // 첫 목록에 없다
+
+        verify(liveAnalysisBroadcaster).onSessionsOffline(Set.of(SESSION_ID));
+        verify(linkLostNotifier).onLost(Set.of(SESSION_ID));
+    }
+
+    @Test
+    @DisplayName("재접속 뒤 목록에 돌아온 세션은 구독하고 끊김 알림을 취소한다")
+    void 재접속뒤_돌아온_세션() throws Exception {
+        when(cameraService.findOwnerBySessionId(SESSION_ID))
+                .thenReturn(Optional.of(new CameraOwner("WD0001", "거실")));
+        subscriber.handleTextMessage(session, liveStreams(SESSION_ID));
+        subscriber.afterConnectionClosed(session, org.springframework.web.socket.CloseStatus.GOING_AWAY);
+        subscriber.afterConnectionEstablished(session);
+
+        subscriber.handleTextMessage(session, liveStreams(SESSION_ID));
+
+        verify(liveAnalysisBroadcaster, never()).onSessionsOffline(any());
+        verify(linkLostNotifier, never()).onLost(any());
+        verify(linkLostNotifier, times(2)).onRecovered(SESSION_ID);   // 최초 구독 + 재접속 뒤 복귀
+        verify(linkLostNotifier).cancelAll();
+    }
+
+    @Test
+    @DisplayName("수신이 오래 없으면 재동기화 때 연결을 닫아 재접속 경로로 보낸다")
+    void 수신없으면_연결_닫음() throws Exception {
+        AnomalyProperties props = new AnomalyProperties();
+        props.setResyncSeconds(1);
+        props.setStaleResyncMultiplier(1);
+        AiLiveStreamSubscriber stale = new AiLiveStreamSubscriber(props, signalParser, detectionService,
+                cameraService, new ObjectMapper(), taskScheduler, liveAnalysisBroadcaster, linkLostNotifier);
+        stale.afterConnectionEstablished(session);
+        Thread.sleep(1200);
+
+        stale.resync();
+
+        verify(session).close(org.springframework.web.socket.CloseStatus.GOING_AWAY);
+    }
+
+    @Test
+    @DisplayName("수신이 있으면 닫지 않는다")
+    void 수신있으면_닫지_않음() throws Exception {
+        subscriber.resync();
+
+        verify(session, never()).close(any(org.springframework.web.socket.CloseStatus.class));
     }
 }

@@ -196,7 +196,13 @@ anomaly:
   trigger-mode: ${ANOMALY_TRIGGER_MODE:DANGER}
   resync-seconds: ${ANOMALY_RESYNC_SECONDS:60}               # AI 세션 목록 재동기화 주기(0이면 끔) - broadcast 누락 안전망
   reconnect-min-seconds: ${ANOMALY_RECONNECT_MIN_SECONDS:2}   # AI WS 재접속 백오프 시작 간격
-  reconnect-max-seconds: ${ANOMALY_RECONNECT_MAX_SECONDS:60}  # 백오프 상한
+  reconnect-max-seconds: ${ANOMALY_RECONNECT_MAX_SECONDS:20}  # 백오프 상한(2026-10-16 60→20, 0~25% 지터 추가) - 끊긴 동안의 위험 신호 공백을 줄인다
+  stale-resync-multiplier: ${ANOMALY_STALE_RESYNC_MULTIPLIER:3} # 수신이 resync-seconds×이 값 동안 없으면 반쯤 열린 연결로 보고 닫아 재접속(0이면 끔)
+  # AI 연결이 끊겼다 돌아온 뒤 목록에서 사라진 등록 카메라 - 유예 안에 돌아오지 않으면 보호자에게 FCM 1회(2026-10-16)
+  link-lost-notify:
+    enabled: ${ANOMALY_LINK_LOST_NOTIFY_ENABLED:true}        # 킬 스위치. false면 알림만 멈춘다(화면 OFFLINE 표시는 그대로)
+    grace-seconds: ${ANOMALY_LINK_LOST_GRACE_SECONDS:120}    # 이 안에 다시 구독되면 보내지 않는다
+    cooldown-hours: ${ANOMALY_LINK_LOST_COOLDOWN_HOURS:6}    # 카메라당 재알림 최소 간격
   confidence-threshold: ${ANOMALY_CONFIDENCE_THRESHOLD:0.6} # CONFIDENCE 폴백 임계 + danger 불일치 경고 기준(AI 합의값과 동일하게 유지)
   # 빈도 정책(2026-07-28): 이력은 촘촘히(1분) 남겨 화재 지속 구간의 타임라인을 확보하되,
   # 사람에게 가는 알림은 그보다 성기게 — 보호자 5분(알림톡·SMS 건수·카카오 신고 리스크),
@@ -224,8 +230,8 @@ anomaly:
     storage-dir: ${ANOMALY_CLIP_STORAGE_DIR:/data/clips}      # 컨테이너 내부 경로. 호스트 ./.data/clips 마운트 필요
     pre-seconds: ${ANOMALY_CLIP_PRE_SECONDS:3}                # 감지 앞 구간(AI 상한 5, 낙상은 아래 별도)
     post-seconds: ${ANOMALY_CLIP_POST_SECONDS:2}              # 감지 뒤 구간(AI 상한 3)
-    fall-pre-seconds: ${ANOMALY_CLIP_FALL_PRE_SECONDS:3}      # 낙상 앞 구간(AI 앞 상한 8). 낙상은 6초 유지 뒤 danger라 따로. AI 반영 후에만 8로
-    fall-post-seconds: ${ANOMALY_CLIP_FALL_POST_SECONDS:2}    # 낙상 뒤 구간(AI 상한 3, 앞+뒤 합계 상한 10). AI 반영 후에만 1로
+    fall-pre-seconds: ${ANOMALY_CLIP_FALL_PRE_SECONDS:8}      # 낙상 앞 구간(AI 앞 상한 8). 낙상은 6초 유지 뒤 danger라 따로. 기본값 3→8(2026-10-16, 운영 env와 일치)
+    fall-post-seconds: ${ANOMALY_CLIP_FALL_POST_SECONDS:1}    # 낙상 뒤 구간(AI 상한 3, 앞+뒤 합계 상한 10). 기본값 2→1
     cooldown-minutes: ${ANOMALY_CLIP_COOLDOWN_MINUTES:5}      # 같은 카메라·유형 클립 최소 간격(알림 쿨다운과 별개 키)
     request-timeout: ${ANOMALY_CLIP_REQUEST_TIMEOUT:25s}      # AI 호출 전체 제한(AI 상한 20초 + 전송 여유 5초)
     max-bytes: ${ANOMALY_CLIP_MAX_BYTES:10485760}             # 클립 최대 크기(10MB). 넘으면 저장하지 않는다

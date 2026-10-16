@@ -94,7 +94,30 @@ public class AnomalyProperties {
     private long reconnectMinSeconds = 2;
 
     /** 재연결 백오프 최대 간격(초). */
-    private long reconnectMaxSeconds = 60;
+    private long reconnectMaxSeconds = 20;
+
+    /**
+     * 수신이 {@code resyncSeconds × 이 값} 동안 없으면 연결을 닫아 재접속한다(반쯤 열린 연결 감지, 0이면 끔).
+     * AI는 구독 세션이 있으면 프레임마다 보내고 목록 요청에도 응답하므로, 이 시간 동안 아무것도 안 오면 끊긴 연결이다.
+     */
+    private int staleResyncMultiplier = 3;
+
+    /** AI 연결 끊김 뒤 돌아오지 않은 카메라 알림({@code anomaly.link-lost-notify.*}). */
+    private LinkLostNotify linkLostNotify = new LinkLostNotify();
+
+    /**
+     * AI 연결이 끊겼다 복구된 뒤에도 목록에 없는 등록 카메라를 보호자에게 알린다.
+     *
+     * <p>FCM만, 보호자별 끄기 대신 카메라당 쿨다운으로 절제한다. 감시가 끊겼다는 사실 자체가 안전 정보라
+     * 알려야 하지만, 반복하면 알림 전체를 끄게 만든다.</p>
+     */
+    @Getter
+    @Setter
+    public static class LinkLostNotify {
+        private boolean enabled = true;
+        private long graceSeconds = 120;
+        private long cooldownHours = 6;
+    }
 
     /** 이상감지 5초 영상 클립({@code anomaly.clip.*}). */
     private Clip clip = new Clip();
@@ -132,12 +155,12 @@ public class AnomalyProperties {
 
         /**
          * 낙상 클립 앞 구간(초). 낙상은 AI에서 6초 유지돼야 danger가 되어 감지 시점에는 이미 누워 있다 - 넘어지는 순간을 담으려고
-         * 앞 구간을 따로 둔다. 기본 3은 일반 클립과 같다(AI가 앞 상한 8·합계 10을 반영한 뒤에만 8/1로 올린다).
+         * 앞 구간을 따로 둔다. 기본 8(AI 앞 상한 8·합계 10 반영 완료, 운영 env와 같은 값).
          */
-        private double fallPreSeconds = 3;
+        private double fallPreSeconds = 8;
 
         /** 낙상 클립 뒤 구간(초). */
-        private double fallPostSeconds = 2;
+        private double fallPostSeconds = 1;
 
         /**
          * 같은 (카메라, 유형)의 클립 최소 간격(분). 보호자 알림 쿨다운과 같은 5분이 기본이지만 키·설정은 따로다 -
