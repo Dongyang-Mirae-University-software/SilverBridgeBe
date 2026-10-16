@@ -1940,3 +1940,8 @@ REST API Key 단독 대비 보안 강화 — 인가코드 탈취 시 토큰 발�
 - `results[]`의 위험 종류를 각각 판정(흉기+낙상 동시 시 낙상 누락 해소), 재접속 뒤 사라진 등록 카메라 OFFLINE 표시, 유예 2분 뒤 보호자 FCM 1회(`CAMERA_LINK_LOST`, 카메라당 6시간)
 - 수신 3×resync 동안 없으면 연결 닫아 재접속, 재접속 상한 60→20초(+지터), 위험 종류 불명·danger 필드 없음 WARN, 낙상 클립 기본값 8/1
 - 마이그레이션 없음. 상세 `docs/(2026-10-16) feature-anomaly-multi-danger-and-ai-link-health.md`
+
+## [2026-10-16] 동시 위험·AI 연결 감지 영향 범위 점검 + 두 서버 배포
+
+- PR #353 머지(`0c19a2f`), vkcs CD 성공·gosky 수동 배포. AI 서버 PR #19(흉기 유지 조건) 재배포 중 실서버에서 재접속 상한 20초+지터 동작 확인
+- 영향 범위 점검(템플릿 C) 완료: High/Medium 없음, 🟢 4건 수용. 사라진 세션 알림·동시 위험 E2E는 송출 중 재시작/동시 감지 때 확인 필요. 상세 `docs/(2026-10-16) audit-impact-anomaly-multi-danger-link-health.md`
