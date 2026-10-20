@@ -1,6 +1,6 @@
 # 챗봇 wardId 검증 · 예약 계정 비밀값 · 예약 API 노출 차단 (2026-10-20)
 
-> 상태: **예약·AI·FE 머지·gosky 배포 완료(2026-10-20), BE #356 머지·배포 대기** (§10 참고).
+> 상태: **5개 repo 머지·배포 완료(2026-10-20)**. BE는 vkcs·gosky 모두 `2b779ed`. 점검 결과는 `(2026-10-20) audit-chat-ward-id-validation.md` (§10 참고).
 > 근거: `(2026-10-20) analysis-ai-chat-reservation.md`의 보안 항목. 분석은 그 시점 기록이라 작업 시작 때 코드·설정으로 다시 확인했다(아래 §2).
 
 ## 1. 한 줄 요약
@@ -73,7 +73,9 @@
 - FE 예약 토큰 캐시(6시간)와 AI 저장 키는 새 비밀값으로 바꾸는 순간 일부 계정에서 어긋날 수 있다(Q1).
 - AI #24는 `chat_service.py`의 비활성 분기 단위 테스트가 없다. gosky에서 전체 테스트 1회 필요.
 
-## 9. 점검 제안 (실행은 승인 후)
+## 9. 점검 (2026-10-20 실행 완료: `(2026-10-20) audit-chat-ward-id-validation.md`, PASS · 🟡1 🟢5)
+
+아래는 실행한 프롬프트 초안이다(기록용).
 
 인가 규칙(챗의 wardId)을 바꿨으므로 챗 중계 기능 점검(템플릿 B, `security-audit` 중심)을 제안한다. 프롬프트 초안은 `docs/audit-index.md` 행의 "점검 문서" 열과 아래를 따른다.
 
@@ -125,7 +127,7 @@ PHASE D. 테스트  [스킬: test-quality]  [모델: sonnet]
 | 6 | FE #81 머지(`41a9af4`) → 백업 브랜치 `backup/gosky-develop-pre-pr81-20261020` → 수정 stash → `origin/develop` 병합(`2d885da`) → 수정 복원 → `docker compose -f docker-compose.dev.yml up -d` | 완료. healthy, `sb-internal` 참여, 환경변수 반영, `reservation-api:6015` 접속 OK |
 | 7 | Q1: 시연 데이터인 `sb-*` 계정 17개와 그 예약 21건·API 키 4개 삭제 | 완료. 남은 계정 11개(seed 포함, **Q3 seed는 사용자 결정으로 유지**) |
 | 8 | Q2: nginx | **생략**(6015가 로컬 전용이 되어 필요성이 낮고, 공유 nginx 수정 위험 대비 이득이 작음) |
-| 9 | BE #356·#357 | **머지·배포 대기** |
+| 9 | BE #356 머지(`2b779ed`) → vkcs CD 성공 → gosky 수동 배포(`up -d --build api`) | 완료. 두 서버 healthy, AI 구독 연결됨. 실서버 확인: 연결 없는 `wardId` 403 `CHAT_WARD_NOT_CONNECTED`(+`[IDOR-ATTEMPT]`), 숫자 `wardId` 400. 문서 #357 머지(`5743e6f`) |
 
 ### 확인한 것
 - 시험 계정(보호자, ACTIVE 피보호자 1명)으로 FE BFF `/api/reservation/reservations/my` 대리 조회: 200, 연결 없는 `wardId`: 403
@@ -133,7 +135,7 @@ PHASE D. 테스트  [스킬: test-quality]  [모델: sonnet]
 - 재생성된 `sb-*` 계정 1개(시험 피보호자). 나머지 사용자는 예약 화면을 다시 열 때 자동 생성된다
 
 ### 아직 확인하지 못한 것
-- BE `wardId` 검증(#356)은 배포 전이라 실서버 확인 전이다 (배포 후 점검 §9에서 확인)
+- (해소) BE `wardId` 검증은 배포 후 실서버에서 확인했다(위 9행, 점검 보고서에 ACTIVE 정상 경로까지 기록)
 - 챗봇 예약 흐름 전체(병원 검색~예약 생성)의 E2E는 시험하지 않았다(실제 사용자 예약 데이터를 시험에 쓰지 않는 원칙)
 - AI 전체 pytest는 컨테이너에 pytest가 없어 못 돌림
 
