@@ -3,7 +3,7 @@
 > 템플릿 B(기능 점검), 보안·인가 중심. **점검만 했고 코드는 수정하지 않았다**(변이 테스트의 임시 수정은 모두 되돌림).
 > 대상: BE PR #356 (`2b779ed`) + 연관 AI #23·#24 / FE #81 / 예약 #1 배포 상태. 배경 `(2026-10-20) fix-chat-reservation-security.md`.
 
-## 종합 판정: **PASS** (🔴 0 · 🟠 0 · 🟡 1 · 🟢 5)
+## 종합 판정: **PASS** (🔴 0 · 🟠 0 · 🟡 1 · 🟢 5) - **이슈 6건 전부 조치 완료**(`fix/chat-ward-id-audit-findings`, 아래 "조치 결과")
 
 wardId 위조로 남의 예약 계정을 쓰는 경로는 막혔다(코드·단위 테스트·실서버 확인). 남은 것은 로그 위생(🟡)과 방어 보강(🟢)이다.
 
@@ -42,26 +42,26 @@ IDOR 결과: **PASS**.
 
 ## 이슈
 
-### 🟡 M-1 `[IDOR-ATTEMPT]` 로그에 클라이언트가 보낸 wardId 원문을 남긴다
+### 🟡 M-1 (해소) `[IDOR-ATTEMPT]` 로그에 클라이언트가 보낸 wardId 원문을 남긴다
 - `log.warn("... guardianId={}, wardId={}", ...)`의 wardId는 `context`에서 온 임의 문자열이다. 길이 제한은 `context` 전체 8KB뿐이고, 콘솔 로그 패턴이 평문(`%msg%n`)이라 줄바꿈 등이 걸러지지 않는다 -> **로그 위조·한 줄 8KB 로그 폭주**가 가능하다. 사용자 ID는 6자(`users.id VARCHAR(6)`)라 정상 값은 짧다.
 - 영향: 인가 우회는 아니다. 로그 신뢰도·저장 비용 문제.
 - 제안: 검증 전에 wardId 형식(영숫자 6자 이내)을 보고, 틀리면 원문 없이 `CHAT_INVALID_REQUEST`(또는 같은 403)로 거절 / 로그에는 길이 상한·제어문자 제거. (이 코드베이스의 다른 `[IDOR-ATTEMPT]`는 숫자 경로 변수라 같은 문제가 없다.)
 
-### 🟢 L-1 속도 제한이 wardId 확인 뒤에 걸린다
+### 🟢 L-1 (해소) 속도 제한이 wardId 확인 뒤에 걸린다
 - `sendAsGuardian`이 `resolveWard`(DB 조회 + WARN 로그)를 먼저 하고, `rateLimitService.check`는 `relay` 안에서 나중에 건다. 위조 wardId 요청은 전송 한도에 걸리지 않고 계속 403이 된다(모두 같은 응답이라 존재 여부 열거는 불가능). 전역 사용자 속도 제한이 있어 영향은 작다.
 - 제안: 한도 확인을 `resolveWard` 앞으로. M-1과 같이 수정하면 된다.
 
-### 🟢 L-2 클라이언트가 보낸 `name`·`phone` 등은 그대로 AI에 간다
+### 🟢 L-2 (해소) 클라이언트가 보낸 `name`·`phone` 등은 그대로 AI에 간다
 - BE가 덮어쓰는 것은 `ward*` 3키뿐이다. FE는 `name`·`phone`·`birthDate` 등도 함께 보내고, AI는 `wardName`이 있으면 `name`을 덮어쓰지만 **`users.phone`이 NULL인 피보호자**는 BE가 `wardPhone`을 생략해 클라이언트의 `phone`이 예약 환자 연락처로 남는다(`users.phone`은 nullable).
 - 영향: 같은 피보호자(ACTIVE 연결)에 한한 데이터 정합성. 계정 간 접근은 아님. 수용 가능, 필요하면 대리 상담 시 `name`·`phone`도 BE가 정하거나 제거.
 
-### 🟢 L-3 연결이 AI 호출 도중 끝나는 경합
+### 🟢 L-3 (완화) 연결이 AI 호출 도중 끝나는 경합
 - 연결 확인은 요청 시점에 한 번이고 AI 호출은 최대 130초다. 그 사이 해제되면 마지막 예약이 만들어질 수 있다. SOS·복약 등 "요청 시점 ACTIVE" 정책과 같다. 수용.
 
-### 🟢 L-4 `isActiveConnection`의 상태 필터를 실 DB로 검증하는 테스트가 없다
+### 🟢 L-4 (해소) `isActiveConnection`의 상태 필터를 실 DB로 검증하는 테스트가 없다
 - 채팅 테스트는 `ConnectionService`를 목으로 대체한다. 파생 쿼리가 단순해 위험은 낮지만 PENDING/REFUSED/DISCONNECTED가 false임을 통합 테스트(`src/integrationTest`, vkcs)로 고정하면 다른 도메인(SOS·복약·이상감지)의 인가도 함께 보호된다.
 
-### 🟢 L-5 `sendAsGuardian`과 `relay`가 활성화 확인·`validate`를 두 번 한다
+### 🟢 L-5 (해소) `sendAsGuardian`과 `relay`가 활성화 확인·`validate`를 두 번 한다
 - 동작은 같고 중복일 뿐이다. 정리해도 되고 두어도 된다.
 
 ## PHASE B 기능 정합성
@@ -86,3 +86,16 @@ IDOR 결과: **PASS**.
 | M-1 + L-1 | `wardId` 형식 검증을 `resolveWard` 맨 앞에, 속도 제한을 그 앞으로, 로그는 상한·제어문자 제거 | 작음 (서비스 한 곳 + 테스트 2건) |
 | L-4 | 연결 상태별 `isActiveConnection` 통합 테스트 | 작음 (vkcs 실행) |
 | L-2 | 대리 상담 시 `name`·`phone`도 BE가 정함 | 선택 |
+
+## 조치 결과 (2026-10-20, `fix/chat-ward-id-audit-findings`)
+
+| 이슈 | 조치 | 테스트 |
+|---|---|---|
+| M-1 | `resolveWard`가 wardId 형식(`\A[A-Za-z0-9]{1,6}\z`, `UserIdGenerator`·`users.id VARCHAR(6)` 기준)을 **DB 조회·로그보다 먼저** 확인. 틀리면 403 `CHAT_WARD_NOT_CONNECTED`, 로그에는 `guardianId`와 `wardIdLength`만 남김. 형식이 맞는 값만 wardId 원문을 로그에 남김 | 줄바꿈·7자·5000자·`../`·공백 5종이 DB 조회·AI 호출 없이 403이고 로그 한 줄에 원문·줄바꿈이 없음 |
+| L-1 | `admit()`(킬 스위치 -> 본문 검증 -> 속도 제한)을 `resolveWard`보다 앞으로 | 한도 초과면 연결 조회·사용자 조회·AI 호출 없음 |
+| L-2 | 대리 상담에서 `name`·`phone`도 BE가 정함. DB 전화가 없으면 클라이언트 `phone`을 **제거** | DB 값 사용 / 전화 NULL 피보호자의 클라이언트 phone 제거 |
+| L-3 | **완화**: AI 응답 뒤 `isActiveConnection`을 한 번 더 확인해 끊겼으면 응답을 폐기하고 403 + `[IDOR-ATTEMPT]`. 호출 도중 만들어진 예약 자체는 되돌릴 수 없음(수용) | 응답 뒤 해제 시 폐기 |
+| L-4 | `ConnectionActiveStatusIntegrationTest`(실 PostgreSQL): 5개 상태 중 ACTIVE만 true, 다른 보호자·반대 방향·없는 ID는 false | 통합 테스트 2건 |
+| L-5 | `send`/`sendAsGuardian`이 `admit()` 한 곳을 공유, `relay`는 AI 호출만 | 기존 채팅 테스트 전부 통과 |
+
+점검 때 확인한 변이 2종(연결 검사 제거, 대리 키 제거)에 더해, 새 동작은 위 테스트가 직접 고정한다.

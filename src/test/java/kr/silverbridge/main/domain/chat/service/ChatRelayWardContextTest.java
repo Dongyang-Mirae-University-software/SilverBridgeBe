@@ -1,5 +1,8 @@
 package kr.silverbridge.main.domain.chat.service;
 
+import ch.qos.logback.classic.Logger;
+import ch.qos.logback.classic.spi.ILoggingEvent;
+import ch.qos.logback.core.read.ListAppender;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import kr.silverbridge.main.domain.chat.client.AiChatClient;
@@ -15,6 +18,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.slf4j.LoggerFactory;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -26,6 +30,10 @@ import java.util.Optional;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyInt;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
@@ -163,5 +171,94 @@ class ChatRelayWardContextTest {
         assertThat(context.has("wardPhone")).isFalse();
         assertThat(context.path("name").asText()).isEqualTo("보호자");
         verifyNoInteractions(connectionService, userRepository);
+    }
+
+    @Test
+    @DisplayName("형식이 틀린 wardId(줄바꿈·7자 이상·8KB)는 DB 조회·AI 호출 없이 403이고 로그에 원문이 남지 않는다")
+    void 형식이_틀린_wardId는_원문_없이_거절() {
+        Logger logger = (Logger) LoggerFactory.getLogger(ChatRelayService.class);
+        ListAppender<ILoggingEvent> appender = new ListAppender<>();
+        appender.start();
+        logger.addAppender(appender);
+        try {
+            for (String bad : new String[]{"ab\ncd", "abcdefg", "a".repeat(5000), "../x", "a b"}) {
+                assertThatThrownBy(() -> service.sendAsGuardian(GUARDIAN, withContext(forged(bad))))
+                        .isInstanceOfSatisfying(CustomException.class,
+                                e -> assertThat(e.getErrorCode()).isEqualTo(ErrorCode.CHAT_WARD_NOT_CONNECTED));
+            }
+        } finally {
+            logger.detachAppender(appender);
+        }
+
+        verifyNoInteractions(aiChatClient, connectionService, userRepository);
+        assertThat(appender.list).hasSize(5);
+        for (ILoggingEvent event : appender.list) {
+            String line = event.getFormattedMessage();
+            assertThat(line).contains("[IDOR-ATTEMPT]").contains("guardianId=" + GUARDIAN);
+            assertThat(line).doesNotContain("\n").doesNotContain("aaaaa").doesNotContain("../");
+            assertThat(line.length()).isLessThan(200);
+        }
+    }
+
+    @Test
+    @DisplayName("속도 제한은 wardId 확인보다 먼저 - 한도 초과면 연결 조회·DB 조회를 하지 않는다")
+    void 속도_제한이_wardId_확인보다_먼저() {
+        doThrow(new CustomException(ErrorCode.CHAT_LIMIT_EXCEEDED))
+                .when(rateLimitService).check(anyString(), eq(GUARDIAN), anyInt(), anyInt());
+
+        assertThatThrownBy(() -> service.sendAsGuardian(GUARDIAN, withContext(forged("VICTIM"))))
+                .isInstanceOfSatisfying(CustomException.class,
+                        e -> assertThat(e.getErrorCode()).isEqualTo(ErrorCode.CHAT_LIMIT_EXCEEDED));
+
+        verifyNoInteractions(connectionService, userRepository, aiChatClient);
+    }
+
+    @Test
+    @DisplayName("AI 응답 뒤 연결이 끊겨 있으면 응답을 폐기하고 403")
+    void 응답_뒤_연결_해제면_응답_폐기() throws Exception {
+        when(connectionService.isActiveConnection(GUARDIAN, WARD)).thenReturn(true, false);
+        when(userRepository.findById(WARD)).thenReturn(Optional.of(ward()));
+        when(aiChatClient.send(any())).thenReturn(objectMapper.readTree("{\"reply\":\"피보호자 예약 내용\"}"));
+
+        assertThatThrownBy(() -> service.sendAsGuardian(GUARDIAN, withContext(forged(WARD))))
+                .isInstanceOfSatisfying(CustomException.class,
+                        e -> assertThat(e.getErrorCode()).isEqualTo(ErrorCode.CHAT_WARD_NOT_CONNECTED));
+
+        verify(aiChatClient).send(any());
+    }
+
+    @Test
+    @DisplayName("대리 상담의 name·phone 도 클라이언트 값 대신 DB 값이다")
+    void name_phone도_DB_값() throws Exception {
+        when(connectionService.isActiveConnection(GUARDIAN, WARD)).thenReturn(true);
+        when(userRepository.findById(WARD)).thenReturn(Optional.of(ward()));
+        when(aiChatClient.send(any())).thenReturn(objectMapper.readTree("{}"));
+        Map<String, Object> withPhone = forged(WARD);
+        withPhone.put("phone", "010-7777-7777");
+
+        service.sendAsGuardian(GUARDIAN, withContext(withPhone));
+
+        JsonNode context = sentBody().path("context");
+        assertThat(context.path("name").asText()).isEqualTo("김영희");
+        assertThat(context.path("phone").asText()).isEqualTo("010-1234-5678");
+        assertThat(context.toString()).doesNotContain("7777").doesNotContain("보호자");
+    }
+
+    @Test
+    @DisplayName("DB 에 전화가 없는 피보호자: 클라이언트가 보낸 phone 은 AI 에 가지 않는다")
+    void DB_전화가_없으면_클라이언트_phone_제거() throws Exception {
+        when(connectionService.isActiveConnection(GUARDIAN, WARD)).thenReturn(true);
+        when(userRepository.findById(WARD)).thenReturn(Optional.of(
+                User.builder().id(WARD).name("김영희").build()));
+        when(aiChatClient.send(any())).thenReturn(objectMapper.readTree("{}"));
+        Map<String, Object> context = forged(WARD);
+        context.put("phone", "010-7777-7777");
+
+        service.sendAsGuardian(GUARDIAN, withContext(context));
+
+        JsonNode sent = sentBody().path("context");
+        assertThat(sent.has("phone")).isFalse();
+        assertThat(sent.has("wardPhone")).isFalse();
+        assertThat(sent.path("name").asText()).isEqualTo("김영희");
     }
 }

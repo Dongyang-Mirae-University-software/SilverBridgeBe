@@ -46,6 +46,8 @@ public class ChatRelayService {
     private static final int LOGS_PER_MINUTE = 30;
     private static final int LOGS_PER_HOUR = 600;
     private static final java.util.Set<String> WARD_KEYS = java.util.Set.of("wardId", "wardName", "wardPhone");
+    /** 사용자 ID 형식(UserIdGenerator: 영숫자, users.id VARCHAR(6)). */
+    private static final java.util.regex.Pattern USER_ID_FORMAT = java.util.regex.Pattern.compile("\\A[A-Za-z0-9]{1,6}\\z");
 
     private final AiChatClient aiChatClient;
     private final ChatSlots slots;
@@ -57,26 +59,37 @@ public class ChatRelayService {
 
     /** 본인 상담(피보호자 경로 등). context 의 대리 상담 키(wardId·wardName·wardPhone)는 버린다. */
     public Object send(String userId, ChatRelayRequest request) {
+        admit(userId, request);
         return relay(userId, request, null);
     }
 
-    /** 보호자 경로. context.wardId 가 있으면 ACTIVE 연결을 확인하고 이름·전화는 DB 값으로 채운다(없으면 본인 상담). */
+    /**
+     * 보호자 경로. context.wardId 가 있으면 ACTIVE 연결을 확인하고 이름·전화는 DB 값으로 채운다(없으면 본인 상담).
+     * 킬 스위치·본문 검증·속도 제한을 <b>wardId 확인보다 먼저</b> 해서, 위조 wardId 로 DB 조회·경고 로그를 무한히 만들지 못하게 한다.
+     */
     public Object sendAsGuardian(String guardianId, ChatRelayRequest request) {
+        admit(guardianId, request);
+        User ward = resolveWard(guardianId, request.context());
+        Object reply = relay(guardianId, request, ward);
+        // AI 호출은 최대 130초라 그 사이 연결이 끊길 수 있다. 끊겼다면 응답(피보호자의 예약 내용이 담길 수 있음)을 보호자에게 주지 않는다.
+        if (ward != null && !connectionService.isActiveConnection(guardianId, ward.getId())) {
+            log.warn("[IDOR-ATTEMPT] 대리 상담 중 연결 해제 감지, 응답 폐기: guardianId={}, wardId={}", guardianId, ward.getId());
+            throw new CustomException(ErrorCode.CHAT_WARD_NOT_CONNECTED);
+        }
+        return reply;
+    }
+
+    /** 전송 공통 입장 검사: 킬 스위치 -> 본문 검증 -> 속도 제한. */
+    private void admit(String userId, ChatRelayRequest request) {
         if (!properties.isEnabled()) {
             throw new CustomException(ErrorCode.CHAT_UNAVAILABLE);
         }
         validate(request);
-        return relay(guardianId, request, resolveWard(guardianId, request.context()));
+        rateLimitService.check(SEND_ENDPOINT, userId, properties.getPerMinute(), properties.getPerHour());
     }
 
     private Object relay(String userId, ChatRelayRequest request, User ward) {
-        if (!properties.isEnabled()) {
-            throw new CustomException(ErrorCode.CHAT_UNAVAILABLE);
-        }
-        validate(request);
         byte[] body = buildBody(userId, request, ward);
-
-        rateLimitService.check(SEND_ENDPOINT, userId, properties.getPerMinute(), properties.getPerHour());
         long startedAt = System.nanoTime();
         try (ChatSlots.Slot ignored = slots.acquire(userId)) {
             JsonNode reply = aiChatClient.send(body);
@@ -139,8 +152,13 @@ public class ChatRelayService {
         if (ward != null) {
             context.put("wardId", ward.getId());
             context.put("wardName", ward.getName());
+            // AI 는 wardName/wardPhone 이 없으면 name/phone 을 환자 정보로 쓴다 - 클라이언트 값이 남지 않게 함께 정한다
+            context.put("name", ward.getName());
             if (StringUtils.hasText(ward.getPhone())) {
                 context.put("wardPhone", ward.getPhone());
+                context.put("phone", ward.getPhone());
+            } else {
+                context.remove("phone");
             }
         }
         return context;
@@ -158,6 +176,12 @@ public class ChatRelayService {
         String wardId = text.trim();
         if (wardId.isEmpty()) {
             return null;
+        }
+        // 형식이 틀리면 DB 조회·원문 로그 없이 거절한다(클라이언트 문자열을 로그에 남기면 줄바꿈 삽입·8KB 폭주가 가능하다)
+        if (!USER_ID_FORMAT.matcher(wardId).matches()) {
+            log.warn("[IDOR-ATTEMPT] 형식이 맞지 않는 피보호자 ID로 대리 상담 시도: guardianId={}, wardIdLength={}",
+                    guardianId, wardId.length());
+            throw new CustomException(ErrorCode.CHAT_WARD_NOT_CONNECTED);
         }
         if (!connectionService.isActiveConnection(guardianId, wardId)) {
             log.warn("[IDOR-ATTEMPT] 연결되지 않은 피보호자 대리 상담 시도: guardianId={}, wardId={}", guardianId, wardId);
