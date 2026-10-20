@@ -35,7 +35,7 @@
 |---|---|---|
 | Q1 기존 `sb-*` 계정 17개 | 새 키 적용 시 비밀번호가 달라져 로그인 불가 → (b) **시연 데이터면 삭제 후 재생성** 권장. 저장된 API 키는 유효하면 계속 동작 | **미실행** (시연 데이터 여부 확인 필요, 비가역) |
 | Q2 공개 도메인 | `reservation.dmu.gosky.kr`가 **예약 API(6015)와 관리자 화면(6017)을 함께 서빙**해 도메인 통째 차단은 관리자 화면까지 막는다 → FE가 내부 주소로 붙는 것을 확인한 뒤 **`/api/` 경로만 외부 차단** 권장 | **미실행**, 배포 단계에서 다시 확인 |
-| Q3 seed 계정 9개 | 운영 DB에 남아 있으면 삭제 | **미실행** (이메일 패턴·개수 재확인 뒤) |
+| Q3 seed 계정 9개 | 운영 DB에 남아 있으면 삭제 | **보류 중**: 처음엔 사용자 결정으로 유지. 이후 확인 결과 seed 9개(`admin@example.com` + `user*@example.com` 8개)가 **예약 163건 전부를 소유**하고, `admin@example.com`이 **예약 서비스의 유일한 ADMIN 계정**이라(관리자 패널 로그인이 첫 ADMIN 사용자를 씀) 단순 삭제는 데이터 손실·관리자 패널 중단을 부른다. 비밀번호가 저장소 seed 파일에 고정돼 있어 공개 도메인으로 로그인될 수 있다 -> 비밀번호 무효화 또는 삭제 방침 결정 필요 |
 | Q4 오류 코드 | `CHAT_WARD_NOT_CONNECTED` 403 "연결된 피보호자만 대신 상담·예약할 수 있습니다." | 구현됨 (#356) |
 
 ## 5. 배포 순서 (어긋나면 예약 로그인이 실패한다)
@@ -66,6 +66,7 @@
 
 ## 8. 남은 위험·수용
 
+- **예약 서비스 seed 계정 9개의 비밀번호가 저장소 seed 파일에 고정돼 있다**(공개 도메인 `/api/`는 열려 있음). 운영 DB의 seed 비밀번호가 아직 seed 값인지는 공격을 시도하지 않아 확인하지 못했다. 처리 방침은 §4 Q3 참고(미결).
 - **AI 서버는 여전히 `context.wardId`를 신뢰한다.** 검증은 BE 중계에서만 한다. AI를 BE 우회로 직접 부를 수 있는 키 보유자는 임의 wardId를 보낼 수 있다(AI API 키는 서버 안에서만 쓴다는 기존 정책, 키 교체는 하지 않기로 한 기존 결정). AI 쪽에서 wardId 신뢰 범위를 줄이는 방안은 별도 검토.
 - 공개 도메인(`/api/`)은 배포 단계 Q2 전까지 열려 있다. 관리자 화면(6017)은 이 작업의 범위가 아니다.
 - FE BFF는 사용자 토큰으로 예약 서비스의 **임의 경로**를 중계한다(예: `/auth/*`). 인증된 사용자 본인 계정 범위라 이번에는 두었다(🟢).
@@ -124,7 +125,7 @@ PHASE D. 테스트  [스킬: test-quality]  [모델: sonnet]
 | 3 | 새 `RESERVATION_ACCOUNT_SECRET` 생성 → AI `.env`·FE `.env.dev`에 같은 값, FE에 `RESERVATION_API_URL=http://reservation-api:6015` | 완료. 수정 전 `.env.bak-20261020-1104` 백업, 값은 출력·기록하지 않음 |
 | 4 | 예약 DB 백업(`reservation-dev.db.bak-20261020-1105`) | 완료 |
 | 5 | AI 서버: 작업 트리 4파일(#23과 동일 확인) 정리 → pull → 재빌드·재시작 | 완료. 비밀값 적용(`True`), 옛 공용 계정 꺼짐. BE의 AI 이상감지 구독은 502 몇 회 뒤 재연결됨 |
-| 6 | FE #81 머지(`41a9af4`) → 백업 브랜치 `backup/gosky-develop-pre-pr81-20261020` → 수정 stash → `origin/develop` 병합(`2d885da`) → 수정 복원 → `docker compose -f docker-compose.dev.yml up -d` | 완료. healthy, `sb-internal` 참여, 환경변수 반영, `reservation-api:6015` 접속 OK |
+| 6 | FE #81 머지(`41a9af4`) → 백업 브랜치·수정 stash(작업 중에만 사용, 이후 삭제) → `origin/develop` 병합(`2d885da`) → 수정 복원 → `docker compose -f docker-compose.dev.yml up -d` | 완료. healthy, `sb-internal` 참여, 환경변수 반영, `reservation-api:6015` 접속 OK |
 | 7 | Q1: 시연 데이터인 `sb-*` 계정 17개와 그 예약 21건·API 키 4개 삭제 | 완료. 남은 계정 11개(seed 포함, **Q3 seed는 사용자 결정으로 유지**) |
 | 8 | Q2: nginx | **생략**(6015가 로컬 전용이 되어 필요성이 낮고, 공유 nginx 수정 위험 대비 이득이 작음) |
 | 9 | BE #356 머지(`2b779ed`) → vkcs CD 성공 → gosky 수동 배포(`up -d --build api`) | 완료. 두 서버 healthy, AI 구독 연결됨. 실서버 확인: 연결 없는 `wardId` 403 `CHAT_WARD_NOT_CONNECTED`(+`[IDOR-ATTEMPT]`), 숫자 `wardId` 400. 문서 #357 머지(`5743e6f`) |
@@ -140,5 +141,5 @@ PHASE D. 테스트  [스킬: test-quality]  [모델: sonnet]
 - AI 전체 pytest는 컨테이너에 pytest가 없어 못 돌림
 
 ### 운영 메모
-- gosky FE는 로컬 병합 커밋이 `origin/develop`과 갈라져 있었다(앞 43). 이번에 `origin/develop`을 병합해 해소했고 이전 상태는 `backup/gosky-develop-pre-pr81-20261020`에 있다. 커밋 안 된 `GuardianHospitalContent.tsx` 수정은 유지(stash 사본 `gosky-hospital-wip-20261020`도 남김)
-- 예약 DB 백업과 `.env` 백업은 일정 기간 뒤 사용자가 정리한다
+- gosky FE는 로컬 병합 커밋이 `origin/develop`과 갈라져 있었다(앞 43). 이번에 `origin/develop`을 병합해 해소했다. 커밋 안 된 `GuardianHospitalContent.tsx` 수정은 FE PR #82(`996ac32`)로 저장소에 반영했고 서버 작업 트리는 깨끗하다
+- 작업 중 만든 `.env` 백업 2개, 예약 DB 백업, gosky FE의 백업 브랜치·stash는 2026-10-20 사용자 요청으로 모두 삭제했다 (삭제한 `sb-*` 계정 17개·예약 21건은 복구 불가, 사용자가 화면을 다시 열면 계정만 자동 재생성)
