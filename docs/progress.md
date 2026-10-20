@@ -1960,3 +1960,8 @@ REST API Key 단독 대비 보안 강화 — 인가코드 탈취 시 토큰 발�
 - 🔴🟠 0 · 🟡 1(M-1 `[IDOR-ATTEMPT]` 로그에 클라이언트 wardId 원문 - 로그 위조·폭주) · 🟢 5(속도 제한 순서·클라이언트 `name`/`phone` 통과·호출 중 해제 경합·`isActiveConnection` 통합 테스트 없음·중복 확인). 변이 테스트 2종 모두 잡힘. 시험 계정 상담 기록 1건 남음
 - 상세 `docs/(2026-10-20) audit-chat-ward-id-validation.md`. 조치(M-1+L-1)는 별도 승인 후
 - 점검 이슈 6건 전부 조치(`fix/chat-ward-id-audit-findings`): wardId 형식 검증 + 로그 위생(M-1), 속도 제한을 wardId 확인 앞으로(L-1), 대리 상담 name/phone도 DB 값(L-2), AI 응답 뒤 연결 해제 시 응답 폐기(L-3 완화), `isActiveConnection` 통합 테스트(L-4), 중복 확인 정리(L-5)
+
+## [2026-10-20] 후속: 예약 seed 계정 비밀번호 무효화 · 문서 정정
+
+- 예약 서비스 seed 계정 9개(`admin@example.com` + `user*@example.com` 8개)를 점검: 예약 163건 전부와 유일한 ADMIN을 소유해 삭제 대신 **비밀번호만 무작위 값으로 무효화**. 변경 전 9개 모두 저장소 seed의 공개 비밀번호가 통했고(해시 비교, 로그인 시도 없음) 변경 후 0개. 계정 12개·예약 163건·ADMIN 1개 유지, 관리자 패널 정상. 변경 전 예약 DB 백업 `reservation-dev.db.bak-20261020-1405`는 서버에 남겨 둠(사용자가 정리)
+- FE 병원 예약 화면 수정(gosky 서버에만 있던 미커밋 변경)을 FE PR #82로 반영, `CLAUDE.md`·fix 문서의 배포 상태·백업 서술 정정
