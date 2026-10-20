@@ -9,6 +9,7 @@
 
 | 머지 | 기능 | 상태 | 점검 문서 | 잔여 이슈 |
 |---|---|---|---|---|
+| BE #356 · FE #81 · 예약 #1 · AI #23·#24 (2026-10-20, draft) | 챗 대리 상담 `wardId` ACTIVE 연결 검증(`CHAT_WARD_NOT_CONNECTED` 403, 이름·전화 DB 덮어쓰기) + 예약 계정 비밀값·공용 계정·JWT·관리자 비밀번호 코드 기본값 제거 + 예약 API 6015 로컬 전용 (마이그레이션 없음) | ❌ | - (템플릿 B 제안: 챗 중계 보안 점검, 프롬프트 초안 `(2026-10-20) fix-chat-reservation-security.md` §9. 머지·배포 뒤 실행) | 미배포 · Q1 `sb-*` 17개/Q3 seed 9개 처리·Q2 nginx `/api/` 차단 미결 · AI 서버는 wardId를 계속 신뢰(BE 중계 전제, 수용) |
 | (2026-10-16) feature/anomaly-multi-danger-link-health | 이상감지 동시 위험 처리(`results[]` 종류별 판정) + AI 연결 끊김 감지(재접속 뒤 사라진 세션 OFFLINE·반쯤 열린 연결 닫기·`CAMERA_LINK_LOST` FCM·재접속 상한 20초·로그 2종·낙상 클립 기본값 8/1) (마이그레이션 없음) | ❌ | - (템플릿 C 영향 범위 점검 제안: `NotificationType`·알림 정책 추가) | - |
 | (2026-10-16) feature/anomaly-multi-danger-link-health | 이상감지 동시 위험 처리(`results[]` 종류별 판정) + AI 연결 끊김 감지(재접속 뒤 사라진 세션 OFFLINE·반쯤 열린 연결 닫기·`CAMERA_LINK_LOST` FCM·재접속 상한 20초·로그 2종·낙상 클립 기본값 8/1) (마이그레이션 없음, #353) | ✅ | `(2026-10-16) audit-impact-anomaly-multi-danger-link-health.md` (템플릿 C, 코드 수정 없음) | - (🟢 L-1 보호자 설정에 끄기 없음(→ `feature/camera-link-lost-preference`에서 해소, V61)·L-2 동시 위험 2건·L-3 resync 0이면 stale 감지 꺼짐·L-4 stale 닫기 중복 재접속 가능성 전부 수용) / 실서버: 재접속 상한·지터 확인, 사라진 세션 알림·동시 위험 E2E는 미확인 |
 | (2026-10-14) feature/camera-total-limit | 서비스 전체 카메라 등록 상한 3대 - `camera.max-total`·409 `CAMERA_LIMIT_REACHED`·어드바이저리 락 (마이그레이션 없음) | ✅ | `(2026-10-14) audit-camera-total-limit.md` (템플릿 B) | - (L-1 Swagger 409 설명 반영·테스트 고정, L-2 통합 테스트 실행 확인, M-1 한 계정 슬롯 독점은 수용) |
