@@ -43,6 +43,10 @@ class ChatRelayServiceTest {
     private AiChatClient aiChatClient;
     @Mock
     private RateLimitService rateLimitService;
+    @Mock
+    private kr.silverbridge.main.domain.connection.service.ConnectionService connectionService;
+    @Mock
+    private kr.silverbridge.main.domain.user.repository.UserRepository userRepository;
 
     private final ObjectMapper objectMapper = new ObjectMapper();
     private ChatRelayProperties properties;
@@ -53,7 +57,8 @@ class ChatRelayServiceTest {
     void setUp() {
         properties = new ChatRelayProperties();
         slots = new ChatSlots(properties);
-        service = new ChatRelayService(aiChatClient, slots, rateLimitService, properties, objectMapper);
+        service = new ChatRelayService(aiChatClient, slots, rateLimitService, properties, objectMapper,
+                connectionService, userRepository);
     }
 
     private static ChatRelayRequest msg(String text) {

@@ -69,7 +69,7 @@ class GuardianChatControllerHttpTest {
     @Test
     @DisplayName("전송: data.reply·riskLevel 이 문자열로, 숫자·null·배열·중첩이 그대로 내려간다")
     void sendSerializesPlainJson() throws Exception {
-        when(chatRelayService.send(eq("aB3x9Z"), any())).thenReturn(plain("""
+        when(chatRelayService.sendAsGuardian(eq("aB3x9Z"), any())).thenReturn(plain("""
                 {"reply":"물을 충분히 드세요","riskLevel":"low","count":3,"ratio":0.5,"none":null,
                  "list":["a","b"],"toolData":{"hospitals":[{"name":"x","dist":1.2}]}}"""));
 
