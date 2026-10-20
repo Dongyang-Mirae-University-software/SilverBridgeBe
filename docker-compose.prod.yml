@@ -1,0 +1,105 @@
+# 운영(dmu.gosky.kr / api.dmu.gosky.kr). dev와 같은 구조, 포트·이름·데이터 경로만 분리.
+#   docker compose -f docker-compose.prod.yml up -d --build
+services:
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: dmu-prod-api
+    image: dmu-api:prod
+    restart: unless-stopped
+    env_file:
+      - .env.prod
+    # 호스트 루프백에만 publish. nginx(api.dmu.gosky.kr)가 127.0.0.1:6011로 프록시.
+    ports:
+      - "127.0.0.1:6011:6511"
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - app-net
+    volumes:
+      - ./.data/prod/clips:/data/clips
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:6511/actuator/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 60s
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "5"
+    deploy:
+      resources:
+        limits:
+          memory: 1536m
+
+  db:
+    image: postgres:17
+    container_name: dmu-prod-db
+    restart: unless-stopped
+    env_file:
+      - .env.prod
+    ports:
+      - "127.0.0.1:6013:5432"
+    volumes:
+      - ./.data/prod/postgres:/var/lib/postgresql/data
+    networks:
+      - app-net
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "5"
+    deploy:
+      resources:
+        limits:
+          memory: 512m
+
+  redis:
+    image: redis:7.2
+    container_name: dmu-prod-redis
+    restart: unless-stopped
+    command:
+      - redis-server
+      - --appendonly
+      - "yes"
+      - --appendfsync
+      - everysec
+      - --maxmemory
+      - 256mb
+      - --maxmemory-policy
+      - noeviction
+    ports:
+      - "127.0.0.1:6014:6379"
+    volumes:
+      - ./.data/prod/redis:/data
+    networks:
+      - app-net
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "5"
+    deploy:
+      resources:
+        limits:
+          memory: 320m
+
+networks:
+  app-net:
+    name: dmu-prod-net
