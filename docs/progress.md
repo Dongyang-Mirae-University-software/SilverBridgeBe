@@ -1945,3 +1945,11 @@ REST API Key 단독 대비 보안 강화 — 인가코드 탈취 시 토큰 발�
 
 - PR #353 머지(`0c19a2f`), vkcs CD 성공·gosky 수동 배포. AI 서버 PR #19(흉기 유지 조건) 재배포 중 실서버에서 재접속 상한 20초+지터 동작 확인
 - 영향 범위 점검(템플릿 C) 완료: High/Medium 없음, 🟢 4건 수용. 사라진 세션 알림·동시 위험 E2E는 송출 중 재시작/동시 감지 때 확인 필요. 상세 `docs/(2026-10-16) audit-impact-anomaly-multi-danger-link-health.md`
+
+## [2026-10-20] 챗봇 wardId 검증 · 예약 계정 비밀값 · 예약 API 노출 차단 (예약·AI·FE 배포 완료, BE #356 대기)
+
+- 분석(`(2026-10-20) analysis-ai-chat-reservation.md`)의 보안 항목 3가지를 코드·설정으로 다시 확인(읽기 전용): ① 챗 `context.wardId` 무검증(BE·AI) ② 예약 계정 비밀값이 AI·FE 모두 미설정 → 저장소에 공개된 코드 기본값으로 동작 ③ 예약 6015 전 인터페이스 노출 + FE BFF는 공개 도메인 경유(운영 JWT·관리자 비밀번호는 기본값과 달랐음)
+- 구현(저장소별 draft PR): BE #356(wardId ACTIVE 연결 검증·이름/전화 DB 덮어쓰기, 테스트 6건, build 통과) / FE #81(BFF 기본값 제거·`sb-internal` 네트워크, vitest 107건) / 예약 #1(JWT·관리자 비밀번호 기본값 제거·6015 로컬 전용) / AI #23(별개: gosky에서 돌던 미커밋 응급 신호 4파일 반영) · #24(비밀값·공용 계정 기본값 제거, 비면 예약만 꺼짐, 테스트 4건)
+- 배포 순서: `docker network create sb-internal` → 예약 → AI·FE(같은 새 비밀값 + FE `RESERVATION_API_URL`) → Q1·Q3 계정 처리(`sb-*` 17개·seed 9개, 비가역) → BE. 운영 `.env` 수정·서버 재시작·계정 삭제는 실행 직전 별도 확인
+- 정책: rules "AI 챗봇 중계" 불변 규칙 ⑦(wardId는 BE가 검증)·⑧(비밀값 기본값 금지)·⑨(예약 API 비공개) 추가. 점검 프롬프트(템플릿 B) 초안은 `docs/(2026-10-20) fix-chat-reservation-security.md` §9
+- 배포(gosky): sb-internal 네트워크 → 예약(#1) → AI(#23·#24) → FE(#81, 로컬 갈라진 develop은 병합으로 해소) 순으로 반영. 새 `RESERVATION_ACCOUNT_SECRET`을 AI·FE에 같은 값으로 적용, 예약 6015 로컬 전용. Q1 `sb-*` 17개(예약 21건) 삭제·Q3 seed 유지·Q2 nginx 생략. 시험 계정으로 FE BFF 대리 조회 200·연결 없는 wardId 403, AI·FE 비밀값 일치 확인. BE #356·#357은 사용자 머지 대기. 상세 `docs/(2026-10-20) fix-chat-reservation-security.md` §10
