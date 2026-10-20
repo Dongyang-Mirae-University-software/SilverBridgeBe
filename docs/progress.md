@@ -1959,3 +1959,4 @@ REST API Key 단독 대비 보안 강화 — 인가코드 탈취 시 토큰 발�
 
 - 🔴🟠 0 · 🟡 1(M-1 `[IDOR-ATTEMPT]` 로그에 클라이언트 wardId 원문 - 로그 위조·폭주) · 🟢 5(속도 제한 순서·클라이언트 `name`/`phone` 통과·호출 중 해제 경합·`isActiveConnection` 통합 테스트 없음·중복 확인). 변이 테스트 2종 모두 잡힘. 시험 계정 상담 기록 1건 남음
 - 상세 `docs/(2026-10-20) audit-chat-ward-id-validation.md`. 조치(M-1+L-1)는 별도 승인 후
+- 점검 이슈 6건 전부 조치(`fix/chat-ward-id-audit-findings`): wardId 형식 검증 + 로그 위생(M-1), 속도 제한을 wardId 확인 앞으로(L-1), 대리 상담 name/phone도 DB 값(L-2), AI 응답 뒤 연결 해제 시 응답 폐기(L-3 완화), `isActiveConnection` 통합 테스트(L-4), 중복 확인 정리(L-5)
