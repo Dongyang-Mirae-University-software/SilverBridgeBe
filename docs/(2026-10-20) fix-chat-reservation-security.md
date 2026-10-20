@@ -1,6 +1,6 @@
 # 챗봇 wardId 검증 · 예약 계정 비밀값 · 예약 API 노출 차단 (2026-10-20)
 
-> 상태: **PR 5개 draft, 아직 머지·배포 전** (이 문서는 PR 단계 기록이다. 배포 결과는 배포 뒤 추가한다).
+> 상태: **예약·AI·FE 머지·gosky 배포 완료(2026-10-20), BE #356 머지·배포 대기** (§10 참고).
 > 근거: `(2026-10-20) analysis-ai-chat-reservation.md`의 보안 항목. 분석은 그 시점 기록이라 작업 시작 때 코드·설정으로 다시 확인했다(아래 §2).
 
 ## 1. 한 줄 요약
@@ -111,3 +111,32 @@ PHASE D. 테스트  [스킬: test-quality]  [모델: sonnet]
 규칙: 점검만, 코드 수정 금지 / DB 직접 조작·실제 공격 금지 / 자동 git commit·push 금지
 산출물: docs/(날짜) audit-chat-ward-id-validation.md + progress.md + audit-index.md 갱신
 ```
+
+## 10. 배포 결과 (2026-10-20, gosky)
+
+| 순서 | 대상 | 결과 |
+|---|---|---|
+| 0 | `docker network create sb-internal` | 완료 |
+| 1 | 예약 #1 머지(`331ab72`) → pull → `up -d --build reservation-api` | 완료. 포트 `127.0.0.1:6015`만 열림, `sb-internal`에 `reservation-api` 별칭 참여, 로컬·공개 도메인 모두 200(nginx는 변경 없음) |
+| 2 | AI #23(`2629b7e`)·#24(`cff3c4e`) 머지 | 완료 |
+| 3 | 새 `RESERVATION_ACCOUNT_SECRET` 생성 → AI `.env`·FE `.env.dev`에 같은 값, FE에 `RESERVATION_API_URL=http://reservation-api:6015` | 완료. 수정 전 `.env.bak-20261020-1104` 백업, 값은 출력·기록하지 않음 |
+| 4 | 예약 DB 백업(`reservation-dev.db.bak-20261020-1105`) | 완료 |
+| 5 | AI 서버: 작업 트리 4파일(#23과 동일 확인) 정리 → pull → 재빌드·재시작 | 완료. 비밀값 적용(`True`), 옛 공용 계정 꺼짐. BE의 AI 이상감지 구독은 502 몇 회 뒤 재연결됨 |
+| 6 | FE #81 머지(`41a9af4`) → 백업 브랜치 `backup/gosky-develop-pre-pr81-20261020` → 수정 stash → `origin/develop` 병합(`2d885da`) → 수정 복원 → `docker compose -f docker-compose.dev.yml up -d` | 완료. healthy, `sb-internal` 참여, 환경변수 반영, `reservation-api:6015` 접속 OK |
+| 7 | Q1: 시연 데이터인 `sb-*` 계정 17개와 그 예약 21건·API 키 4개 삭제 | 완료. 남은 계정 11개(seed 포함, **Q3 seed는 사용자 결정으로 유지**) |
+| 8 | Q2: nginx | **생략**(6015가 로컬 전용이 되어 필요성이 낮고, 공유 nginx 수정 위험 대비 이득이 작음) |
+| 9 | BE #356·#357 | **머지·배포 대기** |
+
+### 확인한 것
+- 시험 계정(보호자, ACTIVE 피보호자 1명)으로 FE BFF `/api/reservation/reservations/my` 대리 조회: 200, 연결 없는 `wardId`: 403
+- FE BFF가 새 비밀값으로 만든 계정에 **AI `ensure_credential`이 로그인해 키를 발급**함 -> AI·FE 비밀값 일치 확인
+- 재생성된 `sb-*` 계정 1개(시험 피보호자). 나머지 사용자는 예약 화면을 다시 열 때 자동 생성된다
+
+### 아직 확인하지 못한 것
+- BE `wardId` 검증(#356)은 배포 전이라 실서버 확인 전이다 (배포 후 점검 §9에서 확인)
+- 챗봇 예약 흐름 전체(병원 검색~예약 생성)의 E2E는 시험하지 않았다(실제 사용자 예약 데이터를 시험에 쓰지 않는 원칙)
+- AI 전체 pytest는 컨테이너에 pytest가 없어 못 돌림
+
+### 운영 메모
+- gosky FE는 로컬 병합 커밋이 `origin/develop`과 갈라져 있었다(앞 43). 이번에 `origin/develop`을 병합해 해소했고 이전 상태는 `backup/gosky-develop-pre-pr81-20261020`에 있다. 커밋 안 된 `GuardianHospitalContent.tsx` 수정은 유지(stash 사본 `gosky-hospital-wip-20261020`도 남김)
+- 예약 DB 백업과 `.env` 백업은 일정 기간 뒤 사용자가 정리한다
