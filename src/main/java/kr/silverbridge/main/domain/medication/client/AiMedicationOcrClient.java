@@ -2,11 +2,11 @@ package kr.silverbridge.main.domain.medication.client;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import jakarta.annotation.PreDestroy;
 import kr.silverbridge.main.domain.medication.config.MedicationOcrProperties;
 import kr.silverbridge.main.global.exception.CustomException;
 import kr.silverbridge.main.global.exception.ErrorCode;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.scheduling.TaskScheduler;
 import org.springframework.stereotype.Component;
 import org.springframework.util.StringUtils;
 import org.springframework.web.util.UriComponentsBuilder;
@@ -18,10 +18,13 @@ import java.io.OutputStream;
 import java.net.HttpURLConnection;
 import java.net.URI;
 import java.nio.charset.StandardCharsets;
-import java.time.Instant;
 import java.util.UUID;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledFuture;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicInteger;
 
 /**
  * AI 서버 약 봉투 OCR 클라이언트(백엔드 중계용, 2026-10-22). AI {@code POST /api/v1/medication/ocr}(multipart {@code image}).
@@ -44,20 +47,35 @@ public class AiMedicationOcrClient {
 
     private final MedicationOcrProperties properties;
     private final ObjectMapper objectMapper;
-    private final TaskScheduler taskScheduler;
+    /**
+     * 호출 마감(연결 끊기) 전용 스레드(2026-10-22 점검 L-4). 공용 스케줄러 풀(3)을 쓰면 복약 Planner 등이 밀릴 때 마감이 늦어져
+     * 요청 스레드를 40초 넘게 붙든다. 빈으로 등록하지 않는다 - {@code TaskScheduler} 빈이 하나 더 생기면 Boot 기본 스케줄러
+     * 자동 설정이 물러나 {@code @Scheduled} 전체가 이 풀로 옮겨 간다. 동시 OCR이 최대 5건이라 2스레드면 충분하다.
+     */
+    private final ScheduledExecutorService deadlineExecutor;
 
-    public AiMedicationOcrClient(MedicationOcrProperties properties, ObjectMapper objectMapper,
-                                 TaskScheduler taskScheduler) {
+    public AiMedicationOcrClient(MedicationOcrProperties properties, ObjectMapper objectMapper) {
         this.properties = properties;
         this.objectMapper = objectMapper;
-        this.taskScheduler = taskScheduler;
+        AtomicInteger seq = new AtomicInteger();
+        this.deadlineExecutor = Executors.newScheduledThreadPool(2, runnable -> {
+            Thread thread = new Thread(runnable, "med-ocr-deadline-" + seq.incrementAndGet());
+            thread.setDaemon(true);
+            return thread;
+        });
+    }
+
+    @PreDestroy
+    void shutdown() {
+        deadlineExecutor.shutdownNow();
     }
 
     /** 사진 1장을 보내고 AI 응답 본문(객체)을 돌려준다. {@code format}은 호출부가 매직 바이트로 확인한 형식이다. */
     public JsonNode read(byte[] image, ImageFormat format) {
         requireApiKey();
         String boundary = "----sb-ocr-" + UUID.randomUUID();
-        byte[] body = multipartBody(boundary, image, format);
+        byte[] head = multipartHead(boundary, format);
+        byte[] tail = multipartTail(boundary);
         URI uri = UriComponentsBuilder.fromUriString(properties.getAiBaseUrl()).path(OCR_PATH).build().toUri();
 
         HttpURLConnection connection = null;
@@ -75,15 +93,18 @@ public class AiMedicationOcrClient {
             connection.setRequestProperty("Accept", "application/json");
             connection.setRequestProperty("Content-Type", "multipart/form-data; boundary=" + boundary);
             connection.setDoOutput(true);
-            connection.setFixedLengthStreamingMode(body.length);
+            connection.setFixedLengthStreamingMode((long) head.length + image.length + tail.length);
             HttpURLConnection target = connection;
-            deadline = taskScheduler.schedule(() -> {
+            deadline = deadlineExecutor.schedule(() -> {
                 timedOut.set(true);
                 target.disconnect();
-            }, Instant.now().plus(properties.getCallTimeout()));
+            }, properties.getCallTimeout().toMillis(), TimeUnit.MILLISECONDS);
 
+            // 사진을 본문용 배열로 한 번 더 복사하지 않고 바로 쓴다(2026-10-22 점검 L-5, 8MB 사진이면 요청당 8MB 절약)
             try (OutputStream out = connection.getOutputStream()) {
-                out.write(body);
+                out.write(head);
+                out.write(image);
+                out.write(tail);
             }
 
             int status = connection.getResponseCode();
@@ -170,16 +191,14 @@ public class AiMedicationOcrClient {
     }
 
     /** 파일 이름은 형식별 고정값이다 - 사용자가 올린 원래 이름을 넘기지 않는다. */
-    private static byte[] multipartBody(String boundary, byte[] image, ImageFormat format) {
-        String head = "--" + boundary + "\r\n"
+    private static byte[] multipartHead(String boundary, ImageFormat format) {
+        return ("--" + boundary + "\r\n"
                 + "Content-Disposition: form-data; name=\"" + PART_NAME + "\"; filename=\"" + format.fileName() + "\"\r\n"
-                + "Content-Type: " + format.contentType() + "\r\n\r\n";
-        String tail = "\r\n--" + boundary + "--\r\n";
-        ByteArrayOutputStream out = new ByteArrayOutputStream(image.length + 256);
-        out.writeBytes(head.getBytes(StandardCharsets.US_ASCII));
-        out.writeBytes(image);
-        out.writeBytes(tail.getBytes(StandardCharsets.US_ASCII));
-        return out.toByteArray();
+                + "Content-Type: " + format.contentType() + "\r\n\r\n").getBytes(StandardCharsets.US_ASCII);
+    }
+
+    private static byte[] multipartTail(String boundary) {
+        return ("\r\n--" + boundary + "--\r\n").getBytes(StandardCharsets.US_ASCII);
     }
 
     private void requireApiKey() {

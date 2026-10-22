@@ -12,7 +12,6 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
-import org.springframework.scheduling.concurrent.ThreadPoolTaskScheduler;
 
 import java.io.IOException;
 import java.net.InetSocketAddress;
@@ -40,7 +39,6 @@ class AiMedicationOcrClientTest {
     private final AtomicBoolean redirectFollowed = new AtomicBoolean();
     private MedicationOcrProperties properties;
     private AiMedicationOcrClient client;
-    private final ThreadPoolTaskScheduler scheduler = new ThreadPoolTaskScheduler();
 
     @BeforeEach
     void setUp() throws IOException {
@@ -55,14 +53,13 @@ class AiMedicationOcrClientTest {
         properties = new MedicationOcrProperties();
         properties.setAiBaseUrl("http://127.0.0.1:" + server.getAddress().getPort());
         properties.setApiKey(KEY);
-        scheduler.initialize();
-        client = new AiMedicationOcrClient(properties, new ObjectMapper(), scheduler);
+        client = new AiMedicationOcrClient(properties, new ObjectMapper());
     }
 
     @AfterEach
     void tearDown() {
         server.stop(0);
-        scheduler.shutdown();
+        client.shutdown();
     }
 
     private void handle(HttpExchange ex) throws IOException {
@@ -120,7 +117,10 @@ class AiMedicationOcrClientTest {
         assertThat(receivedContentType.get()).startsWith("multipart/form-data; boundary=");
         assertThat(receivedBody.get())
                 .contains("Content-Disposition: form-data; name=\"image\"; filename=\"image.jpg\"")
-                .contains("Content-Type: image/jpeg");
+                .contains("Content-Type: image/jpeg")
+                // 점검 L-5: 사진을 복사하지 않고 바로 써도 본문은 머리 + 사진 + 꼬리 그대로다
+                .contains(new String(JPEG, StandardCharsets.ISO_8859_1) + "\r\n--")
+                .endsWith("--\r\n");
     }
 
     @Test

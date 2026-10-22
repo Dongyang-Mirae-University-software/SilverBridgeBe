@@ -126,6 +126,9 @@ public class SecurityConfig {
                         // 세션 만료 후 이 기기 FCM 토큰 해제(XAREA-G01) - 만료된 access token을 본문으로 받아 서명으로 본인을
                         // 확인하고 본인 소유 토큰만 지운다(FcmTokenReleaseService). 이 경로 하나만 연다.
                         .requestMatchers(HttpMethod.POST, "/api/notifications/fcm-token/release").permitAll()
+                        // 약 봉투 OCR(최대 8MB 사진) - 역할을 본문 파싱 전에 막는다(2026-10-22 점검 L-2). 메서드 보안(@PreAuthorize)은
+                        // multipart 파싱 뒤에 돌아 WARD·ADMIN 요청도 10MB까지 읽은 뒤에야 403이 나왔다. 컨트롤러의 @PreAuthorize는 그대로 둔다.
+                        .requestMatchers(HttpMethod.POST, "/api/guardian/ward/*/medication/ocr").hasRole("GUARDIAN")
                         // 관리자 전용 경로
                         .requestMatchers("/api/admin/**").hasRole("ADMIN")
                         // 나머지는 인증 필요

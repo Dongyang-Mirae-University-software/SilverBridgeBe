@@ -590,4 +590,5 @@
 - **40초·동시 상한**: 모델 호출이라 일반 8~10초 규칙의 예외다. 요청 스레드를 붙들므로 동시 전체 5 / 1인 1(인스턴스 메모리)을 없애지 말 것. AI 키는 `X-API-Key` 헤더만, 리다이렉트 미추종, AI 오류 본문은 읽지 않는다(챗 중계와 같음).
 - **multipart 전역 상한 10MB**: 경로별 상한은 서비스가 검사한다(프로필 5MB `UserService`, OCR 8MB). 전역 값을 올릴 때 서비스 검사가 없는 업로드 경로가 생기지 않았는지 확인할 것.
   - gosky 앞단 nginx(`devdmu.gosky.kr`·`api.devdmu.gosky.kr`)는 기본 1MB였다 → 2026-10-22 `client_max_body_size 10m` 적용(백업 `/root/nginx-backup-20261022-ocr/`). 업로드 상한을 바꿀 때는 nginx 값도 함께 볼 것.
+- **점검 후속 (2026-10-22, L-1·L-2·L-6)**: ① OCR 경로는 `SecurityConfig` URL 규칙으로도 GUARDIAN만 - 메서드 보안은 multipart 파싱 뒤라 WARD·ADMIN이 10MB를 읽게 한 뒤 403이었다. 이 URL 규칙을 지우지 말 것(`@PreAuthorize`와 이중). ② 업로드 전역 상한 10MB 때문에 프로필 사진 업로드에 사용자 기준 속도 제한(분 5·시간 30)을 뒀다 - 새 업로드 경로를 만들면 서비스 크기 검사 + 속도 제한을 함께 둘 것. ③ 복약 IDOR 로그는 경로 `wardId` 형식(영숫자 1~6자)을 먼저 확인하고 틀리면 원문 대신 길이만 남긴다(`MedicationWardIds`, 챗 대리 상담과 같음).
 - **반 알**: OCR 응답은 `perDose` 원값(0.5)을 준다. `doseAmount` 0.5 단위 저장은 후속 PR #362(V62)에서 지원한다.

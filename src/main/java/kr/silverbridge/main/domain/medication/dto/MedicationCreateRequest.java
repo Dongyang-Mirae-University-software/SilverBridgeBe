@@ -12,6 +12,7 @@ import kr.silverbridge.main.domain.medication.entity.DoseAmounts;
 
 import java.math.BigDecimal;
 import java.time.LocalTime;
+import java.time.temporal.ChronoUnit;
 
 /**
  * 약 추가 요청(보호자 전용).
@@ -47,9 +48,9 @@ public record MedicationCreateRequest(
         @Schema(description = "복용 안내 메모 (선택, 공백만 보내면 메모 없음)", example = "식사와 함께")
         String memo
 ) {
-    /** 시각 미지정 시 시간대 기본값으로 보정한다. */
+    /** 시각 미지정 시 시간대 기본값으로 보정한다. 초 아래는 버린다(2026-10-22 점검 L-3 - DB {@code TIME}은 마이크로초까지라 나노초 차이가 같은 시각이 된다). */
     public LocalTime resolveDoseTime() {
-        return doseTime != null ? doseTime : timeSlot.defaultTime();
+        return doseTime != null ? doseTime.truncatedTo(ChronoUnit.SECONDS) : timeSlot.defaultTime();
     }
 
     public BigDecimal resolveDoseAmount() {

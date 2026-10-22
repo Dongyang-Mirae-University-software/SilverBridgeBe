@@ -127,6 +127,14 @@ class MedicationOcrServiceTest {
     }
 
     @Test
+    @DisplayName("점검 L-6: 형식이 틀린 wardId 는 DB 조회 없이 403, 로그에 원문 없음")
+    void malformedWardId(CapturedOutput output) {
+        assertThat(codeOf(() -> service.read(GUARDIAN, "x\r\n[FAKE]", image(JPEG)))).isEqualTo(ErrorCode.MEDICATION_NOT_AUTHORIZED);
+        verifyNoInteractions(connectionService, aiClient);
+        assertThat(output).contains("[IDOR-ATTEMPT]", "wardIdLength=9", "action=ocr").doesNotContain("[FAKE]");
+    }
+
+    @Test
     @DisplayName("8MB 초과 → 413, 비었거나 파트 없음·사진 아님(gif·텍스트) → 400 - AI는 부르지 않는다")
     void sizeAndFormat() {
         when(connectionService.isActiveConnection(GUARDIAN, WARD)).thenReturn(true);

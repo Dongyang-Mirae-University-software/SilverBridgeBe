@@ -2009,3 +2009,8 @@ REST API Key 단독 대비 보안 강화 — 인가코드 탈취 시 토큰 발�
 - 방법: 결론을 주지 않은 독립 점검(Sonnet) + 메인 재확인(🟡→🟢 정정 1, 테스트 공백 오탐 4) / 변이 8종 전부 기존 테스트가 잡음 / gosky 실호출로 연결 없는 피보호자 OCR·일괄 등록 403 + `[IDOR-ATTEMPT]` 2건·생성 0 확인
 - audit-index: #361·#362 ✅, 2026-10-16 중복 ❌ 행 정리
 
+## [2026-10-22] 약 봉투 OCR·일괄 등록·반 알 점검 이슈 6건 조치 (branch `fix/medication-audit-findings`)
+
+- L-1 프로필 사진 업로드 속도 제한(분 5·시간 30) / L-2 OCR 경로 URL 단계 GUARDIAN 규칙(본문 파싱 전 403) / L-3 복용 시각 초 단위 / L-4 OCR 마감 전용 스레드(빈 아님) / L-5 multipart 본문 복사 제거 / L-6 복약 IDOR 로그 wardId 형식 확인·길이만 기록
+- 마이그레이션 없음. `./gradlew build` 전체 1,814건 통과(새 6건). 상세 `docs/(2026-10-22) audit-medication-ocr-batch-half-dose.md` "조치"
+

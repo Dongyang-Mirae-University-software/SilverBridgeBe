@@ -132,6 +132,35 @@ class GuardianMedicationBatchTest {
     }
 
     @Test
+    @DisplayName("점검 L-3: 나노초만 다른 시각은 같은 시각으로 보고 400, 저장되는 시각은 초 단위")
+    void subSecondTimesAreSame() {
+        when(connectionService.isActiveConnection(GUARDIAN, WARD)).thenReturn(true);
+
+        assertThatThrownBy(() -> service.createBatch(GUARDIAN, WARD, new MedicationBatchCreateRequest(
+                List.of(drug("약1", null)),
+                List.of(new MedicationBatchCreateRequest.Time(LocalTime.of(8, 0)),
+                        new MedicationBatchCreateRequest.Time(LocalTime.of(8, 0, 0, 100))), null)))
+                .extracting(e -> ((CustomException) e).getErrorCode()).isEqualTo(ErrorCode.MEDICATION_BATCH_DUPLICATE_TIME);
+
+        when(medicationRepository.saveAll(anyList())).thenAnswer(inv -> inv.getArgument(0));
+        service.createBatch(GUARDIAN, WARD, new MedicationBatchCreateRequest(List.of(drug("약1", null)),
+                List.of(new MedicationBatchCreateRequest.Time(LocalTime.of(8, 0, 30, 123_456_789))), null));
+        assertThat(savedMedications().get(0).getDoseTime()).isEqualTo(LocalTime.of(8, 0, 30));
+    }
+
+    @Test
+    @DisplayName("점검 L-6: 형식이 틀린 wardId(줄바꿈 삽입 등)는 DB 조회 없이 403, 로그에는 원문 대신 길이만")
+    void malformedWardIdNotLogged(CapturedOutput output) {
+        String forged = "WD0001\n[FAKE] admin login";
+
+        assertThatThrownBy(() -> service.createBatch(GUARDIAN, forged,
+                new MedicationBatchCreateRequest(List.of(drug("약1", null)), List.of(at(8, 0)), null)))
+                .extracting(e -> ((CustomException) e).getErrorCode()).isEqualTo(ErrorCode.MEDICATION_NOT_AUTHORIZED);
+        verify(connectionService, never()).isActiveConnection(any(), any());
+        assertThat(output).contains("[IDOR-ATTEMPT]", "wardIdLength=" + forged.length()).doesNotContain("[FAKE]");
+    }
+
+    @Test
     @DisplayName("단건 등록·수정도 반 알을 저장하고, 응답은 1.0 이 아니라 1·0.5")
     void singleCreateAndUpdateKeepHalfDose() {
         when(connectionService.isActiveConnection(GUARDIAN, WARD)).thenReturn(true);
