@@ -1977,6 +1977,14 @@ REST API Key 단독 대비 보안 강화 — 인가코드 탈취 시 토큰 발�
 - M-1 확인 토큰 선점(동시 클릭 중복 예약 방지) + 생성 직전 중복 확인, L-2 부정문·방법 질문 처리, L-3 목록 오늘 이후 10건, L-4 트레이스 이름 제거, L-1 시나리오 테스트 40건 편입. pytest 377건, 변이 8종 전부 검출
 - gosky 반영(`258b83d`, AI 서버 재시작 1회, 헬스 `:6017/health` 200): 가상 계정 동시 3클릭 5라운드 전부 예약 1건, 2라운드에서 "처리 중" 안내 관측. 시험 예약 전부 취소·기록 삭제. 한계: 선점은 단일 인스턴스 전제
 
+## [2026-10-22] 약 봉투 OCR - 보호자 중계 API (branch `feature/medication-ocr`)
+
+- `POST /api/guardian/ward/{wardId}/medication/ocr`(GUARDIAN, multipart `image`) → AI `POST /api/v1/medication/ocr` 중계, **등록 초안만** 반환(사진·결과 저장 없음, 자동 등록 없음). 마이그레이션·`.env` 변경 없음
+- 순서: 킬 스위치 `medication.ocr.enabled` → 보호자 분 10·시간 60 → ACTIVE 연결(403 `MEDICATION_NOT_AUTHORIZED` + `[IDOR-ATTEMPT]`) → 8MB(413)·매직 바이트 jpeg/png/webp(400) → 동시 전체 5·1인 1(429) → AI 전체 40초(504)
+- 응답은 허용 목록(`reason`·성분 제외, 이름 100자, 모르는 slot 버림). 반 알은 `perDose` 0.5 원값 → FE가 메모로(`doseAmount` 정수 유지, 사용자 결정)
+- multipart 전역 상한 5MB → 10MB(프로필 5MB는 서비스 검사 유지), 서블릿 단계 초과는 OCR 경로만 413
+- 테스트 30건 추가, `./gradlew build` 전체 1,749건 통과. 상세 `docs/(2026-10-22) feature-medication-ocr.md`. 실서버 확인은 AI 반영·배포 뒤
+
 ## [2026-10-22] 약 일괄 등록 + 반 알(0.5 단위) (branch `feature/medication-batch-half-dose`, V62)
 
 - `doseAmount` 0.5 단위(0.5~99, 정수 하위 호환), V62 `NUMERIC(3,1)` + CHECK(적용 무손실, 0.5 저장 뒤엔 사실상 비가역), 응답 `1`·`0.5` 정규화, 알림 문구 "반 알"·"1정 반"

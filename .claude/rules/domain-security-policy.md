@@ -579,3 +579,15 @@
 - **불변 규칙 ⑤(기본 OFF·킬 스위치)**: 사용자 설정 기본값은 FCM만 ON이고, V60이 구현체 도입 전에 저장돼 있던 `EMAIL=true` 행을 모두 OFF로 되돌렸다(비가역, 명시적으로 다시 켠 사용자만 받는다). `notification.email.enabled`(기본 false)가 꺼져 있으면 빈이 없어 설정이 ON이어도 발송되지 않고 설정값은 보존된다(`NOT_SENT / NO_ENABLED_CHANNEL`).
 - **운영 상태(2026-10-13)**: 두 서버 `.env.dev`에 `NOTIFICATION_EMAIL_ENABLED=true`로 활성화했다(코드 기본값은 false). 복약 미복용 요약은 스케줄러 스레드에서 동기 발송이라, SMTP 호출은 전용 `EmailSendExecutor`에서 **호출 전체 시간 제한**(`notification.email.call-timeout-seconds`, 기본 10초)을 걸어 실행한다(점검 M-1 조치, 상세 `docs/(2026-10-13) audit-impact-email-notification.md`). 이 래퍼를 빼거나 CallerRuns로 바꾸지 말 것.
 - **수용한 한계**: 시간 초과·풀 포화 건은 실패(`PROVIDER_ERROR`)로 기록되며 실제로 늦게 접수됐을 수 있다(Solapi 래퍼와 같음). SDK가 인터럽트에 반응하지 않으면 풀 스레드(4개)는 SMTP 자체 제한까지 남지만 호출자는 제한 시간에 풀려난다. Gmail SMTP 일일 발송 한도에 걸리면 `PROVIDER_ERROR`로 기록된다. 정지·탈퇴 진행 계정 차단은 기존 `dispatch()` 한 곳 그대로다.
+
+## 약 봉투 OCR - 사진은 저장하지 않고 초안만 (2026-10-22)
+
+- **경위**: 시안의 "약 봉투를 찍으면 자동 등록"을 측정한 결과(sonnet 5.5, 바로 세운 사진 9/10, 1글자 오독 잔존) 자동 등록은 하지 않고 초안만 주기로 했다. 상세 `docs/(2026-10-22) feature-medication-ocr.md`, 측정 `docs/(2026-10-22) result-medication-ocr-measure.md`.
+- **불변 규칙 ①(저장 금지)**: 봉투에는 환자 이름·주민번호 앞자리·병원·약국이 찍혀 있다. 사진·AI 결과를 DB·디스크·감사 로그·알림 이력에 남기지 말 것. 등록은 보호자가 확인·수정한 뒤 기존 약 추가 API로만 한다 - OCR 결과로 약을 **자동 등록하는 경로를 만들지 말 것**.
+- **불변 규칙 ②(인가·역할)**: GUARDIAN 전용이고 `isActiveConnection`만(`getMyWards` 금지), 위반 403 `MEDICATION_NOT_AUTHORIZED` + `[IDOR-ATTEMPT]`. 인가는 사진 검사보다 **앞**이다. 피보호자용 OCR은 만들지 않는다(약 등록이 보호자 몫 - 복약 불변 규칙 ①).
+- **불변 규칙 ③(허용 목록)**: 응답은 `MedicationOcrProjection`이 읽는 칸만 담는다. AI `reason`(자유 문장)과 성분은 내리지 말 것 - 자유 문장에는 사진 속 개인정보가 섞일 수 있고, 성분은 확신 high로 틀렸다. 환자·병원·약국 칸을 더하지 말 것.
+- **불변 규칙 ④(로그)**: 보호자 ID·wardId·소요 시간·약 개수·결과 코드·상태 코드·예외 클래스명만. 사진·약 이름·AI 응답·업로드 파일 이름 금지(`MedicationOcrLogGuardTest`). 업로드 파일 이름은 AI에도 넘기지 않는다(형식별 고정 이름).
+- **40초·동시 상한**: 모델 호출이라 일반 8~10초 규칙의 예외다. 요청 스레드를 붙들므로 동시 전체 5 / 1인 1(인스턴스 메모리)을 없애지 말 것. AI 키는 `X-API-Key` 헤더만, 리다이렉트 미추종, AI 오류 본문은 읽지 않는다(챗 중계와 같음).
+- **multipart 전역 상한 10MB**: 경로별 상한은 서비스가 검사한다(프로필 5MB `UserService`, OCR 8MB). 전역 값을 올릴 때 서비스 검사가 없는 업로드 경로가 생기지 않았는지 확인할 것.
+  - gosky 앞단 nginx(`devdmu.gosky.kr`·`api.devdmu.gosky.kr`)는 기본 1MB였다 → 2026-10-22 `client_max_body_size 10m` 적용(백업 `/root/nginx-backup-20261022-ocr/`). 업로드 상한을 바꿀 때는 nginx 값도 함께 볼 것.
+- **반 알**: OCR 응답은 `perDose` 원값(0.5)을 준다. `doseAmount` 0.5 단위 저장은 후속 PR #362(V62)에서 지원한다.
