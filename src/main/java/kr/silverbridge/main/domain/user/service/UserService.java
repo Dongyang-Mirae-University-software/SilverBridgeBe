@@ -11,6 +11,7 @@ import kr.silverbridge.main.global.client.FileServerClient;
 import kr.silverbridge.main.global.exception.CustomException;
 import kr.silverbridge.main.global.exception.ErrorCode;
 import kr.silverbridge.main.global.enums.Role;
+import kr.silverbridge.main.global.security.RateLimitService;
 import kr.silverbridge.main.global.util.RedisCounter;
 import kr.silverbridge.main.global.util.RedisKeys;
 import lombok.RequiredArgsConstructor;
@@ -36,6 +37,9 @@ import java.util.concurrent.TimeUnit;
 public class UserService {
 
     private static final long MAX_FILE_SIZE = 5 * 1024 * 1024L; // 5MB
+    private static final String PROFILE_IMAGE_ENDPOINT = "profile-image";
+    private static final int PROFILE_IMAGE_PER_MINUTE = 5;
+    private static final int PROFILE_IMAGE_PER_HOUR = 30;
     private static final List<String> ALLOWED_CONTENT_TYPES =
             List.of("image/jpeg", "image/png", "image/webp", "image/gif");
     // 실제 파일 시그니처(Magic Number) 확인용 — 앞부분 바이트 길이 (WebP의 "RIFF....WEBP" 검증에 12바이트 필요)
@@ -58,6 +62,7 @@ public class UserService {
     private final ProfileImagePersister profileImagePersister;
     private final StringRedisTemplate redisTemplate;
     private final RedisCounter redisCounter;
+    private final RateLimitService rateLimitService;
 
     // 내 정보 조회
     @Transactional(readOnly = true)
@@ -126,6 +131,9 @@ public class UserService {
     // 이 메서드 자체에는 DB 접근이 없어 @Transactional 을 두지 않는다 (업로드 동안 커넥션 미점유).
     public UserProfileResponse updateProfileImage(String userId, MultipartFile file) {
         log.info("[PROFILE-IMAGE] 변경 요청 수신 userId={}", userId);
+        // 업로드 전역 상한이 10MB(약 봉투 OCR)라 5MB 검사 전까지 서버가 최대 10MB를 받는다 - 반복 업로드를 사용자 기준으로 막는다
+        // (2026-10-22 점검 L-1, Redis 장애 시 fail-open)
+        rateLimitService.check(PROFILE_IMAGE_ENDPOINT, userId, PROFILE_IMAGE_PER_MINUTE, PROFILE_IMAGE_PER_HOUR);
         validateImage(file);
 
         // 파일 서버 업로드 — 트랜잭션 밖 (D-USER-1)

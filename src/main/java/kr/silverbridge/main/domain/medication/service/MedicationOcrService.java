@@ -89,6 +89,11 @@ public class MedicationOcrService {
      * 404로 위장하지 않는다(2026-07-14 정책).
      */
     private void requireActiveConnection(String guardianId, String wardId) {
+        if (!MedicationWardIds.isWellFormed(wardId)) {
+            log.warn("[IDOR-ATTEMPT] 형식이 맞지 않는 피보호자 ID로 복약 접근 시도: guardianId={}, wardIdLength={}, action=ocr",
+                    guardianId, MedicationWardIds.lengthOf(wardId));
+            throw new CustomException(ErrorCode.MEDICATION_NOT_AUTHORIZED);
+        }
         if (!connectionService.isActiveConnection(guardianId, wardId)) {
             log.warn("[IDOR-ATTEMPT] 연결되지 않은 피보호자 복약 접근 시도: guardianId={}, wardId={}, action=ocr",
                     guardianId, wardId);

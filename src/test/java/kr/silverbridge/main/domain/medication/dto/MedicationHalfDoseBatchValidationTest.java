@@ -87,6 +87,14 @@ class MedicationHalfDoseBatchValidationTest {
         assertThat(validator.validate(half)).isEmpty();
     }
 
+    @Test
+    @DisplayName("점검 L-3: 단건 등록 시각은 초 아래를 버린다")
+    void createTruncatesSubSecond() {
+        MedicationCreateRequest request = new MedicationCreateRequest("혈압약", MedicationTimeSlot.MORNING,
+                LocalTime.of(8, 0, 1, 999_999_999), null, null);
+        assertThat(request.resolveDoseTime()).isEqualTo(LocalTime.of(8, 0, 1));
+    }
+
     // ─── 일괄 등록 ──────────────────────────────────────────────
 
     private static MedicationBatchCreateRequest batch(int drugs, int times) {

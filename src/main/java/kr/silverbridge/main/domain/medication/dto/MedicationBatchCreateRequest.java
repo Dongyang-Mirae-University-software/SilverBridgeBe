@@ -11,6 +11,7 @@ import kr.silverbridge.main.global.validation.VisibleText;
 
 import java.math.BigDecimal;
 import java.time.LocalTime;
+import java.time.temporal.ChronoUnit;
 import java.util.List;
 
 /**
@@ -61,5 +62,9 @@ public record MedicationBatchCreateRequest(
                     example = "08:00:00", type = "string")
             LocalTime doseTime
     ) {
+        /** 초 아래는 버린다(2026-10-22 점검 L-3) - 나노초만 다른 두 시각이 중복 검사를 지나 같은 시각 2건이 되지 않게. */
+        public LocalTime resolveDoseTime() {
+            return doseTime.truncatedTo(ChronoUnit.SECONDS);
+        }
     }
 }

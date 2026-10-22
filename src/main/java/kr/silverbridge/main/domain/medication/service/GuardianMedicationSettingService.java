@@ -139,6 +139,11 @@ public class GuardianMedicationSettingService {
      * ({@code getMyWards}는 PENDING이 섞여 있어 인가 목록으로 쓰지 않는다).</p>
      */
     private void requireActiveConnection(String guardianId, String wardId, String action) {
+        if (!MedicationWardIds.isWellFormed(wardId)) {
+            log.warn("[IDOR-ATTEMPT] 형식이 맞지 않는 피보호자 ID로 복약 설정 접근 시도: guardianId={}, wardIdLength={}, action={}",
+                    guardianId, MedicationWardIds.lengthOf(wardId), action);
+            throw new CustomException(ErrorCode.MEDICATION_NOT_AUTHORIZED);
+        }
         if (!connectionService.isActiveConnection(guardianId, wardId)) {
             log.warn("[IDOR-ATTEMPT] 연결되지 않은 피보호자 복약 설정 접근 시도: guardianId={}, wardId={}, action={}",
                     guardianId, wardId, action);

@@ -3,7 +3,7 @@
 > 템플릿 B(기능 점검). 대상: dev `9857061`(코드 기준 `f4883d4` - 이후 문서만). 점검만, 코드 수정 없음.
 > 근거 문서: `(2026-10-22) feature-medication-ocr.md`, `(2026-10-22) feature-medication-batch-half-dose.md`.
 
-## 종합 판정: ✅ PASS (🔴 0 · 🟠 0 · 🟡 0 · 🟢 6)
+## 종합 판정: ✅ PASS (🔴 0 · 🟠 0 · 🟡 0 · 🟢 6) - **6건 전부 조치 완료(2026-10-22, `fix/medication-audit-findings`)**
 
 인가·IDOR·로그·저장 금지·원자성·반 알 규칙 모두 규칙대로다. 남은 것은 전부 Low이고 대부분 기존 경로와 같은 성질이거나 영향이 작다. 수정 제안은 L-3 하나(작음)만 권한다.
 
@@ -74,7 +74,20 @@
 
 테스트 공백으로 보고된 9건 중 4건은 이미 있었다: 중복 이름의 대소문자·zero-width(`GuardianMedicationBatchTest.duplicatesRejected`의 `Tylenol`/` tylenol​`), 목록 null 요소(`MedicationHalfDoseBatchValidationTest` `drugs[4].<list element>`), 반 알 알림 문구(`MedicationReminderServiceTest.반알_문구`), 응답 크기 상한(`AiMedicationOcrClientTest.malformedReply`). 나머지(동시 자리 단독 테스트·통합 테스트의 IDOR·속도 제한 fail-open 경로)는 단위 테스트·변이·실서버 호출로 확인돼 추가 가치가 낮다.
 
-## 수정용 초안 (L-3, 승인 시)
+## 조치 (2026-10-22, 사용자 지시 "이슈 전부 반영")
+
+| ID | 조치 | 테스트 |
+|---|---|---|
+| L-1 | 프로필 사진 업로드에 사용자 기준 속도 제한 분 5·시간 30(`UserService`, 파일 검사·업로드 전, Redis 장애 시 fail-open) | `UserServiceTest.updateProfileImage_속도제한` |
+| L-2 | `SecurityConfig`에 `POST /api/guardian/ward/*/medication/ocr` → `hasRole("GUARDIAN")` URL 규칙 - 보안 필터는 multipart 파싱 전이라 WARD·ADMIN은 본문을 읽기 전에 403. 컨트롤러 `@PreAuthorize`는 유지. 연결 확인·속도 제한은 여전히 파싱 뒤(GUARDIAN 토큰 보유자만, 전역 사용자 속도 제한 적용 - 수용) | `SecurityConfigAccessDeniedTest.medicationOcr_guardianOnlyAtUrlLevel`(메서드 보안 없는 시험용 매핑으로 URL 규칙만 검증) |
+| L-3 | 복용 시각을 초 단위로 자른 뒤 비교·저장(일괄 `Time.resolveDoseTime`, 단건 `resolveDoseTime`, 수정 `resolveDoseTime`) | `GuardianMedicationBatchTest.subSecondTimesAreSame`, `MedicationHalfDoseBatchValidationTest.createTruncatesSubSecond` |
+| L-4 | OCR 호출 마감을 클라이언트 전용 `ScheduledExecutorService`(데몬 2스레드, `@PreDestroy` 정리)로 - **빈으로 등록하지 않는다**(`TaskScheduler` 빈이 늘면 Boot 기본 스케줄러가 물러나 `@Scheduled` 전체가 옮겨 간다). 챗 중계 클라이언트는 이번 범위 밖(같은 구조 유지) | 기존 `AiMedicationOcrClientTest.timeout` |
+| L-5 | multipart 본문을 배열로 복사하지 않고 머리·사진·꼬리를 바로 쓴다(고정 길이 스트리밍) | `AiMedicationOcrClientTest` 본문 형태 검증 보강 |
+| L-6 | 복약 IDOR 3곳(`GuardianMedicationService`·`GuardianMedicationSettingService`·`MedicationOcrService`)에서 `wardId` 형식(영숫자 1~6자)을 먼저 확인 - 틀리면 DB 조회 없이 403, 로그에는 원문 대신 `wardIdLength`(챗 대리 상담과 같은 방식, `MedicationWardIds`) | `GuardianMedicationBatchTest.malformedWardIdNotLogged`, `MedicationOcrServiceTest.malformedWardId` |
+
+빌드: 전체 1,814건 통과(새 6건).
+
+## 수정용 초안 (L-3, 승인 시) - 위 조치로 대체
 
 - 브랜치 `fix/medication-dose-time-truncate`: 일괄 등록 `Time.doseTime`·단건 등록·수정의 `doseTime`을 초 단위로 자른 뒤 중복 비교·저장. 테스트: `08:00:00`과 `08:00:00.0000001` 중복 400.
 - 커밋: `fix: 복용 시각을 초 단위로 맞춰 일괄 등록 중복 검사 우회 방지`

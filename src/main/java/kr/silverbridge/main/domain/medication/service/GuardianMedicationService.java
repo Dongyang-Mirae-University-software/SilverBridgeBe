@@ -27,6 +27,7 @@ import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalTime;
 import java.time.Period;
+import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
@@ -139,7 +140,7 @@ public class GuardianMedicationService {
         requireDistinct(request);
 
         List<LocalTime> times = request.times().stream()
-                .map(MedicationBatchCreateRequest.Time::doseTime)
+                .map(MedicationBatchCreateRequest.Time::resolveDoseTime)
                 .sorted()
                 .toList();
         List<Medication> medications = new ArrayList<>();
@@ -166,7 +167,7 @@ public class GuardianMedicationService {
         }
         Set<LocalTime> times = new HashSet<>();
         for (MedicationBatchCreateRequest.Time time : request.times()) {
-            if (!times.add(time.doseTime())) {
+            if (!times.add(time.resolveDoseTime())) {
                 throw new CustomException(ErrorCode.MEDICATION_BATCH_DUPLICATE_TIME);
             }
         }
@@ -304,7 +305,8 @@ public class GuardianMedicationService {
     private static LocalTime resolveDoseTime(MedicationUpdateRequest request, Medication medication,
                                              MedicationTimeSlot timeSlot) {
         if (request.doseTime() != null) {
-            return request.doseTime();
+            // 초 아래는 버린다(2026-10-22 점검 L-3, 등록과 같은 규칙)
+            return request.doseTime().truncatedTo(ChronoUnit.SECONDS);
         }
         if (request.timeSlot() != null && request.timeSlot() != medication.getTimeSlot()) {
             return timeSlot.defaultTime();
@@ -338,6 +340,11 @@ public class GuardianMedicationService {
      * 드러나는 건 "그 대상이 존재한다"까지이고 이름·약 내용은 응답에 싣지 않는다.
      */
     private void requireActiveConnection(String guardianId, String wardId, String action) {
+        if (!MedicationWardIds.isWellFormed(wardId)) {
+            log.warn("[IDOR-ATTEMPT] 형식이 맞지 않는 피보호자 ID로 복약 접근 시도: guardianId={}, wardIdLength={}, action={}",
+                    guardianId, MedicationWardIds.lengthOf(wardId), action);
+            throw new CustomException(ErrorCode.MEDICATION_NOT_AUTHORIZED);
+        }
         if (!connectionService.isActiveConnection(guardianId, wardId)) {
             log.warn("[IDOR-ATTEMPT] 연결되지 않은 피보호자 복약 접근 시도: guardianId={}, wardId={}, action={}",
                     guardianId, wardId, action);

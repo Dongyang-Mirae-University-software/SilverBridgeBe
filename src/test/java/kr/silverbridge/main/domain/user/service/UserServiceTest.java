@@ -14,6 +14,8 @@ import kr.silverbridge.main.global.enums.Role;
 import kr.silverbridge.main.global.enums.Status;
 import kr.silverbridge.main.global.exception.CustomException;
 import kr.silverbridge.main.global.exception.ErrorCode;
+import kr.silverbridge.main.global.exception.TooManyRequestsException;
+import kr.silverbridge.main.global.security.RateLimitService;
 import kr.silverbridge.main.global.util.RedisCounter;
 import kr.silverbridge.main.global.util.RedisKeys;
 import org.junit.jupiter.api.DisplayName;
@@ -41,6 +43,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -58,6 +61,7 @@ class UserServiceTest {
     @Mock private ProfileImagePersister profileImagePersister;
     @Mock private StringRedisTemplate redisTemplate;
     @Mock private RedisCounter redisCounter;
+    @Mock private RateLimitService rateLimitService;
     @Mock private ValueOperations<String, String> valueOperations;
 
     @InjectMocks private UserService userService;
@@ -339,6 +343,17 @@ class UserServiceTest {
     // ─── updateProfileImage (F-USER-3 / A-USER-2) ────────────────────────────
 
     // 검증(크기·타입·시그니처)은 업로드·영속화보다 먼저 수행되므로, 실패 시 파일 서버·영속화는 호출되지 않는다.
+
+    @Test
+    @DisplayName("프로필 이미지 반복 업로드 → 사용자 기준 속도 제한(분 5·시간 30) 429, 파일 검사·업로드 전에 막는다(점검 L-1)")
+    void updateProfileImage_속도제한() {
+        MultipartFile file = mock(MultipartFile.class);
+        doThrow(new TooManyRequestsException(30)).when(rateLimitService).check("profile-image", USER_ID, 5, 30);
+
+        assertThrows(TooManyRequestsException.class, () -> userService.updateProfileImage(USER_ID, file));
+
+        verifyNoInteractions(file, fileServerClient, profileImagePersister);
+    }
 
     @Test
     @DisplayName("프로필 이미지 5MB 초과 → FILE_TOO_LARGE, 업로드·영속화 미호출")

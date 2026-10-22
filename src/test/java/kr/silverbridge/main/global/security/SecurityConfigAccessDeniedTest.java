@@ -72,6 +72,12 @@ class SecurityConfigAccessDeniedTest {
             return "ok";
         }
 
+        // 메서드 보안(@PreAuthorize)이 없는 시험용 매핑 - URL 규칙만으로 역할이 막히는지 본다(점검 L-2)
+        @org.springframework.web.bind.annotation.PostMapping("/api/guardian/ward/{wardId}/medication/ocr")
+        String medicationOcr() {
+            return "ok";
+        }
+
         @org.springframework.web.bind.annotation.DeleteMapping("/api/notifications/fcm-token")
         String fcmDelete() {
             return "ok";
@@ -93,6 +99,24 @@ class SecurityConfigAccessDeniedTest {
     @BeforeEach
     void setUp() {
         mockMvc = MockMvcBuilders.webAppContextSetup(context).apply(springSecurity()).build();
+    }
+
+    @Test
+    @DisplayName("점검 L-2: 약 봉투 OCR 경로는 URL 단계에서 GUARDIAN 만 - WARD·ADMIN 은 본문 파싱 전에 JSON 403, 비로그인 401")
+    void medicationOcr_guardianOnlyAtUrlLevel() throws Exception {
+        String url = "/api/guardian/ward/WD0001/medication/ocr";
+        mockMvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post(url)
+                        .with(user("w1").roles("WARD")))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.code").value("FORBIDDEN"));
+        mockMvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post(url)
+                        .with(user("a1").roles("ADMIN")))
+                .andExpect(status().isForbidden());
+        mockMvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post(url))
+                .andExpect(status().isUnauthorized());
+        mockMvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post(url)
+                        .with(user("g1").roles("GUARDIAN")))
+                .andExpect(status().isOk());
     }
 
     @Test
