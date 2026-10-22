@@ -10,7 +10,6 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
-import org.springframework.scheduling.concurrent.ThreadPoolTaskScheduler;
 
 import java.io.IOException;
 import java.net.InetSocketAddress;
@@ -34,7 +33,6 @@ class AiChatClientDeleteLogsTest {
     private volatile int responseStatus = 200;
     private ChatRelayProperties properties;
     private AiChatClient client;
-    private final ThreadPoolTaskScheduler scheduler = new ThreadPoolTaskScheduler();
 
     @BeforeEach
     void setUp() throws IOException {
@@ -46,14 +44,13 @@ class AiChatClientDeleteLogsTest {
         properties = new ChatRelayProperties();
         properties.setAiBaseUrl("http://127.0.0.1:" + server.getAddress().getPort());
         properties.setApiKey(KEY);
-        scheduler.initialize();
-        client = new AiChatClient(properties, new ObjectMapper(), scheduler);
+        client = new AiChatClient(properties, new ObjectMapper());
     }
 
     @AfterEach
     void tearDown() {
         server.stop(0);
-        scheduler.shutdown();
+        client.shutdown();
     }
 
     private void handle(HttpExchange ex) throws IOException {

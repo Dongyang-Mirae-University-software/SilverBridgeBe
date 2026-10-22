@@ -2,11 +2,11 @@ package kr.silverbridge.main.domain.chat.client;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import jakarta.annotation.PreDestroy;
 import kr.silverbridge.main.domain.chat.config.ChatRelayProperties;
 import kr.silverbridge.main.global.exception.CustomException;
 import kr.silverbridge.main.global.exception.ErrorCode;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.scheduling.TaskScheduler;
 import org.springframework.stereotype.Component;
 import org.springframework.util.StringUtils;
 import org.springframework.web.util.UriComponentsBuilder;
@@ -19,10 +19,13 @@ import java.net.HttpURLConnection;
 import java.net.URI;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
-import java.time.Instant;
 import java.util.Optional;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledFuture;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicInteger;
 
 /**
  * AI 서버 챗 REST 클라이언트(백엔드 중계용, 2026-10-07).
@@ -42,12 +45,28 @@ public class AiChatClient {
 
     private final ChatRelayProperties properties;
     private final ObjectMapper objectMapper;
-    private final TaskScheduler taskScheduler;
+    /**
+     * 호출 마감(연결 끊기) 전용 스레드(2026-10-22, 약 봉투 OCR 점검 L-4와 같은 조치). 공용 스케줄러 풀(3)을 쓰면 복약 Planner 등이
+     * 밀릴 때 마감이 늦어져 챗 요청 스레드를 130초 넘게 붙든다. 빈으로 등록하지 않는다 - {@code TaskScheduler} 빈이 하나 더 생기면
+     * Boot 기본 스케줄러 자동 설정이 물러나 {@code @Scheduled} 전체가 이 풀로 옮겨 간다. 마감 작업은 {@code disconnect()} 한 번이라
+     * 동시 호출(전송 10 + 기록 조회·탈퇴 삭제)에도 2스레드면 충분하다.
+     */
+    private final ScheduledExecutorService deadlineExecutor;
 
-    public AiChatClient(ChatRelayProperties properties, ObjectMapper objectMapper, TaskScheduler taskScheduler) {
+    public AiChatClient(ChatRelayProperties properties, ObjectMapper objectMapper) {
         this.properties = properties;
         this.objectMapper = objectMapper;
-        this.taskScheduler = taskScheduler;
+        AtomicInteger seq = new AtomicInteger();
+        this.deadlineExecutor = Executors.newScheduledThreadPool(2, runnable -> {
+            Thread thread = new Thread(runnable, "chat-relay-deadline-" + seq.incrementAndGet());
+            thread.setDaemon(true);
+            return thread;
+        });
+    }
+
+    @PreDestroy
+    void shutdown() {
+        deadlineExecutor.shutdownNow();
     }
 
     /** 챗 전송. AI 응답의 {@code data}를 돌려준다. */
@@ -140,10 +159,10 @@ public class AiChatClient {
             connection.setRequestProperty(API_KEY_HEADER, properties.getApiKey());
             connection.setRequestProperty("Accept", "application/json");
             HttpURLConnection target = connection;
-            deadline = taskScheduler.schedule(() -> {
+            deadline = deadlineExecutor.schedule(() -> {
                 timedOut.set(true);
                 target.disconnect();
-            }, Instant.now().plus(callTimeout));
+            }, callTimeout.toMillis(), TimeUnit.MILLISECONDS);
 
             if (body != null) {
                 connection.setDoOutput(true);

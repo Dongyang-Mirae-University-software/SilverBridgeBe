@@ -2020,3 +2020,8 @@ REST API Key 단독 대비 보안 강화 — 인가코드 탈취 시 토큰 발�
 - L-1 프로필 사진 업로드 속도 제한(분 5·시간 30) / L-2 OCR 경로 URL 단계 GUARDIAN 규칙(본문 파싱 전 403) / L-3 복용 시각 초 단위 / L-4 OCR 마감 전용 스레드(빈 아님) / L-5 multipart 본문 복사 제거 / L-6 복약 IDOR 로그 wardId 형식 확인·길이만 기록
 - 마이그레이션 없음. `./gradlew build` 전체 1,814건 통과(새 6건). 상세 `docs/(2026-10-22) audit-medication-ocr-batch-half-dose.md` "조치"
 
+## [2026-10-22] 챗 중계 호출 마감을 전용 스레드로 (branch `fix/chat-deadline-executor`)
+
+- 약 봉투 OCR 점검 L-4와 같은 조치: `AiChatClient`의 마감(`disconnect`)을 공용 스케줄러 풀(3) 대신 클라이언트 전용 데몬 스레드 2개로(빈 등록 안 함 - Boot 기본 스케줄러 유지). 동작·API 변화 없음
+- `./gradlew build` 전체 1,814건 통과(챗 클라이언트 17건, 시간 초과 마감 포함). 영상 중계·클립 클라이언트는 아직 공용 풀(후속 후보)
+
