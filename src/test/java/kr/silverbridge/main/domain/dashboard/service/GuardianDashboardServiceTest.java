@@ -19,6 +19,7 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
+import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalTime;
 import java.time.OffsetDateTime;
@@ -56,7 +57,7 @@ class GuardianDashboardServiceTest {
     }
 
     private static MedicationItem item(long id, LocalTime time, boolean taken) {
-        return new MedicationItem(id, "약" + id, MedicationTimeSlot.MORNING, time, 1, null, taken, null);
+        return new MedicationItem(id, "약" + id, MedicationTimeSlot.MORNING, time, BigDecimal.ONE, null, taken, null);
     }
 
     @Test

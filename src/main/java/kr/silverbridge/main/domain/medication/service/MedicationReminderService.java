@@ -1,5 +1,6 @@
 package kr.silverbridge.main.domain.medication.service;
 
+import kr.silverbridge.main.domain.medication.entity.DoseAmounts;
 import kr.silverbridge.main.domain.medication.entity.MedicationReminderLog;
 import kr.silverbridge.main.domain.notification.channel.NotificationContent;
 import kr.silverbridge.main.domain.notification.dispatch.NotificationDispatcher;
@@ -68,11 +69,11 @@ public class MedicationReminderService {
         String title = retry ? "약 드셨나요?" : "복약 시간이에요";
         String body = retry
                 ? "%s이(가) 아직 복용 체크되지 않았어요.".formatted(target.name())
-                : "%s 드실 시간입니다. %s %s · %d정".formatted(
+                : "%s 드실 시간입니다. %s %s · %s".formatted(
                         target.name(),
                         target.timeSlot().label(),
                         target.doseTime().format(TIME_FORMAT),
-                        target.doseAmount());
+                        DoseAmounts.label(target.doseAmount()));
 
         return NotificationContent.of(title, body, Map.of(
                 "type", "MEDICATION_REMINDER",

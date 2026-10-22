@@ -2,6 +2,7 @@ package kr.silverbridge.main.domain.medication.service;
 
 import kr.silverbridge.main.domain.medication.entity.MedicationTimeSlot;
 
+import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalTime;
 
@@ -19,7 +20,7 @@ public record MedicationReminderTarget(
         String name,
         MedicationTimeSlot timeSlot,
         LocalTime doseTime,
-        int doseAmount,
+        BigDecimal doseAmount,
         LocalDate doseDate,
         int attempt
 ) {}

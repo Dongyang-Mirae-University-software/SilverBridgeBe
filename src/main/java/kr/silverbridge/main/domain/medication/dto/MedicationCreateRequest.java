@@ -1,8 +1,6 @@
 package kr.silverbridge.main.domain.medication.dto;
 
 import io.swagger.v3.oas.annotations.media.Schema;
-import jakarta.validation.constraints.Max;
-import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
@@ -10,6 +8,9 @@ import kr.silverbridge.main.domain.medication.entity.MedicationTimeSlot;
 import kr.silverbridge.main.global.validation.NoControlChars;
 import kr.silverbridge.main.global.validation.VisibleText;
 
+import kr.silverbridge.main.domain.medication.entity.DoseAmounts;
+
+import java.math.BigDecimal;
 import java.time.LocalTime;
 
 /**
@@ -36,10 +37,9 @@ public record MedicationCreateRequest(
         @Schema(description = "복용 시각 (생략 시 시간대 기본값)", example = "08:00:00", type = "string")
         LocalTime doseTime,
 
-        @Min(value = 1, message = "복용량은 1 이상이어야 합니다.")
-        @Max(value = 99, message = "복용량은 99를 초과할 수 없습니다.")
-        @Schema(description = "복용량(정)", example = "1", defaultValue = "1")
-        Integer doseAmount,
+        @DoseAmount
+        @Schema(description = "복용량(정). 0.5 단위(반 알 = 0.5), 0.5~99. 정수(1, 2)도 그대로 받는다", example = "1", defaultValue = "1")
+        BigDecimal doseAmount,
 
         // 줄바꿈은 막지 않는다(입력창에 따라 섞여 올 수 있다) - 저장 전 한 줄로 정리된다.
         @NoControlChars(allowLineBreaks = true)
@@ -47,15 +47,12 @@ public record MedicationCreateRequest(
         @Schema(description = "복용 안내 메모 (선택, 공백만 보내면 메모 없음)", example = "식사와 함께")
         String memo
 ) {
-    /** 복용량 미지정 시 기본값. 화면의 복용량 스테퍼 초기값과 같다. */
-    private static final int DEFAULT_DOSE_AMOUNT = 1;
-
     /** 시각 미지정 시 시간대 기본값으로 보정한다. */
     public LocalTime resolveDoseTime() {
         return doseTime != null ? doseTime : timeSlot.defaultTime();
     }
 
-    public int resolveDoseAmount() {
-        return doseAmount != null ? doseAmount : DEFAULT_DOSE_AMOUNT;
+    public BigDecimal resolveDoseAmount() {
+        return doseAmount != null ? doseAmount : DoseAmounts.DEFAULT;
     }
 }

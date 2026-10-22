@@ -1,6 +1,7 @@
 package kr.silverbridge.main.domain.medication.service;
 
 import kr.silverbridge.main.domain.connection.service.ConnectionService;
+import kr.silverbridge.main.domain.medication.dto.MedicationBatchCreateRequest;
 import kr.silverbridge.main.domain.medication.dto.MedicationCreateRequest;
 import kr.silverbridge.main.domain.medication.dto.MedicationItem;
 import kr.silverbridge.main.domain.medication.dto.MedicationSettingResponse;
@@ -22,12 +23,17 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalTime;
 import java.time.Period;
+import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
+import java.util.Set;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
@@ -110,21 +116,77 @@ public class GuardianMedicationService {
     public MedicationItem create(String guardianId, String wardId, MedicationCreateRequest request) {
         requireActiveConnection(guardianId, wardId, "약 등록");
 
-        Medication medication = medicationRepository.save(Medication.builder()
-                .wardId(wardId)
-                .createdBy(guardianId)
-                // 수정과 같은 규칙으로 정리해 저장한다(MED-G11) - 이름은 앞뒤 공백·보이지 않는 문자 제거,
-                // 메모는 비면 null(빈 문자열·공백 메모가 "1정 · "처럼 보이지 않게).
-                .name(TextSanitizer.sanitize(request.name()))
-                .timeSlot(request.timeSlot())
-                .doseTime(request.resolveDoseTime())
-                .doseAmount(request.resolveDoseAmount())
-                .memo(normalizeMemo(request.memo()))
-                .build());
+        Medication medication = medicationRepository.save(newMedication(wardId, guardianId, request.name(),
+                request.timeSlot(), request.resolveDoseTime(), request.resolveDoseAmount(), request.memo()));
 
         log.info("복약 등록: medicationId={}, wardId={}, guardianId={}", medication.getId(), wardId, guardianId);
         // 방금 등록한 약은 오늘 아직 복용 전이다.
         return MedicationItem.of(medication, null);
+    }
+
+    /**
+     * 약 여러 개 × 복용 시각 여러 개를 한 번에 등록한다(2026-10-22, "약 추가" 시안). <b>한 트랜잭션</b>이라 하나라도
+     * 실패하면 아무것도 남지 않는다. 약 한 건의 생성 규칙은 단건 등록과 같은 {@link #newMedication}이고, 시간대는
+     * {@link MedicationTimeSlot#fromDoseTime}이 정한다. 이미 등록된 같은 이름의 약은 단건 등록처럼 막지 않는다.
+     *
+     * @return 복용 시각 순, 같은 시각 안에서는 요청한 약 순서
+     * @throws CustomException {@code MEDICATION_NOT_AUTHORIZED} ACTIVE 연결이 아닌 피보호자 /
+     *                         {@code MEDICATION_BATCH_DUPLICATE_NAME}·{@code _TIME} 같은 요청 안의 중복
+     */
+    @Transactional
+    public List<MedicationItem> createBatch(String guardianId, String wardId, MedicationBatchCreateRequest request) {
+        requireActiveConnection(guardianId, wardId, "약 일괄 등록");
+        requireDistinct(request);
+
+        List<LocalTime> times = request.times().stream()
+                .map(MedicationBatchCreateRequest.Time::doseTime)
+                .sorted()
+                .toList();
+        List<Medication> medications = new ArrayList<>();
+        for (LocalTime doseTime : times) {
+            for (MedicationBatchCreateRequest.Drug drug : request.drugs()) {
+                medications.add(newMedication(wardId, guardianId, drug.name(),
+                        MedicationTimeSlot.fromDoseTime(doseTime), doseTime, drug.resolveDoseAmount(), request.memo()));
+            }
+        }
+        List<Medication> saved = medicationRepository.saveAll(medications);
+
+        log.info("복약 일괄 등록: wardId={}, guardianId={}, drugs={}, times={}, created={}",
+                wardId, guardianId, request.drugs().size(), times.size(), saved.size());
+        return saved.stream().map(medication -> MedicationItem.of(medication, null)).toList();
+    }
+
+    /** 같은 요청 안의 같은 이름(정리 후, 대소문자 무시)·같은 시각은 오입력으로 보고 전체를 거절한다. */
+    private static void requireDistinct(MedicationBatchCreateRequest request) {
+        Set<String> names = new HashSet<>();
+        for (MedicationBatchCreateRequest.Drug drug : request.drugs()) {
+            if (!names.add(TextSanitizer.sanitize(drug.name()).toLowerCase(Locale.ROOT))) {
+                throw new CustomException(ErrorCode.MEDICATION_BATCH_DUPLICATE_NAME);
+            }
+        }
+        Set<LocalTime> times = new HashSet<>();
+        for (MedicationBatchCreateRequest.Time time : request.times()) {
+            if (!times.add(time.doseTime())) {
+                throw new CustomException(ErrorCode.MEDICATION_BATCH_DUPLICATE_TIME);
+            }
+        }
+    }
+
+    /**
+     * 약 한 건 생성 규칙 - 단건·일괄 등록이 함께 쓴다. 수정과 같은 규칙으로 정리해 저장한다(MED-G11) - 이름은 앞뒤 공백·
+     * 보이지 않는 문자 제거, 메모는 비면 null(빈 문자열·공백 메모가 "1정 · "처럼 보이지 않게).
+     */
+    private static Medication newMedication(String wardId, String guardianId, String name, MedicationTimeSlot timeSlot,
+                                            LocalTime doseTime, BigDecimal doseAmount, String memo) {
+        return Medication.builder()
+                .wardId(wardId)
+                .createdBy(guardianId)
+                .name(TextSanitizer.sanitize(name))
+                .timeSlot(timeSlot)
+                .doseTime(doseTime)
+                .doseAmount(doseAmount)
+                .memo(normalizeMemo(memo))
+                .build();
     }
 
     /**

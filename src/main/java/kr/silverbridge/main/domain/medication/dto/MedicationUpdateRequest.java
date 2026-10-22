@@ -1,13 +1,12 @@
 package kr.silverbridge.main.domain.medication.dto;
 
 import io.swagger.v3.oas.annotations.media.Schema;
-import jakarta.validation.constraints.Max;
-import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.Size;
 import kr.silverbridge.main.domain.medication.entity.MedicationTimeSlot;
 import kr.silverbridge.main.global.validation.NoControlChars;
 import kr.silverbridge.main.global.validation.VisibleText;
 
+import java.math.BigDecimal;
 import java.time.LocalTime;
 
 /**
@@ -39,10 +38,9 @@ public record MedicationUpdateRequest(
                 example = "18:00:00", type = "string", nullable = true)
         LocalTime doseTime,
 
-        @Min(value = 1, message = "복용량은 1 이상이어야 합니다.")
-        @Max(value = 99, message = "복용량은 99를 초과할 수 없습니다.")
-        @Schema(description = "복용량(정)", example = "2", nullable = true)
-        Integer doseAmount,
+        @DoseAmount
+        @Schema(description = "복용량(정). 0.5 단위(반 알 = 0.5), 0.5~99", example = "2", nullable = true)
+        BigDecimal doseAmount,
 
         // 줄바꿈은 막지 않는다(입력창에 따라 섞여 올 수 있다) - 저장 전 한 줄로 정리된다.
         @NoControlChars(allowLineBreaks = true)

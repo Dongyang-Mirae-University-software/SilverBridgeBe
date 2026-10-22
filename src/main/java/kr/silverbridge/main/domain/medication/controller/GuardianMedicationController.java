@@ -8,6 +8,7 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import kr.silverbridge.main.domain.medication.dto.GuardianMedicationAlertSettingRequest;
 import kr.silverbridge.main.domain.medication.dto.GuardianMedicationAlertSettingResponse;
+import kr.silverbridge.main.domain.medication.dto.MedicationBatchCreateRequest;
 import kr.silverbridge.main.domain.medication.dto.MedicationCreateRequest;
 import kr.silverbridge.main.domain.medication.dto.MedicationItem;
 import kr.silverbridge.main.domain.medication.dto.MedicationSettingResponse;
@@ -94,7 +95,7 @@ public class GuardianMedicationController {
                     - timeSlot (필수): MORNING(아침) · LUNCH(점심) · DINNER(저녁) · BEDTIME(취침 전)
                     - doseTime (선택): 복용 시각. 생략 시 시간대 기본값
                       (MORNING 08:00 / LUNCH 13:00 / DINNER 18:00 / BEDTIME 22:00)
-                    - doseAmount (선택, 1~99): 복용량(정). 생략 시 1
+                    - doseAmount (선택, 0.5~99, 0.5 단위): 복용량(정). 반 알은 0.5, 정수(1, 2)도 그대로 받는다. 생략 시 1
                     - memo (선택, 100자 이내): 복용 안내 (예 "식사와 함께")
 
                     [응답] data: MedicationItem — 방금 등록한 약(taken=false)
@@ -116,6 +117,40 @@ public class GuardianMedicationController {
         return ResponseEntity.ok(ApiResponse.ok(guardianMedicationService.create(guardianId, wardId, request)));
     }
 
+    @Operation(summary = "약 여러 개 × 복용 시각 여러 개 한 번에 추가 (보호자 전용)",
+            description = """
+                    [요청 헤더]
+                    Authorization: Bearer {accessToken}
+
+                    "약 추가" 화면처럼 약 여러 개와 드시는 시각 여러 개를 함께 등록합니다. drugs × times 만큼 약이 만들어집니다
+                    (예: 약 6개 × 시각 2개 = 12건). **전부 성공 또는 전부 실패**입니다 - 하나라도 검증에 걸리면 아무것도 등록되지 않습니다.
+
+                    [요청 바디]
+                    - drugs (필수, 1~20개): [{ name (100자 이내), doseAmount (선택, 0.5~99, 0.5 단위 - 반 알은 0.5, 생략 시 1) }]
+                    - times (필수, 1~6개): [{ doseTime: "HH:mm:ss" }]
+                    - memo (선택, 100자 이내): 모든 약에 붙는 복용 안내
+
+                    시간대(timeSlot)는 서버가 시각으로 정합니다: 04:00~10:59 아침 / 11:00~15:59 점심 / 16:00~20:59 저녁 / 그 외 취침 전.
+                    같은 요청 안에 같은 이름(대소문자 무시)이나 같은 시각이 두 번 있으면 400입니다. 이미 등록된 약과 이름이 같아도 등록됩니다(단건 등록과 같음).
+
+                    [응답] data: MedicationItem[] - 등록된 약 전부(복용 시각 순, 같은 시각 안에서는 요청한 약 순서, taken=false)
+
+                    [오류 code] MEDICATION_NOT_AUTHORIZED(403) / MEDICATION_BATCH_DUPLICATE_NAME(400) / MEDICATION_BATCH_DUPLICATE_TIME(400) / INVALID_INPUT(400, 개수·이름·복용량)
+                    """)
+    @ApiResponses({
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "등록 완료. data: 등록된 약 목록"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "개수·이름·복용량 검증 실패 또는 같은 요청 안의 중복", content = @Content),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "인증 토큰 없음 또는 만료", content = @Content),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "보호자 권한 필요 / 연결되지 않은 피보호자", content = @Content)
+    })
+    @PostMapping("/api/guardian/ward/{wardId}/medication/batch")
+    public ResponseEntity<ApiResponse<List<MedicationItem>>> createBatch(
+            @AuthenticationPrincipal String guardianId,
+            @Parameter(description = "피보호자 ID") @PathVariable String wardId,
+            @Valid @RequestBody MedicationBatchCreateRequest request) {
+        return ResponseEntity.ok(ApiResponse.ok(guardianMedicationService.createBatch(guardianId, wardId, request)));
+    }
+
     @Operation(summary = "약 수정 (보호자 전용)",
             description = """
                     [요청 헤더]
@@ -128,7 +163,7 @@ public class GuardianMedicationController {
                     - name (1~100자): 약 이름
                     - timeSlot: MORNING · LUNCH · DINNER · BEDTIME
                     - doseTime: 복용 시각
-                    - doseAmount (1~99): 복용량(정)
+                    - doseAmount (0.5~99, 0.5 단위): 복용량(정). 반 알은 0.5. 0.3·0·100은 400
                     - memo (100자 이내): 복용 안내. **빈 문자열을 보내면 메모가 삭제**됩니다
                       (null은 "변경 안 함"이라 메모를 지울 수 없습니다).
 

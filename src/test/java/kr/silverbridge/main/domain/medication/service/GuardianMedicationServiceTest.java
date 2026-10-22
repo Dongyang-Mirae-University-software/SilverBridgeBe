@@ -23,6 +23,7 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.test.util.ReflectionTestUtils;
 
+import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalTime;
 import java.time.OffsetDateTime;
@@ -183,7 +184,7 @@ class GuardianMedicationServiceTest {
         assertThat(saved.getWardId()).isEqualTo(WARD_ID);
         assertThat(saved.getCreatedBy()).isEqualTo(GUARDIAN_ID);
         assertThat(saved.getDoseTime()).isEqualTo(LocalTime.of(22, 0));
-        assertThat(saved.getDoseAmount()).isEqualTo(1);
+        assertThat(saved.getDoseAmount()).isEqualByComparingTo("1");
         // 방금 등록한 약은 오늘 아직 복용 전이다.
         assertThat(created.taken()).isFalse();
         assertThat(created.takenAt()).isNull();
@@ -196,7 +197,7 @@ class GuardianMedicationServiceTest {
         when(medicationRepository.save(any(Medication.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
         MedicationItem created = guardianMedicationService.create(GUARDIAN_ID, WARD_ID,
-                new MedicationCreateRequest(" 혈압약 ", MedicationTimeSlot.MORNING, null, 1, "   "));
+                new MedicationCreateRequest(" 혈압약 ", MedicationTimeSlot.MORNING, null, BigDecimal.valueOf(1), "   "));
 
         ArgumentCaptor<Medication> captor = ArgumentCaptor.forClass(Medication.class);
         verify(medicationRepository).save(captor.capture());
@@ -212,9 +213,9 @@ class GuardianMedicationServiceTest {
         when(medicationRepository.save(any(Medication.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
         guardianMedicationService.create(GUARDIAN_ID, WARD_ID,
-                new MedicationCreateRequest("혈압약", MedicationTimeSlot.MORNING, null, 1, ""));
+                new MedicationCreateRequest("혈압약", MedicationTimeSlot.MORNING, null, BigDecimal.valueOf(1), ""));
         guardianMedicationService.create(GUARDIAN_ID, WARD_ID,
-                new MedicationCreateRequest("\u200B당뇨약", MedicationTimeSlot.MORNING, null, 1, " 식후\u200B "));
+                new MedicationCreateRequest("\u200B당뇨약", MedicationTimeSlot.MORNING, null, BigDecimal.valueOf(1), " 식후\u200B "));
 
         ArgumentCaptor<Medication> captor = ArgumentCaptor.forClass(Medication.class);
         verify(medicationRepository, times(2)).save(captor.capture());
@@ -229,7 +230,7 @@ class GuardianMedicationServiceTest {
         when(connectionService.isActiveConnection(GUARDIAN_ID, OTHER_WARD_ID)).thenReturn(false);
 
         assertThatThrownBy(() -> guardianMedicationService.create(GUARDIAN_ID, OTHER_WARD_ID,
-                new MedicationCreateRequest("혈압약", MedicationTimeSlot.MORNING, null, 1, null)))
+                new MedicationCreateRequest("혈압약", MedicationTimeSlot.MORNING, null, BigDecimal.valueOf(1), null)))
                 .isInstanceOf(CustomException.class)
                 .hasFieldOrPropertyWithValue("errorCode", ErrorCode.MEDICATION_NOT_AUTHORIZED);
 
@@ -329,7 +330,7 @@ class GuardianMedicationServiceTest {
                 .name(name)
                 .timeSlot(slot)
                 .doseTime(doseTime)
-                .doseAmount(1)
+                .doseAmount(BigDecimal.valueOf(1))
                 .build();
         ReflectionTestUtils.setField(medication, "id", id);
         return medication;

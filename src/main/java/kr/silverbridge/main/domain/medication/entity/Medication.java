@@ -7,6 +7,7 @@ import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 
+import java.math.BigDecimal;
 import java.time.LocalTime;
 import java.time.OffsetDateTime;
 
@@ -53,9 +54,9 @@ public class Medication extends BaseTimeEntity {
     @Column(name = "dose_time", nullable = false)
     private LocalTime doseTime;
 
-    /** 복용량(정). */
-    @Column(name = "dose_amount", nullable = false)
-    private int doseAmount;
+    /** 복용량(정). 0.5 단위(반 알, V62 {@code NUMERIC(3,1)} + CHECK) - 규칙은 {@link DoseAmounts}. */
+    @Column(name = "dose_amount", nullable = false, precision = 3, scale = 1)
+    private BigDecimal doseAmount;
 
     /** "식사와 함께" 같은 복용 안내(선택). */
     @Column(length = 100)
@@ -67,7 +68,7 @@ public class Medication extends BaseTimeEntity {
 
     @Builder
     private Medication(String wardId, String createdBy, String name, MedicationTimeSlot timeSlot,
-                       LocalTime doseTime, int doseAmount, String memo) {
+                       LocalTime doseTime, BigDecimal doseAmount, String memo) {
         this.wardId = wardId;
         this.createdBy = createdBy;
         this.name = name;
@@ -87,7 +88,7 @@ public class Medication extends BaseTimeEntity {
      * @param memo 없으면 {@code null}(메모 삭제)
      */
     public void update(String name, MedicationTimeSlot timeSlot, LocalTime doseTime,
-                       int doseAmount, String memo) {
+                       BigDecimal doseAmount, String memo) {
         this.name = name;
         this.timeSlot = timeSlot;
         this.doseTime = doseTime;

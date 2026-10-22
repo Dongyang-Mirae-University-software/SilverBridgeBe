@@ -10,6 +10,7 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
+import java.math.BigDecimal;
 import java.time.LocalTime;
 import java.time.OffsetDateTime;
 import java.util.List;
@@ -84,7 +85,7 @@ class MedicationWithdrawalServiceTest {
                 .name(name)
                 .timeSlot(MedicationTimeSlot.MORNING)
                 .doseTime(LocalTime.of(8, 0))
-                .doseAmount(1)
+                .doseAmount(BigDecimal.valueOf(1))
                 .build();
     }
 }

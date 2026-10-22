@@ -5,6 +5,9 @@ import kr.silverbridge.main.domain.medication.entity.Medication;
 import kr.silverbridge.main.domain.medication.entity.MedicationIntake;
 import kr.silverbridge.main.domain.medication.entity.MedicationTimeSlot;
 
+import kr.silverbridge.main.domain.medication.entity.DoseAmounts;
+
+import java.math.BigDecimal;
 import java.time.LocalTime;
 import java.time.OffsetDateTime;
 
@@ -32,8 +35,8 @@ public record MedicationItem(
         @Schema(description = "복용 시각", example = "08:00:00", type = "string")
         LocalTime doseTime,
 
-        @Schema(description = "복용량(정)", example = "1")
-        int doseAmount,
+        @Schema(description = "복용량(정). 정수는 1, 반 알은 0.5로 내린다(1.0이 되지 않는다)", example = "1")
+        BigDecimal doseAmount,
 
         @Schema(description = "복용 안내 메모 (없으면 null)", example = "식후 30분")
         String memo,
@@ -51,7 +54,7 @@ public record MedicationItem(
                 medication.getName(),
                 medication.getTimeSlot(),
                 medication.getDoseTime(),
-                medication.getDoseAmount(),
+                DoseAmounts.normalize(medication.getDoseAmount()),
                 medication.getMemo(),
                 intake != null,
                 intake != null ? intake.getTakenAt() : null

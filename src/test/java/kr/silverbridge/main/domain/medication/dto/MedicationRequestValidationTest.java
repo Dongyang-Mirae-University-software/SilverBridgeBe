@@ -12,6 +12,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 
+import java.math.BigDecimal;
 import java.util.Set;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -70,7 +71,7 @@ class MedicationRequestValidationTest {
     }
 
     private static MedicationCreateRequest create(String name, String memo) {
-        return new MedicationCreateRequest(name, MedicationTimeSlot.MORNING, null, 1, memo);
+        return new MedicationCreateRequest(name, MedicationTimeSlot.MORNING, null, BigDecimal.valueOf(1), memo);
     }
 
     private static Set<String> fieldsOf(Set<? extends ConstraintViolation<?>> violations) {

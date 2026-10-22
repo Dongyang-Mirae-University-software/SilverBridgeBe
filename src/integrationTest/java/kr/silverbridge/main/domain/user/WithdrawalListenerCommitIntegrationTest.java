@@ -39,6 +39,7 @@ import org.springframework.transaction.support.TransactionSynchronization;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
 import org.springframework.transaction.support.TransactionTemplate;
 
+import java.math.BigDecimal;
 import java.time.LocalTime;
 import java.util.List;
 import java.util.concurrent.CopyOnWriteArrayList;
@@ -137,7 +138,7 @@ class WithdrawalListenerCommitIntegrationTest extends PostgresIntegrationTest {
                 .name("혈압약")
                 .timeSlot(MedicationTimeSlot.MORNING)
                 .doseTime(LocalTime.of(8, 0))
-                .doseAmount(1)
+                .doseAmount(BigDecimal.valueOf(1))
                 .build());
 
         runAfterCommit(() -> medicationWithdrawalService.removeMedicationsRegisteredBy(GUARDIAN_ID));

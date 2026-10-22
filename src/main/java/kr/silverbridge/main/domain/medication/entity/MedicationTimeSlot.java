@@ -25,6 +25,25 @@ public enum MedicationTimeSlot {
         this.label = label;
     }
 
+    /**
+     * 복용 시각으로 시간대를 정한다(일괄 등록용, 2026-10-22). 04:00~10:59 아침 / 11:00~15:59 점심 / 16:00~20:59 저녁 /
+     * 21:00~03:59 취침 전. 각 시간대의 기본 시각(08·13·18·22시)은 자기 시간대로 돌아온다.
+     * 새벽(00~03시) 약을 "아침"으로 넣으면 아침 약 알림처럼 읽혀 "취침 전"에 둔다.
+     */
+    public static MedicationTimeSlot fromDoseTime(LocalTime doseTime) {
+        int hour = doseTime.getHour();
+        if (hour >= 4 && hour < 11) {
+            return MORNING;
+        }
+        if (hour >= 11 && hour < 16) {
+            return LUNCH;
+        }
+        if (hour >= 16 && hour < 21) {
+            return DINNER;
+        }
+        return BEDTIME;
+    }
+
     /** 요청에 복용 시각이 없을 때 적용되는 기본 시각. */
     public LocalTime defaultTime() {
         return defaultTime;
