@@ -2063,3 +2063,9 @@ SilverBridgeFe PR #83(`e510769`, gosky 반영 `d3d1dea`)을 템플릿 B로 점�
 
 - vitest 130건(신규 7건)·tsc·eslint·build 통과, 브라우저 52개 시나리오 통과, gosky FE 반영 후 복약 화면 2종 200 확인.
 - 상세: `docs/(2026-10-22) audit-fe-medication-add-modal.md` "조치 결과".
+
+---
+
+### [2026-10-22] FE 약 추가·수정 모달 Chrome 컴포넌트 테스트 + 수정 모달 Esc·포커스 (FE PR #85, `9267f10`)
+
+점검 후 남은 두 가지를 처리했다. 컴포넌트 테스트를 설치된 Google Chrome에서 돌리는 `npm run test:browser`를 추가해 19건(약 추가 10·약 수정 5·사진 전처리 4)을 작성했다. 3회 연속 통과했고, 변이 2종을 검출했다. 모달 공통 동작을 `useModalDialog`로 빼서 수정 모달에도 Esc·포커스·저장 중 닫기 막힘을 적용했다. gosky FE 반영 후 복약 화면 2종 200, 컴파일 오류 0을 확인했다. 상세: `docs/(2026-10-22) audit-fe-medication-add-modal.md` "남은 것 처리".

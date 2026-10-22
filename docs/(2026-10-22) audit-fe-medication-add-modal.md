@@ -117,4 +117,14 @@ fix: 약 추가 모달 점검 후속 - 읽는 중 탭 덮어쓰기·반 알 표�
 | L-5 | 단건 추가 API·훅·타입과 수정 모달의 추가 분기를 지웠다 |
 | L-6 | 탭 `aria-controls`·`tabpanel`·←/→/Home/End 이동, 열릴 때 포커스·포커스 가두기·Esc·닫을 때 포커스 복귀, 낮은 확신 칸의 글자 안내 + `aria-describedby`, `:focus-visible` 윤곽선. 수정 모달의 Esc·포커스는 범위 밖으로 두었다 |
 
-검증: vitest 130건(신규 7건 - 위 "테스트 공백"의 순수 함수 항목), tsc·eslint·`next build` 통과. Chromium 375px·1280px 목 API 52개 시나리오(탭 잠금, 안내 문구, 닫기 규칙, 포커스·키보드, 429 두 종류, 수정 모달 0.5→1 제출) 통과. gosky FE `b73513a`에서 `/guardian/medication`·`/ward/medication` 200을 확인했다. 컴포넌트 단위 vitest는 여전히 없다(테스트 환경이 node).
+검증: vitest 130건(신규 7건 - 위 "테스트 공백"의 순수 함수 항목), tsc·eslint·`next build` 통과. Chromium 375px·1280px 목 API 52개 시나리오(탭 잠금, 안내 문구, 닫기 규칙, 포커스·키보드, 429 두 종류, 수정 모달 0.5→1 제출) 통과. gosky FE `b73513a`에서 `/guardian/medication`·`/ward/medication` 200을 확인했다.
+
+## 남은 것 처리 (2026-10-22, FE PR #85 `9267f10`)
+
+- **컴포넌트 테스트를 Chrome에서 실행**: `npm run test:browser`(vitest 브라우저 모드, playwright `channel: 'chrome'` - 설치된 Google Chrome 사용, 브라우저 내려받기 없음, `*.browser.test.tsx`).
+  - 19건: 약 추가 모달 10, 약 수정 모달 5, 사진 전처리 4(Chrome canvas).
+  - 위 "테스트 공백"의 컴포넌트 항목(탭 전환 중 결과 반영, 실패 시 양식 유지, 언마운트 시 취소, 수정 모달 0.5·1.5 경계)을 모두 포함한다.
+  - 3회 연속 통과했다. 변이 2종(읽는 중 탭 잠금 제거, Esc 처리 제거)을 각각 해당 테스트가 잡았다.
+  - 기존 `npm test`(node)는 그대로다. devDependencies 3개(정확한 버전 고정)는 설치 스크립트가 없고, Docker runner 이미지(`--omit=dev`)에는 영향이 없다.
+- **수정 모달 Esc·포커스**: 모달 공통 동작을 `useModalDialog` 훅으로 빼서 약 추가·수정 모달이 함께 쓴다. 수정 모달은 열리면 이름 칸에 포커스, Esc 닫기, 포커스 가두기, 저장 중 닫기 막힘이 생겼다.
+- **남은 한계**: EXIF 방향 반영은 실제 휴대폰 사진이 필요해 자동 테스트에 넣지 않았다. FE 저장소에 CI가 없어 `test:browser`는 Chrome이 설치된 PC에서 직접 돌린다.
