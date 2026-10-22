@@ -25,6 +25,7 @@ import org.mockito.junit.jupiter.MockitoSettings;
 import org.mockito.quality.Strictness;
 import org.springframework.test.util.ReflectionTestUtils;
 
+import java.math.BigDecimal;
 import java.time.LocalTime;
 import java.time.OffsetDateTime;
 import java.util.List;
@@ -395,7 +396,7 @@ class MedicationMissedAlertPlannerTest {
                 .name(name)
                 .timeSlot(MedicationTimeSlot.MORNING)
                 .doseTime(doseTime)
-                .doseAmount(1)
+                .doseAmount(BigDecimal.valueOf(1))
                 .build();
         ReflectionTestUtils.setField(medication, "id", id);
         return medication;

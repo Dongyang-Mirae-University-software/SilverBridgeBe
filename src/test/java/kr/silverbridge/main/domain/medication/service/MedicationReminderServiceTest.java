@@ -13,6 +13,7 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
+import java.math.BigDecimal;
 import java.time.LocalTime;
 import java.util.List;
 
@@ -53,6 +54,23 @@ class MedicationReminderServiceTest {
         assertThat(content.data())
                 .containsEntry("type", "MEDICATION_REMINDER")
                 .containsEntry("attempt", "1");
+    }
+
+    @Test
+    @DisplayName("반 알 — 문구에 '0.5정'이 아니라 '반 알'로, 1.5는 '1정 반'으로 나간다")
+    void 반알_문구() {
+        MedicationReminderTarget half = new MedicationReminderTarget(1L, WARD_ID, "감기약", MedicationTimeSlot.DINNER,
+                LocalTime.of(18, 0), new BigDecimal("0.5"), MedicationClock.today(), MedicationReminderLog.ATTEMPT_FIRST);
+        MedicationReminderTarget oneAndHalf = new MedicationReminderTarget(2L, WARD_ID, "진통제", MedicationTimeSlot.DINNER,
+                LocalTime.of(18, 0), new BigDecimal("1.5"), MedicationClock.today(), MedicationReminderLog.ATTEMPT_FIRST);
+        when(planner.claimFirstReminders()).thenReturn(List.of(half, oneAndHalf));
+
+        reminderService.sendFirstReminders();
+
+        ArgumentCaptor<NotificationContent> captor = ArgumentCaptor.forClass(NotificationContent.class);
+        verify(notificationDispatcher, times(2)).dispatch(any(), any(), eq(NotificationType.MEDICATION_REMINDER), captor.capture());
+        assertThat(captor.getAllValues().get(0).body()).endsWith("· 반 알").doesNotContain("0.5");
+        assertThat(captor.getAllValues().get(1).body()).endsWith("· 1정 반");
     }
 
     @Test
@@ -102,6 +120,6 @@ class MedicationReminderServiceTest {
     private static MedicationReminderTarget target(int attempt, Long medicationId) {
         return new MedicationReminderTarget(
                 medicationId, WARD_ID, "혈압약", MedicationTimeSlot.MORNING,
-                LocalTime.of(8, 0), 1, MedicationClock.today(), attempt);
+                LocalTime.of(8, 0), BigDecimal.ONE, MedicationClock.today(), attempt);
     }
 }

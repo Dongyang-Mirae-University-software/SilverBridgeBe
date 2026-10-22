@@ -8,6 +8,8 @@ import kr.silverbridge.main.global.enums.Provider;
 import kr.silverbridge.main.global.enums.Role;
 import kr.silverbridge.main.global.enums.Status;
 
+import java.math.BigDecimal;
+
 /** 통합 테스트용 최소 엔티티. NOT NULL 컬럼만 채운다(가짜 값 - 실제 개인정보·비밀값을 쓰지 않는다). */
 public final class TestData {
 
@@ -45,7 +47,7 @@ public final class TestData {
                 .name(name)
                 .timeSlot(MedicationTimeSlot.MORNING)
                 .doseTime(MedicationTimeSlot.MORNING.defaultTime())
-                .doseAmount(1)
+                .doseAmount(BigDecimal.valueOf(1))
                 .build();
     }
 }

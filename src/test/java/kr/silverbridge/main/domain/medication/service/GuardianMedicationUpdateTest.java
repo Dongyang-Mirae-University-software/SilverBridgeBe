@@ -22,6 +22,7 @@ import org.mockito.junit.jupiter.MockitoSettings;
 import org.mockito.quality.Strictness;
 import org.springframework.test.util.ReflectionTestUtils;
 
+import java.math.BigDecimal;
 import java.time.LocalTime;
 import java.time.OffsetDateTime;
 import java.util.Optional;
@@ -69,7 +70,7 @@ class GuardianMedicationUpdateTest {
         assertThat(medication.getName()).isEqualTo("혈압약(변경)");
         assertThat(medication.getTimeSlot()).isEqualTo(MedicationTimeSlot.MORNING);
         assertThat(medication.getDoseTime()).isEqualTo(LocalTime.of(8, 0));
-        assertThat(medication.getDoseAmount()).isEqualTo(1);
+        assertThat(medication.getDoseAmount()).isEqualByComparingTo("1");
         assertThat(medication.getMemo()).isEqualTo("식후 30분");
         assertThat(item.name()).isEqualTo("혈압약(변경)");
         // 시각이 그대로면 오늘 발송 기록을 지우지 않는다(중복 알림 방지)
@@ -307,7 +308,7 @@ class GuardianMedicationUpdateTest {
                 .name("혈압약")
                 .timeSlot(MedicationTimeSlot.MORNING)
                 .doseTime(LocalTime.of(8, 0))
-                .doseAmount(1)
+                .doseAmount(BigDecimal.valueOf(1))
                 .memo("식후 30분")
                 .build();
         ReflectionTestUtils.setField(medication, "id", 1L);

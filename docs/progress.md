@@ -1990,3 +1990,10 @@ REST API Key 단독 대비 보안 강화 — 인가코드 탈취 시 토큰 발�
 - 응답은 허용 목록(`reason`·성분 제외, 이름 100자, 모르는 slot 버림). 반 알은 `perDose` 0.5 원값 → FE가 메모로(`doseAmount` 정수 유지, 사용자 결정)
 - multipart 전역 상한 5MB → 10MB(프로필 5MB는 서비스 검사 유지), 서블릿 단계 초과는 OCR 경로만 413
 - 테스트 30건 추가, `./gradlew build` 전체 1,749건 통과. 상세 `docs/(2026-10-22) feature-medication-ocr.md`. 실서버 확인은 AI 반영·배포 뒤
+
+## [2026-10-22] 약 일괄 등록 + 반 알(0.5 단위) (branch `feature/medication-batch-half-dose`, V62)
+
+- `doseAmount` 0.5 단위(0.5~99, 정수 하위 호환), V62 `NUMERIC(3,1)` + CHECK(적용 무손실, 0.5 저장 뒤엔 사실상 비가역), 응답 `1`·`0.5` 정규화, 알림 문구 "반 알"·"1정 반"
+- `POST /api/guardian/ward/{wardId}/medication/batch`: drugs(1~20) × times(1~6) 한 트랜잭션, 시간대는 시각으로(04~10 아침/11~15 점심/16~20 저녁/그 외 취침 전), 같은 요청 안 중복 이름·시각 400, 단건 등록과 같은 생성 메서드
+- `./gradlew build` 전체 1,778건 통과, 통합 테스트(CHECK·롤백) 추가. 상세 `docs/(2026-10-22) feature-medication-batch-half-dose.md`
+- gosky nginx(`devdmu.gosky.kr`·`api.devdmu.gosky.kr`)에 `client_max_body_size 10m` 적용(사용자 승인, 백업 `/root/nginx-backup-20261022-ocr/`) - 기본 1MB라 사진 업로드가 BE 전에 413이던 문제. 3MB 업로드가 BE까지 도달(401)하는 것으로 확인

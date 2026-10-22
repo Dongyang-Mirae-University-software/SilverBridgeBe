@@ -6,6 +6,7 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.test.util.ReflectionTestUtils;
 
+import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalTime;
 import java.time.OffsetDateTime;
@@ -74,7 +75,7 @@ class MedicationMissedAlertRegistrationRuleTest {
                 .name("혈압약")
                 .timeSlot(MedicationTimeSlot.MORNING)
                 .doseTime(DOSE_TIME)
-                .doseAmount(1)
+                .doseAmount(BigDecimal.valueOf(1))
                 .build();
         ReflectionTestUtils.setField(medication, "createdAt", createdAt);
         return MedicationMissedAlertPlanner.registeredAfterDoseToday(medication, TODAY);

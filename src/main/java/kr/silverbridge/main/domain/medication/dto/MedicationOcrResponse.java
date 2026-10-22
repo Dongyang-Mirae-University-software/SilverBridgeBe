@@ -20,7 +20,7 @@ public record MedicationOcrResponse(
 ) {
 
     /**
-     * @param perDose     1회 복용량(정). 반 알은 0.5 - 등록 API의 {@code doseAmount}는 정수라 FE가 메모로 옮긴다
+     * @param perDose     1회 복용량(정). 반 알은 0.5 - 등록 API의 {@code doseAmount}(0.5 단위, V62)에 그대로 넣는다
      * @param slots       봉투에 표시된 복용 시간대. 표시가 없으면 빈 배열(지어내지 않는다)
      * @param confidence  {@code high}·{@code low}. 화면 강조용일 뿐 high라도 확인을 건너뛰지 않는다
      */

@@ -215,6 +215,7 @@
 - **복용 체크 알림은 WebSocket만**(`medication-taken`). FCM·SMS·알림톡은 보내지 않는다 — 하루 여러 번 일어나는 일상 동작이라 푸시는 소음이다(SOS ACK 2026-07-30과 같은 판단). 새 채널을 붙이자는 요구가 오면 이 판단을 먼저 확인할 것.
 - **`medication_setting.alarm_enabled`는 복약 알림 전용**이다. 현재는 보관·조회만 하며 2차(복용 시각 스케줄러 발송)에서 발송 게이트가 된다. **SOS 등 필수 알림을 이 값으로 억제하지 말 것**(SOS 동작 설정 2026-07-23 규칙의 연장).
 - 상세: `docs/(2026-08-04) feature-medication-reminder.md`.
+- **일괄 등록·반 알 (2026-10-22, V62)**: 일괄 등록(`/medication/batch`)도 **보호자만**·`isActiveConnection`만이며 약 한 건의 생성 규칙은 단건 등록과 같은 `newMedication`을 쓴다(복제 금지). **한 트랜잭션 - 전부 성공 또는 전부 실패**를 부분 성공으로 바꾸지 말 것(어느 약이 빠졌는지 보호자가 모른 채 알림이 비게 된다). 복용량은 0.5 단위(`DoseAmounts`, DB CHECK 동일) - 사용자에게 보이는 서버 문구는 "0.5정"이 아니라 "반 알". 상세 `docs/(2026-10-22) feature-medication-batch-half-dose.md`.
 
 ### 복약 알림 발송 (2차, 2026-08-05)
 

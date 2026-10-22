@@ -44,7 +44,7 @@ public class GuardianMedicationOcrController {
 
                     - 사진: JPG·PNG·WebP, 8MB 이하. 방향을 바로 세우고(EXIF 반영) 긴 변 약 1500px로 보내면 가장 정확합니다.
                     - readable=false면 약 봉투로 읽지 못한 것이며 drugs는 빈 배열입니다.
-                    - perDose는 1회 복용량(정)이며 반 알은 0.5입니다. 등록 API의 doseAmount는 정수라, 0.5는 1로 두고 메모에 "1회 반 알"을 채워 주세요.
+                    - perDose는 1회 복용량(정)이며 반 알은 0.5입니다. 등록 API의 doseAmount(0.5 단위)에 그대로 넣으면 됩니다.
                     - slots는 봉투에 표시된 시간대만 담기고, 표시가 없으면 빈 배열입니다(서버가 지어내지 않음). 시간대마다 약을 따로 등록합니다.
                     - confidence(high·low)는 화면 강조용입니다. high라도 이름 1글자 오독이 있을 수 있어 확인을 건너뛰지 마세요.
                     - 처리에 보통 5~10초, 최대 40초가 걸립니다. FE 타임아웃은 50초 이상으로 잡으세요.

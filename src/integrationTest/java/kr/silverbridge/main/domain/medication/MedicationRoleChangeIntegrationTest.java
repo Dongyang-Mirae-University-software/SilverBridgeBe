@@ -14,6 +14,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Import;
 
+import java.math.BigDecimal;
 import java.time.LocalTime;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -68,7 +69,7 @@ class MedicationRoleChangeIntegrationTest extends PostgresIntegrationTest {
                 .name("혈압약")
                 .timeSlot(MedicationTimeSlot.MORNING)
                 .doseTime(LocalTime.of(8, 0))
-                .doseAmount(1)
+                .doseAmount(BigDecimal.valueOf(1))
                 .build());
     }
 }

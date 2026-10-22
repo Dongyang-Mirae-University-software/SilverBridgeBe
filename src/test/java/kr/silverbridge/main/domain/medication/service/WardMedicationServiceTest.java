@@ -20,6 +20,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.test.util.ReflectionTestUtils;
 
+import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalTime;
 import java.time.OffsetDateTime;
@@ -222,7 +223,7 @@ class WardMedicationServiceTest {
                 .name(name)
                 .timeSlot(MedicationTimeSlot.MORNING)
                 .doseTime(doseTime)
-                .doseAmount(1)
+                .doseAmount(BigDecimal.valueOf(1))
                 .build();
         ReflectionTestUtils.setField(medication, "id", id);
         return medication;

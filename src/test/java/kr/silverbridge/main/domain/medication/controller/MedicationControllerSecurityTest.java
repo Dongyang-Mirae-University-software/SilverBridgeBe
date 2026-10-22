@@ -1,5 +1,6 @@
 package kr.silverbridge.main.domain.medication.controller;
 
+import kr.silverbridge.main.domain.medication.dto.MedicationBatchCreateRequest;
 import kr.silverbridge.main.domain.medication.dto.MedicationCreateRequest;
 import kr.silverbridge.main.domain.medication.dto.GuardianMedicationAlertSettingRequest;
 import kr.silverbridge.main.domain.medication.dto.MedicationSettingUpdateRequest;
@@ -22,6 +23,7 @@ import org.springframework.test.context.ContextConfiguration;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.context.junit.jupiter.SpringExtension;
 
+import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalTime;
 import java.util.List;
@@ -65,7 +67,11 @@ class MedicationControllerSecurityTest {
     private WardMedicationController wardController;
 
     private static final MedicationCreateRequest CREATE_REQUEST =
-            new MedicationCreateRequest("혈압약", MedicationTimeSlot.MORNING, null, 1, null);
+            new MedicationCreateRequest("혈압약", MedicationTimeSlot.MORNING, null, BigDecimal.valueOf(1), null);
+
+    private static final MedicationBatchCreateRequest BATCH_REQUEST = new MedicationBatchCreateRequest(
+            List.of(new MedicationBatchCreateRequest.Drug("감기약", new BigDecimal("0.5"))),
+            List.of(new MedicationBatchCreateRequest.Time(LocalTime.of(8, 0))), null);
 
     // ─── 보호자 전용 경로 ────────────────────────────────────────────
 
@@ -82,6 +88,8 @@ class MedicationControllerSecurityTest {
 
         assertThatNoException().isThrownBy(() -> guardianController.getWardMedications("GD0001"));
         assertThatNoException().isThrownBy(() -> guardianController.create("GD0001", "WD0001", CREATE_REQUEST));
+        when(guardianMedicationService.createBatch(any(), any(), any())).thenReturn(List.of());
+        assertThatNoException().isThrownBy(() -> guardianController.createBatch("GD0001", "WD0001", BATCH_REQUEST));
         assertThatNoException().isThrownBy(() -> guardianController.delete("GD0001", 1L));
         assertThatNoException().isThrownBy(() -> guardianController.update(
                 "GD0001", 1L, new MedicationUpdateRequest("혈압약", null, null, null, null)));
@@ -95,6 +103,8 @@ class MedicationControllerSecurityTest {
     @DisplayName("WARD → 약 등록·삭제·알림 설정 거부 (약 추가는 보호자만)")
     void ward_보호자API_거부() {
         assertThatThrownBy(() -> guardianController.create("WD0001", "WD0001", CREATE_REQUEST))
+                .isInstanceOf(AccessDeniedException.class);
+        assertThatThrownBy(() -> guardianController.createBatch("WD0001", "WD0001", BATCH_REQUEST))
                 .isInstanceOf(AccessDeniedException.class);
         assertThatThrownBy(() -> guardianController.delete("WD0001", 1L))
                 .isInstanceOf(AccessDeniedException.class);
@@ -120,6 +130,8 @@ class MedicationControllerSecurityTest {
     @DisplayName("ADMIN → 보호자 복약 API 거부")
     void admin_보호자API_거부() {
         assertThatThrownBy(() -> guardianController.getWardMedications("AD0001"))
+                .isInstanceOf(AccessDeniedException.class);
+        assertThatThrownBy(() -> guardianController.createBatch("AD0001", "WD0001", BATCH_REQUEST))
                 .isInstanceOf(AccessDeniedException.class);
     }
 

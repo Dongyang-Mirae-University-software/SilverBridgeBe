@@ -10,6 +10,7 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
+import java.math.BigDecimal;
 import java.time.LocalTime;
 import java.util.List;
 
@@ -56,7 +57,7 @@ class MedicationRoleChangeServiceTest {
                 .name(name)
                 .timeSlot(MedicationTimeSlot.MORNING)
                 .doseTime(doseTime)
-                .doseAmount(1)
+                .doseAmount(BigDecimal.valueOf(1))
                 .build();
     }
 }
