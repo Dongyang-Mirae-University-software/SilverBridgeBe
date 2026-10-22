@@ -33,6 +33,7 @@
 | `confidence` | `high`·`low`, 그 밖은 null. 화면 강조용일 뿐 |
 
 **반 알 처리(2026-10-22 결정)**: `doseAmount`는 정수 그대로 둔다. 응답의 `perDose` 원값을 보고 FE가 0.5면 복용량 1 + 메모 "1회 반 알"을 채운다.
+> 후속(PR #362, `feature/medication-batch-half-dose`): `doseAmount`가 0.5 단위가 되면 `perDose` 0.5를 그대로 `doseAmount`에 넣는다(메모 우회 불필요). 일괄 등록 API도 함께 - `(2026-10-22) feature-medication-batch-half-dose.md`.
 
 내리지 않는 것: AI `reason`(자유 문장 - 개인정보가 섞일 수 있음), 성분(측정에서 확신 high로 틀림), 그 밖 AI가 더하는 모든 필드(허용 목록 `MedicationOcrProjection`).
 
@@ -80,5 +81,5 @@ AI 구현 확인(AI `feature/medication-ocr` `1b8e749`): 파트 `image`, 본문 
 - 업로드 전 EXIF 방향 반영·긴 변 약 1500px(측정: 누운 사진 9→6~7/10, 1024px 5~6/10). 8MB 이하.
 - 타임아웃 50초 이상.
 - FE 프록시(`src/app/api/[...path]/route.ts`)는 본문을 그대로 넘기고 `Content-Type`(boundary)을 보존해 변경 불요(2026-10-22 확인).
-- ⚠️ **gosky nginx 본문 상한(2026-10-22 확인)**: 경로는 브라우저 → `devdmu.gosky.kr` → FE(6510) → `api.devdmu.gosky.kr` → BE이고, 두 nginx 서버 블록 모두 `client_max_body_size`가 없어 **기본 1MB**다(같은 날 1MB 초과 거절 로그 확인). 1MB를 넘는 사진은 BE에 닿기 전에 nginx 413(HTML)으로 막힌다 - 두 곳을 10m 이상으로 올리거나 FE가 1MB 이하로 줄여 보내야 한다. BE→AI의 `testai.gosky.kr`은 100M라 문제없다.
+- **gosky nginx 본문 상한 - 해결(2026-10-22)**: 경로 브라우저 → `devdmu.gosky.kr` → FE(6510) → `api.devdmu.gosky.kr` → BE의 두 nginx가 기본 1MB라 1MB 넘는 사진이 BE 전에 413(HTML)이었다. 사용자 승인으로 두 서버 블록에 `client_max_body_size 10m`을 넣고 reload(백업 `/root/nginx-backup-20261022-ocr/`), 3MB 업로드가 두 도메인 모두 BE까지 도달(비로그인 401)·12MB는 nginx 413 확인. BE→AI `testai.gosky.kr`은 100M.
 - 0.5는 복용량 1 + 메모 "1회 반 알". `slots`마다 약을 따로 등록. `confidence=low` 항목 강조, high라도 확인 단계는 건너뛰지 않는다.
