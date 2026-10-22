@@ -1,5 +1,6 @@
 package kr.silverbridge.main.global.exception;
 
+import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.ConstraintViolationException;
 import kr.silverbridge.main.global.response.ApiResponse;
 import lombok.extern.slf4j.Slf4j;
@@ -27,6 +28,7 @@ import org.springframework.web.servlet.NoHandlerFoundException;
 import org.springframework.web.servlet.resource.NoResourceFoundException;
 
 import java.util.Map;
+import java.util.regex.Pattern;
 import java.util.Set;
 import java.util.stream.Collectors;
 
@@ -36,6 +38,7 @@ public class GlobalExceptionHandler {
 
     // PostgreSQL SQLSTATE — 23505: unique_violation (그 외 23503 FK, 23502 NOT NULL, 23514 CHECK)
     private static final String SQLSTATE_UNIQUE_VIOLATION = "23505";
+    private static final Pattern MEDICATION_OCR_PATH = Pattern.compile("^/api/guardian/ward/[^/]+/medication/ocr$");
 
     // 22021: character_not_in_repertoire(invalid byte sequence — 문자열의 NUL(\u0000) 등), 22P05: untranslatable_character.
     // 사용자 입력 탓이라 500이 아니라 400으로 안내한다.
@@ -252,8 +255,14 @@ public class GlobalExceptionHandler {
 
     // 파일 업로드 크기 초과 (서블릿 레벨에서 잡힘 — 서비스 레벨 체크보다 먼저 발생)
     @ExceptionHandler(MaxUploadSizeExceededException.class)
-    public ResponseEntity<ApiResponse<Void>> handleMaxUploadSizeExceeded(MaxUploadSizeExceededException e) {
+    public ResponseEntity<ApiResponse<Void>> handleMaxUploadSizeExceeded(MaxUploadSizeExceededException e,
+                                                                         HttpServletRequest request) {
         log.warn("MaxUploadSizeExceededException: {}", e.getMessage());
+        // 약 봉투 OCR(8MB)은 413으로 답한다 - 기존 FILE_TOO_LARGE 문구는 프로필 사진 5MB 기준이라 맞지 않는다(2026-10-22)
+        if (MEDICATION_OCR_PATH.matcher(request.getRequestURI()).matches()) {
+            return ResponseEntity.status(ErrorCode.MEDICATION_OCR_IMAGE_TOO_LARGE.getStatus())
+                    .body(ApiResponse.fail(ErrorCode.MEDICATION_OCR_IMAGE_TOO_LARGE));
+        }
         return ResponseEntity
                 .badRequest()
                 .body(ApiResponse.fail(ErrorCode.FILE_TOO_LARGE));

@@ -1971,3 +1971,11 @@ REST API Key 단독 대비 보안 강화 — 인가코드 탈취 시 토큰 발�
 - 🔴🟠 0 · 🟡 1(M-1 같은 확인 버튼 동시 클릭 시 중복 예약 가능성 - 로컬에서 예약 서비스 지연 시 `create` 2회 재현, 실서버 동시 3클릭 5라운드는 매번 1건) · 🟢 4(L-1 edit 토큰 재생 등 테스트 빈틈·L-2 취소/변경 문장 오인·L-3 취소 목록 상한 없음·L-4 INFO 로그 환자 이름). 상세 `docs/(2026-10-22) audit-ai-chat-reservation-confirm.md`. 조치는 별도 승인 후
 - 확인 우회 시도(위조·교차 세션·교차 종류 토큰, 카드 없는 직접 선택값, 응급 문장 삽입, 이미 쓴 토큰)는 로컬·실서버 모두 막힘. 생성 호출은 확인 경로 한 곳, 취소는 확인 뒤·변경 성공 뒤뿐. `handle`→`_advance` 분리는 옛 커밋 대조로 R-5 1줄 외 동일
 - 변이 6종: 5종은 기존 테스트가 잡고 edit 토큰 검사 제거만 통과(L-1). 실서버: 가상 계정 `qa-audit-1022`, 예약 전부 취소·기록 삭제(활성 0건), AI 재시작 없음
+
+## [2026-10-22] 약 봉투 OCR - 보호자 중계 API (branch `feature/medication-ocr`)
+
+- `POST /api/guardian/ward/{wardId}/medication/ocr`(GUARDIAN, multipart `image`) → AI `POST /api/v1/medication/ocr` 중계, **등록 초안만** 반환(사진·결과 저장 없음, 자동 등록 없음). 마이그레이션·`.env` 변경 없음
+- 순서: 킬 스위치 `medication.ocr.enabled` → 보호자 분 10·시간 60 → ACTIVE 연결(403 `MEDICATION_NOT_AUTHORIZED` + `[IDOR-ATTEMPT]`) → 8MB(413)·매직 바이트 jpeg/png/webp(400) → 동시 전체 5·1인 1(429) → AI 전체 40초(504)
+- 응답은 허용 목록(`reason`·성분 제외, 이름 100자, 모르는 slot 버림). 반 알은 `perDose` 0.5 원값 → FE가 메모로(`doseAmount` 정수 유지, 사용자 결정)
+- multipart 전역 상한 5MB → 10MB(프로필 5MB는 서비스 검사 유지), 서블릿 단계 초과는 OCR 경로만 413
+- 테스트 30건 추가, `./gradlew build` 전체 1,749건 통과. 상세 `docs/(2026-10-22) feature-medication-ocr.md`. 실서버 확인은 AI 반영·배포 뒤
