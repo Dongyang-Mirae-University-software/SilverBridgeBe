@@ -2009,3 +2009,9 @@ REST API Key 단독 대비 보안 강화 — 인가코드 탈취 시 토큰 발�
 - 방법: 결론을 주지 않은 독립 점검(Sonnet) + 메인 재확인(🟡→🟢 정정 1, 테스트 공백 오탐 4) / 변이 8종 전부 기존 테스트가 잡음 / gosky 실호출로 연결 없는 피보호자 OCR·일괄 등록 403 + `[IDOR-ATTEMPT]` 2건·생성 0 확인
 - audit-index: #361·#362 ✅, 2026-10-16 중복 ❌ 행 정리
 
+
+## [2026-10-22] 약 봉투 OCR - AI 엔드포인트 머지·배포·기능 점검 (AI PR #29 `0212176`, #32 `5eebb7c`)
+
+- AI `POST /api/v1/medication/ocr` 구현(sonnet 5.5·effort low·JSON 스키마·30초, 200 래퍼 없음, 사진 메모리 처리·EXIF 제거). 새 테스트 36건, 운영 이미지 임시 컨테이너 전체 372 통과(1건은 `pgrep` 없는 환경 문제)
+- 기능 점검: multipart 경계 사례·로그·처리 시간 이상 없음. 큰 사진 디코드 메모리(4,800만 화소 JPEG 439MB, 105KB PNG 232MB)를 PR #32로 수정 - JPEG 줄여 읽기(41MB), PNG·WEBP 화소 상한 1,600만, 정규화 동시 2건
+- gosky AI 반영 `5eebb7c`: 헬스 200, 합성 메모 `readable=false`, 큰 PNG 400, BE 두 서버 AI WS 재연결. 상세 `docs/(2026-10-22) feature-medication-ocr.md` §3
