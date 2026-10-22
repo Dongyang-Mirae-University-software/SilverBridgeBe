@@ -52,7 +52,7 @@
 
 `POST {AI_HTTP_BASE_URL}/api/v1/medication/ocr`, 헤더 `X-API-Key`, multipart 파트 `image`(파일 이름은 형식별 고정 `image.jpg|png|webp` - 사용자 파일 이름은 넘기지 않음).
 200 본문은 **래퍼 없이** `{readable, reason, drugs[{name, perDose, timesPerDay, days, slots, timing, confidence}]}`, 오류는 AI 공용 래퍼 - BE는 오류 본문을 읽지 않고 상태 코드로만 판단한다.
-⚠️ 파트 이름 `image`는 AI 라우터가 아직 없어 가정이다(AI `feature/medication-ocr` 작업 중) - AI가 다르게 정하면 `AiMedicationOcrClient.PART_NAME`만 바꾼다.
+AI 구현 확인(AI `feature/medication-ocr` `1b8e749`): 파트 `image`, 본문 상한 8MB+64KB(초과 413 `OCR_IMAGE_TOO_LARGE`), 형식·파트 오류 400 `OCR_INVALID_IMAGE`, 꺼짐·미설정 503, 모델 실패 502 `OCR_UPSTREAM_FAILED`(BE는 503으로), 모델 호출 제한 30초(BE 40초 안). 사진은 메모리에서만 다루고 EXIF를 떼어 재인코딩한다.
 
 ## 4. 처리 순서와 정책
 
@@ -78,5 +78,7 @@
 ## 6. FE 전달
 
 - 업로드 전 EXIF 방향 반영·긴 변 약 1500px(측정: 누운 사진 9→6~7/10, 1024px 5~6/10). 8MB 이하.
-- 타임아웃 50초 이상. FE 프록시(Next 라우트)·nginx 본문 상한이 8MB 이상인지 확인.
+- 타임아웃 50초 이상.
+- FE 프록시(`src/app/api/[...path]/route.ts`)는 본문을 그대로 넘기고 `Content-Type`(boundary)을 보존해 변경 불요(2026-10-22 확인).
+- ⚠️ **gosky nginx 본문 상한(2026-10-22 확인)**: 경로는 브라우저 → `devdmu.gosky.kr` → FE(6510) → `api.devdmu.gosky.kr` → BE이고, 두 nginx 서버 블록 모두 `client_max_body_size`가 없어 **기본 1MB**다(같은 날 1MB 초과 거절 로그 확인). 1MB를 넘는 사진은 BE에 닿기 전에 nginx 413(HTML)으로 막힌다 - 두 곳을 10m 이상으로 올리거나 FE가 1MB 이하로 줄여 보내야 한다. BE→AI의 `testai.gosky.kr`은 100M라 문제없다.
 - 0.5는 복용량 1 + 메모 "1회 반 알". `slots`마다 약을 따로 등록. `confidence=low` 항목 강조, high라도 확인 단계는 건너뛰지 않는다.
