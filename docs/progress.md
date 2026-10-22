@@ -1997,3 +1997,9 @@ REST API Key 단독 대비 보안 강화 — 인가코드 탈취 시 토큰 발�
 - `POST /api/guardian/ward/{wardId}/medication/batch`: drugs(1~20) × times(1~6) 한 트랜잭션, 시간대는 시각으로(04~10 아침/11~15 점심/16~20 저녁/그 외 취침 전), 같은 요청 안 중복 이름·시각 400, 단건 등록과 같은 생성 메서드
 - `./gradlew build` 전체 1,778건 통과, 통합 테스트(CHECK·롤백) 추가. 상세 `docs/(2026-10-22) feature-medication-batch-half-dose.md`
 - gosky nginx(`devdmu.gosky.kr`·`api.devdmu.gosky.kr`)에 `client_max_body_size 10m` 적용(사용자 승인, 백업 `/root/nginx-backup-20261022-ocr/`) - 기본 1MB라 사진 업로드가 BE 전에 413이던 문제. 3MB 업로드가 BE까지 도달(401)하는 것으로 확인
+
+## [2026-10-22] 약 봉투 OCR·일괄 등록·반 알 머지·배포·실서버 확인 (PR #361 `28e998b`, #362 `f4883d4`)
+
+- 두 PR 머지(#362에 #361을 먼저 merge해 충돌 해소, 합친 상태 1,808건 통과·vkcs 통합 테스트 `b193bdd` 통과). gosky 수동 배포 - V62 적용(0.014초), 기동 9초, AI WS 연결
+- gosky 실호출(테스트 보호자): OCR 합성 메모 → `readable=false` 2.3초 / 사진 아님 400, 일괄 등록 2×2 → 4건·시간대 경계·`doseAmount` 0.5·1 / 중복 시각·0.3 → 400, 시험 약 4건 삭제
+

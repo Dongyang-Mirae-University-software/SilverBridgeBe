@@ -74,7 +74,7 @@ AI 구현 확인(AI `feature/medication-ocr` `1b8e749`): 파트 `image`, 본문 
   `GuardianMedicationOcrControllerSecurityTest`(4, 실제 `SecurityConfig`: 401·WARD/ADMIN 403·200 no-store·오류 코드별 상태),
   `GuardianMedicationOcrControllerHttpTest`(2, Jackson 3 직렬화·전역 413 분기),
   `MedicationOcrLogGuardTest`(1).
-- 실서버 확인(합성 메모 이미지 → `readable=false`)은 머지·gosky 배포 + AI 반영 뒤.
+- **실서버 확인(gosky, 2026-10-22, PR #361·#362 머지 후 수동 배포 `f4883d4`)**: 테스트 보호자 계정 + ACTIVE 피보호자로 합성 메모 사진(영어 장보기 메모, AI 컨테이너에서 생성) → 200 `{"readable":false,"drugs":[]}` 2.3초(BE → AI → 모델 경로 실동작), 사진 아닌 파일 → 400. 시험 파일은 서버에서 삭제.
 
 ## 6. FE 전달
 

@@ -43,6 +43,8 @@
   - `MedicationControllerSecurityTest`: 일괄 등록 WARD·ADMIN 403
 - 통합 테스트 `MedicationHalfDoseBatchIntegrationTest`(실 PostgreSQL): V62 CHECK(0.3·0·100·99.5 거절), 0.5 저장·조회, 12건 생성, 중간 항목이 DB에서 거절되면 0건. vkcs `tools/integration-test.sh feature/medication-batch-half-dose`.
 
+- **실서버 확인(gosky, 2026-10-22, `f4883d4` 수동 배포, V62 적용 로그 확인)**: 일괄 등록 약 2 × 시각 2 → 200, 4건(03:30 → 취침 전, 04:30 → 아침), 응답 JSON `"doseAmount":0.5`·`"doseAmount":1`(1.0 아님), 같은 시각 중복·0.3 → 400. 시험 약 4건은 즉시 삭제(남은 0건). 배포 전 기존 데이터 gosky 15건(1~4)·vkcs 0건으로 CHECK 위반 없음.
+
 ## 4. FE 전달
 
 - 복용량 스테퍼를 0.5 단위로 바꾸고, 0.5는 "반 알", 1.5는 "1정 반"으로 표시한다(현재 `${doseAmount}정` → "0.5정").
