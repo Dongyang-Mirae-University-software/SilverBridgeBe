@@ -89,16 +89,18 @@ PHASE 4. 점검 제안  (CLAUDE.md §2-6)
   - docs/audit-index.md 에 이 기능 행을 ❌ 로 추가하고, ❌ 가 5건 이상이면 템플릿 D(전체)도 함께 제안
   - 제안만 한다 - 실행은 "시작해" 후
 
+PHASE 5. 마무리 (아래 "공통 - 마무리 절차" 블록을 그대로 붙인다)
+
 규칙
   - 승인 전 코드 작성 금지 / 요청 범위 밖 변경 금지
-  - 자동 git commit·push 금지 (커밋 메시지는 초안만)
+  - git 쓰기는 PHASE 5 마무리 절차로만 (dev 직접 커밋·force push·훅 우회 금지)
   - 시크릿 평문 커밋 금지 (.env.dev 주입)
 
 산출물
   ① docs/(YYYY-MM-DD) feature-<이름>.md — 범위·정책·변경 파일·검증 가이드·테스트 결과
   ② docs/progress.md 갱신
   ③ CLAUDE.md·프로젝트_설명.txt 영향 있으면 갱신
-  ④ 컨벤셔널 커밋 메시지 초안  [스킬: git-commit]
+  ④ 컨벤셔널 커밋  [스킬: git-commit]
 ```
 
 ## 템플릿 B — 점검(audit)
@@ -197,6 +199,34 @@ PHASE D. 운영·기술  [스킬: security-audit, concurrency-review]  [모델: 
 
 보고 형식 / 규칙 / 산출물은 템플릿 B와 같다 (문서명: audit-full-<YYYY-MM>.md)
 ```
+
+## 공통 - 마무리 절차 (모든 코드 변경 프롬프트에 항상 포함, 2026-10-07 사용자 지시)
+
+코드를 바꾸는 프롬프트(템플릿 A, 그리고 B·C·D에서 수정까지 맡길 때)는 **커밋 → 푸시 → PR → 머지 → 자동 배포 확인 → gosky 수동 배포 → 브랜치 정리 → worktree 정리**까지 끝까지 포함한다. 사용자가 "시작해"로 승인하면 이 절차가 git 쓰기 승인을 대신한다(CLAUDE.md §2-2의 명시적 승인). 다른 저장소(AI·FE)용 프롬프트도 같은 블록을 저장소에 맞게 바꿔 넣는다.
+
+**멈추고 확인받는 지점 (되돌리기 어려움)** - 이것만은 실행 전에 사용자에게 묻는다.
+- 운영 `.env`/`.env.dev` 수정 (수정 전 `cp .env.dev .env.dev.bak-$(date +%Y%m%d-%H%M)` 백업)
+- AI 서버 재시작 (스트림 세션이 사라져 카메라 재등록 필요)
+- 비가역 마이그레이션이 든 PR의 머지
+
+```
+PHASE 5. 마무리
+1. 커밋: 빌드·테스트 통과 후 커밋 (한 커밋 = 한 작업, conventional commit "type: 내용") [스킬: git-commit]
+2. 푸시·PR: ./gradlew build -x test --no-daemon 재확인 → git push origin <브랜치> → gh pr create --base dev
+   (본문: 배경·변경 파일·바뀌지 않는 것·배포 순서·테스트 결과 원문)
+3. 머지: CI 통과 확인 후 gh pr merge --merge → dev 반영 확인 (마이그레이션·JPQL 변경 PR은 머지 전 vkcs 통합 테스트)
+4. 자동 배포 확인: vkcs-linux CD(cd.yml) 성공 확인 (통합 테스트 단계 포함)
+5. gosky 수동 배포:
+   ssh gosky → cd /home/apps/SilverBridgeSky/SilverBridgeBe && git pull origin dev && docker compose -f docker-compose.dev.yml up -d --build api
+   확인(두 서버 각각): git log --oneline -1 / docker ps / 기동 로그의 AiLiveStreamSubscriber 연결 / 오류 없음
+6. (필요할 때만) 운영 설정 변경 - ⚠️ 실행 전 확인: .env.dev 백업 → 값 추가 → up -d api (restart 아님)
+7. 브랜치 정리: 머지 반영 확인 후 git branch -d <브랜치> / git push origin --delete <브랜치>
+8. worktree 정리: git worktree list → 이번 작업 worktree 를 git worktree remove <경로> → git worktree prune
+9. 최종 보고: PR 링크·머지 커밋·두 서버 반영 커밋·설정 적용 여부·테스트 결과·PHASE 4 점검 제안
+금지: dev/main 직접 커밋(코드)·force push·--no-verify, 시크릿·.env 내용 출력
+```
+
+문서만 바꾸는 작업은 CLAUDE.md §3 예외대로 2~5를 생략하고 dev에 직접 커밋·푸시한다.
 
 ## 공통 - 찾은 함정은 테스트로 고정
 
