@@ -55,6 +55,14 @@
 200 본문은 **래퍼 없이** `{readable, reason, drugs[{name, perDose, timesPerDay, days, slots, timing, confidence}]}`, 오류는 AI 공용 래퍼 - BE는 오류 본문을 읽지 않고 상태 코드로만 판단한다.
 AI 구현 확인(AI `feature/medication-ocr` `1b8e749`): 파트 `image`, 본문 상한 8MB+64KB(초과 413 `OCR_IMAGE_TOO_LARGE`), 형식·파트 오류 400 `OCR_INVALID_IMAGE`, 꺼짐·미설정 503, 모델 실패 502 `OCR_UPSTREAM_FAILED`(BE는 503으로), 모델 호출 제한 30초(BE 40초 안). 사진은 메모리에서만 다루고 EXIF를 떼어 재인코딩한다.
 
+**AI 머지·배포(2026-10-22)**: AI PR #29(`0212176`)로 main 머지·gosky 반영, 이어서 기능 점검에서 찾은 정규화 메모리 문제를 AI PR #32(`5eebb7c`)로 고쳐 gosky 반영했다(현재 AI main `5eebb7c`).
+- 모델 `claude-sonnet-5-5`(effort low, haiku 설정 시 sonnet으로 대체), JSON 스키마 강제, 서버 측 대체 모델, 30초·재시도 없음. 킬 스위치 AI `MEDICATION_OCR_ENABLED`(기본 true, AI `.env` 추가 없음).
+- 사진 처리: EXIF 방향 반영 → 긴 변 1568px 이하(확대 없음) → EXIF 없는 JPEG. `UploadFile`(1MB 넘으면 디스크 임시 파일)을 쓰지 않고 본문을 메모리로 읽는다.
+- **화소 상한(PR #32)**: JPEG 6,000만 / **PNG·WEBP 1,600만**(넘으면 AI 400 → BE `MEDICATION_OCR_INVALID_IMAGE`). PNG는 줄여 읽을 수 없어 105KB짜리 2,500만 화소 PNG가 디코드 232MB였다. JPEG는 디코드 단계에서 줄여 읽어 4,800만 화소도 41MB(수정 전 439MB). 정규화는 AI 안에서 동시 2건. BE 동시 상한(서버당 5)이 두 서버(prod·dev) 합쳐 AI에 최대 10건이라 둔 방어다.
+- 후처리: 이름 앞뒤 공백 제거·100자, 빈 이름 제거, `perDose`·`timesPerDay`·`days` 0 이하 → null, `slots` 중복 제거(하루 순서), `readable=false`면 `drugs=[]`.
+- AI 로그는 `[MED-OCR] result= bytes= px= ms= drugs=`만(사진·약 이름·모델 응답·오류 문구 없음).
+- gosky AI 직접 호출 확인: 합성 메모 `readable=false` 2.9초, 6000×4000 JPEG 메모 → 1568×1045로 줄여 3.8초, 2,500만 화소 PNG → 400. 재시작 뒤 BE 두 서버 AI WS 재연결 확인.
+
 ## 4. 처리 순서와 정책
 
 킬 스위치(`medication.ocr.enabled`) → 속도 제한(fail-open) → 인가(`isActiveConnection`, `getMyWards` 금지) → 크기(읽기 전 `getSize`) → 형식(매직 바이트) → 동시 자리 → AI 호출(전체 40초, 리다이렉트 미추종) → 허용 목록 → 응답.
