@@ -18,7 +18,6 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDate;
-import java.time.LocalDateTime;
 import java.time.LocalTime;
 import java.time.OffsetDateTime;
 import java.util.ArrayList;
@@ -179,19 +178,9 @@ public class MedicationMissedAlertPlanner {
                 .toList();
     }
 
-    /**
-     * 오늘(KST) 등록됐고 등록 시각이 복용 시각보다 늦은 약인지 — 그날은 먹을 기회가 없었으므로 집계에서 뺀다(MED-G14).
-     *
-     * <p>등록 시각이 복용 시각과 같으면(정각 등록) 뺄 이유가 없어 센다. 등록 시각을 모르면(감사 필드 미기록)
-     * 예전처럼 센다. 어제 이전 등록분은 시각과 무관하게 센다.</p>
-     */
+    /** 오늘 등록 전에 복용 시각이 지난 약인지 - 기준은 {@link MedicationClock#registeredAfterDose} 한 곳(MED-G14). */
     static boolean registeredAfterDoseToday(Medication medication, LocalDate today) {
-        if (medication.getCreatedAt() == null) {
-            return false;
-        }
-        LocalDateTime registeredAt = MedicationClock.toKst(medication.getCreatedAt());
-        return registeredAt.toLocalDate().equals(today)
-                && registeredAt.toLocalTime().isAfter(medication.getDoseTime());
+        return MedicationClock.registeredAfterDose(medication.getCreatedAt(), medication.getDoseTime(), today);
     }
 
     /** 상한까지 예정된 약의 (전체, 미체크) 수. */

@@ -2,6 +2,7 @@ package kr.silverbridge.main.domain.medication.service;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.LocalTime;
 import java.time.OffsetDateTime;
 import java.time.ZoneId;
 
@@ -32,5 +33,24 @@ public final class MedicationClock {
     /** 저장된 시각(오프셋 무관)을 KST 날짜·시각으로 바꾼다 — 등록 시각을 복용 시각과 같은 기준으로 비교할 때 쓴다. */
     public static LocalDateTime toKst(OffsetDateTime dateTime) {
         return dateTime.atZoneSameInstant(KST).toLocalDateTime();
+    }
+
+    /** 저장된 시각을 KST 오프셋(+09:00)으로 바꾼다 - 응답에 싣는 시각을 서버 타임존과 무관하게 맞춘다. null이면 null. */
+    public static OffsetDateTime atKst(OffsetDateTime dateTime) {
+        return dateTime == null ? null : dateTime.atZoneSameInstant(KST).toOffsetDateTime();
+    }
+
+    /**
+     * 그날(KST) 등록됐고 등록 시각이 복용 시각보다 늦은지 — 그날은 먹을 기회가 없었으므로 미체크로 세지 않는다(MED-G14).
+     * 미복용 요약·보호자 대시보드가 같은 기준을 쓰고, FE 복약 카드도 응답의 {@code createdAt}으로 같은 판정을 한다.
+     *
+     * <p>등록 시각이 복용 시각과 같으면(정각 등록) 센다. 등록 시각을 모르면 예전처럼 센다. 전날 이전 등록분은 시각과 무관하게 센다.</p>
+     */
+    public static boolean registeredAfterDose(OffsetDateTime registeredAt, LocalTime doseTime, LocalDate day) {
+        if (registeredAt == null) {
+            return false;
+        }
+        LocalDateTime registered = toKst(registeredAt);
+        return registered.toLocalDate().equals(day) && registered.toLocalTime().isAfter(doseTime);
     }
 }

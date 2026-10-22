@@ -13,6 +13,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.http.MediaType;
+import org.springframework.test.util.ReflectionTestUtils;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.web.method.annotation.AuthenticationPrincipalArgumentResolver;
@@ -21,6 +22,8 @@ import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 
 import java.math.BigDecimal;
 import java.time.LocalTime;
+import java.time.OffsetDateTime;
+import java.time.ZoneOffset;
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -82,6 +85,25 @@ class GuardianMedicationDoseJsonTest {
         assertThat(body).contains("\"doseAmount\":1,", "\"doseAmount\":0.5,", "\"doseAmount\":10,")
                 .doesNotContain("1.0", "1E+1");
         verify(guardianMedicationService).createBatch(eq("GD0001"), eq("WD0001"), any());
+    }
+
+    @Test
+    @DisplayName("응답의 등록 시각(createdAt)은 저장 오프셋과 무관하게 KST(+09:00)로 나간다")
+    void createdAtInKst() throws Exception {
+        MedicationItem stored = item("1", LocalTime.of(8, 0));
+        Medication medication = Medication.builder().wardId("WD0001").createdBy("GD0001").name("약")
+                .timeSlot(MedicationTimeSlot.MORNING).doseTime(LocalTime.of(8, 0)).doseAmount(BigDecimal.ONE).build();
+        ReflectionTestUtils.setField(medication, "createdAt",
+                OffsetDateTime.of(2026, 10, 22, 5, 0, 0, 0, ZoneOffset.UTC));
+        when(guardianMedicationService.create(any(), any(), any())).thenReturn(MedicationItem.of(medication, null));
+
+        String body = mvc().perform(post("/api/guardian/ward/WD0001/medication").contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"name\":\"약\",\"timeSlot\":\"MORNING\"}"))
+                .andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsString();
+
+        assertThat(body).contains("\"createdAt\":\"2026-10-22T14:00:00+09:00\"");
+        assertThat(stored.createdAt()).isNull(); // 감사 필드가 비어 있으면 null 그대로(FE는 예전처럼 센다)
     }
 
     @Test

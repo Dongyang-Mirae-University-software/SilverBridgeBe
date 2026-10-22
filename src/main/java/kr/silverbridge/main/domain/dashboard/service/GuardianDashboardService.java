@@ -132,10 +132,12 @@ public class GuardianDashboardService {
         return todayKst.withDayOfMonth(1).atStartOfDay().atOffset(ZoneOffset.ofHours(9));
     }
 
-    /** 복용 시각이 지났는데 체크되지 않은 약, 복용 시각 순. 복용 시각 정각은 "지난 것"으로 센다. */
+    /** 복용 시각이 지났는데 체크되지 않은 약, 복용 시각 순. 복용 시각 정각은 "지난 것"으로 센다. 오늘 등록 전에 지난 시각은 세지 않는다. */
     static List<UncheckedMedication> uncheckedOf(WardMedicationSummary summary, LocalTime nowKst) {
         return summary.medications().stream()
                 .filter(item -> !item.taken() && !item.doseTime().isAfter(nowKst))
+                // 오늘 등록 전에 복용 시각이 지난 약은 그날 먹을 기회가 없었다 - 미복용 요약과 같은 기준(MED-G14)
+                .filter(item -> !MedicationClock.registeredAfterDose(item.createdAt(), item.doseTime(), summary.doseDate()))
                 .sorted(Comparator.comparing(MedicationItem::doseTime))
                 .map(item -> new UncheckedMedication(summary.wardId(), summary.wardName(),
                         item.medicationId(), item.name(), item.timeSlot(), item.doseTime()))

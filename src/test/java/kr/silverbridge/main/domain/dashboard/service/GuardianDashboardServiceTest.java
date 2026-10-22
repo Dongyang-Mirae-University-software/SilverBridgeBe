@@ -57,7 +57,7 @@ class GuardianDashboardServiceTest {
     }
 
     private static MedicationItem item(long id, LocalTime time, boolean taken) {
-        return new MedicationItem(id, "약" + id, MedicationTimeSlot.MORNING, time, BigDecimal.ONE, null, taken, null);
+        return new MedicationItem(id, "약" + id, MedicationTimeSlot.MORNING, time, BigDecimal.ONE, null, taken, null, null);
     }
 
     @Test
@@ -182,6 +182,35 @@ class GuardianDashboardServiceTest {
 
         assertThat(result).extracting(GuardianDashboardResponse.UncheckedMedication::medicationId)
                 .containsExactly(2L, 1L);
+    }
+
+    @Test
+    @DisplayName("미체크 판정: 오늘 복용 시각 뒤에 등록한 약은 빼고, 어제 등록·정각 등록·등록 시각 모름은 센다 (MED-G14)")
+    void 미체크_판정_늦게_등록한_약() {
+        LocalDate day = LocalDate.of(2026, 10, 22);
+        LocalTime eight = LocalTime.of(8, 0);
+        OffsetDateTime todayAfternoon = OffsetDateTime.of(2026, 10, 22, 14, 0, 0, 0, ZoneOffset.ofHours(9));
+        // UTC로 저장돼 있어도 KST로 비교한다: 10/21 23:30 UTC = 10/22 08:30 KST (오늘, 복용 시각 뒤)
+        OffsetDateTime todayMorningUtc = OffsetDateTime.of(2026, 10, 21, 23, 30, 0, 0, ZoneOffset.UTC);
+        OffsetDateTime yesterday = OffsetDateTime.of(2026, 10, 21, 14, 0, 0, 0, ZoneOffset.ofHours(9));
+        OffsetDateTime onTime = OffsetDateTime.of(2026, 10, 22, 8, 0, 0, 0, ZoneOffset.ofHours(9));
+        WardMedicationSummary s = new WardMedicationSummary("W1", "W1-name", null, true, true, true, null,
+                day, 0, 5, List.of(
+                        registered(1, eight, todayAfternoon),
+                        registered(2, eight, todayMorningUtc),
+                        registered(3, eight, yesterday),
+                        registered(4, eight, onTime),
+                        registered(5, eight, null)));
+
+        var result = GuardianDashboardService.uncheckedOf(s, LocalTime.of(15, 0));
+
+        assertThat(result).extracting(GuardianDashboardResponse.UncheckedMedication::medicationId)
+                .containsExactlyInAnyOrder(3L, 4L, 5L);
+    }
+
+    private static MedicationItem registered(long id, LocalTime time, OffsetDateTime createdAt) {
+        return new MedicationItem(id, "약" + id, MedicationTimeSlot.MORNING, time, BigDecimal.ONE, null, false, null,
+                createdAt);
     }
 
     @Test

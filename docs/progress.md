@@ -2069,3 +2069,11 @@ SilverBridgeFe PR #83(`e510769`, gosky 반영 `d3d1dea`)을 템플릿 B로 점�
 ### [2026-10-22] FE 약 추가·수정 모달 Chrome 컴포넌트 테스트 + 수정 모달 Esc·포커스 (FE PR #85, `9267f10`)
 
 점검 후 남은 두 가지를 처리했다. 컴포넌트 테스트를 설치된 Google Chrome에서 돌리는 `npm run test:browser`를 추가해 19건(약 추가 10·약 수정 5·사진 전처리 4)을 작성했다. 3회 연속 통과했고, 변이 2종을 검출했다. 모달 공통 동작을 `useModalDialog`로 빼서 수정 모달에도 Esc·포커스·저장 중 닫기 막힘을 적용했다. gosky FE 반영 후 복약 화면 2종 200, 컴파일 오류 0을 확인했다. 상세: `docs/(2026-10-22) audit-fe-medication-add-modal.md` "남은 것 처리".
+
+---
+
+### [2026-10-22] 복약 카드 - 오늘 등록한 약은 등록 전에 지난 복용 시각을 "지난 약"에서 뺀다 (BE·FE)
+
+FE PR #86에서 보류한 메인 화면 a. 카드 응답 `MedicationItem`에 `createdAt`(KST)을 더하고(마이그레이션 없음), 판정을 `MedicationClock.registeredAfterDose` 한 곳으로 모아 미복용 요약·보호자 대시보드 "확인이 필요한 일"·FE 카드(회색 "오늘은 등록 전이었어요")가 같은 약을 센다. BE 테스트 1816건 통과, FE 138/138·빌드 통과.
+- 산출물: `docs/(2026-10-22) feature-medication-card-registered-today.md`.
+

@@ -6,6 +6,7 @@ import kr.silverbridge.main.domain.medication.entity.MedicationIntake;
 import kr.silverbridge.main.domain.medication.entity.MedicationTimeSlot;
 
 import kr.silverbridge.main.domain.medication.entity.DoseAmounts;
+import kr.silverbridge.main.domain.medication.service.MedicationClock;
 
 import java.math.BigDecimal;
 import java.time.LocalTime;
@@ -18,6 +19,8 @@ import java.time.OffsetDateTime;
  *
  * @param taken   조회 기준일(오늘)에 복용 체크가 되었는지. 체크는 피보호자만 할 수 있다.
  * @param takenAt 체크한 시각. 미복용이면 null.
+ * @param createdAt 약을 등록한 시각. 오늘 등록 전에 복용 시각이 지난 약은 미체크로 세지 않는다
+ *                  ({@code MedicationClock.registeredAfterDose} - FE 복약 카드가 같은 판정을 한다).
  */
 @Schema(description = "복약 일정 항목")
 public record MedicationItem(
@@ -45,7 +48,11 @@ public record MedicationItem(
         boolean taken,
 
         @Schema(description = "복용 체크 시각 (미복용이면 null)")
-        OffsetDateTime takenAt
+        OffsetDateTime takenAt,
+
+        @Schema(description = "약을 등록한 시각(KST). 오늘(KST) 등록됐고 이 시각이 복용 시각보다 늦으면 오늘은 등록 전이라 "
+                + "미체크로 세지 않는다(미복용 요약·보호자 대시보드와 같은 기준)")
+        OffsetDateTime createdAt
 ) {
     /** @param intake 해당 날짜의 복용 체크. 없으면 {@code null}(미복용). */
     public static MedicationItem of(Medication medication, MedicationIntake intake) {
@@ -57,7 +64,8 @@ public record MedicationItem(
                 DoseAmounts.normalize(medication.getDoseAmount()),
                 medication.getMemo(),
                 intake != null,
-                intake != null ? intake.getTakenAt() : null
+                intake != null ? intake.getTakenAt() : null,
+                MedicationClock.atKst(medication.getCreatedAt())
         );
     }
 }
