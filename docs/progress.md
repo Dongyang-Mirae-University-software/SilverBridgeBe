@@ -1982,3 +1982,11 @@ REST API Key 단독 대비 보안 강화 — 인가코드 탈취 시 토큰 발�
 - 토큰 선점을 DB 테이블로 이동(서버 여러 대에서도 유효), 예약 서비스에 활성 예약 부분 유니크 인덱스 2개 추가(`migrate deploy`로 적용, 예약 182건 보존, 배포 전 `dev.db` 백업·겹침 0건 재확인). 예약 서비스 DB가 SQLite임을 확인했고 테스트 러너(`pnpm test`)를 새로 추가. 인덱스를 빼면 동시 요청이 실제로 중복 예약을 만든다는 것을 테스트로 확인
 - 검증: AI pytest 420건·예약 서비스 6건, 실서버 다른 사용자 3명 동시 같은 슬롯 x3라운드 전부 예약 1건. 가상 계정 id 32~34 삭제(사용자 3·예약 16·API 키 4, 가드 스크립트). id 35~37은 승인 범위 밖이라 잔존
 - 후속 정리: 실서버 시험이 새로 만든 가상 계정 id 35~37도 같은 가드 스크립트로 삭제(사용자 3·취소 예약 6·API 키 3) - 사용자 14명·예약 166건으로 시험 이전과 같다. 예약 서비스 `dev.db` 백업(`dev.db.bak-202610220142`)은 7일 보관, **2026-10-29 이후 삭제 가능**(자동 삭제는 만들지 않음)
+
+## [2026-10-22] 약 봉투 OCR - 보호자 중계 API (branch `feature/medication-ocr`)
+
+- `POST /api/guardian/ward/{wardId}/medication/ocr`(GUARDIAN, multipart `image`) → AI `POST /api/v1/medication/ocr` 중계, **등록 초안만** 반환(사진·결과 저장 없음, 자동 등록 없음). 마이그레이션·`.env` 변경 없음
+- 순서: 킬 스위치 `medication.ocr.enabled` → 보호자 분 10·시간 60 → ACTIVE 연결(403 `MEDICATION_NOT_AUTHORIZED` + `[IDOR-ATTEMPT]`) → 8MB(413)·매직 바이트 jpeg/png/webp(400) → 동시 전체 5·1인 1(429) → AI 전체 40초(504)
+- 응답은 허용 목록(`reason`·성분 제외, 이름 100자, 모르는 slot 버림). 반 알은 `perDose` 0.5 원값 → FE가 메모로(`doseAmount` 정수 유지, 사용자 결정)
+- multipart 전역 상한 5MB → 10MB(프로필 5MB는 서비스 검사 유지), 서블릿 단계 초과는 OCR 경로만 413
+- 테스트 30건 추가, `./gradlew build` 전체 1,749건 통과. 상세 `docs/(2026-10-22) feature-medication-ocr.md`. 실서버 확인은 AI 반영·배포 뒤
