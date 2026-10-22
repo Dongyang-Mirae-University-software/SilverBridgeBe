@@ -39,8 +39,6 @@ class AiStreamClientTest {
     private final AtomicReference<String> receivedRawPath = new AtomicReference<>();
     private final java.util.concurrent.atomic.AtomicBoolean redirectFollowed = new java.util.concurrent.atomic.AtomicBoolean();
     private CameraStreamProperties properties;
-    private final org.springframework.scheduling.concurrent.ThreadPoolTaskScheduler scheduler =
-            new org.springframework.scheduling.concurrent.ThreadPoolTaskScheduler();
 
     @BeforeEach
     void setUp() throws IOException {
@@ -53,13 +51,11 @@ class AiStreamClientTest {
         properties.setApiKey(KEY);
         properties.setReadTimeout(Duration.ofSeconds(2));
         properties.setStreamIdleTimeout(Duration.ofSeconds(2));
-        scheduler.initialize();
     }
 
     @AfterEach
     void tearDown() {
         server.stop(0);
-        scheduler.shutdown();
     }
 
     private void handle(HttpExchange exchange) throws IOException {
@@ -148,7 +144,7 @@ class AiStreamClientTest {
     }
 
     private AiStreamClient client() {
-        return new AiStreamClient(properties, new ObjectMapper(), scheduler);
+        return new AiStreamClient(properties, new ObjectMapper());
     }
 
     @Test

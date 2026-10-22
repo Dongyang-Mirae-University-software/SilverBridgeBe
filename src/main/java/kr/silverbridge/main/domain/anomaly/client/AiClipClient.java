@@ -2,11 +2,11 @@ package kr.silverbridge.main.domain.anomaly.client;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import jakarta.annotation.PreDestroy;
 import kr.silverbridge.main.domain.anomaly.config.AnomalyProperties;
 import kr.silverbridge.main.domain.camera.config.CameraStreamProperties;
 import kr.silverbridge.main.global.enums.DetectedType;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.scheduling.TaskScheduler;
 import org.springframework.stereotype.Component;
 import org.springframework.util.StringUtils;
 import org.springframework.web.util.UriComponentsBuilder;
@@ -18,7 +18,6 @@ import java.io.OutputStream;
 import java.net.HttpURLConnection;
 import java.net.URI;
 import java.time.Duration;
-import java.time.Instant;
 import java.time.LocalDateTime;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
@@ -26,8 +25,12 @@ import java.time.format.DateTimeFormatter;
 import java.time.format.DateTimeParseException;
 import java.util.LinkedHashMap;
 import java.util.Map;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledFuture;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicInteger;
 
 /**
  * AI 서버 클립 API 클라이언트 - {@code POST /api/v1/live-streams/{sessionId}/clips}(계약서 2026-10-04 최종본).
@@ -55,14 +58,29 @@ public class AiClipClient {
     private final CameraStreamProperties streamProperties;
     private final AnomalyProperties anomalyProperties;
     private final ObjectMapper objectMapper;
-    private final TaskScheduler taskScheduler;
+    /**
+     * 호출 마감(연결 끊기) 전용 스레드(2026-10-22, 챗·약 봉투 OCR과 같은 조치). 공용 스케줄러 풀(3)을 쓰면 복약 Planner 등이
+     * 밀릴 때 마감이 늦어져 클립 작업 스레드(`clipExecutor`)를 25초 넘게 붙든다. 빈으로 등록하지 않는다 - {@code TaskScheduler} 빈이 하나 더 생기면
+     * Boot 기본 스케줄러 자동 설정이 물러나 {@code @Scheduled} 전체가 이 풀로 옮겨 간다. 마감 작업은 {@code disconnect()} 한 번이라 2스레드면 충분하다.
+     */
+    private final ScheduledExecutorService deadlineExecutor;
 
     public AiClipClient(CameraStreamProperties streamProperties, AnomalyProperties anomalyProperties,
-                        ObjectMapper objectMapper, TaskScheduler taskScheduler) {
+                        ObjectMapper objectMapper) {
         this.streamProperties = streamProperties;
         this.anomalyProperties = anomalyProperties;
         this.objectMapper = objectMapper;
-        this.taskScheduler = taskScheduler;
+        AtomicInteger seq = new AtomicInteger();
+        this.deadlineExecutor = Executors.newScheduledThreadPool(2, runnable -> {
+            Thread thread = new Thread(runnable, "ai-clip-deadline-" + seq.incrementAndGet());
+            thread.setDaemon(true);
+            return thread;
+        });
+    }
+
+    @PreDestroy
+    void shutdown() {
+        deadlineExecutor.shutdownNow();
     }
 
     /**
@@ -150,10 +168,10 @@ public class AiClipClient {
             connection = open(uri(sessionId), limit, payload.length);
             HttpURLConnection target = connection;
             // 연결·전송·헤더 대기 단계는 연결을 끊으면 바로 빠져나온다. 본문 수신 중에는 readBounded가 마감을 확인한다.
-            deadline = taskScheduler.schedule(() -> {
+            deadline = deadlineExecutor.schedule(() -> {
                 timedOut.set(true);
                 target.disconnect();
-            }, Instant.now().plus(limit));
+            }, limit.toMillis(), TimeUnit.MILLISECONDS);
 
             try (OutputStream body = connection.getOutputStream()) {
                 body.write(payload);

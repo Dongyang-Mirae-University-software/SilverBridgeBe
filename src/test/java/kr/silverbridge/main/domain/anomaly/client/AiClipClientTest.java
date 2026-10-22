@@ -15,7 +15,6 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
-import org.springframework.scheduling.concurrent.ThreadPoolTaskScheduler;
 
 import java.io.IOException;
 import java.io.OutputStream;
@@ -50,7 +49,6 @@ class AiClipClientTest {
     private CameraStreamProperties streamProperties;
     private AnomalyProperties anomalyProperties;
     private final ObjectMapper objectMapper = new ObjectMapper();
-    private final ThreadPoolTaskScheduler scheduler = new ThreadPoolTaskScheduler();
 
     @BeforeEach
     void setUp() throws IOException {
@@ -58,7 +56,6 @@ class AiClipClientTest {
         server.createContext("/api/v1/live-streams", this::handle);
         server.setExecutor(Executors.newCachedThreadPool());
         server.start();
-        scheduler.initialize();
         streamProperties = new CameraStreamProperties();
         streamProperties.setAiBaseUrl("http://127.0.0.1:" + server.getAddress().getPort());
         streamProperties.setApiKey(KEY);
@@ -70,11 +67,10 @@ class AiClipClientTest {
     @AfterEach
     void tearDown() {
         server.stop(0);
-        scheduler.shutdown();
     }
 
     private AiClipClient client() {
-        return new AiClipClient(streamProperties, anomalyProperties, objectMapper, scheduler);
+        return new AiClipClient(streamProperties, anomalyProperties, objectMapper);
     }
 
     private void handle(HttpExchange exchange) throws IOException {
