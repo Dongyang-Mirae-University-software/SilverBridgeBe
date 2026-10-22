@@ -2049,3 +2049,8 @@ SilverBridgeFe PR #83(`e510769`, gosky 반영 `d3d1dea`)을 템플릿 B로 점�
 - 요구사항 8개(초안만·저장 없음·사진 전처리·매핑·실패 안내·일괄 등록 검증·버튼 문구·수정 모달 회귀) 모두 PASS. 구현 단계에서 vitest 123건·브라우저 46 시나리오·gosky 실호출(`readable=false` 200, 잘못된 wardId 403)을 확인했다.
 - 이슈: 🔴🟠 0 · 🟡 5(M-1 읽는 중 탭 전환 덮어쓰기, M-2 다시 찍기 429 문구, M-3 "0.5정" 표시, M-4 약별 복용 안내 통일, M-5 20개 초과 자름) · 🟢 6.
 - 산출물: `docs/(2026-10-22) audit-fe-medication-add-modal.md`(FE 수정 커밋 초안 포함).
+
+## [2026-10-22] 챗 기록 예약 API 키 제거·로그 원문 정리 (AI 서버 PR #35)
+
+- #34 기능 점검 이슈 전부 반영: 챗 기록 `upstreamMeta`에서 예약 API 키·직전 상태 사본·원문 제외 / 원문 로그 3곳 / 라우터 기억·옛 고치기 상태 wardId / 대리 전화 wardPhone만 / 날짜+조사
+- pytest 457(신규 15), 변이 10종 전부 검출. gosky AI `eea6ed1` 반영. **운영 AI DB `chat_logs` 302행의 키 정리**(사용자 승인·`!` 실행, 남은 키 0, 백업 삭제). 상세 `docs/(2026-10-22) audit-ai-reservation-recheck-fixes.md` §0-1
