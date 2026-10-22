@@ -2,12 +2,12 @@ package kr.silverbridge.main.domain.camera.client;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import jakarta.annotation.PreDestroy;
 import kr.silverbridge.main.domain.camera.config.CameraStreamProperties;
 import kr.silverbridge.main.global.exception.CustomException;
 import kr.silverbridge.main.global.exception.ErrorCode;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
-import org.springframework.scheduling.TaskScheduler;
 import org.springframework.stereotype.Component;
 import org.springframework.util.StringUtils;
 import org.springframework.web.util.UriComponentsBuilder;
@@ -19,7 +19,6 @@ import java.io.InputStream;
 import java.net.HttpURLConnection;
 import java.net.URI;
 import java.time.Duration;
-import java.time.Instant;
 import java.time.LocalDateTime;
 import java.time.OffsetDateTime;
 import java.time.ZoneId;
@@ -28,8 +27,12 @@ import java.time.format.DateTimeParseException;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Optional;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledFuture;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicInteger;
 
 /**
  * AI 서버 라이브 스트림 REST 클라이언트(보호자 영상 중계용).
@@ -53,12 +56,27 @@ public class AiStreamClient {
 
     private final CameraStreamProperties properties;
     private final ObjectMapper objectMapper;
-    private final TaskScheduler taskScheduler;
+    /**
+     * 호출 마감(연결 끊기) 전용 스레드(2026-10-22, 챗·약 봉투 OCR과 같은 조치). 공용 스케줄러 풀(3)을 쓰면 복약 Planner 등이
+     * 밀릴 때 마감이 늦어져 카메라 목록·상태·정지 화면 요청 스레드를 8초 넘게 붙든다. 빈으로 등록하지 않는다 - {@code TaskScheduler} 빈이 하나 더 생기면
+     * Boot 기본 스케줄러 자동 설정이 물러나 {@code @Scheduled} 전체가 이 풀로 옮겨 간다. 마감 작업은 {@code disconnect()} 한 번이라 2스레드면 충분하다.
+     */
+    private final ScheduledExecutorService deadlineExecutor;
 
-    public AiStreamClient(CameraStreamProperties properties, ObjectMapper objectMapper, TaskScheduler taskScheduler) {
+    public AiStreamClient(CameraStreamProperties properties, ObjectMapper objectMapper) {
         this.properties = properties;
         this.objectMapper = objectMapper;
-        this.taskScheduler = taskScheduler;
+        AtomicInteger seq = new AtomicInteger();
+        this.deadlineExecutor = Executors.newScheduledThreadPool(2, runnable -> {
+            Thread thread = new Thread(runnable, "ai-stream-deadline-" + seq.incrementAndGet());
+            thread.setDaemon(true);
+            return thread;
+        });
+    }
+
+    @PreDestroy
+    void shutdown() {
+        deadlineExecutor.shutdownNow();
     }
 
     /** 송출 중인 세션 전체({@code sessionId} → 상태). AI가 목록에 넣지 않은 세션은 송출하지 않는 것이다. */
@@ -160,10 +178,10 @@ public class AiStreamClient {
             connection = open(uri, properties.getReadTimeout());
             HttpURLConnection target = connection;
             // 헤더 대기 단계는 연결을 끊으면 바로 빠져나온다
-            deadline = taskScheduler.schedule(() -> {
+            deadline = deadlineExecutor.schedule(() -> {
                 timedOut.set(true);
                 target.disconnect();
-            }, Instant.now().plus(properties.getCallTimeout()));
+            }, properties.getCallTimeout().toMillis(), TimeUnit.MILLISECONDS);
 
             int status = connection.getResponseCode();
             if (timedOut.get()) {
