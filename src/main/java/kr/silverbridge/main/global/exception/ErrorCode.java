@@ -113,6 +113,9 @@ public enum ErrorCode {
     CAMERA_STREAM_LIMIT_EXCEEDED(HttpStatus.TOO_MANY_REQUESTS,
             "동시에 볼 수 있는 영상 수를 넘었습니다. 다른 영상을 닫고 다시 시도해주세요."),
     CAMERA_STREAM_UNAVAILABLE(HttpStatus.SERVICE_UNAVAILABLE, "카메라 영상 서버에 연결할 수 없습니다. 잠시 후 다시 시도해주세요."),
+    // 관리자 디바이스 관리 - AI 연결이 끊겨 상태를 모를 때 정상·오프라인 필터를 빈 목록으로 답하지 않는다(2026-10-23)
+    CAMERA_LIVE_STATUS_UNKNOWN(HttpStatus.SERVICE_UNAVAILABLE,
+            "카메라 연결 상태를 지금 확인할 수 없습니다. 잠시 후 다시 시도해주세요."),
 
     // SOS 이력 조회 (처리(ACK) 기능 철회로 SOS_EVENT_NOT_FOUND 제거 - 2026-08-26, V39)
     // 연결되지 않은 피보호자의 이력 접근 — 404 위장 대신 그대로 안내한다(2026-07-14 정책)

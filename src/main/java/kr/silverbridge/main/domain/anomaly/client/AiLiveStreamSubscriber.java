@@ -88,6 +88,12 @@ public class AiLiveStreamSubscriber extends TextWebSocketHandler {
      */
     private final Set<String> lastKnownSessions = ConcurrentHashMap.newKeySet();
 
+    /**
+     * 연결 뒤 첫 세션 목록을 처리했는가(2026-10-23, 관리자 디바이스 관리). 연결 직후엔 구독 기록이 비어 있어
+     * 목록이 오기 전까지 모든 카메라가 "끊김"으로 보인다 - 이 값이 false인 동안 스냅샷은 "알 수 없음"이다.
+     */
+    private volatile boolean sessionListSynced;
+
     /** 마지막으로 AI에서 메시지(분석·목록·상태 등 무엇이든)를 받은 시각 - 반쯤 열린 연결 감지용. */
     private volatile Instant lastMessageAt = Instant.now();
 
@@ -115,6 +121,17 @@ public class AiLiveStreamSubscriber extends TextWebSocketHandler {
      */
     public int subscribedSessionCount() {
         return subscribedSessions.size();
+    }
+
+    /**
+     * 관리자 디바이스 관리용 - 지금 구독 중인 세션의 복사본. 연결이 없거나 연결 뒤 첫 목록을 아직 받지 못했으면
+     * 빈 값(<b>알 수 없음</b>)이다. 빈 집합(= 송출 중인 등록 카메라 0대)과 섞지 말 것.
+     */
+    public Optional<Set<String>> liveSessionSnapshot() {
+        if (!isConnected() || !sessionListSynced) {
+            return Optional.empty();
+        }
+        return Optional.of(Set.copyOf(subscribedSessions));
     }
 
     /**
@@ -231,6 +248,7 @@ public class AiLiveStreamSubscriber extends TextWebSocketHandler {
         this.session = session;
         this.reconnectAttempts = 0;
         this.lastMessageAt = Instant.now();
+        this.sessionListSynced = false;
         subscribedSessions.clear();   // 재연결이면 서버 측 구독이 사라졌으므로 다시 구독해야 한다
         liveAnalysisBroadcaster.clear();
         log.info("[ANOMALY] AI WS 연결됨 — 세션 목록 요청");
@@ -344,6 +362,7 @@ public class AiLiveStreamSubscriber extends TextWebSocketHandler {
         if (subscribedSessions.retainAll(live)) {
             log.info("[ANOMALY] 종료된 세션 구독 해제 — 남은 구독={}건", subscribedSessions.size());
         }
+        sessionListSynced = true;
     }
 
     /**
@@ -384,6 +403,7 @@ public class AiLiveStreamSubscriber extends TextWebSocketHandler {
     @Override
     public void afterConnectionClosed(WebSocketSession session, CloseStatus status) {
         this.session = null;
+        this.sessionListSynced = false;
         lastKnownSessions.addAll(subscribedSessions);   // 재접속 뒤 사라진 세션을 가려내는 기준
         subscribedSessions.clear();
         linkLostNotifier.cancelAll();      // 연결 상태를 모르는 동안은 보내지 않는다 - 재접속 뒤 다시 판단
