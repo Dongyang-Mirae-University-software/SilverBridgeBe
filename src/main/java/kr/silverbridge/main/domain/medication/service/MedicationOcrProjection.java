@@ -7,6 +7,7 @@ import kr.silverbridge.main.global.validation.TextSanitizer;
 
 import java.util.ArrayList;
 import java.util.EnumSet;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Set;
 
@@ -16,12 +17,16 @@ import java.util.Set;
  *
  * <p>값이 범위 밖이거나 형식이 다르면 그 칸만 {@code null}로 비운다(약 전체를 버리지 않는다 - 이름은 맞을 수 있다).
  * 이름이 보이는 글자로 남지 않는 약은 초안이 될 수 없어 뺀다.</p>
+ *
+ * <p>약 이름 대조 칸({@code inList}·{@code suggestions}, 2026-10-23)은 AI가 보내지 않으면 {@code null}·빈 배열이다
+ * - 옛 AI 응답도 그대로 받는다.</p>
  */
 final class MedicationOcrProjection {
 
     static final int MAX_DRUGS = 20;
     static final int MAX_NAME_CHARS = 100;
     static final int MAX_TIMING_CHARS = 50;
+    static final int MAX_SUGGESTIONS = 3;
     private static final double MAX_PER_DOSE = 99;
     private static final int MAX_TIMES_PER_DAY = 10;
     private static final int MAX_DAYS = 365;
@@ -74,7 +79,9 @@ final class MedicationOcrProjection {
                 integer(drug.get("days"), MAX_DAYS),
                 slots(drug.get("slots")),
                 text(drug.get("timing"), MAX_TIMING_CHARS),
-                confidence(drug.get("confidence")));
+                confidence(drug.get("confidence")),
+                inList(drug.get("inList")),
+                suggestions(drug.get("suggestions")));
     }
 
     /** 한 줄로 정리하고 보이는 글자가 없으면 {@code null}, 길면 코드포인트 기준으로 자른다. */
@@ -122,6 +129,29 @@ final class MedicationOcrProjection {
                 if (candidate.name().equals(slot.textValue())) {
                     found.add(candidate);
                 }
+            }
+        }
+        return List.copyOf(found);
+    }
+
+    /** JSON boolean일 때만 값이 있고, 없거나 형식이 다르면 {@code null}(모름). */
+    private static Boolean inList(JsonNode node) {
+        return node != null && node.isBoolean() ? node.booleanValue() : null;
+    }
+
+    /** 이름과 같은 규칙(정리·빈 값 제외·100자)으로 거르고, 중복은 한 번만, 앞에서부터 최대 3개다. */
+    private static List<String> suggestions(JsonNode node) {
+        if (node == null || !node.isArray()) {
+            return List.of();
+        }
+        Set<String> found = new LinkedHashSet<>();
+        for (JsonNode suggestion : node) {
+            if (found.size() >= MAX_SUGGESTIONS) {
+                break;
+            }
+            String name = text(suggestion, MAX_NAME_CHARS);
+            if (name != null) {
+                found.add(name);
             }
         }
         return List.copyOf(found);

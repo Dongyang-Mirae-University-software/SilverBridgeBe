@@ -68,8 +68,8 @@ class GuardianMedicationOcrControllerHttpTest {
         MockMultipartFile image = new MockMultipartFile("image", "a.jpg", "image/jpeg", new byte[]{(byte) 0xFF, (byte) 0xD8, (byte) 0xFF});
         when(medicationOcrService.read(eq("GD0001"), eq("WD0001"), any())).thenReturn(new MedicationOcrResponse(true, List.of(
                 new MedicationOcrResponse.Drug("슈다페드정", 0.5, 2, 5,
-                        List.of(MedicationTimeSlot.MORNING, MedicationTimeSlot.DINNER), "식후 30분", "high"),
-                new MedicationOcrResponse.Drug("펜쿨리어맥스정", null, null, null, List.of(), null, "low"))));
+                        List.of(MedicationTimeSlot.MORNING, MedicationTimeSlot.DINNER), "식후 30분", "high", false, List.of("슈다페드캡슐")),
+                new MedicationOcrResponse.Drug("펜쿨리어맥스정", null, null, null, List.of(), null, "low", null, List.of()))));
 
         mvc().perform(multipart(URL).file(image))
                 .andExpect(status().isOk())
@@ -83,7 +83,12 @@ class GuardianMedicationOcrControllerHttpTest {
                 .andExpect(jsonPath("$.data.drugs[0].slots[1]").value("DINNER"))
                 .andExpect(jsonPath("$.data.drugs[0].timing").value("식후 30분"))
                 .andExpect(jsonPath("$.data.drugs[0].confidence").value("high"))
+                .andExpect(jsonPath("$.data.drugs[0].inList").value(false))
+                .andExpect(jsonPath("$.data.drugs[0].suggestions[0]").value("슈다페드캡슐"))
                 .andExpect(jsonPath("$.data.drugs[1].slots").isEmpty())
+                .andExpect(jsonPath("$.data.drugs[1].inList").value(org.hamcrest.Matchers.nullValue()))
+                .andExpect(jsonPath("$.data.drugs[1].suggestions").isArray())
+                .andExpect(jsonPath("$.data.drugs[1].suggestions").isEmpty())
                 .andExpect(jsonPath("$.data.reason").doesNotExist())
                 .andExpect(jsonPath("$.data.drugs[0].ingredient").doesNotExist());
     }

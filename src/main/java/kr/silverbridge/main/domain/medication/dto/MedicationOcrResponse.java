@@ -23,6 +23,8 @@ public record MedicationOcrResponse(
      * @param perDose     1회 복용량(정). 반 알은 0.5 - 등록 API의 {@code doseAmount}(0.5 단위, V62)에 그대로 넣는다
      * @param slots       봉투에 표시된 복용 시간대. 표시가 없으면 빈 배열(지어내지 않는다)
      * @param confidence  {@code high}·{@code low}. 화면 강조용일 뿐 high라도 확인을 건너뛰지 않는다
+     * @param inList      AI가 약 이름을 약 목록과 대조한 결과(2026-10-23). 대조하지 않았거나 옛 AI면 {@code null}
+     * @param suggestions 비슷한 약 이름(최대 3개). 참고용이며 이름을 자동으로 바꾸지 않는다. 없으면 빈 배열
      */
     @Schema(description = "읽은 약 1종")
     public record Drug(
@@ -32,7 +34,9 @@ public record MedicationOcrResponse(
             @Schema(description = "복용 일수. 읽지 못하면 null") Integer days,
             @Schema(description = "복용 시간대. 표시가 없으면 빈 배열") List<MedicationTimeSlot> slots,
             @Schema(description = "복용 안내(예: 식후 30분, 최대 50자). 없으면 null") String timing,
-            @Schema(description = "high 또는 low. 알 수 없으면 null", allowableValues = {"high", "low"}) String confidence
+            @Schema(description = "high 또는 low. 알 수 없으면 null", allowableValues = {"high", "low"}) String confidence,
+            @Schema(description = "약 목록에 있는 이름인지. 대조하지 않았으면 null") Boolean inList,
+            @Schema(description = "비슷한 약 이름(최대 3개, 각 100자). 참고용 - 자동으로 바꾸지 않는다. 없으면 빈 배열") List<String> suggestions
     ) {
     }
 }
