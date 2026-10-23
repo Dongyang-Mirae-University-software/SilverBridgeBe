@@ -136,6 +136,7 @@ public enum ErrorCode {
     MEDICATION_BATCH_DUPLICATE_NAME(HttpStatus.BAD_REQUEST, "같은 이름의 약이 두 번 들어 있습니다."),
     MEDICATION_BATCH_DUPLICATE_TIME(HttpStatus.BAD_REQUEST, "같은 복용 시각이 두 번 들어 있습니다."),
     MEDICATION_INTAKE_BATCH_DUPLICATE(HttpStatus.BAD_REQUEST, "같은 약이 두 번 들어 있습니다."),
+    MEDICATION_DELETE_BATCH_DUPLICATE(HttpStatus.BAD_REQUEST, "같은 약이 두 번 들어 있습니다."),
 
     // 이상감지 판정 (2026-08-31)
     ANOMALY_INCIDENT_NOT_FOUND(HttpStatus.NOT_FOUND, "이상감지 기록을 찾을 수 없습니다."),

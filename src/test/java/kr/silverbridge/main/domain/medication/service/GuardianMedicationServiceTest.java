@@ -290,6 +290,70 @@ class GuardianMedicationServiceTest {
                 .hasFieldOrPropertyWithValue("errorCode", ErrorCode.MEDICATION_NOT_FOUND);
     }
 
+    // ─── 여러 개 삭제 (2026-10-23) ──────────────────────────────────
+
+    @Test
+    @DisplayName("여러 개 삭제 — 전부 soft delete, 이미 삭제된 약은 건너뛰고 센 수만 돌려준다")
+    void deleteBatch_전부삭제_이미삭제건너뜀() {
+        Medication a = medication(1L, WARD_ID, "혈압약", MedicationTimeSlot.MORNING, LocalTime.of(8, 0));
+        Medication b = medication(2L, WARD_ID, "위장약", MedicationTimeSlot.MORNING, LocalTime.of(8, 0));
+        Medication gone = medication(3L, WARD_ID, "감기약", MedicationTimeSlot.MORNING, LocalTime.of(8, 0));
+        gone.delete(OffsetDateTime.now().minusMinutes(1));
+        when(connectionService.isActiveConnection(GUARDIAN_ID, WARD_ID)).thenReturn(true);
+        when(medicationRepository.findById(1L)).thenReturn(Optional.of(a));
+        when(medicationRepository.findById(2L)).thenReturn(Optional.of(b));
+        when(medicationRepository.findById(3L)).thenReturn(Optional.of(gone));
+
+        int deleted = guardianMedicationService.deleteBatch(GUARDIAN_ID, WARD_ID, List.of(3L, 2L, 1L));
+
+        assertThat(deleted).isEqualTo(2);
+        assertThat(a.isDeleted()).isTrue();
+        assertThat(b.isDeleted()).isTrue();
+        verify(medicationRepository, never()).delete(any());
+    }
+
+    @Test
+    @DisplayName("[IDOR] 연결되지 않은 피보호자면 403 — 약을 읽지도 않는다")
+    void deleteBatch_연결없음_차단() {
+        when(connectionService.isActiveConnection(GUARDIAN_ID, OTHER_WARD_ID)).thenReturn(false);
+
+        assertThatThrownBy(() -> guardianMedicationService.deleteBatch(GUARDIAN_ID, OTHER_WARD_ID, List.of(1L)))
+                .isInstanceOf(CustomException.class)
+                .hasFieldOrPropertyWithValue("errorCode", ErrorCode.MEDICATION_NOT_AUTHORIZED);
+        verify(medicationRepository, never()).findById(any());
+    }
+
+    @Test
+    @DisplayName("[IDOR] 연결된 피보호자 경로로 다른 피보호자의 약을 섞으면 403 — 예외로 전부 롤백")
+    void deleteBatch_다른피보호자약_섞임_차단() {
+        Medication mine = medication(1L, WARD_ID, "혈압약", MedicationTimeSlot.MORNING, LocalTime.of(8, 0));
+        Medication others = medication(2L, OTHER_WARD_ID, "남의약", MedicationTimeSlot.MORNING, LocalTime.of(8, 0));
+        when(connectionService.isActiveConnection(GUARDIAN_ID, WARD_ID)).thenReturn(true);
+        when(medicationRepository.findById(1L)).thenReturn(Optional.of(mine));
+        when(medicationRepository.findById(2L)).thenReturn(Optional.of(others));
+
+        assertThatThrownBy(() -> guardianMedicationService.deleteBatch(GUARDIAN_ID, WARD_ID, List.of(1L, 2L)))
+                .isInstanceOf(CustomException.class)
+                .hasFieldOrPropertyWithValue("errorCode", ErrorCode.MEDICATION_NOT_AUTHORIZED);
+        // 남의 약은 건드리지 않는다. 먼저 처리한 1번은 @Transactional 롤백으로 되돌아간다(통합 테스트가 실 DB로 고정)
+        assertThat(others.isDeleted()).isFalse();
+    }
+
+    @Test
+    @DisplayName("없는 약이 섞이면 404, 같은 ID 중복이면 400(약을 읽기 전)")
+    void deleteBatch_없는약_중복() {
+        when(connectionService.isActiveConnection(GUARDIAN_ID, WARD_ID)).thenReturn(true);
+        when(medicationRepository.findById(99L)).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> guardianMedicationService.deleteBatch(GUARDIAN_ID, WARD_ID, List.of(99L)))
+                .isInstanceOf(CustomException.class)
+                .hasFieldOrPropertyWithValue("errorCode", ErrorCode.MEDICATION_NOT_FOUND);
+        assertThatThrownBy(() -> guardianMedicationService.deleteBatch(GUARDIAN_ID, WARD_ID, List.of(1L, 1L)))
+                .isInstanceOf(CustomException.class)
+                .hasFieldOrPropertyWithValue("errorCode", ErrorCode.MEDICATION_DELETE_BATCH_DUPLICATE);
+        verify(medicationRepository, never()).findById(1L);
+    }
+
     // ─── 알림 설정 ──────────────────────────────────────────────────
 
     @Test
