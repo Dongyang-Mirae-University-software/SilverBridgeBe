@@ -2134,3 +2134,9 @@ AI(#38·#39)가 더한 `drugs[].inList`·`suggestions`가 BE 허용 목록에 �
 
 FE #97(`3c9a8b6`, gosky 반영): 묶음·단건 체크 실패 시 오늘 일정 다시 불러오기 + 안내(M-1, 변이 확인)·"남은 약 N개"(L-1)·묶음 버튼 이름에 시간대(L-2)·복약 알림 클릭 → `/ward/medication`(L-4). BE #370(`8c908c0`): `MedicationIntakeBatchIntegrationTest`로 남의 약 섞임 403 시 롤백·이벤트 0건 고정(L-3, vkcs 통합 테스트 통과).
 
+### [2026-10-23] 보호자 약 여러 개 삭제(BE #371·FE #100) 기능 점검 - PASS
+
+인가(ACTIVE 연결·경로 피보호자와 약 주인 일치·형식)·전부 성공/전부 실패(실 DB)·이미 삭제 건너뜀·soft delete·알림/요약 제외 PASS. gosky 비변경 호출: 빈 목록 400·중복 400·없는 약 404·미연결 403.
+- 🟢 L-1 수정(PATCH)과 삭제 동시 시 전체 컬럼 UPDATE로 삭제가 취소될 수 있음(기존 경합, `@DynamicUpdate` 제안) · L-2 단건 삭제 실패 시 FE 무반응(기존).
+- 산출물: `docs/(2026-10-23) audit-medication-delete-batch.md`.
+
