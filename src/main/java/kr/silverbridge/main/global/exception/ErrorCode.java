@@ -135,6 +135,7 @@ public enum ErrorCode {
     // 약 일괄 등록 (2026-10-22) - 같은 요청 안의 중복은 오입력으로 보고 전체를 거절한다
     MEDICATION_BATCH_DUPLICATE_NAME(HttpStatus.BAD_REQUEST, "같은 이름의 약이 두 번 들어 있습니다."),
     MEDICATION_BATCH_DUPLICATE_TIME(HttpStatus.BAD_REQUEST, "같은 복용 시각이 두 번 들어 있습니다."),
+    MEDICATION_INTAKE_BATCH_DUPLICATE(HttpStatus.BAD_REQUEST, "같은 약이 두 번 들어 있습니다."),
 
     // 이상감지 판정 (2026-08-31)
     ANOMALY_INCIDENT_NOT_FOUND(HttpStatus.NOT_FOUND, "이상감지 기록을 찾을 수 없습니다."),

@@ -17,9 +17,12 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDate;
 import java.time.OffsetDateTime;
+import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
@@ -74,6 +77,35 @@ public class WardMedicationService {
      */
     @Transactional
     public MedicationItem markTaken(String wardId, Long medicationId) {
+        return mark(wardId, medicationId);
+    }
+
+    /**
+     * 같은 시간대의 약을 한 번에 체크·해제한다(2026-10-23) - "아침 약 다 먹었어요" 한 번으로 6번 누르던 것을 대신한다.
+     *
+     * <p><b>한 트랜잭션 - 전부 성공 또는 전부 실패.</b> 하나라도 본인 약이 아니거나(403) 없으면(404) 아무것도 체크되지 않는다
+     * (일부만 체크되면 어르신은 어느 약이 빠졌는지 모른다). 약마다의 판정·잠금·멱등·이벤트는 단건 체크와 같은 메서드를 쓴다.
+     * 잠금은 ID 오름차순으로 잡는다 - 두 기기가 같은 약들을 다른 순서로 보내도 서로 기다리다 멈추지 않게.</p>
+     *
+     * @return 요청한 순서대로 갱신된 항목
+     * @throws CustomException {@code MEDICATION_INTAKE_BATCH_DUPLICATE} 같은 약 ID 중복 / 그 밖은 단건 체크와 같다
+     */
+    @Transactional
+    public List<MedicationItem> markBatch(String wardId, List<Long> medicationIds, boolean taken) {
+        Set<Long> seen = new HashSet<>();
+        for (Long medicationId : medicationIds) {
+            if (!seen.add(medicationId)) {
+                throw new CustomException(ErrorCode.MEDICATION_INTAKE_BATCH_DUPLICATE);
+            }
+        }
+        Map<Long, MedicationItem> results = new HashMap<>();
+        medicationIds.stream().sorted().forEach(medicationId ->
+                results.put(medicationId, taken ? mark(wardId, medicationId) : unmark(wardId, medicationId)));
+        log.info("복약 묶음 체크: wardId={}, taken={}, 건수={}", wardId, taken, medicationIds.size());
+        return medicationIds.stream().map(results::get).toList();
+    }
+
+    private MedicationItem mark(String wardId, Long medicationId) {
         // 약 행을 잠그고 읽는다 - 더블탭으로 두 요청이 동시에 오면 둘 다 "미체크"를 보고 저장을 시도해
         // 진 쪽이 UNIQUE 위반(409)으로 끝났다. 뒤에 온 쪽이 앞 커밋을 보고 기존 기록을 돌려주게 한다(멱등, L-9).
         Medication medication = requireOwn(wardId, medicationId, medicationRepository.findByIdForUpdate(medicationId));
@@ -102,6 +134,10 @@ public class WardMedicationService {
      */
     @Transactional
     public MedicationItem unmarkTaken(String wardId, Long medicationId) {
+        return unmark(wardId, medicationId);
+    }
+
+    private MedicationItem unmark(String wardId, Long medicationId) {
         // 체크와 같은 잠금을 건다 - 두 기기에서 동시에 해제하면 둘 다 기록을 읽고 지우려다 진 쪽이 0행 삭제로
         // 409("다른 요청이 먼저 처리되었습니다")를 받았다. 뒤에 온 쪽은 앞 커밋을 보고 "이미 해제됨"을 돌려준다(멱등, MED-G04).
         Medication medication = requireOwn(wardId, medicationId, medicationRepository.findByIdForUpdate(medicationId));

@@ -5,6 +5,8 @@ import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.validation.Valid;
+import kr.silverbridge.main.domain.medication.dto.MedicationIntakeBatchRequest;
 import kr.silverbridge.main.domain.medication.dto.MedicationItem;
 import kr.silverbridge.main.domain.medication.dto.TodayMedicationResponse;
 import kr.silverbridge.main.domain.medication.service.WardMedicationService;
@@ -17,7 +19,10 @@ import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RestController;
+
+import java.util.List;
 
 /**
  * 피보호자용 복약 API — 오늘의 일정 조회와 복용 체크/해제.
@@ -119,5 +124,39 @@ public class WardMedicationController {
             @AuthenticationPrincipal String wardId,
             @Parameter(description = "약 ID") @PathVariable Long medicationId) {
         return ResponseEntity.ok(ApiResponse.ok(wardMedicationService.unmarkTaken(wardId, medicationId)));
+    }
+
+    @Operation(summary = "복용 묶음 체크·해제 (피보호자 전용)",
+            description = """
+                    [요청 헤더]
+                    Authorization: Bearer {accessToken}
+
+                    같은 시간대의 약을 한 번에 체크합니다("아침 약 다 먹었어요"). 약마다의 동작은 단건 체크·해제와 같습니다.
+
+                    [요청] { "medicationIds": [11, 12, 13], "taken": true }
+                    - medicationIds: 1~50개, 같은 ID 중복 불가(400)
+                    - taken: true = 체크, false = 해제
+
+                    [동작]
+                    - <b>전부 성공 또는 전부 실패</b>입니다. 하나라도 본인 약이 아니면 403, 없거나 삭제된 약이면 404이고
+                      그때는 아무것도 바뀌지 않습니다.
+                    - 이미 체크된 약은 그대로 성공합니다(멱등, 보호자에게 다시 알리지 않음).
+                    - 상태가 바뀐 약마다 커밋 후 WebSocket medication-taken을 보냅니다(단건과 같은 형식). 푸시·문자는 없습니다.
+
+                    [응답] data: 요청 순서대로 갱신된 항목 목록
+                    """)
+    @ApiResponses({
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "처리 완료. data: 갱신된 항목 목록"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "목록이 비었거나 50개 초과 / 같은 약 중복 / taken 누락", content = @Content),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "인증 토큰 없음 또는 만료", content = @Content),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "피보호자 권한 필요 / 본인의 약이 아닌 것이 섞임", content = @Content),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "존재하지 않거나 삭제된 약이 섞임", content = @Content)
+    })
+    @PostMapping("/api/ward/medication/intake/batch")
+    public ResponseEntity<ApiResponse<List<MedicationItem>>> markBatch(
+            @AuthenticationPrincipal String wardId,
+            @Valid @RequestBody MedicationIntakeBatchRequest request) {
+        return ResponseEntity.ok(ApiResponse.ok(
+                wardMedicationService.markBatch(wardId, request.medicationIds(), request.taken())));
     }
 }
