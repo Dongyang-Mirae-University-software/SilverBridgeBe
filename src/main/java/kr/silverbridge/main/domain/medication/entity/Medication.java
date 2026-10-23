@@ -6,6 +6,7 @@ import lombok.AccessLevel;
 import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
+import org.hibernate.annotations.DynamicUpdate;
 
 import java.math.BigDecimal;
 import java.time.LocalTime;
@@ -25,8 +26,14 @@ import java.time.OffsetDateTime;
  *
  * <p>{@code createdBy}(등록 보호자)는 탈퇴 시 이 약도 함께 삭제된다(V35 CASCADE + 탈퇴 리스너).
  * 남은 보호자에게는 "중지되었다"는 안내가 나간다.</p>
+ *
+ * <p><b>{@code @DynamicUpdate} - 떼지 말 것</b>(2026-10-23 점검 L-1): 바뀐 컬럼만 UPDATE한다. 전체 컬럼을 쓰면 보호자 A의 수정
+ * 트랜잭션이 약을 읽은 뒤 보호자 B의 삭제가 먼저 커밋됐을 때, A가 읽어 둔 {@code deleted_at = NULL}을 다시 써서
+ * <b>삭제가 취소되고 복약 알림이 계속 나갔다</b>. 이상감지 판정({@code AnomalyIncident}, 2026-09-30 E-2)과 같은 처방이다.
+ * {@code MedicationDeletedRaceIntegrationTest}가 실제 DB로 고정한다.</p>
  */
 @Entity
+@DynamicUpdate
 @Table(name = "medication")
 @Getter
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
