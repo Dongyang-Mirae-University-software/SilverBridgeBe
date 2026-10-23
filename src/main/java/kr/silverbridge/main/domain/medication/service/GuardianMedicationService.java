@@ -243,9 +243,50 @@ public class GuardianMedicationService {
         Medication medication = findActiveMedication(medicationId);
         requireActiveConnection(guardianId, medication.getWardId(), "약 삭제");
 
+        softDelete(guardianId, medication);
+    }
+
+    /**
+     * 한 피보호자의 약 여러 개를 한 번에 삭제한다(2026-10-23) - "아침 약 모두 삭제"·"약 전부 삭제".
+     *
+     * <p><b>한 트랜잭션 - 전부 성공 또는 전부 실패.</b> 인가는 단건과 같은 ACTIVE 연결 확인이고, 목록의 약은 모두 경로의
+     * 피보호자 약이어야 한다(아니면 403 + {@code [IDOR-ATTEMPT]}). 없는 약은 404다. <b>이미 삭제된 약은 건너뛴다</b> - 다른
+     * 보호자가 방금 지운 약 때문에 나머지 삭제가 실패하면 보호자가 다시 눌러야 하는데, 지우려던 상태는 이미 이뤄졌다.
+     * 지난 복용 이력은 단건과 같이 남는다(soft delete).</p>
+     *
+     * @return 이번에 삭제한 약 수(이미 삭제돼 건너뛴 약 제외)
+     */
+    @Transactional
+    public int deleteBatch(String guardianId, String wardId, List<Long> medicationIds) {
+        requireActiveConnection(guardianId, wardId, "약 일괄 삭제");
+        if (new HashSet<>(medicationIds).size() != medicationIds.size()) {
+            throw new CustomException(ErrorCode.MEDICATION_DELETE_BATCH_DUPLICATE);
+        }
+
+        int deleted = 0;
+        for (Long medicationId : medicationIds.stream().sorted().toList()) {
+            Medication medication = medicationRepository.findById(medicationId)
+                    .orElseThrow(() -> new CustomException(ErrorCode.MEDICATION_NOT_FOUND));
+            if (!medication.getWardId().equals(wardId)) {
+                log.warn("[IDOR-ATTEMPT] 다른 피보호자의 약을 일괄 삭제 시도: guardianId={}, wardId={}, medicationId={}",
+                        guardianId, wardId, medicationId);
+                throw new CustomException(ErrorCode.MEDICATION_NOT_AUTHORIZED);
+            }
+            if (medication.isDeleted()) {
+                continue;
+            }
+            softDelete(guardianId, medication);
+            deleted++;
+        }
+        log.info("복약 일괄 삭제: wardId={}, guardianId={}, 요청={}, 삭제={}",
+                wardId, guardianId, medicationIds.size(), deleted);
+        return deleted;
+    }
+
+    private void softDelete(String guardianId, Medication medication) {
         medication.delete(MedicationClock.now());
         log.info("복약 삭제: medicationId={}, wardId={}, guardianId={}",
-                medicationId, medication.getWardId(), guardianId);
+                medication.getId(), medication.getWardId(), guardianId);
     }
 
     /** 피보호자의 복약 알림 설정을 조회한다. */

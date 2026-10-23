@@ -92,4 +92,15 @@ class MedicationRequestValidationTest {
                 .anyMatch(field -> field.startsWith("medicationIds"));
         assertThat(fieldsOf(validator.validate(new MedicationIntakeBatchRequest(List.of(1L), null)))).contains("taken");
     }
+
+    @Test
+    @DisplayName("여러 개 삭제 - 약 1~100개, 빈 ID는 거절 (2026-10-23)")
+    void 여러개삭제_검증() {
+        assertThat(validator.validate(new MedicationDeleteBatchRequest(List.of(1L)))).isEmpty();
+        assertThat(fieldsOf(validator.validate(new MedicationDeleteBatchRequest(List.of())))).contains("medicationIds");
+        assertThat(fieldsOf(validator.validate(new MedicationDeleteBatchRequest(
+                java.util.stream.LongStream.rangeClosed(1, 101).boxed().toList())))).contains("medicationIds");
+        assertThat(fieldsOf(validator.validate(new MedicationDeleteBatchRequest(java.util.Arrays.asList(1L, null)))))
+                .anyMatch(field -> field.startsWith("medicationIds"));
+    }
 }

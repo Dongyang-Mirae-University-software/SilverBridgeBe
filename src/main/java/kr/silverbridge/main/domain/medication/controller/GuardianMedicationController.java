@@ -10,6 +10,7 @@ import kr.silverbridge.main.domain.medication.dto.GuardianMedicationAlertSetting
 import kr.silverbridge.main.domain.medication.dto.GuardianMedicationAlertSettingResponse;
 import kr.silverbridge.main.domain.medication.dto.MedicationBatchCreateRequest;
 import kr.silverbridge.main.domain.medication.dto.MedicationCreateRequest;
+import kr.silverbridge.main.domain.medication.dto.MedicationDeleteBatchRequest;
 import kr.silverbridge.main.domain.medication.dto.MedicationItem;
 import kr.silverbridge.main.domain.medication.dto.MedicationSettingResponse;
 import kr.silverbridge.main.domain.medication.dto.MedicationSettingUpdateRequest;
@@ -221,6 +222,40 @@ public class GuardianMedicationController {
             @Parameter(description = "약 ID") @PathVariable Long medicationId) {
         guardianMedicationService.delete(guardianId, medicationId);
         return ResponseEntity.ok(ApiResponse.ok("약이 삭제되었습니다."));
+    }
+
+    @Operation(summary = "약 여러 개 삭제 (보호자 전용)",
+            description = """
+                    [요청 헤더]
+                    Authorization: Bearer {accessToken}
+
+                    한 피보호자의 약을 한 번에 삭제합니다("아침 약 모두 삭제"·"약 전부 삭제").
+
+                    [요청] { "medicationIds": [11, 12, 13] } - 1~100개, 같은 ID 중복 불가(400)
+                    화면에 보이는 약 ID를 보냅니다("전부" 신호가 아니다 - 다른 보호자가 방금 추가한 약은 지우지 않는다).
+
+                    [동작]
+                    - <b>전부 성공 또는 전부 실패</b>입니다. 연결되지 않은 피보호자(403), 다른 피보호자의 약이 섞임(403),
+                      없는 약(404)이면 아무것도 지워지지 않습니다.
+                    - 이미 삭제된 약은 건너뜁니다(오류 아님).
+                    - 지난 복용 이력은 남기고 일정만 중지합니다(soft delete). 알림은 보내지 않습니다.
+
+                    [응답] data: 이번에 삭제한 약 수
+                    """)
+    @ApiResponses({
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "삭제 완료. data: 삭제한 약 수"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "목록이 비었거나 100개 초과 / 같은 약 중복", content = @Content),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "인증 토큰 없음 또는 만료", content = @Content),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "보호자 권한 필요 / 연결되지 않은 피보호자 / 다른 피보호자의 약", content = @Content),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "존재하지 않는 약", content = @Content)
+    })
+    @PostMapping("/api/guardian/ward/{wardId}/medication/delete-batch")
+    public ResponseEntity<ApiResponse<Integer>> deleteBatch(
+            @AuthenticationPrincipal String guardianId,
+            @Parameter(description = "피보호자 ID") @PathVariable String wardId,
+            @Valid @RequestBody MedicationDeleteBatchRequest request) {
+        return ResponseEntity.ok(ApiResponse.ok(
+                guardianMedicationService.deleteBatch(guardianId, wardId, request.medicationIds())));
     }
 
     @Operation(summary = "피보호자 복약 알림 설정 조회 (보호자 전용)",
