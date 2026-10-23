@@ -593,3 +593,14 @@
   - gosky 앞단 nginx(`devdmu.gosky.kr`·`api.devdmu.gosky.kr`)는 기본 1MB였다 → 2026-10-22 `client_max_body_size 10m` 적용(백업 `/root/nginx-backup-20261022-ocr/`). 업로드 상한을 바꿀 때는 nginx 값도 함께 볼 것.
 - **점검 후속 (2026-10-22, L-1·L-2·L-6)**: ① OCR 경로는 `SecurityConfig` URL 규칙으로도 GUARDIAN만 - 메서드 보안은 multipart 파싱 뒤라 WARD·ADMIN이 10MB를 읽게 한 뒤 403이었다. 이 URL 규칙을 지우지 말 것(`@PreAuthorize`와 이중). ② 업로드 전역 상한 10MB 때문에 프로필 사진 업로드에 사용자 기준 속도 제한(분 5·시간 30)을 뒀다 - 새 업로드 경로를 만들면 서비스 크기 검사 + 속도 제한을 함께 둘 것. ③ 복약 IDOR 로그는 경로 `wardId` 형식(영숫자 1~6자)을 먼저 확인하고 틀리면 원문 대신 길이만 남긴다(`MedicationWardIds`, 챗 대리 상담과 같음).
 - **반 알**: OCR 응답은 `perDose` 원값(0.5)을 준다. `doseAmount` 0.5 단위 저장은 후속 PR #362(V62)에서 지원한다.
+
+## 관리자 디바이스 관리 - 상태만 보고, 기기·영상은 보지 않는다 (2026-10-23)
+
+- **경위**: 관리자 웹 "디바이스 관리" 화면용 조회 API(`GET /api/admin/camera`·`/summary`, 마이그레이션 없음). 상세 `docs/(2026-10-23) feature-admin-camera-management.md`.
+- **불변 규칙 ①(모르는 상태는 null)**: `liveStatus`는 AI 구독 집합 기준 LIVE/OFFLINE이고, AI 연결이 끊겼거나 재접속 뒤 첫 세션 목록을 받기 전이면 `null`이다(`AiLiveStreamSubscriber.liveSessionSnapshot()`). 이때 LIVE·OFFLINE 필터는 빈 목록이 아니라 503 `CAMERA_LIVE_STATUS_UNKNOWN`이다. null을 OFFLINE·0으로 채우지 말 것(대시보드 2026-09-02와 같은 판단).
+- **불변 규칙 ②(싣지 않는 칸)**: `deviceId`(재등록 키)·영상·정지 화면·클립 주소·상세 주소를 응답에 싣지 말 것(`AdminCameraItemExposureTest`). 관리자 영상 열람 금지(`AdminAnomalyClipExposureTest`)와 같은 취지.
+- **불변 규칙 ③(조회 전용)**: 카메라 삭제·점검 요청을 만들지 않았다(사용자 결정 - 한 계정 슬롯 독점은 2026-10-14대로 수용). 쓰기 매핑을 더하려면 `AdminCameraControllerSecurityTest`의 고정과 이 정책부터 바꿀 것. 삭제를 넣게 되면 `CameraService.delete`(→ `CameraDeletedEvent` 클립 정리)를 타고, `AdminAuditAction` 새 값 + CHECK 재정의 마이그레이션, 감사 로그는 삭제보다 먼저.
+- **모집단**: 탈퇴 처리 중(INACTIVE) 피보호자의 카메라는 뺀다(회원 관리와 같다). 꺼 둔 카메라(`is_active=false`)는 넣고 개수에도 센다 - 꺼도 감지는 계속되므로(대시보드 "끊김"은 빼고 센다, ADMIN-G20 - 두 숫자가 다를 수 있음은 수용).
+- **메모리 필터·페이지**: 상태가 메모리 값이라 전체를 읽어 거른 뒤 자른다. 근거는 등록 상한 `camera.max-total` 3대다 - 상한을 크게 올리면 이 방식부터 다시 볼 것.
+- 로그 `[ADMIN-CAMERA]`는 adminId·건수·소요 시간만(주소·이름·검색어 금지), 조회라 감사 로그 없음.
+

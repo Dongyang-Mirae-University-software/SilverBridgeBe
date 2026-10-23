@@ -303,4 +303,45 @@ class AiLiveStreamSubscriberTest {
 
         verify(session, never()).close(any(org.springframework.web.socket.CloseStatus.class));
     }
+
+    @Test
+    @DisplayName("관리자 스냅샷: 연결 직후 첫 목록 전에는 '알 수 없음'(빈 집합과 다르다) (2026-10-23)")
+    void 스냅샷_첫목록_전에는_알수없음() {
+        assertThat(subscriber.liveSessionSnapshot()).isEmpty();
+    }
+
+    @Test
+    @DisplayName("관리자 스냅샷: 첫 목록을 처리하면 구독 중인 세션 집합을 준다 - 송출 0대면 빈 집합")
+    void 스냅샷_목록_뒤에는_구독집합() throws Exception {
+        when(cameraService.findOwnerBySessionId(SESSION_ID))
+                .thenReturn(Optional.of(new CameraOwner("WD0001", "거실")));
+
+        subscriber.handleTextMessage(session, liveStreams());
+        assertThat(subscriber.liveSessionSnapshot()).contains(Set.of());
+
+        subscriber.handleTextMessage(session, liveStreams(SESSION_ID));
+        assertThat(subscriber.liveSessionSnapshot()).contains(Set.of(SESSION_ID));
+    }
+
+    @Test
+    @DisplayName("관리자 스냅샷: 연결이 끊기거나 재접속하면 다시 '알 수 없음'")
+    void 스냅샷_끊기면_알수없음() throws Exception {
+        subscriber.handleTextMessage(session, liveStreams());
+        assertThat(subscriber.liveSessionSnapshot()).isPresent();
+
+        subscriber.afterConnectionClosed(session, org.springframework.web.socket.CloseStatus.GOING_AWAY);
+        assertThat(subscriber.liveSessionSnapshot()).isEmpty();
+
+        subscriber.afterConnectionEstablished(session);
+        assertThat(subscriber.liveSessionSnapshot()).isEmpty();
+    }
+
+    @Test
+    @DisplayName("관리자 스냅샷: 소켓이 닫혀 있으면 목록을 받았어도 '알 수 없음'")
+    void 스냅샷_소켓닫힘() throws Exception {
+        subscriber.handleTextMessage(session, liveStreams());
+        when(session.isOpen()).thenReturn(false);
+
+        assertThat(subscriber.liveSessionSnapshot()).isEmpty();
+    }
 }

@@ -2144,3 +2144,12 @@ FE #97(`3c9a8b6`, gosky 반영): 묶음·단건 체크 실패 시 오늘 일정 
 
 BE #372(`81d5279`): `Medication`에 `@DynamicUpdate` - 수정(PATCH) 트랜잭션이 읽은 뒤 삭제가 먼저 커밋되면 전체 컬럼 UPDATE가 `deleted_at`을 NULL로 되돌려 삭제가 취소되던 경합(L-1). `MedicationDeletedRaceIntegrationTest`로 수정 전 실패·수정 후 통과 확인(vkcs). FE #103(`9cf9a92`): 단건 삭제 실패 안내·실패해도 목록 무효화(L-2, 변이 확인).
 
+### [2026-10-23] 관리자 디바이스(카메라) 관리 조회 API (branch `feature/admin-camera-management`)
+
+관리자 웹 "디바이스 관리" 화면용 조회 API 2종(ADMIN 전용, 조회 전용, 마이그레이션 없음).
+- `GET /api/admin/camera?status=ALL|LIVE|OFFLINE&q=&page=&size=` / `GET /api/admin/camera/summary`. 상태 기준은 대시보드와 같은 AI 구독 집합이며, AI 연결이 끊겼거나 재접속 뒤 첫 목록 전이면 `null`(`AiLiveStreamSubscriber.liveSessionSnapshot()` 신설).
+- 사용자 결정: 카메라 삭제 API 없음 · 모를 때 LIVE/OFFLINE 필터는 503 `CAMERA_LIVE_STATUS_UNKNOWN` · 꺼 둔 카메라도 live/offline 개수에 포함(`live + offline = registered`).
+- 만들지 않음: 점검 요청 버튼(받는 곳 없음)·"24시간 꺼짐"(시각 미저장)·영상/클립·deviceId. 탈퇴 처리 중 피보호자 카메라 제외.
+- 테스트: 서비스 11·구독기 +4·권한·HTTP 직렬화·칸 고정, `./gradlew build` 통과(1861건, 실패 0).
+- 산출물: `docs/(2026-10-23) feature-admin-camera-management.md`, `docs/(2026-10-23) api-contract-admin-camera.md`.
+
