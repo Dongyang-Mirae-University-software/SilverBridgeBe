@@ -141,14 +141,39 @@ class MedicationOcrProjectionTest {
     }
 
     @Test
-    @DisplayName("제안: 빈 값·문자열 아님·제어문자 정리, 중복은 한 번, 100자로 자르고 최대 3개")
+    @DisplayName("제안: 정확히 100자는 남긴다(경계)")
+    void suggestionAtLimitKept() throws Exception {
+        String atLimit = "다".repeat(100);
+        MedicationOcrResponse r = MedicationOcrProjection.project(json("{\"readable\":true,\"drugs\":[{\"name\":\"a\","
+                + "\"inList\":false,\"suggestions\":[\"" + atLimit + "\",\"" + atLimit + "다\"]}]}"));
+
+        assertThat(r.drugs().get(0).suggestions()).containsExactly(atLimit);
+    }
+
+    @Test
+    @DisplayName("제안은 inList=false일 때만: true·null·칸 없음·형식 다름이면 AI가 제안을 보내도 빈 배열")
+    void suggestionsOnlyWhenNotInList() throws Exception {
+        MedicationOcrResponse r = MedicationOcrProjection.project(json("""
+                {"readable":true,"drugs":[
+                  {"name":"a","inList":true,"suggestions":["x"]},
+                  {"name":"b","inList":null,"suggestions":["x"]},
+                  {"name":"c","suggestions":["x"]},
+                  {"name":"d","inList":"false","suggestions":["x"]},
+                  {"name":"e","inList":false,"suggestions":["x"]}]}"""));
+
+        assertThat(r.drugs()).extracting(MedicationOcrResponse.Drug::suggestions)
+                .containsExactly(java.util.List.of(), java.util.List.of(), java.util.List.of(), java.util.List.of(), java.util.List.of("x"));
+    }
+
+    @Test
+    @DisplayName("제안: 빈 값·문자열 아님·제어문자 정리, 중복은 한 번, 100자 넘는 것은 자르지 않고 빼며 최대 3개")
     void suggestionsFiltered() throws Exception {
         String longName = "나".repeat(120);
-        MedicationOcrResponse r = MedicationOcrProjection.project(json("{\"readable\":true,\"drugs\":[{\"name\":\"a\","
+        MedicationOcrResponse r = MedicationOcrProjection.project(json("{\"readable\":true,\"drugs\":[{\"name\":\"a\",\"inList\":false,"
                 + "\"suggestions\":[\"\",\"\\u200B \",7,null,\"타이\\u0000레놀\",\"타이레놀\",\"" + longName + "\",\"게보린\",\"펜잘\"]}]}"));
 
         assertThat(r.drugs().get(0).suggestions())
                 .hasSize(MedicationOcrProjection.MAX_SUGGESTIONS)
-                .containsExactly("타이레놀", "나".repeat(100), "게보린");
+                .containsExactly("타이레놀", "게보린", "펜잘");
     }
 }

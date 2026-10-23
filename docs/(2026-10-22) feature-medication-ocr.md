@@ -95,6 +95,6 @@ AI 구현 확인(AI `feature/medication-ocr` `1b8e749`): 파트 `image`, 본문 
 ## 7. 후속 - 약 이름 대조 칸 전달 (2026-10-23)
 
 - AI OCR(#38·#39)이 `drugs[]`에 `inList`(bool|null)·`suggestions`(문자열 배열, 최대 3)를 더했다. BE는 허용 목록으로 거르므로 그대로는 FE에 가지 않아 `MedicationOcrResponse.Drug`에 두 칸을 추가했다(마이그레이션 없음, 가산 변경이라 기존 FE 무영향).
-- `inList`: JSON boolean일 때만 값, 없거나 null·형식이 다르면 `null`(모름). `suggestions`: 배열이 아니면 `[]`, 원소는 약 이름과 같은 정리(`TextSanitizer`·빈 값/문자열 아님 제외·100자 코드포인트), 순서 유지 중복 제거, 최대 3개. AI가 칸을 안 주면 `null`·`[]`라 옛 AI 응답과 호환된다.
+- `inList`: JSON boolean일 때만 값, 없거나 null·형식이 다르면 `null`(모름). `suggestions`: **`inList=false`일 때만** 채우고(그 밖은 `[]`), 배열이 아니면 `[]`, 원소는 약 이름과 같은 정리(`TextSanitizer`·빈 값/문자열 아님 제외), **100자를 넘으면 자르지 않고 뺀다**(점검 L-1·L-2 조치), 순서 유지 중복 제거, 최대 3개. AI가 칸을 안 주면 `null`·`[]`라 옛 AI 응답과 호환된다.
 - 제안은 **참고용**이다 - 이름을 자동으로 바꾸거나 자동 등록하지 않는다(불변 규칙 ① 그대로). 이름·제안 원문은 로그에 남기지 않는다(`MedicationOcrLogGuardTest` 유지).
 - 테스트: `MedicationOcrProjectionTest` +3(칸 있음·없음/null/형식 다름·제안 정리와 3개 상한), `GuardianMedicationOcrControllerHttpTest`(실제 직렬화에서 `inList` false/null·`suggestions` 배열/빈 배열).

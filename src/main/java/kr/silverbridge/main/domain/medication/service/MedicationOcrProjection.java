@@ -19,7 +19,7 @@ import java.util.Set;
  * 이름이 보이는 글자로 남지 않는 약은 초안이 될 수 없어 뺀다.</p>
  *
  * <p>약 이름 대조 칸({@code inList}·{@code suggestions}, 2026-10-23)은 AI가 보내지 않으면 {@code null}·빈 배열이다
- * - 옛 AI 응답도 그대로 받는다.</p>
+ * - 옛 AI 응답도 그대로 받는다. 제안은 {@code inList=false}일 때만 내린다(목록에 있거나 대조하지 못한 이름에 제안을 붙이지 않는다).</p>
  */
 final class MedicationOcrProjection {
 
@@ -72,6 +72,7 @@ final class MedicationOcrProjection {
         if (name == null) {
             return null;
         }
+        Boolean inList = inList(drug.get("inList"));
         return new MedicationOcrResponse.Drug(
                 name,
                 perDose(drug.get("perDose")),
@@ -80,8 +81,8 @@ final class MedicationOcrProjection {
                 slots(drug.get("slots")),
                 text(drug.get("timing"), MAX_TIMING_CHARS),
                 confidence(drug.get("confidence")),
-                inList(drug.get("inList")),
-                suggestions(drug.get("suggestions")));
+                inList,
+                Boolean.FALSE.equals(inList) ? suggestions(drug.get("suggestions")) : List.of());
     }
 
     /** 한 줄로 정리하고 보이는 글자가 없으면 {@code null}, 길면 코드포인트 기준으로 자른다. */
@@ -139,7 +140,10 @@ final class MedicationOcrProjection {
         return node != null && node.isBoolean() ? node.booleanValue() : null;
     }
 
-    /** 이름과 같은 규칙(정리·빈 값 제외·100자)으로 거르고, 중복은 한 번만, 앞에서부터 최대 3개다. */
+    /**
+     * 이름과 같은 정리(빈 값·문자열 아님 제외)를 하되 100자를 넘는 제안은 <b>자르지 않고 뺀다</b> - 잘린 이름은 허가 목록에 없는
+     * 품목명이 된다(2026-10-23 점검 L-1). 중복은 한 번만, 앞에서부터 최대 3개. {@code inList=false}일 때만 부른다(L-2).
+     */
     private static List<String> suggestions(JsonNode node) {
         if (node == null || !node.isArray()) {
             return List.of();
@@ -149,8 +153,8 @@ final class MedicationOcrProjection {
             if (found.size() >= MAX_SUGGESTIONS) {
                 break;
             }
-            String name = text(suggestion, MAX_NAME_CHARS);
-            if (name != null) {
+            String name = text(suggestion, Integer.MAX_VALUE);
+            if (name != null && TextSanitizer.codePointLength(name) <= MAX_NAME_CHARS) {
                 found.add(name);
             }
         }
