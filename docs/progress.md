@@ -2140,3 +2140,7 @@ FE #97(`3c9a8b6`, gosky 반영): 묶음·단건 체크 실패 시 오늘 일정 
 - 🟢 L-1 수정(PATCH)과 삭제 동시 시 전체 컬럼 UPDATE로 삭제가 취소될 수 있음(기존 경합, `@DynamicUpdate` 제안) · L-2 단건 삭제 실패 시 FE 무반응(기존).
 - 산출물: `docs/(2026-10-23) audit-medication-delete-batch.md`.
 
+### [2026-10-23] 약 여러 개 삭제 점검 후속 - 🟢 2 전부 조치
+
+BE #372(`81d5279`): `Medication`에 `@DynamicUpdate` - 수정(PATCH) 트랜잭션이 읽은 뒤 삭제가 먼저 커밋되면 전체 컬럼 UPDATE가 `deleted_at`을 NULL로 되돌려 삭제가 취소되던 경합(L-1). `MedicationDeletedRaceIntegrationTest`로 수정 전 실패·수정 후 통과 확인(vkcs). FE #103(`9cf9a92`): 단건 삭제 실패 안내·실패해도 목록 무효화(L-2, 변이 확인).
+
