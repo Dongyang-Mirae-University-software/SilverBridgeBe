@@ -9,6 +9,7 @@
 
 | 머지 | 기능 | 상태 | 점검 문서 | 잔여 이슈 |
 |---|---|---|---|---|
+| #369 · FE #95·#96 (2026-10-23) | 복약 시간대 묶음 - BE 피보호자 묶음 체크 `POST /api/ward/medication/intake/batch`(전부 성공/전부 실패)·복약 알림 같은 시각 1건 묶음(선점은 약 단위 그대로) / FE 보호자 카드 "3번 중"·약 추가 두 줄 배치·글씨 / 피보호자 "아침 약 다 먹었어요" (마이그레이션 없음) | ⚠️ | `(2026-10-23) audit-medication-time-group.md` (템플릿 B, gosky 보호자 토큰 403 실호출) | 조건부 PASS · 🟡 M-1(묶음 체크 실패 시 화면 무반응) · 🟢 L-1 "남은 약" 표기 · L-2 버튼 이름 · L-3 실 DB 롤백 테스트 · L-4 알림 클릭 경로(기존) |
 | #367 (2026-10-23) | 약 봉투 OCR 약 이름 대조 칸 전달 - `drugs[].inList`(bool\|null)·`suggestions`(최대 3, 이름 규칙 정리) 허용 목록 추가, 옛 AI 호환 (마이그레이션 없음) | ✅ | `(2026-10-23) audit-medication-ocr-name-check.md` (템플릿 B, gosky 실호출·변이 5종 전부 잡힘) | 🔴🟠🟡 0 · 🟢 3 **전부 조치**(`fix/medication-ocr-name-check-findings`: 100자 초과 제안은 빼기·제안은 `inList=false`일 때만·확신≠목록 Swagger 명시) |
 | FE #89 (2026-10-22) | 약 추가 2/2 "언제 드세요?" 한 줄 통합(#86 줄 나눔 철회, 횟수 섞이면 한 줄 안내)·확신 낮은 약 노란 확인 박스·2/2 진입 직후·화면 다시 켜짐 직후 1초 [등록] 잠금(누르지 않은 등록 신고) | ✅ | `(2026-10-22) audit-fe-medication-add-unified-times.md` (템플릿 B, 독립 에이전트 + 메인, Chrome 경계 7종·변이 7종 중 4종) | 조건부 PASS → 🟡 1·🟢 5 **전부 조치**(FE #90 `b46493b`, gosky 반영): 408·5xx도 확인 필요·죽은 코드 삭제·칩 0개 안내·잠금 시 제목 포커스·테스트 공백 보강·안내 문구 - 변이 10종 중 9종(1종은 동등 변이) |
 | BE·FE (2026-10-22) | 복약 카드 오늘 등록 약 제외 - `MedicationItem.createdAt`(KST), `MedicationClock.registeredAfterDose` 한 곳(미복용 요약·보호자 대시보드·FE 카드 `beforeRegistered`) (마이그레이션 없음) | ✅ | `(2026-10-22) audit-medication-add-two-step-and-card.md` (템플릿 B, 독립 에이전트 + 메인 재현, gosky 실등록 대조, 변이 12종 전부 잡힘) | 조건부 PASS → 🟢 L-2·L-3 **조치**(FE #88 `7b3cead`, gosky 반영) |
