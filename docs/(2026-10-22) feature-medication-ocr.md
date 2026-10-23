@@ -91,3 +91,10 @@ AI 구현 확인(AI `feature/medication-ocr` `1b8e749`): 파트 `image`, 본문 
 - FE 프록시(`src/app/api/[...path]/route.ts`)는 본문을 그대로 넘기고 `Content-Type`(boundary)을 보존해 변경 불요(2026-10-22 확인).
 - **gosky nginx 본문 상한 - 해결(2026-10-22)**: 경로 브라우저 → `devdmu.gosky.kr` → FE(6510) → `api.devdmu.gosky.kr` → BE의 두 nginx가 기본 1MB라 1MB 넘는 사진이 BE 전에 413(HTML)이었다. 사용자 승인으로 두 서버 블록에 `client_max_body_size 10m`을 넣고 reload(백업 `/root/nginx-backup-20261022-ocr/`), 3MB 업로드가 두 도메인 모두 BE까지 도달(비로그인 401)·12MB는 nginx 413 확인. BE→AI `testai.gosky.kr`은 100M.
 - 0.5는 복용량 1 + 메모 "1회 반 알". `slots`마다 약을 따로 등록. `confidence=low` 항목 강조, high라도 확인 단계는 건너뛰지 않는다.
+
+## 7. 후속 - 약 이름 대조 칸 전달 (2026-10-23)
+
+- AI OCR(#38·#39)이 `drugs[]`에 `inList`(bool|null)·`suggestions`(문자열 배열, 최대 3)를 더했다. BE는 허용 목록으로 거르므로 그대로는 FE에 가지 않아 `MedicationOcrResponse.Drug`에 두 칸을 추가했다(마이그레이션 없음, 가산 변경이라 기존 FE 무영향).
+- `inList`: JSON boolean일 때만 값, 없거나 null·형식이 다르면 `null`(모름). `suggestions`: 배열이 아니면 `[]`, 원소는 약 이름과 같은 정리(`TextSanitizer`·빈 값/문자열 아님 제외·100자 코드포인트), 순서 유지 중복 제거, 최대 3개. AI가 칸을 안 주면 `null`·`[]`라 옛 AI 응답과 호환된다.
+- 제안은 **참고용**이다 - 이름을 자동으로 바꾸거나 자동 등록하지 않는다(불변 규칙 ① 그대로). 이름·제안 원문은 로그에 남기지 않는다(`MedicationOcrLogGuardTest` 유지).
+- 테스트: `MedicationOcrProjectionTest` +3(칸 있음·없음/null/형식 다름·제안 정리와 3개 상한), `GuardianMedicationOcrControllerHttpTest`(실제 직렬화에서 `inList` false/null·`suggestions` 배열/빈 배열).

@@ -28,7 +28,7 @@ class MedicationOcrProjectionTest {
 
         assertThat(r.readable()).isTrue();
         assertThat(r.drugs()).containsExactly(new MedicationOcrResponse.Drug("슈다페드정", 0.5, 2, 5,
-                java.util.List.of(MedicationTimeSlot.MORNING, MedicationTimeSlot.DINNER), "식후 30분", "high"));
+                java.util.List.of(MedicationTimeSlot.MORNING, MedicationTimeSlot.DINNER), "식후 30분", "high", null, java.util.List.of()));
         // 응답 레코드에는 reason·ingredient 등의 자리가 없다
         assertThat(MAPPER.writeValueAsString(r)).doesNotContain("reason", "ingredient", "홍길동", "OO의원");
     }
@@ -108,5 +108,47 @@ class MedicationOcrProjectionTest {
 
         assertThat(r.drugs()).hasSize(MedicationOcrProjection.MAX_DRUGS);
         assertThat(r.drugs().get(0).timing()).hasSize(MedicationOcrProjection.MAX_TIMING_CHARS);
+    }
+
+    @Test
+    @DisplayName("약 이름 대조 칸: AI가 주면 그대로 옮긴다")
+    void projectsNameCheckFields() throws Exception {
+        MedicationOcrResponse r = MedicationOcrProjection.project(json("""
+                {"readable":true,"drugs":[
+                  {"name":"슈다페드정","inList":true,"suggestions":[]},
+                  {"name":"슈다페트정","inList":false,"suggestions":["슈다페드정","슈다페드캡슐"]}]}"""));
+
+        assertThat(r.drugs().get(0).inList()).isTrue();
+        assertThat(r.drugs().get(0).suggestions()).isEmpty();
+        assertThat(r.drugs().get(1).inList()).isFalse();
+        assertThat(r.drugs().get(1).suggestions()).containsExactly("슈다페드정", "슈다페드캡슐");
+    }
+
+    @Test
+    @DisplayName("약 이름 대조 칸: 없거나 null·형식이 다르면 inList=null, suggestions=[] (옛 AI 호환)")
+    void nameCheckFieldsMissingOrMalformed() throws Exception {
+        MedicationOcrResponse r = MedicationOcrProjection.project(json("""
+                {"readable":true,"drugs":[
+                  {"name":"a"},
+                  {"name":"b","inList":null,"suggestions":null},
+                  {"name":"c","inList":"true","suggestions":"슈다페드정"},
+                  {"name":"d","inList":1,"suggestions":{"0":"x"}}]}"""));
+
+        assertThat(r.drugs()).hasSize(4).allSatisfy(d -> {
+            assertThat(d.inList()).isNull();
+            assertThat(d.suggestions()).isEmpty();
+        });
+    }
+
+    @Test
+    @DisplayName("제안: 빈 값·문자열 아님·제어문자 정리, 중복은 한 번, 100자로 자르고 최대 3개")
+    void suggestionsFiltered() throws Exception {
+        String longName = "나".repeat(120);
+        MedicationOcrResponse r = MedicationOcrProjection.project(json("{\"readable\":true,\"drugs\":[{\"name\":\"a\","
+                + "\"suggestions\":[\"\",\"\\u200B \",7,null,\"타이\\u0000레놀\",\"타이레놀\",\"" + longName + "\",\"게보린\",\"펜잘\"]}]}"));
+
+        assertThat(r.drugs().get(0).suggestions())
+                .hasSize(MedicationOcrProjection.MAX_SUGGESTIONS)
+                .containsExactly("타이레놀", "나".repeat(100), "게보린");
     }
 }
