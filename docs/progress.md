@@ -2158,3 +2158,8 @@ BFF 허용 목록(5개, 밖은 로그인 확인 전 404)·보호자 대리 인�
 - 테스트: 서비스 11·구독기 +4·권한·HTTP 직렬화·칸 고정, `./gradlew build` 통과(1861건, 실패 0).
 - 산출물: `docs/(2026-10-23) feature-admin-camera-management.md`, `docs/(2026-10-23) api-contract-admin-camera.md`.
 
+### [2026-10-23] FE 로그인 유지(FE #105) 기능 점검 - 조건부 PASS
+
+세션 정리 조건(BE `INVALID_TOKEN`·`EXPIRED_TOKEN` 401, `INACTIVE_USER` 403, `USER_NOT_FOUND` 404만 정리 / 429·503·5xx·네트워크 유지)·탭 간 갱신 직렬화(동시 진입·오래된 메모리·다른 탭 로그아웃)·"로그인 유지" 쿠키 수명·서버 컴포넌트 경계·하이드레이션 PASS. 변이 4종 전부 테스트가 잡음, gosky `/` 진입 쿠키 없음 307·refresh만 200·만료 access+refresh 200.
+- 🟡 M-1 갱신 일시 오류 시 `connectionSocket`이 이유와 무관하게 `deactivate` - 로그인은 유지된 채 실시간 WS가 페이지를 다시 열 때까지 멈춤(강제 FCM은 도착) · 🟢 L-1 시간 초과로 응답을 잃으면 다음 갱신이 BE 재사용 감지(수용 권장) · L-2 테스트 공백 · L-3 복원 중 빈 화면 · L-4 JWT 해석 중복 · L-5 BE body-compat 끄기 전 FE `careai_rt` 전환 선행.
+- 산출물: `docs/(2026-10-23) audit-fe-keep-login-refresh.md`.
