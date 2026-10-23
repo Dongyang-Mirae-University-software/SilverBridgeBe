@@ -22,9 +22,10 @@ public record MedicationOcrResponse(
     /**
      * @param perDose     1회 복용량(정). 반 알은 0.5 - 등록 API의 {@code doseAmount}(0.5 단위, V62)에 그대로 넣는다
      * @param slots       봉투에 표시된 복용 시간대. 표시가 없으면 빈 배열(지어내지 않는다)
-     * @param confidence  {@code high}·{@code low}. 화면 강조용일 뿐 high라도 확인을 건너뛰지 않는다
+     * @param confidence  {@code high}·{@code low}. 봉투 글자를 그렇게 읽었다는 확신일 뿐 그런 약이 있다는 뜻이 아니다
+     *                    (목록에 없는 오독 이름도 high로 온다 - 2026-10-23 점검 L-3). high라도 확인을 건너뛰지 않는다
      * @param inList      AI가 약 이름을 약 목록과 대조한 결과(2026-10-23). 대조하지 않았거나 옛 AI면 {@code null}
-     * @param suggestions 비슷한 약 이름(최대 3개). 참고용이며 이름을 자동으로 바꾸지 않는다. 없으면 빈 배열
+     * @param suggestions 비슷한 약 이름(최대 3개). {@code inList=false}일 때만 채운다. 참고용이며 이름을 자동으로 바꾸지 않는다
      */
     @Schema(description = "읽은 약 1종")
     public record Drug(
@@ -34,9 +35,9 @@ public record MedicationOcrResponse(
             @Schema(description = "복용 일수. 읽지 못하면 null") Integer days,
             @Schema(description = "복용 시간대. 표시가 없으면 빈 배열") List<MedicationTimeSlot> slots,
             @Schema(description = "복용 안내(예: 식후 30분, 최대 50자). 없으면 null") String timing,
-            @Schema(description = "high 또는 low. 알 수 없으면 null", allowableValues = {"high", "low"}) String confidence,
-            @Schema(description = "약 목록에 있는 이름인지. 대조하지 않았으면 null") Boolean inList,
-            @Schema(description = "비슷한 약 이름(최대 3개, 각 100자). 참고용 - 자동으로 바꾸지 않는다. 없으면 빈 배열") List<String> suggestions
+            @Schema(description = "글자를 읽은 확신(high·low). 약 목록에 있다는 뜻이 아니다 - 목록 대조는 inList. 알 수 없으면 null", allowableValues = {"high", "low"}) String confidence,
+            @Schema(description = "식약처 허가 목록에 있는 이름인지. false면 확신(confidence)과 별개로 확인을 강조한다. 대조하지 못했으면 null(경고하지 않는다)") Boolean inList,
+            @Schema(description = "비슷한 허가 품목명(최대 3개, 각 100자 이내). inList=false일 때만 채우고 그 밖은 빈 배열. 참고용 - 자동으로 바꾸지 않는다") List<String> suggestions
     ) {
     }
 }

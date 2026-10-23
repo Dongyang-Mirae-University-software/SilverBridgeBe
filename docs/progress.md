@@ -2119,3 +2119,7 @@ gosky에서 직접 써 본 요청 3건. ① 확신 낮은 약 안내를 결과 �
 AI(#38·#39)가 더한 `drugs[].inList`·`suggestions`가 BE 허용 목록에 막혀 FE에 가지 않던 것을 DTO·투영에 추가했다(옛 AI 호환, 제안은 약 이름과 같은 정리·중복 제거·최대 3). vkcs CD·gosky 배포.
 - 점검(템플릿 B): gosky 합성 봉투 실호출 200(목록 이름 `inList:true` / 오독 `슈다페트정` → `false` + 제안 3개), BE·AI 로그에 약 이름 0회, 변이 5종 전부 잡힘. 🔴🟠🟡 0 · 🟢 3(L-1 수용, L-2·L-3 FE 전달 - 제안은 `inList===false`일 때만, 확신과 별개로 강조).
 - 산출물: `docs/(2026-10-23) audit-medication-ocr-name-check.md`.
+
+### [2026-10-23] 약 이름 대조 칸 점검 후속 - 🟢 3 전부 조치
+
+100자 넘는 제안은 자르지 않고 뺌(L-1)·제안은 `inList=false`일 때만(L-2)·`confidence`는 목록 대조가 아니라는 계약을 Swagger에 명시(L-3, AI 값 유지). 투영 테스트 12건, 변이 3종 전부 잡힘. 상세 `docs/(2026-10-23) audit-medication-ocr-name-check.md` "조치 결과".
