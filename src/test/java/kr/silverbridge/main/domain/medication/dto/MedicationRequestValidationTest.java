@@ -13,6 +13,7 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 
 import java.math.BigDecimal;
+import java.util.List;
 import java.util.Set;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -78,5 +79,17 @@ class MedicationRequestValidationTest {
         return violations.stream()
                 .map(v -> v.getPropertyPath().toString())
                 .collect(java.util.stream.Collectors.toSet());
+    }
+
+    @Test
+    @DisplayName("묶음 체크 - 약 1~50개, 빈 ID·taken 누락은 거절 (2026-10-23)")
+    void 묶음체크_검증() {
+        assertThat(validator.validate(new MedicationIntakeBatchRequest(List.of(1L, 2L), true))).isEmpty();
+        assertThat(fieldsOf(validator.validate(new MedicationIntakeBatchRequest(List.of(), true)))).contains("medicationIds");
+        assertThat(fieldsOf(validator.validate(new MedicationIntakeBatchRequest(
+                java.util.stream.LongStream.rangeClosed(1, 51).boxed().toList(), true)))).contains("medicationIds");
+        assertThat(fieldsOf(validator.validate(new MedicationIntakeBatchRequest(java.util.Arrays.asList(1L, null), true))))
+                .anyMatch(field -> field.startsWith("medicationIds"));
+        assertThat(fieldsOf(validator.validate(new MedicationIntakeBatchRequest(List.of(1L), null)))).contains("taken");
     }
 }

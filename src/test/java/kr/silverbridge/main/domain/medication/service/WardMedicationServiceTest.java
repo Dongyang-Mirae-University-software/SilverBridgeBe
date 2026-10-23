@@ -216,6 +216,95 @@ class WardMedicationServiceTest {
         verify(intakeRepository, never()).delete(any());
     }
 
+    // ─── 묶음 체크 (2026-10-23) ─────────────────────────────────────
+
+    @Test
+    @DisplayName("묶음 체크 — 약마다 기록·이벤트, 잠금은 ID 오름차순, 응답은 요청 순서")
+    void markBatch_전부체크() {
+        LocalDate today = MedicationClock.today();
+        for (long id = 1; id <= 3; id++) {
+            when(medicationRepository.findByIdForUpdate(id))
+                    .thenReturn(Optional.of(medication(id, WARD_ID, "약" + id, LocalTime.of(8, 0))));
+            when(intakeRepository.findByMedicationIdAndDoseDate(id, today)).thenReturn(Optional.empty());
+        }
+        when(intakeRepository.save(any(MedicationIntake.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        List<MedicationItem> items = wardMedicationService.markBatch(WARD_ID, List.of(3L, 1L, 2L), true);
+
+        assertThat(items).extracting(MedicationItem::medicationId).containsExactly(3L, 1L, 2L);
+        assertThat(items).allMatch(MedicationItem::taken);
+        var inOrder = inOrder(medicationRepository);
+        inOrder.verify(medicationRepository).findByIdForUpdate(1L);
+        inOrder.verify(medicationRepository).findByIdForUpdate(2L);
+        inOrder.verify(medicationRepository).findByIdForUpdate(3L);
+        verify(eventPublisher, times(3)).publishEvent(any(MedicationIntakeChangedEvent.class));
+    }
+
+    @Test
+    @DisplayName("묶음 체크 — 이미 체크된 약은 그대로(멱등), 그 약은 이벤트를 다시 보내지 않는다")
+    void markBatch_일부이미체크_멱등() {
+        LocalDate today = MedicationClock.today();
+        when(medicationRepository.findByIdForUpdate(1L))
+                .thenReturn(Optional.of(medication(1L, WARD_ID, "혈압약", LocalTime.of(8, 0))));
+        when(medicationRepository.findByIdForUpdate(2L))
+                .thenReturn(Optional.of(medication(2L, WARD_ID, "위장약", LocalTime.of(8, 0))));
+        when(intakeRepository.findByMedicationIdAndDoseDate(1L, today))
+                .thenReturn(Optional.of(MedicationIntake.of(1L, today, OffsetDateTime.now())));
+        when(intakeRepository.findByMedicationIdAndDoseDate(2L, today)).thenReturn(Optional.empty());
+        when(intakeRepository.save(any(MedicationIntake.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        wardMedicationService.markBatch(WARD_ID, List.of(1L, 2L), true);
+
+        verify(intakeRepository, times(1)).save(any());
+        verify(eventPublisher, times(1)).publishEvent(any(MedicationIntakeChangedEvent.class));
+    }
+
+    @Test
+    @DisplayName("[IDOR] 묶음에 남의 약이 섞이면 403 — 예외로 트랜잭션 전체가 되돌아간다(전부 실패)")
+    void markBatch_타인약섞임_403() {
+        LocalDate today = MedicationClock.today();
+        when(medicationRepository.findByIdForUpdate(1L))
+                .thenReturn(Optional.of(medication(1L, WARD_ID, "혈압약", LocalTime.of(8, 0))));
+        when(intakeRepository.findByMedicationIdAndDoseDate(1L, today)).thenReturn(Optional.empty());
+        when(intakeRepository.save(any(MedicationIntake.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        when(medicationRepository.findByIdForUpdate(2L))
+                .thenReturn(Optional.of(medication(2L, OTHER_WARD_ID, "남의약", LocalTime.of(8, 0))));
+
+        assertThatThrownBy(() -> wardMedicationService.markBatch(WARD_ID, List.of(1L, 2L), true))
+                .isInstanceOf(CustomException.class)
+                .hasFieldOrPropertyWithValue("errorCode", ErrorCode.MEDICATION_NOT_OWNED);
+        // 남의 약은 기록하지 않는다. 앞서 쓴 1번 기록·이벤트는 @Transactional 롤백과 AFTER_COMMIT으로 함께 사라진다.
+        verify(intakeRepository, times(1)).save(any());
+    }
+
+    @Test
+    @DisplayName("묶음 체크 — 같은 약 ID가 두 번이면 400, 아무것도 읽거나 쓰지 않는다")
+    void markBatch_중복_400() {
+        assertThatThrownBy(() -> wardMedicationService.markBatch(WARD_ID, List.of(1L, 2L, 1L), true))
+                .isInstanceOf(CustomException.class)
+                .hasFieldOrPropertyWithValue("errorCode", ErrorCode.MEDICATION_INTAKE_BATCH_DUPLICATE);
+        verifyNoInteractions(medicationRepository, intakeRepository, eventPublisher);
+    }
+
+    @Test
+    @DisplayName("묶음 해제(taken=false) — 체크된 약만 지우고 이벤트를 보낸다")
+    void markBatch_해제() {
+        LocalDate today = MedicationClock.today();
+        MedicationIntake intake = MedicationIntake.of(1L, today, OffsetDateTime.now());
+        when(medicationRepository.findByIdForUpdate(1L))
+                .thenReturn(Optional.of(medication(1L, WARD_ID, "혈압약", LocalTime.of(8, 0))));
+        when(medicationRepository.findByIdForUpdate(2L))
+                .thenReturn(Optional.of(medication(2L, WARD_ID, "위장약", LocalTime.of(8, 0))));
+        when(intakeRepository.findByMedicationIdAndDoseDate(1L, today)).thenReturn(Optional.of(intake));
+        when(intakeRepository.findByMedicationIdAndDoseDate(2L, today)).thenReturn(Optional.empty());
+
+        List<MedicationItem> items = wardMedicationService.markBatch(WARD_ID, List.of(1L, 2L), false);
+
+        assertThat(items).noneMatch(MedicationItem::taken);
+        verify(intakeRepository).delete(intake);
+        verify(eventPublisher, times(1)).publishEvent(any(MedicationIntakeChangedEvent.class));
+    }
+
     private static Medication medication(Long id, String wardId, String name, LocalTime doseTime) {
         Medication medication = Medication.builder()
                 .wardId(wardId)

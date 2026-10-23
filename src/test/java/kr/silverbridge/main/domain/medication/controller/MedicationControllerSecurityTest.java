@@ -1,6 +1,7 @@
 package kr.silverbridge.main.domain.medication.controller;
 
 import kr.silverbridge.main.domain.medication.dto.MedicationBatchCreateRequest;
+import kr.silverbridge.main.domain.medication.dto.MedicationIntakeBatchRequest;
 import kr.silverbridge.main.domain.medication.dto.MedicationCreateRequest;
 import kr.silverbridge.main.domain.medication.dto.GuardianMedicationAlertSettingRequest;
 import kr.silverbridge.main.domain.medication.dto.MedicationSettingUpdateRequest;
@@ -31,6 +32,7 @@ import java.util.List;
 import static org.assertj.core.api.Assertions.assertThatNoException;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.when;
 
@@ -72,6 +74,9 @@ class MedicationControllerSecurityTest {
     private static final MedicationBatchCreateRequest BATCH_REQUEST = new MedicationBatchCreateRequest(
             List.of(new MedicationBatchCreateRequest.Drug("감기약", new BigDecimal("0.5"))),
             List.of(new MedicationBatchCreateRequest.Time(LocalTime.of(8, 0))), null);
+
+    private static final MedicationIntakeBatchRequest INTAKE_BATCH_REQUEST =
+            new MedicationIntakeBatchRequest(List.of(1L, 2L), true);
 
     // ─── 보호자 전용 경로 ────────────────────────────────────────────
 
@@ -145,10 +150,12 @@ class MedicationControllerSecurityTest {
                 .thenReturn(TodayMedicationResponse.of(LocalDate.now(), List.of()));
         when(wardMedicationService.markTaken(anyString(), any())).thenReturn(null);
         when(wardMedicationService.unmarkTaken(anyString(), any())).thenReturn(null);
+        when(wardMedicationService.markBatch(anyString(), any(), anyBoolean())).thenReturn(List.of());
 
         assertThatNoException().isThrownBy(() -> wardController.getToday("WD0001"));
         assertThatNoException().isThrownBy(() -> wardController.markTaken("WD0001", 1L));
         assertThatNoException().isThrownBy(() -> wardController.unmarkTaken("WD0001", 1L));
+        assertThatNoException().isThrownBy(() -> wardController.markBatch("WD0001", INTAKE_BATCH_REQUEST));
     }
 
     @Test
@@ -160,6 +167,9 @@ class MedicationControllerSecurityTest {
         assertThatThrownBy(() -> wardController.unmarkTaken("GD0001", 1L))
                 .isInstanceOf(AccessDeniedException.class);
         assertThatThrownBy(() -> wardController.getToday("GD0001"))
+                .isInstanceOf(AccessDeniedException.class);
+        // 묶음 체크도 피보호자만 - 보호자용 체크 경로를 여기서 열지 않는다(복약 불변 규칙 ①)
+        assertThatThrownBy(() -> wardController.markBatch("GD0001", INTAKE_BATCH_REQUEST))
                 .isInstanceOf(AccessDeniedException.class);
     }
 }
