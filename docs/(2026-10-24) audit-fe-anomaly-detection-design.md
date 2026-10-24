@@ -94,3 +94,17 @@
 ## 수정 프롬프트 초안 (승인 시)
 
 FE `fix/anomaly-audit-findings` - L-1 `AnomalyClipModal` 재생 중 클립이 목록에서 사라지면 해제·안내(+브라우저 테스트) / L-2 `useAnomalyFeedbackMutation` onSuccess와 `GuardianLayout` `ANOMALY_DETECTED`에서 `['guardian-dashboard']` 무효화 / L-3 딥링크 `session`을 첫 열기 뒤 버리기(+테스트) / L-4 쿼리 키 단위 테스트. BE·AI 변경 없음, gosky 반영 후 실측.
+
+## 후속 조치 (2026-10-24, FE #127)
+
+FE #127 `fix/anomaly-audit-findings` (머지 `cd2e86d`, gosky 반영) - L-1~L-4 **전부 조치**.
+
+| ID | 조치 | 검증 |
+|---|---|---|
+| L-1 | 재생 중 클립이 다시 받은 목록에서 빠지면 영상을 내리고 "볼 수 없는 영상" 안내(상태 변경 없이 계산 - effect 안 setState 없음, blob은 닫거나 다른 클립 선택 때 해제) | 브라우저 테스트, 되돌리면 실패 |
+| L-2 | `guardianDashboardQueryKey` 내보내고 판정 성공·WS `ANOMALY_DETECTED`·푸시 수신 때 함께 무효화 | 판정 경로 브라우저 테스트(되돌리면 실패), WS·푸시는 한 줄 추가라 코드 확인 |
+| L-3 | 딥링크 `?session=`은 첫 열기에만 쓰고 닫을 때 버림 | `GuardianMonitorContent.browser.test.tsx`, 되돌리면 실패 |
+| L-4 | 요약 쿼리 키가 이력 키로 시작하는지 단위 테스트 | `anomaly.test.ts`, 되돌리면(M11) 실패 |
+
+`npm test` 287·`test:browser` 144(빈 캐시)·`tsc`·build 통과. gosky 재실측 결과 회귀 없음(요약↔칩·`type=FALL`·`blob:` 재생·1440/375 스크롤). L-1·L-2는 판정을 보내야 드러나는 동작이라 실서버에서는 확인하지 않았다.
+
