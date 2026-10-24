@@ -44,6 +44,7 @@ public class AdminDashboardController {
                     [AI가 끊겨 있어도 200]
                     aiConnected=false 로 내려가고 나머지 집계는 정상 반환됩니다.
                     이때 streamingCameras·disconnectedCameras 는 **null**(알 수 없음)입니다.
+                    AI와 다시 연결된 직후 첫 세션 목록을 받기 전(수 초)에도 aiConnected=true 인 채로 두 값이 null 입니다.
                     0대가 아니라 "우리 수신기가 끊겨 판단할 수 없다"는 뜻입니다.
 
                     [오늘 이상감지]

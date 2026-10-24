@@ -30,6 +30,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 
 /**
  * 관리자 대시보드 집계.
@@ -79,7 +80,10 @@ public class AdminDashboardService {
 
         // AI가 끊겨 있으면 구독 집합은 "카메라가 없다"가 아니라 "알 수 없다"이다.
         // 이때 0을 내려보내면 우리 수신기의 장애가 현장 카메라 전멸로 표시된다.
-        Long streamingCameras = aiConnected ? (long) aiLiveStreamSubscriber.subscribedSessionCount() : null;
+        // 재접속 직후 첫 세션 목록 전에도 구독 기록이 비어 있어 같은 이유로 "알 수 없음"이다(2026-10-24 점검 M-1) -
+        // 연결 여부만 보면 그 몇 초 동안 송출 0대·활성 카메라 전부 끊김으로 표시됐다.
+        Optional<Set<String>> liveSessions = aiLiveStreamSubscriber.liveSessionSnapshot();
+        Long streamingCameras = liveSessions.map(sessions -> (long) sessions.size()).orElse(null);
         // 분모는 활성 카메라만 - 비활성 카메라는 구독 대상이 아니라 "끊김"으로 세면 항상 끊긴 것으로 부풀려진다(ADMIN-G20).
         Long disconnectedCameras = streamingCameras == null
                 ? null
@@ -96,7 +100,7 @@ public class AdminDashboardService {
 
         return new AdminSafetyDashboardResponse(
                 aiConnected,
-                aiConnected ? aiLiveStreamSubscriber.subscribedSessionCount() : 0,
+                liveSessions.map(Set::size).orElse(0),
                 totalCameras,
                 streamingCameras,
                 safetyEvents,

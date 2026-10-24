@@ -114,17 +114,8 @@ public class AiLiveStreamSubscriber extends TextWebSocketHandler {
     }
 
     /**
-     * 관리자 대시보드 조회용 - 현재 구독 중인 세션 수.
-     *
-     * <p>구독은 <b>AI가 라이브로 보고했고 우리 {@code camera} 테이블에도 등록된</b> 세션만 들어간다
-     * ({@code syncSubscriptions} 참조). 그래서 이 값이 곧 "지금 스트리밍이 잡히는 등록 카메라 대수"다.</p>
-     */
-    public int subscribedSessionCount() {
-        return subscribedSessions.size();
-    }
-
-    /**
-     * 관리자 디바이스 관리용 - 지금 구독 중인 세션의 복사본. 연결이 없거나 연결 뒤 첫 목록을 아직 받지 못했으면
+     * 관리자 대시보드·디바이스 관리용 - 지금 구독 중인 세션의 복사본. 구독은 AI가 라이브로 보고했고 우리 {@code camera}
+     * 테이블에도 등록된 세션만 들어가므로({@code syncSubscriptions}) 크기가 곧 "지금 스트리밍이 잡히는 등록 카메라 대수"다. 연결이 없거나 연결 뒤 첫 목록을 아직 받지 못했으면
      * 빈 값(<b>알 수 없음</b>)이다. 빈 집합(= 송출 중인 등록 카메라 0대)과 섞지 말 것.
      */
     public Optional<Set<String>> liveSessionSnapshot() {
