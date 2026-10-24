@@ -144,3 +144,18 @@ fix: 카카오 가상 이메일 계정은 이메일 알림을 켤 수 없게 막
 fix: 알림 설정을 불러오지 못하면 기본값 대신 다시 시도 안내 (M-2)
 fix: 계정·보안 탭은 프로필 확인 뒤에 버튼 활성화 (L-1)
 ```
+
+## 조치 결과 (2026-10-25)
+
+6건 모두 FE #141(`1a895ce`, 머지 `6d7a35f`)로 반영했다. gosky FE `6d7a35f`, `/guardian/settings`·`/ward/settings` 200.
+
+| # | 조치 |
+|---|---|
+| M-1 | 프로필 이메일이 `^kakao_\d+@kakao\.com$`이면 이메일 스위치를 꺼진 채로 막고 이유 표시 |
+| M-2 | 조회 실패(`isError && !data`)면 공용 `SettingsLoadError`(다시 시도)를 토글 대신 표시 - 알림 종류·알림 방법 |
+| L-1 | `isAccountReady = Boolean(profile)` 전에는 비밀번호 변경·탈퇴 버튼 비활성 |
+| L-2 | `hasUserSavedWardSosSetting` - 진행 중·성공한 저장이 있으면 첫 동기화를 건너뜀(실패한 저장은 세지 않음) |
+| L-3 | `autoComplete` current-password / new-password |
+| L-4 | 공용 `useModalDialog`로 포커스 가두기·Esc·바깥 클릭(처리 중엔 무시), 첫 포커스 "취소", 닫으면 탈퇴 버튼으로 복귀 |
+
+테스트: 브라우저 +8·단위 +4. 각 수정을 되돌리면 해당 테스트가 실패(7/7). `npm test` 307 · `test:browser` 186 · `tsc` · `build` 통과.
