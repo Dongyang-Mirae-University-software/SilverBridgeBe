@@ -3,7 +3,7 @@
 - 대상: SilverBridgeFe PR #134 (`5081a32`, 머지 `301bf6f`), 점검 기준 develop `da48514`
 - 템플릿: B(기능 점검) - 이 기능 + 건드린 공용 코드 사용처
 - 방법: 독립 에이전트(sonnet)가 변경분을 따로 리뷰 → 메인이 주장마다 코드로 재확인, 공용 코드 사용처는 메인이 직접 조사. 실서버 흐름은 구현 PHASE 3에서 gosky 테스트 계정으로 확인함(아래 "실서버 근거")
-- 결론: **조건부 PASS** · 🔴 0 · 🟠 0 · 🟡 2 · 🟢 7 (코드 수정 없음)
+- 결론: **조건부 PASS** · 🔴 0 · 🟠 0 · 🟡 2 · 🟢 7 → **전부 조치**(FE #139 `5801449`, gosky 반영 2026-10-25, 아래 "조치 결과")
 
 ## 점검 범위
 
@@ -96,3 +96,20 @@ PHASE 2. [모델: sonnet]
 PHASE 3. 테스트: M-1·M-2 재현 테스트(수정 전 실패 확인), 목록 오류 상태, WardLayout 취소 신호 무알림
 PHASE 5. 마무리: 브랜치 → PR → 머지 → gosky 반영(pull) → 정리. 묻지 않고 진행
 ```
+
+## 조치 결과 (2026-10-25, FE #139 `5801449`)
+
+전부 반영했다(사용자 지시 "전부 반영"). gosky FE `5801449` 반영 뒤 `/ward/guardians`·`/guardian/wards`·`/guardian/wards/register`·`/guardian`·`/ward`·`/guardian/detection` 200, FE 로그 컴파일 오류 없음.
+
+| 이슈 | 조치 |
+|---|---|
+| M-1 | 취소 409 → `code`로 "이미 수락되었거나 거절된 요청이에요." 한 줄(대기 0건이면 칸 없이), 6초 뒤 지움 |
+| M-2 | 확인 창 대상을 id로 목록에서 다시 찾음(새 연결은 새 id라 옛 창 재등장 불가 - 상태 지우는 effect 불필요). 해제 409 "이미 연결이 해제됐어요." 피보호자 수락·거절·해제 실패도 `code` 안내 + 실패 때도 목록 재조회 |
+| L-1 | 두 확인 창을 공용 `useModalDialog`로(복약 모달과 같은 훅 - 포커스 가두기·복귀·Esc·바깥 클릭). `CommonModal` 자체는 범위 밖이라 그대로 |
+| L-2 | 보호자 해제 `onSettled`에서 `invalidateQueries()`(떠 있는 쿼리만 재조회) |
+| L-3·L-4·L-6 | "잠시 뒤에" / 휴대폰 메뉴 단계 안내 / "나는 김영희의 아들 · 78세" |
+| L-5 | `ConnectionCard`(+CSS)·`ConnectionShared` 미사용 헬퍼 5개·`getPendingConnectionRequestItems`·`PAGE_TITLES` 삭제(사용처 0건 재확인) |
+| L-7 | 테스트 추가(취소 409·낡은 창 두 화면·포커스·목록 오류 3곳·해제 409·취소 신호 함수·connectionId 없는 신호 가드). 화면 3파일을 수정 전으로 되돌리면 새 테스트 6건 실패 확인 |
+| 추가 | 보호자 해제 실패 띠가 초록(성공 색)이던 것을 오류 색으로 |
+
+검증: `npm test` 306/306 · `npm run test:browser` 187/187 · `tsc` · `next build` 통과 · eslint 오류는 기존 `BirthDateSelects.tsx` 1건뿐.
