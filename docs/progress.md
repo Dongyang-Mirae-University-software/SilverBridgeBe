@@ -2217,3 +2217,8 @@ FE #127(`cd2e86d`, gosky 반영): 오탐 선택 뒤 열린 영상 내림+안내(
 `GET /api/guardian/anomaly/history?camera=DELETED|EXISTING`(전용 enum, 잘못된 값 400, type과 함께) + 요약 `deletedCameraCount`. 삭제 기준은 이력 `cameraLabel=null`과 같은 "세션의 카메라 행 없음", 쿼리 안에서 거름(서비스가 지금 등록된 세션 목록을 넘김, 빈 목록은 매칭 불가 값). 인가·기존 필드 무변경, 마이그레이션 없음. 단위 1871 통과, 통합 테스트 +1(실 PostgreSQL). FE 칩은 별도 PR.
 - 산출물: `docs/(2026-10-24) feature-anomaly-history-deleted-camera-filter.md`.
 
+### [2026-10-24] 이상감지 삭제된 카메라 필터(BE #376·FE #130) 기능 점검 - PASS
+
+인가(연결 검증이 카메라·이력 조회보다 먼저)·입력 400·건수 정합성(gosky 42+3=45) 확인. 변이 BE 5/5·FE 3/4 검출. 🔴🟠🟡 0 · 🟢 2(대시보드가 쓰지 않는 삭제 건수로 피보호자당 쿼리 2개·새 실패 지점 / 피보호자 전환 시 필터 초기화 테스트 없음), 미조치.
+- 산출물: `docs/(2026-10-24) audit-anomaly-history-deleted-camera-filter.md`.
+
