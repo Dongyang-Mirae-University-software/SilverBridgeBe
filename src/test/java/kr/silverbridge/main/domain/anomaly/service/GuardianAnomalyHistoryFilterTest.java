@@ -121,7 +121,8 @@ class GuardianAnomalyHistoryFilterTest {
                 row(DetectedType.FIRE, AnomalyReviewStatus.REAL, 3),
                 row(DetectedType.FALL, AnomalyReviewStatus.CONFLICTED, 1),
                 row(DetectedType.FALL, AnomalyReviewStatus.FALSE_ALARM, 4));
-        when(incidentRepository.countForGuardianSummary(List.of(WARD_ID))).thenReturn(rows);
+        when(cameraService.findSessionIdsByWardIds(List.of(WARD_ID))).thenReturn(List.of("ward_live"));
+        when(incidentRepository.countForGuardianSummary(List.of(WARD_ID), List.of("ward_live"))).thenReturn(rows);
 
         GuardianAnomalyHistorySummary summary = service.getHistorySummary(GUARDIAN_ID, null);
 
@@ -188,14 +189,36 @@ class GuardianAnomalyHistoryFilterTest {
     }
 
     @Test
-    @DisplayName("요약: 삭제된 카메라 건수는 지금 등록된 카메라 세션 기준으로 센다")
+    @DisplayName("요약: 기본 집계와 삭제된 카메라 건수가 같은 '지금 등록된 카메라' 목록을 기준으로 나뉜다(카메라 조회 1회)")
     void summaryCountsDeletedCamera() {
         when(connectionService.getActiveWardIds(GUARDIAN_ID)).thenReturn(List.of(WARD_ID));
-        when(incidentRepository.countForGuardianSummary(List.of(WARD_ID))).thenReturn(List.of());
         when(cameraService.findSessionIdsByWardIds(List.of(WARD_ID))).thenReturn(List.of("ward_live"));
+        List<AnomalyIncidentRepository.GuardianTypeStatusCount> rows =
+                List.of(row(DetectedType.FIRE, AnomalyReviewStatus.PENDING, 2));
+        when(incidentRepository.countForGuardianSummary(List.of(WARD_ID), List.of("ward_live"))).thenReturn(rows);
         when(incidentRepository.countDeletedCameraForGuardian(List.of(WARD_ID), List.of("ward_live"))).thenReturn(4L);
 
-        assertThat(service.getHistorySummary(GUARDIAN_ID, null).deletedCameraCount()).isEqualTo(4);
+        GuardianAnomalyHistorySummary summary = service.getHistorySummary(GUARDIAN_ID, null);
+
+        assertThat(summary.total()).as("등록된 카메라 상황만").isEqualTo(2);
+        assertThat(summary.needsReviewCount()).isEqualTo(2);
+        assertThat(summary.deletedCameraCount()).as("삭제된 카메라 상황은 따로").isEqualTo(4);
+        verify(cameraService).findSessionIdsByWardIds(List.of(WARD_ID));
+    }
+
+    @Test
+    @DisplayName("요약: 등록된 카메라가 없으면 매칭 불가 값 하나로 집계해 기본 건수는 0이 된다(빈 IN 절 회피)")
+    void summaryWithoutCamerasUsesNoMatch() {
+        when(connectionService.getActiveWardIds(GUARDIAN_ID)).thenReturn(List.of(WARD_ID));
+        when(cameraService.findSessionIdsByWardIds(List.of(WARD_ID))).thenReturn(List.of());
+        when(incidentRepository.countForGuardianSummary(List.of(WARD_ID), List.of(""))).thenReturn(List.of());
+        when(incidentRepository.countDeletedCameraForGuardian(List.of(WARD_ID), List.of(""))).thenReturn(3L);
+
+        GuardianAnomalyHistorySummary summary = service.getHistorySummary(GUARDIAN_ID, null);
+
+        assertThat(summary.total()).isZero();
+        assertThat(summary.needsReviewCount()).isZero();
+        assertThat(summary.deletedCameraCount()).isEqualTo(3);
     }
 
     @Test
@@ -205,7 +228,7 @@ class GuardianAnomalyHistoryFilterTest {
         List<AnomalyIncidentRepository.GuardianTypeStatusCount> rows = List.of(
                 row(DetectedType.FIRE, AnomalyReviewStatus.REAL, 2),
                 row(DetectedType.UNKNOWN, AnomalyReviewStatus.PENDING, 1));
-        when(incidentRepository.countForGuardianSummary(List.of(WARD_ID))).thenReturn(rows);
+        when(incidentRepository.countForGuardianSummary(eq(List.of(WARD_ID)), any())).thenReturn(rows);
 
         GuardianAnomalyHistorySummary summary = service.getHistorySummary(GUARDIAN_ID, null);
 
@@ -214,18 +237,18 @@ class GuardianAnomalyHistoryFilterTest {
     }
 
     @Test
-    @DisplayName("대시보드 확인 필요 건수: PENDING+CONFLICTED만 세고 카메라·삭제 건수는 조회하지 않는다")
-    void needsReviewCountSkipsCameraQueries() {
+    @DisplayName("대시보드 확인 필요 건수: 지금 등록된 카메라의 PENDING+CONFLICTED만 세고 삭제 건수는 조회하지 않는다")
+    void needsReviewCountUsesRegisteredCameras() {
         when(connectionService.getActiveWardIds(GUARDIAN_ID)).thenReturn(List.of(WARD_ID));
+        when(cameraService.findSessionIdsByWardIds(List.of(WARD_ID))).thenReturn(List.of("ward_live"));
         // 유형은 읽지 않으므로 엄격한 목 대신 값 객체로 넘긴다
         List<AnomalyIncidentRepository.GuardianTypeStatusCount> rows = List.of(
                 new StatusRow(DetectedType.FIRE, AnomalyReviewStatus.PENDING, 2),
                 new StatusRow(DetectedType.FALL, AnomalyReviewStatus.CONFLICTED, 1),
                 new StatusRow(DetectedType.FIRE, AnomalyReviewStatus.REAL, 5));
-        when(incidentRepository.countForGuardianSummary(List.of(WARD_ID))).thenReturn(rows);
+        when(incidentRepository.countForGuardianSummary(List.of(WARD_ID), List.of("ward_live"))).thenReturn(rows);
 
         assertThat(service.getNeedsReviewCount(GUARDIAN_ID, null)).isEqualTo(3);
-        verify(cameraService, never()).findSessionIdsByWardIds(any());
         verify(incidentRepository, never()).countDeletedCameraForGuardian(any(), any());
     }
 
@@ -239,7 +262,7 @@ class GuardianAnomalyHistoryFilterTest {
 
         when(connectionService.getActiveWardIds(GUARDIAN_ID)).thenReturn(List.of());
         assertThat(service.getNeedsReviewCount(GUARDIAN_ID, null)).isZero();
-        verify(incidentRepository, never()).countForGuardianSummary(any());
+        verify(incidentRepository, never()).countForGuardianSummary(any(), any());
     }
 
     @Test
@@ -250,7 +273,7 @@ class GuardianAnomalyHistoryFilterTest {
         assertThatThrownBy(() -> service.getHistorySummary(GUARDIAN_ID, WARD_ID))
                 .isInstanceOf(CustomException.class)
                 .hasFieldOrPropertyWithValue("errorCode", ErrorCode.ANOMALY_NOT_AUTHORIZED);
-        verify(incidentRepository, never()).countForGuardianSummary(any());
+        verify(incidentRepository, never()).countForGuardianSummary(any(), any());
     }
 
     @Test
@@ -259,6 +282,6 @@ class GuardianAnomalyHistoryFilterTest {
         when(connectionService.getActiveWardIds(GUARDIAN_ID)).thenReturn(List.of());
 
         assertThat(service.getHistorySummary(GUARDIAN_ID, null)).isEqualTo(GuardianAnomalyHistorySummary.EMPTY);
-        verify(incidentRepository, never()).countForGuardianSummary(any());
+        verify(incidentRepository, never()).countForGuardianSummary(any(), any());
     }
 }

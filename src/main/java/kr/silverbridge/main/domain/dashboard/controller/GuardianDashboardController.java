@@ -42,7 +42,8 @@ public class GuardianDashboardController {
 
                     [pendingActions - "확인이 필요한 일 N건"]
                     total = anomaly + medication
-                    - anomaly: 이상감지 확인 필요(PENDING + CONFLICTED) 상황 수
+                    - anomaly: 이상감지 확인 필요(PENDING + CONFLICTED) 상황 수 - 지금 등록된 카메라 기준
+                      (삭제된 카메라의 상황은 세지 않음, 이력 summary의 needsReviewCount와 같은 기준. 최신 1건도 같다)
                     - medication: 오늘(KST) 복용 시각이 지났는데 체크되지 않은 약 개수
                     - SOS는 보호자가 처리할 일이 없어 세지 않습니다
                     - 한 칸이라도 조회에 실패하면 total은 null입니다(합계를 추정하지 않음)
