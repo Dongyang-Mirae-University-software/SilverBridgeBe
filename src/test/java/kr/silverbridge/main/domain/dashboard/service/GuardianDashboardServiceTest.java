@@ -52,7 +52,7 @@ class GuardianDashboardServiceTest {
 
     /** 복용 시각 00:00 약은 언제 조회해도 "지난 약"이라 시계에 의존하지 않는다. */
     private static WardMedicationSummary medSummary(String wardId, MedicationItem... items) {
-        return new WardMedicationSummary(wardId, wardId + "-name", null, true, true, true, null,
+        return new WardMedicationSummary(wardId, wardId + "-name", null, true, true, null,
                 LocalDate.now(), 0, items.length, List.of(items));
     }
 
@@ -194,7 +194,7 @@ class GuardianDashboardServiceTest {
         OffsetDateTime todayMorningUtc = OffsetDateTime.of(2026, 10, 21, 23, 30, 0, 0, ZoneOffset.UTC);
         OffsetDateTime yesterday = OffsetDateTime.of(2026, 10, 21, 14, 0, 0, 0, ZoneOffset.ofHours(9));
         OffsetDateTime onTime = OffsetDateTime.of(2026, 10, 22, 8, 0, 0, 0, ZoneOffset.ofHours(9));
-        WardMedicationSummary s = new WardMedicationSummary("W1", "W1-name", null, true, true, true, null,
+        WardMedicationSummary s = new WardMedicationSummary("W1", "W1-name", null, true, true, null,
                 day, 0, 5, List.of(
                         registered(1, eight, todayAfternoon),
                         registered(2, eight, todayMorningUtc),

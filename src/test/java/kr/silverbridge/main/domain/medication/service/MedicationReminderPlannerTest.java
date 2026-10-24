@@ -69,14 +69,13 @@ class MedicationReminderPlannerTest {
     // ─── 최초 발송 ──────────────────────────────────────────────────
 
     @Test
-    @DisplayName("미복용 + 알림 ON인 약을 대상으로 잡고 발송 기록을 먼저 남긴다(선점)")
+    @DisplayName("미복용인 약을 대상으로 잡고 발송 기록을 먼저 남긴다(선점)")
     void claimFirst_대상선정_선점() {
         Medication target = medication(1L, "혈압약");
         when(medicationRepository.findByDeletedAtIsNullAndDoseTimeBetween(any(), any()))
                 .thenReturn(List.of(target));
         when(intakeRepository.findByMedicationIdInAndDoseDate(any(), any())).thenReturn(List.of());
         when(reminderLogRepository.findByMedicationIdInAndDoseDate(any(), any())).thenReturn(List.of());
-        when(settingService.findPreferences(any())).thenReturn(Map.of(WARD_ID, MedicationPreference.DEFAULT));
 
         List<MedicationReminderTarget> claimed = planner.claimFirstReminders();
 
@@ -102,7 +101,6 @@ class MedicationReminderPlannerTest {
         when(intakeRepository.findByMedicationIdInAndDoseDate(any(), any()))
                 .thenReturn(List.of(MedicationIntake.of(1L, MedicationClock.today(), OffsetDateTime.now())));
         when(reminderLogRepository.findByMedicationIdInAndDoseDate(any(), any())).thenReturn(List.of());
-        when(settingService.findPreferences(any())).thenReturn(Map.of(WARD_ID, MedicationPreference.DEFAULT));
 
         assertThat(planner.claimFirstReminders()).isEmpty();
         verify(reminderLogRepository, never()).saveAll(any());
@@ -117,23 +115,22 @@ class MedicationReminderPlannerTest {
         when(reminderLogRepository.findByMedicationIdInAndDoseDate(any(), any()))
                 .thenReturn(List.of(MedicationReminderLog.of(
                         1L, MedicationClock.today(), MedicationReminderLog.ATTEMPT_FIRST, OffsetDateTime.now())));
-        when(settingService.findPreferences(any())).thenReturn(Map.of(WARD_ID, MedicationPreference.DEFAULT));
 
         assertThat(planner.claimFirstReminders()).isEmpty();
         verify(reminderLogRepository, never()).saveAll(any());
     }
 
     @Test
-    @DisplayName("알림 설정이 꺼진 피보호자에게는 보내지 않는다")
-    void claimFirst_알림OFF_스킵() {
+    @DisplayName("최초 알림은 설정을 읽지 않는다 - 예전에 \"약 드실 시간 알려 드리기\"를 꺼 둔 피보호자에게도 나간다 (2026-10-24)")
+    void claimFirst_알림설정_보지않음() {
         when(medicationRepository.findByDeletedAtIsNullAndDoseTimeBetween(any(), any()))
                 .thenReturn(List.of(medication(1L, "혈압약")));
         when(intakeRepository.findByMedicationIdInAndDoseDate(any(), any())).thenReturn(List.of());
         when(reminderLogRepository.findByMedicationIdInAndDoseDate(any(), any())).thenReturn(List.of());
-        when(settingService.findPreferences(any()))
-                .thenReturn(Map.of(WARD_ID, new MedicationPreference(false, true)));
 
-        assertThat(planner.claimFirstReminders()).isEmpty();
+        assertThat(planner.claimFirstReminders()).hasSize(1);
+        // 켜고 끄는 스위치·API를 없앴으니 발송 여부를 설정으로 가르지 않는다
+        verify(settingService, never()).findPreferences(any());
     }
 
     @Test
@@ -224,7 +221,7 @@ class MedicationReminderPlannerTest {
         when(intakeRepository.findByMedicationIdInAndDoseDate(any(), any())).thenReturn(List.of());
         when(medicationRepository.findAllById(any())).thenReturn(List.of(medication(1L, "혈압약")));
         when(settingService.findPreferences(any()))
-                .thenReturn(Map.of(WARD_ID, new MedicationPreference(true, false)));
+                .thenReturn(Map.of(WARD_ID, new MedicationPreference(false)));
 
         assertThat(planner.claimRetryReminders()).isEmpty();
         verify(reminderLogRepository, never()).saveAll(any());

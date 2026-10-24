@@ -4,7 +4,6 @@ import kr.silverbridge.main.domain.connection.service.ConnectionService;
 import kr.silverbridge.main.domain.medication.dto.MedicationBatchCreateRequest;
 import kr.silverbridge.main.domain.medication.dto.MedicationCreateRequest;
 import kr.silverbridge.main.domain.medication.dto.MedicationItem;
-import kr.silverbridge.main.domain.medication.dto.MedicationSettingResponse;
 import kr.silverbridge.main.domain.medication.dto.MedicationUpdateRequest;
 import kr.silverbridge.main.domain.medication.dto.WardMedicationSummary;
 import kr.silverbridge.main.domain.medication.entity.Medication;
@@ -287,28 +286,6 @@ public class GuardianMedicationService {
         medication.delete(MedicationClock.now());
         log.info("복약 삭제: medicationId={}, wardId={}, guardianId={}",
                 medication.getId(), medication.getWardId(), guardianId);
-    }
-
-    /** 피보호자의 복약 알림 설정을 조회한다. */
-    @Transactional(readOnly = true)
-    public MedicationSettingResponse getSetting(String guardianId, String wardId) {
-        requireActiveConnection(guardianId, wardId, "복약 알림 설정 조회");
-        return MedicationSettingResponse.of(wardId, settingService.getPreference(wardId));
-    }
-
-    /**
-     * 피보호자의 복약 알림 설정을 변경한다. 설정은 피보호자 계정에 붙으므로 다른 보호자 화면에도 동일하게 보인다.
-     * 전달하지 않은 항목({@code null})은 기존값을 유지한다.
-     */
-    @Transactional
-    public MedicationSettingResponse updateSetting(String guardianId, String wardId,
-                                                   Boolean alarmEnabled, Boolean remindAgainEnabled) {
-        requireActiveConnection(guardianId, wardId, "복약 알림 설정 변경");
-
-        MedicationPreference applied = settingService.updatePreference(wardId, alarmEnabled, remindAgainEnabled);
-        log.info("복약 알림 설정 변경: wardId={}, alarmEnabled={}, remindAgainEnabled={}, guardianId={}",
-                wardId, applied.alarmEnabled(), applied.remindAgainEnabled(), guardianId);
-        return MedicationSettingResponse.of(wardId, applied);
     }
 
     /**

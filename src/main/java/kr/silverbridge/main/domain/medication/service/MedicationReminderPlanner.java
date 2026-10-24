@@ -59,7 +59,7 @@ public class MedicationReminderPlanner {
     /**
      * 복용 시각이 도래했는데 아직 체크되지 않은 약의 <b>최초 알림</b>을 선점한다.
      *
-     * <p>대상 조건 — 삭제되지 않음 && 복용 시각이 유예 창 안 && 오늘 미체크 && 알림 설정 ON && 미발송
+     * <p>대상 조건 — 삭제되지 않음 && 복용 시각이 유예 창 안 && 오늘 미체크 && 미발송
      * && ACTIVE 보호자가 있음.</p>
      */
     @Transactional
@@ -76,13 +76,10 @@ public class MedicationReminderPlanner {
         List<Long> medicationIds = due.stream().map(Medication::getId).toList();
         Set<Long> taken = takenMedicationIds(medicationIds, today);
         Set<Long> alreadySent = sentMedicationIds(medicationIds, today, MedicationReminderLog.ATTEMPT_FIRST);
-        Map<String, MedicationPreference> preferences = settingService.findPreferences(
-                due.stream().map(Medication::getWardId).collect(Collectors.toSet()));
 
         List<Medication> targets = due.stream()
                 .filter(medication -> !taken.contains(medication.getId()))
                 .filter(medication -> !alreadySent.contains(medication.getId()))
-                .filter(medication -> preference(preferences, medication.getWardId()).alarmEnabled())
                 .toList();
 
         return claim(withActiveGuardian(targets), today, now, MedicationReminderLog.ATTEMPT_FIRST);
@@ -92,7 +89,7 @@ public class MedicationReminderPlanner {
      * 최초 알림 후에도 체크되지 않은 약의 <b>재알림</b>을 선점한다.
      *
      * <p>대상 조건 — 최초 발송이 {@code [now-마감, now-지연]} 구간 && 재알림 미발송 && 여전히 미체크
-     * && 약이 살아 있음 && 알림·재알림 설정 모두 ON && ACTIVE 보호자가 있음(최초 발송 뒤 연결이 끊겼으면 재알림도 없다).</p>
+     * && 약이 살아 있음 && 재알림 설정 ON && ACTIVE 보호자가 있음(최초 발송 뒤 연결이 끊겼으면 재알림도 없다).</p>
      */
     @Transactional
     public List<MedicationReminderTarget> claimRetryReminders() {
@@ -121,10 +118,7 @@ public class MedicationReminderPlanner {
 
         List<Medication> targets = alive.stream()
                 .filter(medication -> !taken.contains(medication.getId()))
-                .filter(medication -> {
-                    MedicationPreference preference = preference(preferences, medication.getWardId());
-                    return preference.alarmEnabled() && preference.remindAgainEnabled();
-                })
+                .filter(medication -> preference(preferences, medication.getWardId()).remindAgainEnabled())
                 .toList();
 
         return claim(withActiveGuardian(targets), today, now, MedicationReminderLog.ATTEMPT_RETRY);

@@ -88,7 +88,7 @@ class GuardianMedicationServiceTest {
                         MedicationIntake.of(1L, today, OffsetDateTime.now()),
                         MedicationIntake.of(2L, today, OffsetDateTime.now())));
         when(userRepository.findAllById(any())).thenReturn(List.of(user(WARD_ID, "김영희", LocalDate.of(1948, 3, 2))));
-        when(settingService.findPreferences(any())).thenReturn(Map.of(WARD_ID, new MedicationPreference(false, true)));
+        when(settingService.findPreferences(any())).thenReturn(Map.of(WARD_ID, new MedicationPreference(true)));
 
         List<WardMedicationSummary> summaries = guardianMedicationService.getWardMedications(GUARDIAN_ID);
 
@@ -98,7 +98,6 @@ class GuardianMedicationServiceTest {
         assertThat(first.wardId()).isEqualTo(WARD_ID);
         assertThat(first.wardName()).isEqualTo("김영희");
         assertThat(first.age()).isEqualTo(Period.between(LocalDate.of(1948, 3, 2), today).getYears());
-        assertThat(first.alarmEnabled()).isFalse();
         assertThat(first.doseDate()).isEqualTo(today);
         assertThat(first.takenCount()).isEqualTo(2);
         assertThat(first.totalCount()).isEqualTo(3);
@@ -109,7 +108,7 @@ class GuardianMedicationServiceTest {
     }
 
     @Test
-    @DisplayName("약이 없는 피보호자도 카드는 나온다(0/0) — 설정 행이 없으면 알림 기본값 ON")
+    @DisplayName("약이 없는 피보호자도 카드는 나온다(0/0) — 설정 행이 없으면 재알림 기본값 ON")
     void getWardMedications_약없는_피보호자도_카드포함() {
         when(connectionService.getActiveWardIds(GUARDIAN_ID)).thenReturn(List.of(OTHER_WARD_ID));
         when(medicationRepository.findByWardIdInAndDeletedAtIsNullOrderByDoseTimeAscIdAsc(any()))
@@ -123,7 +122,6 @@ class GuardianMedicationServiceTest {
         assertThat(summaries.get(0).medications()).isEmpty();
         assertThat(summaries.get(0).takenCount()).isZero();
         assertThat(summaries.get(0).totalCount()).isZero();
-        assertThat(summaries.get(0).alarmEnabled()).isTrue();
         // 생년월일이 없으면 나이는 null — 프론트가 표기를 생략한다.
         assertThat(summaries.get(0).age()).isNull();
         // 약이 없으면 복용 체크를 조회할 필요도 없다.
@@ -131,14 +129,14 @@ class GuardianMedicationServiceTest {
     }
 
     @Test
-    @DisplayName("카드에 알림 설정 4종이 함께 실린다 — 피보호자 수만큼 설정 API를 더 부르지 않아도 되게")
+    @DisplayName("카드에 알림 설정 3종이 함께 실린다 — 피보호자 수만큼 설정 API를 더 부르지 않아도 되게")
     void getWardMedications_알림설정_동봉() {
         when(connectionService.getActiveWardIds(GUARDIAN_ID)).thenReturn(List.of(WARD_ID, OTHER_WARD_ID));
         when(medicationRepository.findByWardIdInAndDeletedAtIsNullOrderByDoseTimeAscIdAsc(any()))
                 .thenReturn(List.of());
         when(userRepository.findAllById(any())).thenReturn(List.of(user(WARD_ID, "김영희", null)));
         when(settingService.findPreferences(any()))
-                .thenReturn(Map.of(WARD_ID, new MedicationPreference(true, false)));
+                .thenReturn(Map.of(WARD_ID, new MedicationPreference(false)));
         // 김영희 건만 22:30으로 지정, 이순자 건은 미설정 → 기본값
         when(guardianSettingService.findSettingsOfGuardian(eq(GUARDIAN_ID), any()))
                 .thenReturn(Map.of(WARD_ID, new GuardianMissedAlertSetting(true, LocalTime.of(22, 30))));
@@ -147,7 +145,6 @@ class GuardianMedicationServiceTest {
 
         assertThat(summaries).filteredOn(s -> s.wardId().equals(WARD_ID)).singleElement()
                 .satisfies(s -> {
-                    assertThat(s.alarmEnabled()).isTrue();
                     assertThat(s.remindAgainEnabled()).isFalse();
                     assertThat(s.missedAlertEnabled()).isTrue();
                     assertThat(s.missedAlertTime()).isEqualTo(LocalTime.of(22, 30));
@@ -352,36 +349,6 @@ class GuardianMedicationServiceTest {
                 .isInstanceOf(CustomException.class)
                 .hasFieldOrPropertyWithValue("errorCode", ErrorCode.MEDICATION_DELETE_BATCH_DUPLICATE);
         verify(medicationRepository, never()).findById(1L);
-    }
-
-    // ─── 알림 설정 ──────────────────────────────────────────────────
-
-    @Test
-    @DisplayName("[IDOR] 연결되지 않은 피보호자의 알림 설정 변경 시도 → 403, 저장하지 않는다")
-    void updateSetting_연결없음_차단() {
-        when(connectionService.isActiveConnection(GUARDIAN_ID, OTHER_WARD_ID)).thenReturn(false);
-
-        assertThatThrownBy(() -> guardianMedicationService.updateSetting(GUARDIAN_ID, OTHER_WARD_ID, false, null))
-                .isInstanceOf(CustomException.class)
-                .hasFieldOrPropertyWithValue("errorCode", ErrorCode.MEDICATION_NOT_AUTHORIZED);
-
-        verify(settingService, never()).updatePreference(anyString(), any(), any());
-    }
-
-    @Test
-    @DisplayName("알림 설정 변경 — 피보호자 계정에 저장된다")
-    void updateSetting_정상() {
-        when(connectionService.isActiveConnection(GUARDIAN_ID, WARD_ID)).thenReturn(true);
-        when(settingService.updatePreference(WARD_ID, false, null))
-                .thenReturn(new MedicationPreference(false, true));
-
-        assertThat(guardianMedicationService.updateSetting(GUARDIAN_ID, WARD_ID, false, null))
-                .satisfies(response -> {
-                    assertThat(response.wardId()).isEqualTo(WARD_ID);
-                    assertThat(response.alarmEnabled()).isFalse();
-                    // 보내지 않은 항목은 기존값이 유지된다(하위호환).
-                    assertThat(response.remindAgainEnabled()).isTrue();
-                });
     }
 
     // ─── 헬퍼 ───────────────────────────────────────────────────────

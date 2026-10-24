@@ -14,9 +14,9 @@ import java.util.List;
  * <p>나이는 생년월일 원본 대신 <b>서버가 계산한 만 나이</b>만 준다(필요 이상의 개인정보를 내리지 않는다).
  * 생년월일이 없는 계정은 {@code null}이며, 이 경우 프론트는 나이 표기를 생략한다.</p>
  *
- * <p><b>설정 4종을 함께 싣는 이유</b>: 카드마다 토글·시각 피커를 그리는데, 이 값들이 없으면 프론트가
- * 피보호자 수만큼 설정 API를 더 호출해야 한다. 축은 서로 다르다 — {@code alarmEnabled}·
- * {@code remindAgainEnabled}는 피보호자 계정에 붙어 보호자들이 공유하고,
+ * <p><b>설정 3종을 함께 싣는 이유</b>: 카드마다 시각 피커를 그리는데, 이 값들이 없으면 프론트가
+ * 피보호자 수만큼 설정 API를 더 호출해야 한다. 축은 서로 다르다 — {@code remindAgainEnabled}는
+ * 피보호자 계정에 붙어 보호자들이 공유하고(복용 시각 알림 ON/OFF {@code alarmEnabled}는 2026-10-24 제거 - 늘 보낸다),
  * {@code missedAlert*}는 보호자 본인 것이라 다른 보호자와 값이 다를 수 있다.</p>
  *
  * @param takenCount 오늘 복용 체크된 약 수 (화면의 "오늘 2/3회 복용"의 앞 숫자)
@@ -33,9 +33,6 @@ public record WardMedicationSummary(
 
         @Schema(description = "만 나이 (생년월일 미등록 시 null)", example = "78")
         Integer age,
-
-        @Schema(description = "복약 알림 ON/OFF (피보호자에게 보낼 복용 시각 알림)", example = "true")
-        boolean alarmEnabled,
 
         @Schema(description = "재알림 ON/OFF (최초 알림 15분 뒤 한 번 더)", example = "true")
         boolean remindAgainEnabled,
@@ -66,7 +63,7 @@ public record WardMedicationSummary(
         int takenCount = (int) medications.stream().filter(MedicationItem::taken).count();
         return new WardMedicationSummary(
                 wardId, wardName, age,
-                preference.alarmEnabled(), preference.remindAgainEnabled(),
+                preference.remindAgainEnabled(),
                 missedAlert.enabled(), missedAlert.alertTime(),
                 doseDate, takenCount, medications.size(), medications);
     }

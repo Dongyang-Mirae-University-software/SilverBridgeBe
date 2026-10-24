@@ -228,7 +228,6 @@ public class SwaggerConfig {
                     "/api/guardian/medication",
                     "/api/guardian/ward/{wardId}/medication",
                     "/api/guardian/medication/{medicationId}",
-                    "/api/guardian/ward/{wardId}/medication-setting",
                     "/api/guardian/ward/{wardId}/medication-alert-setting",
                     // ── [보호자 - 문의] ──────────────────────────────
                     "/api/guardian/anomaly/history",
