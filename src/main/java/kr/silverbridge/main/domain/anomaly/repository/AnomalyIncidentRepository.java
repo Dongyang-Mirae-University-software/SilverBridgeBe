@@ -47,16 +47,37 @@ public interface AnomalyIncidentRepository extends JpaRepository<AnomalyIncident
      *
      * <p>{@code type}이 null이면 전체다(관리자 {@link #searchForAdmin}과 같은 동적 필터). 필터는 쿼리 안에서 걸어
      * 페이지 크기·전체 건수가 필터 기준으로 맞는다.</p>
+     *
+     * <p>카메라 필터: {@code onlyDeleted}면 {@code liveSessionIds}에 없는 상황만(삭제된 카메라),
+     * {@code onlyExisting}이면 있는 상황만 남긴다. 둘 다 false면 목록은 무시된다. 목록이 비면 호출부가
+     * 매칭 불가능한 값 하나를 넣는다(빈 IN 절 회피 - {@link #searchForAdmin}과 같다).</p>
      */
     @Query("""
             SELECT i FROM AnomalyIncident i
             WHERE i.wardId IN :wardIds
               AND (:type IS NULL OR i.detectedType = :type)
+              AND (:onlyDeleted = false OR i.sessionId NOT IN :liveSessionIds)
+              AND (:onlyExisting = false OR i.sessionId IN :liveSessionIds)
             ORDER BY i.startedAt DESC, i.id DESC
             """)
     Page<AnomalyIncident> findHistory(@Param("wardIds") Collection<String> wardIds,
                                       @Param("type") DetectedType type,
+                                      @Param("onlyDeleted") boolean onlyDeleted,
+                                      @Param("onlyExisting") boolean onlyExisting,
+                                      @Param("liveSessionIds") Collection<String> liveSessionIds,
                                       Pageable pageable);
+
+    /**
+     * 보호자 이력 요약 - 삭제된 카메라(지금 등록된 카메라 {@code liveSessionIds}에 없는 세션)의 상황 수.
+     * 유형 필터는 받지 않는다. 목록이 비면 호출부가 매칭 불가능한 값 하나를 넣는다.
+     */
+    @Query("""
+            SELECT COUNT(i) FROM AnomalyIncident i
+            WHERE i.wardId IN :wardIds
+              AND i.sessionId NOT IN :liveSessionIds
+            """)
+    long countDeletedCameraForGuardian(@Param("wardIds") Collection<String> wardIds,
+                                       @Param("liveSessionIds") Collection<String> liveSessionIds);
 
     /**
      * 보호자 이력 요약 - 인가된 피보호자 범위의 상황을 (유형, 판정 상태)별로 센다. 유형 필터는 받지 않는다

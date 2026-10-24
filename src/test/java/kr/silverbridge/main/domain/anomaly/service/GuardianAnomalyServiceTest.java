@@ -30,6 +30,7 @@ import java.util.Optional;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.never;
@@ -153,11 +154,11 @@ class GuardianAnomalyServiceTest {
         void historyOfUnconnectedWardIsForbidden() {
             when(connectionService.isActiveConnection(GUARDIAN_ID, WARD_ID)).thenReturn(false);
 
-            assertThatThrownBy(() -> service.getHistory(GUARDIAN_ID, WARD_ID, null, 0, 20))
+            assertThatThrownBy(() -> service.getHistory(GUARDIAN_ID, WARD_ID, null, null, 0, 20))
                     .isInstanceOf(CustomException.class)
                     .hasFieldOrPropertyWithValue("errorCode", ErrorCode.ANOMALY_NOT_AUTHORIZED);
 
-            verify(incidentRepository, never()).findHistory(any(), any(), any());
+            verify(incidentRepository, never()).findHistory(any(), any(), anyBoolean(), anyBoolean(), any(), any());
         }
 
         @Test
@@ -179,8 +180,8 @@ class GuardianAnomalyServiceTest {
         void noConnectionReturnsEmptyPage() {
             when(connectionService.getActiveWardIds(GUARDIAN_ID)).thenReturn(List.of());
 
-            assertThat(service.getHistory(GUARDIAN_ID, null, null, 0, 20).content()).isEmpty();
-            verify(incidentRepository, never()).findHistory(any(), any(), any());
+            assertThat(service.getHistory(GUARDIAN_ID, null, null, null, 0, 20).content()).isEmpty();
+            verify(incidentRepository, never()).findHistory(any(), any(), anyBoolean(), anyBoolean(), any(), any());
         }
 
         @Test

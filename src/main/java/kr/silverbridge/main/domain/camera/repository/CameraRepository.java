@@ -26,6 +26,10 @@ public interface CameraRepository extends JpaRepository<Camera, Long> {
     // 이상감지 이력 화면의 위치 표시 — sessionId 묶음으로 한 번에 조회(건별 조회로 인한 N+1 회피)
     List<Camera> findBySessionIdIn(Collection<String> sessionIds);
 
+    // 이상감지 이력의 "삭제된 카메라" 필터 - 피보호자들의 지금 등록된 카메라 sessionId (사용 중지 포함)
+    @Query("select c.sessionId from Camera c where c.wardId in :wardIds")
+    List<String> findSessionIdsByWardIdIn(@Param("wardIds") Collection<String> wardIds);
+
     // 보호자 allowlist — 연결된 피보호자들의 활성 카메라 일괄 조회 (N+1 없이 단일 IN 쿼리)
     List<Camera> findByWardIdInAndIsActiveTrue(Collection<String> wardIds);
 

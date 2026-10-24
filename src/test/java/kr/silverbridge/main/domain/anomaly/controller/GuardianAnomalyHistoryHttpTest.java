@@ -1,5 +1,6 @@
 package kr.silverbridge.main.domain.anomaly.controller;
 
+import kr.silverbridge.main.domain.anomaly.dto.AnomalyCameraFilter;
 import kr.silverbridge.main.domain.anomaly.dto.AnomalyTypeFilter;
 import kr.silverbridge.main.domain.anomaly.dto.GuardianAnomalyHistorySummary;
 import kr.silverbridge.main.domain.anomaly.service.AnomalyClipAccessService;
@@ -60,7 +61,7 @@ class GuardianAnomalyHistoryHttpTest {
     @Test
     @DisplayName("type=FIRE는 서비스에 FIRE로 전달된다")
     void typeBinds() throws Exception {
-        when(service.getHistory(eq("GD0001"), any(), eq(AnomalyTypeFilter.FIRE), eq(0), eq(20)))
+        when(service.getHistory(eq("GD0001"), any(), eq(AnomalyTypeFilter.FIRE), eq(null), eq(0), eq(20)))
                 .thenReturn(new PageResponse<>(List.of(), 0, 20, 0, 0, true));
 
         mockMvc.perform(get("/api/guardian/anomaly/history").param("type", "FIRE"))
@@ -70,7 +71,7 @@ class GuardianAnomalyHistoryHttpTest {
     @Test
     @DisplayName("type을 생략하면 null(전체)로 전달된다")
     void typeOmitted() throws Exception {
-        when(service.getHistory(eq("GD0001"), any(), eq(null), eq(0), eq(20)))
+        when(service.getHistory(eq("GD0001"), any(), eq(null), eq(null), eq(0), eq(20)))
                 .thenReturn(new PageResponse<>(List.of(), 0, 20, 0, 0, true));
 
         mockMvc.perform(get("/api/guardian/anomaly/history")).andExpect(status().isOk());
@@ -84,7 +85,7 @@ class GuardianAnomalyHistoryHttpTest {
                     .andExpect(status().isBadRequest())
                     .andExpect(jsonPath("$.success").value(false));
         }
-        verify(service, never()).getHistory(any(), any(), any(), org.mockito.ArgumentMatchers.anyInt(),
+        verify(service, never()).getHistory(any(), any(), any(), any(), org.mockito.ArgumentMatchers.anyInt(),
                 org.mockito.ArgumentMatchers.anyInt());
     }
 
@@ -92,7 +93,7 @@ class GuardianAnomalyHistoryHttpTest {
     @DisplayName("요약 경로는 history/summary로 응답한다")
     void summaryRoute() throws Exception {
         when(service.getHistorySummary("GD0001", "WD0001")).thenReturn(
-                new GuardianAnomalyHistorySummary(10, 2, 1, 3, new GuardianAnomalyHistorySummary.ByType(6, 3, 1)));
+                new GuardianAnomalyHistorySummary(10, 2, 1, 3, new GuardianAnomalyHistorySummary.ByType(6, 3, 1), 2));
 
         mockMvc.perform(get("/api/guardian/anomaly/history/summary").param("wardId", "WD0001"))
                 .andExpect(status().isOk())
@@ -101,6 +102,31 @@ class GuardianAnomalyHistoryHttpTest {
                 .andExpect(jsonPath("$.data.conflictedCount").value(1))
                 .andExpect(jsonPath("$.data.needsReviewCount").value(3))
                 .andExpect(jsonPath("$.data.byType.fire").value(6))
-                .andExpect(jsonPath("$.data.byType.weapon").value(1));
+                .andExpect(jsonPath("$.data.byType.weapon").value(1))
+                .andExpect(jsonPath("$.data.deletedCameraCount").value(2));
+    }
+
+    @Test
+    @DisplayName("camera=DELETED는 type과 함께 서비스에 전달된다")
+    void cameraBinds() throws Exception {
+        when(service.getHistory(eq("GD0001"), any(), eq(AnomalyTypeFilter.FALL), eq(AnomalyCameraFilter.DELETED),
+                eq(0), eq(20))).thenReturn(new PageResponse<>(List.of(), 0, 20, 0, 0, true));
+
+        mockMvc.perform(get("/api/guardian/anomaly/history").param("type", "FALL").param("camera", "DELETED"))
+                .andExpect(status().isOk());
+        verify(service).getHistory(eq("GD0001"), any(), eq(AnomalyTypeFilter.FALL), eq(AnomalyCameraFilter.DELETED),
+                eq(0), eq(20));
+    }
+
+    @Test
+    @DisplayName("허용 값이 아닌 camera(소문자·ACTIVE·임의 문자열)는 400이고 서비스를 부르지 않는다")
+    void invalidCameraIs400() throws Exception {
+        for (String bad : List.of("deleted", "ACTIVE", "ALL", "abc")) {
+            mockMvc.perform(get("/api/guardian/anomaly/history").param("camera", bad))
+                    .andExpect(status().isBadRequest())
+                    .andExpect(jsonPath("$.success").value(false));
+        }
+        verify(service, never()).getHistory(any(), any(), any(), any(), org.mockito.ArgumentMatchers.anyInt(),
+                org.mockito.ArgumentMatchers.anyInt());
     }
 }

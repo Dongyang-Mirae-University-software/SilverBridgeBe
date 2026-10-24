@@ -25,11 +25,15 @@ public record GuardianAnomalyHistorySummary(
         long needsReviewCount,
 
         @Schema(description = "유형별 상황 수. FIRE(연기 포함)·FALL·WEAPON을 항상 모두 담는다")
-        ByType byType
+        ByType byType,
+
+        @Schema(description = "삭제된 카메라의 상황 수 (= camera=DELETED로 이력을 조회했을 때의 totalElements, 유형 무관)",
+                example = "2")
+        long deletedCameraCount
 ) {
 
     public static final GuardianAnomalyHistorySummary EMPTY =
-            new GuardianAnomalyHistorySummary(0, 0, 0, 0, new ByType(0, 0, 0));
+            new GuardianAnomalyHistorySummary(0, 0, 0, 0, new ByType(0, 0, 0), 0);
 
     public record ByType(
             @Schema(description = "화재(연기 포함)", example = "8") long fire,
