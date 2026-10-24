@@ -159,6 +159,31 @@ public class GuardianAnomalyService {
     }
 
     /**
+     * 확인이 필요한(PENDING·CONFLICTED) 상황 수 - 보호자 대시보드의 피보호자별 배지용.
+     * 인가는 {@link #getHistorySummary}와 같다({@code resolveVisibleWardIds}). 대시보드가 쓰지 않는
+     * 카메라 조회·삭제된 카메라 집계는 하지 않는다 - 쿼리가 늘고 쓰지 않는 값 때문에 대시보드 칸이 실패할 수 있었다
+     * (2026-10-24 점검 L-1).
+     *
+     * @throws CustomException {@code ANOMALY_NOT_AUTHORIZED} - wardId를 지정했으나 ACTIVE 연결이 아닐 때
+     */
+    @Transactional(readOnly = true)
+    public long getNeedsReviewCount(String guardianId, String wardId) {
+        List<String> wardIds = resolveVisibleWardIds(guardianId, wardId);
+        if (wardIds.isEmpty()) {
+            return 0;
+        }
+        long count = 0;
+        for (AnomalyIncidentRepository.GuardianTypeStatusCount row
+                : anomalyIncidentRepository.countForGuardianSummary(wardIds)) {
+            if (row.getReviewStatus() == AnomalyReviewStatus.PENDING
+                    || row.getReviewStatus() == AnomalyReviewStatus.CONFLICTED) {
+                count += row.getTotal();
+            }
+        }
+        return count;
+    }
+
+    /**
      * 피보호자들의 지금 등록된 카메라 세션(삭제 판정 기준 - 이력의 {@code cameraLabel = null}과 같다).
      * 세션은 피보호자를 옮겨 다니지 않으므로(역할 변경 시 카메라 삭제·재등록은 새 세션) 피보호자 범위로 충분하다.
      */
