@@ -35,3 +35,8 @@
 | ID | 단계 | 내용 | 비고 |
 |---|---|---|---|
 | L-1 | 🟢 | FE `PushNotificationListener`의 이상감지 예비 문구(FCM 알림 제목·본문이 없을 때만 사용)는 피보호자에게 유형과 무관하게 "안전한 곳으로 대피해 주세요"를 붙이고 제목도 "이상 상황 감지"다. 낙상에는 맞지 않는 안내다 | BE는 FCM에 항상 알림 제목·본문을 실어(`FcmService` `setNotification`) 이 경로는 BE 푸시에서 실행되지 않는다. FE 범위, 조치 선택 |
+
+## 후속 조치 (2026-10-24) - L-1 조치
+
+FE #137 (머지 `c4bdc24`, gosky 반영): `src/utils/anomaly/alertText.ts` 한 곳에서 BE와 같은 예비 문구(제목 "○○ 감지", 본인 종류별 안내 - 낙상은 보호자 연락·SOS, 보호자 흉기·낙상 안내, 장소가 비면 "등록된 카메라에서")를 만들고 푸시(`PushNotificationListener`)·WS 실시간(`utils/dashboard/realtime.ts`)이 함께 쓴다. WS는 BE `title`·`body`가 여전히 우선. 단위 테스트 3개(낙상에 "대피" 없음 등), `npm test` 303·browser 178·build 통과, gosky 페이지 200.
+
