@@ -82,6 +82,14 @@ class AdminDashboardServiceTest {
         return incident;
     }
 
+    /** AI가 연결돼 있고 첫 세션 목록까지 받은 상태 - 구독 중인 세션 n개. */
+    private void liveSessions(int n) {
+        when(aiLiveStreamSubscriber.isConnected()).thenReturn(true);
+        when(aiLiveStreamSubscriber.liveSessionSnapshot()).thenReturn(Optional.of(
+                java.util.stream.IntStream.range(0, n).mapToObj(k -> "ward_s" + k)
+                        .collect(java.util.stream.Collectors.toSet())));
+    }
+
     @Nested
     @DisplayName("AI 연결 상태 - 모르는 것을 0으로 채우지 않는다")
     class AiState {
@@ -132,10 +140,39 @@ class AdminDashboardServiceTest {
         }
 
         @Test
+        @DisplayName("재접속 직후 첫 세션 목록 전이면 연결돼 있어도 스트리밍/끊긴 카메라는 null이다 (2026-10-24 점검 M-1)")
+        void 첫목록_전에는_null() {
+            when(aiLiveStreamSubscriber.isConnected()).thenReturn(true);
+            when(aiLiveStreamSubscriber.liveSessionSnapshot()).thenReturn(Optional.empty());
+            when(cameraRepository.count()).thenReturn(3L);
+            when(cameraRepository.countByIsActiveTrue()).thenReturn(3L);
+
+            AdminSafetyDashboardResponse response = service.getSafetyDashboard();
+
+            // 구독 기록이 비어 있는 몇 초를 "송출 0대·전부 끊김"으로 보이지 않는다
+            assertThat(response.aiConnected()).isTrue();
+            assertThat(response.streamingCameras()).isNull();
+            assertThat(response.safetyEvents().disconnectedCameras()).isNull();
+            assertThat(response.subscribedSessions()).isZero();
+            assertThat(response.totalCameras()).isEqualTo(3L);
+        }
+
+        @Test
+        @DisplayName("첫 목록을 받았고 송출이 0대면 0이다 - 알 수 없음(null)과 구분")
+        void 목록_받은뒤_0대는_0() {
+            liveSessions(0);
+            when(cameraRepository.countByIsActiveTrue()).thenReturn(2L);
+
+            AdminSafetyDashboardResponse response = service.getSafetyDashboard();
+
+            assertThat(response.streamingCameras()).isZero();
+            assertThat(response.safetyEvents().disconnectedCameras()).isEqualTo(2L);
+        }
+
+        @Test
         @DisplayName("AI 연결 시 끊긴 카메라 = 등록 - 구독")
         void ai_연결시_차감() {
-            when(aiLiveStreamSubscriber.isConnected()).thenReturn(true);
-            when(aiLiveStreamSubscriber.subscribedSessionCount()).thenReturn(27);
+            liveSessions(27);
             when(cameraRepository.count()).thenReturn(29L);
             when(cameraRepository.countByIsActiveTrue()).thenReturn(29L);
 
@@ -149,8 +186,7 @@ class AdminDashboardServiceTest {
         @Test
         @DisplayName("끊긴 카메라의 분모는 활성 카메라만이다 - 비활성은 구독 대상이 아니라 끊김으로 세지 않는다 (ADMIN-G20)")
         void 비활성_카메라는_분모에서_제외() {
-            when(aiLiveStreamSubscriber.isConnected()).thenReturn(true);
-            when(aiLiveStreamSubscriber.subscribedSessionCount()).thenReturn(27);
+            liveSessions(27);
             when(cameraRepository.count()).thenReturn(29L);
             when(cameraRepository.countByIsActiveTrue()).thenReturn(28L);
 
@@ -163,8 +199,7 @@ class AdminDashboardServiceTest {
         @Test
         @DisplayName("구독이 등록 대수보다 많아도 끊긴 카메라가 음수가 되지 않는다")
         void 음수_방지() {
-            when(aiLiveStreamSubscriber.isConnected()).thenReturn(true);
-            when(aiLiveStreamSubscriber.subscribedSessionCount()).thenReturn(5);
+            liveSessions(5);
             when(cameraRepository.count()).thenReturn(3L);
             when(cameraRepository.countByIsActiveTrue()).thenReturn(3L);
 
@@ -181,7 +216,7 @@ class AdminDashboardServiceTest {
         @Test
         @DisplayName("집계된 유형만 담긴다 - 낙상·흉기가 0으로 끼어들지 않는다")
         void 집계된_유형만() {
-            when(aiLiveStreamSubscriber.isConnected()).thenReturn(true);
+            liveSessions(0);
             when(anomalyIncidentRepository.findByStartedAtGreaterThanEqual(any())).thenReturn(List.of(
                     incident(DetectedType.FIRE, AnomalyReviewStatus.PENDING),
                     incident(DetectedType.FIRE, AnomalyReviewStatus.REAL),
@@ -199,7 +234,7 @@ class AdminDashboardServiceTest {
         @Test
         @DisplayName("판정 4종을 모두 내려 오탐률을 응답률과 함께 계산할 수 있게 한다")
         void 판정_4종_집계() {
-            when(aiLiveStreamSubscriber.isConnected()).thenReturn(true);
+            liveSessions(0);
             when(anomalyIncidentRepository.findByStartedAtGreaterThanEqual(any())).thenReturn(List.of(
                     incident(DetectedType.FIRE, AnomalyReviewStatus.PENDING),
                     incident(DetectedType.FIRE, AnomalyReviewStatus.PENDING),
@@ -220,7 +255,7 @@ class AdminDashboardServiceTest {
         @Test
         @DisplayName("상황이 0건이면 total 0 + 빈 배열 - 키는 그대로 존재한다")
         void 상황_0건() {
-            when(aiLiveStreamSubscriber.isConnected()).thenReturn(true);
+            liveSessions(0);
 
             AdminSafetyDashboardResponse.TodayAnomaly today = service.getSafetyDashboard().todayAnomaly();
 

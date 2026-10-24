@@ -29,7 +29,7 @@
 | 스냅샷의 첫 목록 수신 여부 검사 제거 | `AiLiveStreamSubscriberTest` 실패 - 잡힘 |
 
 ## 이슈
-### 🟡 M-1 대시보드는 재접속 직후 첫 목록 전에 "끊김"을 부풀린다 (기존 동작, 이번 PR 회귀 아님)
+### 🟡 M-1 대시보드는 재접속 직후 첫 목록 전에 "끊김"을 부풀린다 (기존 동작, 이번 PR 회귀 아님) - ✅ 조치 2026-10-24 `fix/dashboard-camera-snapshot`
 - `AdminDashboardService.getSafetyDashboard`는 `isConnected()`만 보고 `subscribedSessionCount()`를 쓴다. 재접속 직후 첫 세션 목록 전에는 구독 기록이 비어 `streamingCameras=0`, `disconnectedCameras=활성 카메라 전부`가 된다(약 수 초). 디바이스 관리 화면은 같은 구간에 null이다.
 - 숨긴 카메라 포함 여부로 두 화면의 끊김 숫자가 다른 것은 이번 기능에서 **수용으로 결정·문서화**했다(사용자 결정 2026-10-23). 남는 것은 위 구간뿐이다.
 - 제안: 대시보드도 `liveSessionSnapshot()`으로 바꿔 첫 목록 전에는 null을 내린다(대시보드 계약상 null은 이미 "알 수 없음"이라 FE 변경 없음). 대시보드 숫자를 바꾸는 일이라 사용자 결정 후 진행.
@@ -49,3 +49,9 @@
 
 ## 수정용 커밋 메시지 초안 (M-1을 고치기로 하면)
 `fix: 대시보드 카메라 송출 수를 AI 첫 세션 목록 전에는 null로` - `AdminDashboardService`가 `liveSessionSnapshot()`을 쓰고, 재접속 직후 0·전부 끊김을 내지 않음을 테스트로 고정.
+
+## 후속 조치 (2026-10-24, `fix/dashboard-camera-snapshot`)
+- M-1: `AdminDashboardService`가 `liveSessionSnapshot()`으로 `streamingCameras`·`disconnectedCameras`·`subscribedSessions`를 계산한다. 재접속 직후 첫 목록 전에는 `aiConnected=true`인 채 두 값이 null, `subscribedSessions`는 0. 분모(활성 카메라만, ADMIN-G20)와 `aiConnected`는 그대로.
+- 테스트 +2(`첫목록_전에는_null`·`목록_받은뒤_0대는_0`). 옛 계산으로 되돌리면 실패함을 확인. `./gradlew build` 통과(1863건, 실패 0).
+- Swagger(대시보드 컨트롤러·응답 DTO) 설명에 "연결 직후 첫 목록 전에도 null"을 더했다. FE는 이미 null을 "알 수 없음"으로 다루므로 변경 없음.
+

@@ -18,7 +18,7 @@ public record AdminSafetyDashboardResponse(
         @Schema(description = "AI WebSocket 구독 연결 상태", example = "true")
         boolean aiConnected,
 
-        @Schema(description = "현재 구독 중인 세션 수. AI 미연결이면 0", example = "12")
+        @Schema(description = "현재 구독 중인 세션 수. AI 미연결이거나 재접속 직후 첫 세션 목록 전이면 0", example = "12")
         int subscribedSessions,
 
         @Schema(description = "등록된 카메라 대수", example = "29")
@@ -27,7 +27,8 @@ public record AdminSafetyDashboardResponse(
         @Schema(description = """
                 현재 스트리밍이 잡히는 카메라 대수.
 
-                AI 미연결(aiConnected=false)이면 **null** 입니다 - "0대"가 아니라 "알 수 없음"입니다.
+                AI 미연결(aiConnected=false)이거나, 연결 직후 AI의 첫 세션 목록을 아직 받지 못했으면(수 초,
+                이때 aiConnected=true) **null** 입니다 - "0대"가 아니라 "알 수 없음"입니다.
                 우리 수신기가 끊긴 것을 현장 카메라가 전멸한 것으로 표시하지 않기 위함입니다.
                 """, example = "27", nullable = true)
         Long streamingCameras,
@@ -45,7 +46,7 @@ public record AdminSafetyDashboardResponse(
             @Schema(description = """
                     스트리밍이 잡히지 않는 카메라 대수.
 
-                    AI 미연결이면 **null**(알 수 없음)입니다.
+                    AI 미연결이거나 연결 직후 첫 세션 목록 전이면 **null**(알 수 없음)입니다.
                     """, example = "2", nullable = true)
             Long disconnectedCameras,
 
