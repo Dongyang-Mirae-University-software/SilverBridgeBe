@@ -181,3 +181,15 @@
 - `refactor: access 토큰 클레임 해석을 한 곳으로 모으기`
 
 L-1·L-5는 수용·기록만 하고 코드 변경은 없다.
+
+## 후속 조치 (2026-10-24, FE #109 `c8cbee7`, gosky 반영)
+
+| 항목 | 조치 |
+|---|---|
+| 🟡 M-1 | `connectionSocket`: 세션 거절(401·403·404)만 연결 중단. 일시 장애는 `deactivate` 뒤 5초(`RECONNECT_DELAY_MS`) 타이머로 다시 `activate` → 갱신부터 재시도. STOMP는 `beforeConnect` 예외 시 재연결을 예약하지 않아 직접 타이머로 켠다(만료 토큰 핸드셰이크 반복 없음). 예약은 한 번만, 정리 뒤에는 다시 켜지 않음. 단위 6건, 재시도를 지운 변이 → 3건 실패 |
+| 🟢 L-2 | 가드 복원 거절·일시 장애 → 다시 시도 성공, 확인 중 안내, 토큰이 빠진 200 응답 → 정리, Web Locks 미지원, 락 안 실패 후 락이 풀리고 다음 갱신 진행 |
+| 🟢 L-3 | `SessionCheckingNotice` "로그인 상태를 확인하고 있어요"(0.4초 지연, reduced-motion). 가드는 `useSyncExternalStore`로 하이드레이션 뒤에만 그린다(서버 렌더 불일치 방지). gosky refresh 쿠키만 있는 `/` 응답 HTML에 문구 확인 |
+| 🟢 L-4 | `tokenClaims.decodeAccessTokenClaims` 한 곳으로 통합(만료·역할·subject), 테스트 10건 |
+| 🟢 L-1·L-5 | 권고대로 수용·기록, 코드 변경 없음 |
+
+검증: `npm test` 251, `npm run test:browser` 95, `tsc`, `next build` 통과, 바뀐 파일 린트 0. gosky `/` 307·`/login`·`/guardian`·`/ward` 200, refresh 쿠키만 있으면 200.
