@@ -122,7 +122,8 @@ CSS 위치 문제는 단위 테스트(node)로는 잡히지 않는다. 브라우
 | H-1 | `.button.inline`에 `inset: auto; z-index: auto` - 브라우저 테스트로 흐름 위치(40,40)·z-index auto 고정, 값을 빼면 24 ≠ 40으로 실패 |
 | M-1 | 토글 3개 `aria-label`("복약 시간 알림"·"안 드시면 나에게 알림"·"15분 뒤 재알림") + `.switchField input:focus-visible + .switchTrack` 2px 테두리. gosky에서 이름 3개·Tab 포커스 테두리 확인 |
 | L-1 | `RefreshButton.browser.test.tsx`(신규 2건) + `WardMedicationCard.browser.test.tsx`(2건: 토글 이름, position 없는 스크롤 상자 안에서 바깥 문서 높이 유지). `.switchField` relative를 빼면 문서 1819 > 896으로 실패 |
-| L-2 | 미적용(선택, 지금 증상 없음) |
+| L-2 | FE #119(`f042396`): `AuthShell` `.shell`(900px 이하 스크롤)·`.formPane`(데스크톱 스크롤)에 `position: relative`. `.formPane`도 기준이라 그 안의 absolute가 폼 스크롤을 따라 움직인다. 브라우저 테스트 1건(1366×768, 기준 부모 없는 숨긴 input을 3000px 아래에 둬도 문서 ≤ 내용 끝, 두 줄을 빼면 3093 > 848로 실패). gosky 로그인·가입·비밀번호/이메일 찾기 × 4개 크기 16건이 반영 전후 문서 높이·카드·소개 영역 위치 모두 같음 |
 
 `npm test` 274 · `test:browser` 108 · tsc · build 통과. gosky 복약 화면 1366×768·1366×294 바깥 문서 = 화면. 커밋 메시지가 wip로 올라간 PR #116은 닫고 #117로 다시 올렸다.
 
+L-2 반영 후 `test:browser` 109.

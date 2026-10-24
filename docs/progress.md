@@ -2189,3 +2189,7 @@ FE #114(`386ac52`, gosky 반영): 숨긴 input 5곳 + `.stage` 안전망 `positi
 ### [2026-10-24] FE 화면 아래 빈 띠 점검 후속 - 🟠 1·🟡 1·🟢 1 조치
 
 FE #117(`449ff09`, gosky 반영): inline 새로고침 버튼이 상속된 right·bottom 16px·z-index 50으로 밀리던 #114 회귀를 `inset·z-index auto`로 수정(H-1) · 복약 토글 3개 `aria-label`·포커스 테두리(M-1) · 브라우저 테스트 4건, 변이 3종 검출(L-1). L-2(`AuthShell` 안전망)는 선택으로 미적용. `npm test` 274·browser 108·build 통과.
+
+### [2026-10-24] FE 화면 아래 빈 띠 점검 L-2 조치 - 점검 항목 전부 조치
+
+FE #119(`f042396`, gosky 반영): 로그인·가입 틀 `AuthShell`의 스크롤 영역 `.shell`·`.formPane`에도 `.stage`와 같은 `position: relative` 안전망. 브라우저 테스트 1건(변이 검출), gosky 4화면×4크기 위치·높이 전후 동일. `npm test` 274·browser 109·build 통과.
