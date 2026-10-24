@@ -69,6 +69,13 @@ class GuardianAnomalyHistoryFilterTest {
         return row;
     }
 
+    private record StatusRow(DetectedType detectedType, AnomalyReviewStatus reviewStatus, long total)
+            implements AnomalyIncidentRepository.GuardianTypeStatusCount {
+        @Override public DetectedType getDetectedType() { return detectedType; }
+        @Override public AnomalyReviewStatus getReviewStatus() { return reviewStatus; }
+        @Override public long getTotal() { return total; }
+    }
+
     @Test
     @DisplayName("type을 지정하면 그 유형이 쿼리로 넘어간다")
     void typeIsPassedToQuery() {
@@ -204,6 +211,35 @@ class GuardianAnomalyHistoryFilterTest {
 
         assertThat(summary.total()).isEqualTo(3);
         assertThat(summary.byType().fire()).isEqualTo(2);
+    }
+
+    @Test
+    @DisplayName("대시보드 확인 필요 건수: PENDING+CONFLICTED만 세고 카메라·삭제 건수는 조회하지 않는다")
+    void needsReviewCountSkipsCameraQueries() {
+        when(connectionService.getActiveWardIds(GUARDIAN_ID)).thenReturn(List.of(WARD_ID));
+        // 유형은 읽지 않으므로 엄격한 목 대신 값 객체로 넘긴다
+        List<AnomalyIncidentRepository.GuardianTypeStatusCount> rows = List.of(
+                new StatusRow(DetectedType.FIRE, AnomalyReviewStatus.PENDING, 2),
+                new StatusRow(DetectedType.FALL, AnomalyReviewStatus.CONFLICTED, 1),
+                new StatusRow(DetectedType.FIRE, AnomalyReviewStatus.REAL, 5));
+        when(incidentRepository.countForGuardianSummary(List.of(WARD_ID))).thenReturn(rows);
+
+        assertThat(service.getNeedsReviewCount(GUARDIAN_ID, null)).isEqualTo(3);
+        verify(cameraService, never()).findSessionIdsByWardIds(any());
+        verify(incidentRepository, never()).countDeletedCameraForGuardian(any(), any());
+    }
+
+    @Test
+    @DisplayName("대시보드 확인 필요 건수: 연결 없는 wardId는 403이고 집계하지 않는다 / 연결이 없으면 0")
+    void needsReviewCountAuthorization() {
+        when(connectionService.isActiveConnection(GUARDIAN_ID, WARD_ID)).thenReturn(false);
+        assertThatThrownBy(() -> service.getNeedsReviewCount(GUARDIAN_ID, WARD_ID))
+                .isInstanceOf(CustomException.class)
+                .hasFieldOrPropertyWithValue("errorCode", ErrorCode.ANOMALY_NOT_AUTHORIZED);
+
+        when(connectionService.getActiveWardIds(GUARDIAN_ID)).thenReturn(List.of());
+        assertThat(service.getNeedsReviewCount(GUARDIAN_ID, null)).isZero();
+        verify(incidentRepository, never()).countForGuardianSummary(any());
     }
 
     @Test

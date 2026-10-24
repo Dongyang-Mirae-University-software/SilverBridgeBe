@@ -1,6 +1,5 @@
 package kr.silverbridge.main.domain.dashboard.service;
 
-import kr.silverbridge.main.domain.anomaly.dto.GuardianAnomalyHistorySummary;
 import kr.silverbridge.main.domain.anomaly.service.GuardianAnomalyService;
 import kr.silverbridge.main.domain.connection.service.ConnectionService;
 import kr.silverbridge.main.domain.dashboard.dto.GuardianDashboardResponse;
@@ -45,10 +44,6 @@ class GuardianDashboardServiceTest {
     @Mock UserRepository userRepository;
     @InjectMocks GuardianDashboardService service;
 
-    private static GuardianAnomalyHistorySummary summary(long pending, long conflicted) {
-        return new GuardianAnomalyHistorySummary(pending + conflicted, pending, conflicted, pending + conflicted,
-                new GuardianAnomalyHistorySummary.ByType(0, 0, 0), 0);
-    }
 
     /** 복용 시각 00:00 약은 언제 조회해도 "지난 약"이라 시계에 의존하지 않는다. */
     private static WardMedicationSummary medSummary(String wardId, MedicationItem... items) {
@@ -95,8 +90,8 @@ class GuardianDashboardServiceTest {
     @DisplayName("wardId 생략 → 전원 합산, 복약은 인가된 피보호자만 센다")
     void 생략_합산() {
         when(connectionService.getActiveWardIds("G1")).thenReturn(List.of("W1", "W2"));
-        when(anomalyService.getHistorySummary("G1", "W1")).thenReturn(summary(1, 1));
-        when(anomalyService.getHistorySummary("G1", "W2")).thenReturn(summary(0, 0));
+        when(anomalyService.getNeedsReviewCount("G1", "W1")).thenReturn(2L);
+        when(anomalyService.getNeedsReviewCount("G1", "W2")).thenReturn(0L);
         when(anomalyService.getLatestNeedsReview("G1", null)).thenReturn(null);
         when(sosService.getRecent(anyString(), any(), any())).thenReturn(new GuardianSosService.RecentSos(2, null));
         when(medicationService.getWardMedications("G1")).thenReturn(List.of(
@@ -119,7 +114,7 @@ class GuardianDashboardServiceTest {
     @DisplayName("wardId 지정 → 그 피보호자 기준으로만 하위 서비스 호출")
     void 지정_범위() {
         when(connectionService.isActiveConnection("G1", "W1")).thenReturn(true);
-        when(anomalyService.getHistorySummary("G1", "W1")).thenReturn(summary(1, 0));
+        when(anomalyService.getNeedsReviewCount("G1", "W1")).thenReturn(1L);
         when(anomalyService.getLatestNeedsReview("G1", "W1")).thenReturn(null);
         when(sosService.getRecent(anyString(), any(), any())).thenReturn(new GuardianSosService.RecentSos(0, null));
         when(medicationService.getWardMedications("G1")).thenReturn(List.of(
@@ -137,7 +132,7 @@ class GuardianDashboardServiceTest {
     @DisplayName("복약 칸 실패 → 0이 아니라 null, total도 null, 나머지 칸은 내려간다")
     void 칸_실패_격리() {
         when(connectionService.getActiveWardIds("G1")).thenReturn(List.of("W1"));
-        when(anomalyService.getHistorySummary("G1", "W1")).thenReturn(summary(1, 0));
+        when(anomalyService.getNeedsReviewCount("G1", "W1")).thenReturn(1L);
         when(anomalyService.getLatestNeedsReview("G1", null)).thenReturn(null);
         when(sosService.getRecent(anyString(), any(), any())).thenReturn(new GuardianSosService.RecentSos(0, null));
         when(medicationService.getWardMedications("G1")).thenThrow(new IllegalStateException("db down"));
@@ -157,7 +152,7 @@ class GuardianDashboardServiceTest {
     @DisplayName("이상감지·SOS 칸 실패 → 각각 null + unavailable")
     void 이상감지_SOS_실패() {
         when(connectionService.getActiveWardIds("G1")).thenReturn(List.of("W1"));
-        when(anomalyService.getHistorySummary("G1", "W1")).thenThrow(new IllegalStateException("x"));
+        when(anomalyService.getNeedsReviewCount("G1", "W1")).thenThrow(new IllegalStateException("x"));
         when(sosService.getRecent(anyString(), any(), any())).thenThrow(new IllegalStateException("x"));
         when(medicationService.getWardMedications("G1")).thenReturn(List.of(medSummary("W1")));
 

@@ -1,7 +1,6 @@
 package kr.silverbridge.main.domain.dashboard.service;
 
 import kr.silverbridge.main.domain.anomaly.dto.AnomalyIncidentItem;
-import kr.silverbridge.main.domain.anomaly.dto.GuardianAnomalyHistorySummary;
 import kr.silverbridge.main.domain.anomaly.service.GuardianAnomalyService;
 import kr.silverbridge.main.domain.connection.service.ConnectionService;
 import kr.silverbridge.main.domain.dashboard.dto.GuardianDashboardResponse;
@@ -84,8 +83,7 @@ public class GuardianDashboardService {
         Map<String, Long> anomalyByWard = attempt(SECTION_ANOMALY, unavailable, () -> {
             Map<String, Long> counts = new HashMap<>();
             for (String id : wardIds) {
-                GuardianAnomalyHistorySummary summary = anomalyService.getHistorySummary(guardianId, id);
-                counts.put(id, summary.needsReviewCount());
+                counts.put(id, anomalyService.getNeedsReviewCount(guardianId, id));
             }
             return counts;
         });
