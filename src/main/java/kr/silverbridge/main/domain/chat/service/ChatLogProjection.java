@@ -16,10 +16,12 @@ import java.util.List;
  */
 final class ChatLogProjection {
 
-    /** FE가 기록 복원·표시에 쓰는 필드. 새 필드가 필요하면 여기에 더한다. */
+    /** FE가 기록 복원·표시에 쓰는 필드. 새 필드가 필요하면 여기에 더한다.
+     *  emergencyWarning: 응급·위기 응답의 빨간 경고 박스 문구(2026-10-24) - 기록을 다시 열어도 119·109 안내가 보이게. */
     static final List<String> ALLOWED_FIELDS = List.of(
             "id", "chatNo", "sessionId", "message", "reply", "engine", "modelName", "intent", "type",
-            "tool", "toolData", "ui", "riskLevel", "recommendedAction", "reservationRequired", "createdAt");
+            "tool", "toolData", "ui", "riskLevel", "recommendedAction", "reservationRequired", "emergencyWarning",
+            "createdAt");
 
     private ChatLogProjection() {
     }

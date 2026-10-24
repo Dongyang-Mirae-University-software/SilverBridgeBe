@@ -36,6 +36,17 @@ class ChatLogProjectionTest {
     }
 
     @Test
+    @DisplayName("응급·위기 경고 박스 문구(emergencyWarning)는 기록 조회에도 실린다")
+    void 경고박스_유지() throws Exception {
+        JsonNode log = mapper.readTree("{\"id\":1,\"reply\":\"a\",\"emergencyWarning\":[\"바로 119\"]}");
+
+        JsonNode out = ChatLogProjection.project(log);
+
+        assertThat(out.get("emergencyWarning").isArray()).isTrue();
+        assertThat(out.get("emergencyWarning").get(0).asText()).isEqualTo("바로 119");
+    }
+
+    @Test
     @DisplayName("빈 배열은 빈 배열, 객체 아닌 입력은 null")
     void 경계() throws Exception {
         assertThat(ChatLogProjection.projectAll(mapper.readTree("[]"))).isEmpty();
