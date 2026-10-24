@@ -114,3 +114,15 @@ CSS 위치 문제는 단위 테스트(node)로는 잡히지 않는다. 브라우
 | L-2 | `AuthShell` 안전망 | 선택 |
 
 수정용 커밋 메시지 초안: `fix: inline 새로고침 버튼이 떠 있는 버튼 위치값을 받아 16px 밀리던 문제` / `fix: 복약 알림 토글에 스크린리더 이름과 키보드 포커스 표시 추가`
+
+## 조치 결과 (2026-10-24, FE #117 `449ff09`, gosky 반영)
+
+| ID | 결과 |
+|---|---|
+| H-1 | `.button.inline`에 `inset: auto; z-index: auto` - 브라우저 테스트로 흐름 위치(40,40)·z-index auto 고정, 값을 빼면 24 ≠ 40으로 실패 |
+| M-1 | 토글 3개 `aria-label`("복약 시간 알림"·"안 드시면 나에게 알림"·"15분 뒤 재알림") + `.switchField input:focus-visible + .switchTrack` 2px 테두리. gosky에서 이름 3개·Tab 포커스 테두리 확인 |
+| L-1 | `RefreshButton.browser.test.tsx`(신규 2건) + `WardMedicationCard.browser.test.tsx`(2건: 토글 이름, position 없는 스크롤 상자 안에서 바깥 문서 높이 유지). `.switchField` relative를 빼면 문서 1819 > 896으로 실패 |
+| L-2 | 미적용(선택, 지금 증상 없음) |
+
+`npm test` 274 · `test:browser` 108 · tsc · build 통과. gosky 복약 화면 1366×768·1366×294 바깥 문서 = 화면. 커밋 메시지가 wip로 올라간 PR #116은 닫고 #117로 다시 올렸다.
+

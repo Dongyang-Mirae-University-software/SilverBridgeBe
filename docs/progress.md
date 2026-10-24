@@ -2185,3 +2185,7 @@ FE #111(`fba6a56`, gosky 반영): BFF - BE 5xx를 401·거짓 403 대신 502(M-1
 ### [2026-10-24] FE 화면 아래 빈 띠 수정(FE #114) 기능 점검 - 조건부 PASS
 
 FE #114(`386ac52`, gosky 반영): 숨긴 input 5곳 + `.stage` 안전망 `position: relative`. gosky 보호자 13화면×2크기에서 바깥 문서가 늘지 않고 안전망에 기대는 요소 0, 챗봇 375 `fixed` 유지. 🟠 H-1 inline 새로고침 버튼이 상속된 right·bottom 16px·z-index 50으로 밀림(이 PR 회귀, `inset: auto; z-index: auto` 제안) · 🟡 M-1 복약 토글 스크린리더 이름·포커스 표시 없음(기존) · 🟢 L-1 브라우저 테스트·L-2 `AuthShell` 안전망. `npm test` 274·browser 104 통과. 상세 `docs/(2026-10-24) audit-fe-layout-hidden-input-overflow.md`.
+
+### [2026-10-24] FE 화면 아래 빈 띠 점검 후속 - 🟠 1·🟡 1·🟢 1 조치
+
+FE #117(`449ff09`, gosky 반영): inline 새로고침 버튼이 상속된 right·bottom 16px·z-index 50으로 밀리던 #114 회귀를 `inset·z-index auto`로 수정(H-1) · 복약 토글 3개 `aria-label`·포커스 테두리(M-1) · 브라우저 테스트 4건, 변이 3종 검출(L-1). L-2(`AuthShell` 안전망)는 선택으로 미적용. `npm test` 274·browser 108·build 통과.
