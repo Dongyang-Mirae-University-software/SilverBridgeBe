@@ -47,7 +47,7 @@ class GuardianDashboardServiceTest {
 
     private static GuardianAnomalyHistorySummary summary(long pending, long conflicted) {
         return new GuardianAnomalyHistorySummary(pending + conflicted, pending, conflicted, pending + conflicted,
-                new GuardianAnomalyHistorySummary.ByType(0, 0, 0));
+                new GuardianAnomalyHistorySummary.ByType(0, 0, 0), 0);
     }
 
     /** 복용 시각 00:00 약은 언제 조회해도 "지난 약"이라 시계에 의존하지 않는다. */

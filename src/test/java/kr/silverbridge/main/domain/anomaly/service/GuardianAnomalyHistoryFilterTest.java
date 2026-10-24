@@ -1,5 +1,6 @@
 package kr.silverbridge.main.domain.anomaly.service;
 
+import kr.silverbridge.main.domain.anomaly.dto.AnomalyCameraFilter;
 import kr.silverbridge.main.domain.anomaly.dto.AnomalyTypeFilter;
 import kr.silverbridge.main.domain.anomaly.dto.GuardianAnomalyHistorySummary;
 import kr.silverbridge.main.domain.anomaly.entity.AnomalyReviewStatus;
@@ -28,13 +29,14 @@ import java.util.List;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-/** 보호자 이력의 유형 필터와 건수 요약(2026-10-07). 인가가 필터·집계보다 먼저임을 고정한다. */
+/** 보호자 이력의 유형·카메라 필터와 건수 요약(2026-10-07 / 카메라 2026-10-24). 인가가 필터·집계보다 먼저임을 고정한다. */
 @ExtendWith(MockitoExtension.class)
 class GuardianAnomalyHistoryFilterTest {
 
@@ -71,23 +73,24 @@ class GuardianAnomalyHistoryFilterTest {
     @DisplayName("type을 지정하면 그 유형이 쿼리로 넘어간다")
     void typeIsPassedToQuery() {
         when(connectionService.getActiveWardIds(GUARDIAN_ID)).thenReturn(List.of(WARD_ID));
-        when(incidentRepository.findHistory(any(), any(), any(Pageable.class))).thenReturn(Page.empty());
+        when(incidentRepository.findHistory(any(), any(), anyBoolean(), anyBoolean(), any(), any(Pageable.class))).thenReturn(Page.empty());
 
-        service.getHistory(GUARDIAN_ID, null, AnomalyTypeFilter.FALL, 0, 20);
+        service.getHistory(GUARDIAN_ID, null, AnomalyTypeFilter.FALL, null, 0, 20);
 
-        verify(incidentRepository).findHistory(eq(List.of(WARD_ID)), eq(DetectedType.FALL), any(Pageable.class));
+        verify(incidentRepository).findHistory(eq(List.of(WARD_ID)), eq(DetectedType.FALL), eq(false), eq(false), any(),
+                any(Pageable.class));
     }
 
     @Test
     @DisplayName("type을 생략하면 null이 넘어가 전체 조회다")
     void nullTypeMeansAll() {
         when(connectionService.getActiveWardIds(GUARDIAN_ID)).thenReturn(List.of(WARD_ID));
-        when(incidentRepository.findHistory(any(), any(), any(Pageable.class))).thenReturn(new PageImpl<>(List.of()));
+        when(incidentRepository.findHistory(any(), any(), anyBoolean(), anyBoolean(), any(), any(Pageable.class))).thenReturn(new PageImpl<>(List.of()));
 
-        service.getHistory(GUARDIAN_ID, null, null, 0, 20);
+        service.getHistory(GUARDIAN_ID, null, null, null, 0, 20);
 
         ArgumentCaptor<DetectedType> captor = ArgumentCaptor.forClass(DetectedType.class);
-        verify(incidentRepository).findHistory(any(), captor.capture(), any(Pageable.class));
+        verify(incidentRepository).findHistory(any(), captor.capture(), anyBoolean(), anyBoolean(), any(), any(Pageable.class));
         assertThat(captor.getValue()).isNull();
     }
 
@@ -96,10 +99,10 @@ class GuardianAnomalyHistoryFilterTest {
     void unconnectedWardWithTypeIsForbidden() {
         when(connectionService.isActiveConnection(GUARDIAN_ID, WARD_ID)).thenReturn(false);
 
-        assertThatThrownBy(() -> service.getHistory(GUARDIAN_ID, WARD_ID, AnomalyTypeFilter.FIRE, 0, 20))
+        assertThatThrownBy(() -> service.getHistory(GUARDIAN_ID, WARD_ID, AnomalyTypeFilter.FIRE, null, 0, 20))
                 .isInstanceOf(CustomException.class)
                 .hasFieldOrPropertyWithValue("errorCode", ErrorCode.ANOMALY_NOT_AUTHORIZED);
-        verify(incidentRepository, never()).findHistory(any(), any(), any());
+        verify(incidentRepository, never()).findHistory(any(), any(), anyBoolean(), anyBoolean(), any(), any());
     }
 
     @Test
@@ -122,6 +125,70 @@ class GuardianAnomalyHistoryFilterTest {
         assertThat(summary.byType().fire()).isEqualTo(5);
         assertThat(summary.byType().fall()).isEqualTo(5);
         assertThat(summary.byType().weapon()).isZero();
+        assertThat(summary.deletedCameraCount()).isZero();
+    }
+
+    @Test
+    @DisplayName("camera=DELETED면 지금 등록된 카메라 세션을 넘기고 '없는 세션만'으로 거른다")
+    void deletedCameraFilterPassesLiveSessions() {
+        when(connectionService.getActiveWardIds(GUARDIAN_ID)).thenReturn(List.of(WARD_ID));
+        when(cameraService.findSessionIdsByWardIds(List.of(WARD_ID))).thenReturn(List.of("ward_live"));
+        when(incidentRepository.findHistory(any(), any(), anyBoolean(), anyBoolean(), any(), any(Pageable.class)))
+                .thenReturn(Page.empty());
+
+        service.getHistory(GUARDIAN_ID, null, AnomalyTypeFilter.FIRE, AnomalyCameraFilter.DELETED, 0, 20);
+
+        verify(incidentRepository).findHistory(eq(List.of(WARD_ID)), eq(DetectedType.FIRE), eq(true), eq(false),
+                eq(List.of("ward_live")), any(Pageable.class));
+    }
+
+    @Test
+    @DisplayName("camera=EXISTING이면 '있는 세션만', 등록된 카메라가 없으면 매칭 불가 값 하나를 넘긴다(빈 IN 절 회피)")
+    void existingCameraFilterWithoutCamerasUsesNoMatch() {
+        when(connectionService.getActiveWardIds(GUARDIAN_ID)).thenReturn(List.of(WARD_ID));
+        when(cameraService.findSessionIdsByWardIds(List.of(WARD_ID))).thenReturn(List.of());
+        when(incidentRepository.findHistory(any(), any(), anyBoolean(), anyBoolean(), any(), any(Pageable.class)))
+                .thenReturn(Page.empty());
+
+        service.getHistory(GUARDIAN_ID, null, null, AnomalyCameraFilter.EXISTING, 0, 20);
+
+        verify(incidentRepository).findHistory(eq(List.of(WARD_ID)), eq(null), eq(false), eq(true),
+                eq(List.of("")), any(Pageable.class));
+    }
+
+    @Test
+    @DisplayName("camera를 생략하면 카메라 목록을 조회하지 않는다")
+    void noCameraFilterSkipsCameraLookup() {
+        when(connectionService.getActiveWardIds(GUARDIAN_ID)).thenReturn(List.of(WARD_ID));
+        when(incidentRepository.findHistory(any(), any(), anyBoolean(), anyBoolean(), any(), any(Pageable.class)))
+                .thenReturn(Page.empty());
+
+        service.getHistory(GUARDIAN_ID, null, null, null, 0, 20);
+
+        verify(cameraService, never()).findSessionIdsByWardIds(any());
+    }
+
+    @Test
+    @DisplayName("camera 필터도 연결 없는 wardId면 403이고 카메라·이력을 조회하지 않는다")
+    void deletedCameraFilterOnUnconnectedWardIsForbidden() {
+        when(connectionService.isActiveConnection(GUARDIAN_ID, WARD_ID)).thenReturn(false);
+
+        assertThatThrownBy(() -> service.getHistory(GUARDIAN_ID, WARD_ID, null, AnomalyCameraFilter.DELETED, 0, 20))
+                .isInstanceOf(CustomException.class)
+                .hasFieldOrPropertyWithValue("errorCode", ErrorCode.ANOMALY_NOT_AUTHORIZED);
+        verify(cameraService, never()).findSessionIdsByWardIds(any());
+        verify(incidentRepository, never()).findHistory(any(), any(), anyBoolean(), anyBoolean(), any(), any());
+    }
+
+    @Test
+    @DisplayName("요약: 삭제된 카메라 건수는 지금 등록된 카메라 세션 기준으로 센다")
+    void summaryCountsDeletedCamera() {
+        when(connectionService.getActiveWardIds(GUARDIAN_ID)).thenReturn(List.of(WARD_ID));
+        when(incidentRepository.countForGuardianSummary(List.of(WARD_ID))).thenReturn(List.of());
+        when(cameraService.findSessionIdsByWardIds(List.of(WARD_ID))).thenReturn(List.of("ward_live"));
+        when(incidentRepository.countDeletedCameraForGuardian(List.of(WARD_ID), List.of("ward_live"))).thenReturn(4L);
+
+        assertThat(service.getHistorySummary(GUARDIAN_ID, null).deletedCameraCount()).isEqualTo(4);
     }
 
     @Test

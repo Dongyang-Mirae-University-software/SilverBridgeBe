@@ -6,6 +6,7 @@ import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
+import kr.silverbridge.main.domain.anomaly.dto.AnomalyCameraFilter;
 import kr.silverbridge.main.domain.anomaly.dto.AnomalyClipItem;
 import kr.silverbridge.main.domain.anomaly.dto.AnomalyFeedbackRequest;
 import kr.silverbridge.main.domain.anomaly.dto.AnomalyFeedbackResponse;
@@ -68,6 +69,12 @@ public class GuardianAnomalyController {
                     - wardId와 함께 쓸 수 있고, 연결 검증(403)이 먼저 적용됩니다
                     - 탭 건수는 이 응답이 아니라 GET /api/guardian/anomaly/history/summary 로 받으세요
 
+                    [camera 파라미터]
+                    - DELETED(삭제된 카메라의 이력만) · EXISTING(지금 등록된 카메라의 이력만). 생략하면 전체
+                    - "삭제된 카메라" = 응답의 cameraLabel이 null인 이력과 같은 기준입니다(사용 중지한 카메라는 삭제가 아님)
+                    - 그 밖의 값은 400. 서버에서 걸리므로 totalElements도 필터 기준이며, type과 함께 쓸 수 있습니다
+                    - 건수는 summary의 deletedCameraCount로 받으세요
+
                     [응답] data: PageResponse<AnomalyIncidentItem>
                     - reviewStatus: PENDING(확인 필요) · REAL(실제 위험) · FALSE_ALARM(오탐) · CONFLICTED(보호자 응답 동수 - 다시 확인 필요)
                     - myVerdict: 내가 낸 응답. 아직 응답하지 않았으면 null
@@ -79,7 +86,7 @@ public class GuardianAnomalyController {
                     """)
     @ApiResponses({
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "이상감지 이력 페이지 반환 (연결된 피보호자가 없으면 빈 content)"),
-            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "type 값이 FIRE·FALL·WEAPON이 아님", content = @Content),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "type 값이 FIRE·FALL·WEAPON이 아님 / camera 값이 DELETED·EXISTING이 아님", content = @Content),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "인증 토큰 없음 또는 만료", content = @Content),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "보호자 권한 필요 / 연결되지 않은 피보호자 지정", content = @Content)
     })
@@ -88,10 +95,11 @@ public class GuardianAnomalyController {
             @AuthenticationPrincipal String guardianId,
             @Parameter(description = "특정 피보호자만 조회 (생략 시 연결된 피보호자 전원)") @RequestParam(required = false) String wardId,
             @Parameter(description = "감지 유형 필터: FIRE·FALL·WEAPON (생략 시 전체)") @RequestParam(required = false) AnomalyTypeFilter type,
+            @Parameter(description = "카메라 필터: DELETED(삭제된 카메라)·EXISTING(지금 등록된 카메라) (생략 시 전체)") @RequestParam(required = false) AnomalyCameraFilter camera,
             @Parameter(description = "페이지 번호 (0-based)") @RequestParam(defaultValue = "0") int page,
             @Parameter(description = "페이지 크기 (최대 50)") @RequestParam(defaultValue = "20") int size) {
         return ResponseEntity.ok(ApiResponse.ok(
-                guardianAnomalyService.getHistory(guardianId, wardId, type, page, size)));
+                guardianAnomalyService.getHistory(guardianId, wardId, type, camera, page, size)));
     }
 
     @Operation(summary = "이상감지 이력 건수 요약 (보호자 전용)",
@@ -111,6 +119,7 @@ public class GuardianAnomalyController {
                     - conflictedCount: 보호자 응답이 동수라 다시 확인이 필요한 상황(CONFLICTED)
                     - needsReviewCount: 헤더 "확인 필요 N건"용 = pendingCount + conflictedCount
                     - byType.fire / fall / weapon: 유형별 건수. 연기는 fire에 포함. 세 값을 항상 내려주며 0은 실제로 센 값입니다
+                    - deletedCameraCount: 삭제된 카메라의 상황 수 (= history?camera=DELETED 의 totalElements, 유형 무관)
 
                     [주의]
                     - history의 type 필터·페이지와 무관하게 항상 조회 범위 전체를 셉니다(탭을 골라도 숫자가 변하지 않음)

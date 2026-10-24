@@ -385,6 +385,19 @@ public class CameraService {
     }
 
     /**
+     * 피보호자들의 지금 등록된 카메라 {@code sessionId}(anomaly 도메인 협력용, 보호자 이력의 "삭제된 카메라" 필터).
+     * 사용 중지(is_active=false) 카메라도 포함한다 - 삭제가 아니므로 위치가 그대로 보인다
+     * ({@link #findLabelsBySessionIds}와 같은 기준).
+     */
+    @Transactional(readOnly = true)
+    public List<String> findSessionIdsByWardIds(Collection<String> wardIds) {
+        if (wardIds == null || wardIds.isEmpty()) {
+            return List.of();
+        }
+        return cameraRepository.findSessionIdsByWardIdIn(wardIds);
+    }
+
+    /**
      * 설치 위치 부분일치 → {@code sessionId} 목록(anomaly 도메인 협력용, 관리자 이상감지 로그 검색).
      * 삭제된 카메라는 위치를 알 수 없어 검색되지 않는다.
      *

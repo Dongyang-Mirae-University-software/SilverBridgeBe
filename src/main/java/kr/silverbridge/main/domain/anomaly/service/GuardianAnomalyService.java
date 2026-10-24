@@ -1,5 +1,6 @@
 package kr.silverbridge.main.domain.anomaly.service;
 
+import kr.silverbridge.main.domain.anomaly.dto.AnomalyCameraFilter;
 import kr.silverbridge.main.domain.anomaly.dto.AnomalyFeedbackResponse;
 import kr.silverbridge.main.domain.anomaly.dto.AnomalyTypeFilter;
 import kr.silverbridge.main.domain.anomaly.dto.GuardianAnomalyHistorySummary;
@@ -59,6 +60,9 @@ public class GuardianAnomalyService {
     /** 페이지 크기 상한 - 과대 요청으로 전체 이력을 한 번에 끌어가는 것을 막는다(SOS 이력과 동일). */
     private static final int MAX_PAGE_SIZE = 50;
 
+    /** 빈 IN 절을 피하는 매칭 불가능한 값(관리자 로그 검색과 같다). 세션 ID는 'ward_' + 영숫자라 빈 문자열과 겹치지 않는다. */
+    private static final List<String> NO_MATCH = List.of("");
+
     private final AnomalyIncidentRepository anomalyIncidentRepository;
     private final AnomalyIncidentFeedbackRepository feedbackRepository;
     private final AnomalyReviewConflictLogRepository conflictLogRepository;
@@ -72,19 +76,24 @@ public class GuardianAnomalyService {
      *
      * @param wardId 특정 피보호자만 볼 때 지정. {@code null}·공백이면 ACTIVE 연결된 피보호자 전원
      * @param type   감지 유형 필터. {@code null}이면 전체. 인가(wardId 검증) 뒤에 쿼리 안에서 건다
+     * @param camera 카메라 필터(삭제된 카메라 / 지금 등록된 카메라). {@code null}이면 전체. 유형 필터와 함께 걸린다
      * @throws CustomException {@code ANOMALY_NOT_AUTHORIZED} - wardId를 지정했으나 ACTIVE 연결이 아닐 때
      */
     @Transactional(readOnly = true)
     public PageResponse<AnomalyIncidentItem> getHistory(String guardianId, String wardId, AnomalyTypeFilter type,
-                                                        int page, int size) {
+                                                        AnomalyCameraFilter camera, int page, int size) {
         Pageable pageable = PageRequest.of(Math.max(page, 0), normalizeSize(size));
         List<String> wardIds = resolveVisibleWardIds(guardianId, wardId);
         if (wardIds.isEmpty()) {
             return PageResponse.of(Page.empty(pageable));
         }
 
+        // 카메라 필터가 없으면 카메라 목록을 조회하지 않는다(쿼리도 목록을 보지 않는다)
+        Collection<String> liveSessionIds = camera == null ? NO_MATCH : liveSessionIds(wardIds);
         Page<AnomalyIncident> incidents = anomalyIncidentRepository.findHistory(
-                wardIds, type == null ? null : type.toDetectedType(), pageable);
+                wardIds, type == null ? null : type.toDetectedType(),
+                camera == AnomalyCameraFilter.DELETED, camera == AnomalyCameraFilter.EXISTING,
+                liveSessionIds, pageable);
         List<AnomalyIncident> content = incidents.getContent();
 
         Map<String, String> wardNames = resolveWardNames(content);
@@ -142,9 +151,20 @@ public class GuardianAnomalyService {
                 conflicted += row.getTotal();
             }
         }
+        long deletedCamera = anomalyIncidentRepository.countDeletedCameraForGuardian(wardIds, liveSessionIds(wardIds));
         return new GuardianAnomalyHistorySummary(all, pending, conflicted,
                 pending + conflicted,
-                new GuardianAnomalyHistorySummary.ByType(fire, fall, weapon));
+                new GuardianAnomalyHistorySummary.ByType(fire, fall, weapon),
+                deletedCamera);
+    }
+
+    /**
+     * 피보호자들의 지금 등록된 카메라 세션(삭제 판정 기준 - 이력의 {@code cameraLabel = null}과 같다).
+     * 세션은 피보호자를 옮겨 다니지 않으므로(역할 변경 시 카메라 삭제·재등록은 새 세션) 피보호자 범위로 충분하다.
+     */
+    private Collection<String> liveSessionIds(List<String> wardIds) {
+        List<String> sessionIds = cameraService.findSessionIdsByWardIds(wardIds);
+        return sessionIds.isEmpty() ? NO_MATCH : sessionIds;
     }
 
     /**
