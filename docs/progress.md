@@ -2182,3 +2182,6 @@ FE #111(`fba6a56`, gosky 반영): BFF - BE 5xx를 401·거짓 403 대신 502(M-1
 
 관리자 대시보드 안전 현황이 AI 재접속 직후 첫 세션 목록 전 몇 초 동안 송출 0대·활성 카메라 전부 끊김으로 표시하던 것을, 디바이스 관리와 같은 `liveSessionSnapshot()` 기준으로 바꿔 null(알 수 없음)로 내린다. 응답 칸·분모·`aiConnected`는 그대로, 테스트 +2(옛 계산으로 되돌리면 실패 확인), `./gradlew build` 통과(1863건).
 
+### [2026-10-24] FE 화면 아래 빈 띠 수정(FE #114) 기능 점검 - 조건부 PASS
+
+FE #114(`386ac52`, gosky 반영): 숨긴 input 5곳 + `.stage` 안전망 `position: relative`. gosky 보호자 13화면×2크기에서 바깥 문서가 늘지 않고 안전망에 기대는 요소 0, 챗봇 375 `fixed` 유지. 🟠 H-1 inline 새로고침 버튼이 상속된 right·bottom 16px·z-index 50으로 밀림(이 PR 회귀, `inset: auto; z-index: auto` 제안) · 🟡 M-1 복약 토글 스크린리더 이름·포커스 표시 없음(기존) · 🟢 L-1 브라우저 테스트·L-2 `AuthShell` 안전망. `npm test` 274·browser 104 통과. 상세 `docs/(2026-10-24) audit-fe-layout-hidden-input-overflow.md`.
