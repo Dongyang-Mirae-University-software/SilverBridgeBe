@@ -2212,3 +2212,8 @@ FE #124(`7b09ecb`): 400 `INVALID_INPUT`이면 BE 칸별 문구·입력 수정 �
 
 FE #127(`cd2e86d`, gosky 반영): 오탐 선택 뒤 열린 영상 내림+안내(L-1) · 판정·WS·푸시 때 대시보드 캐시 무효화(L-2) · 푸시 딥링크 카메라는 첫 열기에만(L-3) · 요약 키 배치 단위 테스트(L-4). 되돌리면 새 테스트 4/4 실패. `npm test` 287·browser 144·build 통과, gosky 재실측 회귀 없음.
 
+### [2026-10-24] 보호자 이상감지 이력 삭제된 카메라 필터·건수 (BE)
+
+`GET /api/guardian/anomaly/history?camera=DELETED|EXISTING`(전용 enum, 잘못된 값 400, type과 함께) + 요약 `deletedCameraCount`. 삭제 기준은 이력 `cameraLabel=null`과 같은 "세션의 카메라 행 없음", 쿼리 안에서 거름(서비스가 지금 등록된 세션 목록을 넘김, 빈 목록은 매칭 불가 값). 인가·기존 필드 무변경, 마이그레이션 없음. 단위 1871 통과, 통합 테스트 +1(실 PostgreSQL). FE 칩은 별도 PR.
+- 산출물: `docs/(2026-10-24) feature-anomaly-history-deleted-camera-filter.md`.
+
