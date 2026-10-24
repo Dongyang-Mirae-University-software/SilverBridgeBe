@@ -5,7 +5,6 @@ import kr.silverbridge.main.domain.medication.dto.MedicationDeleteBatchRequest;
 import kr.silverbridge.main.domain.medication.dto.MedicationIntakeBatchRequest;
 import kr.silverbridge.main.domain.medication.dto.MedicationCreateRequest;
 import kr.silverbridge.main.domain.medication.dto.GuardianMedicationAlertSettingRequest;
-import kr.silverbridge.main.domain.medication.dto.MedicationSettingUpdateRequest;
 import kr.silverbridge.main.domain.medication.dto.MedicationUpdateRequest;
 import kr.silverbridge.main.domain.medication.dto.TodayMedicationResponse;
 import kr.silverbridge.main.domain.medication.entity.MedicationTimeSlot;
@@ -123,9 +122,6 @@ class MedicationControllerSecurityTest {
         // 약 수정도 보호자 전용 — 피보호자는 자기 약도 고칠 수 없다(등록·수정·삭제는 보호자 몫)
         assertThatThrownBy(() -> guardianController.update(
                 "WD0001", 1L, new MedicationUpdateRequest("혈압약", null, null, null, null)))
-                .isInstanceOf(AccessDeniedException.class);
-        assertThatThrownBy(() -> guardianController.updateSetting("WD0001", "WD0001",
-                new MedicationSettingUpdateRequest(false, null)))
                 .isInstanceOf(AccessDeniedException.class);
         assertThatThrownBy(() -> guardianController.getWardMedications("WD0001"))
                 .isInstanceOf(AccessDeniedException.class);

@@ -12,8 +12,6 @@ import kr.silverbridge.main.domain.medication.dto.MedicationBatchCreateRequest;
 import kr.silverbridge.main.domain.medication.dto.MedicationCreateRequest;
 import kr.silverbridge.main.domain.medication.dto.MedicationDeleteBatchRequest;
 import kr.silverbridge.main.domain.medication.dto.MedicationItem;
-import kr.silverbridge.main.domain.medication.dto.MedicationSettingResponse;
-import kr.silverbridge.main.domain.medication.dto.MedicationSettingUpdateRequest;
 import kr.silverbridge.main.domain.medication.dto.MedicationUpdateRequest;
 import kr.silverbridge.main.domain.medication.dto.WardMedicationSummary;
 import kr.silverbridge.main.domain.medication.service.GuardianMedicationService;
@@ -61,7 +59,6 @@ public class GuardianMedicationController {
 
                     [응답] data: WardMedicationSummary[]
                     - wardId / wardName / age(만 나이, 생년월일 미등록 시 null)
-                    - alarmEnabled: 복약 알림 ON/OFF (설정한 적 없으면 true)
                     - doseDate: 조회 기준일(KST)
                     - takenCount / totalCount: "오늘 2/3회 복용"의 두 숫자
                     - medications[]: 복용 시각 순. taken(체크 여부) / takenAt(체크 시각) 포함
@@ -258,61 +255,6 @@ public class GuardianMedicationController {
                 guardianMedicationService.deleteBatch(guardianId, wardId, request.medicationIds())));
     }
 
-    @Operation(summary = "피보호자 복약 알림 설정 조회 (보호자 전용)",
-            description = """
-                    [요청 헤더]
-                    Authorization: Bearer {accessToken}
-
-                    피보호자의 복약 알림 ON/OFF 상태를 반환합니다. 설정한 적이 없으면 기본값 true입니다.
-                    """)
-    @ApiResponses({
-            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "설정 반환"),
-            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "인증 토큰 없음 또는 만료", content = @Content),
-            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "보호자 권한 필요 / 연결되지 않은 피보호자", content = @Content)
-    })
-    @GetMapping("/api/guardian/ward/{wardId}/medication-setting")
-    public ResponseEntity<ApiResponse<MedicationSettingResponse>> getSetting(
-            @AuthenticationPrincipal String guardianId,
-            @Parameter(description = "피보호자 ID") @PathVariable String wardId) {
-        return ResponseEntity.ok(ApiResponse.ok(guardianMedicationService.getSetting(guardianId, wardId)));
-    }
-
-    @Operation(summary = "피보호자 복약 알림 설정 변경 (보호자 전용)",
-            description = """
-                    [요청 헤더]
-                    Authorization: Bearer {accessToken}
-
-                    피보호자의 복약 알림을 켜거나 끕니다(화면의 알림 토글).
-
-                    [요청 바디] 둘 다 선택 — 보내지 않은 항목은 기존값이 유지됩니다.
-                    - alarmEnabled: true = 알림 켜기, false = 끄기
-                    - remindAgainEnabled: 복용 체크를 안 했을 때 15분 뒤 한 번 더 알릴지 (기본 true)
-
-                    [발송 동작]
-                    - 복용 시각이 되면 피보호자 본인에게 알림이 갑니다(FCM·문자 — 사용자 알림 설정을 따름).
-                    - 이미 복용 체크를 했으면 보내지 않습니다.
-                    - 정각을 놓쳐도 30분까지는 발송하고, 그 뒤로는 건너뜁니다(밤늦게 아침 약 알림 방지).
-                    - remindAgainEnabled=true면 체크가 없을 때 15분 뒤 한 번 더 보냅니다(최대 1회).
-
-                    [주의]
-                    - 설정은 피보호자 계정에 붙습니다 — 보호자가 여러 명이면 한 명이 끈 결과가 모두에게 보입니다.
-                    - 이 설정은 복약 알림에만 적용됩니다. SOS 등 필수 알림에는 영향이 없습니다.
-                    - 문자를 켜둔 경우 재알림까지 켜면 한 번 복용에 문자가 2건까지 나갑니다.
-                    """)
-    @ApiResponses({
-            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "변경 완료. data: 적용된 설정"),
-            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "인증 토큰 없음 또는 만료", content = @Content),
-            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "보호자 권한 필요 / 연결되지 않은 피보호자", content = @Content)
-    })
-    @PutMapping("/api/guardian/ward/{wardId}/medication-setting")
-    public ResponseEntity<ApiResponse<MedicationSettingResponse>> updateSetting(
-            @AuthenticationPrincipal String guardianId,
-            @Parameter(description = "피보호자 ID") @PathVariable String wardId,
-            @Valid @RequestBody MedicationSettingUpdateRequest request) {
-        return ResponseEntity.ok(ApiResponse.ok(guardianMedicationService.updateSetting(
-                guardianId, wardId, request.alarmEnabled(), request.remindAgainEnabled())));
-    }
-
     @Operation(summary = "피보호자별 미복용 요약 수신 설정 조회 (보호자 전용)",
             description = """
                     [요청 헤더]
@@ -325,10 +267,6 @@ public class GuardianMedicationController {
 
                     ※ 이 값은 GET /api/guardian/medication 응답의 카드에도 함께 실립니다 -
                       목록 화면에서는 피보호자 수만큼 이 API를 부르지 마세요.
-
-                    ※ 같은 경로의 medication-setting과 축이 다릅니다 -
-                      저쪽은 "피보호자에게 무엇을 보낼지"(보호자들이 공유),
-                      이쪽은 "내가 무엇을 언제 받을지"(보호자마다 다름)입니다.
                     """)
     @ApiResponses({
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "설정 반환"),

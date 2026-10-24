@@ -213,7 +213,7 @@
   - **동기 AFTER_COMMIT 리스너가 부르는 쓰기는 `REQUIRES_NEW`여야 한다 (H-1, 2026-09-30 수정)**: 커밋 직후라 탈퇴 트랜잭션 자원이 아직 스레드에 묶여 있어, 기본 전파(REQUIRED)면 이미 커밋된 트랜잭션에 합류해 **쓰기가 커밋되지 않는다**. `MedicationWithdrawalService.removeMedicationsRegisteredBy`·`ConnectionService.tearDownConnectionsOnWithdrawal`이 그 상태였다 - 행은 purge CASCADE가 지워 겉으로 무해했지만, **연결 정리 안에서 발행한 해제 이벤트가 AFTER_COMMIT을 맞지 못해 탈퇴 시 상대방 해제 알림이 한 번도 나가지 않고 있었다**. 실 DB로 재현·고정(`WithdrawalListenerCommitIntegrationTest`). 같은 결함이 `FcmService.deleteAllTokens`(`UserWithdrawalFcmListener`)에도 있어 2026-09-30 영향 범위 점검 M-1로 함께 고쳤다 - 현재 동기 AFTER_COMMIT 리스너 7개가 모두 이 규칙을 따른다. 새 탈퇴 리스너를 만들 때도 같은 규칙이며, `UserAccountEventListener`·`NotificationLogService.record()`가 이미 따르는 형태다.
   - **수용한 한계**: 스윕 purge(`WithdrawnUserPurgeScheduler`) 경로는 리스너를 거치지 않아 안내가 유실되고 약만 삭제된다(WITHDRAW 감사로그·연결 해제 알림과 동일).
 - **복용 체크 알림은 WebSocket만**(`medication-taken`). FCM·SMS·알림톡은 보내지 않는다 — 하루 여러 번 일어나는 일상 동작이라 푸시는 소음이다(SOS ACK 2026-07-30과 같은 판단). 새 채널을 붙이자는 요구가 오면 이 판단을 먼저 확인할 것.
-- **`medication_setting.alarm_enabled`는 복약 알림 전용**이다. 현재는 보관·조회만 하며 2차(복용 시각 스케줄러 발송)에서 발송 게이트가 된다. **SOS 등 필수 알림을 이 값으로 억제하지 말 것**(SOS 동작 설정 2026-07-23 규칙의 연장).
+- **복용 시각 알림은 늘 보낸다 (2026-10-24 사용자 결정)**: 보호자 화면의 "○○에게 약 드실 시간 알려 드리기" 스위치와 설정 API(`GET·PUT /api/guardian/ward/{wardId}/medication-setting`)를 없앴다. `medication_setting.alarm_enabled` 컬럼은 비가역 DROP을 피하려고 남겼지만 **읽지 않는다** - 예전에 꺼 둔 피보호자도 다시 받는다. 재알림(`remind_again_enabled`)은 저장값(기본 켜짐)대로 따르되 바꾸는 API는 없다. 발송을 다시 끌 수 있게 하려면 스위치·API를 되살리는 정책 결정이 먼저다. **SOS 등 필수 알림은 복약 설정과 무관**하다(SOS 동작 설정 2026-07-23 규칙의 연장).
 - 상세: `docs/(2026-08-04) feature-medication-reminder.md`.
 - **일괄 등록·반 알 (2026-10-22, V62)**: 일괄 등록(`/medication/batch`)도 **보호자만**·`isActiveConnection`만이며 약 한 건의 생성 규칙은 단건 등록과 같은 `newMedication`을 쓴다(복제 금지). **한 트랜잭션 - 전부 성공 또는 전부 실패**를 부분 성공으로 바꾸지 말 것(어느 약이 빠졌는지 보호자가 모른 채 알림이 비게 된다). 복용량은 0.5 단위(`DoseAmounts`, DB CHECK 동일) - 사용자에게 보이는 서버 문구는 "0.5정"이 아니라 "반 알". 상세 `docs/(2026-10-22) feature-medication-batch-half-dose.md`.
 
@@ -224,7 +224,7 @@
 - **불변 규칙 ⑤(복약 알림톡 금지)**: `MEDICATION_REMINDER`·`MEDICATION_STOPPED`에 **알림톡 템플릿을 매핑하지 말 것**. 복약 알림은 매일 반복되는 전형적인 **다발성 메시지**라, 보내려면 "반복 수신에 동의했음"을 고정 문구로 고지한 별도 템플릿 승인이 필요하다(이상감지 2차 반려 사유, 2026-07-23). 승인 없이 매핑하면 승인 문구와 다른 발송이 되어 발신 프로필 차단 대상이 된다. 현재는 매핑이 없어 조용히 스킵된다(`ANOMALY_DETECTED_SELF`와 같은 구조).
 - **불변 규칙 ⑥(유예 창은 자정을 넘지 않는다)**: `graceWindowStart()`는 00:00에서 자른다. 하루를 되감으면 `dose_date`가 달라져 **어제 약을 오늘 날짜로** 보내게 되고, 발송 기록·복용 체크의 날짜 기준이 어긋난다. "23:50 약이 자정 넘겨 안 나간다"를 고치겠다고 되감기를 넣지 말 것 — 그 건은 건너뛰는 것이 의도된 동작이다.
 - **재알림은 사용자 선택**(`medication_setting.remind_again_enabled`, 기본 ON). 문자를 켜둔 사용자에게는 한 번 복용에 문자가 2건까지 나가므로 끌 수 있어야 한다. **강제 채널로 승격시키지 말 것** — 복약은 SOS·화재 같은 즉시 대응이 아니라 매일 반복되는 일상이라 사용자의 선택을 뒤집을 근거가 없다.
-- **설정 API 하위호환**: `PUT .../medication-setting`의 필드는 모두 **선택**이며 `null`은 "변경하지 않음"이다. 필수로 되돌리면 기존 프론트의 `{alarmEnabled}` 요청이 400으로 깨지거나 재알림 설정이 초기화된다.
+- ~~설정 API 하위호환~~: `PUT .../medication-setting`은 2026-10-24에 없앴다(위 항목).
 - **킬 스위치** `medication.reminder.enabled=false`는 **발송만** 멈춘다 — 등록·체크·조회는 계속 동작해야 한다.
 - 상세: `docs/(2026-08-05) feature-medication-reminder-scheduler.md`.
 

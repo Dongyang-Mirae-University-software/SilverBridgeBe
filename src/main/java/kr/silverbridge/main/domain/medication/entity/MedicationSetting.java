@@ -33,6 +33,10 @@ public class MedicationSetting extends BaseTimeEntity {
     @Column(name = "user_id", nullable = false, length = 6)
     private String userId;
 
+    /**
+     * 복용 시각 알림 ON/OFF - <b>더 읽지 않는다</b>(2026-10-24 스위치·설정 API 제거, 알림은 늘 보낸다).
+     * 컬럼은 비가역 DROP을 피하려고 남겨 둔다.
+     */
     @Column(name = "alarm_enabled", nullable = false)
     private boolean alarmEnabled;
 
@@ -53,13 +57,5 @@ public class MedicationSetting extends BaseTimeEntity {
 
     public static MedicationSetting of(String userId, boolean alarmEnabled, boolean remindAgainEnabled) {
         return new MedicationSetting(userId, alarmEnabled, remindAgainEnabled);
-    }
-
-    public void updateAlarmEnabled(boolean alarmEnabled) {
-        this.alarmEnabled = alarmEnabled;
-    }
-
-    public void updateRemindAgainEnabled(boolean remindAgainEnabled) {
-        this.remindAgainEnabled = remindAgainEnabled;
     }
 }
