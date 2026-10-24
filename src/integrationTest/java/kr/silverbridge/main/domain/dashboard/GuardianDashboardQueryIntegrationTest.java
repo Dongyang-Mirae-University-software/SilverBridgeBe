@@ -32,6 +32,8 @@ class GuardianDashboardQueryIntegrationTest extends PostgresIntegrationTest {
     private static final ZoneOffset KST = ZoneOffset.ofHours(9);
     private static final List<AnomalyReviewStatus> NEEDS_REVIEW =
             List.of(AnomalyReviewStatus.PENDING, AnomalyReviewStatus.CONFLICTED);
+    /** 지금 등록된 카메라 세션(서비스가 카메라 도메인에서 받아 넘기는 값). 이 쿼리는 카메라 행이 아니라 이 목록만 본다. */
+    private static final List<String> LIVE = List.of("sess-WD0001", "sess-WD0002");
 
     @Autowired private AnomalyIncidentRepository incidentRepository;
     @Autowired private SosEventRepository sosEventRepository;
@@ -54,27 +56,48 @@ class GuardianDashboardQueryIntegrationTest extends PostgresIntegrationTest {
         incident("WD0002", 5, AnomalyReviewStatus.PENDING);        // 다른 피보호자
 
         List<AnomalyIncident> latest = incidentRepository.findLatestByStatuses(
-                List.of("WD0001"), NEEDS_REVIEW, PageRequest.of(0, 1));
+                List.of("WD0001"), LIVE, NEEDS_REVIEW, PageRequest.of(0, 1));
         assertThat(latest).hasSize(1);
         assertThat(latest.get(0).getReviewStatus()).isEqualTo(AnomalyReviewStatus.CONFLICTED);
         assertThat(latest.get(0).getWardId()).isEqualTo("WD0001");
 
-        assertThat(incidentRepository.findLatestByStatuses(List.of("WD0001", "WD0002"), NEEDS_REVIEW,
+        assertThat(incidentRepository.findLatestByStatuses(List.of("WD0001", "WD0002"), LIVE, NEEDS_REVIEW,
                 PageRequest.of(0, 1)).get(0).getReviewStatus()).isEqualTo(AnomalyReviewStatus.PENDING); // WD0002 05시
 
-        long needsReview = incidentRepository.countForGuardianSummary(List.of("WD0001")).stream()
-                .filter(r -> r.getReviewStatus() == AnomalyReviewStatus.PENDING
-                        || r.getReviewStatus() == AnomalyReviewStatus.CONFLICTED)
-                .mapToLong(AnomalyIncidentRepository.GuardianTypeStatusCount::getTotal).sum();
-        assertThat(needsReview).isEqualTo(2);
+        assertThat(needsReviewCount(List.of("WD0001"), LIVE)).isEqualTo(2);
+    }
+
+    @Test
+    @DisplayName("확인 필요 건수·최신 1건은 삭제된 카메라의 상황을 빼고, 둘이 같은 기준이다 (2026-10-25)")
+    void deletedCameraExcluded() {
+        incident("WD0001", "sess-WD0001", 1, AnomalyReviewStatus.PENDING);     // 등록된 카메라
+        incident("WD0001", "sess-gone", 2, AnomalyReviewStatus.CONFLICTED);    // 삭제된 카메라 - 더 최근이지만 빠진다
+        incident("WD0001", "sess-gone", 3, AnomalyReviewStatus.PENDING);       // 삭제된 카메라
+
+        assertThat(needsReviewCount(List.of("WD0001"), LIVE)).isEqualTo(1);
+        List<AnomalyIncident> latest = incidentRepository.findLatestByStatuses(
+                List.of("WD0001"), LIVE, NEEDS_REVIEW, PageRequest.of(0, 1));
+        assertThat(latest).singleElement().extracting(AnomalyIncident::getSessionId).isEqualTo("sess-WD0001");
+
+        // 등록된 카메라가 하나도 없으면(매칭 불가 값) 확인 필요는 0건·최신 1건 없음
+        assertThat(needsReviewCount(List.of("WD0001"), List.of(""))).isZero();
+        assertThat(incidentRepository.findLatestByStatuses(List.of("WD0001"), List.of(""), NEEDS_REVIEW,
+                PageRequest.of(0, 1))).isEmpty();
     }
 
     @Test
     @DisplayName("확인 필요 상황이 없으면 빈 목록")
     void latestNeedsReviewEmpty() {
         incident("WD0001", 1, AnomalyReviewStatus.REAL);
-        assertThat(incidentRepository.findLatestByStatuses(List.of("WD0001"), NEEDS_REVIEW, PageRequest.of(0, 1)))
+        assertThat(incidentRepository.findLatestByStatuses(List.of("WD0001"), LIVE, NEEDS_REVIEW, PageRequest.of(0, 1)))
                 .isEmpty();
+    }
+
+    private long needsReviewCount(List<String> wardIds, List<String> liveSessionIds) {
+        return incidentRepository.countForGuardianSummary(wardIds, liveSessionIds).stream()
+                .filter(r -> r.getReviewStatus() == AnomalyReviewStatus.PENDING
+                        || r.getReviewStatus() == AnomalyReviewStatus.CONFLICTED)
+                .mapToLong(AnomalyIncidentRepository.GuardianTypeStatusCount::getTotal).sum();
     }
 
     @Test
@@ -97,9 +120,13 @@ class GuardianDashboardQueryIntegrationTest extends PostgresIntegrationTest {
     }
 
     private void incident(String wardId, int hour, AnomalyReviewStatus status) {
+        incident(wardId, "sess-" + wardId, hour, status);
+    }
+
+    private void incident(String wardId, String sessionId, int hour, AnomalyReviewStatus status) {
         AnomalyIncident incident = AnomalyIncident.builder()
                 .wardId(wardId)
-                .sessionId("sess-" + wardId)
+                .sessionId(sessionId)
                 .detectedType(DetectedType.FIRE)
                 .detectedAt(OffsetDateTime.of(2026, 10, 6, hour, 0, 0, 0, KST))
                 .confidence(0.8)

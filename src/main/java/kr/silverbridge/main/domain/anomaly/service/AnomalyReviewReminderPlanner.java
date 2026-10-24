@@ -43,9 +43,10 @@ import java.util.stream.Collectors;
  * <p><b>선점 후 발송</b>: 기록을 먼저 커밋하고 보낸다. 순서를 뒤집으면 발송 직후 앱이 죽었을 때
  * 다음 주기에 또 보내고, 스케줄러가 5분마다 돌기 때문에 마감(3일) 내내 같은 재촉이 반복된다.</p>
  *
- * <p><b>재촉하지 않는 경우</b>는 다섯이다 - ① 이미 응답한 보호자 ② 누군가 응답해 상황이 PENDING을
+ * <p><b>재촉하지 않는 경우</b>는 여섯이다 - ① 이미 응답한 보호자 ② 누군가 응답해 상황이 PENDING을
  * 벗어난 경우(응답 API는 계속 열려 있어 나중에 다른 보호자가 눌러 다수결이 바뀌거나 동수가 되는 경로는 살아 있다)
- * ③ 연결이 ACTIVE가 아닌 보호자 ④ 수신 설정을 끈 보호자 ⑤ 마감(상황 시작 + 3일)을 지난 상황.</p>
+ * ③ 연결이 ACTIVE가 아닌 보호자 ④ 수신 설정을 끈 보호자 ⑤ 마감(상황 시작 + 3일)을 지난 상황
+ * ⑥ 삭제된 카메라의 상황(2026-10-25 - 보호자 화면 기본 집계와 같은 기준, 판정 API는 그대로 열려 있다).</p>
  *
  * <p><b>야간 억제</b>는 건너뛰기가 아니라 미루기다 - 조건이 그대로 남아 아침 첫 주기에 다시 잡힌다.
  * 화재 알림 본체는 억제 대상이 아니다(그건 밤에도 즉시 나가야 한다).</p>
@@ -101,9 +102,9 @@ public class AnomalyReviewReminderPlanner {
         OffsetDateTime dueBefore = now.minusMinutes(properties.getIncidentMergeMinutes() + config.getDelayMinutes());
         OffsetDateTime deadlineFrom = now.minusDays(config.getDeadlineDays());
 
-        List<AnomalyIncident> candidates = incidentRepository
+        List<AnomalyIncident> candidates = retainRegisteredCameras(incidentRepository
                 .findByReviewStatusAndLastDetectedAtLessThanEqualAndStartedAtGreaterThanEqual(
-                        AnomalyReviewStatus.PENDING, dueBefore, deadlineFrom);
+                        AnomalyReviewStatus.PENDING, dueBefore, deadlineFrom));
         if (candidates.isEmpty()) {
             return List.of();
         }
@@ -172,8 +173,9 @@ public class AnomalyReviewReminderPlanner {
             return List.of();
         }
 
-        List<AnomalyIncident> candidates = incidentRepository.findByReviewStatusAndStartedAtGreaterThanEqual(
-                AnomalyReviewStatus.PENDING, now.minusDays(config.getDeadlineDays()));
+        List<AnomalyIncident> candidates = retainRegisteredCameras(
+                incidentRepository.findByReviewStatusAndStartedAtGreaterThanEqual(
+                        AnomalyReviewStatus.PENDING, now.minusDays(config.getDeadlineDays())));
         if (candidates.isEmpty()) {
             return List.of();
         }
@@ -263,8 +265,10 @@ public class AnomalyReviewReminderPlanner {
             return List.of();
         }
 
-        List<AnomalyIncident> candidates = incidentRepository.findByReviewStatusAndStartedAtGreaterThanEqual(
-                AnomalyReviewStatus.CONFLICTED, now.minusDays(properties.getReviewReminder().getDeadlineDays()));
+        List<AnomalyIncident> candidates = retainRegisteredCameras(
+                incidentRepository.findByReviewStatusAndStartedAtGreaterThanEqual(
+                        AnomalyReviewStatus.CONFLICTED,
+                        now.minusDays(properties.getReviewReminder().getDeadlineDays())));
         if (candidates.isEmpty()) {
             return List.of();
         }
@@ -343,6 +347,23 @@ public class AnomalyReviewReminderPlanner {
         AnomalyProperties.ReviewReminder config = properties.getReviewReminder();
         return AnomalyReviewClock.isQuietHours(
                 AnomalyReviewClock.toTime(now), config.getQuietStart(), config.getQuietEnd());
+    }
+
+    /**
+     * 후보 중 <b>지금 등록된 카메라</b>의 상황만 남긴다(2026-10-25). 삭제된 카메라의 상황은 영상이 없고 다시 확인할
+     * 길도 없어 보호자 화면의 기본 집계에서 빠지므로 재촉·요약·동수 안내도 보내지 않는다. 판정 API는 계속 열려 있고
+     * 이미 남은 발송 기록은 건드리지 않는다. 기준은 보호자 이력의 {@code cameraLabel = null}과 같다 - 사용 중지 카메라는
+     * 삭제가 아니라 남는다. 존재 확인은 {@code camera.session_id} 유니크 인덱스로 한 번에 한다.
+     */
+    private List<AnomalyIncident> retainRegisteredCameras(List<AnomalyIncident> candidates) {
+        if (candidates.isEmpty()) {
+            return candidates;
+        }
+        Set<String> registered = cameraService.findLabelsBySessionIds(candidates.stream()
+                .map(AnomalyIncident::getSessionId).collect(Collectors.toSet())).keySet();
+        return candidates.stream()
+                .filter(incident -> registered.contains(incident.getSessionId()))
+                .toList();
     }
 
     /** 이미 응답한 (상황, 보호자) 조합. */

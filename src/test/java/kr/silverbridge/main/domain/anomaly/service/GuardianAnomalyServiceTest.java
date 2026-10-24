@@ -79,7 +79,7 @@ class GuardianAnomalyServiceTest {
 
             assertThat(service.getLatestNeedsReview(GUARDIAN_ID, null)).isNull();
 
-            verify(incidentRepository, never()).findLatestByStatuses(any(), any(), any());
+            verify(incidentRepository, never()).findLatestByStatuses(any(), any(), any(), any());
         }
 
         @Test
@@ -91,25 +91,26 @@ class GuardianAnomalyServiceTest {
                     .isInstanceOf(CustomException.class)
                     .hasFieldOrPropertyWithValue("errorCode", ErrorCode.ANOMALY_NOT_AUTHORIZED);
 
-            verify(incidentRepository, never()).findLatestByStatuses(any(), any(), any());
+            verify(incidentRepository, never()).findLatestByStatuses(any(), any(), any(), any());
         }
 
         @Test
         @DisplayName("확인 필요 상황이 없으면 null")
         void 없으면_null() {
             when(connectionService.getActiveWardIds(GUARDIAN_ID)).thenReturn(List.of(WARD_ID));
-            when(incidentRepository.findLatestByStatuses(any(), any(), any())).thenReturn(List.of());
+            when(incidentRepository.findLatestByStatuses(any(), any(), any(), any())).thenReturn(List.of());
 
             assertThat(service.getLatestNeedsReview(GUARDIAN_ID, null)).isNull();
         }
 
         @Test
-        @DisplayName("인가된 범위·PENDING+CONFLICTED·1건만 조회하고 이력 항목 형식으로 돌려준다")
+        @DisplayName("인가된 범위·지금 등록된 카메라·PENDING+CONFLICTED·1건만 조회하고 이력 항목 형식으로 돌려준다")
         void 최신_1건() {
             AnomalyIncident found = incident();
             org.springframework.test.util.ReflectionTestUtils.setField(found, "id", INCIDENT_ID);
             when(connectionService.getActiveWardIds(GUARDIAN_ID)).thenReturn(List.of(WARD_ID));
-            when(incidentRepository.findLatestByStatuses(any(), any(), any())).thenReturn(List.of(found));
+            when(cameraService.findSessionIdsByWardIds(List.of(WARD_ID))).thenReturn(List.of("ward_a9cC5f_k3m"));
+            when(incidentRepository.findLatestByStatuses(any(), any(), any(), any())).thenReturn(List.of(found));
 
             var item = service.getLatestNeedsReview(GUARDIAN_ID, null);
 
@@ -120,7 +121,8 @@ class GuardianAnomalyServiceTest {
                     org.mockito.ArgumentCaptor.forClass(java.util.Collection.class);
             org.mockito.ArgumentCaptor<org.springframework.data.domain.Pageable> page =
                     org.mockito.ArgumentCaptor.forClass(org.springframework.data.domain.Pageable.class);
-            verify(incidentRepository).findLatestByStatuses(eq(List.of(WARD_ID)), statuses.capture(), page.capture());
+            verify(incidentRepository).findLatestByStatuses(eq(List.of(WARD_ID)), eq(List.of("ward_a9cC5f_k3m")),
+                    statuses.capture(), page.capture());
             assertThat(statuses.getValue())
                     .containsExactlyInAnyOrder(AnomalyReviewStatus.PENDING, AnomalyReviewStatus.CONFLICTED);
             assertThat(page.getValue().getPageSize()).isEqualTo(1);
@@ -252,6 +254,19 @@ class GuardianAnomalyServiceTest {
             assertThat(response.reviewStatus()).isEqualTo(AnomalyReviewStatus.FALSE_ALARM);
             assertThat(incident.getReviewStatus()).isEqualTo(AnomalyReviewStatus.FALSE_ALARM);
             verify(feedbackRepository).save(any(AnomalyIncidentFeedback.class));
+        }
+
+        @Test
+        @DisplayName("삭제된 카메라의 상황에도 응답할 수 있다 - 카메라 등록 여부를 보지 않는다(2026-10-25 집계 제외와 무관)")
+        void feedbackOnDeletedCameraIncidentWorks() {
+            AnomalyIncident incident = incident();   // 이 세션의 카메라 행은 없다고 가정 - 응답은 카메라를 조회하지 않는다
+            when(incidentRepository.findByIdForUpdate(INCIDENT_ID)).thenReturn(Optional.of(incident));
+            when(feedbackRepository.findByIncidentId(INCIDENT_ID)).thenReturn(List.of());
+
+            AnomalyFeedbackResponse response = service.submitFeedback(GUARDIAN_ID, INCIDENT_ID, AnomalyVerdict.REAL);
+
+            assertThat(response.reviewStatus()).isEqualTo(AnomalyReviewStatus.REAL);
+            org.mockito.Mockito.verifyNoInteractions(cameraService);
         }
 
         @Test

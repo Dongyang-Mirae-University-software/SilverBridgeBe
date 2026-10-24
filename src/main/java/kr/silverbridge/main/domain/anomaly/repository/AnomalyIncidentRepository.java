@@ -80,28 +80,38 @@ public interface AnomalyIncidentRepository extends JpaRepository<AnomalyIncident
                                        @Param("liveSessionIds") Collection<String> liveSessionIds);
 
     /**
-     * 보호자 이력 요약 - 인가된 피보호자 범위의 상황을 (유형, 판정 상태)별로 센다. 유형 필터는 받지 않는다
-     * (탭 건수는 탭을 골라도 그대로여야 한다).
+     * 보호자 이력 요약 - 인가된 피보호자 범위에서 <b>지금 등록된 카메라</b>({@code liveSessionIds})의 상황을
+     * (유형, 판정 상태)별로 센다. 유형 필터는 받지 않는다(탭 건수는 탭을 골라도 그대로여야 한다).
+     *
+     * <p>삭제된 카메라의 상황은 세지 않는다(2026-10-25) - 영상이 없고 다시 확인할 길도 없어 "확인 필요"·탭 건수에
+     * 섞이면 혼란만 준다. 그 수는 {@link #countDeletedCameraForGuardian}이 따로 센다. 목록이 비면 호출부가
+     * 매칭 불가능한 값 하나를 넣는다(빈 IN 절 회피).</p>
      */
     @Query("""
             SELECT i.detectedType AS detectedType, i.reviewStatus AS reviewStatus, COUNT(i) AS total
             FROM AnomalyIncident i
             WHERE i.wardId IN :wardIds
+              AND i.sessionId IN :liveSessionIds
             GROUP BY i.detectedType, i.reviewStatus
             """)
-    List<GuardianTypeStatusCount> countForGuardianSummary(@Param("wardIds") Collection<String> wardIds);
+    List<GuardianTypeStatusCount> countForGuardianSummary(@Param("wardIds") Collection<String> wardIds,
+                                                          @Param("liveSessionIds") Collection<String> liveSessionIds);
 
     /**
-     * 보호자 대시보드용 - 인가된 피보호자 범위에서 <b>확인이 필요한</b>(판정 상태가 주어진 값들) 상황을 최신순으로.
-     * 호출부가 {@code PageRequest.of(0, 1)}로 가장 최근 1건만 받는다. 정렬 기준은 {@link #findHistory}와 같다.
+     * 보호자 대시보드용 - 인가된 피보호자 범위에서 <b>지금 등록된 카메라</b>({@code liveSessionIds})의
+     * <b>확인이 필요한</b>(판정 상태가 주어진 값들) 상황을 최신순으로. 카메라 기준은 {@link #countForGuardianSummary}와
+     * 같다(건수와 최신 1건이 어긋나지 않게). 호출부가 {@code PageRequest.of(0, 1)}로 가장 최근 1건만 받는다.
+     * 정렬 기준은 {@link #findHistory}와 같다.
      */
     @Query("""
             SELECT i FROM AnomalyIncident i
             WHERE i.wardId IN :wardIds
+              AND i.sessionId IN :liveSessionIds
               AND i.reviewStatus IN :statuses
             ORDER BY i.startedAt DESC, i.id DESC
             """)
     List<AnomalyIncident> findLatestByStatuses(@Param("wardIds") Collection<String> wardIds,
+                                               @Param("liveSessionIds") Collection<String> liveSessionIds,
                                                @Param("statuses") Collection<AnomalyReviewStatus> statuses,
                                                Pageable pageable);
 
@@ -116,6 +126,7 @@ public interface AnomalyIncidentRepository extends JpaRepository<AnomalyIncident
 
     /**
      * 건별 재촉 후보 - 아직 아무도 응답하지 않았고, <b>상황이 닫힌 뒤 유예까지 지났으며</b>, 마감 전인 것.
+     * 삭제된 카메라의 상황은 호출부({@code AnomalyReviewReminderPlanner})가 거른다.
      *
      * @param closedAndDueBefore {@code now - (묶음 간격 + 유예)} - 이 시각 이전이 마지막 감지면
      *                           상황이 닫히고 유예까지 지난 것이다
@@ -124,7 +135,9 @@ public interface AnomalyIncidentRepository extends JpaRepository<AnomalyIncident
     List<AnomalyIncident> findByReviewStatusAndLastDetectedAtLessThanEqualAndStartedAtGreaterThanEqual(
             AnomalyReviewStatus reviewStatus, OffsetDateTime closedAndDueBefore, OffsetDateTime deadlineFrom);
 
-    /** 요약 후보 - 마감 전이고 아직 판정되지 않은 상황 전부(1차 재촉 여부는 호출부가 거른다). */
+    /**
+     * 요약·동수 안내 후보 - 마감 전이고 판정 상태가 주어진 값인 상황 전부(1차 재촉 여부·삭제된 카메라는 호출부가 거른다).
+     */
     List<AnomalyIncident> findByReviewStatusAndStartedAtGreaterThanEqual(
             AnomalyReviewStatus reviewStatus, OffsetDateTime deadlineFrom);
 

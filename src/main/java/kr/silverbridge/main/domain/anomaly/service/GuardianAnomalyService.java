@@ -118,7 +118,11 @@ public class GuardianAnomalyService {
 
     /**
      * 이력 화면의 건수 요약. 이력 조회와 같은 인가({@code resolveVisibleWardIds})를 먼저 거치고,
-     * 집계는 DB에서 (유형, 판정) GROUP BY로 한다. 유형 필터와 무관하게 조회 범위 전체를 센다.
+     * 집계는 DB에서 (유형, 판정) GROUP BY로 한다. 유형 필터와 무관하게 조회 범위를 센다.
+     *
+     * <p><b>건수는 지금 등록된 카메라의 상황만</b>이다(2026-10-25, = {@code camera=EXISTING} 이력의 totalElements).
+     * 삭제된 카메라의 상황은 영상이 없고 다시 확인할 길도 없어 "확인 필요"·탭 건수에서 빼고
+     * {@code deletedCameraCount}로만 따로 센다. 이력 행·판정은 지우지 않는다(안전 기록·판정 통계 보존).</p>
      *
      * @throws CustomException {@code ANOMALY_NOT_AUTHORIZED} - wardId를 지정했으나 ACTIVE 연결이 아닐 때
      */
@@ -128,6 +132,7 @@ public class GuardianAnomalyService {
         if (wardIds.isEmpty()) {
             return GuardianAnomalyHistorySummary.EMPTY;
         }
+        Collection<String> liveSessionIds = liveSessionIds(wardIds);
         long fire = 0;
         long fall = 0;
         long weapon = 0;
@@ -135,8 +140,9 @@ public class GuardianAnomalyService {
         long pending = 0;
         long conflicted = 0;
         for (AnomalyIncidentRepository.GuardianTypeStatusCount row
-                : anomalyIncidentRepository.countForGuardianSummary(wardIds)) {
-            // total은 유형과 무관하게 모든 행을 센다 - type 없는 이력의 totalElements와 항상 같아야 한다(점검 L-1)
+                : anomalyIncidentRepository.countForGuardianSummary(wardIds, liveSessionIds)) {
+            // total은 유형과 무관하게 모든 행을 센다 - type 없이 camera=EXISTING으로 조회한 이력의 totalElements와
+            // 항상 같아야 한다(점검 L-1)
             all += row.getTotal();
             if (row.getDetectedType() == DetectedType.FIRE) {
                 fire += row.getTotal();
@@ -151,7 +157,7 @@ public class GuardianAnomalyService {
                 conflicted += row.getTotal();
             }
         }
-        long deletedCamera = anomalyIncidentRepository.countDeletedCameraForGuardian(wardIds, liveSessionIds(wardIds));
+        long deletedCamera = anomalyIncidentRepository.countDeletedCameraForGuardian(wardIds, liveSessionIds);
         return new GuardianAnomalyHistorySummary(all, pending, conflicted,
                 pending + conflicted,
                 new GuardianAnomalyHistorySummary.ByType(fire, fall, weapon),
@@ -160,9 +166,9 @@ public class GuardianAnomalyService {
 
     /**
      * 확인이 필요한(PENDING·CONFLICTED) 상황 수 - 보호자 대시보드의 피보호자별 배지용.
-     * 인가는 {@link #getHistorySummary}와 같다({@code resolveVisibleWardIds}). 대시보드가 쓰지 않는
-     * 카메라 조회·삭제된 카메라 집계는 하지 않는다 - 쿼리가 늘고 쓰지 않는 값 때문에 대시보드 칸이 실패할 수 있었다
-     * (2026-10-24 점검 L-1).
+     * 인가·카메라 기준은 {@link #getHistorySummary}와 같다({@code resolveVisibleWardIds}, 지금 등록된 카메라의
+     * 상황만 - 2026-10-25). 대시보드가 쓰지 않는 삭제된 카메라 집계는 하지 않는다 - 쓰지 않는 값 때문에 대시보드 칸이
+     * 실패할 수 있었다(2026-10-24 점검 L-1).
      *
      * @throws CustomException {@code ANOMALY_NOT_AUTHORIZED} - wardId를 지정했으나 ACTIVE 연결이 아닐 때
      */
@@ -174,7 +180,7 @@ public class GuardianAnomalyService {
         }
         long count = 0;
         for (AnomalyIncidentRepository.GuardianTypeStatusCount row
-                : anomalyIncidentRepository.countForGuardianSummary(wardIds)) {
+                : anomalyIncidentRepository.countForGuardianSummary(wardIds, liveSessionIds(wardIds))) {
             if (row.getReviewStatus() == AnomalyReviewStatus.PENDING
                     || row.getReviewStatus() == AnomalyReviewStatus.CONFLICTED) {
                 count += row.getTotal();
@@ -194,7 +200,8 @@ public class GuardianAnomalyService {
 
     /**
      * 대시보드용 - 확인이 필요한(PENDING·CONFLICTED) 상황 중 가장 최근 1건. 없으면 {@code null}.
-     * 인가·항목 조립은 {@link #getHistory}와 같다(같은 {@code resolveVisibleWardIds}).
+     * 인가·항목 조립은 {@link #getHistory}와 같다(같은 {@code resolveVisibleWardIds}). 카메라 기준은
+     * {@link #getNeedsReviewCount}와 같다(지금 등록된 카메라의 상황만 - 건수와 1건이 어긋나지 않게).
      *
      * @throws CustomException {@code ANOMALY_NOT_AUTHORIZED} - wardId를 지정했으나 ACTIVE 연결이 아닐 때
      */
@@ -205,7 +212,7 @@ public class GuardianAnomalyService {
             return null;
         }
         List<AnomalyIncident> found = anomalyIncidentRepository.findLatestByStatuses(
-                wardIds, List.of(AnomalyReviewStatus.PENDING, AnomalyReviewStatus.CONFLICTED),
+                wardIds, liveSessionIds(wardIds), List.of(AnomalyReviewStatus.PENDING, AnomalyReviewStatus.CONFLICTED),
                 PageRequest.of(0, 1));
         if (found.isEmpty()) {
             return null;

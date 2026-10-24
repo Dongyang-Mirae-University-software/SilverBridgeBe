@@ -578,4 +578,131 @@ class AnomalyReviewReminderPlannerTest {
             verify(incidentRepository, never()).findByReviewStatusAndStartedAtGreaterThanEqual(any(), any());
         }
     }
+
+    /**
+     * 삭제된 카메라(지금 등록돼 있지 않은 세션)의 상황은 재촉·요약·동수 안내 후보에서 빠진다(2026-10-25).
+     * 영상이 없고 보호자 화면 기본 집계에서도 빠지므로 알림만 남으면 혼란을 준다. 기본 setUp은
+     * {@code ward_a9cC5f_k3m}만 등록된 카메라로 돌려준다.
+     */
+    @Nested
+    @DisplayName("삭제된 카메라 상황 제외")
+    class DeletedCameraExcluded {
+
+        private static final Long DELETED_INCIDENT_ID = 99L;
+
+        private AnomalyIncident deletedCameraIncident() {
+            AnomalyIncident incident = AnomalyIncident.builder()
+                    .wardId(WARD_ID)
+                    .sessionId("ward_deletedCam000000")
+                    .detectedType(DetectedType.FALL)
+                    .detectedAt(OffsetDateTime.of(2026, 9, 1, 11, 0, 0, 0, KST))
+                    .confidence(0.8)
+                    .build();
+            ReflectionTestUtils.setField(incident, "id", DELETED_INCIDENT_ID);
+            return incident;
+        }
+
+        @Test
+        @DisplayName("건별 재촉: 등록된 카메라 상황만 선점하고 삭제된 카메라 상황에는 기록을 남기지 않는다")
+        void reminderSkipsDeletedCamera() {
+            when(incidentRepository.findByReviewStatusAndLastDetectedAtLessThanEqualAndStartedAtGreaterThanEqual(
+                    any(), any(), any())).thenReturn(List.of(deletedCameraIncident(), incident()));
+            when(connectionService.getActiveGuardianIds(WARD_ID)).thenReturn(List.of(GUARDIAN_ID));
+            when(feedbackRepository.findByIncidentIdIn(anyCollection())).thenReturn(List.of());
+            when(reminderLogRepository.findByIncidentIdIn(anyCollection())).thenReturn(List.of());
+            when(settingRepository.findByGuardianIdIn(anyCollection())).thenReturn(List.of());
+
+            List<AnomalyReviewReminderTarget> targets = planner.claimReminders();
+
+            assertThat(targets).extracting(AnomalyReviewReminderTarget::incidentId).containsExactly(INCIDENT_ID);
+            @SuppressWarnings("unchecked")
+            ArgumentCaptor<List<AnomalyReviewReminderLog>> captor = ArgumentCaptor.forClass(List.class);
+            verify(reminderLogRepository).saveAll(captor.capture());
+            assertThat(captor.getValue()).extracting(AnomalyReviewReminderLog::getIncidentId)
+                    .containsExactly(INCIDENT_ID);
+        }
+
+        @Test
+        @DisplayName("건별 재촉: 후보가 전부 삭제된 카메라면 이후 조회·선점 없이 빈 목록")
+        void reminderWithOnlyDeletedCameraClaimsNothing() {
+            when(incidentRepository.findByReviewStatusAndLastDetectedAtLessThanEqualAndStartedAtGreaterThanEqual(
+                    any(), any(), any())).thenReturn(List.of(deletedCameraIncident()));
+
+            assertThat(planner.claimReminders()).isEmpty();
+            verify(feedbackRepository, never()).findByIncidentIdIn(anyCollection());
+            verify(reminderLogRepository, never()).saveAll(anyCollection());
+        }
+
+        @Test
+        @DisplayName("하루 요약: 이미 재촉한 삭제된 카메라 상황은 미응답 건수에 세지 않는다(남은 발송 기록은 그대로)")
+        void summarySkipsDeletedCamera() {
+            properties.getReviewReminder().setSummaryTime(LocalTime.MIDNIGHT);
+            OffsetDateTime longAgo = AnomalyReviewReminderPlanner
+                    .summaryCutoff(AnomalyReviewClock.now(), LocalTime.MIDNIGHT).minusHours(1);
+            when(incidentRepository.findByReviewStatusAndStartedAtGreaterThanEqual(any(), any()))
+                    .thenReturn(List.of(deletedCameraIncident(), incident()));
+            when(connectionService.getActiveGuardianIds(WARD_ID)).thenReturn(List.of(GUARDIAN_ID));
+            when(feedbackRepository.findByIncidentIdIn(anyCollection())).thenReturn(List.of());
+            when(reminderLogRepository.findByIncidentIdIn(anyCollection())).thenReturn(List.of(
+                    AnomalyReviewReminderLog.builder().incidentId(DELETED_INCIDENT_ID).guardianId(GUARDIAN_ID)
+                            .sentAt(longAgo).build(),
+                    AnomalyReviewReminderLog.builder().incidentId(INCIDENT_ID).guardianId(GUARDIAN_ID)
+                            .sentAt(longAgo).build()));
+            when(summaryLogRepository.findBySummaryDateAndGuardianIdIn(any(), anyCollection())).thenReturn(List.of());
+            when(settingRepository.findByGuardianIdIn(anyCollection())).thenReturn(List.of());
+
+            List<AnomalyReviewSummaryTarget> targets = planner.claimSummaries();
+
+            assertThat(targets).singleElement()
+                    .extracting(AnomalyReviewSummaryTarget::pendingCount).isEqualTo(1);
+        }
+
+        @Test
+        @DisplayName("하루 요약: 남은 미응답이 삭제된 카메라 상황뿐이면 요약을 보내지 않는다")
+        void summaryWithOnlyDeletedCameraSendsNothing() {
+            properties.getReviewReminder().setSummaryTime(LocalTime.MIDNIGHT);
+            when(incidentRepository.findByReviewStatusAndStartedAtGreaterThanEqual(any(), any()))
+                    .thenReturn(List.of(deletedCameraIncident()));
+
+            assertThat(planner.claimSummaries()).isEmpty();
+            verify(summaryLogRepository, never()).saveAll(anyCollection());
+        }
+
+        @Test
+        @DisplayName("동수 안내: 삭제된 카메라의 동수 상황에는 응답자에게도 안내하지 않는다")
+        void conflictSkipsDeletedCamera() {
+            AnomalyIncident tie = deletedCameraIncident();
+            tie.applyReviewStatus(AnomalyReviewStatus.CONFLICTED);
+            when(incidentRepository.findByReviewStatusAndStartedAtGreaterThanEqual(
+                    eq(AnomalyReviewStatus.CONFLICTED), any())).thenReturn(List.of(tie));
+            when(feedbackRepository.findByIncidentIdIn(anyCollection())).thenReturn(List.of(
+                    AnomalyIncidentFeedback.builder().incidentId(DELETED_INCIDENT_ID).guardianId(GUARDIAN_ID)
+                            .verdict(AnomalyVerdict.REAL).build(),
+                    AnomalyIncidentFeedback.builder().incidentId(DELETED_INCIDENT_ID).guardianId(OTHER_GUARDIAN_ID)
+                            .verdict(AnomalyVerdict.FALSE_ALARM).build()));
+            when(connectionService.getActiveGuardianIds(WARD_ID)).thenReturn(List.of(GUARDIAN_ID, OTHER_GUARDIAN_ID));
+            when(conflictLogRepository.findByIncidentIdIn(anyCollection())).thenReturn(List.of());
+            when(settingRepository.findByGuardianIdIn(anyCollection())).thenReturn(List.of());
+
+            assertThat(planner.claimConflicts()).isEmpty();
+            verify(conflictLogRepository, never()).saveAll(anyCollection());
+        }
+
+        @Test
+        @DisplayName("사용 중지 카메라는 삭제가 아니다 - 카메라 행이 있으면(라벨 조회에 잡히면) 그대로 재촉한다")
+        void deactivatedCameraIsStillRegistered() {
+            // findLabelsBySessionIds는 is_active와 무관하게 카메라 행을 돌려준다(이력 cameraLabel과 같은 기준)
+            when(cameraService.findLabelsBySessionIds(anyCollection()))
+                    .thenReturn(Map.of("ward_a9cC5f_k3m", "거실", "ward_deletedCam000000", "침실"));
+            when(incidentRepository.findByReviewStatusAndLastDetectedAtLessThanEqualAndStartedAtGreaterThanEqual(
+                    any(), any(), any())).thenReturn(List.of(deletedCameraIncident()));
+            when(connectionService.getActiveGuardianIds(WARD_ID)).thenReturn(List.of(GUARDIAN_ID));
+            when(feedbackRepository.findByIncidentIdIn(anyCollection())).thenReturn(List.of());
+            when(reminderLogRepository.findByIncidentIdIn(anyCollection())).thenReturn(List.of());
+            when(settingRepository.findByGuardianIdIn(anyCollection())).thenReturn(List.of());
+
+            assertThat(planner.claimReminders()).extracting(AnomalyReviewReminderTarget::incidentId)
+                    .containsExactly(DELETED_INCIDENT_ID);
+        }
+    }
 }

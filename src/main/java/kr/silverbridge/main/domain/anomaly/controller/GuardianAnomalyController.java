@@ -74,6 +74,9 @@ public class GuardianAnomalyController {
                     - "삭제된 카메라" = 응답의 cameraLabel이 null인 이력과 같은 기준입니다(사용 중지한 카메라는 삭제가 아님)
                     - 그 밖의 값은 400. 서버에서 걸리므로 totalElements도 필터 기준이며, type과 함께 쓸 수 있습니다
                     - 건수는 summary의 deletedCameraCount로 받으세요
+                    - 화면의 "전체" 탭은 camera=EXISTING을 보내세요. summary의 total·탭 건수·확인 필요 건수가
+                      지금 등록된 카메라 기준이라 그래야 숫자가 맞습니다(2026-10-25). 생략(전체)은 하위 호환으로 남겨 둡니다
+                    - 삭제된 카메라의 상황에는 재촉·요약·동수 안내 알림이 가지 않습니다. 응답(판정)은 그대로 할 수 있습니다
 
                     [응답] data: PageResponse<AnomalyIncidentItem>
                     - reviewStatus: PENDING(확인 필요) · REAL(실제 위험) · FALSE_ALARM(오탐) · CONFLICTED(보호자 응답 동수 - 다시 확인 필요)
@@ -109,20 +112,27 @@ public class GuardianAnomalyController {
 
                     이력 화면의 탭 건수·"확인 필요" 건수용 요약입니다. 이력 조회(history)와 같은 범위·같은 인가를 씁니다.
 
+                    [지금 등록된 카메라 기준입니다 - 2026-10-25 변경]
+                    total·pendingCount·conflictedCount·needsReviewCount·byType는 지금 등록된 카메라의 상황만 셉니다
+                    (= history?camera=EXISTING). 삭제된 카메라의 상황은 영상이 없어 다시 확인할 수 없으므로 기본 집계에서 빼고
+                    deletedCameraCount로만 따로 셉니다. 이력과 판정은 지워지지 않으며 history?camera=DELETED로 볼 수 있습니다.
+                    사용 중지한 카메라는 삭제가 아니므로 그대로 셉니다.
+
                     [wardId 파라미터]
                     - 지정: 그 피보호자만 (ACTIVE 연결이 아니면 403)
                     - 생략: ACTIVE 연결된 피보호자 전원 (연결이 없으면 전부 0)
 
                     [응답] data
-                    - total: 전체 상황 수 (= type 없이 history를 조회했을 때의 totalElements)
-                    - pendingCount: 아직 아무도 응답하지 않은 상황(PENDING)
-                    - conflictedCount: 보호자 응답이 동수라 다시 확인이 필요한 상황(CONFLICTED)
+                    - total: 지금 등록된 카메라의 상황 수 (= type 없이 history?camera=EXISTING을 조회했을 때의 totalElements)
+                    - pendingCount: 아직 아무도 응답하지 않은 상황(PENDING, 등록된 카메라 기준)
+                    - conflictedCount: 보호자 응답이 동수라 다시 확인이 필요한 상황(CONFLICTED, 등록된 카메라 기준)
                     - needsReviewCount: 헤더 "확인 필요 N건"용 = pendingCount + conflictedCount
-                    - byType.fire / fall / weapon: 유형별 건수. 연기는 fire에 포함. 세 값을 항상 내려주며 0은 실제로 센 값입니다
-                    - deletedCameraCount: 삭제된 카메라의 상황 수 (= history?camera=DELETED 의 totalElements, 유형 무관)
+                    - byType.fire / fall / weapon: 유형별 건수(등록된 카메라 기준). 연기는 fire에 포함. 세 값을 항상 내려주며 0은 실제로 센 값입니다
+                    - deletedCameraCount: 삭제된 카메라의 상황 수 (= history?camera=DELETED 의 totalElements, 유형·판정 무관)
 
                     [주의]
-                    - history의 type 필터·페이지와 무관하게 항상 조회 범위 전체를 셉니다(탭을 골라도 숫자가 변하지 않음)
+                    - history의 type 필터·페이지와 무관하게 항상 조회 범위를 셉니다(탭을 골라도 숫자가 변하지 않음)
+                    - total + deletedCameraCount = camera 없이 history를 조회했을 때의 totalElements 입니다
                     """)
     @ApiResponses({
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "건수 요약"),

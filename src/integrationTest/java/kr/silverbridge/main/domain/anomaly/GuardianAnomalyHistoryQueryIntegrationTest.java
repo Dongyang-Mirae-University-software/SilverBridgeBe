@@ -3,6 +3,7 @@ package kr.silverbridge.main.domain.anomaly;
 import kr.silverbridge.main.domain.anomaly.entity.AnomalyIncident;
 import kr.silverbridge.main.domain.anomaly.entity.AnomalyReviewStatus;
 import kr.silverbridge.main.domain.anomaly.repository.AnomalyIncidentRepository;
+import kr.silverbridge.main.domain.camera.entity.Camera;
 import kr.silverbridge.main.domain.camera.repository.CameraRepository;
 import kr.silverbridge.main.domain.user.repository.UserRepository;
 import kr.silverbridge.main.global.enums.DetectedType;
@@ -80,12 +81,14 @@ class GuardianAnomalyHistoryQueryIntegrationTest extends PostgresIntegrationTest
     }
 
     @Test
-    @DisplayName("요약 집계는 목록 totalElements와 같은 범위·같은 수를 센다")
+    @DisplayName("요약 집계는 camera=EXISTING 목록 totalElements와 같은 범위·같은 수를 센다")
     void summaryMatchesList() {
-        List<AnomalyIncidentRepository.GuardianTypeStatusCount> rows = incidentRepository.countForGuardianSummary(WARD_1);
+        cameraRepository.save(TestData.camera("WD0001", "sess-WD0001", "거실"));
+        List<String> live = cameraRepository.findSessionIdsByWardIdIn(WARD_1);
+        List<AnomalyIncidentRepository.GuardianTypeStatusCount> rows = incidentRepository.countForGuardianSummary(WARD_1, live);
 
         long total = rows.stream().mapToLong(AnomalyIncidentRepository.GuardianTypeStatusCount::getTotal).sum();
-        assertThat(total).isEqualTo(incidentRepository.findHistory(WARD_1, null, false, false, NO_MATCH, PageRequest.of(0, 20)).getTotalElements());
+        assertThat(total).isEqualTo(incidentRepository.findHistory(WARD_1, null, false, true, live, PageRequest.of(0, 20)).getTotalElements());
 
         Map<String, Long> byKey = rows.stream().collect(Collectors.toMap(
                 row -> row.getDetectedType() + "/" + row.getReviewStatus(),
@@ -120,6 +123,40 @@ class GuardianAnomalyHistoryQueryIntegrationTest extends PostgresIntegrationTest
         // 두 피보호자 범위
         List<String> liveBoth = cameraRepository.findSessionIdsByWardIdIn(BOTH);
         assertThat(incidentRepository.countDeletedCameraForGuardian(BOTH, liveBoth)).isEqualTo(3);
+    }
+
+    @Test
+    @DisplayName("요약은 지금 등록된 카메라의 상황만 센다 - 삭제된 카메라 상황은 유형·판정 집계에서 빠지고 deleted 건수로만, 합은 전체 이력과 같다 (2026-10-25)")
+    void summaryExcludesDeletedCamera() {
+        // 기존 4건(sess-WD0001: 화재 PENDING·REAL·CONFLICTED, 낙상 FALSE_ALARM) + 삭제된 카메라 3건(화재 PENDING, 흉기 CONFLICTED, 낙상 REAL)
+        incident("WD0001", "sess-gone", DetectedType.FIRE, 7, AnomalyReviewStatus.PENDING);
+        incident("WD0001", "sess-gone", DetectedType.WEAPON, 8, AnomalyReviewStatus.CONFLICTED);
+        incident("WD0001", "sess-gone", DetectedType.FALL, 9, AnomalyReviewStatus.REAL);
+        // 사용 중지 카메라는 삭제가 아니다 - 그 상황은 그대로 센다
+        incident("WD0001", "sess-off", DetectedType.FIRE, 10, AnomalyReviewStatus.PENDING);
+        cameraRepository.save(TestData.camera("WD0001", "sess-WD0001", "거실"));
+        Camera off = TestData.camera("WD0001", "sess-off", "침실");
+        off.deactivate();
+        cameraRepository.save(off);
+        List<String> live = cameraRepository.findSessionIdsByWardIdIn(WARD_1);
+
+        Map<String, Long> byKey = incidentRepository.countForGuardianSummary(WARD_1, live).stream()
+                .collect(Collectors.toMap(row -> row.getDetectedType() + "/" + row.getReviewStatus(),
+                        AnomalyIncidentRepository.GuardianTypeStatusCount::getTotal));
+        assertThat(byKey).containsOnly(
+                Map.entry("FIRE/PENDING", 2L), Map.entry("FIRE/REAL", 1L), Map.entry("FIRE/CONFLICTED", 1L),
+                Map.entry("FALL/FALSE_ALARM", 1L));
+
+        long existing = byKey.values().stream().mapToLong(Long::longValue).sum();
+        long deleted = incidentRepository.countDeletedCameraForGuardian(WARD_1, live);
+        assertThat(existing).isEqualTo(5)
+                .isEqualTo(incidentRepository.findHistory(WARD_1, null, false, true, live, PageRequest.of(0, 20))
+                        .getTotalElements());
+        assertThat(deleted).isEqualTo(3);
+        assertThat(existing + deleted).isEqualTo(
+                incidentRepository.findHistory(WARD_1, null, false, false, live, PageRequest.of(0, 20)).getTotalElements());
+        // 등록된 카메라가 하나도 없으면(매칭 불가 값) 기본 집계는 비어 있다
+        assertThat(incidentRepository.countForGuardianSummary(WARD_1, NO_MATCH)).isEmpty();
     }
 
     private void incident(String wardId, DetectedType type, int hour, AnomalyReviewStatus status) {
