@@ -36,11 +36,12 @@ public record GuardianDashboardResponse(
         List<String> unavailable
 ) {
 
-    @Schema(description = "확인이 필요한 일 = 이상감지 확인 필요(PENDING+CONFLICTED) + 오늘 복용 시각이 지났는데 체크되지 않은 약. SOS는 세지 않는다")
+    @Schema(description = "확인이 필요한 일 = 이상감지 확인 필요(PENDING+CONFLICTED, 지금 등록된 카메라의 상황만) + 오늘 복용 시각이 지났는데 체크되지 않은 약. SOS는 세지 않는다")
     public record PendingActions(
             @Schema(description = "합계. anomaly·medication 중 하나라도 null이면 null", nullable = true)
             Long total,
-            @Schema(description = "이상감지 확인 필요 건수(실패 시 null)", nullable = true)
+            @Schema(description = "이상감지 확인 필요 건수 - 지금 등록된 카메라의 상황만, 삭제된 카메라 제외(실패 시 null)",
+                    nullable = true)
             Long anomaly,
             @Schema(description = "오늘 복용 시각이 지났는데 체크되지 않은 약 개수(실패 시 null)", nullable = true)
             Long medication
@@ -58,8 +59,10 @@ public record GuardianDashboardResponse(
 
     @Schema(description = "이상감지 칸")
     public record AnomalyDetection(
-            @Schema(description = "확인 필요 상황 수(PENDING + CONFLICTED)") long needsReviewCount,
-            @Schema(description = "가장 최근의 확인 필요 상황 1건. 없으면 null (영상은 clip 필드/클립 API)", nullable = true)
+            @Schema(description = "확인 필요 상황 수(PENDING + CONFLICTED) - 지금 등록된 카메라(사용 중지 포함)의 상황만, "
+                    + "이력 summary의 needsReviewCount와 같은 기준") long needsReviewCount,
+            @Schema(description = "가장 최근의 확인 필요 상황 1건(needsReviewCount와 같은 카메라 기준). 없으면 null "
+                    + "(영상은 clip 필드/클립 API)", nullable = true)
             AnomalyIncidentItem latest
     ) {
     }
