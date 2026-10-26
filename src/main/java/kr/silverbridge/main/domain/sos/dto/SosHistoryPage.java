@@ -21,7 +21,7 @@ public record SosHistoryPage(
         @Schema(description = "현재 페이지 항목")
         List<SosHistoryItem> content,
 
-        @Schema(description = "현재 페이지 번호 (0-based)", example = "0")
+        @Schema(description = "실제 적용된 페이지 번호 (0-based). offset이 int 범위를 넘는 요청은 마지막 가능 페이지로 보정된 값이다(PageOffsets)", example = "0")
         int page,
 
         @Schema(description = "페이지 크기", example = "20")
