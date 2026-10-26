@@ -2310,3 +2310,4 @@ BE #381(`6c0b86c`) 점검(템플릿 B). 인가(URL 규칙 + 클래스 `@PreAutho
 
 `/api/admin/hospital/**` 9개(목록·요약·등록·수정·소프트 삭제·운영 상태·진료과 추가/이름 변경/삭제, ADMIN 전용). 데이터는 예약 서비스에 있고 BE는 전용 ADMIN 계정으로 8개 경로만 중계한다(토큰 메모리 캐시·401 재로그인 1회·연결 3초/전체 8초·리다이렉트 미추종·오류 본문 미사용). 예약 서비스가 검색·페이지·삭제 병원 쓰기 차단·진료과 중복 차단을 하지 않아 BE가 메모리 필터와 쓰기 전 확인을 맡는다. 감사 로그 7종은 호출 전(V63 CHECK 재정의). 사용자 결정: 전용 계정·우리 사용자 예약 수 생략(환자 정보 조회 필요)·병원 이메일 제외·gosky 전용 compose override(vkcs에 `sb-internal` 없음). 새 테스트 59건, `./gradlew build` 통과(1931건).
 - 산출물: `docs/(2026-10-26) feature-admin-partner-hospital.md`, `docs/(2026-10-26) api-contract-admin-hospital.md`.
+- gosky 반영(2026-10-26, 사용자 확인 후): 예약 서비스 BE 전용 ADMIN 계정(id 44, API로 생성)·`.env.dev` 백업 후 `RESERVATION_ADMIN_*` 3줄·override 포함 api 재생성(`98d1f10`, `sb-internal` 연결, healthy). BE 컨테이너에서 같은 설정값으로 예약 서비스 로그인 → 병원 목록 200(46곳), 실서버 비로그인 401·보호자 403. BE 관리자 토큰 끝까지 시험(목록·시험용 병원 등록/수정/삭제)은 관리자 테스트 계정이 없어 미실시.

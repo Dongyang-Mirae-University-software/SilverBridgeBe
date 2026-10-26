@@ -70,6 +70,18 @@ BE는 데이터를 저장하지 않고, 관리자 토큰으로 예약 서비스 
 - 예약 서비스 BE 전용 ADMIN 계정: 예약 서비스 API `POST /api/v1/admin/users`(role ADMIN)로 만든다(DB 직접 수정·`prisma db seed` 금지).
 - vkcs-linux: 변경 없음(값 비어 503 정상).
 
+### 반영 결과 (2026-10-26)
+
+- PR #382 머지 `98d1f10`. 머지 전 vkcs 통합 테스트 통과, CD 성공(V63 적용, 비로그인 401).
+- gosky(사용자 확인 후 스크립트 1회 실행):
+  - 예약 서비스 BE 전용 ADMIN 계정 `be-hospital-relay@silverbridge.internal`(id 44)을 예약 서비스 API(`admin-login` → `POST /admin/users`)로 생성했다. 연락처는 더미 `010-0000-0000`이고 비밀번호는 서버에서 만든 32자다(어디에도 출력하지 않음).
+  - `.env.dev` 백업 `.env.dev.bak-20261026-101919` 후 `RESERVATION_ADMIN_*` 3줄을 추가했다.
+  - `git pull` → `-f docker-compose.gosky.yml` 포함 `up -d --build api`: `98d1f10`, 네트워크 `dmu-dev-net`·`sb-internal`, healthy, 재시작 0, AI WS 연결.
+- gosky 확인:
+  - BE 컨테이너 안에서 같은 설정값으로 예약 서비스 로그인(role ADMIN) → `GET /admin/hospitals` 200, 46곳.
+  - 비로그인 401, 보호자 토큰 목록·요약·등록 403, api-docs에 6개 경로 노출.
+- **미확인**: BE 관리자 토큰으로 `/api/admin/hospital` 목록 조회와 시험용 병원 등록·수정·삭제. BE 관리자 테스트 계정이 없어 사용자 몫으로 남겼다. 시험용 병원은 소프트 삭제라 예약 서비스 DB에 `deleted=true`로 남는다(되살리는 API 없음).
+
 ## 7. 수용한 한계
 
 - 쓰기 전 확인과 실제 쓰기 사이의 경합(동시에 같은 진료과 추가 등)은 막지 않는다 - 관리자 한두 명 규모.
