@@ -67,7 +67,8 @@
 - 원인: `page × size`가 `Integer.MAX_VALUE`를 넘으면 Spring Data `PageableUtils`가 `InvalidDataAccessApiUsageException`("Page offset exceeds Integer.MAX_VALUE")을 던진다.
 - 결과: `GlobalExceptionHandler`에 맞는 핸들러가 없어 `Exception` 핸들러로 가서 500이 된다. 예: `page=100000000&size=50`.
 - 범위: `AdminPaging.of`를 쓰는 9곳이 모두 같다. 이번 PR 전부터 있던 동작이다.
-- 영향: 관리자만 부를 수 있고 데이터 영향은 없다. 오류 로그 한 줄이 남는다.
+  - (정정) 9곳 중 2곳은 관리자 밖이다: 공개 공지 목록(`AnnouncementService`)·보호자 내 문의(`InquiryService`). 보호자 SOS·이상감지 이력(`PageRequest` 직접 생성)도 같은 결함이 있었다. 즉 일반 사용자도 500을 낼 수 있었다.
+- 영향: 데이터 영향은 없다. 오류 로그 한 줄이 남는다.
 - 제안(별도 작업): `AdminPaging.page()`에 상한(예: offset이 int 범위 안이 되도록)을 두거나, 이 예외를 400으로 바꾼다.
 
 ### 🟢 L-2 터키어 `İ` 소문자 차이 (수용)
@@ -83,3 +84,15 @@
 
 ## 수정용 커밋 메시지 초안 (L-1을 고칠 경우)
 `fix: 관리자 목록 페이지 번호 상한 - 큰 page 값의 500을 막는다`
+
+## 후속 조치 (2026-10-26, `fix/admin-announcement-list-audit-followup`)
+
+| 이슈 | 조치 |
+|---|---|
+| L-1 | 공용 `global/response/PageOffsets.clampPage`를 만들었다. offset이 int를 넘는 page는 범위 안의 마지막 페이지로 **보정**한다(사용자 결정, 400 아님). `AdminPaging.of`가 이 유틸을 써서 9곳에 한 번에 적용되고, 보호자 SOS·이상감지 이력 2곳도 같은 유틸을 쓴다. 결과는 빈 `content`와 정확한 `totalElements`다. 예외를 전역 400으로 바꾸는 방식은 다른 결함까지 가려서 택하지 않았다 |
+| L-2 | 검색어의 Java `toLowerCase()`를 뺐다. JPQL을 `lower(title) like lower(concat(...)) escape '\'`로 바꿔 양쪽 모두 DB가 소문자로 만든다. 실 DB에서 `İSTANBUL`·`istanbul` → `İstanbul…`, `école` → `École…` 일치를 확인했다. 다른 관리자 검색(회원·문의·이상감지·알림)은 같은 Java 소문자화를 쓰지만 이번 범위 밖이다(같은 한계, 실사용 무관) |
+| L-3 | 인덱스는 넣지 않았다(사용자 결정). 두 리포지토리 주석에 "수천 건 이상이면 `pg_trgm` GIN 인덱스 검토" 기준을 남겼다 |
+| L-4 | 임시저장 검색 경로의 정렬 검증, 분해형(NFD) 한글 검색어가 NFC로 전달되는지 검증을 추가했다 |
+
+- 테스트: `PageOffsetsTest`(size 1·20·50 경계), `AdminSupportTest`, `GuardianSosServiceTest`, `GuardianAnomalyHistoryFilterTest`, 공지 서비스 2종, 실 DB `AnnouncementTitleSearchIntegrationTest`(İ·É, 큰 page → 빈 페이지 + 전체 건수 1). `./gradlew build` BUILD SUCCESSFUL(단위 1897건 실패 0).
+- 변이 시험: V4 `AdminPaging` 보정 제거 / V5 보호자 SOS 보정 제거 / V6 Java 소문자화 복귀 - 모두 검출.

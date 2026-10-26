@@ -65,6 +65,29 @@ class AnnouncementTitleSearchIntegrationTest extends PostgresIntegrationTest {
         assertThat(result.getTotalElements()).isEqualTo(1);
     }
 
+    @Test
+    @DisplayName("대소문자는 양쪽 모두 DB lower()로 맞춘다 - Java 소문자화와 어긋나던 İ·É도 찾는다 (2026-10-26 점검 L-2)")
+    void 비ASCII_대소문자() {
+        save("İstanbul 지사 안내");
+        save("École 협력 공지");
+
+        assertThat(titles(search("İSTANBUL", 0, 20))).containsExactly("İstanbul 지사 안내");
+        assertThat(titles(search("istanbul", 0, 20))).containsExactly("İstanbul 지사 안내");
+        assertThat(titles(search("école", 0, 20))).containsExactly("École 협력 공지");
+    }
+
+    @Test
+    @DisplayName("아주 큰 page도 예외 없이 빈 페이지와 정확한 전체 건수를 준다 (AdminPaging 보정, 2026-10-26 점검 L-1)")
+    void 큰_페이지() {
+        save("점검 안내");
+
+        Page<Announcement> page = announcementRepository.findAll(
+                kr.silverbridge.main.domain.admin.support.AdminPaging.of(100_000_000, 50, LATEST));
+
+        assertThat(page.getContent()).isEmpty();
+        assertThat(page.getTotalElements()).isEqualTo(1);
+    }
+
     private void save(String title) {
         announcementRepository.saveAndFlush(Announcement.builder().title(title).content("내용").build());
     }

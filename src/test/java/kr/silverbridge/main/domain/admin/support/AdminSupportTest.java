@@ -29,6 +29,16 @@ class AdminSupportTest {
     }
 
     @Test
+    @DisplayName("offset이 int를 넘는 page는 마지막 가능 페이지로 보정한다 - 넘으면 500이었다 (2026-10-26 점검 L-1)")
+    void 큰_페이지_보정() {
+        assertThat(AdminPaging.of(100_000_000, 50).getPageNumber()).isEqualTo(Integer.MAX_VALUE / 50);
+        assertThat(AdminPaging.of(Integer.MAX_VALUE, 0).getPageNumber()).isEqualTo(Integer.MAX_VALUE / 20);
+        assertThat(AdminPaging.of(Integer.MAX_VALUE, 50,
+                org.springframework.data.domain.Sort.by("id")).getOffset()).isLessThanOrEqualTo(Integer.MAX_VALUE);
+        assertThat(AdminPaging.of(3, 20).getPageNumber()).isEqualTo(3);
+    }
+
+    @Test
     @DisplayName("목록 본문 축약은 코드포인트 기준 100자이고 이모지를 반으로 자르지 않는다")
     void 본문_축약() {
         String text = "a".repeat(99) + "😀" + "b".repeat(10);
