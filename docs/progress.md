@@ -2305,3 +2305,8 @@ AI main `0b72379`(#46·#48·#51·#52) 점검. 라우터 오프라인 탐색(가�
 
 BE #381(`6c0b86c`) 점검(템플릿 B). 인가(URL 규칙 + 클래스 `@PreAuthorize`, `/summary` 포함, gosky 비로그인 401)·로그(쿼리 문자열 미기록)·검색 정확성(실 DB 이스케이프·대소문자, 두 서버 DB `en_US.utf8`)·건수 기준(대시보드 `announcementDrafts`와 같음)·api-docs 계약 모두 PASS. 두 서버에 정리 전 형태로 남은 제목 0건. 변이 3종 전부 검출. 🟢 4 - L-1 아주 큰 `page`는 500(원래부터, `AdminPaging` 9곳 공통, 별도 작업 제안)·L-2 `İ` 소문자 차이·L-3 LIKE 전체 훑기·L-4 테스트 공백(수용). 코드 수정 없음.
 - 산출물: `docs/(2026-10-26) audit-admin-announcement-list-paging.md`.
+
+### [2026-10-26] 관리자 제휴 병원 관리 - 예약 서비스 중계 API
+
+`/api/admin/hospital/**` 9개(목록·요약·등록·수정·소프트 삭제·운영 상태·진료과 추가/이름 변경/삭제, ADMIN 전용). 데이터는 예약 서비스에 있고 BE는 전용 ADMIN 계정으로 8개 경로만 중계한다(토큰 메모리 캐시·401 재로그인 1회·연결 3초/전체 8초·리다이렉트 미추종·오류 본문 미사용). 예약 서비스가 검색·페이지·삭제 병원 쓰기 차단·진료과 중복 차단을 하지 않아 BE가 메모리 필터와 쓰기 전 확인을 맡는다. 감사 로그 7종은 호출 전(V63 CHECK 재정의). 사용자 결정: 전용 계정·우리 사용자 예약 수 생략(환자 정보 조회 필요)·병원 이메일 제외·gosky 전용 compose override(vkcs에 `sb-internal` 없음). 새 테스트 59건, `./gradlew build` 통과(1931건).
+- 산출물: `docs/(2026-10-26) feature-admin-partner-hospital.md`, `docs/(2026-10-26) api-contract-admin-hospital.md`.
