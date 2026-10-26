@@ -1,9 +1,11 @@
 package kr.silverbridge.main.domain.admin.service;
 
 import kr.silverbridge.main.domain.admin.dto.AdminAnnouncementResponse;
+import kr.silverbridge.main.domain.admin.dto.AdminAnnouncementSummaryResponse;
 import kr.silverbridge.main.domain.admin.dto.AnnouncementCreateRequest;
 import kr.silverbridge.main.domain.admin.dto.AnnouncementUpdateRequest;
 import kr.silverbridge.main.domain.announcement.entity.Announcement;
+import kr.silverbridge.main.domain.announcement.repository.AnnouncementDraftRepository;
 import kr.silverbridge.main.domain.announcement.repository.AnnouncementRepository;
 import kr.silverbridge.main.domain.user.entity.User;
 import kr.silverbridge.main.domain.user.repository.UserRepository;
@@ -12,6 +14,7 @@ import kr.silverbridge.main.global.enums.AdminAuditAction;
 import kr.silverbridge.main.global.enums.Role;
 import kr.silverbridge.main.global.exception.CustomException;
 import kr.silverbridge.main.global.exception.ErrorCode;
+import kr.silverbridge.main.global.response.PageResponse;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -48,6 +51,7 @@ class AdminAnnouncementServiceTest {
 
     @Mock private UserRepository userRepository;
     @Mock private AnnouncementRepository announcementRepository;
+    @Mock private AnnouncementDraftRepository draftRepository;
     @Mock private AdminAuditLogService auditLogService;
     @InjectMocks private AdminAnnouncementService service;
 
@@ -127,7 +131,7 @@ class AdminAnnouncementServiceTest {
                 announcement(2L, null, "작성자 탈퇴 공지"))));
         when(userRepository.findAllById(anyCollection())).thenReturn(List.of(admin()));
 
-        List<AdminAnnouncementResponse> result = service.getAnnouncements(0, 20);
+        List<AdminAnnouncementResponse> result = service.getAnnouncements(0, 20, null).content();
 
         assertThat(result).extracting(AdminAnnouncementResponse::authorName)
                 .containsExactly("관리자", null);
@@ -146,7 +150,7 @@ class AdminAnnouncementServiceTest {
         when(announcementRepository.findById(1L)).thenReturn(Optional.of(a));
         when(userRepository.findById(ADMIN_ID)).thenReturn(Optional.of(admin()));
 
-        String listed = service.getAnnouncements(0, 20).get(0).content();
+        String listed = service.getAnnouncements(0, 20, null).content().get(0).content();
 
         assertThat(listed.codePointCount(0, listed.length())).isEqualTo(100);
         assertThat(listed).endsWith("😀");
@@ -158,8 +162,8 @@ class AdminAnnouncementServiceTest {
     void 목록_페이지_보정() {
         when(announcementRepository.findAll(any(Pageable.class))).thenReturn(new PageImpl<>(List.of()));
 
-        service.getAnnouncements(-1, 0);
-        service.getAnnouncements(3, 999);
+        service.getAnnouncements(-1, 0, null);
+        service.getAnnouncements(3, 999, null);
 
         org.mockito.ArgumentCaptor<Pageable> captor = org.mockito.ArgumentCaptor.forClass(Pageable.class);
         verify(announcementRepository, org.mockito.Mockito.times(2)).findAll(captor.capture());
@@ -190,5 +194,77 @@ class AdminAnnouncementServiceTest {
         ReflectionTestUtils.setField(update, "content", "새 내용");
 
         assertThat(service.updateAnnouncement(3L, update, ADMIN_ID).title()).isEqualTo("새제목");
+    }
+
+    @Test
+    @DisplayName("목록은 PageResponse로 전체 건수·페이지 수를 함께 준다 (2026-10-26)")
+    void 목록_전체건수_페이지수() {
+        when(announcementRepository.findAll(any(Pageable.class))).thenAnswer(inv -> new PageImpl<>(
+                List.of(announcement(1L, ADMIN_ID, "공지")), inv.getArgument(0), 41));
+        when(userRepository.findAllById(anyCollection())).thenReturn(List.of(admin()));
+
+        PageResponse<AdminAnnouncementResponse> result = service.getAnnouncements(2, 20, null);
+
+        assertThat(result.page()).isEqualTo(2);
+        assertThat(result.size()).isEqualTo(20);
+        assertThat(result.totalElements()).isEqualTo(41);
+        assertThat(result.totalPages()).isEqualTo(3);
+        assertThat(result.last()).isTrue();
+    }
+
+    @Test
+    @DisplayName("검색어가 있으면 정리·이스케이프·소문자화한 값으로 제목 검색하고, 정렬·페이지 규칙은 그대로다")
+    void 목록_제목검색_정규화() {
+        when(announcementRepository.findByTitleKeyword(anyString(), any(Pageable.class)))
+                .thenReturn(new PageImpl<>(List.of()));
+
+        service.getAnnouncements(-1, 999, "  ABC_​10%\\  ");
+
+        org.mockito.ArgumentCaptor<Pageable> captor = org.mockito.ArgumentCaptor.forClass(Pageable.class);
+        verify(announcementRepository).findByTitleKeyword(eq("abc\\_10\\%\\\\"), captor.capture());
+        verify(announcementRepository, never()).findAll(any(Pageable.class));
+        assertThat(captor.getValue().getPageNumber()).isZero();
+        assertThat(captor.getValue().getPageSize()).isEqualTo(50);
+        assertThat(captor.getValue().getSort()).isEqualTo(
+                Sort.by(Sort.Direction.DESC, "createdAt").and(Sort.by(Sort.Direction.DESC, "id")));
+    }
+
+    @Test
+    @DisplayName("공백·보이지 않는 문자뿐인 검색어는 검색 조건 없이 전체 목록이다")
+    void 목록_빈검색어_전체() {
+        when(announcementRepository.findAll(any(Pageable.class))).thenReturn(new PageImpl<>(List.of()));
+
+        service.getAnnouncements(0, 20, " \u200B\u3000 ");
+
+        verify(announcementRepository).findAll(any(Pageable.class));
+        verify(announcementRepository, never()).findByTitleKeyword(anyString(), any(Pageable.class));
+    }
+
+    @Test
+    @DisplayName("검색어는 50자(이모지 1개=1자)까지 받고 51자부터 400 INVALID_INPUT, DB는 조회하지 않는다")
+    void 목록_검색어_길이경계() {
+        when(announcementRepository.findByTitleKeyword(anyString(), any(Pageable.class)))
+                .thenReturn(new PageImpl<>(List.of()));
+
+        service.getAnnouncements(0, 20, "😀".repeat(50));
+
+        assertThatThrownBy(() -> service.getAnnouncements(0, 20, "가".repeat(51)))
+                .isInstanceOf(CustomException.class)
+                .hasFieldOrPropertyWithValue("errorCode", ErrorCode.INVALID_INPUT);
+        verify(announcementRepository).findByTitleKeyword(anyString(), any(Pageable.class));
+        verify(announcementRepository, never()).findAll(any(Pageable.class));
+    }
+
+    @Test
+    @DisplayName("탭 건수는 게시 공지·임시저장 전체 수이며 감사 로그를 남기지 않는다")
+    void 탭건수() {
+        when(announcementRepository.count()).thenReturn(12L);
+        when(draftRepository.count()).thenReturn(3L);
+
+        AdminAnnouncementSummaryResponse summary = service.getSummary();
+
+        assertThat(summary.publishedCount()).isEqualTo(12);
+        assertThat(summary.draftCount()).isEqualTo(3);
+        verify(auditLogService, never()).log(anyString(), any(), anyString(), anyString());
     }
 }

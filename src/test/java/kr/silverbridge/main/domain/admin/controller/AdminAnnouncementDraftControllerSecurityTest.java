@@ -3,12 +3,14 @@ package kr.silverbridge.main.domain.admin.controller;
 import kr.silverbridge.main.domain.admin.dto.AdminAnnouncementDraftResponse;
 import kr.silverbridge.main.domain.admin.dto.AnnouncementDraftCreateRequest;
 import kr.silverbridge.main.domain.admin.service.AdminAnnouncementDraftService;
+import kr.silverbridge.main.global.response.PageResponse;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.security.access.AccessDeniedException;
+import org.springframework.security.authentication.AuthenticationCredentialsNotFoundException;
 import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
 import org.springframework.security.test.context.support.WithMockUser;
 import org.springframework.test.context.ContextConfiguration;
@@ -66,10 +68,10 @@ class AdminAnnouncementDraftControllerSecurityTest {
     @WithMockUser(roles = "ADMIN")
     @DisplayName("ADMIN → 목록 조회·임시저장 생성 허용")
     void admin_허용() {
-        when(draftService.getDrafts(0, 20)).thenReturn(List.of(response()));
+        when(draftService.getDrafts(0, 20, null)).thenReturn(new PageResponse<>(List.of(response()), 0, 20, 1, 1, true));
         when(draftService.createDraft(any(), anyString())).thenReturn(response());
 
-        assertThatNoException().isThrownBy(() -> controller.getDrafts(0, 20));
+        assertThatNoException().isThrownBy(() -> controller.getDrafts(0, 20, null));
         assertThatNoException().isThrownBy(() -> controller.createDraft(createRequest(), "AD0001"));
     }
 
@@ -77,7 +79,7 @@ class AdminAnnouncementDraftControllerSecurityTest {
     @WithMockUser(roles = "GUARDIAN")
     @DisplayName("보호자(GUARDIAN) → 403")
     void guardian_거부() {
-        assertThatThrownBy(() -> controller.getDrafts(0, 20))
+        assertThatThrownBy(() -> controller.getDrafts(0, 20, null))
                 .isInstanceOf(AccessDeniedException.class);
         assertThatThrownBy(() -> controller.createDraft(createRequest(), "GD0001"))
                 .isInstanceOf(AccessDeniedException.class);
@@ -87,9 +89,16 @@ class AdminAnnouncementDraftControllerSecurityTest {
     @WithMockUser(roles = "WARD")
     @DisplayName("피보호자(WARD) → 403")
     void ward_거부() {
-        assertThatThrownBy(() -> controller.getDrafts(0, 20))
+        assertThatThrownBy(() -> controller.getDrafts(0, 20, null))
                 .isInstanceOf(AccessDeniedException.class);
         assertThatThrownBy(() -> controller.createDraft(createRequest(), "WD0001"))
                 .isInstanceOf(AccessDeniedException.class);
+    }
+
+    @Test
+    @DisplayName("비로그인 → 임시저장 목록 인증 요구(401)")
+    void 비로그인_거부() {
+        assertThatThrownBy(() -> controller.getDrafts(0, 20, null))
+                .isInstanceOf(AuthenticationCredentialsNotFoundException.class);
     }
 }

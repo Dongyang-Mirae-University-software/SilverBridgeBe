@@ -5,6 +5,7 @@ import kr.silverbridge.main.domain.admin.dto.AdminAnnouncementResponse;
 import kr.silverbridge.main.domain.admin.dto.AnnouncementDraftCreateRequest;
 import kr.silverbridge.main.domain.admin.dto.AnnouncementDraftUpdateRequest;
 import kr.silverbridge.main.domain.admin.support.AdminPaging;
+import kr.silverbridge.main.domain.admin.support.AnnouncementTitleKeyword;
 import kr.silverbridge.main.domain.announcement.entity.Announcement;
 import kr.silverbridge.main.domain.announcement.entity.AnnouncementDraft;
 import kr.silverbridge.main.domain.announcement.repository.AnnouncementDraftRepository;
@@ -15,13 +16,15 @@ import kr.silverbridge.main.global.audit.AdminAuditLogService;
 import kr.silverbridge.main.global.enums.AdminAuditAction;
 import kr.silverbridge.main.global.exception.CustomException;
 import kr.silverbridge.main.global.exception.ErrorCode;
+import kr.silverbridge.main.global.response.PageResponse;
 import kr.silverbridge.main.global.validation.TextSanitizer;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
@@ -41,11 +44,16 @@ public class AdminAnnouncementDraftService {
     private final AnnouncementRepository announcementRepository;
     private final AdminAuditLogService auditLogService;
 
-    // 임시저장 목록 조회 (최신순 + 배치 작성자 조회, 선택 페이징·본문 축약 - ADMIN-G24)
+    // 임시저장 목록 조회 (최신순 + 배치 작성자 조회, 페이징·본문 축약 - ADMIN-G24, 제목 검색·건수 - 2026-10-26)
     @Transactional(readOnly = true)
-    public List<AdminAnnouncementDraftResponse> getDrafts(int page, int size) {
-        List<AnnouncementDraft> drafts = draftRepository.findAll(AdminPaging.of(page, size,
-                Sort.by(Sort.Direction.DESC, "createdAt").and(Sort.by(Sort.Direction.DESC, "id")))).getContent();
+    public PageResponse<AdminAnnouncementDraftResponse> getDrafts(int page, int size, String keyword) {
+        // 검색어 검사(50자 초과 400)를 DB 조회보다 먼저 한다
+        String titleKeyword = AnnouncementTitleKeyword.normalize(keyword);
+        Pageable pageable = AdminPaging.of(page, size,
+                Sort.by(Sort.Direction.DESC, "createdAt").and(Sort.by(Sort.Direction.DESC, "id")));
+        Page<AnnouncementDraft> drafts = titleKeyword == null
+                ? draftRepository.findAll(pageable)
+                : draftRepository.findByTitleKeyword(titleKeyword, pageable);
 
         Set<String> authorIds = drafts.stream()
                 .map(AnnouncementDraft::getAuthorId)
@@ -54,9 +62,7 @@ public class AdminAnnouncementDraftService {
         Map<String, User> authorMap = userRepository.findAllById(authorIds).stream()
                 .collect(Collectors.toMap(User::getId, u -> u));
 
-        return drafts.stream()
-                .map(d -> AdminAnnouncementDraftResponse.ofSummary(d, authorMap.get(d.getAuthorId())))
-                .toList();
+        return PageResponse.of(drafts.map(d -> AdminAnnouncementDraftResponse.ofSummary(d, authorMap.get(d.getAuthorId()))));
     }
 
     // 임시저장 상세 조회
