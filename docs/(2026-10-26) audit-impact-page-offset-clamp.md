@@ -73,3 +73,13 @@
 ## 참고
 - size 1에서 offset이 정확히 `Integer.MAX_VALUE`인 경우는 실 DB로 확인하지 않았다.
 - PostgreSQL에서 Hibernate는 offset과 fetch를 따로 바인딩해 두 값을 더하지 않으므로 넘침이 생기지 않는다.
+
+## 후속 조치 (2026-10-26, `test/page-clamp-guard`)
+
+| 이슈 | 조치 |
+|---|---|
+| L-1 | `PageResponse`·`SosHistoryPage`의 `page` Swagger 설명을 "실제 적용된 페이지 번호(0-based). offset이 int 범위를 넘는 요청은 마지막 가능 페이지로 보정된 값"으로 고쳤다(사용자 결정 A - 동작 그대로, 요청값을 되돌려주지 않음). 응답의 page는 실제 offset과 맞는 값이다 |
+| L-2 | 소스 스캔 가드 `PageRequestClampGuardTest`. `src/main/java`에서 `PageRequest.of(`의 첫 인자가 `0`이나 `PageOffsets.clampPage(`가 아니면 실패한다(`AdminPaging.java` 제외). `.withPage(`·`PageRequest.ofSize(`·`Pageable.ofSize(`도 실패로 잡고, 실패 메시지에 `file:line`과 안내를 넣는다. 스캔이 사용처를 실제로 찾았는지(보정 2곳 이상·고정 0 4곳 이상)와 `AdminPaging.of` 2개 메서드의 보정도 고정한다 |
+
+- 변이 시험 4종이 모두 검출됐다: 보호자 SOS 보정 제거, 새 목록이 `PageRequest.of(page, size)` 직접 생성, `AdminPaging` 보정 제거, `withPage`로 우회.
+- `./gradlew build` 통과.
