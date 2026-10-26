@@ -286,3 +286,12 @@ FE → BE POST /api/{guardian|ward}/chat (userId는 토큰으로 덮어씀, cont
 - **최종**: gosky AI `3944343`, `.env` 측정 전과 동일(`MEDGEMMA_QUANT=none`, 반복 금지 없음, 16:53 재시작, 백업 `.env.bak-20261026-1450`). ⚠️ bf16 유지 시 EXAONE 4비트를 함께 올리면 여유가 약 0.85GB로 메모리 기준(1.5GB)에 못 미친다 - 안부말벗 탑재 전에 아래 중 하나를 정해야 한다.
 - **다음 선택지(제안)**: ① 8비트(bitsandbytes int8) - 약 5GB 예상, 4비트보다 품질 손실이 작지만 int8 연산이 느릴 수 있어 같은 기준으로 재측정 / ② nf4 + 말 바꾼 되풀이 대책(문장 단위 중복 제거 후처리 또는 advice 길이 제한 - 응답 품질 규칙이라 안전 규칙 세션과 조율) / ③ EXAONE를 다른 서버(DGX 등)에서 돌리고 gosky는 bf16 유지 - 품질 변화 0, 대신 호출 지연·운영 서버 하나 추가. 품질 위험이 가장 작은 것은 ③, gosky 한 대로 끝내려면 ①부터 잰다.
 - 결과 AI `docs/eval-results/2026-10-26-nf4-retest.*`.
+
+### 4-10. MedGemma 8비트(int8) 재측정 (2026-10-26, AI #60·#61, 결론 미채택 - 1단계에서 멈춤, gosky 재시작 0회)
+
+- 목표(사용자 결정): 품질 16비트 수준 유지, 속도는 양보 가능, EXAONE 2.5GB를 더해도 GPU 여유 1.5GB 이상. 비용을 줄이려고 1단계(무료, DGX, 라우터 없이 MedGemma 직접) → 통과 시에만 2단계(유료, gosky run_eval v4 1회)로 나눴다.
+- **코드**: `MEDGEMMA_QUANT=int8`(#60, `BitsAndBytesConfig(load_in_8bit=True)`, 실패 시 none 폴백). 기존 `LOAD_IN_8BIT` 설정은 transformers 5.x가 `from_pretrained(load_in_8bit=True)`를 받지 않아 MedGemma 경로에서 동작하지 않는다(범위 밖이라 그대로 둠).
+- **1단계 결과**(DGX, v3 의료 20문항 × 1회, bf16은 같은 날 DGX 결과 재사용): int8 파싱 실패·상한 도달·기본 문장 대체 각 1건(qa.D5 복약 - advice 칸 8자 조각 15번 반복 고리, 33.6초) vs bf16 0건. 응급 7건 119·경고는 둘 다 7/7. 생성 평균 6.67 → 8.74초(+31%), torch 최대 8.28 → 4.98GB(gosky 어림 여유 약 4GB).
+- **판정**: 멈춤 조건 ①(파싱 실패·기본 문장 대체가 bf16보다 나쁨)으로 미채택. 2단계·판정자 채점 미실시, gosky `.env`·재시작 없음(`3944343`, `MEDGEMMA_QUANT=none`).
+- **다음 선택지(추천만)**: ① EXAONE을 다른 서버에서 실행 - MedGemma 품질 변화 0, 서버 한 대·네트워크 왕복 추가 → **추천** / ② nf4 + 문장 단위 중복 제거 - 말을 바꾼 되풀이(4-9 qa.A7)·빠진 병원 권유는 못 막음 / (참고) ③ int8 + `gen_ngram:10` - int8 실패가 정확히 같은 조각 반복이라 막힐 가능성, 코드 변경 없이 DGX 1단계로 무료 확인 가능. gosky 한 대로 끝내야 한다면 ②보다 ③을 먼저 본다.
+- 결과 AI `docs/eval-results/2026-10-26-int8-retest.*`.
