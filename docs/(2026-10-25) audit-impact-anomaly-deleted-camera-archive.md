@@ -62,3 +62,10 @@
 ## 종합 판정
 
 **PASS** - 새 불변식을 깨는 사용처 없음. 조치 대상은 🟢 L-1(Swagger)·L-3(FE 문구) 두 건이며 둘 다 표시 문구다.
+
+## 후속 조치 (2026-10-26)
+
+- **L-1 조치** - BE #380(`c91c615`): `GuardianDashboardResponse`의 `PendingActions`·`anomaly`·`needsReviewCount`·`latest` 스키마 설명에 "지금 등록된 카메라 기준"을 적었다(동작 변경 없음). `./gradlew build` 통과, vkcs CD 성공, gosky `b5a8eec`(#380 포함) 기동·AI WS 연결, gosky `/v3/api-docs`에서 새 문구 확인.
+- **L-3 조치** - FE #144(`e910ced`): "전체"가 비었는데 `deletedCameraCount > 0`이면 "지금 카메라의 감지 기록이 없어요. 삭제된 카메라의 기록은 "삭제된 카메라"에서 볼 수 있어요". 브라우저 테스트 1건 추가(조건을 빼면 실패 확인), 단위 313·브라우저 208·build 통과, gosky FE 반영·`/guardian/detection` 200.
+- 남은 것: L-4(배포 전환기)는 수용.
+- 별건(범위 밖, 손대지 않음): FE `AuthShell.browser.test.tsx`가 `process is not defined`로 import 실패 - 이번 변경을 빼도 develop에서 같은 실패(로그인 화면 디자인 커밋 `daf8aad`·`7d8e4ce` 이후).

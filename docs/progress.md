@@ -2281,3 +2281,7 @@ FE #140(`346f1ea`, gosky 반영): 체크한 시간대 펼침은 그날만·다�
 FE #142(`9e5e3ff`, gosky 반영·`/guardian/detection` 200): 이력 전체·유형 칩이 `camera=EXISTING`(요약 숫자와 목록 일치), 삭제 칩은 `DELETED` 그대로. 단위 313·브라우저 207·build 통과, 이전 코드로 되돌리면 브라우저 테스트 3건 실패.
 영향 범위 점검(템플릿 C): 사용처 15곳(요약·대시보드·재촉 3종·판정·재등록·역할 변경·스키마 NOT NULL·클립·관리자·FE) 판정 전부 PASS, 변이 BE 6/6 검출. 🟢 4 - L-2 정책 문서 재촉 규칙 ⑤ 보강(조치), L-1 대시보드 응답 스키마 설명·L-3 FE 빈 목록 문구 제안, L-4 배포 전환기 수용.
 - 산출물: `docs/(2026-10-25) audit-impact-anomaly-deleted-camera-archive.md`.
+
+### [2026-10-26] 이상감지 삭제된 카메라 제외 점검 후속 - 🟢 L-1·L-3 조치
+
+BE #380(`c91c615`): 보호자 대시보드 응답 스키마 설명에 "지금 등록된 카메라 기준" 명시(동작 변경 없음, gosky api-docs 확인). FE #144(`e910ced`): "전체"가 비었는데 삭제된 카메라 기록이 있으면 "삭제된 카메라"로 안내(테스트 1건, 조건 제거 시 실패). vkcs·gosky 반영. 별건: FE `AuthShell.browser.test.tsx` import 실패(`process is not defined`)는 develop 원본에서도 재현 - 범위 밖.
