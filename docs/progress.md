@@ -2290,3 +2290,13 @@ BE #380(`c91c615`): 보호자 대시보드 응답 스키마 설명에 "지금 �
 
 AI main `0b72379`(#46·#48·#51·#52) 점검. 라우터 오프라인 탐색(가상 문장, AI 서버 미경유)에서 **위기 응답 뒤 평범한 말까지 109 고정 응답에 갇히는 문제(H-1)**를 확인 - 운영 모델 Opus로 "배가 아파요"·"고마워요"·"손주가 놀러 왔어요" 등 5문장 모두 3/3. #52 이전 프롬프트에서도 3문장은 3/3이었고 #52의 `self_harm` 정의("직전 대화 흐름")가 2문장을 더 갇히게 했다. 일상 표현 과잉 판정은 0건. 그 밖에 M-1(라우터 실패 시 키워드 밖 자해·history 근거 빠짐)·M-2(위기 뒤 자해 표현+예약)·L-1~L-3. 코드 수정 없음 - H-1·M-2 묶음 작업 제안.
 - 산출물: `docs/(2026-10-26) audit-ai-chat-crisis-routing.md`.
+
+### [2026-10-26] 관리자 공지사항 목록 - 건수·페이지·제목 검색 (branch `feature/admin-announcement-list-paging`)
+
+관리자 공지 화면(탭 건수·제목 검색·페이지 번호)에 필요한 정보를 API가 주지 않던 문제를 고쳤다.
+- `GET /api/admin/announcement/select`·`/draft/select`: 응답을 배열에서 `PageResponse`로 바꿨다. 소비처가 없어 기존 경로를 바꿨다 - FE 호출 없음, QA ADMIN-G24는 둘 다 처리함.
+- 두 목록에 `keyword`를 추가했다. 제목 부분 일치, 대소문자 무시, 50자를 넘으면 400, `%`·`_`·`\`는 글자 그대로 찾는다.
+- 새 API `GET /api/admin/announcement/summary`: `publishedCount`·`draftCount`(검색어와 무관한 전체 건수).
+- 정렬·100자 축약·page/size 규칙, 쓰기 API, 공개 공지 API, 감사 로그는 바꾸지 않았다. 마이그레이션 없음.
+- 테스트: 단위·보안·HTTP 직렬화·실 DB 검색 통합 테스트.
+- 산출물: `docs/(2026-10-26) feature-admin-announcement-list-paging.md`(관리자 웹 계약 포함).

@@ -128,6 +128,24 @@ class AdminAnnouncementDraftServiceTest {
                 .thenReturn(new org.springframework.data.domain.PageImpl<>(List.of(draft("제목", "y".repeat(150)))));
         when(userRepository.findAllById(org.mockito.ArgumentMatchers.anyCollection())).thenReturn(List.of());
 
-        assertThat(service.getDrafts(-1, 0).get(0).content()).hasSize(100);
+        assertThat(service.getDrafts(-1, 0, null).content().get(0).content()).hasSize(100);
+    }
+
+    @Test
+    @DisplayName("임시저장 목록도 제목 검색·전체 건수를 준다 - 검색어 규칙은 공지 목록과 같다 (2026-10-26)")
+    void 목록_제목검색_건수() {
+        when(draftRepository.findByTitleKeyword(eq("점검"), any(org.springframework.data.domain.Pageable.class)))
+                .thenAnswer(inv -> new org.springframework.data.domain.PageImpl<>(
+                        List.of(draft("서버 점검", "내용")), inv.getArgument(1), 21));
+        when(userRepository.findAllById(org.mockito.ArgumentMatchers.anyCollection())).thenReturn(List.of());
+
+        var result = service.getDrafts(0, 20, " 점검 ");
+
+        assertThat(result.totalElements()).isEqualTo(21);
+        assertThat(result.totalPages()).isEqualTo(2);
+        verify(draftRepository, never()).findAll(any(org.springframework.data.domain.Pageable.class));
+        assertThatThrownBy(() -> service.getDrafts(0, 20, "a".repeat(51)))
+                .isInstanceOf(CustomException.class)
+                .hasFieldOrPropertyWithValue("errorCode", ErrorCode.INVALID_INPUT);
     }
 }

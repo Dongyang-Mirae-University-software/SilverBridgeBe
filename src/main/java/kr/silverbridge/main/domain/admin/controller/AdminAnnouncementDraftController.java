@@ -13,6 +13,7 @@ import kr.silverbridge.main.domain.admin.dto.AnnouncementDraftCreateRequest;
 import kr.silverbridge.main.domain.admin.dto.AnnouncementDraftUpdateRequest;
 import kr.silverbridge.main.domain.admin.service.AdminAnnouncementDraftService;
 import kr.silverbridge.main.global.response.ApiResponse;
+import kr.silverbridge.main.global.response.PageResponse;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
@@ -25,8 +26,6 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
-
-import java.util.List;
 
 @Tag(name = "관리자 - 공지사항")
 @RestController
@@ -44,10 +43,15 @@ public class AdminAnnouncementDraftController {
                     임시저장된 공지 목록을 조회합니다.
 
                     [정렬]
-                    - 생성 일시 내림차순
+                    - 생성 일시 내림차순(같은 시각이면 id 내림차순)
 
                     [페이징]
-                    - page(0부터, 기본 0)·size(기본 20, 최대 50)는 선택입니다. 응답은 배열 그대로이며, 생략하면 첫 20건입니다.
+                    - page(0부터, 기본 0)·size(기본 20, 최대 50)는 선택입니다.
+                    - 응답은 PageResponse(content·page·size·totalElements·totalPages·last)입니다(2026-10-26, 배열에서 변경).
+
+                    [제목 검색]
+                    - keyword(선택): 제목 부분 일치, 대소문자 무시, 앞뒤 공백 무시, 최대 50자(초과 400 INVALID_INPUT).
+                    - %·_ 는 글자 그대로 찾습니다. 제목이 빈 임시저장은 검색에 걸리지 않습니다.
 
                     [content 축약]
                     - 목록의 content 는 앞 100자(이모지 1개=1자)로 축약된 미리보기입니다. 전체 본문은 상세 조회로 받으세요.
@@ -57,15 +61,17 @@ public class AdminAnnouncementDraftController {
                     """)
     @ApiResponses({
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "임시저장 목록 반환"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "keyword 50자 초과", content = @Content),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "인증 토큰 없음 또는 만료", content = @Content),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "관리자 권한 필요", content = @Content),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "500", description = "서버 내부 오류", content = @Content)
     })
     @GetMapping("/select")
-    public ApiResponse<List<AdminAnnouncementDraftResponse>> getDrafts(
+    public ApiResponse<PageResponse<AdminAnnouncementDraftResponse>> getDrafts(
             @Parameter(description = "페이지 번호(0부터, 생략 시 0, 음수는 0으로 보정)") @RequestParam(defaultValue = "0") int page,
-            @Parameter(description = "페이지 크기(생략 시 20, 0 이하는 20, 최대 50)") @RequestParam(defaultValue = "20") int size) {
-        return ApiResponse.ok(draftService.getDrafts(page, size));
+            @Parameter(description = "페이지 크기(생략 시 20, 0 이하는 20, 최대 50)") @RequestParam(defaultValue = "20") int size,
+            @Parameter(description = "제목 검색어(부분 일치, 대소문자 무시, 최대 50자)") @RequestParam(required = false) String keyword) {
+        return ApiResponse.ok(draftService.getDrafts(page, size, keyword));
     }
 
     @Operation(summary = "임시저장 상세 조회", description = "임시저장 ID로 단건 상세 조회합니다.")

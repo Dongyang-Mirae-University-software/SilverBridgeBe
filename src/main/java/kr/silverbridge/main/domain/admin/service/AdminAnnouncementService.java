@@ -2,9 +2,12 @@ package kr.silverbridge.main.domain.admin.service;
 
 import kr.silverbridge.main.domain.admin.dto.AnnouncementCreateRequest;
 import kr.silverbridge.main.domain.admin.dto.AdminAnnouncementResponse;
+import kr.silverbridge.main.domain.admin.dto.AdminAnnouncementSummaryResponse;
 import kr.silverbridge.main.domain.admin.dto.AnnouncementUpdateRequest;
 import kr.silverbridge.main.domain.admin.support.AdminPaging;
+import kr.silverbridge.main.domain.admin.support.AnnouncementTitleKeyword;
 import kr.silverbridge.main.domain.announcement.entity.Announcement;
+import kr.silverbridge.main.domain.announcement.repository.AnnouncementDraftRepository;
 import kr.silverbridge.main.domain.announcement.repository.AnnouncementRepository;
 import kr.silverbridge.main.domain.user.entity.User;
 import kr.silverbridge.main.domain.user.repository.UserRepository;
@@ -12,13 +15,15 @@ import kr.silverbridge.main.global.audit.AdminAuditLogService;
 import kr.silverbridge.main.global.enums.AdminAuditAction;
 import kr.silverbridge.main.global.exception.CustomException;
 import kr.silverbridge.main.global.exception.ErrorCode;
+import kr.silverbridge.main.global.response.PageResponse;
 import kr.silverbridge.main.global.validation.TextSanitizer;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
@@ -34,14 +39,20 @@ public class AdminAnnouncementService {
 
     private final UserRepository userRepository;
     private final AnnouncementRepository announcementRepository;
+    private final AnnouncementDraftRepository draftRepository;
     private final AdminAuditLogService auditLogService;
 
-    // 공지 목록 조회 (최신순 + 배치 작성자 조회, 선택 페이징·본문 축약 - ADMIN-G24)
+    // 공지 목록 조회 (최신순 + 배치 작성자 조회, 페이징·본문 축약 - ADMIN-G24, 제목 검색·건수 - 2026-10-26)
     @Transactional(readOnly = true)
-    public List<AdminAnnouncementResponse> getAnnouncements(int page, int size) {
+    public PageResponse<AdminAnnouncementResponse> getAnnouncements(int page, int size, String keyword) {
+        // 검색어 검사(50자 초과 400)를 DB 조회보다 먼저 한다
+        String titleKeyword = AnnouncementTitleKeyword.normalize(keyword);
         // id 내림차순을 함께 둬 같은 시각의 공지가 페이지 사이에서 겹치거나 빠지지 않게 한다
-        List<Announcement> announcements = announcementRepository.findAll(AdminPaging.of(page, size,
-                Sort.by(Sort.Direction.DESC, "createdAt").and(Sort.by(Sort.Direction.DESC, "id")))).getContent();
+        Pageable pageable = AdminPaging.of(page, size,
+                Sort.by(Sort.Direction.DESC, "createdAt").and(Sort.by(Sort.Direction.DESC, "id")));
+        Page<Announcement> announcements = titleKeyword == null
+                ? announcementRepository.findAll(pageable)
+                : announcementRepository.findByTitleKeyword(titleKeyword, pageable);
 
         Set<String> authorIds = announcements.stream()
                 .map(Announcement::getAuthorId)
@@ -50,9 +61,13 @@ public class AdminAnnouncementService {
         Map<String, User> authorMap = userRepository.findAllById(authorIds).stream()
                 .collect(Collectors.toMap(User::getId, u -> u));
 
-        return announcements.stream()
-                .map(a -> AdminAnnouncementResponse.ofSummary(a, authorMap.get(a.getAuthorId())))
-                .toList();
+        return PageResponse.of(announcements.map(a -> AdminAnnouncementResponse.ofSummary(a, authorMap.get(a.getAuthorId()))));
+    }
+
+    // 탭 건수 (검색어와 무관한 전체 기준)
+    @Transactional(readOnly = true)
+    public AdminAnnouncementSummaryResponse getSummary() {
+        return new AdminAnnouncementSummaryResponse(announcementRepository.count(), draftRepository.count());
     }
 
     // 공지 상세 조회

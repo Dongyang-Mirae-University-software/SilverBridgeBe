@@ -3,12 +3,14 @@ package kr.silverbridge.main.domain.admin.controller;
 import kr.silverbridge.main.domain.admin.dto.AdminAnnouncementResponse;
 import kr.silverbridge.main.domain.admin.dto.AnnouncementCreateRequest;
 import kr.silverbridge.main.domain.admin.service.AdminAnnouncementService;
+import kr.silverbridge.main.global.response.PageResponse;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.security.access.AccessDeniedException;
+import org.springframework.security.authentication.AuthenticationCredentialsNotFoundException;
 import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
 import org.springframework.security.test.context.support.WithMockUser;
 import org.springframework.test.context.ContextConfiguration;
@@ -66,20 +68,23 @@ class AdminAnnouncementControllerSecurityTest {
     @WithMockUser(roles = "ADMIN")
     @DisplayName("ADMIN → 목록 조회·등록 허용")
     void admin_허용() {
-        when(adminAnnouncementService.getAnnouncements(0, 20)).thenReturn(List.of(response()));
+        when(adminAnnouncementService.getAnnouncements(0, 20, null)).thenReturn(new PageResponse<>(List.of(response()), 0, 20, 1, 1, true));
         when(adminAnnouncementService.createAnnouncement(any(), anyString())).thenReturn(response());
 
-        assertThatNoException().isThrownBy(() -> controller.getAnnouncements(0, 20));
+        assertThatNoException().isThrownBy(() -> controller.getAnnouncements(0, 20, null));
         assertThatNoException().isThrownBy(() -> controller.createAnnouncement(createRequest(), "AD0001"));
+        assertThatNoException().isThrownBy(() -> controller.getSummary());
     }
 
     @Test
     @WithMockUser(roles = "GUARDIAN")
     @DisplayName("보호자(GUARDIAN) → 403")
     void guardian_거부() {
-        assertThatThrownBy(() -> controller.getAnnouncements(0, 20))
+        assertThatThrownBy(() -> controller.getAnnouncements(0, 20, null))
                 .isInstanceOf(AccessDeniedException.class);
         assertThatThrownBy(() -> controller.createAnnouncement(createRequest(), "GD0001"))
+                .isInstanceOf(AccessDeniedException.class);
+        assertThatThrownBy(() -> controller.getSummary())
                 .isInstanceOf(AccessDeniedException.class);
     }
 
@@ -87,9 +92,20 @@ class AdminAnnouncementControllerSecurityTest {
     @WithMockUser(roles = "WARD")
     @DisplayName("피보호자(WARD) → 403")
     void ward_거부() {
-        assertThatThrownBy(() -> controller.getAnnouncements(0, 20))
+        assertThatThrownBy(() -> controller.getAnnouncements(0, 20, null))
                 .isInstanceOf(AccessDeniedException.class);
         assertThatThrownBy(() -> controller.createAnnouncement(createRequest(), "WD0001"))
                 .isInstanceOf(AccessDeniedException.class);
+        assertThatThrownBy(() -> controller.getSummary())
+                .isInstanceOf(AccessDeniedException.class);
+    }
+
+    @Test
+    @DisplayName("비로그인 → 목록·탭 건수 모두 인증 요구(401)")
+    void 비로그인_거부() {
+        assertThatThrownBy(() -> controller.getAnnouncements(0, 20, null))
+                .isInstanceOf(AuthenticationCredentialsNotFoundException.class);
+        assertThatThrownBy(() -> controller.getSummary())
+                .isInstanceOf(AuthenticationCredentialsNotFoundException.class);
     }
 }
