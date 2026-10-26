@@ -17,5 +17,13 @@ public enum AdminAuditAction {
     // 이상감지 판정 정정 - 2026-09-21 관리자 정정 폐지로 새로 기록되지 않는다. 폐지 전 감사 로그 행이
     // 이 값을 담고 있어 enum과 CHECK(V50)에서 지우지 않는다(지우면 CHECK 재정의가 기존 행 때문에 실패한다).
     ANOMALY_REVIEW_RESOLVE,
-    INQUIRY_ANSWER              // 문의 답변 (보호자 개인 문의를 열어 답하는 쓰기 조작 - V50 CHECK 재정의)
+    INQUIRY_ANSWER,             // 문의 답변 (보호자 개인 문의를 열어 답하는 쓰기 조작 - V50 CHECK 재정의)
+    // 제휴 병원 관리(예약 서비스 중계, V63). 예약 서비스 호출보다 먼저 남겨 호출이 실패해도 "시도" 기록이 남는다
+    HOSPITAL_CREATE,
+    HOSPITAL_UPDATE,
+    HOSPITAL_DELETE,
+    HOSPITAL_STATUS_CHANGE,
+    HOSPITAL_DEPARTMENT_ADD,
+    HOSPITAL_DEPARTMENT_UPDATE,
+    HOSPITAL_DEPARTMENT_DELETE
 }
