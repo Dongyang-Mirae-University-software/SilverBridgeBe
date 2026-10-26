@@ -2334,3 +2334,7 @@ PR #382 점검(템플릿 B, 독립 에이전트 리뷰 + 메인 재확인). 인�
 
 - L-1: `PageResponse`·`SosHistoryPage`의 `page` 설명을 "실제 적용된 페이지 번호(범위를 넘는 요청은 보정된 값)"로 고쳤다(동작 그대로, 사용자 결정).
 - L-2: 소스 스캔 가드 `PageRequestClampGuardTest`를 추가했다. 사용자 page로 `PageRequest`를 만들 때 `AdminPaging.of`나 `PageOffsets.clampPage`를 빼먹으면 실패하고, `withPage`·`ofSize` 우회도 잡는다. 변이 4종 검출.
+
+### [2026-10-26] 관리자 제휴 병원 관리 점검 후속 - 🟡 2·🟢 6 전부 조치 (BE #385)
+
+M-1 연결 뒤 쓰기의 시간 초과·끊김·2xx 본문 이상 = 504 `HOSPITAL_RESULT_UNKNOWN`(새로고침해 확인, 연결 전 실패·5xx는 그대로) + 등록·이름/주소 수정 시 같은 이름+주소면 409 `HOSPITAL_DUPLICATED`. M-2 감사 detail에 보낸 칸과 값·등록 성공 시 새 id 로그. L-1 로그인 거절 30초 기억, L-2 `withinCall`로 관리자 요청 하나가 마감 8초 공유, L-3 읽기 제한 > 마감, L-4 쓰기 경로 Swagger 응답, L-5 Int 범위 밖 ID 404, L-6 테스트 보강(클라이언트 17·서비스 27건). 새 변이 7종 전부 검출, `./gradlew build` 1965건 통과. 마이그레이션 없음.

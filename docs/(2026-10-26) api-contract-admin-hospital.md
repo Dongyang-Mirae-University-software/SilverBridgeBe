@@ -15,8 +15,10 @@
 | 404 | `HOSPITAL_NOT_FOUND` | 없거나 삭제된 병원 |
 | 404 | `HOSPITAL_DEPARTMENT_NOT_FOUND` | 그 병원의 사용 중인 진료과가 아님 |
 | 409 | `HOSPITAL_DEPARTMENT_DUPLICATED` | 같은 병원에 같은 이름의 진료과가 있음 |
+| 409 | `HOSPITAL_DUPLICATED` | 같은 이름 + 주소(공백·대소문자 무시)의 병원이 이미 있음(등록·이름/주소 수정) |
 | 503 | `HOSPITAL_SERVICE_UNAVAILABLE` | 예약 서비스 연결 불가·미설정 → "잠시 후 다시" |
-| 504 | `HOSPITAL_SERVICE_TIMEOUT` | 예약 서비스 응답 지연(8초) → 쓰기였다면 목록을 새로고침해 반영 여부 확인 |
+| 504 | `HOSPITAL_SERVICE_TIMEOUT` | 예약 서비스 응답 지연(요청 하나 전체 8초) - 요청이 닿기 전이라 반영되지 않음 → 잠시 후 다시 |
+| 504 | `HOSPITAL_RESULT_UNKNOWN` | **쓰기가 예약 서비스에 닿은 뒤** 응답을 확인하지 못함 - 이미 반영됐을 수 있음 → **다시 누르지 말고 목록을 새로고침해 확인**(다시 누르면 중복이 생길 수 있다) |
 
 ## 병원 항목 `AdminHospitalItem`
 
@@ -83,12 +85,12 @@
   "departments": ["정형외과", "재활의학과"] // 필수, 1~20개, 각 1~30자, 중복 불가
 }
 ```
-응답 `data` = `AdminHospitalItem`. 모르는 칸을 보내면 무시된다.
+응답 `data` = `AdminHospitalItem`. 모르는 칸을 보내면 무시된다. 같은 이름 + 주소 병원이 있으면 409 `HOSPITAL_DUPLICATED`(같은 이름의 다른 지점은 주소가 달라 등록된다).
 
 ## 4. 수정 `PUT /api/admin/hospital/{id}`
 
 등록 칸 중 `departments`를 뺀 전부가 선택(null·생략 = 변경 안 함). 하나도 없으면 400. `description`은 빈 문자열로 지울 수 있다.
-시각을 한쪽만 바꾸면 기존 값과 합쳐 순서를 확인한다. 응답 `data` = `AdminHospitalItem`.
+시각을 한쪽만 바꾸면 기존 값과 합쳐 순서를 확인한다. 이름·주소를 바꿔 다른 병원과 같아지면 409 `HOSPITAL_DUPLICATED`. 응답 `data` = `AdminHospitalItem`.
 
 ## 5. 삭제 `DELETE /api/admin/hospital/{id}`
 

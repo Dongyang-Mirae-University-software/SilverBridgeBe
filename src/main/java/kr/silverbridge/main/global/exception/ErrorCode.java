@@ -143,6 +143,10 @@ public enum ErrorCode {
     HOSPITAL_REQUEST_REJECTED(HttpStatus.BAD_REQUEST, "예약 서비스가 요청을 받아들이지 않았습니다. 입력값을 확인해주세요."),
     HOSPITAL_SERVICE_UNAVAILABLE(HttpStatus.SERVICE_UNAVAILABLE, "제휴 병원 관리를 지금 사용할 수 없습니다. 잠시 후 다시 시도해주세요."),
     HOSPITAL_SERVICE_TIMEOUT(HttpStatus.GATEWAY_TIMEOUT, "예약 서비스 응답이 늦습니다. 잠시 후 다시 시도해주세요."),
+    // 점검 M-1(2026-10-26): 쓰기가 예약 서비스에 닿은 뒤 응답을 확인하지 못한 경우 - 실패로 보이면 다시 눌러 중복이 생긴다
+    HOSPITAL_RESULT_UNKNOWN(HttpStatus.GATEWAY_TIMEOUT,
+            "예약 서비스 응답을 확인하지 못했습니다. 이미 반영됐을 수 있으니 목록을 새로고침해 확인한 뒤 다시 시도해주세요."),
+    HOSPITAL_DUPLICATED(HttpStatus.CONFLICT, "같은 이름과 주소의 병원이 이미 등록되어 있습니다."),
     MEDICATION_OCR_TIMEOUT(HttpStatus.GATEWAY_TIMEOUT, "약 봉투를 읽는 데 시간이 너무 오래 걸립니다. 잠시 후 다시 시도해주세요."),
     // 약 일괄 등록 (2026-10-22) - 같은 요청 안의 중복은 오입력으로 보고 전체를 거절한다
     MEDICATION_BATCH_DUPLICATE_NAME(HttpStatus.BAD_REQUEST, "같은 이름의 약이 두 번 들어 있습니다."),

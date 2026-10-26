@@ -86,6 +86,15 @@ public class AdminHospitalController {
 
     @Operation(summary = "제휴 병원 등록",
             description = "진료과 1~20개와 함께 등록합니다. 진료 시작은 종료보다 빨라야 하고(400 HOSPITAL_INVALID_HOURS), 같은 진료과를 두 번 넣으면 400입니다.")
+    @ApiResponses({
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "201", description = "만들어짐"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "입력 오류(INVALID_INPUT·HOSPITAL_INVALID_HOURS·HOSPITAL_DEPARTMENT_DUPLICATED_IN_REQUEST·HOSPITAL_REQUEST_REJECTED)", content = @Content),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "인증 토큰 없음 또는 만료", content = @Content),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "관리자 권한 없음", content = @Content),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "409", description = "같은 이름+주소 병원(HOSPITAL_DUPLICATED) 또는 같은 이름 진료과(HOSPITAL_DEPARTMENT_DUPLICATED)", content = @Content),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "503", description = "예약 서비스 연결 불가·미설정(HOSPITAL_SERVICE_UNAVAILABLE) - 반영되지 않음", content = @Content),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "504", description = "응답 지연(HOSPITAL_SERVICE_TIMEOUT) 또는 반영 여부 불명(HOSPITAL_RESULT_UNKNOWN) - 목록을 새로고침해 확인", content = @Content)
+    })
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
     public ApiResponse<AdminHospitalItem> create(@AuthenticationPrincipal String adminId,
@@ -95,6 +104,16 @@ public class AdminHospitalController {
 
     @Operation(summary = "제휴 병원 수정",
             description = "부분 수정(null = 변경 안 함). 진료과는 진료과 API로 바꿉니다. 한 칸도 없으면 400, 삭제된 병원은 404입니다.")
+    @ApiResponses({
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "처리됨"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "입력 오류(INVALID_INPUT·HOSPITAL_INVALID_HOURS·HOSPITAL_DEPARTMENT_DUPLICATED_IN_REQUEST·HOSPITAL_REQUEST_REJECTED)", content = @Content),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "인증 토큰 없음 또는 만료", content = @Content),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "관리자 권한 없음", content = @Content),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "없거나 삭제된 병원(HOSPITAL_NOT_FOUND) 또는 그 병원의 진료과가 아님(HOSPITAL_DEPARTMENT_NOT_FOUND)", content = @Content),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "409", description = "같은 이름+주소 병원(HOSPITAL_DUPLICATED) 또는 같은 이름 진료과(HOSPITAL_DEPARTMENT_DUPLICATED)", content = @Content),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "503", description = "예약 서비스 연결 불가·미설정(HOSPITAL_SERVICE_UNAVAILABLE) - 반영되지 않음", content = @Content),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "504", description = "응답 지연(HOSPITAL_SERVICE_TIMEOUT) 또는 반영 여부 불명(HOSPITAL_RESULT_UNKNOWN) - 목록을 새로고침해 확인", content = @Content)
+    })
     @PutMapping("/{hospitalId}")
     public ApiResponse<AdminHospitalItem> update(@AuthenticationPrincipal String adminId,
                                                  @PathVariable long hospitalId,
@@ -104,6 +123,14 @@ public class AdminHospitalController {
 
     @Operation(summary = "제휴 병원 삭제",
             description = "소프트 삭제입니다 - 목록·앱 병원 찾기·새 예약에서 빠지고, 이미 잡힌 예약 기록은 남습니다. 되돌리는 API는 없습니다.")
+    @ApiResponses({
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "처리됨"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "인증 토큰 없음 또는 만료", content = @Content),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "관리자 권한 없음", content = @Content),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "없거나 삭제된 병원(HOSPITAL_NOT_FOUND) 또는 그 병원의 진료과가 아님(HOSPITAL_DEPARTMENT_NOT_FOUND)", content = @Content),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "503", description = "예약 서비스 연결 불가·미설정(HOSPITAL_SERVICE_UNAVAILABLE) - 반영되지 않음", content = @Content),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "504", description = "응답 지연(HOSPITAL_SERVICE_TIMEOUT) 또는 반영 여부 불명(HOSPITAL_RESULT_UNKNOWN) - 목록을 새로고침해 확인", content = @Content)
+    })
     @DeleteMapping("/{hospitalId}")
     public ApiResponse<Void> delete(@AuthenticationPrincipal String adminId, @PathVariable long hospitalId) {
         adminHospitalService.delete(adminId, hospitalId);
@@ -112,6 +139,15 @@ public class AdminHospitalController {
 
     @Operation(summary = "병원 운영 상태 수정",
             description = "운영 상태·혼잡도·대기·접수·공지를 부분 수정합니다(null = 변경 안 함). 한 칸도 없으면 400, 삭제된 병원은 404입니다.")
+    @ApiResponses({
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "처리됨"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "입력 오류(INVALID_INPUT·HOSPITAL_INVALID_HOURS·HOSPITAL_DEPARTMENT_DUPLICATED_IN_REQUEST·HOSPITAL_REQUEST_REJECTED)", content = @Content),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "인증 토큰 없음 또는 만료", content = @Content),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "관리자 권한 없음", content = @Content),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "없거나 삭제된 병원(HOSPITAL_NOT_FOUND) 또는 그 병원의 진료과가 아님(HOSPITAL_DEPARTMENT_NOT_FOUND)", content = @Content),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "503", description = "예약 서비스 연결 불가·미설정(HOSPITAL_SERVICE_UNAVAILABLE) - 반영되지 않음", content = @Content),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "504", description = "응답 지연(HOSPITAL_SERVICE_TIMEOUT) 또는 반영 여부 불명(HOSPITAL_RESULT_UNKNOWN) - 목록을 새로고침해 확인", content = @Content)
+    })
     @PutMapping("/{hospitalId}/status")
     public ApiResponse<AdminHospitalItem.Status> updateStatus(@AuthenticationPrincipal String adminId,
                                                               @PathVariable long hospitalId,
@@ -120,6 +156,16 @@ public class AdminHospitalController {
     }
 
     @Operation(summary = "진료과 추가", description = "같은 병원에 같은 이름의 진료과가 있으면 409 HOSPITAL_DEPARTMENT_DUPLICATED입니다.")
+    @ApiResponses({
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "201", description = "만들어짐"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "입력 오류(INVALID_INPUT·HOSPITAL_INVALID_HOURS·HOSPITAL_DEPARTMENT_DUPLICATED_IN_REQUEST·HOSPITAL_REQUEST_REJECTED)", content = @Content),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "인증 토큰 없음 또는 만료", content = @Content),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "관리자 권한 없음", content = @Content),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "없거나 삭제된 병원(HOSPITAL_NOT_FOUND) 또는 그 병원의 진료과가 아님(HOSPITAL_DEPARTMENT_NOT_FOUND)", content = @Content),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "409", description = "같은 이름+주소 병원(HOSPITAL_DUPLICATED) 또는 같은 이름 진료과(HOSPITAL_DEPARTMENT_DUPLICATED)", content = @Content),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "503", description = "예약 서비스 연결 불가·미설정(HOSPITAL_SERVICE_UNAVAILABLE) - 반영되지 않음", content = @Content),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "504", description = "응답 지연(HOSPITAL_SERVICE_TIMEOUT) 또는 반영 여부 불명(HOSPITAL_RESULT_UNKNOWN) - 목록을 새로고침해 확인", content = @Content)
+    })
     @PostMapping("/{hospitalId}/department")
     @ResponseStatus(HttpStatus.CREATED)
     public ApiResponse<AdminHospitalItem.Department> addDepartment(@AuthenticationPrincipal String adminId,
@@ -129,6 +175,16 @@ public class AdminHospitalController {
     }
 
     @Operation(summary = "진료과 이름 변경", description = "그 병원의 사용 중인 진료과가 아니면 404, 같은 이름이 있으면 409입니다.")
+    @ApiResponses({
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "처리됨"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "입력 오류(INVALID_INPUT·HOSPITAL_INVALID_HOURS·HOSPITAL_DEPARTMENT_DUPLICATED_IN_REQUEST·HOSPITAL_REQUEST_REJECTED)", content = @Content),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "인증 토큰 없음 또는 만료", content = @Content),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "관리자 권한 없음", content = @Content),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "없거나 삭제된 병원(HOSPITAL_NOT_FOUND) 또는 그 병원의 진료과가 아님(HOSPITAL_DEPARTMENT_NOT_FOUND)", content = @Content),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "409", description = "같은 이름+주소 병원(HOSPITAL_DUPLICATED) 또는 같은 이름 진료과(HOSPITAL_DEPARTMENT_DUPLICATED)", content = @Content),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "503", description = "예약 서비스 연결 불가·미설정(HOSPITAL_SERVICE_UNAVAILABLE) - 반영되지 않음", content = @Content),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "504", description = "응답 지연(HOSPITAL_SERVICE_TIMEOUT) 또는 반영 여부 불명(HOSPITAL_RESULT_UNKNOWN) - 목록을 새로고침해 확인", content = @Content)
+    })
     @PutMapping("/{hospitalId}/department/{departmentId}")
     public ApiResponse<AdminHospitalItem.Department> renameDepartment(@AuthenticationPrincipal String adminId,
                                                                       @PathVariable long hospitalId,
@@ -139,6 +195,14 @@ public class AdminHospitalController {
 
     @Operation(summary = "진료과 삭제",
             description = "사용 중지(소프트 삭제)합니다 - 새 예약에서 빠지고 기존 예약의 진료과 이름은 그대로 남습니다. 다시 쓰려면 같은 이름으로 추가하세요.")
+    @ApiResponses({
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "처리됨"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "인증 토큰 없음 또는 만료", content = @Content),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "관리자 권한 없음", content = @Content),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "없거나 삭제된 병원(HOSPITAL_NOT_FOUND) 또는 그 병원의 진료과가 아님(HOSPITAL_DEPARTMENT_NOT_FOUND)", content = @Content),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "503", description = "예약 서비스 연결 불가·미설정(HOSPITAL_SERVICE_UNAVAILABLE) - 반영되지 않음", content = @Content),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "504", description = "응답 지연(HOSPITAL_SERVICE_TIMEOUT) 또는 반영 여부 불명(HOSPITAL_RESULT_UNKNOWN) - 목록을 새로고침해 확인", content = @Content)
+    })
     @DeleteMapping("/{hospitalId}/department/{departmentId}")
     public ApiResponse<Void> deleteDepartment(@AuthenticationPrincipal String adminId,
                                               @PathVariable long hospitalId,

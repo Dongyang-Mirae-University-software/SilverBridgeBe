@@ -122,9 +122,14 @@ public class AdminHospitalService {
             body.put("departments", departments);
 
             client.requireConfigured();
-            audit(adminId, AdminAuditAction.HOSPITAL_CREATE, "hospital:new",
-                    "name=" + body.get("name") + ", region=" + body.get("region") + ", departments=" + departments.size());
-            return toItem(requireObject(client.createHospital(body)));
+            // 예약 서비스에는 이름 유일 제약이 없다 - 결과 불명 뒤 다시 누른 등록이 중복을 만들지 않게 먼저 본다(점검 M-1)
+            requireNoDuplicate(fetchAll(), (String) body.get("name"), (String) body.get("address"), null);
+            audit(adminId, AdminAuditAction.HOSPITAL_CREATE, "hospital:new", describe(body));
+            JsonNode reply = client.createHospital(body);
+            AdminHospitalItem created = afterWrite(() -> toItem(requireObject(reply)));
+            // 감사 로그는 호출 전이라 새 id를 모른다 - 어느 병원이 만들어졌는지 여기서 잇는다(점검 M-2)
+            log.info("[ADMIN-HOSPITAL] 등록 완료: adminId={}, hospitalId={}", adminId, created.id());
+            return created;
         });
     }
 
@@ -133,11 +138,6 @@ public class AdminHospitalService {
             requireValidId(hospitalId, ErrorCode.HOSPITAL_NOT_FOUND);
             if (request.isEmpty()) {
                 throw new CustomException(ErrorCode.INVALID_INPUT);
-            }
-            if (request.openTime() != null || request.closeTime() != null) {
-                AdminHospitalItem current = findActive(hospitalId);
-                requireHoursOrder(request.openTime() != null ? request.openTime() : current.openTime(),
-                        request.closeTime() != null ? request.closeTime() : current.closeTime());
             }
             Map<String, Object> body = new LinkedHashMap<>();
             putIfPresent(body, "name", TextSanitizer.sanitize(request.name()));
@@ -149,9 +149,26 @@ public class AdminHospitalService {
             putIfPresent(body, "closeTime", request.closeTime());
             putIfPresent(body, "bookingAvailable", request.bookingAvailable());
 
+            boolean needsCurrent = body.containsKey("name") || body.containsKey("address")
+                    || body.containsKey("openTime") || body.containsKey("closeTime");
+            if (needsCurrent) {
+                List<AdminHospitalItem> all = fetchAll();
+                AdminHospitalItem current = all.stream().filter(h -> h.id() == hospitalId).findFirst()
+                        .orElseThrow(() -> new CustomException(ErrorCode.HOSPITAL_NOT_FOUND));
+                requireHoursOrder(request.openTime() != null ? request.openTime() : current.openTime(),
+                        request.closeTime() != null ? request.closeTime() : current.closeTime());
+                if (body.containsKey("name") || body.containsKey("address")) {
+                    requireNoDuplicate(all,
+                            body.containsKey("name") ? (String) body.get("name") : current.name(),
+                            body.containsKey("address") ? (String) body.get("address") : current.address(),
+                            hospitalId);
+                }
+            }
+
             client.requireConfigured();
-            audit(adminId, AdminAuditAction.HOSPITAL_UPDATE, hospitalTarget(hospitalId), "fields=" + fieldNames(body));
-            return toItem(requireObject(client.updateHospital(hospitalId, body)));
+            audit(adminId, AdminAuditAction.HOSPITAL_UPDATE, hospitalTarget(hospitalId), describe(body));
+            JsonNode reply = client.updateHospital(hospitalId, body);
+            return afterWrite(() -> toItem(requireObject(reply)));
         });
     }
 
@@ -183,8 +200,9 @@ public class AdminHospitalService {
             putIfPresent(body, "acceptingPatients", request.acceptingPatients());
             putIfPresent(body, "notice", TextSanitizer.sanitize(request.notice()));
 
-            audit(adminId, AdminAuditAction.HOSPITAL_STATUS_CHANGE, hospitalTarget(hospitalId), "fields=" + fieldNames(body));
-            return toStatus(requireObject(client.updateHospitalStatus(hospitalId, body)));
+            audit(adminId, AdminAuditAction.HOSPITAL_STATUS_CHANGE, hospitalTarget(hospitalId), describe(body));
+            JsonNode reply = client.updateHospitalStatus(hospitalId, body);
+            return afterWrite(() -> toStatus(requireObject(reply)));
         });
     }
 
@@ -198,7 +216,8 @@ public class AdminHospitalService {
             requireUniqueDepartment(hospital, name, null);
 
             audit(adminId, AdminAuditAction.HOSPITAL_DEPARTMENT_ADD, hospitalTarget(hospitalId), "name=" + name);
-            return toDepartment(requireObject(client.addDepartment(hospitalId, name)));
+            JsonNode reply = client.addDepartment(hospitalId, name);
+            return afterWrite(() -> toDepartment(requireObject(reply)));
         });
     }
 
@@ -214,7 +233,8 @@ public class AdminHospitalService {
 
             audit(adminId, AdminAuditAction.HOSPITAL_DEPARTMENT_UPDATE, departmentTarget(hospitalId, departmentId),
                     "name=" + name);
-            return toDepartment(requireObject(client.renameDepartment(departmentId, name)));
+            JsonNode reply = client.renameDepartment(departmentId, name);
+            return afterWrite(() -> toDepartment(requireObject(reply)));
         });
     }
 
@@ -279,9 +299,37 @@ public class AdminHospitalService {
         }
     }
 
+    /** 같은 이름 + 주소(공백·대소문자 무시)의 다른 병원이 있으면 409. 예약 서비스에는 유일 제약이 없다(점검 M-1). */
+    private static void requireNoDuplicate(List<AdminHospitalItem> all, String name, String address, Long exceptHospitalId) {
+        String nameKey = normalize(name);
+        String addressKey = normalize(address);
+        boolean duplicated = all.stream()
+                .filter(h -> exceptHospitalId == null || h.id() != exceptHospitalId)
+                .anyMatch(h -> Objects.equals(nameKey, normalize(h.name())) && Objects.equals(addressKey, normalize(h.address())));
+        if (duplicated) {
+            throw new CustomException(ErrorCode.HOSPITAL_DUPLICATED);
+        }
+    }
+
+    /** 0 이하이거나 예약 서비스 ID(Int) 범위를 넘으면 없는 것으로 본다 - 감사 로그·호출 전에 걸러낸다(점검 L-5). */
     private static void requireValidId(long id, ErrorCode notFound) {
-        if (id <= 0) {
+        if (id <= 0 || id > Integer.MAX_VALUE) {
             throw new CustomException(notFound);
+        }
+    }
+
+    /**
+     * 쓰기 호출 뒤 응답 변환. 예약 서비스는 이미 처리했으므로 변환 실패(형식 이상)를 503 실패로 보이면 다시 눌러 중복이 생긴다 -
+     * 결과 불명으로 바꾼다(점검 M-1).
+     */
+    private static <T> T afterWrite(Supplier<T> conversion) {
+        try {
+            return conversion.get();
+        } catch (CustomException e) {
+            if (e.getErrorCode() == ErrorCode.HOSPITAL_SERVICE_UNAVAILABLE) {
+                throw new CustomException(ErrorCode.HOSPITAL_RESULT_UNKNOWN);
+            }
+            throw e;
         }
     }
 
@@ -377,7 +425,8 @@ public class AdminHospitalService {
         long startedAt = System.nanoTime();
         String result = "OK";
         try {
-            return work.get();
+            // 한 번의 관리자 요청 안의 목록 확인·쓰기가 마감 하나를 함께 쓴다(점검 L-2)
+            return client.withinCall(work);
         } catch (CustomException e) {
             result = e.getErrorCode().name();
             throw e;
@@ -404,9 +453,18 @@ public class AdminHospitalService {
         }
     }
 
-    private static String fieldNames(Map<String, Object> body) {
-        StringJoiner joiner = new StringJoiner(",");
-        body.keySet().forEach(joiner::add);
+    /**
+     * 감사 로그 detail - 보낸 칸과 값(점검 M-2). 병원 정보는 개인정보가 아니고 detail은 DB에만 남는다(SLF4J 미출력).
+     * 줄바꿈은 한 줄로 펴고, 길면 {@link #audit}이 500자로 자른다.
+     */
+    private static String describe(Map<String, Object> body) {
+        StringJoiner joiner = new StringJoiner(", ");
+        body.forEach((key, value) -> {
+            String text = value instanceof List<?> list
+                    ? String.join("/", list.stream().map(String::valueOf).toList())
+                    : String.valueOf(value);
+            joiner.add(key + "=" + text.replace('\n', ' '));
+        });
         return joiner.toString();
     }
 
