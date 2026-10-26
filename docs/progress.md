@@ -2300,3 +2300,8 @@ AI main `0b72379`(#46·#48·#51·#52) 점검. 라우터 오프라인 탐색(가�
 - 정렬·100자 축약·page/size 규칙, 쓰기 API, 공개 공지 API, 감사 로그는 바꾸지 않았다. 마이그레이션 없음.
 - 테스트: 단위·보안·HTTP 직렬화·실 DB 검색 통합 테스트.
 - 산출물: `docs/(2026-10-26) feature-admin-announcement-list-paging.md`(관리자 웹 계약 포함).
+
+### [2026-10-26] 관리자 공지 목록 건수·페이지·제목 검색 기능 점검 - PASS
+
+BE #381(`6c0b86c`) 점검(템플릿 B). 인가(URL 규칙 + 클래스 `@PreAuthorize`, `/summary` 포함, gosky 비로그인 401)·로그(쿼리 문자열 미기록)·검색 정확성(실 DB 이스케이프·대소문자, 두 서버 DB `en_US.utf8`)·건수 기준(대시보드 `announcementDrafts`와 같음)·api-docs 계약 모두 PASS. 두 서버에 정리 전 형태로 남은 제목 0건. 변이 3종 전부 검출. 🟢 4 - L-1 아주 큰 `page`는 500(원래부터, `AdminPaging` 9곳 공통, 별도 작업 제안)·L-2 `İ` 소문자 차이·L-3 LIKE 전체 훑기·L-4 테스트 공백(수용). 코드 수정 없음.
+- 산출물: `docs/(2026-10-26) audit-admin-announcement-list-paging.md`.
