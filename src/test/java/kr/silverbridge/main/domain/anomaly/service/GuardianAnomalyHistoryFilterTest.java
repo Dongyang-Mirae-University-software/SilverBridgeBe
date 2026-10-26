@@ -284,4 +284,19 @@ class GuardianAnomalyHistoryFilterTest {
         assertThat(service.getHistorySummary(GUARDIAN_ID, null)).isEqualTo(GuardianAnomalyHistorySummary.EMPTY);
         verify(incidentRepository, never()).countForGuardianSummary(any(), any());
     }
+
+    @Test
+    @DisplayName("offset이 int를 넘는 page → 마지막 가능 페이지로 보정(넘으면 500이었다, 2026-10-26)")
+    void 큰페이지_보정() {
+        when(connectionService.getActiveWardIds(GUARDIAN_ID)).thenReturn(List.of(WARD_ID));
+        when(incidentRepository.findHistory(any(), any(), anyBoolean(), anyBoolean(), any(), any(Pageable.class)))
+                .thenReturn(new PageImpl<>(List.of()));
+
+        service.getHistory(GUARDIAN_ID, null, null, null, 100_000_000, 50);
+
+        org.mockito.ArgumentCaptor<Pageable> captor = org.mockito.ArgumentCaptor.forClass(Pageable.class);
+        verify(incidentRepository).findHistory(any(), any(), anyBoolean(), anyBoolean(), any(), captor.capture());
+        assertThat(captor.getValue().getPageNumber()).isEqualTo(Integer.MAX_VALUE / 50);
+        assertThat(captor.getValue().getOffset()).isLessThanOrEqualTo(Integer.MAX_VALUE);
+    }
 }

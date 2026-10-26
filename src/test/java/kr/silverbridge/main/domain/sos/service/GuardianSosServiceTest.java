@@ -174,6 +174,21 @@ class GuardianSosServiceTest {
     }
 
     @Test
+    @DisplayName("offset이 int를 넘는 page → 마지막 가능 페이지로 보정(넘으면 500이었다, 2026-10-26)")
+    void getHistory_큰페이지_보정() {
+        when(connectionService.getActiveWardIds(GUARDIAN_ID)).thenReturn(List.of(WARD_ID));
+        when(sosEventRepository.findByWardIdInOrderByCreatedAtDesc(any(), any(Pageable.class)))
+                .thenAnswer(inv -> new PageImpl<>(List.of(), inv.getArgument(1), 3));
+
+        guardianSosService.getHistory(GUARDIAN_ID, null, null, 100_000_000, 50);
+
+        ArgumentCaptor<Pageable> pageableCaptor = ArgumentCaptor.captor();
+        verify(sosEventRepository).findByWardIdInOrderByCreatedAtDesc(any(), pageableCaptor.capture());
+        assertThat(pageableCaptor.getValue().getPageNumber()).isEqualTo(Integer.MAX_VALUE / 50);
+        assertThat(pageableCaptor.getValue().getOffset()).isLessThanOrEqualTo(Integer.MAX_VALUE);
+    }
+
+    @Test
     @DisplayName("triggerType 지정 → 경로 필터 쿼리로 조회하고, 탭 건수(counts)는 필터와 무관한 전체 기준 (SOS-G12)")
     void getHistory_경로필터_전체기준건수() {
         SosEvent call = sosEvent(5L, WARD_ID, OffsetDateTime.now(), null, SosTriggerType.GUARDIAN_CALL);

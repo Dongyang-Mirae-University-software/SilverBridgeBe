@@ -213,7 +213,7 @@ class AdminAnnouncementServiceTest {
     }
 
     @Test
-    @DisplayName("검색어가 있으면 정리·이스케이프·소문자화한 값으로 제목 검색하고, 정렬·페이지 규칙은 그대로다")
+    @DisplayName("검색어가 있으면 정리·이스케이프한 값(대소문자 원문 그대로 - 소문자화는 DB lower)으로 제목 검색하고, 정렬·페이지 규칙은 그대로다")
     void 목록_제목검색_정규화() {
         when(announcementRepository.findByTitleKeyword(anyString(), any(Pageable.class)))
                 .thenReturn(new PageImpl<>(List.of()));
@@ -221,7 +221,7 @@ class AdminAnnouncementServiceTest {
         service.getAnnouncements(-1, 999, "  ABC_​10%\\  ");
 
         org.mockito.ArgumentCaptor<Pageable> captor = org.mockito.ArgumentCaptor.forClass(Pageable.class);
-        verify(announcementRepository).findByTitleKeyword(eq("abc\\_10\\%\\\\"), captor.capture());
+        verify(announcementRepository).findByTitleKeyword(eq("ABC\\_10\\%\\\\"), captor.capture());
         verify(announcementRepository, never()).findAll(any(Pageable.class));
         assertThat(captor.getValue().getPageNumber()).isZero();
         assertThat(captor.getValue().getPageSize()).isEqualTo(50);
@@ -266,5 +266,18 @@ class AdminAnnouncementServiceTest {
         assertThat(summary.publishedCount()).isEqualTo(12);
         assertThat(summary.draftCount()).isEqualTo(3);
         verify(auditLogService, never()).log(anyString(), any(), anyString(), anyString());
+    }
+
+    @Test
+    @DisplayName("분해형(NFD) 한글 검색어는 저장값과 같은 NFC로 바꿔 넘긴다 (2026-10-26 점검 L-4)")
+    void 목록_분해형_한글_NFC() {
+        when(announcementRepository.findByTitleKeyword(anyString(), any(Pageable.class)))
+                .thenReturn(new PageImpl<>(List.of()));
+        String decomposed = java.text.Normalizer.normalize("점검", java.text.Normalizer.Form.NFD);
+        assertThat(decomposed).isNotEqualTo("점검");
+
+        service.getAnnouncements(0, 20, decomposed);
+
+        verify(announcementRepository).findByTitleKeyword(eq("점검"), any(Pageable.class));
     }
 }

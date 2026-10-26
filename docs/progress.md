@@ -2305,3 +2305,11 @@ AI main `0b72379`(#46·#48·#51·#52) 점검. 라우터 오프라인 탐색(가�
 
 BE #381(`6c0b86c`) 점검(템플릿 B). 인가(URL 규칙 + 클래스 `@PreAuthorize`, `/summary` 포함, gosky 비로그인 401)·로그(쿼리 문자열 미기록)·검색 정확성(실 DB 이스케이프·대소문자, 두 서버 DB `en_US.utf8`)·건수 기준(대시보드 `announcementDrafts`와 같음)·api-docs 계약 모두 PASS. 두 서버에 정리 전 형태로 남은 제목 0건. 변이 3종 전부 검출. 🟢 4 - L-1 아주 큰 `page`는 500(원래부터, `AdminPaging` 9곳 공통, 별도 작업 제안)·L-2 `İ` 소문자 차이·L-3 LIKE 전체 훑기·L-4 테스트 공백(수용). 코드 수정 없음.
 - 산출물: `docs/(2026-10-26) audit-admin-announcement-list-paging.md`.
+
+### [2026-10-26] 관리자 공지 목록 점검 후속 - 🟢 L-1~L-4 반영 (branch `fix/admin-announcement-list-audit-followup`)
+
+- L-1: offset(page × size)이 int를 넘는 page가 500이던 것을 공용 `PageOffsets.clampPage`로 보정했다(마지막 가능 페이지, 빈 content + 정확한 전체 건수). `AdminPaging` 9곳(공개 공지·보호자 내 문의 포함)과 보호자 SOS·이상감지 이력 2곳에 적용.
+- L-2: 공지 검색 대소문자를 양쪽 모두 DB `lower()`로 처리한다(İ·É 실 DB 확인).
+- L-3: 인덱스는 넣지 않았다(사용자 결정). 기준만 주석으로 남김.
+- L-4: 테스트 공백 보강.
+- `./gradlew build` 통과(단위 1897건), 변이 3종 검출. 마이그레이션 없음.

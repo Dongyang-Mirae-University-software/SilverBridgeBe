@@ -141,6 +141,14 @@ class AdminAnnouncementDraftServiceTest {
 
         var result = service.getDrafts(0, 20, " 점검 ");
 
+        org.mockito.ArgumentCaptor<org.springframework.data.domain.Pageable> captor =
+                org.mockito.ArgumentCaptor.forClass(org.springframework.data.domain.Pageable.class);
+        verify(draftRepository).findByTitleKeyword(eq("점검"), captor.capture());
+        // 검색 경로도 생성 일시 내림차순 + id 내림차순 (2026-10-26 점검 L-4)
+        assertThat(captor.getValue().getSort()).isEqualTo(
+                org.springframework.data.domain.Sort.by(org.springframework.data.domain.Sort.Direction.DESC, "createdAt")
+                        .and(org.springframework.data.domain.Sort.by(org.springframework.data.domain.Sort.Direction.DESC, "id")));
+
         assertThat(result.totalElements()).isEqualTo(21);
         assertThat(result.totalPages()).isEqualTo(2);
         verify(draftRepository, never()).findAll(any(org.springframework.data.domain.Pageable.class));

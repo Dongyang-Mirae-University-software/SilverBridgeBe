@@ -20,6 +20,7 @@ import kr.silverbridge.main.global.enums.DetectedType;
 import kr.silverbridge.main.global.exception.CustomException;
 import kr.silverbridge.main.global.exception.ErrorCode;
 import kr.silverbridge.main.global.response.PageResponse;
+import kr.silverbridge.main.global.response.PageOffsets;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
@@ -82,7 +83,9 @@ public class GuardianAnomalyService {
     @Transactional(readOnly = true)
     public PageResponse<AnomalyIncidentItem> getHistory(String guardianId, String wardId, AnomalyTypeFilter type,
                                                         AnomalyCameraFilter camera, int page, int size) {
-        Pageable pageable = PageRequest.of(Math.max(page, 0), normalizeSize(size));
+        int pageSize = normalizeSize(size);
+        // 큰 page는 offset이 int를 넘어 500이었다 - 범위 안의 마지막 페이지로 맞춘다(PageOffsets)
+        Pageable pageable = PageRequest.of(PageOffsets.clampPage(page, pageSize), pageSize);
         List<String> wardIds = resolveVisibleWardIds(guardianId, wardId);
         if (wardIds.isEmpty()) {
             return PageResponse.of(Page.empty(pageable));

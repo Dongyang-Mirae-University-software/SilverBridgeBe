@@ -10,6 +10,7 @@ import kr.silverbridge.main.domain.user.entity.User;
 import kr.silverbridge.main.domain.user.repository.UserRepository;
 import kr.silverbridge.main.global.exception.CustomException;
 import kr.silverbridge.main.global.exception.ErrorCode;
+import kr.silverbridge.main.global.response.PageOffsets;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
@@ -67,7 +68,9 @@ public class GuardianSosService {
     @Transactional(readOnly = true)
     public SosHistoryPage getHistory(String guardianId, String wardId, SosTriggerType triggerType,
                                      int page, int size) {
-        Pageable pageable = PageRequest.of(Math.max(page, 0), normalizeSize(size));
+        int pageSize = normalizeSize(size);
+        // 큰 page는 offset이 int를 넘어 500이었다 - 범위 안의 마지막 페이지로 맞춘다(PageOffsets)
+        Pageable pageable = PageRequest.of(PageOffsets.clampPage(page, pageSize), pageSize);
         List<String> wardIds = resolveVisibleWardIds(guardianId, wardId);
         if (wardIds.isEmpty()) {
             // 연결된 피보호자가 없으면 빈 페이지 - 보호자 카메라 목록(allowlist)과 같은 방식
