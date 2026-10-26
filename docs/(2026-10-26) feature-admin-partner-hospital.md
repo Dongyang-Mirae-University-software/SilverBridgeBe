@@ -80,7 +80,23 @@ BE는 데이터를 저장하지 않고, 관리자 토큰으로 예약 서비스 
 - gosky 확인:
   - BE 컨테이너 안에서 같은 설정값으로 예약 서비스 로그인(role ADMIN) → `GET /admin/hospitals` 200, 46곳.
   - 비로그인 401, 보호자 토큰 목록·요약·등록 403, api-docs에 6개 경로 노출.
-- **미확인**: BE 관리자 토큰으로 `/api/admin/hospital` 목록 조회와 시험용 병원 등록·수정·삭제. BE 관리자 테스트 계정이 없어 사용자 몫으로 남겼다. 시험용 병원은 소프트 삭제라 예약 서비스 DB에 `deleted=true`로 남는다(되살리는 API 없음).
+- ~~미확인~~ → 아래 "BE 관리자 끝까지 시험"에서 확인했다.
+
+### BE 관리자 끝까지 시험 (2026-10-26, gosky `431db61`)
+
+- 시험용 BE 관리자 계정 `sbtadm`(ADMIN·ACTIVE·LOCAL)을 사용자 승인 후 gosky `users`에 직접 넣었다. 관리자는 가입·역할 변경으로 만들 수 없다. 비밀번호는 무작위 26자이고 DB에는 bcrypt(12) 해시만 들어갔다. 자격은 작업 PC `~/.silverbridge-test.env`의 `TEST_ADMIN_*`에만 있다(출력 안 함). 관리자 계정은 API로 지울 수 없다(`CANNOT_MODIFY_ADMIN`) - 필요 없어지면 DB에서 지운다.
+- gosky에는 이미 관리자 3명이 있었다(자격 미상, 건드리지 않음). 공개 비밀번호 seed 계정(`admin@test.com`)은 없었다.
+- BE를 거친 15단계가 전부 기대대로였다.
+  - 목록 200(46곳), 요약 200(46·44), 검색 `q=정형` 5건
+  - 등록 201(id 57)
+  - 같은 병원 재등록 409 `HOSPITAL_DUPLICATED`
+  - 수정 200, 시작 > 종료 수정 400 `HOSPITAL_INVALID_HOURS`
+  - 운영 상태 200
+  - 진료과 추가 201, 같은 진료과(공백 섞음) 409, 진료과 이름 변경 200, 진료과 삭제 200
+  - 병원 삭제 200, 삭제 후 검색 0건, 삭제된 병원 상태 변경 404 `HOSPITAL_NOT_FOUND`
+- 감사 로그 `admin_audit_log`(admin `sbtadm`)에는 정확히 7행이 남았다: CREATE(`hospital:new`, 값 포함) → UPDATE → STATUS_CHANGE → DEPARTMENT_ADD → DEPARTMENT_UPDATE → DEPARTMENT_DELETE → DELETE. 400·409로 막힌 요청은 행이 없다. `[ADMIN-HOSPITAL] 등록 완료: hospitalId=57`가 만든 병원을 잇는다.
+- 예약 서비스에는 병원 57이 `deleted=true`로 남았다(소프트 삭제, 되살리는 API 없음 - 수용).
+
 
 ## 7. 수용한 한계
 
