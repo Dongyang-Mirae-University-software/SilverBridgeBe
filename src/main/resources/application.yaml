@@ -195,6 +195,17 @@ medication:
     per-minute: ${MEDICATION_OCR_PER_MINUTE:10}
     per-hour: ${MEDICATION_OCR_PER_HOUR:60}
 
+# 관리자 제휴 병원 관리 - 예약 서비스(SilverBridgeReservation) 관리자 API 중계 (2026-10-26).
+# 주소·자격은 코드 기본값 없음: 비면 이 API들만 503(기동은 막지 않음). vkcs-linux는 예약 서비스가 없어 비어 있는 것이 정상.
+# gosky: base-url = http://reservation-api:6015 (도커 네트워크 sb-internal - docker-compose.gosky.yml), 자격 = BE 전용 관리자 계정.
+hospital:
+  reservation-admin:
+    base-url: ${RESERVATION_ADMIN_BASE_URL:}
+    email: ${RESERVATION_ADMIN_EMAIL:}
+    password: ${RESERVATION_ADMIN_PASSWORD:}               # 평문 커밋·출력 금지. 공용 ADMIN_PANEL_PASSWORD를 쓰지 않는다
+    connect-timeout: ${RESERVATION_ADMIN_CONNECT_TIMEOUT:3s}
+    call-timeout: ${RESERVATION_ADMIN_CALL_TIMEOUT:8s}     # 로그인·재시도 포함 한 요청 전체
+
 # SOS. 코드 기본값과 서버 값을 같게 유지한다(이상감지 2026-07-28 교훈).
 sos:
   # 같은 피보호자의 SOS 알림 최소 간격(초). 목적은 보호자 폰의 알림 폭주 방지이며 서버 부하 방어가 아니다.

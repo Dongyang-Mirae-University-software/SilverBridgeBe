@@ -1,0 +1,18 @@
+# gosky 전용 override (2026-10-26, 관리자 제휴 병원 관리).
+#
+# 예약 서비스(SilverBridgeReservation)는 호스트 127.0.0.1:6015와 도커 네트워크 sb-internal(별칭 reservation-api)에만 열려 있다.
+# api 컨테이너를 sb-internal에 붙여 http://reservation-api:6015 로 관리자 API를 부른다.
+#
+# ⚠️ vkcs-linux에는 sb-internal 네트워크도 예약 서비스도 없다 - 이 파일을 docker-compose.dev.yml에 합치면
+#    external 네트워크를 찾지 못해 vkcs CD의 `up -d`가 실패한다. gosky 수동 배포에서만 함께 넘긴다:
+#    docker compose -f docker-compose.dev.yml -f docker-compose.gosky.yml up -d --build api
+services:
+  api:
+    networks:
+      - app-net
+      - sb-internal
+
+networks:
+  sb-internal:
+    external: true
+    name: sb-internal
