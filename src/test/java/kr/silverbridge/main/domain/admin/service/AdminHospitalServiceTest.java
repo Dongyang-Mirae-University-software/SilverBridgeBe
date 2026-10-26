@@ -29,6 +29,7 @@ import org.mockito.quality.Strictness;
 import java.time.ZoneOffset;
 import java.util.List;
 import java.util.Map;
+import java.util.function.Supplier;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -84,6 +85,8 @@ class AdminHospitalServiceTest {
     void setUp() throws Exception {
         service = new AdminHospitalService(client, auditLogService);
         when(client.listHospitals()).thenReturn(MAPPER.readTree(LIST));
+        // 실제 클라이언트처럼 감싼 작업을 그대로 실행한다(마감 공유는 클라이언트 테스트가 본다)
+        when(client.withinCall(any())).thenAnswer(inv -> ((Supplier<?>) inv.getArgument(0)).get());
     }
 
     private static JsonNode json(String raw) {
@@ -343,6 +346,124 @@ class AdminHospitalServiceTest {
             order.verify(auditLogService).log(ADMIN, AdminAuditAction.HOSPITAL_DEPARTMENT_DELETE,
                     "hospital:1/department:12", null);
             order.verify(client).deleteDepartment(12);
+        }
+    }
+
+    @Nested
+    @DisplayName("점검 후속(2026-10-26) - 중복·결과 불명·감사 값·ID 범위·마감 공유")
+    class AuditFollowUp {
+
+        private AdminHospitalCreateRequest create(String name, String address) {
+            return new AdminHospitalCreateRequest(name, "서울 강남구", address, "02-2001-0001", null,
+                    "09:00", "18:00", null, List.of("내과"));
+        }
+
+        @Test
+        @DisplayName("M-1 등록: 같은 이름+주소(공백·대소문자 무시) 병원이 있으면 409, 감사 로그·등록 호출 없음")
+        void create_duplicate_409() {
+            assertThatThrownBy(() -> service.create(ADMIN, create("서울 튼튼 정형외과", "서울 강남구 테헤란로  1")))
+                    .extracting(e -> ((CustomException) e).getErrorCode()).isEqualTo(ErrorCode.HOSPITAL_DUPLICATED);
+            verifyNoInteractions(auditLogService);
+            verify(client, never()).createHospital(anyMap());
+        }
+
+        @Test
+        @DisplayName("M-1 등록: 이름이 같아도 주소가 다르면(다른 지점) 등록된다")
+        void create_same_name_other_address_ok() {
+            when(client.createHospital(anyMap())).thenReturn(json("{\"id\":60,\"departments\":[]}"));
+
+            assertThat(service.create(ADMIN, create("서울튼튼정형외과", "서울 강남구 테헤란로 99")).id()).isEqualTo(60);
+        }
+
+        @Test
+        @DisplayName("M-1 수정: 다른 병원과 같은 이름+주소가 되면 409, 자기 이름 그대로면 통과")
+        void update_duplicate() {
+            assertThatThrownBy(() -> service.update(ADMIN, 2,
+                    new AdminHospitalUpdateRequest("서울튼튼정형외과", null, "서울 강남구 테헤란로 1", null, null, null, null, null)))
+                    .extracting(e -> ((CustomException) e).getErrorCode()).isEqualTo(ErrorCode.HOSPITAL_DUPLICATED);
+
+            when(client.updateHospital(anyLong(), anyMap())).thenReturn(json("{\"id\":1,\"departments\":[]}"));
+            service.update(ADMIN, 1, new AdminHospitalUpdateRequest("서울튼튼정형외과", null, null, null, null, null, null, null));
+            verify(client).updateHospital(eq(1L), anyMap());
+        }
+
+        @Test
+        @DisplayName("M-1 쓰기 뒤 응답을 변환하지 못하면 결과 불명(504), 예약 서비스 503은 그대로 503")
+        void after_write_conversion_is_result_unknown() {
+            when(client.createHospital(anyMap())).thenReturn(json("[]"));
+            assertThatThrownBy(() -> service.create(ADMIN, create("새 병원", "새 주소")))
+                    .extracting(e -> ((CustomException) e).getErrorCode()).isEqualTo(ErrorCode.HOSPITAL_RESULT_UNKNOWN);
+
+            when(client.addDepartment(anyLong(), anyString())).thenReturn(json("{\"departmentName\":\"x\"}"));
+            assertThatThrownBy(() -> service.addDepartment(ADMIN, 1, new AdminHospitalDepartmentRequest("신경과")))
+                    .extracting(e -> ((CustomException) e).getErrorCode()).isEqualTo(ErrorCode.HOSPITAL_RESULT_UNKNOWN);
+
+            when(client.updateHospitalStatus(anyLong(), anyMap()))
+                    .thenThrow(new CustomException(ErrorCode.HOSPITAL_SERVICE_UNAVAILABLE));
+            assertThatThrownBy(() -> service.updateStatus(ADMIN, 1,
+                    new AdminHospitalStatusRequest(null, null, null, null, null, true, null)))
+                    .extracting(e -> ((CustomException) e).getErrorCode()).isEqualTo(ErrorCode.HOSPITAL_SERVICE_UNAVAILABLE);
+        }
+
+        @Test
+        @DisplayName("M-2 감사 로그 detail에 보낸 칸과 값이 남는다(진료과 목록 포함, 줄바꿈은 펴서)")
+        void audit_detail_has_values() {
+            when(client.createHospital(anyMap())).thenReturn(json("{\"id\":61,\"departments\":[]}"));
+            service.create(ADMIN, new AdminHospitalCreateRequest("새 병원", "서울 마포구", "서울 마포구 1", "02-300-0001",
+                    "첫 줄\n둘째 줄", "08:30", "17:30", false, List.of("내과", "외과")));
+
+            ArgumentCaptor<String> detail = ArgumentCaptor.forClass(String.class);
+            verify(auditLogService).log(eq(ADMIN), eq(AdminAuditAction.HOSPITAL_CREATE), eq("hospital:new"), detail.capture());
+            assertThat(detail.getValue())
+                    .contains("name=새 병원", "address=서울 마포구 1", "phone=02-300-0001", "openTime=08:30",
+                            "closeTime=17:30", "bookingAvailable=false", "departments=내과/외과", "description=첫 줄 둘째 줄")
+                    .doesNotContain("\n");
+
+            when(client.updateHospitalStatus(anyLong(), anyMap())).thenReturn(json("{\"operationStatus\":\"CLOSED\"}"));
+            service.updateStatus(ADMIN, 1, new AdminHospitalStatusRequest(
+                    AdminHospitalStatusRequest.OperationStatus.CLOSED, null, 4, null, null, null, null));
+            verify(auditLogService).log(ADMIN, AdminAuditAction.HOSPITAL_STATUS_CHANGE, "hospital:1",
+                    "operationStatus=CLOSED, waitingCount=4");
+        }
+
+        @Test
+        @DisplayName("M-2 감사 detail은 500자로 자른다")
+        void audit_detail_truncated() {
+            when(client.createHospital(anyMap())).thenReturn(json("{\"id\":62,\"departments\":[]}"));
+            service.create(ADMIN, new AdminHospitalCreateRequest("가".repeat(100), "서울", "주".repeat(200), "02-300-0001",
+                    "소".repeat(1000), "09:00", "18:00", null, List.of("내과")));
+
+            ArgumentCaptor<String> detail = ArgumentCaptor.forClass(String.class);
+            verify(auditLogService).log(any(), any(), any(), detail.capture());
+            assertThat(detail.getValue()).hasSize(500);
+        }
+
+        @Test
+        @DisplayName("L-5 예약 서비스 ID(Int) 범위를 넘는 ID는 404이고 감사 로그·호출 없음")
+        void id_over_int_range() {
+            long tooBig = Integer.MAX_VALUE + 1L;
+
+            assertThatThrownBy(() -> service.delete(ADMIN, tooBig))
+                    .extracting(e -> ((CustomException) e).getErrorCode()).isEqualTo(ErrorCode.HOSPITAL_NOT_FOUND);
+            assertThatThrownBy(() -> service.deleteDepartment(ADMIN, 1, tooBig))
+                    .extracting(e -> ((CustomException) e).getErrorCode())
+                    .isEqualTo(ErrorCode.HOSPITAL_DEPARTMENT_NOT_FOUND);
+            verifyNoInteractions(auditLogService);
+            verify(client, never()).deleteHospital(anyLong());
+        }
+
+        @Test
+        @DisplayName("L-2 서비스 메서드는 한 번의 요청 전체를 withinCall로 감싼다(목록 확인과 쓰기가 마감 하나)")
+        void every_call_is_scoped() {
+            when(client.updateHospitalStatus(anyLong(), anyMap())).thenReturn(json("{\"operationStatus\":\"OPEN\"}"));
+
+            service.getSummary(ADMIN);
+            service.updateStatus(ADMIN, 1, new AdminHospitalStatusRequest(null, null, null, null, null, true, null));
+
+            InOrder order = inOrder(client);
+            order.verify(client).withinCall(any());
+            order.verify(client).withinCall(any());
+            verify(client, org.mockito.Mockito.times(2)).withinCall(any());
         }
     }
 }

@@ -11,17 +11,24 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.function.ThrowingSupplier;
 
 import java.io.IOException;
 import java.net.InetSocketAddress;
+import java.net.ServerSocket;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.Base64;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
@@ -31,7 +38,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 /**
  * 예약 서비스 관리자 클라이언트 - 실제 HTTP(로컬 임시 서버)로 로그인·토큰 캐시·401 재로그인·오류 매핑·시간 제한·
- * 리다이렉트 미추종·허용 목록 경로만 호출함을 확인한다.
+ * 리다이렉트 미추종·허용 목록 경로·결과 불명 구분·호출 마감 공유를 확인한다.
  */
 class ReservationAdminClientTest {
 
@@ -47,9 +54,12 @@ class ReservationAdminClientTest {
     private final AtomicReference<String> issuedToken = new AtomicReference<>();
     private final AtomicReference<String> receivedAuthorization = new AtomicReference<>();
     private final AtomicReference<String> receivedLoginBody = new AtomicReference<>();
-    private final AtomicReference<String> receivedBody = new AtomicReference<>();
     private final AtomicInteger loginStatus = new AtomicInteger(201);
+    private final AtomicReference<String> loginBody = new AtomicReference<>();
+    private final AtomicReference<Long> loginDelayMs = new AtomicReference<>(0L);
     private final AtomicInteger adminStatus = new AtomicInteger(200);
+    /** null이면 경로별 기본 본문. 빈 문자열이면 본문 없음. */
+    private final AtomicReference<String> adminBody = new AtomicReference<>();
     /** 이 횟수만큼은 관리자 경로가 401을 준다(토큰 만료 흉내). */
     private final AtomicInteger unauthorizedTimes = new AtomicInteger();
     private final AtomicReference<Long> delayMs = new AtomicReference<>(0L);
@@ -86,16 +96,16 @@ class ReservationAdminClientTest {
         if (path.equals("/api/v1/auth/login")) {
             logins.incrementAndGet();
             receivedLoginBody.set(body);
+            sleep(loginDelayMs.get());
             String token = jwt(Instant.now().plus(Duration.ofDays(7))) + "." + logins.get();
             issuedToken.set(token);
-            json(ex, loginStatus.get(), "{\"accessToken\":\"" + token + "\",\"user\":{\"id\":9,\"role\":\"ADMIN\"}}");
+            String reply = loginBody.get() != null ? loginBody.get()
+                    : "{\"accessToken\":\"" + token + "\",\"user\":{\"id\":9,\"role\":\"ADMIN\"}}";
+            json(ex, loginStatus.get(), reply);
             return;
         }
         receivedAuthorization.set(ex.getRequestHeaders().getFirst("Authorization"));
-        receivedBody.set(body);
-        if (delayMs.get() > 0) {
-            sleep(delayMs.get());
-        }
+        sleep(delayMs.get());
         if (unauthorizedTimes.getAndUpdate(n -> Math.max(0, n - 1)) > 0) {
             json(ex, 401, "{\"success\":false,\"code\":\"UNAUTHORIZED\",\"message\":\"secret detail\"}");
             return;
@@ -110,7 +120,9 @@ class ReservationAdminClientTest {
             json(ex, adminStatus.get(), "{\"success\":false,\"code\":\"HTTP_ERROR\",\"message\":\"internal detail\"}");
             return;
         }
-        if (path.equals("/api/v1/admin/hospitals") && ex.getRequestMethod().equals("GET")) {
+        if (adminBody.get() != null) {
+            json(ex, 200, adminBody.get());
+        } else if (path.equals("/api/v1/admin/hospitals") && ex.getRequestMethod().equals("GET")) {
             json(ex, 200, "[{\"id\":1,\"name\":\"가\"}]");
         } else {
             json(ex, 200, "{\"id\":1}");
@@ -127,17 +139,33 @@ class ReservationAdminClientTest {
     private static void json(HttpExchange ex, int status, String body) throws IOException {
         byte[] bytes = body.getBytes(StandardCharsets.UTF_8);
         ex.getResponseHeaders().set("Content-Type", "application/json");
-        ex.sendResponseHeaders(status, bytes.length);
-        ex.getResponseBody().write(bytes);
+        ex.sendResponseHeaders(status, bytes.length == 0 ? -1 : bytes.length);
+        if (bytes.length > 0) {
+            ex.getResponseBody().write(bytes);
+        }
         ex.close();
     }
 
     private static void sleep(long ms) {
+        if (ms <= 0) {
+            return;
+        }
         try {
             Thread.sleep(ms);
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
         }
+    }
+
+    private static ErrorCode codeOf(ThrowingSupplier<?> call) {
+        try {
+            call.get();
+        } catch (CustomException e) {
+            return e.getErrorCode();
+        } catch (Throwable t) {
+            throw new AssertionError("CustomException이 아닌 예외: " + t, t);
+        }
+        throw new AssertionError("예외가 나지 않았다");
     }
 
     @Test
@@ -150,6 +178,28 @@ class ReservationAdminClientTest {
         assertThat(logins.get()).isEqualTo(1);
         assertThat(receivedAuthorization.get()).isEqualTo("Bearer " + issuedToken.get());
         assertThat(receivedLoginBody.get()).contains("\"email\":\"" + EMAIL + "\"").contains(PASSWORD);
+    }
+
+    @Test
+    @DisplayName("동시에 여러 요청이 와도 로그인은 한 번만 나간다")
+    void concurrent_requests_login_once() throws Exception {
+        loginDelayMs.set(200L);
+        ExecutorService pool = Executors.newFixedThreadPool(8);
+        CountDownLatch start = new CountDownLatch(1);
+        List<Future<JsonNode>> futures = new ArrayList<>();
+        for (int i = 0; i < 8; i++) {
+            futures.add(pool.submit(() -> {
+                start.await();
+                return client.listHospitals();
+            }));
+        }
+        start.countDown();
+        for (Future<JsonNode> future : futures) {
+            assertThat(future.get(5, TimeUnit.SECONDS).isArray()).isTrue();
+        }
+        pool.shutdownNow();
+
+        assertThat(logins.get()).isEqualTo(1);
     }
 
     @Test
@@ -169,22 +219,28 @@ class ReservationAdminClientTest {
     void second_401_gives_503() {
         unauthorizedTimes.set(5);
 
-        assertThatThrownBy(() -> client.listHospitals())
-                .isInstanceOf(CustomException.class)
-                .extracting(e -> ((CustomException) e).getErrorCode())
-                .isEqualTo(ErrorCode.HOSPITAL_SERVICE_UNAVAILABLE);
+        assertThat(codeOf(() -> client.listHospitals())).isEqualTo(ErrorCode.HOSPITAL_SERVICE_UNAVAILABLE);
         assertThat(logins.get()).isEqualTo(2);
         assertThat(requests).filteredOn(r -> r.startsWith("GET /api/v1/admin/hospitals")).hasSize(2);
     }
 
     @Test
-    @DisplayName("로그인이 거절되면(자격 오류) 관리자 경로를 부르지 않고 503")
-    void login_rejected_gives_503() {
+    @DisplayName("로그인이 거절되면(자격 오류) 503이고, 30초 동안은 다시 로그인하지 않는다")
+    void login_rejected_is_remembered() {
         loginStatus.set(401);
 
-        assertThatThrownBy(() -> client.listHospitals())
-                .extracting(e -> ((CustomException) e).getErrorCode())
-                .isEqualTo(ErrorCode.HOSPITAL_SERVICE_UNAVAILABLE);
+        assertThat(codeOf(() -> client.listHospitals())).isEqualTo(ErrorCode.HOSPITAL_SERVICE_UNAVAILABLE);
+        assertThat(codeOf(() -> client.listHospitals())).isEqualTo(ErrorCode.HOSPITAL_SERVICE_UNAVAILABLE);
+
+        assertThat(requests).containsExactly("POST /api/v1/auth/login");
+    }
+
+    @Test
+    @DisplayName("로그인 응답에 accessToken이 없으면 503이고 관리자 경로를 부르지 않는다")
+    void login_without_token() {
+        loginBody.set("{\"user\":{\"id\":9}}");
+
+        assertThat(codeOf(() -> client.listHospitals())).isEqualTo(ErrorCode.HOSPITAL_SERVICE_UNAVAILABLE);
         assertThat(requests).containsExactly("POST /api/v1/auth/login");
     }
 
@@ -193,9 +249,7 @@ class ReservationAdminClientTest {
     void not_configured_gives_503_without_call() {
         properties.setPassword("");
 
-        assertThatThrownBy(() -> client.listHospitals())
-                .extracting(e -> ((CustomException) e).getErrorCode())
-                .isEqualTo(ErrorCode.HOSPITAL_SERVICE_UNAVAILABLE);
+        assertThat(codeOf(() -> client.listHospitals())).isEqualTo(ErrorCode.HOSPITAL_SERVICE_UNAVAILABLE);
         assertThat(requests).isEmpty();
     }
 
@@ -204,16 +258,12 @@ class ReservationAdminClientTest {
     void not_found_mapping() {
         adminStatus.set(404);
 
-        assertThatThrownBy(() -> client.deleteHospital(7))
-                .extracting(e -> ((CustomException) e).getErrorCode())
-                .isEqualTo(ErrorCode.HOSPITAL_NOT_FOUND);
-        assertThatThrownBy(() -> client.deleteDepartment(31))
-                .extracting(e -> ((CustomException) e).getErrorCode())
-                .isEqualTo(ErrorCode.HOSPITAL_DEPARTMENT_NOT_FOUND);
+        assertThat(codeOf(() -> client.deleteHospital(7))).isEqualTo(ErrorCode.HOSPITAL_NOT_FOUND);
+        assertThat(codeOf(() -> client.deleteDepartment(31))).isEqualTo(ErrorCode.HOSPITAL_DEPARTMENT_NOT_FOUND);
     }
 
     @Test
-    @DisplayName("400은 HOSPITAL_REQUEST_REJECTED, 5xx는 503이며 예약 서비스 오류 문구는 옮기지 않는다")
+    @DisplayName("400은 HOSPITAL_REQUEST_REJECTED, 5xx는 503(쓰기여도 결과 불명이 아님)이며 예약 서비스 오류 문구는 옮기지 않는다")
     void client_and_server_error_mapping() {
         adminStatus.set(400);
         assertThatThrownBy(() -> client.updateHospital(1, Map.of("name", "x")))
@@ -230,16 +280,75 @@ class ReservationAdminClientTest {
     }
 
     @Test
-    @DisplayName("호출 전체 시간 제한을 넘기면 연결을 끊고 504")
-    void timeout_gives_504() {
+    @DisplayName("조회가 시간 제한을 넘기면 연결을 끊고 504 HOSPITAL_SERVICE_TIMEOUT")
+    void read_timeout_gives_504() {
         properties.setCallTimeout(Duration.ofMillis(400));
         delayMs.set(2_000L);
 
         long started = System.nanoTime();
-        assertThatThrownBy(() -> client.listHospitals())
-                .extracting(e -> ((CustomException) e).getErrorCode())
-                .isEqualTo(ErrorCode.HOSPITAL_SERVICE_TIMEOUT);
+        assertThat(codeOf(() -> client.listHospitals())).isEqualTo(ErrorCode.HOSPITAL_SERVICE_TIMEOUT);
         assertThat(Duration.ofNanos(System.nanoTime() - started)).isLessThan(Duration.ofMillis(1_800));
+    }
+
+    @Test
+    @DisplayName("쓰기가 예약 서비스에 닿은 뒤 시간 제한을 넘기면 실패가 아니라 결과 불명(HOSPITAL_RESULT_UNKNOWN)")
+    void write_timeout_is_result_unknown() {
+        client.listHospitals(); // 토큰 먼저 받아 둔다
+        properties.setCallTimeout(Duration.ofMillis(400));
+        delayMs.set(2_000L);
+
+        assertThat(codeOf(() -> client.createHospital(Map.of("name", "가")))).isEqualTo(ErrorCode.HOSPITAL_RESULT_UNKNOWN);
+        assertThat(codeOf(() -> client.deleteHospital(3))).isEqualTo(ErrorCode.HOSPITAL_RESULT_UNKNOWN);
+    }
+
+    @Test
+    @DisplayName("2xx인데 본문이 비거나 깨졌으면: 쓰기는 결과 불명, 조회는 503")
+    void empty_or_broken_success_body() {
+        adminBody.set("");
+        assertThat(codeOf(() -> client.updateHospital(1, Map.of("name", "x")))).isEqualTo(ErrorCode.HOSPITAL_RESULT_UNKNOWN);
+        assertThat(codeOf(() -> client.listHospitals())).isEqualTo(ErrorCode.HOSPITAL_SERVICE_UNAVAILABLE);
+
+        adminBody.set("{broken");
+        assertThat(codeOf(() -> client.addDepartment(1, "내과"))).isEqualTo(ErrorCode.HOSPITAL_RESULT_UNKNOWN);
+    }
+
+    @Test
+    @DisplayName("응답이 크기 상한을 넘으면 조회는 503")
+    void oversize_reply() {
+        properties.setMaxReplyBytes(64);
+        adminBody.set("[" + "{\"id\":1,\"name\":\"가나다라마바사\"},".repeat(10) + "{}]");
+
+        assertThat(codeOf(() -> client.listHospitals())).isEqualTo(ErrorCode.HOSPITAL_SERVICE_UNAVAILABLE);
+    }
+
+    @Test
+    @DisplayName("연결 자체가 안 되면 쓰기여도 결과 불명이 아니라 503(요청이 닿지 않았다)")
+    void connection_refused_write_is_unavailable() throws IOException {
+        int closedPort;
+        try (ServerSocket socket = new ServerSocket(0)) {
+            closedPort = socket.getLocalPort();
+        }
+        properties.setBaseUrl("http://127.0.0.1:" + closedPort);
+
+        assertThat(codeOf(() -> client.createHospital(Map.of("name", "가")))).isEqualTo(ErrorCode.HOSPITAL_SERVICE_UNAVAILABLE);
+    }
+
+    @Test
+    @DisplayName("withinCall 안에서는 여러 호출이 마감 하나를 함께 쓴다 - 밖에서는 호출마다 새 마감")
+    void within_call_shares_deadline() {
+        client.listHospitals(); // 토큰 먼저
+        properties.setCallTimeout(Duration.ofMillis(700));
+        delayMs.set(400L);
+
+        // 밖: 400ms짜리 두 번은 각자 700ms 안
+        client.listHospitals();
+        client.listHospitals();
+
+        // 안: 합쳐 800ms라 두 번째가 마감을 넘긴다
+        assertThat(codeOf(() -> client.withinCall(() -> {
+            client.listHospitals();
+            return client.listHospitals();
+        }))).isEqualTo(ErrorCode.HOSPITAL_SERVICE_TIMEOUT);
     }
 
     @Test
@@ -247,9 +356,7 @@ class ReservationAdminClientTest {
     void redirect_not_followed() {
         adminStatus.set(302);
 
-        assertThatThrownBy(() -> client.listHospitals())
-                .extracting(e -> ((CustomException) e).getErrorCode())
-                .isEqualTo(ErrorCode.HOSPITAL_SERVICE_UNAVAILABLE);
+        assertThat(codeOf(() -> client.listHospitals())).isEqualTo(ErrorCode.HOSPITAL_SERVICE_UNAVAILABLE);
         assertThat(redirectFollowed).isFalse();
     }
 

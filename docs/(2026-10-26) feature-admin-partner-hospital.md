@@ -96,3 +96,14 @@ BE는 데이터를 저장하지 않고, 관리자 토큰으로 예약 서비스 
 - `AdminHospitalServiceTest`(19건): 필터·페이지·요약·변환, 감사 로그 → 호출 순서, 감사 실패 시 미호출, 미설정 시 감사 없음, 시각·중복·보이지 않는 글자, 삭제된 병원 상태 404, 진료과 소유·중복
 - `AdminHospitalControllerSecurityTest`: 9개 경로 ADMIN 허용·GUARDIAN·WARD 403
 - `AdminHospitalRequestValidationTest`(20건), `AdminAuditActionCheckSyncTest`(V63), `LogRawExceptionGuardTest`
+
+## 9. 점검 후속 (2026-10-26, `docs/(2026-10-26) audit-admin-partner-hospital.md`)
+
+- **M-1 결과 불명·중복**: 쓰기 요청이 예약 서비스에 **연결된 뒤** 시간 초과·끊김·2xx 본문 이상이 나면 504 `HOSPITAL_RESULT_UNKNOWN`("이미 반영됐을 수 있으니 새로고침해 확인")이다. 연결 전 실패(연결 거부·연결 시간 초과)와 5xx는 그대로 503/504 `HOSPITAL_SERVICE_TIMEOUT`이다(반영되지 않음). 등록과 이름·주소 수정은 같은 이름 + 주소(공백·대소문자 무시) 병원이 있으면 409 `HOSPITAL_DUPLICATED`이다 - 같은 이름의 다른 지점은 주소가 달라 막지 않는다.
+- **M-2 감사 로그 값**: detail에 보낸 칸과 값을 남긴다(`name=…, phone=…, departments=내과/외과`, 줄바꿈은 펴고 500자로 자름). 등록 성공 뒤 `[ADMIN-HOSPITAL] 등록 완료: hospitalId=`로 새 id를 잇는다. 감사 로그 = 시도 기록 원칙은 그대로다.
+- **L-1** 로그인이 400·401·403으로 거절되면 30초 동안 다시 로그인하지 않는다(네트워크 오류는 기억하지 않음).
+- **L-2** 서비스 메서드가 요청 하나를 `ReservationAdminClient.withinCall`로 감싸 목록 확인·로그인·재시도·쓰기가 마감 하나(8초)를 함께 쓴다 - "한 요청 전체 8초"가 사실이 됐다.
+- **L-3** 읽기 시간 제한을 마감보다 1초 길게 두고 `SocketTimeoutException`도 시간 초과로 본다(504가 503으로 나오던 경합).
+- **L-4** 쓰기 7개 경로에 Swagger 응답(400·401·403·404·409·503·504) 명시.
+- **L-5** 예약 서비스 ID(Int) 범위를 넘는 ID는 감사 로그·호출 전에 404.
+- **L-6** 테스트 보강: 동시 요청 로그인 1회, 쓰기 시간 초과·2xx 본문 이상 = 결과 불명, 연결 거부는 503, 로그인 거절 기억, accessToken 누락, 응답 크기 상한, 마감 공유, 중복 409, 감사 detail 값·500자, ID 범위.
