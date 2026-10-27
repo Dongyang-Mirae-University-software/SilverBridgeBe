@@ -1,8 +1,10 @@
 package kr.silverbridge.main.domain.admin.dto;
 
 import io.swagger.v3.oas.annotations.media.Schema;
+import kr.silverbridge.main.domain.anomaly.dto.AdminAnomalySummaryResponse;
 import kr.silverbridge.main.global.enums.DetectedType;
 
+import java.time.OffsetDateTime;
 import java.util.List;
 
 /**
@@ -37,7 +39,10 @@ public record AdminSafetyDashboardResponse(
         SafetyEvents safetyEvents,
 
         @Schema(description = "오늘(KST) 이상감지 - 단위는 상황(incident)")
-        TodayAnomaly todayAnomaly
+        TodayAnomaly todayAnomaly,
+
+        @Schema(description = "이 응답을 만든 시각(KST, 오프셋 포함). 화면의 \"N분 전 확인\" 기준", example = "2026-10-27T14:05:00+09:00")
+        OffsetDateTime generatedAt
 ) {
 
     @Schema(description = "보호 사각지대 신호")
@@ -67,7 +72,16 @@ public record AdminSafetyDashboardResponse(
             long wardsWithoutCamera,
 
             @Schema(description = "오래 방치된 연결 요청 수", example = "1")
-            long stalePendingConnections
+            long stalePendingConnections,
+
+            @Schema(description = """
+                    오늘(KST 00:00부터) 전달에 실패한 알림 수(수신자 1명 = 1건).
+
+                    알림 이력 요약(`GET /api/admin/notification/summary?period=TODAY`)의 `failed`와 같은 값입니다.
+                    **발송 안 함(NOT_SENT - 정지 계정 차단·수신자가 채널을 꺼 둠)은 실패가 아니라 세지 않습니다.**
+                    문자 대체로 전달된 건(SMS_FALLBACK)도 전달로 보아 세지 않습니다.
+                    """, example = "2")
+            long todayFailedNotifications
     ) {
     }
 
@@ -87,7 +101,16 @@ public record AdminSafetyDashboardResponse(
             List<TypeCount> byType,
 
             @Schema(description = "판정 상태별 건수")
-            ReviewCount review
+            ReviewCount review,
+
+            @Schema(description = """
+                    오늘 평균 AI 신뢰도 = 판정이 난 상황(위험 + 오탐)의 AI confidence 평균.
+
+                    이상감지 로그 요약(`GET /api/admin/anomaly/summary?period=TODAY`)의 `aiConfidence`와 같은 값입니다.
+                    미판정·동수는 빼며, 판정 난 상황이 0건이면 average는 **null**입니다(0%가 아닙니다).
+                    "AI가 얼마나 확신했는가"이지 "AI가 맞았는가"가 아닙니다.
+                    """)
+            AdminAnomalySummaryResponse.AiConfidence aiConfidence
     ) {
     }
 

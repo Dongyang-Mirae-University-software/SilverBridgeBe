@@ -3,6 +3,7 @@ package kr.silverbridge.main.domain.admin.dto;
 import io.swagger.v3.oas.annotations.media.Schema;
 
 import java.time.LocalDate;
+import java.time.OffsetDateTime;
 import java.util.List;
 
 /**
@@ -36,7 +37,10 @@ public record AdminOperationDashboardResponse(
         List<SignupPoint> signupTrend,
 
         @Schema(description = "처리 대기 항목")
-        PendingItems pendingItems
+        PendingItems pendingItems,
+
+        @Schema(description = "이 응답을 만든 시각(KST, 오프셋 포함). 화면의 \"N분 전 확인\" 기준", example = "2026-10-27T14:05:00+09:00")
+        OffsetDateTime generatedAt
 ) {
 
     @Schema(description = "회원 구성")
@@ -49,7 +53,13 @@ public record AdminOperationDashboardResponse(
     @Schema(description = "카메라 현황")
     public record Cameras(
             @Schema(description = "등록된 카메라 대수", example = "29") long registered,
-            @Schema(description = "카메라를 1대 이상 등록한 피보호자 수", example = "6") long wards
+            @Schema(description = "카메라를 1대 이상 등록한 피보호자 수", example = "6") long wards,
+            @Schema(description = """
+                    서비스 전체 카메라 등록 상한(camera.max-total). 상한이 꺼져 있으면 null.
+
+                    `registered`(대)·`wards`(명)·`maxTotal`(대)은 단위가 다르니 "29 / 34대"처럼 섞어 쓰지 마세요.
+                    "등록 대수 / 상한"은 `registered / maxTotal`입니다.
+                    """, example = "3", nullable = true) Integer maxTotal
     ) {
     }
 

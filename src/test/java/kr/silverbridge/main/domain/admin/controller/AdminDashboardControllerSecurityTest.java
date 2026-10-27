@@ -1,8 +1,11 @@
 package kr.silverbridge.main.domain.admin.controller;
 
+import kr.silverbridge.main.domain.admin.dto.AdminAiStatusResponse;
 import kr.silverbridge.main.domain.admin.dto.AdminOperationDashboardResponse;
 import kr.silverbridge.main.domain.admin.dto.AdminSafetyDashboardResponse;
+import kr.silverbridge.main.domain.admin.service.AdminAiStatusService;
 import kr.silverbridge.main.domain.admin.service.AdminDashboardService;
+import kr.silverbridge.main.domain.anomaly.dto.AdminAnomalySummaryResponse;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -10,11 +13,13 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
+import org.springframework.security.test.context.support.WithAnonymousUser;
 import org.springframework.security.test.context.support.WithMockUser;
 import org.springframework.test.context.ContextConfiguration;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.context.junit.jupiter.SpringExtension;
 
+import java.time.OffsetDateTime;
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThatNoException;
@@ -44,26 +49,32 @@ class AdminDashboardControllerSecurityTest {
     @MockitoBean
     private AdminDashboardService adminDashboardService;
 
+    @MockitoBean
+    private AdminAiStatusService adminAiStatusService;
+
     @Autowired
     private AdminDashboardController controller;
 
     private AdminSafetyDashboardResponse safety() {
         return new AdminSafetyDashboardResponse(
                 false, 0, 0L, null,
-                new AdminSafetyDashboardResponse.SafetyEvents(null, 0L, 0L, 0L, 0L),
+                new AdminSafetyDashboardResponse.SafetyEvents(null, 0L, 0L, 0L, 0L, 0L),
                 new AdminSafetyDashboardResponse.TodayAnomaly(
-                        0L, List.of(), new AdminSafetyDashboardResponse.ReviewCount(0L, 0L, 0L, 0L)));
+                        0L, List.of(), new AdminSafetyDashboardResponse.ReviewCount(0L, 0L, 0L, 0L),
+                        new AdminAnomalySummaryResponse.AiConfidence(null, 0L)),
+                OffsetDateTime.now());
     }
 
     private AdminOperationDashboardResponse operation() {
         return new AdminOperationDashboardResponse(
                 0L, 0L,
                 new AdminOperationDashboardResponse.MemberComposition(0L, 0L),
-                new AdminOperationDashboardResponse.Cameras(0L, 0L),
+                new AdminOperationDashboardResponse.Cameras(0L, 0L, 3),
                 0L,
                 new AdminOperationDashboardResponse.UnansweredInquiries(0L, null),
                 List.of(),
-                new AdminOperationDashboardResponse.PendingItems(0L, 0L, 0L));
+                new AdminOperationDashboardResponse.PendingItems(0L, 0L, 0L),
+                OffsetDateTime.now());
     }
 
     @Test
@@ -85,12 +96,26 @@ class AdminDashboardControllerSecurityTest {
     }
 
     @Test
+    @WithMockUser(roles = "ADMIN")
+    @DisplayName("ADMIN 역할 → AI 서비스 상태 조회 허용")
+    void admin_AI상태_허용() {
+        when(adminAiStatusService.getAiStatus()).thenReturn(new AdminAiStatusResponse(
+                new AdminAiStatusResponse.Item(null, OffsetDateTime.now()),
+                new AdminAiStatusResponse.Item(null, OffsetDateTime.now()),
+                OffsetDateTime.now()));
+
+        assertThatNoException().isThrownBy(() -> controller.getAiStatus());
+    }
+
+    @Test
     @WithMockUser(roles = "GUARDIAN")
     @DisplayName("보호자(GUARDIAN) → 403 (AccessDeniedException)")
     void guardian_거부() {
         assertThatThrownBy(() -> controller.getSafetyDashboard())
                 .isInstanceOf(AccessDeniedException.class);
         assertThatThrownBy(() -> controller.getOperationDashboard())
+                .isInstanceOf(AccessDeniedException.class);
+        assertThatThrownBy(() -> controller.getAiStatus())
                 .isInstanceOf(AccessDeniedException.class);
     }
 
@@ -101,6 +126,20 @@ class AdminDashboardControllerSecurityTest {
         assertThatThrownBy(() -> controller.getSafetyDashboard())
                 .isInstanceOf(AccessDeniedException.class);
         assertThatThrownBy(() -> controller.getOperationDashboard())
+                .isInstanceOf(AccessDeniedException.class);
+        assertThatThrownBy(() -> controller.getAiStatus())
+                .isInstanceOf(AccessDeniedException.class);
+    }
+
+    @Test
+    @WithAnonymousUser
+    @DisplayName("비로그인(익명) → 거부 - 실제 요청에서는 경로 규칙이 401로 응답한다")
+    void anonymous_거부() {
+        assertThatThrownBy(() -> controller.getSafetyDashboard())
+                .isInstanceOf(AccessDeniedException.class);
+        assertThatThrownBy(() -> controller.getOperationDashboard())
+                .isInstanceOf(AccessDeniedException.class);
+        assertThatThrownBy(() -> controller.getAiStatus())
                 .isInstanceOf(AccessDeniedException.class);
     }
 }

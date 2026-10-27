@@ -3,13 +3,19 @@ package kr.silverbridge.main.domain.admin.service;
 import kr.silverbridge.main.domain.admin.dto.AdminOperationDashboardResponse;
 import kr.silverbridge.main.domain.admin.dto.AdminSafetyDashboardResponse;
 import kr.silverbridge.main.domain.anomaly.client.AiLiveStreamSubscriber;
+import kr.silverbridge.main.domain.anomaly.dto.AdminAnomalyPeriod;
+import kr.silverbridge.main.domain.anomaly.dto.AdminAnomalySummaryResponse;
 import kr.silverbridge.main.domain.anomaly.entity.AnomalyIncident;
 import kr.silverbridge.main.domain.anomaly.entity.AnomalyReviewStatus;
 import kr.silverbridge.main.domain.anomaly.repository.AnomalyIncidentRepository;
+import kr.silverbridge.main.domain.anomaly.service.AdminAnomalyService;
 import kr.silverbridge.main.domain.announcement.repository.AnnouncementDraftRepository;
 import kr.silverbridge.main.domain.camera.repository.CameraRepository;
 import kr.silverbridge.main.domain.connection.repository.ConnectionRepository;
 import kr.silverbridge.main.domain.inquiry.repository.InquiryRepository;
+import kr.silverbridge.main.domain.notification.dto.AdminNotificationPeriod;
+import kr.silverbridge.main.domain.notification.dto.AdminNotificationSummaryResponse;
+import kr.silverbridge.main.domain.notification.service.AdminNotificationService;
 import kr.silverbridge.main.domain.user.repository.UserRepository;
 import kr.silverbridge.main.global.enums.DetectedType;
 import kr.silverbridge.main.global.enums.ConnectionStatus;
@@ -25,6 +31,7 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.mockito.junit.jupiter.MockitoSettings;
 import org.mockito.quality.Strictness;
+import org.springframework.test.util.ReflectionTestUtils;
 
 import java.time.LocalDate;
 import java.time.OffsetDateTime;
@@ -34,6 +41,9 @@ import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.isNull;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 /**
@@ -55,6 +65,8 @@ class AdminDashboardServiceTest {
     @Mock private ConnectionRepository connectionRepository;
     @Mock private InquiryRepository inquiryRepository;
     @Mock private UserRepository userRepository;
+    @Mock private AdminNotificationService adminNotificationService;
+    @Mock private AdminAnomalyService adminAnomalyService;
 
     private AdminDashboardService service;
 
@@ -62,12 +74,26 @@ class AdminDashboardServiceTest {
     void setUp() {
         service = new AdminDashboardService(
                 aiLiveStreamSubscriber, anomalyIncidentRepository, announcementDraftRepository,
-                cameraRepository, connectionRepository, inquiryRepository, userRepository);
+                cameraRepository, connectionRepository, inquiryRepository, userRepository,
+                adminNotificationService, adminAnomalyService);
+        ReflectionTestUtils.setField(service, "cameraMaxTotal", 3);
 
         // 기본값 - 각 테스트는 관심 있는 것만 덮어쓴다
         when(anomalyIncidentRepository.findByStartedAtGreaterThanEqual(any())).thenReturn(List.of());
         when(inquiryRepository.findOldestCreatedAtByStatus(any())).thenReturn(Optional.empty());
         when(userRepository.findCreatedAtSince(any(), any(), any())).thenReturn(List.of());
+        when(adminNotificationService.getSummary(any(), any(), any())).thenReturn(notificationSummary(0L, 0L));
+        when(adminAnomalyService.getSummary(any(), any(), any())).thenReturn(anomalySummary(null, 0L));
+    }
+
+    private static AdminNotificationSummaryResponse notificationSummary(long failed, long notSent) {
+        return new AdminNotificationSummaryResponse(AdminNotificationPeriod.TODAY, 10L + failed + notSent, 10L, 1L, failed, notSent);
+    }
+
+    private static AdminAnomalySummaryResponse anomalySummary(Double average, long basis) {
+        return new AdminAnomalySummaryResponse(AdminAnomalyPeriod.TODAY, basis, List.of(),
+                new AdminAnomalySummaryResponse.ReviewCount(0L, basis, 0L, 0L), null,
+                new AdminAnomalySummaryResponse.AiConfidence(average, basis));
     }
 
     private AnomalyIncident incident(DetectedType type, AnomalyReviewStatus status) {
@@ -324,6 +350,73 @@ class AdminDashboardServiceTest {
 
             assertThat(response.pendingConnections()).isEqualTo(4L);
             assertThat(response.pendingItems().connectionRequests()).isEqualTo(4L);
+        }
+    }
+
+    @Nested
+    @DisplayName("디자인 보강(2026-10-27) - 다른 화면 요약 재사용·상한·생성 시각")
+    class Enrich {
+
+        @Test
+        @DisplayName("전달 실패한 알림 = 알림 이력 요약(오늘, 전체 탭·검색 없음)의 failed - 발송 안 함(NOT_SENT)은 세지 않는다")
+        void 오늘_전달실패만() {
+            when(adminNotificationService.getSummary(isNull(), eq(AdminNotificationPeriod.TODAY), isNull()))
+                    .thenReturn(notificationSummary(2L, 7L));
+
+            assertThat(service.getSafetyDashboard().safetyEvents().todayFailedNotifications()).isEqualTo(2L);
+            verify(adminNotificationService).getSummary(null, AdminNotificationPeriod.TODAY, null);
+        }
+
+        @Test
+        @DisplayName("평균 AI 신뢰도 = 이상감지 요약(오늘, 전체 유형)의 aiConfidence 그대로")
+        void 오늘_AI신뢰도() {
+            when(adminAnomalyService.getSummary(eq(AdminAnomalyPeriod.TODAY), isNull(), isNull()))
+                    .thenReturn(anomalySummary(0.88, 7L));
+
+            AdminAnomalySummaryResponse.AiConfidence confidence =
+                    service.getSafetyDashboard().todayAnomaly().aiConfidence();
+
+            assertThat(confidence.average()).isEqualTo(0.88);
+            assertThat(confidence.basis()).isEqualTo(7L);
+            verify(adminAnomalyService).getSummary(AdminAnomalyPeriod.TODAY, null, null);
+        }
+
+        @Test
+        @DisplayName("판정 난 상황이 없으면 평균은 0이 아니라 null")
+        void 판정_0건이면_null() {
+            AdminAnomalySummaryResponse.AiConfidence confidence =
+                    service.getSafetyDashboard().todayAnomaly().aiConfidence();
+
+            assertThat(confidence.average()).isNull();
+            assertThat(confidence.basis()).isZero();
+        }
+
+        @Test
+        @DisplayName("카메라 단위는 따로 - 등록 대수·등록 피보호자 수·상한")
+        void 카메라_단위_분리() {
+            when(cameraRepository.count()).thenReturn(2L);
+            when(cameraRepository.countDistinctWards()).thenReturn(1L);
+
+            AdminOperationDashboardResponse.Cameras cameras = service.getOperationDashboard().cameras();
+
+            assertThat(cameras.registered()).isEqualTo(2L);
+            assertThat(cameras.wards()).isEqualTo(1L);
+            assertThat(cameras.maxTotal()).isEqualTo(3);
+        }
+
+        @Test
+        @DisplayName("상한을 끄면(0 이하) maxTotal은 0이 아니라 null - 0은 \"한 대도 못 단다\"로 읽힌다")
+        void 상한_끄면_null() {
+            ReflectionTestUtils.setField(service, "cameraMaxTotal", 0);
+
+            assertThat(service.getOperationDashboard().cameras().maxTotal()).isNull();
+        }
+
+        @Test
+        @DisplayName("generatedAt은 두 응답 모두 KST 오프셋(+09:00)")
+        void 생성시각_KST() {
+            assertThat(service.getSafetyDashboard().generatedAt().getOffset()).isEqualTo(KST);
+            assertThat(service.getOperationDashboard().generatedAt().getOffset()).isEqualTo(KST);
         }
     }
 }

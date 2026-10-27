@@ -3,13 +3,17 @@ package kr.silverbridge.main.domain.admin.service;
 import kr.silverbridge.main.domain.admin.dto.AdminOperationDashboardResponse;
 import kr.silverbridge.main.domain.admin.dto.AdminSafetyDashboardResponse;
 import kr.silverbridge.main.domain.anomaly.client.AiLiveStreamSubscriber;
+import kr.silverbridge.main.domain.anomaly.dto.AdminAnomalyPeriod;
 import kr.silverbridge.main.domain.anomaly.entity.AnomalyIncident;
 import kr.silverbridge.main.domain.anomaly.entity.AnomalyReviewStatus;
 import kr.silverbridge.main.domain.anomaly.repository.AnomalyIncidentRepository;
+import kr.silverbridge.main.domain.anomaly.service.AdminAnomalyService;
 import kr.silverbridge.main.domain.announcement.repository.AnnouncementDraftRepository;
 import kr.silverbridge.main.domain.camera.repository.CameraRepository;
 import kr.silverbridge.main.domain.connection.repository.ConnectionRepository;
 import kr.silverbridge.main.domain.inquiry.repository.InquiryRepository;
+import kr.silverbridge.main.domain.notification.dto.AdminNotificationPeriod;
+import kr.silverbridge.main.domain.notification.service.AdminNotificationService;
 import kr.silverbridge.main.domain.user.repository.UserRepository;
 import kr.silverbridge.main.global.enums.ConnectionStatus;
 import kr.silverbridge.main.global.enums.DetectedType;
@@ -18,6 +22,7 @@ import kr.silverbridge.main.global.enums.Role;
 import kr.silverbridge.main.global.enums.Status;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -65,6 +70,13 @@ public class AdminDashboardService {
     private final ConnectionRepository connectionRepository;
     private final InquiryRepository inquiryRepository;
     private final UserRepository userRepository;
+    // 아래 두 값은 각 화면(알림 이력·이상감지 로그)의 요약 계산을 그대로 부른다 - 대시보드와 그 화면 숫자가 어긋나지 않게 복제하지 않는다.
+    private final AdminNotificationService adminNotificationService;
+    private final AdminAnomalyService adminAnomalyService;
+
+    /** 서비스 전체 카메라 등록 상한(0 이하 = 끔 → 응답 null). {@code CameraService}·{@code AdminCameraService}와 같은 설정. */
+    @Value("${camera.max-total:3}")
+    private int cameraMaxTotal;
 
     /**
      * 안전 현황 탭.
@@ -96,7 +108,9 @@ public class AdminDashboardService {
                 userRepository.countWardsWithoutReachableGuardian(Role.WARD, Status.ACTIVE, ConnectionStatus.ACTIVE),
                 userRepository.countWardsWithoutCamera(Role.WARD, Status.ACTIVE),
                 connectionRepository.countByStatusAndCreatedAtBefore(
-                        ConnectionStatus.PENDING, now.minusDays(STALE_PENDING_DAYS)));
+                        ConnectionStatus.PENDING, now.minusDays(STALE_PENDING_DAYS)),
+                // 알림 이력 화면의 "오늘 · 전송 실패"와 같은 값. NOT_SENT(정지 차단·채널 꺼 둠)는 실패가 아니다.
+                adminNotificationService.getSummary(null, AdminNotificationPeriod.TODAY, null).failed());
 
         return new AdminSafetyDashboardResponse(
                 aiConnected,
@@ -104,7 +118,8 @@ public class AdminDashboardService {
                 totalCameras,
                 streamingCameras,
                 safetyEvents,
-                todayAnomaly(AdminDashboardClock.startOfDay(now)));
+                todayAnomaly(AdminDashboardClock.startOfDay(now)),
+                now);
     }
 
     /** 운영 현황 탭. */
@@ -124,14 +139,17 @@ public class AdminDashboardService {
                         userRepository.countByStatusAndRole(Status.ACTIVE, Role.GUARDIAN)),
                 new AdminOperationDashboardResponse.Cameras(
                         cameraRepository.count(),
-                        cameraRepository.countDistinctWards()),
+                        cameraRepository.countDistinctWards(),
+                        // 0을 내리면 "한 대도 못 단다"로 읽힌다 - 끈 상한은 null
+                        cameraMaxTotal > 0 ? cameraMaxTotal : null),
                 pendingConnections,
                 unansweredInquiries(now),
                 signupTrend(now),
                 new AdminOperationDashboardResponse.PendingItems(
                         pendingConnections,
                         todayInquiries,
-                        announcementDraftRepository.count()));
+                        announcementDraftRepository.count()),
+                now);
     }
 
     /**
@@ -162,7 +180,9 @@ public class AdminDashboardService {
                         byReview.getOrDefault(AnomalyReviewStatus.PENDING, 0L),
                         byReview.getOrDefault(AnomalyReviewStatus.REAL, 0L),
                         byReview.getOrDefault(AnomalyReviewStatus.FALSE_ALARM, 0L),
-                        byReview.getOrDefault(AnomalyReviewStatus.CONFLICTED, 0L)));
+                        byReview.getOrDefault(AnomalyReviewStatus.CONFLICTED, 0L)),
+                // 판정 난 상황(위험+오탐)만의 평균 - 이상감지 로그 요약과 같은 계산·같은 기준(첫 감지 시각, KST 오늘)
+                adminAnomalyService.getSummary(AdminAnomalyPeriod.TODAY, null, null).aiConfidence());
     }
 
     /**
