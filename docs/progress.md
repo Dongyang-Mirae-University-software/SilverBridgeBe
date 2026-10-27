@@ -2346,3 +2346,14 @@ M-1 연결 뒤 쓰기의 시간 초과·끊김·2xx 본문 이상 = 504 `HOSPITA
 ### [2026-10-27] Swagger 태그 등록 누락 정리 + `SwaggerTagSyncTest`
 
 2026-10-07 이후 컨트롤러 태그 6개(피보호자·보호자 - AI 챗봇, 보호자 - 대시보드·알림 종류 설정, 관리자 - 디바이스 관리·제휴 병원 관리)를 `SwaggerConfig.tags()` 역할 구역 끝에 설명과 함께 등록(28개, 이름 변경 없음, API 동작 무변경). `SwaggerTagSyncTest`(컨텍스트 없는 클래스패스 스캔)가 컨트롤러 @Tag 누락·등록 목록 양방향 일치·이름 규칙·구역 순서를 고정한다. 경로 순서 목록의 잘못된 구역 주석(`[보호자 - 문의]` → `[보호자 - 이상감지]`)도 고쳤다.
+
+### [2026-10-27] 관리자 대시보드 보강 - 디자인 대비 빠진 값 채우기 (branch `feature/admin-dashboard-enrich`)
+
+claude.ai/design 관리자 대시보드와 대조해 빠진 값만 추가했다(기존 칸 무변경, 마이그레이션·JPQL 없음).
+- `/safety`: `safetyEvents.todayFailedNotifications`(알림 이력 요약 TODAY의 failed 재사용, NOT_SENT 제외)·`todayAnomaly.aiConfidence`(이상감지 요약 TODAY 재사용, 판정 난 상황만, 0건이면 null)·`generatedAt`.
+- `/operation`: `cameras.maxTotal`(상한, 끄면 null - 단위 분리)·`generatedAt`.
+- 새 `GET /api/admin/dashboard/ai-status`: 이상감지 = WS 구독(OK/DISCONNECTED), 챗봇 = AI `/health`(OK/null 확인 불가, 연결 3초·전체 5초·전용 마감 스레드·리다이렉트 미추종). 챗봇 칸은 AI 서버 응답까지만 보장한다.
+- 만들지 않음: 안부 말벗·정서 분석 상태(BE에 없는 서비스), "24시간 넘게 꺼진 카메라"(끊긴 시각 미저장). 동수 칸 누락은 FE에 보고.
+- 테스트: 서비스 6·클라이언트 8(실제 HTTP 서버)·상태 3·HTTP 직렬화 3·보안 6건, `./gradlew build` 통과.
+- 산출물: `docs/(2026-10-27) feature-admin-dashboard-enrich.md`(관리자 웹 계약 포함).
+

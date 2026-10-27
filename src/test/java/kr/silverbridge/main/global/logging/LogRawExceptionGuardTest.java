@@ -47,6 +47,7 @@ class LogRawExceptionGuardTest {
             "domain/medication/service/MedicationOcrService.java",
             "domain/medication/service/MedicationOcrSlots.java",
             "domain/admin/service/AdminCameraService.java",
+            "domain/admin/client/AiServerHealthClient.java",
             "domain/hospital/client/ReservationAdminClient.java",
             "domain/admin/service/AdminHospitalService.java");
 

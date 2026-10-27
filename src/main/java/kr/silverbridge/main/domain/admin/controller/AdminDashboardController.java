@@ -5,8 +5,10 @@ import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import kr.silverbridge.main.domain.admin.dto.AdminAiStatusResponse;
 import kr.silverbridge.main.domain.admin.dto.AdminOperationDashboardResponse;
 import kr.silverbridge.main.domain.admin.dto.AdminSafetyDashboardResponse;
+import kr.silverbridge.main.domain.admin.service.AdminAiStatusService;
 import kr.silverbridge.main.domain.admin.service.AdminDashboardService;
 import kr.silverbridge.main.global.response.ApiResponse;
 import lombok.RequiredArgsConstructor;
@@ -36,6 +38,7 @@ import org.springframework.web.bind.annotation.RestController;
 public class AdminDashboardController {
 
     private final AdminDashboardService adminDashboardService;
+    private final AdminAiStatusService adminAiStatusService;
 
     @Operation(summary = "안전 현황 조회",
             description = """
@@ -52,6 +55,17 @@ public class AdminDashboardController {
                     byType 에는 실제로 집계된 유형만 담깁니다(0건 유형은 항목 자체가 없습니다).
                     review 의 네 값으로 오탐률을 **응답률과 함께** 계산하세요
                     (응답 수 = total - pending). 오탐 건수만 단독 표시하면 분모가 거짓이 됩니다.
+                    aiConfidence 는 판정 난 상황(위험+오탐)만의 AI confidence 평균이며, 판정 난 상황이 0건이면 average 가 null 입니다.
+
+                    [전달 실패한 알림 - safetyEvents.todayFailedNotifications]
+                    오늘(KST) 전달 실패(FAILED) 건수로, 알림 이력 요약 period=TODAY 의 failed 와 같습니다.
+                    발송 안 함(NOT_SENT - 정지 차단·채널 꺼 둠)은 실패가 아니라 세지 않습니다.
+
+                    [연결이 끊긴 카메라]
+                    "지금" 끊긴 대수입니다. 끊긴 시각을 저장하지 않아 "24시간 넘게 꺼진 카메라"는 알 수 없습니다.
+
+                    [generatedAt]
+                    응답을 만든 시각(KST, 오프셋 포함)입니다. "N분 전 확인" 표시에 쓰세요.
 
                     [폴링]
                     30초 이상을 권장합니다. 서버 캐시는 두지 않습니다.
@@ -81,6 +95,13 @@ public class AdminDashboardController {
                     [미답변 문의]
                     longestWaitingHours 가 null 이면 대기 중인 문의가 없다는 뜻입니다(0시간이 아닙니다).
 
+                    [카메라 - 단위가 다릅니다]
+                    registered(등록 대수) · wards(카메라를 등록한 피보호자 수, 명) · maxTotal(서비스 등록 상한, 대 - 꺼져 있으면 null).
+                    "등록 대수 / 상한"은 registered / maxTotal 입니다. 대수와 사람 수를 한 분수로 섞지 마세요.
+
+                    [generatedAt]
+                    응답을 만든 시각(KST, 오프셋 포함)입니다.
+
                     [폴링]
                     30초 이상을 권장합니다. 서버 캐시는 두지 않습니다.
                     """)
@@ -93,5 +114,36 @@ public class AdminDashboardController {
     @GetMapping("/operation")
     public ApiResponse<AdminOperationDashboardResponse> getOperationDashboard() {
         return ApiResponse.ok(adminDashboardService.getOperationDashboard());
+    }
+
+    @Operation(summary = "AI 서비스 상태 조회",
+            description = """
+                    BE가 확인할 수 있는 AI 서비스의 상태를 요청 때마다 새로 확인합니다(서버 캐시 없음).
+
+                    [anomalyDetection - 이상감지(영상 분석)]
+                    백엔드의 AI WebSocket 구독 상태입니다. OK(연결됨) / DISCONNECTED(끊김 - 이상감지 알림이 나가지 않음).
+
+                    [chatbot - AI 의료 챗봇]
+                    챗봇을 서빙하는 AI 서버의 GET /health 응답입니다(연결 3초·전체 5초 제한).
+                    OK(정상 응답) / null(확인 불가 - 시간 초과·통신 오류·서버 오류·설정 없음).
+                    AI 서버 프로세스 응답까지만 확인하며 모델 응답 성공은 보장하지 않습니다.
+                    확인 실패를 "중단"으로 단정하지 않으므로 이 칸에는 DISCONNECTED가 오지 않습니다.
+
+                    [만들지 않은 항목]
+                    "AI 안부 말벗 · 정서 상태 분석"은 BE에 없는 서비스라 상태를 내리지 않습니다.
+
+                    [응답 시간]
+                    AI가 응답하지 않으면 최대 약 5초 걸립니다. 안전 현황(/safety)과 따로 호출하세요.
+                    폴링은 60초 이상을 권장합니다.
+                    """)
+    @ApiResponses({
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "AI 서비스 상태 반환(확인 실패도 200 + null)"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "인증 토큰 없음 또는 만료", content = @Content),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "관리자 권한 없음", content = @Content),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "500", description = "서버 내부 오류", content = @Content)
+    })
+    @GetMapping("/ai-status")
+    public ApiResponse<AdminAiStatusResponse> getAiStatus() {
+        return ApiResponse.ok(adminAiStatusService.getAiStatus());
     }
 }
