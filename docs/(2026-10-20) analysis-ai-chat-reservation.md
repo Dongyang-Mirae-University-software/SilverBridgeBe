@@ -318,3 +318,14 @@ FE → BE POST /api/{guardian|ward}/chat (userId는 토큰으로 덮어씀, cont
 - **안부말벗 담당 메모(4-11 갱신)**: 송출 + 상담 동시 GPU 실측 최대 5,837MiB, EXAONE 뒤 여유 약 3.9GB. EXAONE 생성도 같은 GPU를 쓰므로 탑재 뒤 송출 + 상담 상태로 `[LIVE-INFER]` 처리 시간을 다시 잴 것.
 - **추천(미착수)**: ① AI MedGemma 동시 생성 1개 제한(감지를 순차 수준에 묶고, 두 번째 상담이 약 12초 더 기다림) ② 카메라 2~3대 송출 + 상담 재측정.
 - 결과 AI `docs/eval-results/2026-10-27-int8-live-check.*`.
+
+### 4-13. MedGemma 동시 생성 1개 제한 (2026-10-27, AI #64·#65, gosky AI `00e0f20` 10:43 재시작)
+
+- 4-12 추천 ①을 반영했다. MedGemma 생성을 프로세스 안 슬롯(세마포어)으로 한 줄로 세운다 - 감지 스레드는 이 슬롯을 모른다. 설정은 코드 기본값이라 `.env` 변경 없이 배포만으로 적용(`MEDGEMMA_MAX_CONCURRENT_GENERATE=1`, 0 이하면 끔).
+- **대기 상한**: 일반 상담 60초(`MEDGEMMA_GEN_WAIT_TIMEOUT_SEC`), 응급 턴(키워드·라우터 응급) 3초(`MEDGEMMA_GEN_WAIT_TIMEOUT_EMERGENCY_SEC`). 넘기면 생성하지 않고 기존 fallback 응답(HTTP 200, `engine: fallback`, 응급이면 119 경고 박스)으로 답한다 - BE 계약 변경 없음. 자해 고정 응답은 MedGemma를 거치지 않아 무관.
+- **로그**: 대기 `[MEDGEMMA-GEN-WAIT] waitMs·waiting`, 상한 초과 `[MEDGEMMA-GEN-BUSY]` + `[CHAT-LLM-FAILED] MedGemmaBusyError`(다른 생성 실패와 구분해 셀 수 있다).
+- **재측정**(카메라 1대, 같은 방법): 송출만 20.5ms·85.5% → 상담 2명 동시 30.2ms(**×1.48**, 오전 슬롯 없음 ×2.03)·87.5%. 오전 "상담 순차"(×1.43) 수준으로 내려왔다. 오후 S1이 오전보다 약 3ms 높은 것은 화면 차이로 보고 같은 측정 안 배율로 비교했다. S3 한 구간에 1프레임 271ms가 있었다(기준 300ms 안, 원인 미확인).
+- **상담**: 10/10 HTTP 200, 최대 30.2초(BE 130초 안), 대기 7건(6.3~14.8초). 응급 문항 1건이 앞 생성에 걸려 3초 뒤 119 fallback(5.4초 응답, high·경고 박스) - 의도한 대가(그 턴엔 증상 정리 문장 없음). 일반 문항 1건 병원 권유 누락은 생성 편차(슬롯은 생성 결과를 바꾸지 않음).
+- **GPU**: 최대 5,709MiB, EXAONE 2,560MiB 뒤 여유 약 4.0GB.
+- **남은 것**: 카메라 2~3대 송출 + 상담 재측정(4-12 추천 ②). EXAONE을 같은 GPU에 올리면 이 슬롯 밖에서 겹치므로 같은 제한이 필요하다. BE 동시 상한(10건)까지 몰리면 뒤쪽 일반 상담은 60초 대기 뒤 fallback이 된다.
+- 결과 AI `docs/eval-results/2026-10-27-medgemma-gen-lock.*`.
