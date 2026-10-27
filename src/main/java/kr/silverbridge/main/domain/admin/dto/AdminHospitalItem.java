@@ -60,7 +60,7 @@ public record AdminHospitalItem(
             Integer waitingCount,
             @Schema(description = "평균 대기(분)", example = "15")
             Integer averageWaitingMinutes,
-            @Schema(description = "오늘 예약 수(관리자 입력값 - 실제 예약 집계 아님)", example = "0")
+            @Schema(description = "오늘(KST) 예약 수 - 예약 서비스가 예약 행을 센 값(취소·거절 제외)", example = "0")
             Integer todayReservationCount,
             @Schema(description = "환자 접수 중", example = "true")
             Boolean acceptingPatients,

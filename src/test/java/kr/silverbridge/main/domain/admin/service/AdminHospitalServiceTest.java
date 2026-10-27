@@ -276,7 +276,7 @@ class AdminHospitalServiceTest {
     class StatusAndDepartments {
 
         private final AdminHospitalStatusRequest notice =
-                new AdminHospitalStatusRequest(AdminHospitalStatusRequest.OperationStatus.HOLIDAY, null, null, null, null, null, "휴진");
+                new AdminHospitalStatusRequest(AdminHospitalStatusRequest.OperationStatus.HOLIDAY, null, null, null, null, "휴진");
 
         @Test
         @DisplayName("상태: 삭제된(목록에 없는) 병원이면 404이고 감사 로그·호출이 없다 - 예약 서비스는 삭제된 병원도 바꿔 준다")
@@ -401,7 +401,7 @@ class AdminHospitalServiceTest {
             when(client.updateHospitalStatus(anyLong(), anyMap()))
                     .thenThrow(new CustomException(ErrorCode.HOSPITAL_SERVICE_UNAVAILABLE));
             assertThatThrownBy(() -> service.updateStatus(ADMIN, 1,
-                    new AdminHospitalStatusRequest(null, null, null, null, null, true, null)))
+                    new AdminHospitalStatusRequest(null, null, null, null, true, null)))
                     .extracting(e -> ((CustomException) e).getErrorCode()).isEqualTo(ErrorCode.HOSPITAL_SERVICE_UNAVAILABLE);
         }
 
@@ -421,7 +421,7 @@ class AdminHospitalServiceTest {
 
             when(client.updateHospitalStatus(anyLong(), anyMap())).thenReturn(json("{\"operationStatus\":\"CLOSED\"}"));
             service.updateStatus(ADMIN, 1, new AdminHospitalStatusRequest(
-                    AdminHospitalStatusRequest.OperationStatus.CLOSED, null, 4, null, null, null, null));
+                    AdminHospitalStatusRequest.OperationStatus.CLOSED, null, 4, null, null, null));
             verify(auditLogService).log(ADMIN, AdminAuditAction.HOSPITAL_STATUS_CHANGE, "hospital:1",
                     "operationStatus=CLOSED, waitingCount=4");
         }
@@ -458,7 +458,7 @@ class AdminHospitalServiceTest {
             when(client.updateHospitalStatus(anyLong(), anyMap())).thenReturn(json("{\"operationStatus\":\"OPEN\"}"));
 
             service.getSummary(ADMIN);
-            service.updateStatus(ADMIN, 1, new AdminHospitalStatusRequest(null, null, null, null, null, true, null));
+            service.updateStatus(ADMIN, 1, new AdminHospitalStatusRequest(null, null, null, null, true, null));
 
             InOrder order = inOrder(client);
             order.verify(client).withinCall(any());

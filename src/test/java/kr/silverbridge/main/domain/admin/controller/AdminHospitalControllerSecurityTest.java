@@ -54,7 +54,7 @@ class AdminHospitalControllerSecurityTest {
     private final AdminHospitalUpdateRequest update =
             new AdminHospitalUpdateRequest("이름", null, null, null, null, null, null, null);
     private final AdminHospitalStatusRequest status =
-            new AdminHospitalStatusRequest(null, null, null, null, null, true, null);
+            new AdminHospitalStatusRequest(null, null, null, null, true, null);
     private final AdminHospitalDepartmentRequest department = new AdminHospitalDepartmentRequest("내과");
 
     private List<Executable> allEndpoints(String userId) {

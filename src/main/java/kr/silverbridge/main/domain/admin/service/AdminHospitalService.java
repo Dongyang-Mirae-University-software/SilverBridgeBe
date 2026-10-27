@@ -196,7 +196,6 @@ public class AdminHospitalService {
             putIfPresent(body, "congestionLevel", request.congestionLevel() == null ? null : request.congestionLevel().name());
             putIfPresent(body, "waitingCount", request.waitingCount());
             putIfPresent(body, "averageWaitingMinutes", request.averageWaitingMinutes());
-            putIfPresent(body, "todayReservationCount", request.todayReservationCount());
             putIfPresent(body, "acceptingPatients", request.acceptingPatients());
             putIfPresent(body, "notice", TextSanitizer.sanitize(request.notice()));
 
