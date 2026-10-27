@@ -1,5 +1,6 @@
 package kr.silverbridge.main.domain.connection.listener;
 
+import kr.silverbridge.main.domain.notification.channel.WardSmsAssertions;
 import kr.silverbridge.main.domain.connection.event.ConnectionAcceptedEvent;
 import kr.silverbridge.main.domain.connection.event.ConnectionDisconnectedEvent;
 import kr.silverbridge.main.domain.connection.event.ConnectionForcedEvent;
@@ -53,7 +54,7 @@ class ConnectionNotificationListenerTest {
     }
 
     @Test
-    @DisplayName("연결 요청 이벤트(relation 있음) → 피보호자에게 WS + 관계 포함 알림 디스패치")
+    @DisplayName("연결 요청 이벤트 → 피보호자에게 WS + 이름만 담은 단문 알림(관계는 싣지 않는다, 2026-10-27)")
     void handleRequested_relation있음_관계포함문구() {
         ConnectionRequestedEvent event =
                 new ConnectionRequestedEvent(CONNECTION_ID, GUARDIAN_ID, WARD_ID, GUARDIAN_NAME, "아들");
@@ -65,13 +66,14 @@ class ConnectionNotificationListenerTest {
         ArgumentCaptor<NotificationContent> captor = ArgumentCaptor.forClass(NotificationContent.class);
         // 두 번째 인자 = 관련 피보호자(관리자 알림 이력). 연결 요청은 수신자가 곧 피보호자다
         verify(notificationDispatcher).dispatch(eq(WARD_ID), eq(WARD_ID), eq(NotificationType.CONNECTION_REQUEST), captor.capture());
-        assertThat(captor.getValue().title()).isEqualTo("연결 요청");
-        assertThat(captor.getValue().body()).isEqualTo("아들 박보호님이 연결을 요청했어요.");
+        assertThat(captor.getValue().title()).isEqualTo("실버브릿지");
+        assertThat(captor.getValue().body()).isEqualTo("박보호님이 가족 연결을 요청했어요. 앱에서 확인해 주세요.")
+                .doesNotContain("아들");
         assertThat(captor.getValue().data()).containsEntry("type", "CONNECTION_REQUEST");
     }
 
     @Test
-    @DisplayName("연결 요청 이벤트(relation 없음) → fallback 문구로 디스패치")
+    @DisplayName("연결 요청 이벤트(relation 없음) → 같은 이름 문구로 디스패치")
     void handleRequested_relation없음_fallback문구() {
         ConnectionRequestedEvent event =
                 new ConnectionRequestedEvent(CONNECTION_ID, GUARDIAN_ID, WARD_ID, GUARDIAN_NAME, null);
@@ -80,7 +82,7 @@ class ConnectionNotificationListenerTest {
 
         ArgumentCaptor<NotificationContent> captor = ArgumentCaptor.forClass(NotificationContent.class);
         verify(notificationDispatcher).dispatch(eq(WARD_ID), eq(WARD_ID), eq(NotificationType.CONNECTION_REQUEST), captor.capture());
-        assertThat(captor.getValue().body()).isEqualTo("박보호 보호자가 연결을 요청했습니다.");
+        assertThat(captor.getValue().body()).isEqualTo("박보호님이 가족 연결을 요청했어요. 앱에서 확인해 주세요.");
     }
 
     @Test
@@ -117,7 +119,7 @@ class ConnectionNotificationListenerTest {
     }
 
     @Test
-    @DisplayName("보호자가 해제 → 피보호자에게 '보호자가 연결을 해제했습니다' 디스패치")
+    @DisplayName("보호자가 해제 → 피보호자에게 '가족 연결이 해제됐어요' 단문 디스패치")
     void handleDisconnected_보호자해제_문구() {
         ConnectionDisconnectedEvent event = new ConnectionDisconnectedEvent(
                 CONNECTION_ID, WARD_ID, ConnectionDisconnectedEvent.DisconnectedBy.GUARDIAN, GUARDIAN_ID, WARD_ID);
@@ -127,7 +129,8 @@ class ConnectionNotificationListenerTest {
         verify(webSocketEventPublisher).sendToUser(eq(WARD_ID), eq("connection-cancelled"), anyMap());
         ArgumentCaptor<NotificationContent> captor = ArgumentCaptor.forClass(NotificationContent.class);
         verify(notificationDispatcher).dispatch(eq(WARD_ID), eq(WARD_ID), eq(NotificationType.CONNECTION_DISCONNECTED), captor.capture());
-        assertThat(captor.getValue().body()).isEqualTo("보호자가 연결을 해제했습니다.");
+        assertThat(captor.getValue().title()).isEqualTo("실버브릿지");
+        assertThat(captor.getValue().body()).isEqualTo("가족 연결이 해제됐어요.");
         // 해제 와이어 식별자는 CONNECTION_CANCELLED(레거시 호환). 거절(CONNECTION_REFUSED)과 섞이지 않음을 고정.
         assertThat(captor.getValue().data()).containsEntry("type", "CONNECTION_CANCELLED");
     }
@@ -149,7 +152,7 @@ class ConnectionNotificationListenerTest {
     }
 
     @Test
-    @DisplayName("보호자 탈퇴 → 피보호자에게 '보호자가 탈퇴해 연결이 종료되었습니다' (M-2)")
+    @DisplayName("보호자 탈퇴 → 피보호자에게도 '가족 연결이 해제됐어요' 단문(누가 끊었다고 말하지 않는다, M-2 취지 유지)")
     void handleDisconnected_보호자탈퇴_문구() {
         ConnectionDisconnectedEvent event = new ConnectionDisconnectedEvent(
                 CONNECTION_ID, WARD_ID, ConnectionDisconnectedEvent.DisconnectedBy.WITHDRAWN, GUARDIAN_ID, WARD_ID);
@@ -158,8 +161,8 @@ class ConnectionNotificationListenerTest {
 
         ArgumentCaptor<NotificationContent> captor = ArgumentCaptor.forClass(NotificationContent.class);
         verify(notificationDispatcher).dispatch(eq(WARD_ID), eq(WARD_ID), eq(NotificationType.CONNECTION_DISCONNECTED), captor.capture());
-        // "보호자가 연결을 해제했습니다"로 나가면 남은 쪽은 "나를 끊었다"로 읽는다
-        assertThat(captor.getValue().body()).isEqualTo("보호자가 탈퇴해 연결이 종료되었습니다.");
+        // "보호자가 연결을 해제했습니다"로 나가면 남은 쪽은 "나를 끊었다"로 읽는다 - 피보호자 단문은 주체를 말하지 않는다
+        assertThat(captor.getValue().body()).isEqualTo("가족 연결이 해제됐어요.");
         assertThat(captor.getValue().data()).containsEntry("type", "CONNECTION_CANCELLED");
     }
 
@@ -177,14 +180,26 @@ class ConnectionNotificationListenerTest {
     }
 
     @Test
-    @DisplayName("연결 요청 relation이 제로폭 문자만 → 빈 접두어 없이 fallback 문구 (CONN-G14, DTO와 같은 판정 기준)")
+    @DisplayName("연결 요청 relation이 제로폭 문자만 → 문구에 영향 없음 (CONN-G14)")
     void handleRequested_보이지않는_relation은_fallback() {
         listener.handleRequested(
                 new ConnectionRequestedEvent(CONNECTION_ID, GUARDIAN_ID, WARD_ID, GUARDIAN_NAME, "\u200B\uFEFF"));
 
         ArgumentCaptor<NotificationContent> captor = ArgumentCaptor.forClass(NotificationContent.class);
         verify(notificationDispatcher).dispatch(eq(WARD_ID), eq(WARD_ID), eq(NotificationType.CONNECTION_REQUEST), captor.capture());
-        assertThat(captor.getValue().body()).isEqualTo("박보호 보호자가 연결을 요청했습니다.");
+        assertThat(captor.getValue().body()).isEqualTo("박보호님이 가족 연결을 요청했어요. 앱에서 확인해 주세요.");
+    }
+
+    @Test
+    @DisplayName("연결 요청: 보호자 이름이 길어 단문(90바이트)을 넘거나 보이는 글자가 없으면 '가족이'로 대신한다")
+    void requestBody_긴이름_빈이름은_가족이() {
+        String longName = "가".repeat(14);   // 28바이트 - 이름 칸 한도(27바이트)를 1 넘는다
+        assertThat(ConnectionNotificationListener.requestBody(longName))
+                .isEqualTo("가족이 연결을 요청했어요. 앱에서 확인해 주세요.");
+        assertThat(ConnectionNotificationListener.requestBody("가".repeat(13)))
+                .isEqualTo("가".repeat(13) + "님이 가족 연결을 요청했어요. 앱에서 확인해 주세요.");
+        assertThat(ConnectionNotificationListener.requestBody("\u200B")).startsWith("가족이");
+        assertThat(ConnectionNotificationListener.requestBody(null)).startsWith("가족이");
     }
 
     @Test
@@ -206,8 +221,8 @@ class ConnectionNotificationListenerTest {
         assertThat((java.util.Map<String, Object>) wardWs.getValue())
                 .containsEntry("connectionId", CONNECTION_ID)
                 .containsEntry("type", "CONNECTION_FORCED")
-                .containsEntry("title", "보호자 연결")
-                .containsEntry("body", "관리자가 박보호님을 보호자로 연결했습니다.");
+                .containsEntry("title", "보호자 연결")   // 앱 화면 제목은 그대로
+                .containsEntry("body", "가족과 연결됐어요. 앱에서 확인해 주세요.");
 
         // FCM 문구와 WS 문구가 같아야 FE가 같은 알림으로 다룬다
         ArgumentCaptor<NotificationContent> guardianFcm = ArgumentCaptor.forClass(NotificationContent.class);
@@ -216,7 +231,8 @@ class ConnectionNotificationListenerTest {
         assertThat(guardianFcm.getValue().data()).containsEntry("type", "CONNECTION_FORCED");
         ArgumentCaptor<NotificationContent> wardFcm = ArgumentCaptor.forClass(NotificationContent.class);
         verify(notificationDispatcher).dispatch(eq(WARD_ID), eq(WARD_ID), eq(NotificationType.CONNECTION_FORCED), wardFcm.capture());
-        assertThat(wardFcm.getValue().body()).isEqualTo("관리자가 박보호님을 보호자로 연결했습니다.");
+        assertThat(wardFcm.getValue().title()).isEqualTo("실버브릿지");
+        assertThat(wardFcm.getValue().body()).isEqualTo("가족과 연결됐어요. 앱에서 확인해 주세요.");
     }
 
     @Test
@@ -236,15 +252,17 @@ class ConnectionNotificationListenerTest {
 
     @org.junit.jupiter.params.ParameterizedTest
     @org.junit.jupiter.params.provider.CsvSource({
-            "GUARDIAN, WD0001, 보호자가 연결을 해제했습니다.",
-            "WARD, GD0001, 피보호자가 연결을 해제했습니다.",
-            "ADMIN, GD0001, 관리자가 연결을 해제했습니다.",
-            "WITHDRAWN, WD0001, 보호자가 탈퇴해 연결이 종료되었습니다.",
-            "WITHDRAWN, GD0001, 피보호자가 탈퇴해 연결이 종료되었습니다."
+            "GUARDIAN, WD0001, 실버브릿지, 가족 연결이 해제됐어요.",
+            "WARD, GD0001, 연결 해제, 피보호자가 연결을 해제했습니다.",
+            "ADMIN, GD0001, 연결 해제, 관리자가 연결을 해제했습니다.",
+            "ADMIN, WD0001, 실버브릿지, 가족 연결이 해제됐어요.",
+            "WITHDRAWN, WD0001, 실버브릿지, 가족 연결이 해제됐어요.",
+            "WITHDRAWN, GD0001, 연결 해제, 피보호자가 탈퇴해 연결이 종료되었습니다."
     })
     @DisplayName("연결 해제 WS(connection-cancelled)에 해제 주체와 FCM과 같은 제목·본문을 싣는다, connectionId 유지 (CONN-G12)")
     @SuppressWarnings("unchecked")
-    void handleDisconnected_WS에_주체별_문구(ConnectionDisconnectedEvent.DisconnectedBy by, String target, String expectedBody) {
+    void handleDisconnected_WS에_주체별_문구(ConnectionDisconnectedEvent.DisconnectedBy by, String target,
+                                         String expectedTitle, String expectedBody) {
         listener.handleDisconnected(new ConnectionDisconnectedEvent(CONNECTION_ID, target, by, GUARDIAN_ID, WARD_ID));
 
         ArgumentCaptor<Object> ws = ArgumentCaptor.forClass(Object.class);
@@ -258,7 +276,19 @@ class ConnectionNotificationListenerTest {
 
         ArgumentCaptor<NotificationContent> fcm = ArgumentCaptor.forClass(NotificationContent.class);
         verify(notificationDispatcher).dispatch(eq(target), eq(WARD_ID), eq(NotificationType.CONNECTION_DISCONNECTED), fcm.capture());
-        assertThat(fcm.getValue().title()).isEqualTo("연결 해제");
+        // 보호자는 기존 제목 그대로, 피보호자 푸시·문자는 앱 이름 제목(앱 화면 WS 제목은 둘 다 "연결 해제")
+        assertThat(fcm.getValue().title()).isEqualTo(expectedTitle);
         assertThat(fcm.getValue().body()).isEqualTo(expectedBody);
+    }
+
+    @Test
+    @DisplayName("피보호자 문자 규칙: 연결 요청(이름 최대 20자 포함)·강제 연결·해제 문구가 90바이트 단문 (2026-10-27)")
+    void 피보호자_문자_규칙() {
+        WardSmsAssertions.assertPlainWardSms(ConnectionNotificationListener.requestBody(GUARDIAN_NAME));
+        WardSmsAssertions.assertPlainWardSms(ConnectionNotificationListener.requestBody("가".repeat(20)));
+        WardSmsAssertions.assertPlainWardSms(ConnectionNotificationListener.requestBody("😀".repeat(20)));
+        WardSmsAssertions.assertPlainWardSms(ConnectionNotificationListener.REQUEST_BODY_FALLBACK);
+        WardSmsAssertions.assertPlainWardSms(ConnectionNotificationListener.FORCED_WARD_BODY);
+        WardSmsAssertions.assertPlainWardSms(ConnectionNotificationListener.DISCONNECTED_WARD_BODY);
     }
 }

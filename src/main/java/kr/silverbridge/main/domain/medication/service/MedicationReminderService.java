@@ -1,9 +1,9 @@
 package kr.silverbridge.main.domain.medication.service;
 
-import kr.silverbridge.main.domain.medication.entity.DoseAmounts;
 import kr.silverbridge.main.domain.medication.entity.MedicationReminderLog;
 import kr.silverbridge.main.domain.medication.entity.MedicationTimeSlot;
 import kr.silverbridge.main.domain.notification.channel.NotificationContent;
+import kr.silverbridge.main.domain.notification.channel.WardNotificationText;
 import kr.silverbridge.main.domain.notification.dispatch.NotificationDispatcher;
 import kr.silverbridge.main.domain.notification.dispatch.NotificationType;
 import lombok.RequiredArgsConstructor;
@@ -12,7 +12,6 @@ import org.springframework.stereotype.Service;
 
 import java.time.LocalDate;
 import java.time.LocalTime;
-import java.time.format.DateTimeFormatter;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -36,10 +35,6 @@ import java.util.stream.Collectors;
 @Service
 @RequiredArgsConstructor
 public class MedicationReminderService {
-
-    private static final DateTimeFormatter TIME_FORMAT = DateTimeFormatter.ofPattern("HH:mm");
-    /** 묶음 알림 본문에 이름을 적는 약 수 - 나머지는 "외 N개"(문자가 너무 길어지지 않게). */
-    static final int NAMES_SHOWN = 2;
 
     private final MedicationReminderPlanner planner;
     private final NotificationDispatcher notificationDispatcher;
@@ -80,21 +75,15 @@ public class MedicationReminderService {
     }
 
     /**
-     * 알림 문구. 어르신이 읽을 문장이라 무엇을·언제·얼마나인지 한 줄에 담는다.
-     * 재알림은 "안 드신 것 같다"가 아니라 "체크가 안 되어 있다"로 적는다 — 실제로는 드시고 체크만 안 한 경우가 많다.
+     * 알림 문구(2026-10-27 단순화). 피보호자 휴대폰 문자로도 나가므로 {@link WardNotificationText} 규칙대로 단문 한 줄이다 -
+     * 약 이름·개수·용량·시각은 넣지 않는다(앱 화면에서 본다). 재알림은 "안 드셨다"가 아니라 체크를 부탁하는 말로 적는다 —
+     * 실제로는 드시고 체크만 안 한 경우가 많다.
      */
-    private NotificationContent content(MedicationReminderTarget target) {
-        boolean retry = target.attempt() == MedicationReminderLog.ATTEMPT_RETRY;
-        String title = retry ? "약 드셨나요?" : "복약 시간이에요";
-        String body = retry
-                ? "%s이(가) 아직 복용 체크되지 않았어요.".formatted(target.name())
-                : "%s 드실 시간입니다. %s %s · %s".formatted(
-                        target.name(),
-                        target.timeSlot().label(),
-                        target.doseTime().format(TIME_FORMAT),
-                        DoseAmounts.label(target.doseAmount()));
+    static final String FIRST_BODY = "약 드실 시간이에요.";
+    static final String RETRY_BODY = "약 드셨으면 앱에서 '먹었어요'를 눌러 주세요.";
 
-        return NotificationContent.of(title, body, Map.of(
+    private NotificationContent content(MedicationReminderTarget target) {
+        return NotificationContent.of(WardNotificationText.TITLE, body(target), Map.of(
                 "type", "MEDICATION_REMINDER",
                 "medicationId", String.valueOf(target.medicationId()),
                 "doseDate", target.doseDate().toString(),
@@ -102,24 +91,12 @@ public class MedicationReminderService {
     }
 
     /**
-     * 같은 시각 약 여러 개의 묶음 문구. 첫 알림은 이름과 용량을, 재알림은 아직 체크되지 않은 약 이름을 적는다.
-     * "아침 약 6개 드실 시간입니다(08:00). 혈압약 1정, 감기약 반 알 외 4개"
-     * "아침 약 중 2개가 아직 복용 체크되지 않았어요. 혈압약, 감기약"
-     *
-     * <p>data의 {@code medicationId}는 첫 약(옛 앱 호환), {@code medicationIds}는 묶음 전체(쉼표 구분)다.</p>
+     * 같은 시각 약 여러 개의 묶음 알림. 문구는 한 건과 같고, data의 {@code medicationId}는 첫 약(옛 앱 호환),
+     * {@code medicationIds}는 묶음 전체(쉼표 구분)다.
      */
     private NotificationContent groupContent(List<MedicationReminderTarget> group) {
         MedicationReminderTarget first = group.get(0);
-        boolean retry = first.attempt() == MedicationReminderLog.ATTEMPT_RETRY;
-        String slot = first.timeSlot().label();
-        String title = retry ? "약 드셨나요?" : "복약 시간이에요";
-        String body = retry
-                ? "%s 약 중 %d개가 아직 복용 체크되지 않았어요. %s".formatted(
-                        slot, group.size(), names(group, false))
-                : "%s 약 %d개 드실 시간입니다(%s). %s".formatted(
-                        slot, group.size(), first.doseTime().format(TIME_FORMAT), names(group, true));
-
-        return NotificationContent.of(title, body, Map.of(
+        return NotificationContent.of(WardNotificationText.TITLE, body(first), Map.of(
                 "type", "MEDICATION_REMINDER",
                 "medicationId", String.valueOf(first.medicationId()),
                 "medicationIds", medicationIds(group),
@@ -127,13 +104,8 @@ public class MedicationReminderService {
                 "attempt", String.valueOf(first.attempt())));
     }
 
-    /** "혈압약 1정, 감기약 반 알 외 4개" - 앞의 {@link #NAMES_SHOWN}개만 적는다. */
-    private static String names(List<MedicationReminderTarget> group, boolean withDose) {
-        String shown = group.stream().limit(NAMES_SHOWN)
-                .map(target -> withDose ? target.name() + " " + DoseAmounts.label(target.doseAmount()) : target.name())
-                .collect(Collectors.joining(", "));
-        int rest = group.size() - NAMES_SHOWN;
-        return rest > 0 ? shown + " 외 " + rest + "개" : shown;
+    private static String body(MedicationReminderTarget target) {
+        return target.attempt() == MedicationReminderLog.ATTEMPT_RETRY ? RETRY_BODY : FIRST_BODY;
     }
 
     private static String medicationIds(List<MedicationReminderTarget> group) {
