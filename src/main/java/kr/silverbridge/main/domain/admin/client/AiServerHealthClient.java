@@ -5,6 +5,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.annotation.PreDestroy;
 import kr.silverbridge.main.domain.chat.config.ChatRelayProperties;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 import org.springframework.util.StringUtils;
 import org.springframework.web.util.UriComponentsBuilder;
@@ -53,6 +54,8 @@ public class AiServerHealthClient {
     private final Duration callTimeout;
     private final ScheduledExecutorService deadlineExecutor;
 
+    /** 생성자가 둘이라 Spring이 쓸 쪽을 명시한다 - 빠지면 기본 생성자를 찾다가 기동이 실패한다(2026-10-27 실제 발생). */
+    @Autowired
     public AiServerHealthClient(ChatRelayProperties properties, ObjectMapper objectMapper) {
         this(properties, objectMapper, CONNECT_TIMEOUT, CALL_TIMEOUT);
     }
