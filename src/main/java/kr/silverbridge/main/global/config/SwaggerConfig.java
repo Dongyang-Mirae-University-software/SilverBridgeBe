@@ -36,6 +36,7 @@ public class SwaggerConfig {
                 //
                 // ⚠️ 새 컨트롤러를 추가하면 이 목록에도 반드시 태그를 등록한다. 빠뜨리면 설명 없이
                 //    목록 맨 뒤에 붙어, 최근 기능일수록 문서가 부실해진다(2026-08-07 정리 이전 상태).
+                //    SwaggerTagSyncTest가 컨트롤러 @Tag와 이 목록·이름 규칙·역할 구역 순서를 대조한다.
                 .tags(List.of(
                         // ── 공통: 역할과 무관하게 로그인한 사용자면 호출 ──────────────
                         new Tag().name("공통 - 인증")
@@ -85,6 +86,12 @@ public class SwaggerConfig {
                                         + "※ 연결된(ACTIVE) 보호자가 한 명 이상일 때만 보입니다(없으면 404, 다시 연결되면 보입니다).\n"
                                         + "※ 파일은 Authorization 헤더로 fetch해 blob URL로 재생합니다.\n"
                                         + "※ WARD 역할 계정만 호출 가능."),
+                        new Tag().name("피보호자 - AI 챗봇")
+                                .description("AI 챗봇 상담 메시지 전송 + 내 상담 기록 목록·상세 조회(백엔드가 AI 서버로 중계)\n"
+                                        + "※ 사용자 ID는 요청 본문이 아니라 토큰에서만 정합니다 - 본인 기록만 보입니다.\n"
+                                        + "※ 상담 내용은 본인만 봅니다(보호자·관리자에게 열람 경로가 없습니다).\n"
+                                        + "※ 답변 생성에 시간이 걸려 응답이 최대 130초까지 걸릴 수 있고, 한 사람당 동시에 1건만 보낼 수 있습니다.\n"
+                                        + "※ WARD 역할 계정만 호출 가능."),
 
                         // ── 보호자(GUARDIAN) 전용: 다른 역할이 호출하면 403 ────────────
                         new Tag().name("보호자 - 연결")
@@ -117,6 +124,22 @@ public class SwaggerConfig {
                         new Tag().name("보호자 - 문의")
                                 .description("고객센터 문의 작성 및 본인 문의 목록·상세 조회.\n"
                                         + "카테고리: ANOMALY(이상감지)/HOSPITAL(병원)/ACCOUNT(계정·회원)/SERVICE(서비스 이용)/ETC(기타), 상태: WAITING(답변 대기)/ANSWERED(답변 완료).\n"
+                                        + "※ GUARDIAN 역할 계정만 호출 가능."),
+                        new Tag().name("보호자 - 대시보드")
+                                .description("보호자 홈 화면 통합 조회 - 이상감지·SOS·복약 현황과 \"확인이 필요한 일\"을 한 번에 내려줍니다.\n"
+                                        + "※ wardId를 생략하면 ACTIVE 연결된 피보호자 전원, 지정하면 그 한 명입니다(ACTIVE 연결만).\n"
+                                        + "※ 칸 하나의 조회가 실패하면 0이 아니라 null + unavailable로 표시합니다(나머지 칸은 정상 응답).\n"
+                                        + "※ GUARDIAN 역할 계정만 호출 가능."),
+                        new Tag().name("보호자 - 알림 종류 설정")
+                                .description("보호자가 받을 알림 종류별 ON/OFF 조회·변경\n"
+                                        + "※ SOS·이상감지 발생 알림은 required라 끌 수 없습니다(항상 발송).\n"
+                                        + "※ 끌 수 있는 것은 이상감지 확인 요청(재촉)과 복약 미복용 요약뿐입니다.\n"
+                                        + "※ GUARDIAN 역할 계정만 호출 가능."),
+                        new Tag().name("보호자 - AI 챗봇")
+                                .description("AI 챗봇 상담 메시지 전송 + 내 상담 기록 목록·상세 조회(백엔드가 AI 서버로 중계)\n"
+                                        + "※ 사용자 ID는 요청 본문이 아니라 토큰에서만 정합니다 - 본인 기록만 보입니다.\n"
+                                        + "※ 피보호자 대신 상담할 때 context.wardId는 ACTIVE 연결인 피보호자만 허용합니다(아니면 403). 이름·전화번호는 서버가 채웁니다.\n"
+                                        + "※ 답변 생성에 시간이 걸려 응답이 최대 130초까지 걸릴 수 있고, 한 사람당 동시에 1건만 보낼 수 있습니다.\n"
                                         + "※ GUARDIAN 역할 계정만 호출 가능."),
 
                         // ── 관리자(ADMIN) 전용 ────────────────────────────────────
@@ -155,6 +178,18 @@ public class SwaggerConfig {
                                         + "이용 제한 계정은 로그인·토큰 재발급이 막히고 어떤 알림도 받지 않습니다(강제 푸시 포함).\n"
                                         + "※ 피보호자는 이용 제한할 수 없습니다(400) — 로그인이 막히면 SOS를 보낼 수 없게 됩니다.\n"
                                         + "※ 관리자 계정은 목록에는 나오지만 수정·삭제 대상이 아닙니다(403).\n"
+                                        + "※ ADMIN 권한 계정만 호출 가능."),
+                        new Tag().name("관리자 - 디바이스 관리")
+                                .description("등록된 카메라 목록(상태 필터·검색·페이징)·요약 조회 전용. 삭제·점검 요청은 없습니다.\n"
+                                        + "모르는 값은 null입니다 - AI 수신기가 끊겼거나 재접속 직후면 liveStatus가 null이고, "
+                                        + "이때 LIVE·OFFLINE 필터는 503(CAMERA_LIVE_STATUS_UNKNOWN)입니다.\n"
+                                        + "영상·정지 화면·클립·기기 식별자는 싣지 않습니다. 조회는 감사 로그에 남기지 않습니다.\n"
+                                        + "※ ADMIN 권한 계정만 호출 가능."),
+                        new Tag().name("관리자 - 제휴 병원 관리")
+                                .description("제휴 병원 목록·요약 조회, 등록·수정·삭제, 운영 상태 변경, 진료과 추가·이름 변경·삭제.\n"
+                                        + "병원 데이터는 예약 서비스에 있고 백엔드가 중계합니다(연동이 설정되지 않은 서버는 503).\n"
+                                        + "쓰기는 호출 전에 감사 로그를 남깁니다. 결과를 알 수 없으면 504(HOSPITAL_RESULT_UNKNOWN) - "
+                                        + "다시 누르기 전에 목록에서 반영 여부를 확인하세요.\n"
                                         + "※ ADMIN 권한 계정만 호출 가능.")
                 ))
                 // 전역 JWT Bearer 인증 적용
@@ -229,11 +264,11 @@ public class SwaggerConfig {
                     "/api/guardian/ward/{wardId}/medication",
                     "/api/guardian/medication/{medicationId}",
                     "/api/guardian/ward/{wardId}/medication-alert-setting",
-                    // ── [보호자 - 문의] ──────────────────────────────
+                    // ── [보호자 - 이상감지] ──────────────────────────
                     "/api/guardian/anomaly/history",
                     "/api/guardian/anomaly/{incidentId}/feedback",
                     "/api/guardian/anomaly/reminder-setting",
-
+                    // ── [보호자 - 문의] ──────────────────────────────
                     // POST(작성)·GET(내 목록)은 단일 경로 키 → /api/guardian/inquiry 한 줄로 묶임
                     "/api/guardian/inquiry",
                     "/api/guardian/inquiry/{id}",
