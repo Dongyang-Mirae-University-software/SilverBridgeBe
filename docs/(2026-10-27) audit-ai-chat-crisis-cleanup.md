@@ -59,4 +59,4 @@
 | L-1 | 수용(라우터 칸 의존, 측정 누락 0, 시험지 v5로 감시) | - |
 | L-2 | `run_eval.direction_hint()` 분리, "높일" 정규식 누락 수정 | 실행기 테스트 |
 
-- 상세: AI `docs/eval-results/2026-10-27-safety-v5-followup.*`, `(2026-10-20) analysis-ai-chat-reservation.md` 4-14a.
+- 상세: AI `docs/eval-results/2026-10-27-safety-v5-followup.*`, `(2026-10-20) analysis-ai-chat-reservation.md` 4-17.
