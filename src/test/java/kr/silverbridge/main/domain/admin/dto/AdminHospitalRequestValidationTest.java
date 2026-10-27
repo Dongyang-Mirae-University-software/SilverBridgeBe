@@ -90,8 +90,15 @@ class AdminHospitalRequestValidationTest {
     @Test
     @DisplayName("상태: 음수·상한 초과·공지 제어문자는 위반")
     void status_rules() {
-        assertThat(fields(validator.validate(new AdminHospitalStatusRequest(null, null, -1, 1441, 10000, null, "a\u0007"))))
-                .containsExactlyInAnyOrder("waitingCount", "averageWaitingMinutes", "todayReservationCount", "notice");
+        assertThat(fields(validator.validate(new AdminHospitalStatusRequest(null, null, -1, 1441, null, "a\u0007"))))
+                .containsExactlyInAnyOrder("waitingCount", "averageWaitingMinutes", "notice");
+    }
+
+    @Test
+    @DisplayName("상태: 오늘 예약 수는 입력 칸이 아니다 - 예약 서비스가 예약 행을 세서 준다(2026-10-27)")
+    void status_has_no_today_reservation_count() {
+        assertThat(java.util.Arrays.stream(AdminHospitalStatusRequest.class.getRecordComponents()).map(c -> c.getName()))
+                .doesNotContain("todayReservationCount");
     }
 
     @Test

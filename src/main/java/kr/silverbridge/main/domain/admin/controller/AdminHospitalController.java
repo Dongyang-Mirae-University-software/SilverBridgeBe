@@ -58,7 +58,7 @@ public class AdminHospitalController {
                     - department: 진료과 이름 일치(예: "정형외과")
 
                     병원 이메일·우리 사용자 예약 수는 싣지 않습니다.
-                    status.todayReservationCount는 관리자가 입력하는 값이며 실제 예약 집계가 아닙니다.
+                    status.todayReservationCount는 예약 서비스가 오늘(KST) 예약 행을 센 값입니다(취소·거절 제외, 입력할 수 없음).
                     """)
     @ApiResponses({
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "목록 반환"),
