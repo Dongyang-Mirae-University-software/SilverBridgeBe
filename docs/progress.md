@@ -2363,3 +2363,13 @@ claude.ai/design 관리자 대시보드와 대조해 빠진 값만 추가했다(
 BE #387·#388·#389 템플릿 B 점검. 인가(경로 규칙 + 클래스 `@PreAuthorize`, gosky 비로그인 401), AI 키 헤더 전용·리다이렉트 미추종, 로그 고정 코드, "모르는 값 null"은 모두 PASS다. 재사용한 두 요약의 모집단(`created_at`/`startedAt >= KST 자정`, 추가 조건 없음)이 대시보드와 같고, 다중 생성자 빈 스캔은 0건이었다. 🟡 M-1 챗봇 킬 스위치를 꺼도 `/ai-status`가 "정상"을 냄(수정안 `AiServiceState.DISABLED`). 🟢 5(연결만 보는 OK·시각 기준 셋·동시 상한·다중 생성자 가드 테스트·장애 중 WARN). 미조치.
 - 산출물: `docs/(2026-10-27) audit-admin-dashboard-enrich.md`.
 
+### [2026-10-27] 관리자 대시보드 점검 후속 - 6건 전부 반영 (branch `fix/admin-dashboard-audit-followup`)
+
+- M-1: 챗봇 킬 스위치가 꺼져 있으면 `/ai-status` `chatbot.status=DISABLED`(값 추가, AI 미호출).
+- L-1: 이상감지는 연결됐어도 첫 세션 목록 전이면 null(`/safety` `streamingCameras`와 같은 기준).
+- L-2: 알림·이상감지 요약에 기준 시각 오버로드를 추가하고, 대시보드가 한 `now`를 넘긴다.
+- L-3: 동시에 들어온 AI 확인은 진행 중인 1회를 공유한다(저장은 하지 않음).
+- L-4: `BeanConstructorGuardTest`(생성자 여러 개인 빈의 `@Autowired` 누락이면 실패).
+- L-5: AI 확인 로그는 결과가 바뀔 때만 남긴다.
+- 테스트 추가: 상태 서비스 6·클라이언트 +2·대시보드 +1·요약 경계 2·가드 1, 변이 6종 전부 검출. 마이그레이션 없음.
+

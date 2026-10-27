@@ -110,7 +110,7 @@ public class AdminDashboardService {
                 connectionRepository.countByStatusAndCreatedAtBefore(
                         ConnectionStatus.PENDING, now.minusDays(STALE_PENDING_DAYS)),
                 // 알림 이력 화면의 "오늘 · 전송 실패"와 같은 값. NOT_SENT(정지 차단·채널 꺼 둠)는 실패가 아니다.
-                adminNotificationService.getSummary(null, AdminNotificationPeriod.TODAY, null).failed());
+                adminNotificationService.getSummary(null, AdminNotificationPeriod.TODAY, null, now).failed());
 
         return new AdminSafetyDashboardResponse(
                 aiConnected,
@@ -118,7 +118,7 @@ public class AdminDashboardService {
                 totalCameras,
                 streamingCameras,
                 safetyEvents,
-                todayAnomaly(AdminDashboardClock.startOfDay(now)),
+                todayAnomaly(now),
                 now);
     }
 
@@ -156,8 +156,9 @@ public class AdminDashboardService {
      * 오늘(KST) 이상감지 집계. 단위는 <b>상황(incident)</b>이지 감지 건수가 아니다 - 같은 화재로 이력이
      * 3건 쌓여도 관리자가 봐야 할 것은 "상황 1건"이다.
      */
-    private AdminSafetyDashboardResponse.TodayAnomaly todayAnomaly(OffsetDateTime todayStart) {
-        List<AnomalyIncident> incidents = anomalyIncidentRepository.findByStartedAtGreaterThanEqual(todayStart);
+    private AdminSafetyDashboardResponse.TodayAnomaly todayAnomaly(OffsetDateTime now) {
+        List<AnomalyIncident> incidents =
+                anomalyIncidentRepository.findByStartedAtGreaterThanEqual(AdminDashboardClock.startOfDay(now));
 
         // 유형별: 실제로 집계된 것만 담는다. 0건인 유형(낙상·흉기 등)은 항목 자체를 만들지 않는다 -
         // "낙상 0건"은 안전하다는 뜻이 아니라 모델이 없다는 뜻이라, 숫자로 보여주면 오독된다.
@@ -181,8 +182,9 @@ public class AdminDashboardService {
                         byReview.getOrDefault(AnomalyReviewStatus.REAL, 0L),
                         byReview.getOrDefault(AnomalyReviewStatus.FALSE_ALARM, 0L),
                         byReview.getOrDefault(AnomalyReviewStatus.CONFLICTED, 0L)),
-                // 판정 난 상황(위험+오탐)만의 평균 - 이상감지 로그 요약과 같은 계산·같은 기준(첫 감지 시각, KST 오늘)
-                adminAnomalyService.getSummary(AdminAnomalyPeriod.TODAY, null, null).aiConfidence());
+                // 판정 난 상황(위험+오탐)만의 평균 - 이상감지 로그 요약과 같은 계산·같은 기준(첫 감지 시각, KST 오늘).
+                // 기준 시각 now를 넘겨 한 응답 안의 "오늘"이 칸마다 달라지지 않게 한다(점검 L-2, 자정 경계).
+                adminAnomalyService.getSummary(AdminAnomalyPeriod.TODAY, null, null, now).aiConfidence());
     }
 
     /**

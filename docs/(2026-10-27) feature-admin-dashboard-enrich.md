@@ -70,11 +70,12 @@ claude.ai/design 프로젝트의 관리자 콘솔 "대시보드"(SilverBridge-ap
 
 | 칸 | 값 | 화면 표시 |
 |---|---|---|
-| `anomalyDetection.status` | `OK` / `DISCONNECTED` | 정상 / 연결 끊김. 끊기면 이상감지 알림이 나가지 않는 상태다. 안전 현황 `aiConnected`와 같은 값이다 |
-| `chatbot.status` | `OK` / **null** | 정상 / 확인 불가. null이 되는 경우는 시간 초과(5초), 통신 오류, AI 4xx·5xx, 형식 이상, 설정 없음이다. 원인을 알 수 없어 DISCONNECTED로 단정하지 않으므로 이 칸에는 DISCONNECTED가 오지 않는다 |
+| `anomalyDetection.status` | `OK` / `DISCONNECTED` / **null** | 정상 / 연결 끊김(이상감지 알림이 나가지 않는 상태) / 확인 중. null은 재접속 직후 첫 세션 목록을 받기 전 몇 초로, 안전 현황 `streamingCameras`가 null인 때와 같다(2026-10-27 점검 L-1) |
+| `chatbot.status` | `OK` / `DISABLED` / **null** | 정상 / 꺼 둠 / 확인 불가. `DISABLED`는 운영자가 챗봇 전송을 꺼 둔 상태(`chat.relay.enabled=false`)로, AI를 부르지 않는다. 사용자 전송이 모두 막혀 있어 "정상"과 나눈다(점검 M-1). 화면에는 "꺼 둠"으로 표시한다. null이 되는 경우는 시간 초과(5초), 통신 오류, AI 4xx·5xx, 형식 이상, 설정 없음이다. 원인을 알 수 없어 DISCONNECTED로 단정하지 않으므로 이 칸에는 DISCONNECTED가 오지 않는다 |
 | `*.checkedAt` | string | 그 항목을 확인한 시각 |
 
 - AI가 응답하지 않으면 이 경로는 최대 약 5초 걸린다. 안전 현황과 따로 부르고, 폴링은 60초 이상을 권장한다.
+- 동시에 들어온 요청은 진행 중인 확인 하나를 함께 기다린다(AI 호출 1회). 결과를 저장해 두지는 않는다(점검 L-3).
 - "AI 안부 말벗 · 정서 상태 분석" 행은 BE에 없는 서비스라 값이 없다. 화면에서 행을 빼거나 "미연동"으로 표시할 것("정상"으로 표시하면 안 된다).
 
 ## 5. 디자인과 다르게 처리한 칸
@@ -126,4 +127,11 @@ claude.ai/design 프로젝트의 관리자 콘솔 "대시보드"(SilverBridge-ap
 
 - **#388 기동 실패 수정**: #387 배포 직후 두 서버의 api가 기동에 실패해 재시작을 반복했다. `AiServerHealthClient`에 생성자가 둘이라 Spring이 기본 생성자를 찾다 `No default constructor found`로 멈춘 것이다. 단위 테스트는 생성자를 직접 불러 이 문제를 잡지 못했다. 공개 생성자에 `@Autowired`를 붙였고, 실제 Spring 컨텍스트로 빈 생성을 고정하는 `AiServerHealthClientWiringTest`를 추가했다(`@Autowired`를 빼면 실패함을 변이로 확인).
 - **확인 경로 변경**: §3-2. gosky 실측 결과 이상감지는 `OK`였고, 챗봇은 `/health` 404 때문에 `null`이었다.
+- **점검 후속 (점검 6건 전부 반영)**: `docs/(2026-10-27) audit-admin-dashboard-enrich.md`
+  - M-1: 챗봇 킬 스위치를 끄면 `DISABLED`(값 추가)
+  - L-1: 이상감지는 첫 목록 전이면 null
+  - L-2: 한 응답 안의 "오늘"을 한 시각으로(두 요약 서비스에 기준 시각 오버로드 추가)
+  - L-3: 진행 중인 확인 공유
+  - L-4: `BeanConstructorGuardTest`
+  - L-5: 결과가 바뀔 때만 WARN·INFO
 

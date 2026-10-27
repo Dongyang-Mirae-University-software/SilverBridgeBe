@@ -16,12 +16,16 @@ import java.io.InputStream;
 import java.net.HttpURLConnection;
 import java.net.URI;
 import java.time.Duration;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicReference;
 
 /**
  * AI 서버 응답 확인(관리자 대시보드 "AI 서비스 상태", 2026-10-27).
@@ -37,7 +41,7 @@ import java.util.concurrent.atomic.AtomicInteger;
  *
  * <p>AI HTTP 클라이언트 공통 규칙: 키는 {@code X-API-Key} 헤더만, 리다이렉트 미추종, 호출 <b>전체</b> 제한(연결 3초·전체 5초),
  * 마감은 전용 데몬 스레드에서 연결을 끊는다(빈으로 등록하지 않는다 - {@code TaskScheduler} 빈이 늘면 {@code @Scheduled}가 옮겨 간다).
- * 로그에는 결과 코드·상태 코드·예외 클래스명만 남긴다.</p>
+ * 로그에는 결과 코드·상태 코드·예외 클래스명만 남기고, 결과가 바뀔 때만 WARN/INFO를 남긴다(장애 중 폴링마다 반복하지 않음).</p>
  */
 @Slf4j
 @Component
@@ -83,14 +87,68 @@ public class AiServerHealthClient {
         deadlineExecutor.shutdownNow();
     }
 
+    /** 진행 중인 확인. 동시에 들어온 요청은 새로 부르지 않고 이것을 함께 기다린다(점검 L-3). */
+    private final AtomicReference<CompletableFuture<Boolean>> inFlight = new AtomicReference<>();
+    /** 직전 확인 결과 코드(null = 정상). 같은 실패가 이어지면 WARN을 반복하지 않는다(점검 L-5). */
+    private final AtomicReference<String> lastFailure = new AtomicReference<>();
+
     /**
      * AI 서버가 정상 응답하면 true. 그 밖(미설정·통신 오류·시간 초과·2xx 아님·본문 형식 이상)은 모두 false = "확인 불가".
      * 예외를 던지지 않는다.
+     *
+     * <p>동시에 여러 요청이 오면 <b>진행 중인 확인 하나를 함께 기다린다</b> - AI가 응답하지 않을 때 관리자 탭 수만큼 AI를
+     * 두드리지 않게 한다. 기다림도 호출 제한({@code callTimeout}) + 1초 안에서 끝난다. 결과를 저장해 두지는 않는다(서버 캐시 없음).</p>
      */
     public boolean isHealthy() {
-        if (!StringUtils.hasText(properties.getApiKey()) || !StringUtils.hasText(properties.getAiBaseUrl())) {
-            log.warn("[ADMIN-AI-STATUS] AI 상태 확인 불가: reason=NOT_CONFIGURED");
+        CompletableFuture<Boolean> mine = new CompletableFuture<>();
+        CompletableFuture<Boolean> running = inFlight.compareAndExchange(null, mine);
+        if (running != null) {
+            return awaitShared(running);
+        }
+        try {
+            boolean healthy = recordResult(probe());
+            mine.complete(healthy);
+            return healthy;
+        } catch (RuntimeException e) {
+            mine.complete(false);
             return false;
+        } finally {
+            inFlight.compareAndSet(mine, null);
+        }
+    }
+
+    private boolean awaitShared(CompletableFuture<Boolean> running) {
+        try {
+            return running.get(callTimeout.toMillis() + 1_000L, TimeUnit.MILLISECONDS);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            return false;
+        } catch (ExecutionException | TimeoutException e) {
+            return false;
+        }
+    }
+
+    /** 결과 코드가 바뀔 때만 남긴다 - 실패 시작은 WARN, 회복은 INFO, 같은 실패의 반복은 DEBUG. */
+    private boolean recordResult(String failure) {
+        String previous = lastFailure.getAndSet(failure);
+        if (failure == null) {
+            if (previous != null) {
+                log.info("[ADMIN-AI-STATUS] AI 상태 확인 회복: previous={}", previous);
+            }
+            return true;
+        }
+        if (!failure.equals(previous)) {
+            log.warn("[ADMIN-AI-STATUS] AI 상태 확인 불가: reason={}", failure);
+        } else {
+            log.debug("[ADMIN-AI-STATUS] AI 상태 확인 불가 지속: reason={}", failure);
+        }
+        return false;
+    }
+
+    /** 한 번 확인한다. 정상이면 null, 아니면 고정 결과 코드(로그·응답에 주소·원문을 싣지 않는다). */
+    private String probe() {
+        if (!StringUtils.hasText(properties.getApiKey()) || !StringUtils.hasText(properties.getAiBaseUrl())) {
+            return "NOT_CONFIGURED";
         }
         HttpURLConnection connection = null;
         ScheduledFuture<?> deadline = null;
@@ -117,23 +175,17 @@ public class AiServerHealthClient {
                 throw new IOException("call deadline reached");
             }
             if (status < 200 || status >= 300) {
-                log.warn("[ADMIN-AI-STATUS] AI 상태 확인 불가: reason=HTTP_STATUS, status={}", status);
-                return false;
+                // 상태 코드는 숫자뿐이라 결과 코드에 붙여 남긴다
+                return "HTTP_STATUS_" + status;
             }
             byte[] body;
             try (InputStream in = connection.getInputStream()) {
                 body = readBounded(in, deadlineNanos, timedOut);
             }
-            if (!isOk(body)) {
-                log.warn("[ADMIN-AI-STATUS] AI 상태 확인 불가: reason=UNEXPECTED_BODY");
-                return false;
-            }
-            return true;
+            return isOk(body) ? null : "UNEXPECTED_BODY";
         } catch (IOException | RuntimeException e) {
-            String reason = timedOut.get() ? "TIMEOUT" : "IO_ERROR";
             // 예외 원문에는 접속 주소가 섞일 수 있어 클래스명만 남긴다
-            log.warn("[ADMIN-AI-STATUS] AI 상태 확인 불가: reason={}, error={}", reason, e.getClass().getSimpleName());
-            return false;
+            return (timedOut.get() ? "TIMEOUT_" : "IO_ERROR_") + e.getClass().getSimpleName();
         } finally {
             if (deadline != null) {
                 deadline.cancel(false);

@@ -128,9 +128,18 @@ public class AdminAnomalyService {
     @Transactional(readOnly = true)
     public AdminAnomalySummaryResponse getSummary(AdminAnomalyPeriod period, AdminAnomalyTypeFilter type,
                                                   String keyword) {
+        return getSummary(period, type, keyword, AnomalyReviewClock.now());
+    }
+
+    /**
+     * 기준 시각을 받는 요약. 관리자 대시보드가 한 응답 안의 "오늘"을 한 시각으로 맞추려고 쓴다(2026-10-27 점검 L-2).
+     */
+    @Transactional(readOnly = true)
+    public AdminAnomalySummaryResponse getSummary(AdminAnomalyPeriod period, AdminAnomalyTypeFilter type,
+                                                  String keyword, OffsetDateTime now) {
         KeywordScope scope = resolveKeyword(keyword);
         List<AnomalyIncidentRepository.TypeStatusCount> rows = incidentRepository.countForAdminSummary(
-                lowerBound(period), scope.applied(), scope.wardIds(), scope.sessionIds());
+                lowerBound(period, now), scope.applied(), scope.wardIds(), scope.sessionIds());
 
         // 유형 탭: 유형 필터를 무시하고 집계된 유형만(0건 유형은 항목이 생기지 않는다)
         Map<DetectedType, Long> byType = new EnumMap<>(DetectedType.class);
@@ -200,7 +209,11 @@ public class AdminAnomalyService {
      * 타입 추론이 흔들린다. 서비스 이전 시각이라 어떤 상황도 빠지지 않는다.
      */
     private OffsetDateTime lowerBound(AdminAnomalyPeriod period) {
-        OffsetDateTime from = AdminAnomalyPeriod.orDefault(period).startFrom(AnomalyReviewClock.now());
+        return lowerBound(period, AnomalyReviewClock.now());
+    }
+
+    private OffsetDateTime lowerBound(AdminAnomalyPeriod period, OffsetDateTime now) {
+        OffsetDateTime from = AdminAnomalyPeriod.orDefault(period).startFrom(now);
         return from != null ? from : NO_LOWER_BOUND;
     }
 

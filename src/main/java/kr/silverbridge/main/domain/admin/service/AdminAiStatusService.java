@@ -4,6 +4,7 @@ import kr.silverbridge.main.domain.admin.client.AiServerHealthClient;
 import kr.silverbridge.main.domain.admin.dto.AdminAiStatusResponse;
 import kr.silverbridge.main.domain.admin.dto.AiServiceState;
 import kr.silverbridge.main.domain.anomaly.client.AiLiveStreamSubscriber;
+import kr.silverbridge.main.domain.chat.config.ChatRelayProperties;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
@@ -22,19 +23,41 @@ public class AdminAiStatusService {
 
     private final AiLiveStreamSubscriber aiLiveStreamSubscriber;
     private final AiServerHealthClient aiServerHealthClient;
+    private final ChatRelayProperties chatRelayProperties;
 
     public AdminAiStatusResponse getAiStatus() {
-        // 구독 끊김은 우리가 확실히 아는 사실이라 null(모름)이 아니라 DISCONNECTED다
-        AiServiceState anomaly = aiLiveStreamSubscriber.isConnected() ? AiServiceState.OK : AiServiceState.DISCONNECTED;
+        AiServiceState anomaly = anomalyState();
         OffsetDateTime anomalyCheckedAt = AdminDashboardClock.now();
 
-        // 확인 실패는 AI 장애인지 우리 경로 문제인지 모르므로 DISCONNECTED로 단정하지 않고 null
-        AiServiceState chatbot = aiServerHealthClient.isHealthy() ? AiServiceState.OK : null;
+        AiServiceState chatbot = chatbotState();
         OffsetDateTime chatbotCheckedAt = AdminDashboardClock.now();
 
         return new AdminAiStatusResponse(
                 new AdminAiStatusResponse.Item(anomaly, anomalyCheckedAt),
                 new AdminAiStatusResponse.Item(chatbot, chatbotCheckedAt),
                 chatbotCheckedAt);
+    }
+
+    /**
+     * 구독 끊김은 우리가 확실히 아는 사실이라 null(모름)이 아니라 DISCONNECTED다. 연결은 됐지만 재접속 직후 첫 세션 목록을
+     * 아직 못 받았으면 어느 카메라를 지켜보는지 모르는 몇 초라 null(확인 중) - 안전 현황의 {@code streamingCameras}와 같은 기준이다
+     * (점검 L-1, {@code liveSessionSnapshot()}).
+     */
+    private AiServiceState anomalyState() {
+        if (!aiLiveStreamSubscriber.isConnected()) {
+            return AiServiceState.DISCONNECTED;
+        }
+        return aiLiveStreamSubscriber.liveSessionSnapshot().isPresent() ? AiServiceState.OK : null;
+    }
+
+    /**
+     * 킬 스위치({@code chat.relay.enabled=false})면 사용자 전송이 모두 503이라 AI가 살아 있어도 "정상"이 아니다 -
+     * AI를 부르지 않고 DISABLED(점검 M-1). 확인 실패는 AI 장애인지 우리 경로 문제인지 모르므로 DISCONNECTED로 단정하지 않고 null.
+     */
+    private AiServiceState chatbotState() {
+        if (!chatRelayProperties.isEnabled()) {
+            return AiServiceState.DISABLED;
+        }
+        return aiServerHealthClient.isHealthy() ? AiServiceState.OK : null;
     }
 }

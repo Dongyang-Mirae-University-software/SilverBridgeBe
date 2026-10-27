@@ -34,6 +34,7 @@ import org.springframework.data.domain.PageRequest;
 import org.springframework.test.util.ReflectionTestUtils;
 
 import java.time.OffsetDateTime;
+import java.time.ZoneOffset;
 import java.util.Collection;
 import java.util.List;
 
@@ -224,5 +225,19 @@ class AdminNotificationServiceTest {
                 return total;
             }
         };
+    }
+
+    @Test
+    @DisplayName("요약 기준 시각 오버로드: 넘긴 시각의 KST 자정이 하한이다 - 자정 직전 요청도 그날 0시부터(점검 L-2)")
+    void 요약_기준시각() {
+        when(notificationLogRepository.countByResult(any(), anyBoolean(), anyCollection(), anyBoolean(), anyCollection()))
+                .thenReturn(List.of());
+        OffsetDateTime justBeforeMidnight = OffsetDateTime.of(2026, 10, 27, 23, 59, 59, 999_000_000, ZoneOffset.ofHours(9));
+        ArgumentCaptor<OffsetDateTime> from = ArgumentCaptor.forClass(OffsetDateTime.class);
+
+        service.getSummary(null, AdminNotificationPeriod.TODAY, null, justBeforeMidnight);
+
+        verify(notificationLogRepository).countByResult(from.capture(), anyBoolean(), anyCollection(), anyBoolean(), anyCollection());
+        assertThat(from.getValue()).isEqualTo(OffsetDateTime.of(2026, 10, 27, 0, 0, 0, 0, ZoneOffset.ofHours(9)));
     }
 }
