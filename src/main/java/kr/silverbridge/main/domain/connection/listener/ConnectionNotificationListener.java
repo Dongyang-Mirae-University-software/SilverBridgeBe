@@ -7,6 +7,7 @@ import kr.silverbridge.main.domain.connection.event.ConnectionRefusedEvent;
 import kr.silverbridge.main.domain.connection.event.ConnectionRequestCancelledEvent;
 import kr.silverbridge.main.domain.connection.event.ConnectionRequestedEvent;
 import kr.silverbridge.main.domain.notification.channel.NotificationContent;
+import kr.silverbridge.main.domain.notification.channel.WardNotificationText;
 import kr.silverbridge.main.domain.notification.dispatch.NotificationDispatcher;
 import kr.silverbridge.main.domain.notification.dispatch.NotificationType;
 import kr.silverbridge.main.global.validation.TextSanitizer;
@@ -48,16 +49,29 @@ public class ConnectionNotificationListener {
         webSocketEventPublisher.sendToUser(event.wardId(), "connection-request",
                 Map.of("connectionId", event.connectionId(), "from", event.guardianId()));
 
-        // 관계가 있으면 "아들 박민수님이 연결을 요청했어요" / 없으면 기존 fallback 문구
-        // 판정은 요청 DTO의 @VisibleText와 같은 기준 - isBlank()는 제로폭 문자를 글자로 보아 빈 접두어가 붙는다(CONN-G14)
-        String body = TextSanitizer.hasVisibleChar(event.relation())
-                ? event.relation() + " " + event.guardianName() + "님이 연결을 요청했어요."
-                : event.guardianName() + " 보호자가 연결을 요청했습니다.";
-
         notificationDispatcher.dispatch(event.wardId(), event.wardId(), NotificationType.CONNECTION_REQUEST,
-                NotificationContent.of("연결 요청", body,
+                NotificationContent.of(WardNotificationText.TITLE, requestBody(event.guardianName()),
                         Map.of("type", "CONNECTION_REQUEST",
                                 "connectionId", String.valueOf(event.connectionId()))));
+    }
+
+    /** 피보호자 문구는 단문 한 줄(2026-10-27) - 관계("아들")는 빼고 이름만 쓴다. */
+    static final String REQUEST_BODY_FALLBACK = "가족이 연결을 요청했어요. 앱에서 확인해 주세요.";
+    static final String FORCED_WARD_BODY = "가족과 연결됐어요. 앱에서 확인해 주세요.";
+    static final String DISCONNECTED_WARD_BODY = "가족 연결이 해제됐어요.";
+
+    /**
+     * 연결 요청 본문. 이름이 비었거나(제로폭 문자만 등, CONN-G14와 같은 기준) 넣으면 단문 한도를 넘는 긴 이름이면
+     * "가족이"로 대신한다.
+     */
+    static String requestBody(String guardianName) {
+        if (TextSanitizer.hasVisibleChar(guardianName)) {
+            String body = guardianName + "님이 가족 연결을 요청했어요. 앱에서 확인해 주세요.";
+            if (WardNotificationText.fitsSingleSms(body)) {
+                return body;
+            }
+        }
+        return REQUEST_BODY_FALLBACK;
     }
 
     @Async("notificationExecutor")
@@ -88,8 +102,8 @@ public class ConnectionNotificationListener {
 
         String guardianTitle = "연결 완료";
         String guardianBody = "관리자가 " + event.wardName() + "님과의 연결을 완료했습니다.";
-        String wardTitle = "보호자 연결";
-        String wardBody = "관리자가 " + event.guardianName() + "님을 보호자로 연결했습니다.";
+        // 피보호자 푸시·문자는 앱 이름 제목 + 단문(2026-10-27), 앱 화면(WS) 제목은 그대로 둔다.
+        String wardScreenTitle = "보호자 연결";
 
         // WS 이벤트명은 FE 호환을 위해 connection-accepted 그대로 두고, payload에 FCM과 같은 type·문구를 싣는다.
         // connectionId만 보내면 FE가 일반 수락으로 보고 "피보호자가 수락했습니다"를 띄운다 - 동의 없는 연결에 거짓 문구다(CONN-G01).
@@ -99,12 +113,12 @@ public class ConnectionNotificationListener {
         webSocketEventPublisher.sendToUser(event.guardianId(), "connection-accepted",
                 forcedPayload(event.connectionId(), guardianTitle, guardianBody));
         webSocketEventPublisher.sendToUser(event.wardId(), "connection-accepted",
-                forcedPayload(event.connectionId(), wardTitle, wardBody));
+                forcedPayload(event.connectionId(), wardScreenTitle, FORCED_WARD_BODY));
 
         notificationDispatcher.dispatch(event.guardianId(), event.wardId(), NotificationType.CONNECTION_FORCED,
                 NotificationContent.of(guardianTitle, guardianBody, data));
         notificationDispatcher.dispatch(event.wardId(), event.wardId(), NotificationType.CONNECTION_FORCED,
-                NotificationContent.of(wardTitle, wardBody, data));
+                NotificationContent.of(WardNotificationText.TITLE, FORCED_WARD_BODY, data));
     }
 
     private static Map<String, Object> forcedPayload(Long connectionId, String title, String body) {
@@ -138,15 +152,15 @@ public class ConnectionNotificationListener {
     @Async("notificationExecutor")
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
     public void handleDisconnected(ConnectionDisconnectedEvent event) {
-        String body = switch (event.disconnectedBy()) {
+        // 받는 사람이 피보호자면 누가 끊었든 단문 한 줄(2026-10-27), 보호자 문구는 그대로다.
+        boolean toWard = event.notifyTargetId().equals(event.wardId());
+        String body = toWard ? DISCONNECTED_WARD_BODY : switch (event.disconnectedBy()) {
             case GUARDIAN -> "보호자가 연결을 해제했습니다.";
             case WARD -> "피보호자가 연결을 해제했습니다.";
             // 관리자가 끊은 것을 "보호자가 해제했습니다"로 내보내면 사실과 다르다
             case ADMIN -> "관리자가 연결을 해제했습니다.";
-            // 알림은 남은 쪽에만 간다 - 받는 사람이 피보호자면 떠난 쪽은 보호자다
-            case WITHDRAWN -> event.notifyTargetId().equals(event.wardId())
-                    ? "보호자가 탈퇴해 연결이 종료되었습니다."
-                    : "피보호자가 탈퇴해 연결이 종료되었습니다.";
+            // 알림은 남은 쪽에만 간다 - 여기 오는 수신자는 보호자이므로 떠난 쪽은 피보호자다
+            case WITHDRAWN -> "피보호자가 탈퇴해 연결이 종료되었습니다.";
         };
 
         // 문구 없이 connectionId만 보내면 FE가 "연결이 해제되었습니다"만 띄우고, 뒤이은 FCM은 같은 키로 걸러져
@@ -161,7 +175,7 @@ public class ConnectionNotificationListener {
         // 두 번째 인자는 이력 표시용 피보호자. 피보호자 탈퇴 경로에서는 이 비동기 리스너보다 purge가 먼저 끝나
         // FK 때문에 이력만 남지 않을 수 있다(발송은 그대로, [NOTIFY-LOG-FAILED] WARN) - 어차피 CASCADE로 지워질 행이다.
         notificationDispatcher.dispatch(event.notifyTargetId(), event.wardId(), NotificationType.CONNECTION_DISCONNECTED,
-                NotificationContent.of("연결 해제", body,
+                NotificationContent.of(toWard ? WardNotificationText.TITLE : "연결 해제", body,
                         Map.of("type", "CONNECTION_CANCELLED",
                                 "connectionId", String.valueOf(event.connectionId()))));
     }

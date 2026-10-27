@@ -1,5 +1,6 @@
 package kr.silverbridge.main.domain.medication.service;
 
+import kr.silverbridge.main.domain.notification.channel.WardSmsAssertions;
 import kr.silverbridge.main.domain.medication.entity.MedicationReminderLog;
 import kr.silverbridge.main.domain.medication.entity.MedicationTimeSlot;
 import kr.silverbridge.main.domain.notification.channel.NotificationContent;
@@ -39,7 +40,7 @@ class MedicationReminderServiceTest {
     private static final String WARD_ID = "WD0001";
 
     @Test
-    @DisplayName("최초 알림 — MEDICATION_REMINDER로 약 이름·시간대·용량이 담긴 문구를 보낸다")
+    @DisplayName("최초 알림 — MEDICATION_REMINDER로 약 이름·시각·용량 없는 단문을 보낸다 (2026-10-27)")
     void 최초알림_문구() {
         when(planner.claimFirstReminders()).thenReturn(List.of(target(MedicationReminderLog.ATTEMPT_FIRST)));
 
@@ -49,15 +50,16 @@ class MedicationReminderServiceTest {
         verify(notificationDispatcher).dispatch(
                 eq(WARD_ID), any(), eq(NotificationType.MEDICATION_REMINDER), captor.capture());
         NotificationContent content = captor.getValue();
-        assertThat(content.title()).isEqualTo("복약 시간이에요");
-        assertThat(content.body()).contains("혈압약", "아침", "08:00", "1정");
+        assertThat(content.title()).isEqualTo("실버브릿지");
+        assertThat(content.body()).isEqualTo("약 드실 시간이에요.")
+                .doesNotContain("혈압약", "아침", "08:00", "1정");
         assertThat(content.data())
                 .containsEntry("type", "MEDICATION_REMINDER")
                 .containsEntry("attempt", "1");
     }
 
     @Test
-    @DisplayName("반 알 — 문구에 '0.5정'이 아니라 '반 알'로, 1.5는 '1정 반'으로 나간다(같은 시각이라 한 알림으로 묶인다)")
+    @DisplayName("반 알·1정 반이어도 문구에 용량을 싣지 않는다(같은 시각이라 한 알림으로 묶인다)")
     void 반알_문구() {
         MedicationReminderTarget half = new MedicationReminderTarget(1L, WARD_ID, "감기약", MedicationTimeSlot.DINNER,
                 LocalTime.of(18, 0), new BigDecimal("0.5"), MedicationClock.today(), MedicationReminderLog.ATTEMPT_FIRST);
@@ -69,11 +71,12 @@ class MedicationReminderServiceTest {
 
         ArgumentCaptor<NotificationContent> captor = ArgumentCaptor.forClass(NotificationContent.class);
         verify(notificationDispatcher).dispatch(any(), any(), eq(NotificationType.MEDICATION_REMINDER), captor.capture());
-        assertThat(captor.getValue().body()).endsWith("감기약 반 알, 진통제 1정 반").doesNotContain("0.5");
+        assertThat(captor.getValue().body()).isEqualTo("약 드실 시간이에요.")
+                .doesNotContain("0.5", "반 알", "1정 반", "감기약", "진통제");
     }
 
     @Test
-    @DisplayName("같은 시각 약 6개 — 알림 1건으로 묶고, 이름 2개 + '외 4개', data에 전체 약 ID를 싣는다 (2026-10-23)")
+    @DisplayName("같은 시각 약 6개 — 알림 1건으로 묶고 문구는 한 건과 같으며, data에 전체 약 ID를 싣는다")
     void 같은시각_묶음() {
         List<MedicationReminderTarget> six = new java.util.ArrayList<>();
         String[] names = {"코싹열정", "신일이부프로펜정", "알마겔정", "소말겐정", "엘도스캡슐", "코푸시럽"};
@@ -89,8 +92,8 @@ class MedicationReminderServiceTest {
         verify(notificationDispatcher, times(1)).dispatch(
                 eq(WARD_ID), eq(WARD_ID), eq(NotificationType.MEDICATION_REMINDER), captor.capture());
         NotificationContent content = captor.getValue();
-        assertThat(content.title()).isEqualTo("복약 시간이에요");
-        assertThat(content.body()).isEqualTo("아침 약 6개 드실 시간입니다(08:00). 코싹열정 1정, 신일이부프로펜정 1정 외 4개");
+        assertThat(content.title()).isEqualTo("실버브릿지");
+        assertThat(content.body()).isEqualTo("약 드실 시간이에요.").doesNotContain("6개", "외", "코싹열정");
         assertThat(content.data())
                 .containsEntry("type", "MEDICATION_REMINDER")
                 .containsEntry("medicationId", "1")
@@ -99,7 +102,7 @@ class MedicationReminderServiceTest {
     }
 
     @Test
-    @DisplayName("묶음 재알림 — 아직 체크되지 않은 약만 이름으로, 단정하지 않는 문구")
+    @DisplayName("묶음 재알림 — 약 이름 없이 체크를 부탁하는 문구, 안 드셨다고 단정하지 않는다")
     void 묶음_재알림() {
         when(planner.claimRetryReminders()).thenReturn(List.of(
                 target(MedicationReminderLog.ATTEMPT_RETRY, 1L, "혈압약"),
@@ -109,9 +112,9 @@ class MedicationReminderServiceTest {
 
         ArgumentCaptor<NotificationContent> captor = ArgumentCaptor.forClass(NotificationContent.class);
         verify(notificationDispatcher).dispatch(any(), any(), eq(NotificationType.MEDICATION_REMINDER), captor.capture());
-        assertThat(captor.getValue().title()).isEqualTo("약 드셨나요?");
-        assertThat(captor.getValue().body()).isEqualTo("아침 약 중 2개가 아직 복용 체크되지 않았어요. 혈압약, 감기약");
-        assertThat(captor.getValue().body()).doesNotContain("안 드셨");
+        assertThat(captor.getValue().title()).isEqualTo("실버브릿지");
+        assertThat(captor.getValue().body()).isEqualTo("약 드셨으면 앱에서 '먹었어요'를 눌러 주세요.")
+                .doesNotContain("안 드셨", "혈압약", "감기약");
     }
 
     @Test
@@ -131,7 +134,7 @@ class MedicationReminderServiceTest {
     }
 
     @Test
-    @DisplayName("재알림 — '아직 체크되지 않았다'로 안내한다(안 드셨다고 단정하지 않는다)")
+    @DisplayName("재알림 — 체크를 부탁하는 말로 안내한다(안 드셨다고 단정하지 않는다)")
     void 재알림_문구() {
         when(planner.claimRetryReminders()).thenReturn(List.of(target(MedicationReminderLog.ATTEMPT_RETRY)));
 
@@ -139,8 +142,9 @@ class MedicationReminderServiceTest {
 
         ArgumentCaptor<NotificationContent> captor = ArgumentCaptor.forClass(NotificationContent.class);
         verify(notificationDispatcher).dispatch(any(), any(), eq(NotificationType.MEDICATION_REMINDER), captor.capture());
-        assertThat(captor.getValue().title()).isEqualTo("약 드셨나요?");
-        assertThat(captor.getValue().body()).contains("혈압약", "체크");
+        assertThat(captor.getValue().title()).isEqualTo("실버브릿지");
+        assertThat(captor.getValue().body()).isEqualTo("약 드셨으면 앱에서 '먹었어요'를 눌러 주세요.")
+                .doesNotContain("안 드셨", "혈압약");
         assertThat(captor.getValue().data()).containsEntry("attempt", "2");
     }
 
@@ -182,5 +186,12 @@ class MedicationReminderServiceTest {
         return new MedicationReminderTarget(
                 medicationId, WARD_ID, name, MedicationTimeSlot.MORNING,
                 LocalTime.of(8, 0), BigDecimal.ONE, MedicationClock.today(), attempt);
+    }
+
+    @Test
+    @DisplayName("피보호자 문자 규칙: 1차·재알림 문구 모두 90바이트 단문, 약 이름·숫자 시각·괄호 없음 (2026-10-27)")
+    void 피보호자_문자_규칙() {
+        WardSmsAssertions.assertPlainWardSms(MedicationReminderService.FIRST_BODY);
+        WardSmsAssertions.assertPlainWardSms(MedicationReminderService.RETRY_BODY);
     }
 }

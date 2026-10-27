@@ -5,6 +5,7 @@ import kr.silverbridge.main.domain.anomaly.event.AnomalyDetectedEvent;
 import kr.silverbridge.main.domain.anomaly.service.AnomalyNotificationCooldown;
 import kr.silverbridge.main.domain.connection.service.ConnectionService;
 import kr.silverbridge.main.domain.notification.channel.NotificationContent;
+import kr.silverbridge.main.domain.notification.channel.WardNotificationText;
 import kr.silverbridge.main.domain.notification.entity.NotificationLogResult;
 import kr.silverbridge.main.domain.notification.dispatch.NotificationDispatcher;
 import kr.silverbridge.main.domain.notification.dispatch.NotificationType;
@@ -40,7 +41,7 @@ import java.util.Map;
  *   <li><b>WebSocket</b>({@code anomaly-detected}) — 채널 추상화 밖, 사용자 설정과 무관하게 항상 발송.</li>
  *   <li><b>{@link NotificationDispatcher}</b> + {@link NotificationType#ANOMALY_DETECTED} —
  *       FCM은 설정을 무시하고 항상, SMS·알림톡은 사용자가 켠 경우에만 추가 발송. 어느 채널로도 전달되지 않으면
- *       문자를 대신 보낸다(2026-10-06, 문구는 {@link #smsFallbackText}).</li>
+ *       문자를 대신 보낸다(2026-10-06, 보호자 문구는 {@link #smsFallbackText}, 본인은 {@link #selfBody}).</li>
  * </ul>
  *
  * <p>수신자별 발송을 try/catch로 감싸 한 명 실패가 나머지 발송을 막지 않게 격리한다.</p>
@@ -93,17 +94,18 @@ public class AnomalyNotificationListener {
 
                 // 제목·본문은 푸시와 같은 값을 WS에도 싣는다(FE 대체 문구의 조사 오류 방지 - 문구는 BE 한 곳).
                 // 수신자별 복사본에만 넣는다 - 공유 data는 FCM data·알림톡 변수로도 쓰여 title·body가 섞이면 안 된다.
-                String title = title(event);
-                String body = body(event, self);
+                // 본인 푸시·문자 제목은 앱 이름이지만(문자 접두어) 앱 화면(WS)의 제목은 종류가 보이게 그대로 둔다.
+                String title = self ? WardNotificationText.TITLE : title(event);
+                String body = self ? selfBody(event) : body(event);
                 Map<String, String> wsPayload = new HashMap<>(data);
-                wsPayload.put("title", title);
+                wsPayload.put("title", title(event));
                 wsPayload.put("body", body);
                 webSocketEventPublisher.sendToUser(userId, "anomaly-detected", wsPayload);
                 // 본인은 별도 타입으로 보낸다 — 승인된 알림톡 템플릿이 보호자용 문구라 본인에게 나가면 안 된다.
                 // (data["type"]은 계속 ANOMALY_DETECTED — 클라이언트 계약은 그대로 둔다)
                 NotificationLogResult result = notificationDispatcher.dispatch(userId, event.wardId(),
                         self ? NotificationType.ANOMALY_DETECTED_SELF : NotificationType.ANOMALY_DETECTED,
-                        NotificationContent.of(title, body, data, smsFallbackText(event, self)));
+                        NotificationContent.of(title, body, data, self ? null : smsFallbackText(event)));
                 if (result != null && result.isDelivered()) {
                     delivered++;
                 } else if (result == NotificationLogResult.NOT_SENT) {
@@ -135,15 +137,11 @@ public class AnomalyNotificationListener {
     }
 
     /**
-     * 알림 본문. 시니어/4050 대상이라 완곡어법 없이 "감지되었습니다"로 명시한다(설계 D-3).
-     * 본인에게는 상황 통지에 그치지 않고 종류에 맞는 행동 안내를 함께 준다({@link #selfGuidance}).
+     * 보호자 알림 본문. 시니어/4050 대상이라 완곡어법 없이 "감지되었습니다"로 명시한다(설계 D-3).
      */
-    private String body(AnomalyDetectedEvent event, boolean self) {
-        String what = DetectedTypeLabel.withSubjectParticle(event.detectedType());
-        if (self) {
-            return event.cameraLabel() + "에서 " + what + " 감지되었습니다. " + selfGuidance(event.detectedType());
-        }
-        return event.wardName() + "님 댁 " + event.cameraLabel() + "에서 " + what + " 감지되었습니다."
+    private String body(AnomalyDetectedEvent event) {
+        return event.wardName() + "님 댁 " + event.cameraLabel() + "에서 "
+                + DetectedTypeLabel.withSubjectParticle(event.detectedType()) + " 감지되었습니다."
                 + guardianGuidance(event.detectedType());
     }
 
@@ -160,37 +158,38 @@ public class AnomalyNotificationListener {
     }
 
     /**
-     * 본인 수신분의 행동 안내. 화재는 대피, 흉기는 피신·신고, 낙상은 대피가 아니라 도움 요청이다
-     * (넘어진 사람에게 "대피"는 맞지 않는다). 신고는 안내 문구일 뿐 서버가 발신하지 않는다.
+     * 피보호자 본인 알림 본문(푸시·문자 공통, 2026-10-27 단순화). 제목은 {@link WardNotificationText#TITLE}이라 문자는
+     * {@code [실버브릿지] 본문} 단문 한 줄이 되고, 문자 대체도 같은 문구로 나간다(별도 대체 문구 없음).
+     * 종류마다 행동 하나 - 화재는 대피, 흉기는 피신·112 연락, 낙상은 가족 연락이다(넘어진 사람에게 "대피"는 맞지 않는다).
+     * "불이 났어요"처럼 단정하지 않고 "감지"로 말한다. 신고는 안내 문구일 뿐 서버가 발신하지 않는다.
      */
-    private static String selfGuidance(DetectedType type) {
-        return switch (type) {
-            case WEAPON -> "안전한 곳으로 피하고 112에 연락해 주세요.";
-            case FALL -> "괜찮으시면 보호자에게 연락해 주세요. 도움이 필요하면 SOS 버튼을 눌러 주세요.";
-            default -> "안전한 곳으로 대피해 주세요.";
+    static String selfBody(AnomalyDetectedEvent event) {
+        return switch (event.detectedType()) {
+            case WEAPON -> "집에서 흉기가 감지됐어요. 안전한 곳으로 피하고 112에 연락하세요.";
+            case FALL -> "넘어지신 것이 감지됐어요. 도움이 필요하면 가족에게 연락하세요.";
+            case FIRE -> withPlace(event.cameraLabel(), "에서 불이 감지됐어요. 지금 밖으로 나가세요.");
+            default -> withPlace(event.cameraLabel(),
+                    "에서 " + DetectedTypeLabel.withSubjectParticle(event.detectedType()) + " 감지됐어요. 앱에서 확인해 주세요.");
         };
     }
 
-    private static String selfSmsGuidance(DetectedType type) {
-        return switch (type) {
-            case WEAPON -> "안전한 곳으로 피하고 112에 연락해 주세요.";
-            case FALL -> "도움이 필요하면 보호자에게 연락해 주세요.";
-            default -> "안전한 곳으로 대피해 주세요.";
-        };
+    /** 위치가 비었거나 넣으면 단문 한도를 넘는 옛 방 이름이면 "집"으로 쓴다. */
+    private static String withPlace(String place, String rest) {
+        if (hasText(place) && WardNotificationText.fitsSingleSms(place + rest)) {
+            return place + rest;
+        }
+        return "집" + rest;
     }
 
     /**
-     * 푸시가 전달되지 않아 문자로 대신 나갈 때의 문구. 이름·위치가 비면 그 부분만 뺀다. 화재 문구와 본인 문구는 SMS(90바이트)
-     * 안이지만 흉기·낙상 보호자 문구는 푸시와 같은 안내를 담아 길다 - 발송사가 LMS로 자동 전환한다(건당 비용만 늘고
-     * 전달은 같다, 2026-10-07 점검 G-1).
-     * 본인에게는 종류별 행동 안내를 함께 준다. 푸시 본문과 달리 앱 이름을 앞에 붙여 발신처를 알린다.
+     * 보호자에게 푸시가 전달되지 않아 문자로 대신 나갈 때의 문구. 이름·위치가 비면 그 부분만 뺀다. 화재 문구는
+     * SMS(90바이트) 안이지만 흉기·낙상 문구는 푸시와 같은 안내를 담아 길다 - 발송사가 LMS로 자동 전환한다(건당 비용만
+     * 늘고 전달은 같다, 2026-10-07 점검 G-1). 푸시 본문과 달리 앱 이름을 앞에 붙여 발신처를 알린다.
+     * 피보호자 본인은 이 문구를 쓰지 않는다({@link #selfBody}가 제목과 함께 그대로 문자가 된다).
      */
-    static String smsFallbackText(AnomalyDetectedEvent event, boolean self) {
+    static String smsFallbackText(AnomalyDetectedEvent event) {
         String what = label(event.detectedType());
         String place = hasText(event.cameraLabel()) ? event.cameraLabel() + "에서" : "등록된 카메라에서";
-        if (self) {
-            return "[실버브릿지] " + place + " " + what + " 감지. " + selfSmsGuidance(event.detectedType());
-        }
         String home = hasText(event.wardName()) ? event.wardName() + "님 댁 " : "";
         String guidance = guardianGuidance(event.detectedType());
         if (guidance.isEmpty()) {

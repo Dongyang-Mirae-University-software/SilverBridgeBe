@@ -1,5 +1,6 @@
 package kr.silverbridge.main.domain.anomaly.listener;
 
+import kr.silverbridge.main.domain.notification.channel.WardSmsAssertions;
 import kr.silverbridge.main.domain.anomaly.event.AnomalyDetectedEvent;
 import kr.silverbridge.main.domain.anomaly.service.AnomalyNotificationCooldown;
 import kr.silverbridge.main.domain.connection.service.ConnectionService;
@@ -117,8 +118,10 @@ class AnomalyNotificationListenerTest {
         @SuppressWarnings("unchecked")
         ArgumentCaptor<Map<String, String>> wsSelf = ArgumentCaptor.forClass(Map.class);
         verify(webSocketEventPublisher).sendToUser(eq(WARD_ID), eq("anomaly-detected"), wsSelf.capture());
-        assertThat(wsSelf.getValue().get("body"))
-                .isEqualTo("거실에서 화재가 감지되었습니다. 안전한 곳으로 대피해 주세요.");
+        // 본인: 앱 화면 제목은 종류 그대로, 본문은 푸시·문자와 같은 단문(2026-10-27)
+        assertThat(wsSelf.getValue())
+                .containsEntry("title", "화재 감지")
+                .containsEntry("body", "거실에서 불이 감지됐어요. 지금 밖으로 나가세요.");
 
         ArgumentCaptor<NotificationContent> fcm = ArgumentCaptor.forClass(NotificationContent.class);
         verify(notificationDispatcher).dispatch(eq("GD0001"), any(), any(), fcm.capture());
@@ -129,7 +132,7 @@ class AnomalyNotificationListenerTest {
 
     @org.junit.jupiter.params.ParameterizedTest
     @org.junit.jupiter.params.provider.CsvSource({"FIRE,화재가", "FALL,낙상이", "WEAPON,흉기가"})
-    @DisplayName("종류별 조사와 제목이 WS·푸시 본문에 맞게 들어간다(보호자·본인 모두)")
+    @DisplayName("종류별 조사가 보호자 본문에 맞게 들어가고, WS 제목은 보호자·본인 모두 '○○ 감지'다")
     void 종류별_조사와_제목(DetectedType type, String subject) {
         AnomalyDetectedEvent e = new AnomalyDetectedEvent(7L, INCIDENT_ID, WARD_ID, "김순자", SESSION_ID, "거실", type, DETECTED_AT);
         when(connectionService.getActiveGuardianIds(WARD_ID)).thenReturn(List.of("GD0001"));
@@ -141,14 +144,13 @@ class AnomalyNotificationListenerTest {
         ArgumentCaptor<Map<String, String>> ws = ArgumentCaptor.forClass(Map.class);
         verify(webSocketEventPublisher, org.mockito.Mockito.times(2))
                 .sendToUser(anyString(), eq("anomaly-detected"), ws.capture());
-        assertThat(ws.getAllValues()).hasSize(2).allSatisfy(m -> {
-            assertThat(m.get("body")).contains(subject + " 감지되었습니다");
-            assertThat(m.get("title")).endsWith(" 감지").doesNotContain("이상 상황");
-        });
+        assertThat(ws.getAllValues()).hasSize(2).allSatisfy(m ->
+                assertThat(m.get("title")).endsWith(" 감지").doesNotContain("이상 상황"));
+        assertThat(ws.getAllValues().get(0).get("body")).contains(subject + " 감지되었습니다");
     }
 
     @Test
-    @DisplayName("보호자에겐 '누구 댁 어디' 문구, 본인에겐 대피 안내 문구를 보낸다")
+    @DisplayName("보호자에겐 '누구 댁 어디' 문구, 본인에겐 앱 이름 제목 + 대피 단문을 보낸다")
     void 문구_수신자별_구분() {
         when(connectionService.getActiveGuardianIds(WARD_ID)).thenReturn(List.of("GD0001"));
         when(cooldown.tryAcquire(anyString(), eq(SESSION_ID), eq(DetectedType.FIRE), anyBoolean())).thenReturn(true);
@@ -166,7 +168,10 @@ class AnomalyNotificationListenerTest {
 
         ArgumentCaptor<NotificationContent> self = ArgumentCaptor.forClass(NotificationContent.class);
         verify(notificationDispatcher).dispatch(eq(WARD_ID), any(), any(), self.capture());
-        assertThat(self.getValue().body()).isEqualTo("거실에서 화재가 감지되었습니다. 안전한 곳으로 대피해 주세요.");
+        assertThat(self.getValue().title()).isEqualTo("실버브릿지");
+        assertThat(self.getValue().body()).isEqualTo("거실에서 불이 감지됐어요. 지금 밖으로 나가세요.");
+        // 본인은 별도 대체 문구 없이 같은 제목·본문이 문자로 나간다
+        assertThat(self.getValue().smsFallbackText()).isNull();
     }
 
     @Test
@@ -246,12 +251,10 @@ class AnomalyNotificationListenerTest {
     // ─── 문자 대체 문구(푸시 미전달 시) ────────────────────────────
 
     @Test
-    @DisplayName("문자 대체 문구: 보호자분은 이름·위치·유형과 앱 확인 안내, 본인분은 대피 안내")
+    @DisplayName("문자 대체 문구: 보호자분은 이름·위치·유형과 앱 확인 안내(피보호자 본인은 대체 문구 없이 푸시 문구 그대로)")
     void 문자_대체_문구() {
-        assertThat(AnomalyNotificationListener.smsFallbackText(event, false))
+        assertThat(AnomalyNotificationListener.smsFallbackText(event))
                 .isEqualTo("[실버브릿지] 김순자님 댁 거실에서 화재 감지. 앱에서 확인해 주세요.");
-        assertThat(AnomalyNotificationListener.smsFallbackText(event, true))
-                .isEqualTo("[실버브릿지] 거실에서 화재 감지. 안전한 곳으로 대피해 주세요.");
     }
 
     private AnomalyDetectedEvent eventOf(DetectedType type) {
@@ -275,8 +278,9 @@ class AnomalyNotificationListenerTest {
 
         ArgumentCaptor<NotificationContent> self = ArgumentCaptor.forClass(NotificationContent.class);
         verify(notificationDispatcher).dispatch(eq(WARD_ID), any(), any(), self.capture());
+        assertThat(self.getValue().title()).isEqualTo("실버브릿지");
         assertThat(self.getValue().body())
-                .isEqualTo("거실에서 흉기가 감지되었습니다. 안전한 곳으로 피하고 112에 연락해 주세요.");
+                .isEqualTo("집에서 흉기가 감지됐어요. 안전한 곳으로 피하고 112에 연락하세요.");
     }
 
     @Test
@@ -294,24 +298,20 @@ class AnomalyNotificationListenerTest {
 
         ArgumentCaptor<NotificationContent> self = ArgumentCaptor.forClass(NotificationContent.class);
         verify(notificationDispatcher).dispatch(eq(WARD_ID), any(), any(), self.capture());
-        assertThat(self.getValue().body()).isEqualTo(
-                "거실에서 낙상이 감지되었습니다. 괜찮으시면 보호자에게 연락해 주세요. 도움이 필요하면 SOS 버튼을 눌러 주세요.")
+        assertThat(self.getValue().body())
+                .isEqualTo("넘어지신 것이 감지됐어요. 도움이 필요하면 가족에게 연락하세요.")
                 .doesNotContain("대피");
     }
 
     @Test
-    @DisplayName("문자 대체 문구: 흉기·낙상 본인분은 종류별 안내, 보호자분은 앱 확인 안내")
+    @DisplayName("문자 대체 문구: 보호자분은 종류별 안내(흉기·낙상)·앱 확인 안내(화재)")
     void 문자_대체_문구_종류별() {
-        assertThat(AnomalyNotificationListener.smsFallbackText(eventOf(DetectedType.WEAPON), true))
-                .isEqualTo("[실버브릿지] 거실에서 흉기 감지. 안전한 곳으로 피하고 112에 연락해 주세요.");
-        assertThat(AnomalyNotificationListener.smsFallbackText(eventOf(DetectedType.FALL), true))
-                .isEqualTo("[실버브릿지] 거실에서 낙상 감지. 도움이 필요하면 보호자에게 연락해 주세요.");
-        assertThat(AnomalyNotificationListener.smsFallbackText(eventOf(DetectedType.FALL), false))
+        assertThat(AnomalyNotificationListener.smsFallbackText(eventOf(DetectedType.FALL)))
                 .isEqualTo("[실버브릿지] 김순자님 댁 거실에서 낙상이 감지되었습니다. 바로 연락해 안전을 확인해 주세요.");
-        assertThat(AnomalyNotificationListener.smsFallbackText(eventOf(DetectedType.WEAPON), false))
+        assertThat(AnomalyNotificationListener.smsFallbackText(eventOf(DetectedType.WEAPON)))
                 .isEqualTo("[실버브릿지] 김순자님 댁 거실에서 흉기가 감지되었습니다. "
                         + "바로 연락해 안전을 확인하고, 위험하면 112에 신고해 주세요.");
-        assertThat(AnomalyNotificationListener.smsFallbackText(eventOf(DetectedType.FIRE), false))
+        assertThat(AnomalyNotificationListener.smsFallbackText(eventOf(DetectedType.FIRE)))
                 .isEqualTo("[실버브릿지] 김순자님 댁 거실에서 화재 감지. 앱에서 확인해 주세요.");
     }
 
@@ -322,11 +322,11 @@ class AnomalyNotificationListenerTest {
                 DetectedType.FIRE, null);
         AnomalyDetectedEvent noPlace = new AnomalyDetectedEvent(7L, INCIDENT_ID, WARD_ID, "김순자", SESSION_ID, null,
                 DetectedType.FIRE, null);
-        assertThat(AnomalyNotificationListener.smsFallbackText(noName, false))
+        assertThat(AnomalyNotificationListener.smsFallbackText(noName))
                 .isEqualTo("[실버브릿지] 거실에서 화재 감지. 앱에서 확인해 주세요.");
-        assertThat(AnomalyNotificationListener.smsFallbackText(noPlace, false))
+        assertThat(AnomalyNotificationListener.smsFallbackText(noPlace))
                 .isEqualTo("[실버브릿지] 김순자님 댁 등록된 카메라에서 화재 감지. 앱에서 확인해 주세요.");
-        assertThat(AnomalyNotificationListener.smsFallbackText(noPlace, false).length()).isLessThan(45);
+        assertThat(AnomalyNotificationListener.smsFallbackText(noPlace).length()).isLessThan(45);
     }
 
     // ─── 전달 0건이면 쿨다운을 푼다 (2026-10-07 점검 Y-1, SOS-G09와 같은 판단·수신자 단위) ───
@@ -395,5 +395,28 @@ class AnomalyNotificationListenerTest {
         listener.handleAnomalyDetected(event);
 
         verify(cooldown, never()).release(eq("GD0001"), anyString(), any());
+    }
+
+    @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.EnumSource(value = DetectedType.class, names = {"FIRE", "FALL", "WEAPON"})
+    @DisplayName("피보호자 문자 규칙: 화재·낙상·흉기 본인 문구가 어떤 방 이름에서도 90바이트 단문이고 '감지'로 말한다 (2026-10-27)")
+    void 피보호자_문자_규칙(DetectedType type) {
+        for (String place : new String[]{"거실", "작은방2", null, " ", "가".repeat(30)}) {
+            String body = AnomalyNotificationListener.selfBody(
+                    new AnomalyDetectedEvent(7L, INCIDENT_ID, WARD_ID, "김순자", SESSION_ID, place, type, DETECTED_AT));
+            WardSmsAssertions.assertPlainWardSms(body);
+            assertThat(body).contains("감지").doesNotContain("불이 났", "null");
+        }
+    }
+
+    @Test
+    @DisplayName("화재 본인 문구: 위치가 비거나 단문을 넘기는 옛 방 이름이면 '집에서'로 쓴다")
+    void 화재_본인_위치_대체() {
+        assertThat(AnomalyNotificationListener.selfBody(new AnomalyDetectedEvent(7L, INCIDENT_ID, WARD_ID, "김순자",
+                SESSION_ID, null, DetectedType.FIRE, DETECTED_AT)))
+                .isEqualTo("집에서 불이 감지됐어요. 지금 밖으로 나가세요.");
+        assertThat(AnomalyNotificationListener.selfBody(new AnomalyDetectedEvent(7L, INCIDENT_ID, WARD_ID, "김순자",
+                SESSION_ID, "가".repeat(30), DetectedType.FIRE, DETECTED_AT)))
+                .isEqualTo("집에서 불이 감지됐어요. 지금 밖으로 나가세요.");
     }
 }
