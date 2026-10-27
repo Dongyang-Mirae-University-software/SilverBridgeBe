@@ -110,3 +110,19 @@ chat.relay.enabled=false면 챗 전송이 모두 503인데 대시보드는 AI �
 ```
 
 L-4를 함께 하면 `test: 생성자가 여러 개인 Spring 빈의 @Autowired 누락을 막는 가드 테스트 추가`로 커밋을 나눈다.
+
+## 후속 조치 (2026-10-27, 6건 전부 반영)
+
+사용자 지시("전부 반영")로 수용 제안 항목까지 모두 고쳤다. 마이그레이션 없음, 기존 응답 칸 그대로(상태 값 `DISABLED`만 추가).
+
+| 항목 | 조치 | 고정한 테스트 |
+|---|---|---|
+| M-1 | 킬 스위치가 꺼져 있으면 AI를 부르지 않고 `AiServiceState.DISABLED` | `AdminAiStatusServiceTest.chatbotDisabled` |
+| L-1 | 연결됐지만 `liveSessionSnapshot()`이 비어 있으면(첫 목록 전) null. 목록을 받았으면 송출 0대여도 OK | `anomalyBeforeFirstList`·`anomalyEmptyListIsOk` |
+| L-2 | `AdminNotificationService`·`AdminAnomalyService`에 기준 시각을 받는 `getSummary(..., now)` 오버로드를 추가했다(기존 메서드는 위임). 대시보드는 한 `now`를 두 요약과 오늘 이상감지에 넘긴다 | `AdminDashboardServiceTest.오늘_기준시각_하나` + 두 서비스의 자정 직전 경계 테스트 |
+| L-3 | 진행 중인 확인을 함께 기다린다(`compareAndExchange`, 기다림 상한 = 호출 제한 + 1초). 끝나면 다음 요청은 새로 확인한다 | `concurrentChecksShareOneCall`(4건 동시 → AI 1회) |
+| L-4 | 생성자가 둘 이상인 Spring 빈에 `@Autowired`가 없으면 실패하는 소스 스캔 | `BeanConstructorGuardTest` |
+| L-5 | 실패 시작은 WARN, 같은 실패의 반복은 DEBUG, 회복은 INFO. 결과 코드는 `HTTP_STATUS_503`·`TIMEOUT_…`처럼 고정 코드다 | `logsOnlyOnTransition` |
+
+변이 6종(각 결함을 다시 넣기)은 모두 해당 테스트가 잡았다.
+

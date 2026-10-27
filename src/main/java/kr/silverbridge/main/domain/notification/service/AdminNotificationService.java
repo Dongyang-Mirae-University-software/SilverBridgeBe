@@ -103,10 +103,21 @@ public class AdminNotificationService {
     @Transactional(readOnly = true)
     public AdminNotificationSummaryResponse getSummary(AdminNotificationCategory category,
                                                        AdminNotificationPeriod period, String keyword) {
+        return getSummary(category, period, keyword, OffsetDateTime.now(AdminNotificationPeriod.KST));
+    }
+
+    /**
+     * 기준 시각을 받는 요약. 관리자 대시보드가 한 응답 안의 "오늘"을 한 시각으로 맞추려고 쓴다(2026-10-27 점검 L-2).
+     */
+    @Transactional(readOnly = true)
+    public AdminNotificationSummaryResponse getSummary(AdminNotificationCategory category,
+                                                       AdminNotificationPeriod period, String keyword,
+                                                       OffsetDateTime now) {
         TypeScope types = TypeScope.of(category);
         KeywordScope scope = resolveKeyword(keyword);
         Map<NotificationLogResult, Long> counts = new EnumMap<>(NotificationLogResult.class);
-        notificationLogRepository.countByResult(lowerBound(period), types.applied(), types.types(),
+        notificationLogRepository.countByResult(
+                        AdminNotificationPeriod.orDefault(period).startFrom(now), types.applied(), types.types(),
                         scope.applied(), scope.userIds())
                 .forEach(row -> counts.put(row.getResult(), row.getTotal()));
 

@@ -1,5 +1,9 @@
 package kr.silverbridge.main.domain.admin.client;
 
+import ch.qos.logback.classic.Level;
+import ch.qos.logback.classic.Logger;
+import ch.qos.logback.classic.spi.ILoggingEvent;
+import ch.qos.logback.core.read.ListAppender;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpServer;
@@ -8,12 +12,19 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.io.OutputStream;
 import java.net.InetSocketAddress;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 
@@ -32,6 +43,7 @@ class AiServerHealthClientTest {
     private final AtomicReference<Handler> handler = new AtomicReference<>();
     private final AtomicReference<String> receivedKey = new AtomicReference<>();
     private final AtomicInteger redirectTargetHits = new AtomicInteger();
+    private final AtomicInteger probeHits = new AtomicInteger();
 
     @FunctionalInterface
     interface Handler {
@@ -42,6 +54,7 @@ class AiServerHealthClientTest {
     void setUp() throws IOException {
         server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
         server.createContext("/api/v1/live-streams", exchange -> {
+            probeHits.incrementAndGet();
             receivedKey.set(exchange.getRequestHeaders().getFirst("X-API-Key"));
             handler.get().handle(exchange);
         });
@@ -155,5 +168,66 @@ class AiServerHealthClientTest {
         server.stop(0);
 
         assertThat(client.isHealthy()).isFalse();
+    }
+
+    @Test
+    @DisplayName("동시에 들어온 확인은 진행 중인 한 번을 함께 기다린다 - AI 호출은 1회(점검 L-3)")
+    void concurrentChecksShareOneCall() throws Exception {
+        handler.set(exchange -> {
+            try {
+                Thread.sleep(600);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+            }
+            respond(exchange, 200, OK_BODY);
+        });
+        AiServerHealthClient client = client("test-key", Duration.ofSeconds(3));
+        ExecutorService pool = Executors.newFixedThreadPool(4);
+        CountDownLatch start = new CountDownLatch(1);
+        try {
+            List<Future<Boolean>> results = new ArrayList<>();
+            for (int i = 0; i < 4; i++) {
+                results.add(pool.submit(() -> {
+                    start.await();
+                    return client.isHealthy();
+                }));
+            }
+            start.countDown();
+            for (Future<Boolean> result : results) {
+                assertThat(result.get()).isTrue();
+            }
+        } finally {
+            pool.shutdownNow();
+        }
+
+        assertThat(probeHits.get()).isEqualTo(1);
+        // 끝난 뒤에는 다시 새로 확인한다(결과를 저장해 두지 않는다)
+        assertThat(client.isHealthy()).isTrue();
+        assertThat(probeHits.get()).isEqualTo(2);
+    }
+
+    @Test
+    @DisplayName("WARN은 실패가 시작될 때 한 번만, 회복되면 INFO - 장애 중 폴링마다 반복하지 않는다(점검 L-5)")
+    void logsOnlyOnTransition() {
+        Logger logger = (Logger) LoggerFactory.getLogger(AiServerHealthClient.class);
+        ListAppender<ILoggingEvent> appender = new ListAppender<>();
+        appender.start();
+        logger.addAppender(appender);
+        try {
+            AiServerHealthClient client = client("test-key", Duration.ofSeconds(2));
+            handler.set(exchange -> respond(exchange, 503, "{}"));
+            client.isHealthy();
+            client.isHealthy();
+            client.isHealthy();
+            handler.set(exchange -> respond(exchange, 200, OK_BODY));
+            client.isHealthy();
+            client.isHealthy();
+
+            assertThat(appender.list).filteredOn(e -> e.getLevel() == Level.WARN).hasSize(1)
+                    .first().extracting(ILoggingEvent::getFormattedMessage).asString().contains("HTTP_STATUS_503");
+            assertThat(appender.list).filteredOn(e -> e.getLevel() == Level.INFO).hasSize(1);
+        } finally {
+            logger.detachAppender(appender);
+        }
     }
 }

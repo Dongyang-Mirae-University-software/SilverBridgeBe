@@ -27,6 +27,7 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.mockito.junit.jupiter.MockitoSettings;
@@ -82,8 +83,8 @@ class AdminDashboardServiceTest {
         when(anomalyIncidentRepository.findByStartedAtGreaterThanEqual(any())).thenReturn(List.of());
         when(inquiryRepository.findOldestCreatedAtByStatus(any())).thenReturn(Optional.empty());
         when(userRepository.findCreatedAtSince(any(), any(), any())).thenReturn(List.of());
-        when(adminNotificationService.getSummary(any(), any(), any())).thenReturn(notificationSummary(0L, 0L));
-        when(adminAnomalyService.getSummary(any(), any(), any())).thenReturn(anomalySummary(null, 0L));
+        when(adminNotificationService.getSummary(any(), any(), any(), any())).thenReturn(notificationSummary(0L, 0L));
+        when(adminAnomalyService.getSummary(any(), any(), any(), any())).thenReturn(anomalySummary(null, 0L));
     }
 
     private static AdminNotificationSummaryResponse notificationSummary(long failed, long notSent) {
@@ -360,17 +361,17 @@ class AdminDashboardServiceTest {
         @Test
         @DisplayName("전달 실패한 알림 = 알림 이력 요약(오늘, 전체 탭·검색 없음)의 failed - 발송 안 함(NOT_SENT)은 세지 않는다")
         void 오늘_전달실패만() {
-            when(adminNotificationService.getSummary(isNull(), eq(AdminNotificationPeriod.TODAY), isNull()))
+            when(adminNotificationService.getSummary(isNull(), eq(AdminNotificationPeriod.TODAY), isNull(), any()))
                     .thenReturn(notificationSummary(2L, 7L));
 
             assertThat(service.getSafetyDashboard().safetyEvents().todayFailedNotifications()).isEqualTo(2L);
-            verify(adminNotificationService).getSummary(null, AdminNotificationPeriod.TODAY, null);
+            verify(adminNotificationService).getSummary(isNull(), eq(AdminNotificationPeriod.TODAY), isNull(), any());
         }
 
         @Test
         @DisplayName("평균 AI 신뢰도 = 이상감지 요약(오늘, 전체 유형)의 aiConfidence 그대로")
         void 오늘_AI신뢰도() {
-            when(adminAnomalyService.getSummary(eq(AdminAnomalyPeriod.TODAY), isNull(), isNull()))
+            when(adminAnomalyService.getSummary(eq(AdminAnomalyPeriod.TODAY), isNull(), isNull(), any()))
                     .thenReturn(anomalySummary(0.88, 7L));
 
             AdminAnomalySummaryResponse.AiConfidence confidence =
@@ -378,7 +379,7 @@ class AdminDashboardServiceTest {
 
             assertThat(confidence.average()).isEqualTo(0.88);
             assertThat(confidence.basis()).isEqualTo(7L);
-            verify(adminAnomalyService).getSummary(AdminAnomalyPeriod.TODAY, null, null);
+            verify(adminAnomalyService).getSummary(eq(AdminAnomalyPeriod.TODAY), isNull(), isNull(), any());
         }
 
         @Test
@@ -410,6 +411,23 @@ class AdminDashboardServiceTest {
             ReflectionTestUtils.setField(service, "cameraMaxTotal", 0);
 
             assertThat(service.getOperationDashboard().cameras().maxTotal()).isNull();
+        }
+
+        @Test
+        @DisplayName("한 응답 안의 \"오늘\"은 한 시각 기준 - 알림·이상감지 요약과 오늘 이상감지에 같은 now를 넘긴다(점검 L-2)")
+        void 오늘_기준시각_하나() {
+            ArgumentCaptor<OffsetDateTime> notifyNow = ArgumentCaptor.forClass(OffsetDateTime.class);
+            ArgumentCaptor<OffsetDateTime> anomalyNow = ArgumentCaptor.forClass(OffsetDateTime.class);
+            ArgumentCaptor<OffsetDateTime> todayStart = ArgumentCaptor.forClass(OffsetDateTime.class);
+
+            AdminSafetyDashboardResponse response = service.getSafetyDashboard();
+
+            verify(adminNotificationService).getSummary(isNull(), eq(AdminNotificationPeriod.TODAY), isNull(), notifyNow.capture());
+            verify(adminAnomalyService).getSummary(eq(AdminAnomalyPeriod.TODAY), isNull(), isNull(), anomalyNow.capture());
+            verify(anomalyIncidentRepository).findByStartedAtGreaterThanEqual(todayStart.capture());
+            assertThat(notifyNow.getValue()).isEqualTo(response.generatedAt());
+            assertThat(anomalyNow.getValue()).isEqualTo(response.generatedAt());
+            assertThat(todayStart.getValue()).isEqualTo(AdminDashboardClock.startOfDay(response.generatedAt()));
         }
 
         @Test

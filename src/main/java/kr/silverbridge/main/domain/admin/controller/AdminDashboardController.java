@@ -121,12 +121,14 @@ public class AdminDashboardController {
                     BE가 확인할 수 있는 AI 서비스의 상태를 요청 때마다 새로 확인합니다(서버 캐시 없음).
 
                     [anomalyDetection - 이상감지(영상 분석)]
-                    백엔드의 AI WebSocket 구독 상태입니다. OK(연결됨) / DISCONNECTED(끊김 - 이상감지 알림이 나가지 않음).
+                    백엔드의 AI WebSocket 구독 상태입니다. OK(연결됨) / DISCONNECTED(끊김 - 이상감지 알림이 나가지 않음)
+                    / null(확인 중 - 재접속 직후 첫 세션 목록 전 수 초).
 
                     [chatbot - AI 의료 챗봇]
                     챗봇을 서빙하는 AI 서버의 응답입니다(키가 필요한 조회 GET /api/v1/live-streams로 확인, 연결 3초·전체 5초 제한).
                     AI /health 는 앞단이 바깥에 열지 않아 쓰지 않습니다.
-                    OK(정상 응답) / null(확인 불가 - 시간 초과·통신 오류·서버 오류·설정 없음).
+                    OK(정상 응답) / DISABLED(운영자가 챗봇 전송을 꺼 둠 - AI를 부르지 않음)
+                    / null(확인 불가 - 시간 초과·통신 오류·서버 오류·설정 없음).
                     AI 서버 프로세스 응답까지만 확인하며 모델 응답 성공은 보장하지 않습니다.
                     확인 실패를 "중단"으로 단정하지 않으므로 이 칸에는 DISCONNECTED가 오지 않습니다.
 
@@ -135,6 +137,7 @@ public class AdminDashboardController {
 
                     [응답 시간]
                     AI가 응답하지 않으면 최대 약 5초 걸립니다. 안전 현황(/safety)과 따로 호출하세요.
+                    동시에 들어온 요청은 진행 중인 확인 하나를 함께 기다립니다(결과를 저장해 두지는 않음).
                     폴링은 60초 이상을 권장합니다.
                     """)
     @ApiResponses({
