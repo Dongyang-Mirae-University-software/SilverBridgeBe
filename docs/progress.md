@@ -2356,4 +2356,5 @@ claude.ai/design 관리자 대시보드와 대조해 빠진 값만 추가했다(
 - 만들지 않음: 안부 말벗·정서 분석 상태(BE에 없는 서비스), "24시간 넘게 꺼진 카메라"(끊긴 시각 미저장). 동수 칸 누락은 FE에 보고.
 - 테스트: 서비스 6·클라이언트 8(실제 HTTP 서버)·상태 3·HTTP 직렬화 3·보안 6건, `./gradlew build` 통과.
 - 산출물: `docs/(2026-10-27) feature-admin-dashboard-enrich.md`(관리자 웹 계약 포함).
+- 배포 후속: #388에서 `AiServerHealthClient` 생성자 둘 때문에 생긴 기동 실패를 고쳤다(`@Autowired` + 컨텍스트 빈 생성 테스트). 이어서 AI 앞단이 `/health`를 막아 챗봇이 늘 null로 나오던 문제는, 확인 경로를 키가 필요한 `GET /api/v1/live-streams`로 바꿔 해결했다(사용자 결정).
 

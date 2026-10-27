@@ -22,7 +22,7 @@ public record AdminAiStatusResponse(
         Item anomalyDetection,
 
         @Schema(description = """
-                AI 의료 챗봇 - 챗봇을 서빙하는 AI 서버의 GET /health 응답.
+                AI 의료 챗봇 - 챗봇을 서빙하는 AI 서버의 응답(키가 필요한 조회 GET /api/v1/live-streams로 확인).
 
                 OK = AI 서버가 정상 응답, null = 확인 불가(시간 초과 5초·통신 오류·서버 오류·설정 없음).
                 AI에 챗봇 전용 상태 경로가 없어 **AI 서버 프로세스 응답까지만** 확인합니다(모델 응답 성공은 보장하지 않음).

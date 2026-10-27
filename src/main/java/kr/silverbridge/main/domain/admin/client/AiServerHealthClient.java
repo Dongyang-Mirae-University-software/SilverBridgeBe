@@ -24,11 +24,13 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 
 /**
- * AI 서버 {@code GET /health} 확인(관리자 대시보드 "AI 서비스 상태", 2026-10-27).
+ * AI 서버 응답 확인(관리자 대시보드 "AI 서비스 상태", 2026-10-27).
  *
- * <p>챗 중계가 붙는 바로 그 AI 서버({@code chat.relay.ai-base-url})를 본다. AI에는 챗봇 전용 상태 경로가 없어
- * 이 확인은 <b>챗봇을 서빙하는 AI 서버 프로세스가 응답하는가</b>까지만 답한다 - 모델(MedGemma·Claude) 호출이
- * 성공하는지는 보장하지 않는다.</p>
+ * <p>챗 중계가 붙는 바로 그 AI 서버({@code chat.relay.ai-base-url})에 {@code GET /api/v1/live-streams}를 보낸다.
+ * AI의 {@code /health}는 앞단(nginx)이 {@code /api/}만 넘겨 바깥에서 닿지 않는다(404 HTML, 2026-10-27 gosky 실측) -
+ * 그래서 이미 열려 있고 키가 필요한 가벼운 조회 경로를 쓴다(챗봇과 같은 AI 프로세스, AI DB까지 거친다).
+ * AI에는 챗봇 전용 상태 경로가 없어 이 확인은 <b>챗봇을 서빙하는 AI 서버가 응답하는가</b>까지만 답한다 -
+ * 모델(MedGemma·Claude) 호출이 성공하는지는 보장하지 않는다. 응답 본문(세션 목록)은 성공 여부만 보고 버린다.</p>
  *
  * <p>결과는 두 가지다: 정상({@code true}) / 확인 불가({@code false}). 네트워크 오류·시간 초과·5xx·형식 이상·키 미설정을
  * 모두 "확인 불가"로 묶는다 - 우리 쪽 경로 문제와 AI 장애를 구분할 수 없어 "중단"으로 단정하지 않는다.</p>
@@ -42,10 +44,11 @@ import java.util.concurrent.atomic.AtomicInteger;
 public class AiServerHealthClient {
 
     private static final String API_KEY_HEADER = "X-API-Key";
-    private static final String HEALTH_PATH = "/health";
+    /** 앞단이 넘겨 주는 키 필요 경로 중 가장 가벼운 조회. 본문은 성공 여부만 본다. */
+    private static final String PROBE_PATH = "/api/v1/live-streams";
     static final Duration CONNECT_TIMEOUT = Duration.ofSeconds(3);
     static final Duration CALL_TIMEOUT = Duration.ofSeconds(5);
-    /** /health 본문은 수백 바이트다. 앞단이 큰 HTML을 돌려줘도 붙들지 않게 작게 자른다. */
+    /** 세션 목록은 등록 상한(3대) 기준 수 KB다. 앞단이 큰 HTML을 돌려줘도 붙들지 않게 작게 자른다. */
     private static final int MAX_BODY_BYTES = 64 * 1024;
 
     private final ChatRelayProperties properties;
@@ -94,7 +97,7 @@ public class AiServerHealthClient {
         AtomicBoolean timedOut = new AtomicBoolean();
         long deadlineNanos = System.nanoTime() + callTimeout.toNanos();
         try {
-            URI uri = UriComponentsBuilder.fromUriString(properties.getAiBaseUrl()).path(HEALTH_PATH).build().toUri();
+            URI uri = UriComponentsBuilder.fromUriString(properties.getAiBaseUrl()).path(PROBE_PATH).build().toUri();
             connection = (HttpURLConnection) uri.toURL().openConnection();
             connection.setRequestMethod("GET");
             connection.setConnectTimeout((int) connectTimeout.toMillis());
@@ -141,11 +144,11 @@ public class AiServerHealthClient {
         }
     }
 
-    /** AI 응답 {@code {"data": {"status": "ok"}}}만 정상으로 본다(앞단 프록시가 HTML 200을 돌려줘도 정상으로 읽지 않게). */
+    /** AI 공통 응답 {@code {"success": true, ...}}만 정상으로 본다(앞단 프록시가 HTML 200을 돌려줘도 정상으로 읽지 않게). */
     private boolean isOk(byte[] body) {
         try {
             JsonNode root = objectMapper.readTree(body);
-            return "ok".equals(root.path("data").path("status").asText(null));
+            return root.path("success").isBoolean() && root.path("success").asBoolean();
         } catch (IOException e) {
             return false;
         }

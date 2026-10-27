@@ -1726,7 +1726,9 @@ SilverBridge는 노인(피보호자)과 그 가족(보호자)을 연결하는 �
       generatedAt
     새 주소: GET /api/admin/dashboard/ai-status  → AI 서비스 상태
       anomalyDetection      : 이상감지 - 우리 서버가 AI 영상 분석에 붙어 있는지 (OK / DISCONNECTED)
-      chatbot               : 의료 챗봇 - 챗봇이 돌아가는 AI 서버가 /health 에 답하는지 (OK / null)
+      chatbot               : 의료 챗봇 - 챗봇이 돌아가는 AI 서버가 답하는지 (OK / null)
+                            ※ AI의 /health 는 앞단(nginx)이 바깥에 열어 두지 않아서, 이미 열려 있고 키가
+                              필요한 가벼운 조회(/api/v1/live-streams)로 확인합니다(2026-10-27).
                             ※ 확인에 실패하면 "끊김"이 아니라 null(확인 불가)입니다. 우리 쪽 문제인지
                               AI 문제인지 모르기 때문입니다. AI 서버가 살아 있는지까지만 보고,
                               모델이 실제로 답을 잘 만드는지는 보장하지 않습니다.
