@@ -2358,3 +2358,8 @@ claude.ai/design 관리자 대시보드와 대조해 빠진 값만 추가했다(
 - 산출물: `docs/(2026-10-27) feature-admin-dashboard-enrich.md`(관리자 웹 계약 포함).
 - 배포 후속: #388에서 `AiServerHealthClient` 생성자 둘 때문에 생긴 기동 실패를 고쳤다(`@Autowired` + 컨텍스트 빈 생성 테스트). 이어서 AI 앞단이 `/health`를 막아 챗봇이 늘 null로 나오던 문제는, 확인 경로를 키가 필요한 `GET /api/v1/live-streams`로 바꿔 해결했다(사용자 결정).
 
+### [2026-10-27] 관리자 대시보드 보강 기능 점검 - 조건부 PASS (🟡 1)
+
+BE #387·#388·#389 템플릿 B 점검. 인가(경로 규칙 + 클래스 `@PreAuthorize`, gosky 비로그인 401), AI 키 헤더 전용·리다이렉트 미추종, 로그 고정 코드, "모르는 값 null"은 모두 PASS다. 재사용한 두 요약의 모집단(`created_at`/`startedAt >= KST 자정`, 추가 조건 없음)이 대시보드와 같고, 다중 생성자 빈 스캔은 0건이었다. 🟡 M-1 챗봇 킬 스위치를 꺼도 `/ai-status`가 "정상"을 냄(수정안 `AiServiceState.DISABLED`). 🟢 5(연결만 보는 OK·시각 기준 셋·동시 상한·다중 생성자 가드 테스트·장애 중 WARN). 미조치.
+- 산출물: `docs/(2026-10-27) audit-admin-dashboard-enrich.md`.
+
