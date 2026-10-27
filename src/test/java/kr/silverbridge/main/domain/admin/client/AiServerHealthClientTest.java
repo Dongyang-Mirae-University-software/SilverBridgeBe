@@ -20,13 +20,13 @@ import java.util.concurrent.atomic.AtomicReference;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
- * AI 서버 /health 확인(관리자 대시보드 AI 서비스 상태). 고정하는 것은 <b>"정상이라고 확인한 경우에만 true"</b>다 -
+ * AI 서버 응답 확인(관리자 대시보드 AI 서비스 상태, 확인 경로 GET /api/v1/live-streams). 고정하는 것은 <b>"정상이라고 확인한 경우에만 true"</b>다 -
  * 시간 초과·5xx·형식 이상·설정 없음을 정상으로 읽으면 장애가 화면에서 "정상"으로 보인다.
  */
 class AiServerHealthClientTest {
 
     private static final String OK_BODY =
-            "{\"success\":true,\"data\":{\"status\":\"ok\",\"detectors\":{\"fire\":{\"enabled\":true,\"loaded\":true}}}}";
+            "{\"success\":true,\"message\":\"라이브 세션 목록 조회 완료\",\"data\":[{\"sessionId\":\"ward_a1B2c3D4e5F6g7H8\"}]}";
 
     private HttpServer server;
     private final AtomicReference<Handler> handler = new AtomicReference<>();
@@ -41,7 +41,7 @@ class AiServerHealthClientTest {
     @BeforeEach
     void setUp() throws IOException {
         server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
-        server.createContext("/health", exchange -> {
+        server.createContext("/api/v1/live-streams", exchange -> {
             receivedKey.set(exchange.getRequestHeaders().getFirst("X-API-Key"));
             handler.get().handle(exchange);
         });
@@ -73,7 +73,7 @@ class AiServerHealthClientTest {
     }
 
     @Test
-    @DisplayName("정상: data.status=ok면 true, 키는 X-API-Key 헤더로만 간다")
+    @DisplayName("정상: success=true면 true, 키는 X-API-Key 헤더로만 간다")
     void ok() {
         handler.set(exchange -> respond(exchange, 200, OK_BODY));
 
@@ -98,9 +98,9 @@ class AiServerHealthClientTest {
     }
 
     @Test
-    @DisplayName("status가 ok가 아니면 false")
+    @DisplayName("success가 true가 아니면 false")
     void notOkStatus() {
-        handler.set(exchange -> respond(exchange, 200, "{\"data\":{\"status\":\"degraded\"}}"));
+        handler.set(exchange -> respond(exchange, 200, "{\"success\":false,\"errorCode\":\"X\"}"));
 
         assertThat(client("test-key", Duration.ofSeconds(2)).isHealthy()).isFalse();
     }

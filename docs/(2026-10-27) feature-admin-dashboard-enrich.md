@@ -13,7 +13,7 @@ claude.ai/design 프로젝트의 관리자 콘솔 "대시보드"(SilverBridge-ap
 | 디자인 칸 | BE | 이번 작업 |
 |---|---|---|
 | AI 서비스 상태 - 이상감지(영상 분석) | `aiConnected`(안전 현황) | `GET /ai-status`의 `anomalyDetection` |
-| AI 서비스 상태 - AI 의료 챗봇 | 없음 | `GET /ai-status`의 `chatbot`(AI `/health`) |
+| AI 서비스 상태 - AI 의료 챗봇 | 없음 | `GET /ai-status`의 `chatbot`(AI 응답 확인, §3-2) |
 | AI 서비스 상태 - AI 안부 말벗·정서 상태 분석 | BE에 없는 서비스 | **만들지 않음** |
 | "1분 전 확인" | 없음 | `generatedAt`·`checkedAt` |
 | 안전 이벤트 - 연결이 끊긴 카메라 | `disconnectedCameras` | 그대로(설명 문구는 §5) |
@@ -29,7 +29,7 @@ claude.ai/design 프로젝트의 관리자 콘솔 "대시보드"(SilverBridge-ap
 ## 3. 결정 (2026-10-27 사용자 결정)
 
 1. **AI 상태는 별도 경로**(`/ai-status`). AI 호출이 최대 5초 걸릴 수 있어서 안전 현황 응답이 같이 늦어지지 않게 했다.
-2. **챗봇 상태는 AI `/health` 응답 기준**이다. AI에 챗봇 전용 상태 경로가 없다. 그래서 이 칸은 "챗봇을 서빙하는 AI 서버 프로세스가 응답하는가"까지만 답하고, 모델 응답이 성공하는지는 보장하지 않는다. AI 서버는 바꾸지 않았다.
+2. **챗봇 상태는 AI 서버 응답 기준**이다. 처음에는 AI `/health`로 확인했다. 그런데 gosky 배포 뒤 실측해 보니 AI 앞단 nginx(`testai.gosky.kr`)가 `/api/`만 넘기고 `/health`는 404 HTML을 돌려줘 늘 "확인 불가"로 나왔다. 그래서 이미 열려 있고 키가 필요한 가벼운 조회 `GET /api/v1/live-streams`로 바꿨다(사용자 결정). 챗봇과 같은 AI 프로세스이고 AI DB까지 거친다. 본문은 `success=true`만 보고 버린다. nginx·AI 서버는 바꾸지 않았다. AI에 챗봇 전용 상태 경로가 없다. 그래서 이 칸은 "챗봇을 서빙하는 AI 서버 프로세스가 응답하는가"까지만 답하고, 모델 응답이 성공하는지는 보장하지 않는다. AI 서버는 바꾸지 않았다.
 3. **이상감지 구독이 끊기면 `DISCONNECTED`**를 내린다. 우리가 확실히 아는 사실이기 때문이다. `null`(확인 불가)은 확인 자체가 실패했을 때만 쓴다.
 4. **평균 AI 신뢰도는 판정 난 상황(위험+오탐)만으로 계산**한다. 이상감지 로그 요약과 같은 계산을 그대로 쓰기 때문에 판정 칸과 분모가 같다. 디자인 주석은 "오늘 감지 건 전체 평균"이었지만 채택하지 않았다.
 
@@ -71,7 +71,7 @@ claude.ai/design 프로젝트의 관리자 콘솔 "대시보드"(SilverBridge-ap
 | 칸 | 값 | 화면 표시 |
 |---|---|---|
 | `anomalyDetection.status` | `OK` / `DISCONNECTED` | 정상 / 연결 끊김. 끊기면 이상감지 알림이 나가지 않는 상태다. 안전 현황 `aiConnected`와 같은 값이다 |
-| `chatbot.status` | `OK` / **null** | 정상 / 확인 불가. null이 되는 경우는 시간 초과(5초), 통신 오류, AI 5xx, 형식 이상, 설정 없음이다. 원인을 알 수 없어 DISCONNECTED로 단정하지 않으므로 이 칸에는 DISCONNECTED가 오지 않는다 |
+| `chatbot.status` | `OK` / **null** | 정상 / 확인 불가. null이 되는 경우는 시간 초과(5초), 통신 오류, AI 4xx·5xx, 형식 이상, 설정 없음이다. 원인을 알 수 없어 DISCONNECTED로 단정하지 않으므로 이 칸에는 DISCONNECTED가 오지 않는다 |
 | `*.checkedAt` | string | 그 항목을 확인한 시각 |
 
 - AI가 응답하지 않으면 이 경로는 최대 약 5초 걸린다. 안전 현황과 따로 부르고, 폴링은 60초 이상을 권장한다.
@@ -97,10 +97,10 @@ claude.ai/design 프로젝트의 관리자 콘솔 "대시보드"(SilverBridge-ap
   - 계산을 복제하지 않았기 때문에 각 화면 숫자와 어긋나지 않는다.
   - `maxTotal`은 `camera.max-total`이 0 이하이면 null이다(`AdminCameraService` 요약과 같다).
 - `AdminAiStatusService`(트랜잭션 없음, DB 조회 없음)와 `AiServerHealthClient`(`admin/client`)
-  - 확인 대상은 챗 중계와 같은 `chat.relay.ai-base-url`이고, 거기에 `GET /health`를 보낸다.
+  - 확인 대상은 챗 중계와 같은 `chat.relay.ai-base-url`이고, 거기에 `GET /api/v1/live-streams`를 보낸다(`/health`는 앞단에서 막힘).
   - 연결 3초, 호출 전체 5초 제한을 둔다. 마감은 전용 데몬 스레드 1개가 연결을 끊는다(빈으로 등록하지 않음).
   - 키는 `X-API-Key` 헤더로만 보내고, 리다이렉트는 따라가지 않으며, 본문은 64KB까지만 받는다.
-  - 정상은 `data.status == "ok"`인 경우뿐이다. 앞단이 HTML 200을 돌려줘도 정상으로 보지 않는다.
+  - 정상은 AI 공통 응답 `success == true`인 경우뿐이다. 앞단이 HTML 200을 돌려줘도 정상으로 보지 않는다.
   - 로그 `[ADMIN-AI-STATUS]`에는 결과 코드·상태 코드·예외 클래스명만 남긴다(`LogRawExceptionGuardTest` 대상에 추가).
 - 응답 DTO는 새 칸을 추가만 했다. `AdminAnomalySummaryResponse.AiConfidence` 타입을 재사용해 두 화면의 스키마가 같다.
 
@@ -121,3 +121,9 @@ claude.ai/design 프로젝트의 관리자 콘솔 "대시보드"(SilverBridge-ap
 - `AdminDashboardControllerHttpTest` 3건(실제 직렬화): 기존 칸 이름 하위 호환, 새 칸, null 칸이 빠지지 않는지, 오프셋 포함 시각
 - `AdminDashboardControllerSecurityTest` 6건: 세 경로 모두 ADMIN만 허용, GUARDIAN·WARD·익명 거부
 - 원래 계산의 경계(NOT_SENT 분리·KST 자정·basis 0이면 null)는 기존 `AdminNotificationServiceTest`·`AdminNotificationFilterTest`·`AdminAnomalyServiceTest`가 이미 고정하고 있다
+
+## 8. 배포 후속 (2026-10-27)
+
+- **#388 기동 실패 수정**: #387 배포 직후 두 서버의 api가 기동에 실패해 재시작을 반복했다. `AiServerHealthClient`에 생성자가 둘이라 Spring이 기본 생성자를 찾다 `No default constructor found`로 멈춘 것이다. 단위 테스트는 생성자를 직접 불러 이 문제를 잡지 못했다. 공개 생성자에 `@Autowired`를 붙였고, 실제 Spring 컨텍스트로 빈 생성을 고정하는 `AiServerHealthClientWiringTest`를 추가했다(`@Autowired`를 빼면 실패함을 변이로 확인).
+- **확인 경로 변경**: §3-2. gosky 실측 결과 이상감지는 `OK`였고, 챗봇은 `/health` 404 때문에 `null`이었다.
+

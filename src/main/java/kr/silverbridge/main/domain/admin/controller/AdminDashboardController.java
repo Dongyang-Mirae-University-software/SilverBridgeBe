@@ -124,7 +124,8 @@ public class AdminDashboardController {
                     백엔드의 AI WebSocket 구독 상태입니다. OK(연결됨) / DISCONNECTED(끊김 - 이상감지 알림이 나가지 않음).
 
                     [chatbot - AI 의료 챗봇]
-                    챗봇을 서빙하는 AI 서버의 GET /health 응답입니다(연결 3초·전체 5초 제한).
+                    챗봇을 서빙하는 AI 서버의 응답입니다(키가 필요한 조회 GET /api/v1/live-streams로 확인, 연결 3초·전체 5초 제한).
+                    AI /health 는 앞단이 바깥에 열지 않아 쓰지 않습니다.
                     OK(정상 응답) / null(확인 불가 - 시간 초과·통신 오류·서버 오류·설정 없음).
                     AI 서버 프로세스 응답까지만 확인하며 모델 응답 성공은 보장하지 않습니다.
                     확인 실패를 "중단"으로 단정하지 않으므로 이 칸에는 DISCONNECTED가 오지 않습니다.
