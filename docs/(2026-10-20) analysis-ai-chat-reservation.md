@@ -457,3 +457,4 @@ FE → BE POST /api/{guardian|ward}/chat (userId는 토큰으로 덮어씀, cont
 - **S-7**: 설계만 - AI `docs/design/2026-10-28-chat-history-server-side.md`. history를 쓰는 곳 10곳 중 예약 생성·취소(토큰)와 위기 해제는 이미 서버 값이고, 남은 위험은 라우터·위기 근거·예약 값이다. A안(서버 기록으로 이력 재구성, 클라이언트 값 무시) 추천, FE·BE 필수 변경 없음.
 - **남은 것**: S-7 구현, 예약 API 응답 읽기는 소켓 단위 제한이라 아주 느린 응답은 몇 초 넘칠 수 있음, MedGemma(로컬) 입력의 프로필은 범위 밖.
 - 결과 AI `docs/eval-results/2026-10-28-privacy-deadline.*`.
+- **기능 점검**(AI #90, `docs/audits/2026-10-28-privacy-deadline-audit.md`): 🟡 1·🟢 5, 되돌릴 수 없는 호출 순서·마감 경계·최악 합계·응급/자해·로그는 PASS. 🟡 M-1 = 이어 쓰는 턴의 저장 초안 지역(`facts.location`)이 전체 주소로 추출에 나간다(첫 턴만 시·구로 줄었다). 실제 FE는 `context`에 주소를 보내지 않아 지금은 사용자가 지역 입력칸에 전체 주소를 칠 때만 해당 - S-7 작업에서 함께 고친다(L-1 확인 버튼 턴 마감 시 `pendingAction` 넘김 포함).
