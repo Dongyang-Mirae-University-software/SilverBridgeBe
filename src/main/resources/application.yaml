@@ -351,6 +351,7 @@ chat:
     connect-timeout: ${CHAT_RELAY_CONNECT_TIMEOUT:3s}
     call-timeout: ${CHAT_RELAY_CALL_TIMEOUT:130s}           # 챗 전송 호출 전체 - AI 상한(120초)보다 약간 길게
     logs-call-timeout: ${CHAT_RELAY_LOGS_CALL_TIMEOUT:15s}  # 기록 조회 호출 전체
+    stats-call-timeout: ${CHAT_RELAY_STATS_CALL_TIMEOUT:8s} # 관리자 AI 통계 집계 호출 전체
     max-concurrent: ${CHAT_RELAY_MAX_CONCURRENT:10}         # 전송 1건이 요청 스레드를 최대 130초 붙든다
     max-per-user: ${CHAT_RELAY_MAX_PER_USER:1}
     per-minute: ${CHAT_RELAY_PER_MINUTE:10}

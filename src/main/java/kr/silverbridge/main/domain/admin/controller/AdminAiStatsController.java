@@ -39,7 +39,8 @@ public class AdminAiStatsController {
                     기간 안 AI 의료 챗봇 상담의 개수만 돌려줍니다(상담 내용·사용자 ID 없음).
 
                     [기간]
-                    - from·to: KST 날짜(YYYY-MM-DD), 둘 다 필수·둘 다 포함, 최대 31일. 어기면 400 AI_STATS_INVALID_RANGE
+                    - from·to: KST 날짜(YYYY-MM-DD, 2000~2999년), 둘 다 필수·둘 다 포함, from ≤ to, 최대 31일.
+                      어기면 400 AI_STATS_INVALID_RANGE
 
                     [값 읽는 법]
                     - emergencyGuidance: 응급 안내(119)를 낸 상담 수 - 고위험 판정 기준이라 실제 응급 수보다 조금 많을 수 있음
@@ -57,7 +58,7 @@ public class AdminAiStatsController {
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "관리자 권한 없음", content = @Content),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "429", description = "요청이 너무 많음", content = @Content),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "503", description = "AI 서버에 연결할 수 없거나 응답 형식 이상(AI_STATS_UNAVAILABLE)", content = @Content),
-            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "504", description = "AI 응답 지연(AI_STATS_TIMEOUT)", content = @Content)
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "504", description = "AI 응답 지연 - 8초 초과(AI_STATS_TIMEOUT)", content = @Content)
     })
     @GetMapping("/chat")
     public ApiResponse<AdminAiChatStatsResponse> getChatStats(

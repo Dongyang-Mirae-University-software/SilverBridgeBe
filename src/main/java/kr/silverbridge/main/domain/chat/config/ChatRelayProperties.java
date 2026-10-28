@@ -26,6 +26,8 @@ public class ChatRelayProperties {
     private Duration callTimeout = Duration.ofSeconds(130);
     /** 기록 조회 호출 전체. */
     private Duration logsCallTimeout = Duration.ofSeconds(15);
+    /** 관리자 AI 통계 집계 호출 전체(2026-10-28 점검 L-4) - 숫자만 오는 조회라 일반 AI 조회와 같은 8초. */
+    private Duration statsCallTimeout = Duration.ofSeconds(8);
     private int maxConcurrent = 10;
     private int maxPerUser = 1;
     private int perMinute = 10;
