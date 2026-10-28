@@ -19,6 +19,7 @@ import java.net.HttpURLConnection;
 import java.net.URI;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
+import java.time.LocalDate;
 import java.util.Optional;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
@@ -42,6 +43,8 @@ public class AiChatClient {
     private static final String API_KEY_HEADER = "X-API-Key";
     private static final String CHAT_PATH = "/api/v1/chat";
     private static final String RESERVATION_CREDENTIAL_PATH = "/api/v1/reservation-credentials";
+    /** 집계 응답 상한 - 숫자와 날짜별 31줄뿐이라 수 KB다. 넘치면 응답 형식 이상으로 본다. */
+    private static final int MAX_STATS_BYTES = 64 * 1024;
 
     private final ChatRelayProperties properties;
     private final ObjectMapper objectMapper;
@@ -96,6 +99,20 @@ public class AiChatClient {
             return Optional.empty();
         }
         return Optional.of(dataOf(response, "log-detail"));
+    }
+
+    /**
+     * 상담 전체 집계(관리자 AI 통계용, 2026-10-28). AI의 {@code GET /api/v1/chat/stats?from=&to=} - 개수만 오고 원문·userId는 없다.
+     * 기간은 호출부가 먼저 검증한다. 그래서 AI가 400·404·422를 주면 계약이 어긋난 것(옛 AI 서버 등)으로 보고 503이다.
+     */
+    public JsonNode stats(LocalDate from, LocalDate to) {
+        URI uri = base(CHAT_PATH + "/stats").queryParam("from", from).queryParam("to", to).build().encode().toUri();
+        AiResponse response = call("stats", "GET", uri, null, properties.getLogsCallTimeout(), MAX_STATS_BYTES);
+        if (response.status() != 200) {
+            log.warn("[CHAT-RELAY] AI 집계 응답 이상: status={}", response.status());
+            throw new CustomException(ErrorCode.CHAT_UNAVAILABLE);
+        }
+        return dataOf(response, "stats");
     }
 
     /**
