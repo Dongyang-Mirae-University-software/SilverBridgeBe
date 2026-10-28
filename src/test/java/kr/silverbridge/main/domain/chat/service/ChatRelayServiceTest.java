@@ -274,9 +274,9 @@ class ChatRelayServiceTest {
     @DisplayName("context는 직렬화 8192바이트까지 허용, 8193바이트부터 400")
     void context_8KB_경계() throws Exception {
         when(aiChatClient.send(any())).thenReturn(objectMapper.readTree("{}"));
-        // {"k":"<n자>"} = n + 8 바이트
-        ChatRelayRequest atLimit = new ChatRelayRequest("안녕", null, null, Map.of("k", "a".repeat(8184)), null);
-        ChatRelayRequest over = new ChatRelayRequest("안녕", null, null, Map.of("k", "a".repeat(8185)), null);
+        // {"k":"<n자>","role":"WARD"} = n + 22 바이트 - 상한은 BE가 덧붙이는 role 까지 넣은 최종 context 기준
+        ChatRelayRequest atLimit = new ChatRelayRequest("안녕", null, null, Map.of("k", "a".repeat(8170)), null);
+        ChatRelayRequest over = new ChatRelayRequest("안녕", null, null, Map.of("k", "a".repeat(8171)), null);
 
         service.send(ME, atLimit);
         assertThatThrownBy(() -> service.send(ME, over)).isInstanceOfSatisfying(CustomException.class,

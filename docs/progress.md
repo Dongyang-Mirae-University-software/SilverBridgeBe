@@ -2407,3 +2407,10 @@ AI PR #84(`GET /api/v1/chat/stats`, gosky 배포 10:25)를 템플릿 B로 점검
 - 🟢 L-1~L-5: 극단 날짜 500 / byRole은 클라이언트 값(BE가 토큰 역할로 덮어쓰기, `unknown`은 10/08~12 옛 기록) / 생성 실패 후 자해 고정 응답 폴백 미집계 / 테스트가 `app.main` 연결 미경유 / 경계 케이스 미고정.
 - 산출물: `docs/(2026-10-28) audit-ai-chat-stats.md`, 점검 대장 행 추가.
 
+---
+
+### [2026-10-28] AI 챗 집계 점검 후속 - 6건 전부 반영 (AI #87 · BE branch `fix/chat-relay-role`)
+
+- AI #87: `chat_logs.created_at` 인덱스(기동 시 멱등 생성)·기간 행 나눠 읽기, 극단 날짜 400, 생성 실패 턴 `upstreamMeta.generationFailed` 표시와 집계, 운영 연결(최상위 `errorCode`·`main.py` 키 검사) 테스트, 경계 케이스. 운영 이미지 전체 828/829 통과(1건 기존 `pgrep` 환경 문제), 변이 6종 검출.
+- BE: 챗 중계가 `context.role`을 경로의 역할(보호자 `GUARDIAN`·피보호자 `WARD`)로 덮어쓴다 - 클라이언트 값이 비거나 위조돼 AI 역할별 집계가 흔들리던 것(L-2). `context` 8KB 상한은 최종 크기 기준 그대로(경계 테스트 숫자만 조정). 정책 문서 갱신.
+
