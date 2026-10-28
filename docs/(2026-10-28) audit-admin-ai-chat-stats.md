@@ -91,6 +91,6 @@ fix: 관리자 AI 챗 집계 점검 반영 - daily 날짜 검사·AI 호출 런�
 | 🟢 L-6 | 서비스: 날짜 하루 밀림·중복·순서·형식·UTC 오프셋 5가지 503 / 클라이언트: 집계 시간 초과·64KB 상한·키 제어 문자(예외·로그에 키 없음)·잘못된 주소 2가지 |
 
 - 검증: 관리자·chat 테스트 357건, 변이 4종 검출(날짜 검사·오프셋 검사·런타임 예외 감싸기·전용 제한), `./gradlew build` 2075건 통과(건너뜀 1, 기존).
-- 남긴 것: 공용 `GlobalExceptionHandler.handleIllegalArgument`의 `e.getMessage()` 로깅은 그대로다(전 도메인 영향이라 별도 판단). AI 호출 경로에서는 이번 감싸기로 그 핸들러까지 가지 않는다.
+- ~~남긴 것~~ → **해소 (2026-10-28, branch `fix/global-handler-raw-log`)**: 공용 `GlobalExceptionHandler`의 원문 로그 10곳을 이름·클래스명·발생 위치로 바꾸고 `LogRawExceptionGuardTest` 목록에 넣었다(응답 무변경). IAE의 하위인 `NumberFormatException`이 사용자 입력을 남기던 것과 Content-Type 원문 로그(가짜 줄 삽입)도 함께 막혔다.
 - 배포·실측(2026-10-28 14:18, PR #398 `58e636c`): 두 서버 반영, gosky에서 실제 AI 응답이 새 검사를 통과(오늘·10월 200)하고 챗 중계(피보호자·보호자) 200. 탈퇴 2건으로 집계가 줄어든 것을 확인해 "탈퇴한 회원의 상담은 빠진다"를 기능 문서·Notion 전달 문서에 적었다.
 

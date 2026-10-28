@@ -49,7 +49,8 @@ class LogRawExceptionGuardTest {
             "domain/admin/service/AdminCameraService.java",
             "domain/admin/client/AiServerHealthClient.java",
             "domain/hospital/client/ReservationAdminClient.java",
-            "domain/admin/service/AdminHospitalService.java");
+            "domain/admin/service/AdminHospitalService.java",
+            "global/exception/GlobalExceptionHandler.java");
 
     @Test
     void guarded_files_do_not_log_exception_messages() throws IOException {
