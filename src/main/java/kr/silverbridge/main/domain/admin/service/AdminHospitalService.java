@@ -7,6 +7,7 @@ import kr.silverbridge.main.domain.admin.dto.AdminHospitalItem;
 import kr.silverbridge.main.domain.admin.dto.AdminHospitalStatusRequest;
 import kr.silverbridge.main.domain.admin.dto.AdminHospitalSummaryResponse;
 import kr.silverbridge.main.domain.admin.dto.AdminHospitalUpdateRequest;
+import kr.silverbridge.main.domain.admin.dto.AdminHospitalWeekdayHours;
 import kr.silverbridge.main.domain.admin.support.AdminPaging;
 import kr.silverbridge.main.domain.hospital.client.ReservationAdminClient;
 import kr.silverbridge.main.global.audit.AdminAuditLogService;
@@ -129,6 +130,9 @@ public class AdminHospitalService {
             if (request.closedWeekdays() != null) {
                 body.put("closedWeekdays", closedWeekdays(request.closedWeekdays()));
             }
+            if (request.weekdayHours() != null) {
+                body.put("weekdayHours", weekdayHoursBody(request.weekdayHours()));
+            }
 
             client.requireConfigured();
             // 예약 서비스에는 이름 유일 제약이 없다 - 결과 불명 뒤 다시 누른 등록이 중복을 만들지 않게 먼저 본다(점검 M-1)
@@ -166,6 +170,9 @@ public class AdminHospitalService {
             }
             if (request.closedWeekdays() != null) {
                 body.put("closedWeekdays", closedWeekdays(request.closedWeekdays()));
+            }
+            if (request.weekdayHours() != null) {
+                body.put("weekdayHours", weekdayHoursBody(request.weekdayHours()));
             }
 
             boolean needsCurrent = body.containsKey("name") || body.containsKey("address")
@@ -335,6 +342,25 @@ public class AdminHospitalService {
         }
     }
 
+    /** 요일별 진료 시간 - 같은 요일 두 번·시작 >= 끝이면 400 HOSPITAL_INVALID_HOURS, 요일순으로 보낸다. */
+    private static List<Map<String, Object>> weekdayHoursBody(List<AdminHospitalWeekdayHours> hours) {
+        List<AdminHospitalWeekdayHours> sorted = hours.stream()
+                .sorted(Comparator.comparing(AdminHospitalWeekdayHours::weekday)).toList();
+        Set<Integer> seen = new HashSet<>();
+        List<Map<String, Object>> out = new ArrayList<>();
+        for (AdminHospitalWeekdayHours h : sorted) {
+            if (!seen.add(h.weekday()) || h.openTime().compareTo(h.closeTime()) >= 0) {
+                throw new CustomException(ErrorCode.HOSPITAL_INVALID_HOURS);
+            }
+            Map<String, Object> item = new LinkedHashMap<>();
+            item.put("weekday", h.weekday());
+            item.put("openTime", h.openTime());
+            item.put("closeTime", h.closeTime());
+            out.add(item);
+        }
+        return out;
+    }
+
     /** 휴진 요일 - 중복이면 400, 정렬해 보낸다. */
     private static List<Integer> closedWeekdays(List<Integer> days) {
         List<Integer> sorted = days.stream().sorted().toList();
@@ -419,6 +445,7 @@ public class AdminHospitalService {
                 h.hasNonNull("breakStart") && !h.get("breakStart").asText().isEmpty() ? h.get("breakStart").asText() : null,
                 h.hasNonNull("breakEnd") && !h.get("breakEnd").asText().isEmpty() ? h.get("breakEnd").asText() : null,
                 weekdays(h.path("closedWeekdays")),
+                weekdayHours(h.path("weekdayHours")),
                 h.path("bookingAvailable").asBoolean(false),
                 List.copyOf(departments),
                 status != null && status.isObject() ? toStatus(status) : null,
@@ -437,6 +464,20 @@ public class AdminHospitalService {
             }
         }
         return List.copyOf(days);
+    }
+
+    /** 요일별 진료 시간 - 형식이 맞는 항목만(옛 버전·형식 이상이면 빈 목록). */
+    private static List<AdminHospitalWeekdayHours> weekdayHours(JsonNode node) {
+        List<AdminHospitalWeekdayHours> out = new ArrayList<>();
+        if (node != null && node.isArray()) {
+            for (JsonNode h : node) {
+                if (h.isObject() && h.path("weekday").canConvertToInt() && h.path("weekday").asInt() >= 0 && h.path("weekday").asInt() <= 6
+                        && h.hasNonNull("openTime") && h.hasNonNull("closeTime")) {
+                    out.add(new AdminHospitalWeekdayHours(h.path("weekday").asInt(), h.get("openTime").asText(), h.get("closeTime").asText()));
+                }
+            }
+        }
+        return List.copyOf(out);
     }
 
     private static AdminHospitalItem.Department toDepartment(JsonNode d) {

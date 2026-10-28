@@ -35,6 +35,8 @@ public record AdminHospitalItem(
         String breakEnd,
         @Schema(description = "휴진 요일(0=일 … 6=토). 없으면 빈 배열", example = "[0]")
         List<Integer> closedWeekdays,
+        @Schema(description = "요일별 진료 시간(그 요일만 기본 진료 시간을 덮어씀). 없으면 빈 배열")
+        List<AdminHospitalWeekdayHours> weekdayHours,
         @Schema(description = "앱 예약 가능 여부", example = "true")
         boolean bookingAvailable,
         @Schema(description = "진료과(사용 중인 것만)")
