@@ -79,6 +79,10 @@ class AiChatClientTest {
             ex.close();
         } else if (path.equals("/api/v1/chat")) {
             json(ex, 200, "{\"success\":true,\"message\":\"ok\",\"data\":{\"reply\":\"안녕하세요\",\"riskLevel\":\"low\"}}");
+        } else if (path.equals("/api/v1/chat/stats") && ex.getRequestURI().getRawQuery().contains("from=2026-09-")) {
+            json(ex, 404, "{}");
+        } else if (path.equals("/api/v1/chat/stats")) {
+            json(ex, 200, "{\"success\":true,\"data\":{\"totalChats\":3}}");
         } else if (path.equals("/api/v1/chat/logs") && ex.getRequestURI().getRawQuery().contains("EMPTY")) {
             json(ex, 200, "{\"success\":true,\"data\":[]}");
         } else if (path.equals("/api/v1/chat/logs") && ex.getRequestURI().getRawQuery().contains("FAIL")) {
@@ -221,6 +225,24 @@ class AiChatClientTest {
         properties.setMaxLogsBytes(1024);
 
         assertThatThrownBy(() -> client.logs("HUGE"))
+                .isInstanceOfSatisfying(CustomException.class,
+                        e -> assertThat(e.getErrorCode()).isEqualTo(ErrorCode.CHAT_UNAVAILABLE));
+    }
+
+    @Test
+    @DisplayName("집계 - 기간을 쿼리로, 키는 헤더로만 보내고 AI 응답의 data를 돌려준다")
+    void stats_정상() {
+        JsonNode data = client.stats(java.time.LocalDate.of(2026, 10, 1), java.time.LocalDate.of(2026, 10, 31));
+
+        assertThat(data.path("totalChats").asLong()).isEqualTo(3L);
+        assertThat(receivedRawUri.get()).isEqualTo("/api/v1/chat/stats?from=2026-10-01&to=2026-10-31");
+        assertThat(receivedKey.get()).isEqualTo(KEY);
+    }
+
+    @Test
+    @DisplayName("집계 - 기간은 호출부가 검사하므로 AI 4xx(옛 AI 서버의 404 등)는 계약 어긋남으로 보고 CHAT_UNAVAILABLE")
+    void stats_AI404() {
+        assertThatThrownBy(() -> client.stats(java.time.LocalDate.of(2026, 9, 1), java.time.LocalDate.of(2026, 9, 2)))
                 .isInstanceOfSatisfying(CustomException.class,
                         e -> assertThat(e.getErrorCode()).isEqualTo(ErrorCode.CHAT_UNAVAILABLE));
     }

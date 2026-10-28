@@ -170,6 +170,9 @@ public enum ErrorCode {
     CHAT_UNAVAILABLE(HttpStatus.SERVICE_UNAVAILABLE, "AI 상담 서버에 연결할 수 없습니다. 잠시 후 다시 시도해주세요."),
     CHAT_TIMEOUT(HttpStatus.GATEWAY_TIMEOUT, "AI 상담 응답이 너무 오래 걸립니다. 잠시 후 다시 시도해주세요."),
     CHAT_INVALID_REQUEST(HttpStatus.BAD_REQUEST, "상담 요청 형식이 올바르지 않습니다."),
+    AI_STATS_INVALID_RANGE(HttpStatus.BAD_REQUEST, "기간은 YYYY-MM-DD 형식으로, 시작일부터 종료일까지 최대 31일을 조회할 수 있습니다."),
+    AI_STATS_UNAVAILABLE(HttpStatus.SERVICE_UNAVAILABLE, "AI 통계를 지금 불러올 수 없습니다. 잠시 후 다시 시도해주세요."),
+    AI_STATS_TIMEOUT(HttpStatus.GATEWAY_TIMEOUT, "AI 통계 응답이 늦습니다. 잠시 후 다시 시도해주세요."),
     CHAT_LOG_NOT_FOUND(HttpStatus.NOT_FOUND, "상담 기록을 찾을 수 없습니다."),
     CHAT_LIMIT_EXCEEDED(HttpStatus.TOO_MANY_REQUESTS, "이전 상담 응답을 기다리는 중입니다. 잠시 후 다시 시도해주세요."),
     CHAT_WARD_NOT_CONNECTED(HttpStatus.FORBIDDEN, "연결된 피보호자만 대신 상담·예약할 수 있습니다.");

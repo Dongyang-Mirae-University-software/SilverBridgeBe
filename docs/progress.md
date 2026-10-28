@@ -2414,3 +2414,14 @@ AI PR #84(`GET /api/v1/chat/stats`, gosky 배포 10:25)를 템플릿 B로 점검
 - AI #87: `chat_logs.created_at` 인덱스(기동 시 멱등 생성)·기간 행 나눠 읽기, 극단 날짜 400, 생성 실패 턴 `upstreamMeta.generationFailed` 표시와 집계, 운영 연결(최상위 `errorCode`·`main.py` 키 검사) 테스트, 경계 케이스. 운영 이미지 전체 828/829 통과(1건 기존 `pgrep` 환경 문제), 변이 6종 검출.
 - BE: 챗 중계가 `context.role`을 경로의 역할(보호자 `GUARDIAN`·피보호자 `WARD`)로 덮어쓴다 - 클라이언트 값이 비거나 위조돼 AI 역할별 집계가 흔들리던 것(L-2). `context` 8KB 상한은 최종 크기 기준 그대로(경계 테스트 숫자만 조정). 정책 문서 갱신.
 
+---
+
+### [2026-10-28] 관리자 AI 통계 - 의료 챗봇 집계 중계 (branch `feature/admin-ai-chat-stats`)
+
+관리자 웹 v13 "AI 통계 > AI 의료 챗봇" 탭용 `GET /api/admin/ai-stats/chat?from=&to=`(ADMIN, 조회 전용, 마이그레이션 없음). AI `GET /api/v1/chat/stats`(AI #84·#87)를 `AiChatClient.stats`로 불러 허용 목록 record로만 옮긴다.
+
+- 결정(사용자 "추천안"): AI 실패 503 `AI_STATS_UNAVAILABLE`·시간 초과 504 `AI_STATS_TIMEOUT`(0으로 채우지 않음), 같은 기간 60초 캐시(성공만, 32개), 관리자 분 30·시간 600, 챗 킬 스위치 미적용, 경로 `/api/admin/ai-stats/chat`. 기간 오류는 전용 400 `AI_STATS_INVALID_RANGE`.
+- 작업 중 발견: BE 기간 검사가 `0001-01-01`을 통과시켜 AI 400이 503으로 보였다 → 2000~2999년으로 제한.
+- 테스트: 보안·HTTP 직렬화·서비스(검사 12·형식 이상 8·캐시)·클라이언트, 변이 6종 검출, `./gradlew build` 2066건 통과.
+- 산출물: `docs/(2026-10-28) feature-admin-ai-chat-stats.md`, 점검 대장 ❌ 행, CLAUDE.md·정책 파일 갱신.
+
