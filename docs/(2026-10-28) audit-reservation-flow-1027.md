@@ -83,3 +83,18 @@ AI 직접 기록 조회(`GET /api/v1/chat/logs/{id}?userId=`)는 `upstreamMeta`�
 
 1. **AI**: M-1(진료과 변경 시 병원 비움) + M-2(`SLOT_TAKEN`·`INVALID_TIME` 재선택) + L-1(빈 시간 `INVALID_DEPARTMENT` → 진료과 다시 묻기) + L-4(가짜 예약 서비스 진료과 검증) - 한 PR, 마이그레이션 없음, AI 재시작 필요.
 2. **예약 서비스**: L-2(MCP 스키마에서 `todayReservationCount` 제거) - 코드 1줄, 운영 영향 없음.
+
+## 반영 결과 (2026-10-28)
+
+| 항목 | 반영 | gosky |
+|---|---|---|
+| M-1 진료과 변경 시 이전 병원 비움 | AI #79 - `_clear_stale_links`(이전 진료과가 있었고 병원이 그대로면 병원·id 비움, 처음 정하는 진료과는 유지) | AI `da6bae6` 09:31:37 재시작 |
+| M-2 `SLOT_TAKEN`·`INVALID_TIME` 시간 재선택 | AI #79 - `_RESELECT_PREFIX` 추가 | 〃 |
+| L-1 병원에 없는 진료과 → 진료과 다시 고르기 | AI #79 - `_DepartmentNotOffered`, 시간 선택·재선택 경로 모두, 같은 턴 표시는 저장 안 함 | 〃 |
+| L-4 가짜 예약 서비스 진료과 검증 | AI #79 - `FakeReservation.departments_by_hospital` | - |
+| L-2 MCP 상태 도구 `todayReservationCount` 제거 | 예약 서비스 #7 | 예약 서비스 `211d626` |
+| L-3 FE BFF 진료과 검사 완화 | FE #151 - 제어 문자·30자 초과만 막고 `URLSearchParams`로 다시 인코딩(`&`·`/`·`../`가 경로·다른 쿼리를 만들지 않음을 테스트로 고정) | FE `b088303`, `/guardian/hospital`·`/ward/hospital` 200 |
+| L-5 BE 관리자 API 실서버 확인 | **미완** - 시험 관리자 비밀번호 불일치(누적 로그인 실패 2회, 계정은 ADMIN·ACTIVE) | - |
+
+- 테스트: AI pytest 802 passed·1 skipped(신규 7, 결함 주입 M-1 1건·M-2 2건·L-1 1건 실패 확인), 예약 서비스 `npm test` 26/26, FE BFF 73 passed(`npm test` 326 통과, 기존 `admin/dashboard.test.ts` 로드 오류는 무관).
+- 실서버: 이력 없이 지역 → 병원 목록 → 병원 → 날짜 → 시간 → 확인 → 예약 → 취소 한 바퀴 성공(시험 예약 #258 취소, CANCELED 행 잔존). run_eval rs.*·mt.* × 1: PASS 4·기록용 2. 시험 챗 기록 11건은 세션 조건으로 삭제.
