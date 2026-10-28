@@ -140,6 +140,7 @@ public enum ErrorCode {
     HOSPITAL_DEPARTMENT_DUPLICATED(HttpStatus.CONFLICT, "이미 등록된 진료과입니다."),
     HOSPITAL_DEPARTMENT_DUPLICATED_IN_REQUEST(HttpStatus.BAD_REQUEST, "같은 진료과가 두 번 들어 있습니다."),
     HOSPITAL_INVALID_HOURS(HttpStatus.BAD_REQUEST, "진료 시작 시각은 종료 시각보다 빨라야 합니다."),
+    HOSPITAL_INVALID_BREAK(HttpStatus.BAD_REQUEST, "점심시간은 시작과 끝을 함께, 진료 시간 안에서 시작이 끝보다 빠르게 정해주세요."),
     HOSPITAL_REQUEST_REJECTED(HttpStatus.BAD_REQUEST, "예약 서비스가 요청을 받아들이지 않았습니다. 입력값을 확인해주세요."),
     HOSPITAL_SERVICE_UNAVAILABLE(HttpStatus.SERVICE_UNAVAILABLE, "제휴 병원 관리를 지금 사용할 수 없습니다. 잠시 후 다시 시도해주세요."),
     HOSPITAL_SERVICE_TIMEOUT(HttpStatus.GATEWAY_TIMEOUT, "예약 서비스 응답이 늦습니다. 잠시 후 다시 시도해주세요."),
