@@ -2444,3 +2444,14 @@ PR #397(`GET /api/admin/ai-stats/chat`)을 템플릿 B로 점검했다(코드 �
 - L-4 집계 전용 제한 `chat.relay.stats-call-timeout` 8초. L-5 기간 오류 문구·Swagger 보강. L-6 테스트 9가지 추가.
 - 검증: 변이 4종 검출, `./gradlew build` 2075건 통과.
 
+---
+
+### [2026-10-28] 공용 예외 처리기 로그의 예외 원문 제거 (branch `fix/global-handler-raw-log`)
+
+AI 챗 집계 점검 L-1에서 남겨 둔 공용 `GlobalExceptionHandler`의 `e.getMessage()` 로그를 정리했다(응답·처리 순서 무변경, 사용자 결정 "추천안").
+
+- 10곳: IAE → `type`·`at`(우리 코드 첫 발생 위치) / Content-Type 오류 → 값 없이 / CustomException·429 → 오류 코드 이름 / 누락 파라미터·파트 → 이름 / multipart → 원인 클래스명 / 권한 거부 → 고정 / 낙관적 잠금 → 엔티티 클래스명 / 메서드 → HTTP 메서드 / 업로드 크기 → 상한 바이트.
+- 함께 막힌 것: `NumberFormatException`(IAE 하위)이 사용자 입력을, Content-Type 오류가 요청자 헤더 원문(줄바꿈으로 가짜 로그 줄)을 남기던 것.
+- 가드: 파일을 `LogRawExceptionGuardTest` 목록에 추가, `GlobalExceptionHandlerLogTest` 5건(키·입력·헤더 원문 없음, 응답 그대로). 변이 2종 검출(정규식을 피해 가는 문자열 결합도 로그 테스트가 잡음). `./gradlew build` 2080건 통과.
+- 운영에서 달라 보이는 점: `CustomException` 로그가 한국어 문구 대신 `code=USER_NOT_FOUND` 형태다.
+

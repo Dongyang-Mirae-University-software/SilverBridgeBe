@@ -48,7 +48,7 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(CustomException.class)
     public ResponseEntity<ApiResponse<Void>> handleCustomException(CustomException e) {
         ErrorCode errorCode = e.getErrorCode();
-        log.warn("CustomException: {}", errorCode.getMessage());
+        log.warn("CustomException: code={}", errorCode);
         return ResponseEntity
                 .status(errorCode.getStatus())
                 .body(ApiResponse.fail(errorCode));
@@ -58,7 +58,7 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(TooManyRequestsException.class)
     public ResponseEntity<ApiResponse<Map<String, Long>>> handleTooManyRequests(TooManyRequestsException e) {
         ErrorCode errorCode = e.getErrorCode();
-        log.warn("TooManyRequestsException: {} (retryAfter={}s)", errorCode.getMessage(), e.getRetryAfterSeconds());
+        log.warn("TooManyRequestsException: code={} (retryAfter={}s)", errorCode, e.getRetryAfterSeconds());
         return ResponseEntity
                 .status(errorCode.getStatus())
                 .header("Retry-After", String.valueOf(e.getRetryAfterSeconds()))
@@ -106,7 +106,7 @@ public class GlobalExceptionHandler {
     // 필수 쿼리 파라미터 누락
     @ExceptionHandler(MissingServletRequestParameterException.class)
     public ResponseEntity<ApiResponse<Void>> handleMissingParameter(MissingServletRequestParameterException e) {
-        log.warn("MissingServletRequestParameterException: {}", e.getMessage());
+        log.warn("MissingServletRequestParameterException: parameter={}, type={}", e.getParameterName(), e.getParameterType());
         // 파일 파라미터(@RequestParam MultipartFile) 누락은 파라미터명 대신 "파일이 필요합니다"로 안내
         if ("MultipartFile".equals(e.getParameterType())) {
             return ResponseEntity.badRequest().body(ApiResponse.fail(ErrorCode.FILE_REQUIRED));
@@ -118,14 +118,15 @@ public class GlobalExceptionHandler {
     // multipart 파트 누락 (@RequestPart / @RequestParam MultipartFile 에 파일을 안 보낸 경우)
     @ExceptionHandler(MissingServletRequestPartException.class)
     public ResponseEntity<ApiResponse<Void>> handleMissingPart(MissingServletRequestPartException e) {
-        log.warn("MissingServletRequestPartException: {}", e.getMessage());
+        log.warn("MissingServletRequestPartException: part={}", e.getRequestPartName());
         return ResponseEntity.badRequest().body(ApiResponse.fail(ErrorCode.FILE_REQUIRED));
     }
 
     // multipart 요청이 아니거나 파싱 실패 (크기 초과는 아래 더 구체적인 핸들러가 먼저 처리)
     @ExceptionHandler(MultipartException.class)
     public ResponseEntity<ApiResponse<Void>> handleMultipart(MultipartException e) {
-        log.warn("MultipartException: {}", e.getMessage());
+        // 원인 메시지에 업로드 정보가 섞일 수 있어 클래스명만 남긴다.
+        log.warn("MultipartException: cause={}", e.getCause() == null ? "-" : e.getCause().getClass().getSimpleName());
         return ResponseEntity.badRequest().body(ApiResponse.fail(ErrorCode.FILE_REQUIRED));
     }
 
@@ -141,7 +142,9 @@ public class GlobalExceptionHandler {
     // 비즈니스 로직의 잘못된 인자 (CustomException으로 감싸지지 않은 경우의 안전망)
     @ExceptionHandler(IllegalArgumentException.class)
     public ResponseEntity<ApiResponse<Void>> handleIllegalArgument(IllegalArgumentException e) {
-        log.warn("IllegalArgumentException: {}", e.getMessage());
+        // 메시지에 무엇이든 실릴 수 있다 - JDK 헤더 값 오류는 그 값(AI 키 등) 원문을, NumberFormatException은 사용자 입력을 담는다
+        // (2026-10-28 점검 L-1). 클래스명과 우리 코드의 발생 위치만 남긴다.
+        log.warn("IllegalArgumentException: type={}, at={}", e.getClass().getSimpleName(), origin(e));
         return ResponseEntity
                 .badRequest()
                 .body(ApiResponse.fail(ErrorCode.INVALID_INPUT));
@@ -150,7 +153,7 @@ public class GlobalExceptionHandler {
     // @PreAuthorize 권한 검증 실패
     @ExceptionHandler(AccessDeniedException.class)
     public ResponseEntity<ApiResponse<Void>> handleAccessDenied(AccessDeniedException e) {
-        log.warn("AccessDeniedException: {}", e.getMessage());
+        log.warn("AccessDeniedException");
         return ResponseEntity
                 .status(HttpStatus.FORBIDDEN)
                 .body(ApiResponse.fail(ErrorCode.FORBIDDEN));
@@ -201,7 +204,7 @@ public class GlobalExceptionHandler {
     // 동시 상태 전이로 인한 낙관적 락(@Version) 충돌 — 다른 요청이 먼저 커밋됨
     @ExceptionHandler(ObjectOptimisticLockingFailureException.class)
     public ResponseEntity<ApiResponse<Void>> handleOptimisticLock(ObjectOptimisticLockingFailureException e) {
-        log.warn("OptimisticLockingFailure: {}", e.getMessage());
+        log.warn("OptimisticLockingFailure: entity={}", e.getPersistentClassName());
         return ResponseEntity
                 .status(HttpStatus.CONFLICT)
                 .body(ApiResponse.fail(ErrorCode.CONCURRENT_MODIFICATION));
@@ -210,7 +213,7 @@ public class GlobalExceptionHandler {
     // 허용되지 않은 HTTP 메서드 (예: POST만 지원하는 API에 GET 요청)
     @ExceptionHandler(HttpRequestMethodNotSupportedException.class)
     public ResponseEntity<ApiResponse<Void>> handleMethodNotSupported(HttpRequestMethodNotSupportedException e) {
-        log.warn("HttpRequestMethodNotSupportedException: {}", e.getMessage());
+        log.warn("HttpRequestMethodNotSupportedException: method={}", e.getMethod());
         String allowed = e.getSupportedHttpMethods() == null
                 ? ""
                 : e.getSupportedHttpMethods().stream()
@@ -227,7 +230,8 @@ public class GlobalExceptionHandler {
     // 지원하지 않는 Content-Type (예: application/xml로 요청)
     @ExceptionHandler(HttpMediaTypeNotSupportedException.class)
     public ResponseEntity<ApiResponse<Void>> handleMediaTypeNotSupported(HttpMediaTypeNotSupportedException e) {
-        log.warn("HttpMediaTypeNotSupportedException: {}", e.getMessage());
+        // 메시지에 요청자가 보낸 Content-Type 원문이 들어간다(줄바꿈을 넣어 로그에 가짜 줄을 만들 수 있다) - 값은 남기지 않는다.
+        log.warn("HttpMediaTypeNotSupportedException");
         return ResponseEntity
                 .status(HttpStatus.UNSUPPORTED_MEDIA_TYPE)
                 .body(ApiResponse.fail(ErrorCode.UNSUPPORTED_MEDIA_TYPE));
@@ -257,7 +261,7 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(MaxUploadSizeExceededException.class)
     public ResponseEntity<ApiResponse<Void>> handleMaxUploadSizeExceeded(MaxUploadSizeExceededException e,
                                                                          HttpServletRequest request) {
-        log.warn("MaxUploadSizeExceededException: {}", e.getMessage());
+        log.warn("MaxUploadSizeExceededException: maxBytes={}", e.getMaxUploadSize());
         // 약 봉투 OCR(8MB)은 413으로 답한다 - 기존 FILE_TOO_LARGE 문구는 프로필 사진 5MB 기준이라 맞지 않는다(2026-10-22)
         if (MEDICATION_OCR_PATH.matcher(request.getRequestURI()).matches()) {
             return ResponseEntity.status(ErrorCode.MEDICATION_OCR_IMAGE_TOO_LARGE.getStatus())
@@ -294,5 +298,16 @@ public class GlobalExceptionHandler {
         return ResponseEntity
                 .internalServerError()
                 .body(ApiResponse.fail(ErrorCode.INTERNAL_SERVER_ERROR));
+    }
+
+    /** 우리 패키지의 첫 스택 프레임(파일:줄). 없으면 맨 위 프레임. 로그 진단용 - 예외 메시지는 쓰지 않는다. */
+    static String origin(Throwable e) {
+        StackTraceElement[] trace = e.getStackTrace();
+        for (StackTraceElement frame : trace) {
+            if (frame.getClassName().startsWith("kr.silverbridge.")) {
+                return frame.getFileName() + ":" + frame.getLineNumber();
+            }
+        }
+        return trace.length == 0 ? "?" : trace[0].getFileName() + ":" + trace[0].getLineNumber();
     }
 }
