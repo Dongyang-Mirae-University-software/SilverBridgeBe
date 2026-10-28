@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import kr.silverbridge.main.domain.admin.dto.AdminHospitalCreateRequest;
 import kr.silverbridge.main.domain.admin.dto.AdminHospitalItem;
 import kr.silverbridge.main.domain.admin.dto.AdminHospitalUpdateRequest;
+import kr.silverbridge.main.domain.admin.dto.AdminHospitalWeekdayHours;
 import kr.silverbridge.main.domain.hospital.client.ReservationAdminClient;
 import kr.silverbridge.main.global.audit.AdminAuditLogService;
 import kr.silverbridge.main.global.exception.CustomException;
@@ -44,7 +45,8 @@ class AdminHospitalScheduleTest {
     private static final String LIST = """
             [{"id":1,"name":"서울튼튼정형외과","region":"서울 강남구","address":"서울 강남구 테헤란로 1","phone":"02-2001-0001",
               "description":"","openTime":"09:00","closeTime":"18:00","breakStart":"12:30","breakEnd":"13:30",
-              "closedWeekdays":[0,6,9,"x",6],"bookingAvailable":true,"deleted":false,"departments":[]},
+              "closedWeekdays":[0,6,9,"x",6],"weekdayHours":[{"weekday":6,"openTime":"09:00","closeTime":"13:00"},{"weekday":9}],
+              "bookingAvailable":true,"deleted":false,"departments":[]},
              {"id":2,"name":"부산바른내과","region":"부산","address":"부산 1","phone":"051-200-0001",
               "description":"","openTime":"09:00","closeTime":"18:00","bookingAvailable":true,"deleted":false,"departments":[]}]
             """;
@@ -66,7 +68,7 @@ class AdminHospitalScheduleTest {
     }
 
     private static AdminHospitalUpdateRequest update(String open, String close, String breakStart, String breakEnd, List<Integer> days) {
-        return new AdminHospitalUpdateRequest(null, null, null, null, null, open, close, null, breakStart, breakEnd, days);
+        return new AdminHospitalUpdateRequest(null, null, null, null, null, open, close, null, breakStart, breakEnd, days, null);
     }
 
     @SuppressWarnings("unchecked")
@@ -133,6 +135,31 @@ class AdminHospitalScheduleTest {
     }
 
     @Test
+    @DisplayName("요일별 진료 시간: 목록에 싣고(형식 이상 항목은 버림), 수정은 요일순으로 보내며 같은 요일·시작 >= 끝은 400")
+    void weekday_hours() {
+        AdminHospitalItem withLunch = service.getHospitals(ADMIN, null, null, null, 0, 20).content().stream()
+                .filter(h -> h.id() == 1).findFirst().orElseThrow();
+        assertThat(withLunch.weekdayHours()).containsExactly(new AdminHospitalWeekdayHours(6, "09:00", "13:00"));
+
+        service.update(ADMIN, 1, new AdminHospitalUpdateRequest(null, null, null, null, null, null, null, null, null, null, null,
+                List.of(new AdminHospitalWeekdayHours(6, "10:00", "14:00"), new AdminHospitalWeekdayHours(3, "09:00", "12:00"))));
+        assertThat(sentUpdateBody().get("weekdayHours")).isEqualTo(List.of(
+                Map.of("weekday", 3, "openTime", "09:00", "closeTime", "12:00"),
+                Map.of("weekday", 6, "openTime", "10:00", "closeTime", "14:00")));
+
+        for (List<AdminHospitalWeekdayHours> bad : List.of(
+                List.of(new AdminHospitalWeekdayHours(6, "09:00", "13:00"), new AdminHospitalWeekdayHours(6, "10:00", "12:00")),
+                List.of(new AdminHospitalWeekdayHours(6, "13:00", "09:00")))) {
+            assertThatThrownBy(() -> service.update(ADMIN, 1, new AdminHospitalUpdateRequest(null, null, null, null, null, null, null,
+                    null, null, null, null, bad)))
+                    .extracting(AdminHospitalScheduleTest::codeOf).isEqualTo(ErrorCode.HOSPITAL_INVALID_HOURS);
+        }
+        var validator = jakarta.validation.Validation.buildDefaultValidatorFactory().getValidator();
+        assertThat(validator.validate(new AdminHospitalUpdateRequest(null, null, null, null, null, null, null, null, null, null, null,
+                List.of(new AdminHospitalWeekdayHours(7, "09:00", "13:00"))))).isNotEmpty();
+    }
+
+    @Test
     @DisplayName("수정: 휴진 요일 중복은 400 INVALID_INPUT")
     void update_rejects_duplicate_days() {
         assertThatThrownBy(() -> service.update(ADMIN, 1, update(null, null, null, null, List.of(0, 0))))
@@ -143,7 +170,7 @@ class AdminHospitalScheduleTest {
     @DisplayName("등록: 점심시간·휴진 요일을 함께 보내고, 없으면 칸을 싣지 않는다")
     void create_sends_schedule() {
         service.create(ADMIN, new AdminHospitalCreateRequest("새 병원", "서울", "서울 새주소 1", "02-111-2222", null,
-                "09:00", "18:00", true, List.of("내과"), "12:30", "13:30", List.of(0)));
+                "09:00", "18:00", true, List.of("내과"), "12:30", "13:30", List.of(0), null));
         @SuppressWarnings("unchecked")
         ArgumentCaptor<Map<String, Object>> body = ArgumentCaptor.forClass(Map.class);
         verify(client).createHospital(body.capture());
@@ -159,7 +186,7 @@ class AdminHospitalScheduleTest {
     @DisplayName("등록: 진료 시간 밖 점심시간은 400")
     void create_rejects_bad_break() {
         assertThatThrownBy(() -> service.create(ADMIN, new AdminHospitalCreateRequest("새 병원", "서울", "서울 새주소 1", "02-111-2222",
-                null, "09:00", "12:00", true, List.of("내과"), "12:30", "13:30", null)))
+                null, "09:00", "12:00", true, List.of("내과"), "12:30", "13:30", null, null)))
                 .extracting(AdminHospitalScheduleTest::codeOf).isEqualTo(ErrorCode.HOSPITAL_INVALID_BREAK);
         verify(client, never()).createHospital(anyMap());
     }
