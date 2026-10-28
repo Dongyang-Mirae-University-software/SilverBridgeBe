@@ -2425,3 +2425,13 @@ AI PR #84(`GET /api/v1/chat/stats`, gosky 배포 10:25)를 템플릿 B로 점검
 - 테스트: 보안·HTTP 직렬화·서비스(검사 12·형식 이상 8·캐시)·클라이언트, 변이 6종 검출, `./gradlew build` 2066건 통과.
 - 산출물: `docs/(2026-10-28) feature-admin-ai-chat-stats.md`, 점검 대장 ❌ 행, CLAUDE.md·정책 파일 갱신.
 
+---
+
+### [2026-10-28] 관리자 AI 통계 챗 집계 기능 점검 - 조건부 PASS (🟡 1)
+
+PR #397(`GET /api/admin/ai-stats/chat`)을 템플릿 B로 점검했다(코드 수정 없음). 인가(보호자 403·비로그인 401, 공개 도메인 포함)·원문 미노출·null 유지·기간 검사·속도 제한(31번째 429, 그중 AI 호출 1회)·캐시는 실측까지 PASS.
+
+- 🟡 M-1 `daily` 날짜 값을 검사하지 않아 AI가 날짜를 잘못 묶으면 하루 밀린 그래프가 200으로 나간다(`date[i] == from + i` 확인 권장).
+- 🟢 L-1 AI 키에 줄바꿈이 섞이면 JDK 예외 메시지에 키 원문이 들어가 공용 `IllegalArgumentException` 핸들러가 로그에 남긴다(공용 `AiChatClient.call`, 두 서버 CR 0개라 지금 미발동) / L-2 설정·종료 시 런타임 예외 400·500 / L-3 `generatedAt` 오프셋 / L-4 제한 15초·동시 상한 / L-5 기간 오류 문구 / L-6 테스트 빈틈.
+- 산출물: `docs/(2026-10-28) audit-admin-ai-chat-stats.md`, 점검 대장 ⚠️.
+
