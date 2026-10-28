@@ -77,3 +77,19 @@ fix: 관리자 AI 챗 집계 점검 반영 - daily 날짜 검사·AI 호출 런�
 - generatedAt 오프셋 +09:00 확인, 집계 호출 제한 8초
 - AI_STATS_INVALID_RANGE 문구·Swagger에 시작일 ≤ 종료일·2000~2999년 명시, 빈틈 테스트 추가
 ```
+
+## 후속 반영 (2026-10-28, 사용자 "전부 반영", branch `fix/admin-ai-chat-stats-audit`)
+
+| 이슈 | 반영 |
+|---|---|
+| 🟡 M-1 | `daily[i].date`가 `from + i`일과 다르면 503 - 범위 밖·순서·중복·형식을 한 번에 막는다 |
+| 🟢 L-1 | `AiChatClient.call`이 `CustomException`이 아닌 런타임 예외를 클래스명만 남기고 `CHAT_UNAVAILABLE`로 감싼다 - 헤더 값 오류의 키 원문이 공용 핸들러 로그로 가지 않는다. `requireApiKey`가 키의 제어 문자를 먼저 걸러 고정 문구 WARN("CRLF 확인")을 남긴다(값 미기록) |
+| 🟢 L-2 | 같은 감싸기로 잘못된 주소(상대 주소·http 아닌 스킴)·종료 중 예약 거절도 400/500이 아니라 503 |
+| 🟢 L-3 | `generatedAt` 오프셋이 +09:00이 아니면 503 |
+| 🟢 L-4 | 집계 전용 호출 제한 `chat.relay.stats-call-timeout`(기본 8초, `CHAT_RELAY_STATS_CALL_TIMEOUT`). 같은 기간 진행 중 호출 공유는 넣지 않았다(속도 제한이 상한, 점검 문서의 "필요하면") |
+| 🟢 L-5 | `AI_STATS_INVALID_RANGE` 문구·Swagger에 2000~2999년·from ≤ to 명시, 504 설명에 8초 |
+| 🟢 L-6 | 서비스: 날짜 하루 밀림·중복·순서·형식·UTC 오프셋 5가지 503 / 클라이언트: 집계 시간 초과·64KB 상한·키 제어 문자(예외·로그에 키 없음)·잘못된 주소 2가지 |
+
+- 검증: 관리자·chat 테스트 357건, 변이 4종 검출(날짜 검사·오프셋 검사·런타임 예외 감싸기·전용 제한), `./gradlew build` 2075건 통과(건너뜀 1, 기존).
+- 남긴 것: 공용 `GlobalExceptionHandler.handleIllegalArgument`의 `e.getMessage()` 로깅은 그대로다(전 도메인 영향이라 별도 판단). AI 호출 경로에서는 이번 감싸기로 그 핸들러까지 가지 않는다.
+

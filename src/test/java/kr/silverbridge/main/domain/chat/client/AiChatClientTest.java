@@ -79,6 +79,11 @@ class AiChatClientTest {
             ex.close();
         } else if (path.equals("/api/v1/chat")) {
             json(ex, 200, "{\"success\":true,\"message\":\"ok\",\"data\":{\"reply\":\"안녕하세요\",\"riskLevel\":\"low\"}}");
+        } else if (path.equals("/api/v1/chat/stats") && ex.getRequestURI().getRawQuery().contains("from=2026-08-")) {
+            sleepQuietly(1_500);
+            json(ex, 200, "{\"data\":{\"totalChats\":1}}");
+        } else if (path.equals("/api/v1/chat/stats") && ex.getRequestURI().getRawQuery().contains("from=2026-07-")) {
+            json(ex, 200, "{\"data\":{\"pad\":\"" + "x".repeat(70 * 1024) + "\"}}");
         } else if (path.equals("/api/v1/chat/stats") && ex.getRequestURI().getRawQuery().contains("from=2026-09-")) {
             json(ex, 404, "{}");
         } else if (path.equals("/api/v1/chat/stats")) {
@@ -245,5 +250,57 @@ class AiChatClientTest {
         assertThatThrownBy(() -> client.stats(java.time.LocalDate.of(2026, 9, 1), java.time.LocalDate.of(2026, 9, 2)))
                 .isInstanceOfSatisfying(CustomException.class,
                         e -> assertThat(e.getErrorCode()).isEqualTo(ErrorCode.CHAT_UNAVAILABLE));
+    }
+
+    @Test
+    @DisplayName("집계 - 전용 호출 제한(statsCallTimeout)을 넘기면 CHAT_TIMEOUT (점검 L-4)")
+    void stats_시간초과() {
+        properties.setStatsCallTimeout(Duration.ofMillis(500));
+
+        assertThatThrownBy(() -> client.stats(java.time.LocalDate.of(2026, 8, 1), java.time.LocalDate.of(2026, 8, 2)))
+                .isInstanceOfSatisfying(CustomException.class,
+                        e -> assertThat(e.getErrorCode()).isEqualTo(ErrorCode.CHAT_TIMEOUT));
+    }
+
+    @Test
+    @DisplayName("집계 - 응답이 64KB를 넘으면 형식 이상으로 CHAT_UNAVAILABLE")
+    void stats_크기상한() {
+        assertThatThrownBy(() -> client.stats(java.time.LocalDate.of(2026, 7, 1), java.time.LocalDate.of(2026, 7, 2)))
+                .isInstanceOfSatisfying(CustomException.class,
+                        e -> assertThat(e.getErrorCode()).isEqualTo(ErrorCode.CHAT_UNAVAILABLE));
+    }
+
+    @Test
+    @DisplayName("AI 키에 줄바꿈이 섞이면 호출하지 않고 CHAT_UNAVAILABLE - 키 원문은 예외·로그 어디에도 없다 (점검 L-1)")
+    void 키_제어문자() {
+        properties.setApiKey("SECRETKEY123\r\n");
+        ch.qos.logback.classic.Logger logger = (ch.qos.logback.classic.Logger) org.slf4j.LoggerFactory.getLogger(AiChatClient.class);
+        ch.qos.logback.core.read.ListAppender<ch.qos.logback.classic.spi.ILoggingEvent> appender = new ch.qos.logback.core.read.ListAppender<>();
+        appender.start();
+        logger.addAppender(appender);
+        try {
+            assertThatThrownBy(() -> client.send(req("hello")))
+                    .isInstanceOfSatisfying(CustomException.class, e -> {
+                        assertThat(e.getErrorCode()).isEqualTo(ErrorCode.CHAT_UNAVAILABLE);
+                        assertThat(e.getMessage()).doesNotContain("SECRETKEY123");
+                    });
+            assertThat(receivedKey.get()).isNull();
+            assertThat(appender.list).isNotEmpty()
+                    .allSatisfy(event -> assertThat(event.getFormattedMessage()).doesNotContain("SECRETKEY123"));
+        } finally {
+            logger.detachAppender(appender);
+        }
+    }
+
+    @Test
+    @DisplayName("AI 주소가 잘못되면(상대 주소·http 아닌 스킴) 400/500이 아니라 CHAT_UNAVAILABLE (점검 L-2)")
+    void 잘못된_주소() {
+        for (String base : java.util.List.of("not-a-url", "ftp://127.0.0.1:1")) {
+            properties.setAiBaseUrl(base);
+            assertThatThrownBy(() -> client.stats(java.time.LocalDate.of(2026, 10, 1), java.time.LocalDate.of(2026, 10, 2)))
+                    .as(base)
+                    .isInstanceOfSatisfying(CustomException.class,
+                            e -> assertThat(e.getErrorCode()).isEqualTo(ErrorCode.CHAT_UNAVAILABLE));
+        }
     }
 }

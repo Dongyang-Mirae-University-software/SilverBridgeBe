@@ -2435,3 +2435,12 @@ PR #397(`GET /api/admin/ai-stats/chat`)을 템플릿 B로 점검했다(코드 �
 - 🟢 L-1 AI 키에 줄바꿈이 섞이면 JDK 예외 메시지에 키 원문이 들어가 공용 `IllegalArgumentException` 핸들러가 로그에 남긴다(공용 `AiChatClient.call`, 두 서버 CR 0개라 지금 미발동) / L-2 설정·종료 시 런타임 예외 400·500 / L-3 `generatedAt` 오프셋 / L-4 제한 15초·동시 상한 / L-5 기간 오류 문구 / L-6 테스트 빈틈.
 - 산출물: `docs/(2026-10-28) audit-admin-ai-chat-stats.md`, 점검 대장 ⚠️.
 
+---
+
+### [2026-10-28] 관리자 AI 챗 집계 점검 후속 - 7건 전부 반영 (branch `fix/admin-ai-chat-stats-audit`)
+
+- M-1 `daily` 각 줄 날짜 = 시작일 + i 확인(어긋나면 503). L-3 `generatedAt` +09:00 확인.
+- L-1·L-2 공용 `AiChatClient.call`이 런타임 예외를 클래스명만 남기고 503으로 감싼다(키 원문이 공용 핸들러 로그로 가던 경로·잘못된 주소 400/500 해소), 키 제어 문자는 호출 전에 고정 문구로 거른다.
+- L-4 집계 전용 제한 `chat.relay.stats-call-timeout` 8초. L-5 기간 오류 문구·Swagger 보강. L-6 테스트 9가지 추가.
+- 검증: 변이 4종 검출, `./gradlew build` 2075건 통과.
+

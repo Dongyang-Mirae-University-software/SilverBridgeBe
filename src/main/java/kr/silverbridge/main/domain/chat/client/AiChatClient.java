@@ -107,7 +107,7 @@ public class AiChatClient {
      */
     public JsonNode stats(LocalDate from, LocalDate to) {
         URI uri = base(CHAT_PATH + "/stats").queryParam("from", from).queryParam("to", to).build().encode().toUri();
-        AiResponse response = call("stats", "GET", uri, null, properties.getLogsCallTimeout(), MAX_STATS_BYTES);
+        AiResponse response = call("stats", "GET", uri, null, properties.getStatsCallTimeout(), MAX_STATS_BYTES);
         if (response.status() != 200) {
             log.warn("[CHAT-RELAY] AI 집계 응답 이상: status={}", response.status());
             throw new CustomException(ErrorCode.CHAT_UNAVAILABLE);
@@ -212,6 +212,13 @@ public class AiChatClient {
             // 예외 원문에는 접속 주소가 섞일 수 있어 클래스명만 남긴다
             log.warn("[CHAT-RELAY] AI 호출 실패: call={}, error={}", call, e.getClass().getSimpleName());
             throw new CustomException(ErrorCode.CHAT_UNAVAILABLE);
+        } catch (CustomException e) {
+            throw e;
+        } catch (RuntimeException e) {
+            // 잘못된 주소(상대 주소·http 아닌 스킴)·종료 중 마감 예약 거절 등 설정·종료 상황(2026-10-28 점검 L-1·L-2).
+            // 헤더 값 오류의 JDK 메시지에는 키 원문이 들어 있어, 공용 핸들러까지 올라가면 로그에 남는다 - 클래스명만 남기고 503.
+            log.warn("[CHAT-RELAY] AI 호출 준비 실패: call={}, error={}", call, e.getClass().getSimpleName());
+            throw new CustomException(ErrorCode.CHAT_UNAVAILABLE);
         } finally {
             if (deadline != null) {
                 deadline.cancel(false);
@@ -254,6 +261,11 @@ public class AiChatClient {
     private void requireApiKey() {
         if (!StringUtils.hasText(properties.getApiKey())) {
             log.warn("[CHAT-RELAY] AI_API_KEY 미설정 - 챗 중계 불가(.env.dev에 AI_API_KEY 주입 필요)");
+            throw new CustomException(ErrorCode.CHAT_UNAVAILABLE);
+        }
+        if (properties.getApiKey().chars().anyMatch(ch -> ch < 0x20 || ch == 0x7f)) {
+            // CRLF로 저장한 .env 등. 헤더에 실을 수 없는 값이라 원인만 고정 문구로 알린다(값은 남기지 않는다).
+            log.warn("[CHAT-RELAY] AI_API_KEY에 줄바꿈 등 제어 문자가 있음 - .env.dev 줄 끝(CRLF)을 확인할 것");
             throw new CustomException(ErrorCode.CHAT_UNAVAILABLE);
         }
     }

@@ -16,6 +16,7 @@ import org.springframework.stereotype.Service;
 import java.time.Duration;
 import java.time.LocalDate;
 import java.time.OffsetDateTime;
+import java.time.ZoneOffset;
 import java.time.format.DateTimeParseException;
 import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
@@ -49,6 +50,7 @@ public class AdminAiChatStatsService {
     private static final int PER_MINUTE = 30;
     private static final int PER_HOUR = 600;
     private static final Pattern DATE = Pattern.compile("\\A\\d{4}-\\d{2}-\\d{2}\\z");
+    private static final ZoneOffset KST_OFFSET = ZoneOffset.ofHours(9);
 
     private final AiChatClient aiChatClient;
     private final RateLimitService rateLimitService;
@@ -136,12 +138,23 @@ public class AdminAiChatStatsService {
             throw malformed();
         }
         List<Daily> daily = new ArrayList<>();
+        LocalDate expected = range.from();
         for (JsonNode day : dailyNode) {
-            daily.add(new Daily(text(day, "date"), count(day, "totalChats")));
+            String date = text(day, "date");
+            // i번째 줄은 시작일 + i일이어야 한다 - 범위 밖·순서 뒤바뀜·중복 날짜를 한 번에 막는다(2026-10-28 점검 M-1).
+            // AI가 날짜를 잘못 묶으면 하루 밀린 그래프가 정상 집계처럼 나가기 때문이다.
+            if (!expected.toString().equals(date)) {
+                throw malformed();
+            }
+            daily.add(new Daily(date, count(day, "totalChats")));
+            expected = expected.plusDays(1);
         }
         String generatedAt = text(data, "generatedAt");
         try {
-            OffsetDateTime.parse(generatedAt);
+            // 계약은 KST(+09:00)다 - 다른 오프셋이면 화면의 "기준 시각"이 틀리게 보인다(점검 L-3).
+            if (!KST_OFFSET.equals(OffsetDateTime.parse(generatedAt).getOffset())) {
+                throw malformed();
+            }
         } catch (DateTimeParseException e) {
             throw malformed();
         }

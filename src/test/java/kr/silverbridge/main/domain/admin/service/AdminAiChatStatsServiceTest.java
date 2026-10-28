@@ -134,7 +134,8 @@ class AdminAiChatStatsServiceTest {
     }
 
     @ParameterizedTest(name = "[{index}] {0}")
-    @CsvSource({"칸 없음", "음수", "문자열 숫자", "소수", "기간 불일치", "날짜 줄 수 불일치", "시각 형식 이상", "byRole 객체 아님"})
+    @CsvSource({"칸 없음", "음수", "문자열 숫자", "소수", "기간 불일치", "날짜 줄 수 불일치", "시각 형식 이상", "byRole 객체 아님",
+            "날짜 하루 밀림", "날짜 중복", "날짜 순서 뒤바뀜", "날짜 형식 이상", "UTC 오프셋"})
     @DisplayName("AI 응답 형식이 어긋나면 0으로 메우지 않고 503 AI_STATS_UNAVAILABLE")
     void malformed(String kind) throws Exception {
         ObjectNode data = aiData();
@@ -146,6 +147,19 @@ class AdminAiChatStatsServiceTest {
             case "기간 불일치" -> d -> d.put("from", "2026-10-26");
             case "날짜 줄 수 불일치" -> d -> ((com.fasterxml.jackson.databind.node.ArrayNode) d.get("daily")).remove(1);
             case "시각 형식 이상" -> d -> d.put("generatedAt", "어제");
+            // 점검 M-1 - 줄 수는 맞지만 날짜가 어긋난 경우
+            case "날짜 하루 밀림" -> d -> {
+                ((ObjectNode) d.get("daily").get(0)).put("date", "2026-10-26");
+                ((ObjectNode) d.get("daily").get(1)).put("date", "2026-10-27");
+            };
+            case "날짜 중복" -> d -> ((ObjectNode) d.get("daily").get(1)).put("date", "2026-10-27");
+            case "날짜 순서 뒤바뀜" -> d -> {
+                ((ObjectNode) d.get("daily").get(0)).put("date", "2026-10-28");
+                ((ObjectNode) d.get("daily").get(1)).put("date", "2026-10-27");
+            };
+            case "날짜 형식 이상" -> d -> ((ObjectNode) d.get("daily").get(0)).put("date", "20261027");
+            // 점검 L-3 - 같은 순간이라도 +09:00이 아니면 계약 위반
+            case "UTC 오프셋" -> d -> d.put("generatedAt", "2026-10-28T02:03:27Z");
             default -> d -> d.put("byRole", 3);
         };
         breaker.accept(data);
