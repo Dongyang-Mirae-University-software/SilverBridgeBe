@@ -2385,3 +2385,14 @@ BE #387·#388·#389 템플릿 B 점검. 인가(경로 규칙 + 클래스 `@PreAu
 - 10/26 21:21 화재 본인 문자 중복: gosky 알림 이력상 BE는 그 분에 1회만 보냈다(FCM+켜 둔 문자 각 1, 상황 1건, 계정 1개, vkcs 이력 0). BE 버그 아님 - Solapi 콘솔로 확인.
 - 산출물: `docs/(2026-10-27) fix-ward-sms-plain.md`.
 
+
+---
+
+### [2026-10-28] 받은 연결 요청에 보호자 프로필 사진 추가 (branch `feature/pending-connection-guardian-photo`)
+
+피보호자 "내 가족 > 받은 요청" 카드(프로토타입 v13)가 보호자 사진을 보여 주도록 `GET /api/ward/connection/pending` 응답(`PendingConnectionResponse`)에 `guardianProfileImage`(nullable)를 더했다. 값은 `users.profile_image` 그대로다. 가산 변경, 마이그레이션 없음.
+
+- 노출 수준: 보호자용 연결 목록(`ConnectionResponse.partnerProfileImage`)이 PENDING에도 이미 주는 사진과 같다. 전화 마스킹·주소 미노출은 그대로다.
+- 추가 조회 없음: 기존 `guardianMap`(한 번에 읽은 보호자 User)에서 꺼낸다. 보호자 행이 없을 때의 기존 동작(NPE)은 FK CASCADE로 생길 수 없는 경우라 바꾸지 않았다.
+- 테스트: 사진 저장값 그대로·보호자 조회 1회·마스킹 유지 / 사진 없으면 null 2건 추가. `./gradlew build` 통과.
+- 산출물: `docs/(2026-10-28) feature-pending-connection-guardian-photo.md`.

@@ -809,6 +809,47 @@ class ConnectionServiceTest {
         }
 
         @Test
+        @DisplayName("getPendingRequests → 보호자 사진은 저장값 그대로, 보호자 조회는 한 번(N+1 없음), 마스킹 유지")
+        void getPendingRequests_사진_저장값그대로() {
+            Connection first = connection(ConnectionStatus.PENDING);
+            Connection second = Connection.builder()
+                    .id(2L).guardianId(GUARDIAN_ID).wardId(WARD_ID)
+                    .status(ConnectionStatus.PENDING).initiatedBy(GUARDIAN_ID).relation(RELATION)
+                    .build();
+            when(connectionRepository.findByWardIdAndStatusOrderByCreatedAtDesc(WARD_ID, ConnectionStatus.PENDING))
+                    .thenReturn(List.of(first, second));
+            when(userRepository.findAllById(anyList())).thenReturn(List.of(guardian()));
+
+            List<PendingConnectionResponse> result = connectionService.getPendingRequests(WARD_ID);
+
+            assertThat(result).hasSize(2)
+                    .allSatisfy(r -> {
+                        assertThat(r.getGuardianProfileImage()).isEqualTo("https://img/g.png");
+                        assertThat(r.getGuardianPhone()).isNotEqualTo(GUARDIAN_PHONE);
+                    });
+            verify(userRepository, times(1)).findAllById(anyList());
+            verify(userRepository, never()).findById(any());
+        }
+
+        @Test
+        @DisplayName("getPendingRequests → 보호자 사진이 없으면 null")
+        void getPendingRequests_사진없음_null() {
+            User noPhoto = User.builder()
+                    .id(GUARDIAN_ID).email("guardian@example.com").name("보호자")
+                    .role(Role.GUARDIAN).status(Status.ACTIVE).provider(Provider.LOCAL)
+                    .phone(GUARDIAN_PHONE)
+                    .build();
+            when(connectionRepository.findByWardIdAndStatusOrderByCreatedAtDesc(WARD_ID, ConnectionStatus.PENDING))
+                    .thenReturn(List.of(connection(ConnectionStatus.PENDING)));
+            when(userRepository.findAllById(anyList())).thenReturn(List.of(noPhoto));
+
+            List<PendingConnectionResponse> result = connectionService.getPendingRequests(WARD_ID);
+
+            assertThat(result).singleElement()
+                    .satisfies(r -> assertThat(r.getGuardianProfileImage()).isNull());
+        }
+
+        @Test
         @DisplayName("getMyWards(filter=null) → 파라미터 생략은 ACTIVE+PENDING (기존 FE 하위호환), PENDING 항목은 전화번호 null")
         void getMyWards_혼합상태_PENDING은_전화null() {
             Connection activeConn = Connection.builder()
