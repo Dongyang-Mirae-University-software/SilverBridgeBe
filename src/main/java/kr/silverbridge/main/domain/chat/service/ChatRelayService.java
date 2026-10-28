@@ -11,6 +11,7 @@ import kr.silverbridge.main.domain.connection.service.ConnectionService;
 import kr.silverbridge.main.domain.user.entity.User;
 import kr.silverbridge.main.domain.user.repository.UserRepository;
 import kr.silverbridge.main.global.exception.CustomException;
+import kr.silverbridge.main.global.enums.Role;
 import kr.silverbridge.main.global.exception.ErrorCode;
 import kr.silverbridge.main.global.security.RateLimitService;
 import lombok.RequiredArgsConstructor;
@@ -23,7 +24,8 @@ import java.util.LinkedHashMap;
 import java.util.Map;
 
 /**
- * AI 챗 중계(2026-10-07). 보호자·피보호자 컨트롤러가 함께 쓴다 - 역할 판단은 컨트롤러 몫이고 이 서비스는 역할을 모른다.
+ * AI 챗 중계(2026-10-07). 보호자·피보호자 컨트롤러가 함께 쓴다 - 역할 인가는 컨트롤러 몫이다. 이 서비스는 호출 경로
+ * ({@link #send} = 피보호자, {@link #sendAsGuardian} = 보호자)로 {@code context.role}만 정한다(2026-10-28, 아래).
  * <b>AI에 넘기는 사용자 ID는 항상 호출자의 토큰 ID</b>다 - 요청 본문의 userId는 DTO에
  * 필드가 없어 받지 않고, 기록 조회도 토큰 ID로만 묻는다(남의 기록 조회 IDOR 차단).
  *
@@ -31,6 +33,9 @@ import java.util.Map;
  * 조회·생성한다. 이 값을 클라이언트가 정하면 남의 예약을 보거나 남의 이름으로 예약할 수 있으므로, <b>wardId·wardName·wardPhone은
  * 항상 BE가 정한다</b> - 보호자 경로는 ACTIVE 연결({@code isActiveConnection}, {@code getMyWards} 금지)을 확인한 뒤 DB 값으로
  * 채우고, 그 밖의 경로는 이 세 키를 지운다.</p>
+ *
+ * <p><b>context.role은 BE가 정한다(2026-10-28)</b>: AI 관리자 통계(챗 집계)가 역할별 상담 수를 이 값으로 센다. 클라이언트 값을
+ * 그대로 넘기면 빠지거나(옛 FE는 비어 있었다) 위조된 값이 통계에 섞이므로 경로의 역할로 덮어쓴다. 권한 판단에는 여전히 쓰지 않는다.</p>
  *
  * <p>상담 내용은 민감 정보라 메시지·응답 본문은 로그에 남기지 않는다(userId·길이·소요 시간까지만). 기록 응답은
  * {@link ChatLogProjection} 허용 목록으로 걸러 AI 내부 정보(contextJson·upstreamMeta 등)를 FE에 내리지 않는다.</p>
@@ -60,7 +65,7 @@ public class ChatRelayService {
     /** 본인 상담(피보호자 경로 등). context 의 대리 상담 키(wardId·wardName·wardPhone)는 버린다. */
     public Object send(String userId, ChatRelayRequest request) {
         admit(userId, request);
-        return relay(userId, request, null);
+        return relay(userId, request, null, Role.WARD);
     }
 
     /**
@@ -70,7 +75,7 @@ public class ChatRelayService {
     public Object sendAsGuardian(String guardianId, ChatRelayRequest request) {
         admit(guardianId, request);
         User ward = resolveWard(guardianId, request.context());
-        Object reply = relay(guardianId, request, ward);
+        Object reply = relay(guardianId, request, ward, Role.GUARDIAN);
         // AI 호출은 최대 130초라 그 사이 연결이 끊길 수 있다. 끊겼다면 응답(피보호자의 예약 내용이 담길 수 있음)을 보호자에게 주지 않는다.
         if (ward != null && !connectionService.isActiveConnection(guardianId, ward.getId())) {
             log.warn("[IDOR-ATTEMPT] 대리 상담 중 연결 해제 감지, 응답 폐기: guardianId={}, wardId={}", guardianId, ward.getId());
@@ -88,8 +93,8 @@ public class ChatRelayService {
         rateLimitService.check(SEND_ENDPOINT, userId, properties.getPerMinute(), properties.getPerHour());
     }
 
-    private Object relay(String userId, ChatRelayRequest request, User ward) {
-        byte[] body = buildBody(userId, request, ward);
+    private Object relay(String userId, ChatRelayRequest request, User ward, Role role) {
+        byte[] body = buildBody(userId, request, ward, role);
         long startedAt = System.nanoTime();
         try (ChatSlots.Slot ignored = slots.acquire(userId)) {
             JsonNode reply = aiChatClient.send(body);
@@ -142,13 +147,17 @@ public class ChatRelayService {
         }
     }
 
-    /** 대리 상담 키를 모두 지우고, 검증된 피보호자가 있을 때만 DB 값으로 다시 채운다(클라이언트 값은 어느 것도 통과하지 못한다). */
-    private static Map<String, Object> sanitizedContext(Map<String, Object> raw, User ward) {
+    /**
+     * 대리 상담 키를 모두 지우고, 검증된 피보호자가 있을 때만 DB 값으로 다시 채운다(클라이언트 값은 어느 것도 통과하지 못한다).
+     * role 은 호출 경로의 역할로 덮어쓴다(AI 챗 집계의 역할별 수 근거).
+     */
+    private static Map<String, Object> sanitizedContext(Map<String, Object> raw, User ward, Role role) {
         Map<String, Object> context = new LinkedHashMap<>();
         if (raw != null) {
             context.putAll(raw);
         }
         context.keySet().removeAll(WARD_KEYS);
+        context.put("role", role.name());
         if (ward != null) {
             context.put("wardId", ward.getId());
             context.put("wardName", ward.getName());
@@ -192,7 +201,7 @@ public class ChatRelayService {
     }
 
     /** AI 요청 본문. {@code userId}는 인자로 받은 토큰 ID로 <b>마지막에 덮어쓴다</b>. */
-    private byte[] buildBody(String userId, ChatRelayRequest request, User ward) {
+    private byte[] buildBody(String userId, ChatRelayRequest request, User ward, Role role) {
         ObjectNode body = objectMapper.createObjectNode();
         body.put("message", request.message() == null ? "" : request.message());
         if (StringUtils.hasText(request.sessionId())) {
@@ -201,7 +210,7 @@ public class ChatRelayService {
         if (request.history() != null) {
             body.set("history", objectMapper.valueToTree(request.history()));
         }
-        Map<String, Object> contextMap = sanitizedContext(request.context(), ward);
+        Map<String, Object> contextMap = sanitizedContext(request.context(), ward, role);
         if (!contextMap.isEmpty()) {
             JsonNode context = objectMapper.valueToTree(contextMap);
             if (context.toString().getBytes(StandardCharsets.UTF_8).length > MAX_CONTEXT_BYTES) {

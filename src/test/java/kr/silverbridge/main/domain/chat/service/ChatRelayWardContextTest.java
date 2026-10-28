@@ -35,6 +35,7 @@ import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
@@ -260,5 +261,44 @@ class ChatRelayWardContextTest {
         assertThat(sent.has("phone")).isFalse();
         assertThat(sent.has("wardPhone")).isFalse();
         assertThat(sent.path("name").asText()).isEqualTo("김영희");
+    }
+
+    @Test
+    @DisplayName("context.role 은 경로의 역할로 덮어쓴다 - 피보호자 경로는 WARD (클라이언트 값·누락 무시, AI 챗 집계 근거)")
+    void 피보호자_경로는_role_WARD() throws Exception {
+        when(aiChatClient.send(any())).thenReturn(objectMapper.readTree("{}"));
+        Map<String, Object> context = new HashMap<>();
+        context.put("role", "GUARDIAN");
+
+        service.send(WARD, withContext(context));
+        assertThat(sentBody().path("context").path("role").asText()).isEqualTo("WARD");
+    }
+
+    @Test
+    @DisplayName("context 가 없어도 피보호자 경로는 role=WARD 를 싣는다")
+    void context_없어도_role_WARD() throws Exception {
+        when(aiChatClient.send(any())).thenReturn(objectMapper.readTree("{}"));
+
+        service.send(WARD, withContext(null));
+        assertThat(sentBody().path("context").path("role").asText()).isEqualTo("WARD");
+    }
+
+    @Test
+    @DisplayName("보호자 경로는 본인·대리 상담 모두 role=GUARDIAN (클라이언트가 WARD 를 보내도)")
+    void 보호자_경로는_role_GUARDIAN() throws Exception {
+        when(connectionService.isActiveConnection(GUARDIAN, WARD)).thenReturn(true);
+        when(userRepository.findById(WARD)).thenReturn(Optional.of(ward()));
+        when(aiChatClient.send(any())).thenReturn(objectMapper.readTree("{}"));
+        Map<String, Object> proxy = forged(WARD);
+        proxy.put("role", "WARD");
+
+        service.sendAsGuardian(GUARDIAN, withContext(proxy));
+        service.sendAsGuardian(GUARDIAN, withContext(Map.of("role", "ward")));
+
+        ArgumentCaptor<byte[]> bodies = ArgumentCaptor.forClass(byte[].class);
+        verify(aiChatClient, times(2)).send(bodies.capture());
+        for (byte[] b : bodies.getAllValues()) {
+            assertThat(objectMapper.readTree(b).path("context").path("role").asText()).isEqualTo("GUARDIAN");
+        }
     }
 }

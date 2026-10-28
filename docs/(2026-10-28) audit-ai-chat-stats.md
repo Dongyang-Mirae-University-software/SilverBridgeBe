@@ -81,3 +81,18 @@ fix: 챗 집계 API의 created_at 인덱스·극단 날짜 400·운영 연결 �
 - 연도 경계에서 OverflowError가 500이 되던 것을 400 CHAT_STATS_INVALID_RANGE로
 - app.main 기준 테스트로 401·최상위 errorCode를 고정, dict 아닌 JSON·role 공백·자해 응답 분류 케이스 추가
 ```
+
+## 후속 반영 (2026-10-28, 사용자 "전부 반영")
+
+| 이슈 | 반영 | 위치 |
+|---|---|---|
+| 🟡 M-1 | `chat_logs.created_at` 인덱스(모델 `index=True` + 기동 시 `ensure_indexes` 멱등 `CREATE INDEX IF NOT EXISTS`), 기간 행은 500행씩 나눠 읽기(`yield_per`) | AI #87 |
+| 🟢 L-1 | 0001/9999 날짜 `OverflowError` → 400 `CHAT_STATS_INVALID_RANGE` | AI #87 |
+| 🟢 L-2 | BE 챗 중계가 `context.role`을 경로의 역할로 덮어씀(보호자 `GUARDIAN`·피보호자 `WARD`), 정책 문서 갱신 | BE `fix/chat-relay-role` |
+| 🟢 L-3 | 생성 실패 두 경로가 기록 `upstreamMeta.generationFailed=true`를 남기고 집계가 센다(배포 이후 기록부터, `/chat` 응답 무변경) | AI #87 |
+| 🟢 L-4 | 운영 예외 핸들러 규칙으로 최상위 `errorCode` 검사 + `main.py` 키 검사 연결·`ensure_indexes` 호출 고정 | AI #87 |
+| 🟢 L-5 | dict 아닌 JSON·role 공백·모르는 경로·자해 응답 분류 테스트 | AI #87 |
+
+- 검증: AI chat 관련 279건 + 운영 이미지 임시 컨테이너 전체 829건 중 828건 통과(실패 1건은 이미지에 `pgrep`이 없는 기존 환경 문제), 변이 6종 검출. BE chat 81건 통과, 역할 덮어쓰기 제거 변이 검출(4건 실패).
+- 남는 한계: 2026-10-28 이전 기록의 `byRole.unknown`(옛 기록 237건)과 생성 실패 뒤 자해 응답(표시 없음)은 고칠 수 없다 - 새 기록부터 정확하다.
+
