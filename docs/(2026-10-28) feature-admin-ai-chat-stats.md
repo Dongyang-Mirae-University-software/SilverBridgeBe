@@ -61,6 +61,13 @@
 - `./gradlew build`: 2066건 통과(건너뜀 1, 기존)
 - 작업 중 찾은 것: BE 기간 검사가 `0001-01-01`을 통과시켜 AI 400 → 503으로 보이던 것을 연도 범위로 막았다
 
-## 실서버 확인
+## 실서버 확인 (2026-10-28 13:5x, PR #397 머지 `eae3bec`)
 
-PHASE 5에서 gosky·vkcs 결과를 이 절에 덧붙인다.
+- 배포: vkcs CD 성공(통합 테스트 포함, 13:52 기동) / gosky 수동 배포(13:53 기동, gosky override 포함). 두 서버 모두 `eae3bec`, AI WS 연결 확인.
+- gosky, 시험 관리자 계정:
+  - 오늘(10/28) 200 - 키 `from,to,totalChats,users,byRole,byRoute,emergencyGuidance,reservationCompleted,fallbackReplies,daily,generatedAt`. 상담 9·사용자 2·역할 보호자 8/피보호자 1/모름 0·예약 완료 1(다른 세션 시험 상담)
+  - 10월 200 - 상담 586·사용자 7·역할 308/40/238·경로 309/234/43/0·응급 36·예약 완료 43·대체 0, `daily` 31줄
+  - 같은 기간 다시 호출 → `generatedAt` 같음(60초 캐시)
+  - 32일·`0001`년·`20261001` 형식·`from` 누락 → 모두 400 `AI_STATS_INVALID_RANGE`
+  - 보호자 토큰 403, 비로그인 401
+- vkcs: 비로그인 401(시험 계정은 gosky에서만 로그인되어 관리자 호출은 gosky에서만 확인).
