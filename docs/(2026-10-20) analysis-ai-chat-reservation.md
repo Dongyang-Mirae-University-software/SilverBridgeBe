@@ -46,7 +46,7 @@ FE → BE POST /api/{guardian|ward}/chat (userId는 토큰으로 덮어씀, cont
 | S-4 | 🟠 확인 필요 | **사용자 키 확보에 실패하면 공용 계정으로 예약될 수 있다.** `ensure_credential`이 None이면 API 클라이언트가 설정 키 → 공용 서비스 계정(`RESERVATION_SERVICE_EMAIL`, 코드 기본값 있음) JWT로 내려간다. 그러면 여러 사용자의 예약이 한 계정에 섞이고 서로의 목록에 보인다 | `reservation_api_client._resolve_api_key/_resolve_user_jwt` |
 | S-5 | ✅ 처리(2026-10-22) | **업스트림 폴백이 개인정보를 다른 서버로 보낸다.** MedGemma가 실패하면 ChatSilverBridge(:6012, 별도 MySQL)에 이름·전화·주소·대화를 보낸다. 탈퇴 정리(`AiMemberDataPurgeListener`)는 AI `chat_logs`만 지우므로, 업스트림이 저장한다면 그 기록은 남는다.<br>**처리**: AI PR #33(머지 `35dee08`)이 폴백 경로·`chat_upstream_service.py`·설정 `CHAT_UPSTREAM_URL`/`CHAT_UPSTREAM_TIMEOUT_SEC`를 삭제했다. 이제 MedGemma가 실패하면 키워드 고정 문구(`_fallback_reply`)로 끝나고, 라우터가 응급으로 본 문장은 119 안내로 고정된다. 실패 로그는 예외 클래스명만 남는다. gosky 반영은 2026-10-22 11:27 KST(`/health` 200, 시험 계정 상담 200 확인). gosky AI `.env`의 두 키는 코드가 더 이상 읽지 않아 그대로 두었다. **남은 것**: 옛 챗 서버 컨테이너와 그 DB에 이미 저장된 기록은 정리하지 않았다(별도 결정). chat_logs로 확인해 보니 10/20 이후 옛 서버가 답한 흔적은 0건이고, 그 전 기록은 구분할 수 없다 | AI `chat_service.py` (옛 `chat_upstream_service.py`) |
 | S-6 | ✅ 처리(2026-10-28) | **외부 LLM에 프로필을 보낸다.** 예약 추출 프롬프트에 이름·전화·주소·이메일을 넣어 Anthropic API로 보낸다. 라우터·추출 모두 대화 이력도 보낸다. 필요한 값(지역 정도)만 보내도 된다.<br>**처리**: AI #88 - 추출 프로필·위치 힌트는 시·구까지만, 추출 이력은 6턴·턴당 300자·이전 요약 제외, 라우터·추출 이력의 전화·주민번호·이메일 형태 가림(라우터 턴 수는 유지). 아래 4-24 | `reservation_orchestrator._user_profile_text` |
-| S-7 | 🟡 설계만(2026-10-28) | **대화 이력을 클라이언트가 보낸다.** 서버 저장 이력이 아니라 요청 본문의 `history`를 그대로 프롬프트에 넣어, 조작한 "assistant" 발화로 라우팅·예약 상태를 바꿀 수 있다.<br>**설계**: AI `docs/design/2026-10-28-chat-history-server-side.md`(#89) - 서버 `chat_logs`로 이력을 다시 만들고 클라이언트 값은 무시하는 A안 추천, FE·BE 필수 변경 없음, 관찰 1주 → 전환 → 재측정 순서. 구현 미착수 | `ChatRequest.history` |
+| S-7 | ✅ 처리(2026-10-28) | **대화 이력을 클라이언트가 보낸다.** 서버 저장 이력이 아니라 요청 본문의 `history`를 그대로 프롬프트에 넣어, 조작한 "assistant" 발화로 라우팅·예약 상태를 바꿀 수 있다.<br>**설계**: AI `docs/design/2026-10-28-chat-history-server-side.md`(#89) - 서버 `chat_logs`로 이력을 다시 만들고 클라이언트 값은 무시하는 A안 추천, FE·BE 필수 변경 없음.<br>**처리**: AI #91 - 바로 전환(배포 전후 같은 방식으로 측정). 아래 4-25 | `ChatRequest.history` |
 | S-8 | ✅ 처리(2026-10-28) | 병원에 넘기는 `symptomSummary`를 정규식으로 만들 때 **현재 문장 + 대화 이력 전체 앞 120자**를 쓴다. 추출 LLM 값이 비면 관련 없는 대화가 예약 기록에 실린다.<br>**처리**: AI #88 - 이번 턴 사용자 문장 중 증상 단어가 든 문장만, 개인정보 형태 제거, 60자, 없으면 빈 값(이력·LLM 추출 값 미사용). 실서버 예약 기록에서 "이번 턴 증상 문장만" 확인. 아래 4-24 | `reservation_intake._extract_symptom_summary(merged)` |
 
 > S-1~S-3은 인텔리제이 세션 `fix/chat-ward-id-validation`에서 처리 중이다. **S-4·S-5는 그 작업 범위에 없으니 같이 넣을지 정해야 한다** (특히 S-4는 S-2에서 비밀값을 바꾼 직후 계정 확보가 실패하면 바로 드러난다).
@@ -458,3 +458,14 @@ FE → BE POST /api/{guardian|ward}/chat (userId는 토큰으로 덮어씀, cont
 - **남은 것**: S-7 구현, 예약 API 응답 읽기는 소켓 단위 제한이라 아주 느린 응답은 몇 초 넘칠 수 있음, MedGemma(로컬) 입력의 프로필은 범위 밖.
 - 결과 AI `docs/eval-results/2026-10-28-privacy-deadline.*`.
 - **기능 점검**(AI #90, `docs/audits/2026-10-28-privacy-deadline-audit.md`): 🟡 1·🟢 5, 되돌릴 수 없는 호출 순서·마감 경계·최악 합계·응급/자해·로그는 PASS. 🟡 M-1 = 이어 쓰는 턴의 저장 초안 지역(`facts.location`)이 전체 주소로 추출에 나간다(첫 턴만 시·구로 줄었다). 실제 FE는 `context`에 주소를 보내지 않아 지금은 사용자가 지역 입력칸에 전체 주소를 칠 때만 해당 - S-7 작업에서 함께 고친다(L-1 확인 버튼 턴 마감 시 `pendingAction` 넘김 포함).
+
+### 4-25. 챗 대화 이력 서버화 - S-7 처리 + #88 점검 수정 (2026-10-28, AI #91·#92, gosky AI `cac0384` 14:36:22 재시작)
+
+- **변경**: 라우터·예약 추출·규칙 초안·MedGemma·위기 근거·"무슨 과?" 답·대체 응답이 쓰는 이력을 요청의 `history` 대신 같은 사용자·세션·피보호자(`router.wardId`)의 서버 `chat_logs`에서 만든다(최근 24개, 버튼 턴은 선택값만, 확인·취소·목록 버튼 제외). 요청 스키마·응답 필드 그대로라 BE·FE 변경 없음(`history`는 받되 무시). 위기 근거는 지금처럼 사용자 원문 키워드이고 출처만 서버 기록. 관찰 로그 `[CHAT-HISTORY-DIFF] client=… server=…`(턴 수만, 2주 뒤 제거). 같은 PR에 #88 점검 M-1(이어 쓰는 턴의 지역도 시·구까지)·L-1(확인 버튼 턴 마감 시 확인 대기 유지).
+- **의도한 동작 변화**: 요청 `history`에만 있고 서버 기록에 없는 자해 발화(조작·다른 세션)는 위기 근거가 아니다 - 기존 테스트 5건을 이 기준으로 바꿨다. FE는 대화창마다 같은 `sessionId`를 유지하고 피보호자를 바꾸면 새 세션이라 서버 이력 범위가 FE 화면과 같다.
+- **테스트**: pytest 861(신규 9)·기존 환경 실패 1. 결함 주입 5종(요청 history 되살림·wardId 조건 제거·서버 이력 사용자 발화 제거·M-1·L-1 되돌림) 모두 실패 확인.
+- **측정**: v6의 mt.01·mt.02·sh.11이 history만 보내 전환 뒤 맥락을 잃으므로 `run_eval --replay-history`를 더해 배포 전·후 같은 방식으로 44문항(em·sh·cf·mt·rs) × 1. 전후 모두 HTTP 200 44/44·PASS 40/40·응급 22행 119·경고·high, 문항별 42/44 같음. 다른 2건: em.08(과다 복용 단일 턴) 라우터 자해 판정으로 일반 응급 안내 → 위기 고정 응답(119·경고 유지, 이력 없는 새 세션이라 S-7 무관, 10/26에도 12회 중 3회 같은 판정 - 사용자 확인 후 진행), sh.12 생성 편차.
+- **실서버**: 조작한 assistant 발화로 예약 상태를 끌어오려는 시험 → 일반 대화(예약 화면 없음, `client=2 server=0`). 예약 한 바퀴(후속 턴은 history 없이) 모두 HTTP 200·`server=2~8`로 맥락 유지·증상 요약 = 이번 턴 증상 문장만. 재시작 뒤 74턴 마감·실패 로그 0.
+- **남은 것**: 관찰 로그 제거(2주 뒤), FE·BE의 `history` 전송 제거(선택), em.08류 과다 복용 문장의 라우터 판정 흔들림.
+- 결과 AI `docs/eval-results/2026-10-28-history-server-side.*`.
+
