@@ -2454,4 +2454,5 @@ AI 챗 집계 점검 L-1에서 남겨 둔 공용 `GlobalExceptionHandler`의 `e.
 - 함께 막힌 것: `NumberFormatException`(IAE 하위)이 사용자 입력을, Content-Type 오류가 요청자 헤더 원문(줄바꿈으로 가짜 로그 줄)을 남기던 것.
 - 가드: 파일을 `LogRawExceptionGuardTest` 목록에 추가, `GlobalExceptionHandlerLogTest` 5건(키·입력·헤더 원문 없음, 응답 그대로). 변이 2종 검출(정규식을 피해 가는 문자열 결합도 로그 테스트가 잡음). `./gradlew build` 2080건 통과.
 - 운영에서 달라 보이는 점: `CustomException` 로그가 한국어 문구 대신 `code=USER_NOT_FOUND` 형태다.
+- 배포(PR #399 `dcbb2f3`): vkcs CD 성공(14:44 기동), gosky 수동 배포(14:45 기동), 두 서버 AI WS 연결. gosky 실측 - 지원하지 않는 Content-Type 요청 415 그대로·로그는 `HttpMediaTypeNotSupportedException`만(요청에 넣은 표식 0건), 쿠키 없는 토큰 갱신 400 그대로·로그 `CustomException: code=INVALID_INPUT`.
 
