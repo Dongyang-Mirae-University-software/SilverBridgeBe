@@ -8,6 +8,8 @@ final class AdminHospitalRules {
     static final String PHONE_MESSAGE = "전화번호 형식이 올바르지 않습니다.";
     /** 실제 시각만(00:00~23:59). 예약 서비스는 99:99도 받는다. */
     static final String TIME_REGEX = "^([01]\\d|2[0-3]):[0-5]\\d$";
+    /** 점심시간 칸 - HH:mm 또는 빈 문자열(지우기). */
+    static final String TIME_OR_EMPTY_REGEX = "^(|([01]\\d|2[0-3]):[0-5]\\d)$";
     static final String TIME_MESSAGE = "시각은 HH:mm 형식이어야 합니다.";
 
     private AdminHospitalRules() {

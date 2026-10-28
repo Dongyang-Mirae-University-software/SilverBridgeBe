@@ -1,10 +1,15 @@
 package kr.silverbridge.main.domain.admin.dto;
 
 import io.swagger.v3.oas.annotations.media.Schema;
+import jakarta.validation.constraints.Max;
+import jakarta.validation.constraints.Min;
+import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
 import kr.silverbridge.main.global.validation.NoControlChars;
 import kr.silverbridge.main.global.validation.VisibleText;
+
+import java.util.List;
 
 /**
  * 제휴 병원 정보 수정(부분 수정 - null은 변경 안 함, 2026-10-26). 진료과는 진료과 API로 따로 바꾼다.
@@ -41,10 +46,29 @@ public record AdminHospitalUpdateRequest(
         String closeTime,
 
         @Schema(description = "앱 예약 가능 여부")
-        Boolean bookingAvailable
+        Boolean bookingAvailable,
+
+        @Schema(description = "점심시간 시작(HH:mm, 선택 - 끝과 함께, 진료 시간 안). 빈 문자열이면 지움, null 은 변경 안 함", example = "12:30", nullable = true)
+        @Pattern(regexp = AdminHospitalRules.TIME_OR_EMPTY_REGEX, message = AdminHospitalRules.TIME_MESSAGE)
+        String breakStart,
+
+        @Schema(description = "점심시간 끝(HH:mm)", example = "13:30", nullable = true)
+        @Pattern(regexp = AdminHospitalRules.TIME_OR_EMPTY_REGEX, message = AdminHospitalRules.TIME_MESSAGE)
+        String breakEnd,
+
+        @Schema(description = "휴진 요일(0=일 … 6=토, 중복 불가). 빈 배열이면 휴진 없음, null 은 변경 안 함", example = "[0]", nullable = true)
+        @Size(max = 7)
+        List<@NotNull @Min(0) @Max(6) Integer> closedWeekdays
 ) {
+    /** 점심시간·휴진 요일을 건드리지 않는 기존 형태(2026-10-28 이전 호출부 호환). */
+    public AdminHospitalUpdateRequest(String name, String region, String address, String phone, String description,
+                                      String openTime, String closeTime, Boolean bookingAvailable) {
+        this(name, region, address, phone, description, openTime, closeTime, bookingAvailable, null, null, null);
+    }
+
     public boolean isEmpty() {
         return name == null && region == null && address == null && phone == null && description == null
-                && openTime == null && closeTime == null && bookingAvailable == null;
+                && openTime == null && closeTime == null && bookingAvailable == null
+                && breakStart == null && breakEnd == null && closedWeekdays == null;
     }
 }

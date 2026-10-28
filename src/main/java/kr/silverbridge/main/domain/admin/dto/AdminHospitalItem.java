@@ -29,6 +29,12 @@ public record AdminHospitalItem(
         String openTime,
         @Schema(description = "진료 종료(HH:mm)", example = "18:00")
         String closeTime,
+        @Schema(description = "점심시간 시작(HH:mm). 없으면 null", example = "12:30", nullable = true)
+        String breakStart,
+        @Schema(description = "점심시간 끝(HH:mm). 없으면 null", example = "13:30", nullable = true)
+        String breakEnd,
+        @Schema(description = "휴진 요일(0=일 … 6=토). 없으면 빈 배열", example = "[0]")
+        List<Integer> closedWeekdays,
         @Schema(description = "앱 예약 가능 여부", example = "true")
         boolean bookingAvailable,
         @Schema(description = "진료과(사용 중인 것만)")

@@ -1,8 +1,11 @@
 package kr.silverbridge.main.domain.admin.dto;
 
 import io.swagger.v3.oas.annotations.media.Schema;
+import jakarta.validation.constraints.Max;
+import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotEmpty;
+import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
 import kr.silverbridge.main.global.validation.NoControlChars;
@@ -50,6 +53,23 @@ public record AdminHospitalCreateRequest(
         // 원소의 보이는 글자·제어문자 검사는 서비스가 한다(@VisibleText·@NoControlChars는 타입 인자에 붙지 않는다)
         @Schema(description = "진료과 이름 1~20개(각 최대 30자, 중복 불가)", example = "[\"정형외과\", \"재활의학과\"]")
         @NotEmpty @Size(max = 20)
-        List<@NotBlank @Size(max = 30) String> departments
+        List<@NotBlank @Size(max = 30) String> departments,
+
+        @Schema(description = "점심시간 시작(HH:mm, 선택 - 끝과 함께, 진료 시간 안). 빈 문자열이면 없음", example = "12:30", nullable = true)
+        @Pattern(regexp = AdminHospitalRules.TIME_OR_EMPTY_REGEX, message = AdminHospitalRules.TIME_MESSAGE)
+        String breakStart,
+
+        @Schema(description = "점심시간 끝(HH:mm)", example = "13:30", nullable = true)
+        @Pattern(regexp = AdminHospitalRules.TIME_OR_EMPTY_REGEX, message = AdminHospitalRules.TIME_MESSAGE)
+        String breakEnd,
+
+        @Schema(description = "휴진 요일(0=일 … 6=토, 중복 불가). 빈 배열이면 휴진 없음", example = "[0]", nullable = true)
+        @Size(max = 7)
+        List<@NotNull @Min(0) @Max(6) Integer> closedWeekdays
 ) {
+    /** 점심시간·휴진 요일 없이 만드는 기존 형태(2026-10-28 이전 호출부 호환). */
+    public AdminHospitalCreateRequest(String name, String region, String address, String phone, String description,
+                                      String openTime, String closeTime, Boolean bookingAvailable, List<String> departments) {
+        this(name, region, address, phone, description, openTime, closeTime, bookingAvailable, departments, null, null, null);
+    }
 }

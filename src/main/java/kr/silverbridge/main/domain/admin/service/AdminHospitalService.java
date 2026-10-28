@@ -120,6 +120,15 @@ public class AdminHospitalService {
             body.put("closeTime", request.closeTime());
             body.put("bookingAvailable", request.bookingAvailable() == null || request.bookingAvailable());
             body.put("departments", departments);
+            String[] lunch = breakPair(request.breakStart(), request.breakEnd());
+            requireBreakWithinHours(request.openTime(), request.closeTime(), lunch[0], lunch[1]);
+            if (lunch[0] != null) {
+                body.put("breakStart", lunch[0]);
+                body.put("breakEnd", lunch[1]);
+            }
+            if (request.closedWeekdays() != null) {
+                body.put("closedWeekdays", closedWeekdays(request.closedWeekdays()));
+            }
 
             client.requireConfigured();
             // 예약 서비스에는 이름 유일 제약이 없다 - 결과 불명 뒤 다시 누른 등록이 중복을 만들지 않게 먼저 본다(점검 M-1)
@@ -148,15 +157,29 @@ public class AdminHospitalService {
             putIfPresent(body, "openTime", request.openTime());
             putIfPresent(body, "closeTime", request.closeTime());
             putIfPresent(body, "bookingAvailable", request.bookingAvailable());
+            boolean breakChanged = request.breakStart() != null || request.breakEnd() != null;
+            String[] lunch = breakChanged ? breakPair(request.breakStart(), request.breakEnd()) : null;
+            if (breakChanged) {
+                // 빈 문자열 = 점심시간 지우기 - 예약 서비스에는 null 로 보낸다
+                body.put("breakStart", lunch[0]);
+                body.put("breakEnd", lunch[1]);
+            }
+            if (request.closedWeekdays() != null) {
+                body.put("closedWeekdays", closedWeekdays(request.closedWeekdays()));
+            }
 
             boolean needsCurrent = body.containsKey("name") || body.containsKey("address")
-                    || body.containsKey("openTime") || body.containsKey("closeTime");
+                    || body.containsKey("openTime") || body.containsKey("closeTime") || breakChanged;
             if (needsCurrent) {
                 List<AdminHospitalItem> all = fetchAll();
                 AdminHospitalItem current = all.stream().filter(h -> h.id() == hospitalId).findFirst()
                         .orElseThrow(() -> new CustomException(ErrorCode.HOSPITAL_NOT_FOUND));
-                requireHoursOrder(request.openTime() != null ? request.openTime() : current.openTime(),
-                        request.closeTime() != null ? request.closeTime() : current.closeTime());
+                String open = request.openTime() != null ? request.openTime() : current.openTime();
+                String close = request.closeTime() != null ? request.closeTime() : current.closeTime();
+                requireHoursOrder(open, close);
+                // 점심시간은 바뀐 뒤의 진료 시간과 맞춰 본다(진료 시간만 줄여 기존 점심시간이 밖으로 밀려나는 것도 막는다)
+                requireBreakWithinHours(open, close,
+                        breakChanged ? lunch[0] : current.breakStart(), breakChanged ? lunch[1] : current.breakEnd());
                 if (body.containsKey("name") || body.containsKey("address")) {
                     requireNoDuplicate(all,
                             body.containsKey("name") ? (String) body.get("name") : current.name(),
@@ -291,6 +314,36 @@ public class AdminHospitalService {
         }
     }
 
+    /** 점심시간 두 칸을 함께 해석한다 - 둘 다 빈 문자열이면 없음(null 쌍), 한쪽만 있으면 400. */
+    private static String[] breakPair(String start, String end) {
+        String s = start == null || start.isEmpty() ? null : start;
+        String e = end == null || end.isEmpty() ? null : end;
+        if ((s == null) != (e == null)) {
+            throw new CustomException(ErrorCode.HOSPITAL_INVALID_BREAK);
+        }
+        return new String[]{s, e};
+    }
+
+    /** 점심시간이 있으면 진료 시간 안에서 시작 < 끝(HH:mm 문자열 비교 = 시각 비교). */
+    private static void requireBreakWithinHours(String open, String close, String breakStart, String breakEnd) {
+        if (breakStart == null && breakEnd == null) {
+            return;
+        }
+        if (breakStart == null || breakEnd == null || open.compareTo(breakStart) > 0
+                || breakStart.compareTo(breakEnd) >= 0 || breakEnd.compareTo(close) > 0) {
+            throw new CustomException(ErrorCode.HOSPITAL_INVALID_BREAK);
+        }
+    }
+
+    /** 휴진 요일 - 중복이면 400, 정렬해 보낸다. */
+    private static List<Integer> closedWeekdays(List<Integer> days) {
+        List<Integer> sorted = days.stream().sorted().toList();
+        if (sorted.stream().distinct().count() != sorted.size()) {
+            throw new CustomException(ErrorCode.INVALID_INPUT);
+        }
+        return sorted;
+    }
+
     /** "HH:mm"은 DTO가 실제 시각으로 확인했으므로 문자열 비교가 곧 시각 비교다. */
     private static void requireHoursOrder(String openTime, String closeTime) {
         if (openTime == null || closeTime == null || openTime.compareTo(closeTime) >= 0) {
@@ -363,11 +416,27 @@ public class AdminHospitalService {
                 h.hasNonNull("description") ? h.get("description").asText() : "",
                 text(h, "openTime"),
                 text(h, "closeTime"),
+                h.hasNonNull("breakStart") && !h.get("breakStart").asText().isEmpty() ? h.get("breakStart").asText() : null,
+                h.hasNonNull("breakEnd") && !h.get("breakEnd").asText().isEmpty() ? h.get("breakEnd").asText() : null,
+                weekdays(h.path("closedWeekdays")),
                 h.path("bookingAvailable").asBoolean(false),
                 List.copyOf(departments),
                 status != null && status.isObject() ? toStatus(status) : null,
                 time(h, "createdAt"),
                 time(h, "updatedAt"));
+    }
+
+    /** 휴진 요일 - 예약 서비스는 숫자 배열을 준다(옛 버전·형식 이상이면 빈 목록, 0~6 밖 값은 버린다). */
+    private static List<Integer> weekdays(JsonNode node) {
+        List<Integer> days = new ArrayList<>();
+        if (node != null && node.isArray()) {
+            for (JsonNode d : node) {
+                if (d.canConvertToInt() && d.asInt() >= 0 && d.asInt() <= 6 && !days.contains(d.asInt())) {
+                    days.add(d.asInt());
+                }
+            }
+        }
+        return List.copyOf(days);
     }
 
     private static AdminHospitalItem.Department toDepartment(JsonNode d) {
