@@ -12,6 +12,7 @@ import java.time.OffsetDateTime;
  * 피보호자 "요청온 목록" 카드 응답.
  * 보호자가 보낸 PENDING 연결 요청을 수락/거절하기 위해 필요한 최소 정보만 노출한다.
  * 전화번호는 수락 전이므로 마스킹하고, 주소는 노출하지 않는다(수락 후 ACTIVE 응답에서만 노출).
+ * 프로필 사진은 보호자용 연결 목록(ConnectionResponse.partnerProfileImage)이 PENDING에도 주는 것과 같은 수준이다.
  */
 @Schema(description = "피보호자에게 온 PENDING 연결 요청")
 @Getter
@@ -26,6 +27,9 @@ public class PendingConnectionResponse {
     @Schema(description = "보호자 이름")
     private final String guardianName;
 
+    @Schema(description = "보호자 프로필 이미지 URL (없으면 null)", nullable = true)
+    private final String guardianProfileImage;
+
     @Schema(description = "보호자 전화번호 — PENDING이므로 마스킹 노출", example = "010****5678")
     private final String guardianPhone;
 
@@ -36,10 +40,11 @@ public class PendingConnectionResponse {
     private final OffsetDateTime requestedAt;
 
     private PendingConnectionResponse(Long connectionId, String guardianId, String guardianName,
-                                      String guardianPhone, String relation, OffsetDateTime requestedAt) {
+                                      String guardianProfileImage, String guardianPhone, String relation, OffsetDateTime requestedAt) {
         this.connectionId = connectionId;
         this.guardianId = guardianId;
         this.guardianName = guardianName;
+        this.guardianProfileImage = guardianProfileImage;
         this.guardianPhone = guardianPhone;
         this.relation = relation;
         this.requestedAt = requestedAt;
@@ -50,6 +55,7 @@ public class PendingConnectionResponse {
                 connection.getId(),
                 guardian.getId(),
                 guardian.getName(),
+                guardian.getProfileImage(),
                 MaskingUtil.maskPhone(guardian.getPhone()),
                 connection.getRelation(),
                 connection.getCreatedAt()

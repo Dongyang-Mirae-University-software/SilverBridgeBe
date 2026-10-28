@@ -47,6 +47,7 @@ public class WardConnectionController {
                     피보호자웹 "요청온 목록" 카드용.
                     보호자가 보낸 PENDING 연결 요청을 요청일(createdAt) 내림차순으로 반환합니다.
                     수락 전이므로 전화번호는 마스킹(010****5678)되고, 주소는 노출되지 않습니다.
+                    보호자 프로필 사진(guardianProfileImage)은 없으면 null입니다.
                     수락은 POST /api/ward/connection/{id}/accept,
                     거절은 DELETE /api/ward/connection/request/{id}/refusal 을 사용합니다.
                     """)
