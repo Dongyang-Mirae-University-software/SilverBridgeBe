@@ -40,7 +40,7 @@ public class WardChatController {
                     AI 의료 상담에 메시지를 보내고 답을 받습니다. 사용자는 로그인 토큰으로 정해지며 요청 본문에 userId를 넣지 않습니다
                     (넣어도 무시됩니다). 응답 data는 AI 응답의 data 그대로입니다(reply, riskLevel, intent, type, tool 등).
 
-                    message 또는 uiSelection 중 하나는 필수이고 message는 2000자 이하, history는 24개 이하입니다.
+                    message 또는 uiSelection 중 하나는 필수이고 message는 2000자 이하, history는 24개 이하입니다(보내도 AI로 넘기지 않습니다 - 대화 맥락은 AI가 같은 sessionId의 서버 기록으로 만듭니다).
                     모델이 답을 만드는 데 시간이 걸립니다. 서버는 최대 130초까지 기다리므로 FE 타임아웃은 그보다 길게(권장 140초) 잡으세요.
 
                     [오류 code]
