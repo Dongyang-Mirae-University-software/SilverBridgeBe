@@ -207,9 +207,8 @@ public class ChatRelayService {
         if (StringUtils.hasText(request.sessionId())) {
             body.put("sessionId", request.sessionId());
         }
-        if (request.history() != null) {
-            body.set("history", objectMapper.valueToTree(request.history()));
-        }
+        // history 는 AI로 보내지 않는다(2026-10-29) - AI가 대화 이력을 서버 기록으로 만들고 요청의 history 를 무시한다(AI #91 S-7).
+        // 요청 DTO 는 옛 FE 호환으로 history 를 계속 받아 검사만 한다.
         Map<String, Object> contextMap = sanitizedContext(request.context(), ward, role);
         if (!contextMap.isEmpty()) {
             JsonNode context = objectMapper.valueToTree(contextMap);

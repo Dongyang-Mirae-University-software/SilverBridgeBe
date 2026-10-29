@@ -43,7 +43,7 @@ public class GuardianChatController {
                     피보호자를 대신해 상담·예약하려면 context.wardId에 ACTIVE 연결된 피보호자 ID를 넣습니다. 연결이 아니면 403 CHAT_WARD_NOT_CONNECTED이며
                     wardName·wardPhone은 서버가 DB 값으로 채웁니다(보낸 값은 무시).
 
-                    message 또는 uiSelection 중 하나는 필수이고 message는 2000자 이하, history는 24개 이하입니다.
+                    message 또는 uiSelection 중 하나는 필수이고 message는 2000자 이하, history는 24개 이하입니다(보내도 AI로 넘기지 않습니다 - 대화 맥락은 AI가 같은 sessionId의 서버 기록으로 만듭니다).
                     모델이 답을 만드는 데 시간이 걸립니다. 서버는 최대 130초까지 기다리므로 FE 타임아웃은 그보다 길게(권장 140초) 잡으세요.
 
                     [오류 code]
