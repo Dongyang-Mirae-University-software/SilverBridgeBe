@@ -29,8 +29,10 @@ import java.util.regex.Pattern;
  *
  * <p><b>제외(절대 막지 않음)</b>
  * <ul>
- *   <li>SOS 관련 경로 - {@code /api/ward/sos}, {@code /api/ward/sos-setting}, {@code /api/guardian/sos/**} 등
- *       ({@link #SOS_PATH}). SOS 는 어떤 제한에도 막히면 안 되는 필수 경로다(정책 그대로).</li>
+ *   <li>피보호자 SOS 경로 - {@code /api/ward/sos}, {@code /api/ward/sos/**}, {@code /api/ward/sos-setting}
+ *       ({@link #SOS_PATH}). SOS 발신은 어떤 제한에도 막히면 안 되는 필수 경로다(정책 그대로).
+ *       보호자 SOS 이력({@code /api/guardian/sos/**})은 읽기라 제한한다 - 묶음 조회가 윈도 함수로 무거워
+ *       제외하면 토큰 하나로 DB 부하를 걸 수 있었다(2026-10 전체 점검 M-5).</li>
  *   <li>{@code /api/auth/**} - 로그인·갱신·로그아웃은 이미 IP 기준 제한이 있어 기존 규칙을 그대로 둔다.</li>
  *   <li>{@code /ws/**} - WebSocket 핸드셰이크(연결 1회). {@code OPTIONS} preflight.</li>
  *   <li>미인증 요청 - 사용자 ID 가 없다.</li>
@@ -47,8 +49,8 @@ public class UserRateLimitFilter extends OncePerRequestFilter {
 
     static final String ENDPOINT = "user-api";
 
-    // /api/ward/sos, /api/ward/sos/..., /api/ward/sos-setting, /api/guardian/sos/history 등 - 구간 이름이 sos 로 시작하면 제외
-    private static final Pattern SOS_PATH = Pattern.compile("^/api/[^/]+/sos([/-].*)?$");
+    // /api/ward/sos, /api/ward/sos/..., /api/ward/sos-setting - 피보호자 경로에서 구간 이름이 sos 로 시작하면 제외
+    private static final Pattern SOS_PATH = Pattern.compile("^/api/ward/sos([/-].*)?$");
 
     private final RateLimitService rateLimitService;
     private final ObjectMapper objectMapper;

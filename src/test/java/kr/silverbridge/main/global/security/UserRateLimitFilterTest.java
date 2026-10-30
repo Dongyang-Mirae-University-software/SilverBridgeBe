@@ -99,8 +99,6 @@ class UserRateLimitFilterTest {
             "POST, /api/ward/sos/",
             "GET,  /api/ward/sos-setting",
             "PUT,  /api/ward/sos-setting",
-            "GET,  /api/guardian/sos/history",
-            "GET,  /api/guardian/sos",
             "POST, /api/auth/login",
             "POST, /api/auth/refresh",
             "POST, /api/auth/logout",
@@ -120,7 +118,8 @@ class UserRateLimitFilterTest {
     }
 
     @ParameterizedTest(name = "{0} 는 제외 대상이 아니다(이름만 비슷한 경로)")
-    @ValueSource(strings = {"/api/ward/sosx", "/api/ward/medication/sos", "/api/guardian/anomaly", "/api/user/me"})
+    @ValueSource(strings = {"/api/ward/sosx", "/api/ward/medication/sos", "/api/guardian/anomaly", "/api/user/me",
+            "/api/guardian/sos/history", "/api/guardian/sos"})  // 보호자 SOS 이력은 읽기라 제한한다(2026-10 점검 M-5)
     @DisplayName("sos 로 시작하는 구간이 아니면 제한한다 - 제외 규칙이 과하게 넓지 않다")
     void similarPathsAreLimited(String uri) throws Exception {
         login("user-1");
