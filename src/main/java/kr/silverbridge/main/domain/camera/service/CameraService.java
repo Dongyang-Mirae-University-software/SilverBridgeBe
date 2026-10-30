@@ -25,6 +25,7 @@ import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.core.NestedExceptionUtils;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.Arrays;
@@ -354,6 +355,15 @@ public class CameraService {
     public Optional<CameraOwner> findOwnerBySessionId(String sessionId) {
         return cameraRepository.findBySessionId(sessionId)
                 .map(camera -> new CameraOwner(camera.getWardId(), camera.getLabel()));
+    }
+
+    /**
+     * 카메라 행을 잠그고 소유 피보호자 ID를 돌려준다 - 호출자 트랜잭션 안에서만 쓴다(이상감지 클립 기록, 2026-10 점검 M-7).
+     * 잠금은 호출자 트랜잭션이 끝날 때 풀리며, 그동안 이 카메라의 삭제가 기다린다.
+     */
+    @Transactional(propagation = Propagation.MANDATORY)
+    public Optional<String> lockOwnerWardIdForKeyShare(String sessionId) {
+        return cameraRepository.lockOwnerWardIdForKeyShare(sessionId);
     }
 
     /**

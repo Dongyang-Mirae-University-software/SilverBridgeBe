@@ -53,6 +53,15 @@ public interface CameraRepository extends JpaRepository<Camera, Long> {
     @Query(value = "select 1 from (select pg_advisory_xact_lock(:key)) t", nativeQuery = true)
     int lockTotalLimit(@Param("key") long key);
 
+    /**
+     * 이상감지 클립 기록용 - 카메라 행을 {@code FOR KEY SHARE}로 잠그고 소유 피보호자 ID를 돌려준다(2026-10 전체 점검 M-7).
+     *
+     * <p>잠근 동안 카메라 삭제가 기다리므로, 삭제 정리({@code CameraDeletedEvent})는 이 클립 행이 커밋된 뒤에 돌아 함께 지운다.
+     * 삭제가 먼저 커밋됐으면 빈 값이다. {@code KEY SHARE}는 방 이름·사용 중지 같은 일반 UPDATE와는 충돌하지 않는다.</p>
+     */
+    @Query(value = "SELECT ward_id FROM camera WHERE session_id = :sessionId FOR KEY SHARE", nativeQuery = true)
+    Optional<String> lockOwnerWardIdForKeyShare(@Param("sessionId") String sessionId);
+
     // ===== 관리자 대시보드 집계 =====
 
     /** 활성(isActive=true) 카메라 수 - 대시보드 "끊김" 계산의 분모(ADMIN-G20). 비활성 카메라는 구독 대상이 아니다. */
