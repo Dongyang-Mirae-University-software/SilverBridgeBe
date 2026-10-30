@@ -61,3 +61,5 @@ paths:
 
 - **피보호자 수락 시 보호자 정지·탈퇴 진행은 `CONNECTION_REQUESTER_NOT_ACTIVE`(400)**: 받는 사람이 피보호자라 요청 쪽 문구(`CONNECTION_TARGET_NOT_ACTIVE`)를 쓰면 뜻이 통하지 않는다(수신자 기준 문구 정책). 보호자 요청·관리자 강제 연결은 `CONNECTION_TARGET_NOT_ACTIVE` 그대로. FE 수락 화면은 모르는 코드면 서버 문구를 보여 준다.
 - **강제 연결도 요청 횟수를 지운다**: `forceConnect`가 일반 수락처럼 `ConnectionRequestLimiter.reset`을 부른다 - 강제 해제 뒤 보호자의 정상 재요청이 옛 횟수로 막히지 않게.
+- **피보호자 경로 IDOR 문구 분리 (2026-10-31 L-6)**: 피보호자가 남의 연결을 수락·거절·해제하려 하면 `CONNECTION_NOT_OWNED`(403, "본인에게 온 연결 요청만 처리할 수 있습니다."), 보호자 경로는 `CONNECTION_NOT_AUTHORIZED` 그대로. `[IDOR-ATTEMPT]` WARN 유지.
+- **연결 요청의 Redis 확인은 잠금 안에 둔다 (L-4, 의도)**: 앞으로 옮기면 409·400보다 429가 먼저 나가 오류 우선순위가 바뀐다. 대기는 Redis 명령 제한 2초로 한정되고 장애 시 fail-open.
