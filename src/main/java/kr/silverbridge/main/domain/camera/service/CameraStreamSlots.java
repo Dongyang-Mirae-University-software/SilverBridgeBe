@@ -144,9 +144,17 @@ public class CameraStreamSlots implements SmartLifecycle {
         /** 종료 처리에서 닫을 AI 연결을 붙인다. */
         public void attach(Closeable connection) {
             this.connection = connection;
-            if (!running) {
-                closeConnection();   // 붙이는 사이 종료가 시작됐으면 바로 닫는다
+            // 붙이는 사이 종료가 시작됐거나, 같은 카메라 다시 열기로 이 자리가 먼저 닫혔으면 바로 닫는다.
+            // 자리만 반납된 채 연결이 남으면 상한 밖에서 최대 30분 중계된다(2026-10 전체 점검 H-1).
+            // connection·released 둘 다 volatile이라 close()와 엇갈려도 한쪽은 반드시 상대 값을 본다.
+            if (!running || released.get()) {
+                closeConnection();
             }
+        }
+
+        /** 같은 카메라 다시 열기·종료로 이미 자리를 돌려줬는지. */
+        public boolean isReleased() {
+            return released.get();
         }
 
         private void closeConnection() {

@@ -205,6 +205,11 @@ public class CameraStreamService {
                 throw new CustomException(ErrorCode.CAMERA_STREAM_UNAVAILABLE);
             }
             slot.attach(aiStream);   // 자리를 닫으면(정상 종료·예외·서버 종료) AI 소켓도 끊긴다
+            if (slot.isReleased()) {
+                // AI 연결을 기다리는 사이 같은 카메라를 다시 열어 이 중계가 대체됐다 - 연결은 attach가 이미 닫았다
+                log.info("[CAMERA-STREAM] 연결 전 대체된 중계 - 시작하지 않음: userId={}, sessionId={}", userId, sessionId);
+                throw new CustomException(ErrorCode.CAMERA_STREAM_UNAVAILABLE);
+            }
 
             String contentType = aiStream.contentType();
             response.setStatus(HttpServletResponse.SC_OK);
