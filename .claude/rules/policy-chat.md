@@ -1,0 +1,53 @@
+---
+paths:
+  - "**/domain/chat/**"
+  - "**/*AiChat*"
+  - "**/*AiMemberDataPurge*"
+  - "**/domain/admin/**/*AiStat*"
+---
+
+# 도메인 정책 - AI 챗봇 중계·관리자 AI 통계
+
+> 이 파일은 위 경로의 파일을 다룰 때 자동으로 로드된다. 코드를 열지 않고 이 도메인 작업을 설계·답변할 때는 직접 Read 한다.
+> 공통 불변 규칙은 `domain-security-policy.md`(항상 로드).
+
+## 기능 요약 (CLAUDE.md §1에서 이동, 2026-10-30)
+
+- **AI 챗봇 중계**(chat, 2026-10-07): FE 프록시가 막혀(ad44cb6) **FE → 백엔드 → AI** 중계로 대체. 보호자 전용 `POST /api/guardian/chat`·`GET .../chat/logs`·`.../logs/{chatId}`. **사용자 ID는 요청이 아니라 토큰에서만**(DTO에 userId 없음, AI 본문은 토큰 ID로 덮어씀 - 옛 FE는 `userId: 1` 고정이라 기록이 한 버킷에 섞여 있었다). 상담 내용은 민감 정보라 **본문 로그 금지**(`ChatRelayLogGuardTest`). 호출 전체 130초(일반 8~10초 규칙의 예외)·동시 전체 10/1인 1·속도 제한·킬 스위치 `chat.relay.enabled`(전송만 멈춤). FE 프록시에 챗 경로를 되살리지 말 것. 상세 rules 파일.
+  - **피보호자 경로 추가**(2026-10-09): `POST /api/ward/chat`·`GET .../logs`·`.../logs/{chatId}`(WARD 전용, 같은 `ChatRelayService`·응답·한도). 피보호자 상담 내용을 보호자·관리자에게 노출하는 경로는 만들지 않는다. 상세 `docs/(2026-10-09) feature-ward-chat-relay.md`.
+  - **탈퇴 시 AI 회원 데이터 삭제**(2026-10-09): `AiMemberDataPurgeListener`가 `UserWithdrawnEvent` AFTER_COMMIT에서 AI `DELETE /api/v1/chat/logs?userId=`(상담 기록)·`DELETE /api/v1/reservation-credentials?userId=`(예약 API 키)를 항목별 독립으로 호출(비동기 `aiPurgeExecutor`, best-effort). **배포 순서: AI 서버 먼저**. 상세 `docs/(2026-10-09) feature-chat-log-purge-on-withdraw.md`.
+  - **대리 상담 wardId 검증·예약 계정 보안**(2026-10-20, 5개 repo 배포 완료): 보호자 챗의 `context.wardId`는 **BE가 `isActiveConnection`으로 검증**(아니면 403 `CHAT_WARD_NOT_CONNECTED`, 이름·전화는 DB 값으로 덮어씀 - 클라이언트 값 불신). 예약 계정 비밀값(`RESERVATION_ACCOUNT_SECRET`)에 **코드 기본값 금지**(비면 예약만 꺼짐), 예약 API(6015)는 외부 비공개. 상세 rules 파일·`docs/(2026-10-20) fix-chat-reservation-security.md`.
+  - **관리자 AI 통계 - 챗 집계**(2026-10-28, 마이그레이션 없음): AI `GET /api/v1/chat/stats`(AI #84·#87, 개수만)를 `GET /api/admin/ai-stats/chat?from=&to=`(ADMIN, KST 31일·2000~2999년, 400 `AI_STATS_INVALID_RANGE`)로 중계. 응답은 허용 목록 record만(원문·userId 칸 없음), AI 실패는 0이 아니라 503 `AI_STATS_UNAVAILABLE`·504 `AI_STATS_TIMEOUT`, 같은 기간 60초 캐시·관리자 분 30/시간 600, 킬 스위치 미적용. **`context.role`은 BE가 경로 역할로 덮어쓴다**(#395 - 역할별 집계 근거). 상세 `docs/(2026-10-28) feature-admin-ai-chat-stats.md`.
+
+
+## AI 챗봇 중계 - 사용자 ID는 토큰에서만, 상담 내용은 로그에 남기지 않는다 (2026-10-07)
+
+- **경위**: FE 보안 수정(ad44cb6)이 `/api/streams` 프록시를 송출 3개 경로로 줄여 챗봇(`POST /v1/chat`·`GET /v1/chat/logs`)이 막혔다. 영상 중계(2026-10-03)와 같은 방식으로 **FE → 백엔드 → AI**로 바꿨다. 상세 `docs/(2026-10-07) feature-chat-relay.md`·`api-contract-chat-relay.md`.
+- **불변 규칙 ①(사용자 ID는 토큰에서만)**: `ChatRelayRequest`에 `userId` 필드가 없고, AI로 나가는 본문의 `userId`는 `@AuthenticationPrincipal`로 받은 ID로 **마지막에 덮어쓴다**. 기록 목록·상세도 토큰 ID로만 AI에 묻는다(쿼리·본문으로 받지 말 것) - 그렇지 않으면 남의 상담 기록을 읽는다(AI는 `userId` 없이 부르면 전체를, `CHAT_REQUIRE_USER_ID`가 꺼져 있으면 상세도 소유자 없이 준다). 옛 FE는 `userId: 1` 고정이라 기존 기록 112건이 한 버킷에 섞여 있다 - 새 API에서는 안 보이며 이전하지 않는다.
+- **불변 규칙 ②(역할별 컨트롤러)**: 보호자 `GuardianChatController`(`hasRole('GUARDIAN')`)와 피보호자 `WardChatController`(`hasRole('WARD')`, 2026-10-09)가 따로 있고 **관리자용은 없다**. 새 경로는 인증 필수(permitAll 금지).
+  - **두 컨트롤러는 같은 `ChatRelayService`를 쓰고 로직을 복제하지 말 것.** 서비스는 역할을 모른다(토큰의 사용자 ID만 사용).
+  - **피보호자의 상담 내용을 보호자·관리자에게 노출하는 경로를 만들지 말 것**(의료 상담 = 본인만). 보호자가 연결된 피보호자의 기록을 보려면 이 정책부터 바꿔야 한다.
+  - `context.role`은 **BE가 경로의 역할로 덮어쓴다**(2026-10-28 - 보호자 경로 `GUARDIAN`, 피보호자 경로 `WARD`). AI 관리자 통계(`GET /api/v1/chat/stats` `byRole`)가 이 값으로 역할별 상담 수를 세는데, 클라이언트 값은 비거나 위조될 수 있었다. AI는 분기에 쓰지 않으며 BE도 권한 판단 근거로 삼지 말 것(인가는 컨트롤러 `@PreAuthorize`). `guardianId`는 여전히 클라이언트 값 그대로다. `context` 8KB 상한은 BE가 채운 값(role·대리 상담 DB 값)까지 넣은 최종 크기 기준이다.
+- **불변 규칙 ③(본문 로그 금지)**: 의료 상담은 민감 정보다. 메시지·응답·기록·context 본문과 AI 오류 문구는 로그·예외 메시지·알림 이력·감사 로그에 남기지 않는다(userId·소요 시간·상태 코드·예외 클래스명까지). AI 오류 본문은 읽지 않고 상태 코드로만 판단해 고정 문구로 답한다. 응답은 `Cache-Control: no-store`. `ChatRelayLogGuardTest`가 chat 패키지 로그 인자를 고정하고 `LogRawExceptionGuardTest` 목록에도 들어 있다.
+- **불변 규칙 ④(호출 시간 예외)**: 챗은 모델 생성이라 전체 제한을 130초(`chat.relay.call-timeout`)로 둔다 - 일반 외부 호출 8~10초 규칙의 예외. 그만큼 요청 스레드를 붙들므로 **동시 상한(전체 10 / 1인 1, 인스턴스 메모리)을 없애지 말 것**(SOS·로그인까지 멈춘다). 처음 근거였던 AI `CHAT_UPSTREAM_TIMEOUT_SEC=120`(옛 챗 서버 대기)은 2026-10-22 AI PR #33에서 폴백과 함께 삭제됐다. **AI는 2026-10-28(#88)부터 요청 전체 마감 `CHAT_DEADLINE_SEC` 110초를 둔다**(이 130초 - 응답 전송 여유 20초, 각 호출은 남은 시간만큼만, 예약 생성·취소는 남은 25초 이상일 때만) - 둘은 함께 움직인다. AI 값을 BE 값 이상으로 올리면 BE가 먼저 끊어 사용자는 답을 못 받고 AI는 뒤에서 일을 계속하므로, 이 값을 줄일 때는 AI 마감도 같이 줄일 것. 늘리거나 없애지 말 것. 마감 시 연결을 끊는다(영상 중계 L-3와 같은 방식).
+- **호출 마감은 전용 스레드 (2026-10-22)**: AI HTTP 클라이언트 4종(`AiChatClient`·`AiMedicationOcrClient`·`AiStreamClient`·`AiClipClient`)은 마감(`disconnect`)을 공용 스케줄러 풀(3)이 아니라 클라이언트마다 전용 데몬 스레드(2)에서 건다 - 공용 풀이 밀리면 마감이 늦어져 요청·클립 스레드를 붙든다. 이 실행기를 **빈으로 등록하지 말 것**(`TaskScheduler` 빈이 늘면 Boot 기본 스케줄러가 물러나 `@Scheduled` 전체가 옮겨 간다). 새 AI HTTP 클라이언트도 같은 방식으로. 공용 풀에 남은 것(AI WS 재접속·목록 재동기화·연결 끊김 안내 유예)은 예약 작업 자체라 그대로 둔다.
+- **대화 이력은 AI 서버 기록 기준이다 (2026-10-28, AI #91 S-7)**: AI는 요청의 `history`를 읽지 않고 같은 사용자·세션·피보호자의 `chat_logs`로 이력을 만든다(조작한 assistant 발화·지운 자해 발화로 경로·위기 응답·예약 값이 바뀌지 않게). **BE는 2026-10-29(#400)부터 `history`를 AI로 보내지 않는다**(요청 DTO는 옛 FE 호환으로 받아 검사만, FE #155도 싣지 않음) - BE에서 이력을 다시 판단 근거로 쓰거나, AI로 다시 넘기거나, AI가 클라이언트 `history`를 다시 읽게 되돌리지 말 것. 이력 범위가 `sessionId` 단위라 FE는 대화창마다 같은 세션 ID를 유지해야 한다.
+- **MedGemma 입력은 나이·성별만 (2026-10-29, AI #107)**: AI가 MedGemma 프롬프트에 넣는 프로필은 `age`·`gender`뿐이다(대리 상담의 피보호자 이름·전화·주소·생년월일·ID 제외). BE가 `context`에 덮어쓰는 피보호자 이름·전화는 AI의 예약 계정 확보(환자 정보)에만 쓰인다 - 상담 답에 이름을 넣으려고 AI가 프로필 전체를 다시 넘기게 되돌리지 말 것. 같은 PR에서 AI의 예약 API 호출 한 번 대기는 기본 10초·상한 15초가 됐다.
+- **불변 규칙 ⑤(키는 서버 안에서만)**: `X-API-Key` 헤더만, 리다이렉트 미추종, 키는 로그·응답에 남기지 않는다(영상 중계 ④와 같음). `AI_API_KEY`·`AI_HTTP_BASE_URL`을 공유한다.
+- **남의 기록 상세는 404**: AI가 없는 기록과 남의 기록을 구분하지 않아 `404 CHAT_LOG_NOT_FOUND`로 같게 답한다(`[CHAT-LOG-NOT-FOUND]` INFO, userId·chatId만). `[IDOR-ATTEMPT]` 403은 구분이 불가능해 쓰지 않는다.
+- **기록 응답은 허용 목록으로 거른다 (2026-10-07 점검 M-2)**: AI 기록에는 `contextJson`(요청 때 보낸 프로필 사본 `userContext` 포함)·`upstreamMeta`·`decisionTrace`·`userId`가 함께 오는데 FE는 쓰지 않는다. `ChatLogProjection.ALLOWED_FIELDS`에 있는 필드만 내린다(AI가 새 필드를 더해도 자동으로 빠진다 - 차단 목록으로 바꾸지 말 것). FE가 새 필드를 쓰게 되면 목록에 더하고, 내부 정보 필드를 더하지 말 것(`ChatLogProjectionTest`가 고정). AI 응답 형식이 이상하면 503이다.
+- **AI 상세 조회의 `userId` 필수화는 AI 서버 설정이다 (점검 M-1)**: AI `GET /api/v1/chat/logs/{id}`는 `CHAT_REQUIRE_USER_ID=false`면 `userId` 없이도 200이라 추측 가능한 `chat_id`로 남의 상세가 열린다. 중계는 항상 `userId`를 붙이므로 백엔드 경유로는 노출되지 않는다. **gosky AI 서버 `.env`에 `CHAT_REQUIRE_USER_ID=true`를 적용했다(2026-10-07, 무 `userId` 상세 조회 422 실측)** - 이 줄을 지우거나 새 AI 서버를 띄울 때 빠뜨리면 다시 열린다. 내용은 `docs/(2026-10-07) audit-chat-relay.md` 후속 절.
+- **킬 스위치** `chat.relay.enabled=false`는 **전송만** 503으로 멈춘다(기록 조회는 계속).
+- **불변 규칙 ⑥(탈퇴하면 AI의 상담 기록도 지운다, 2026-10-09 점검 M-1)**: 상담 기록은 AI 서버 DB에 있어 회원 행 CASCADE가 닿지 않는다. `AiMemberDataPurgeListener`가 `UserWithdrawnEvent` AFTER_COMMIT에서 AI `DELETE /api/v1/chat/logs?userId=`를 부른다(보호자·피보호자·관리자 강제 탈퇴 모두 같은 파이프라인).
+  - **비동기 + 전용 `aiPurgeExecutor`**(1/2/100, 포화 시 폐기 + `[AI-PURGE-REJECTED]` WARN, CallerRuns 금지). 이벤트가 `userId`를 들고 있어 회원 행이 필요 없으므로 클립 삭제처럼 동기일 필요가 없다 - AI 호출(최대 15초)이 탈퇴 응답을 붙들지 않게 한다. 알림 풀에 태우지 말 것(`NotificationExecutorAssignmentTest`가 고정).
+  - **best-effort**: 실패는 삼키고 `[AI-PURGE-FAILED]` WARN에 userId와 예외 클래스명만 남긴다(상담 내용·AI 오류 문구 금지, `LogRawExceptionGuardTest`). 삭제 성공은 AI가 200을 줄 때뿐이다 - 404/405(옛 AI 서버)를 성공으로 보지 말 것.
+  - **수용한 한계**: 스윕 purge 경로·AI 장애·executor 포화로 놓친 건은 AI에 남는다(재시도 없음). **AI 서버가 삭제 API를 갖춘 버전으로 반영되기 전에 탈퇴하면 그 건은 지워지지 않는다**(배포 순서: AI 먼저). 킬 스위치는 삭제에 영향이 없다.
+  - **예약 API 키도 같이 지운다(2026-10-09 점검 M-2)**: AI `reservation_credentials`(예약 서비스 API 키, 평문 보관)는 AI `DELETE /api/v1/reservation-credentials?userId=`로 지운다. 한 리스너(`AiMemberDataPurgeListener`)가 상담 기록·예약 API 키를 **항목별로 독립** 시도한다(한쪽이 실패해도 다른 쪽은 진행, `[AI-PURGE-FAILED]`에 item·userId·예외 클래스명만, **키 값은 요청·응답·로그에 싣지 않는다**). AI `cameras` 테이블은 회원 ID 컬럼이 비어 있어(실서버 확인) 대상이 아니다 - 백엔드가 AI 카메라 행에 회원 ID를 채우게 되면 그때 다시 볼 것. 회원 데이터를 AI에 새로 저장하게 되면 같은 리스너에 삭제를 더할 것.
+  - **통합 테스트로 고정**: `WithdrawalAiPurgeIntegrationTest`(실제 컨텍스트에서 커밋하면 전용 executor 스레드에서 호출되고, 롤백하면 호출되지 않는다).
+- **FE 프록시에 챗 경로를 되살리지 말 것**: 프록시는 AI 키를 붙여 아무 경로나 넘기던 구멍이라 FE가 줄인 것이 맞다. AI 쪽 `CHAT_REQUIRE_USER_ID` 강화는 별도 결정(AI 서버 범위).
+- **불변 규칙 ⑦(wardId는 BE가 ACTIVE 연결로 검증한다, 2026-10-20)**: 보호자가 피보호자 대신 상담·예약할 때 AI는 `context.wardId`로 **그 피보호자의 예약 계정**을 만들어 예약을 조회·생성한다. 이 값을 클라이언트가 정하면 남의 예약을 보거나 남의 이름으로 예약할 수 있어(검증 전 실제 구멍이었다), `ChatRelayService.sendAsGuardian`이 `isActiveConnection(guardianId, wardId)`로 확인한다. 연결이 아니면 403 `CHAT_WARD_NOT_CONNECTED` + `[IDOR-ATTEMPT]` WARN이고 **AI는 부르지 않는다**. `getMyWards`는 PENDING이 섞여 있어 쓰지 않는다(SOS·복약·이상감지와 같은 규칙).
+  - `wardId`·`wardName`·`wardPhone`은 **항상 BE가 정한다**: 보호자 경로는 클라이언트 값을 버리고 DB 값으로 덮어쓰고, 피보호자 경로(`send`)는 세 키를 지운다. FE가 보낸 이름·전화를 AI에 그대로 넘기도록 되돌리지 말 것(환자명·연락처가 예약에 들어간다). `context`의 다른 키(`role`·`guardianId` 등)는 여전히 판단 근거로 쓰지 않는다.
+  - **wardId 처리 순서는 킬 스위치 -> 본문 검증 -> 속도 제한 -> 형식 -> ACTIVE 연결이다(2026-10-20 점검 M-1·L-1).** 형식(영숫자 6자 이내)이 틀리면 DB 조회·원문 로그 없이 403이고, 클라이언트 문자열을 `[IDOR-ATTEMPT]` 로그에 그대로 남기지 말 것(줄바꿈 삽입·8KB 폭주). 보호자 대리 상담은 `name`·`phone`도 BE가 정하고(전화가 없으면 클라이언트 값 제거), AI 응답 뒤 연결이 끊겼으면 응답을 폐기한다.
+  - wardId가 문자열이 아니면 400, 공백이면 본인 상담으로 본다. AI 서버는 BE 중계를 거친 값만 신뢰한다는 전제다(AI 직접 호출 경로는 AI 키로만 막힌다 - 수용).
+- **불변 규칙 ⑧(예약 계정 비밀값에 코드 기본값을 두지 않는다, 2026-10-20)**: 예약 계정은 이메일 `sb-<userId>@silverbridge.local`, 비밀번호 `HMAC(RESERVATION_ACCOUNT_SECRET, userId)`이고 **AI 서버와 FE BFF가 같은 값**을 써야 한다. 이 비밀값과 옛 공용 계정(`RESERVATION_SERVICE_EMAIL`/`PASSWORD`)의 **코드·compose 기본값을 두지 말 것** - 저장소를 보는 누구나 계정 비밀번호를 계산할 수 있다(운영 `.env`에 값이 없어 기본값으로 돌던 것이 실제 노출이었다). 비어 있으면 **예약 기능만** 꺼진다(AI: `ensure_credential`이 None + 안내 문구, FE BFF: 503). 서버 기동·상담·이상감지·클립은 막지 않는다. 비밀값을 바꾸면 기존 `sb-*` 계정은 새 비밀번호로 로그인되지 않으므로 **계정 재설정/재생성을 함께 계획**한다. 값은 `.env`로만 넣고 출력·커밋 금지.
+- **불변 규칙 ⑨(예약 API는 외부에 직접 열지 않는다, 2026-10-20)**: 예약 서비스(6015)는 `127.0.0.1`에만 publish하고, 같은 서버의 AI(host 네트워크)는 `127.0.0.1:6015`, FE 컨테이너는 공용 도커 네트워크 `sb-internal`의 `http://reservation-api:6015`로 붙는다. 포트를 `0.0.0.0`으로 되돌리거나 FE 기본 주소를 공개 도메인으로 두지 말 것(FE는 `RESERVATION_API_URL`이 없으면 예약만 503). `JWT_SECRET`·`ADMIN_PANEL_PASSWORD`도 기본값 없이 필수이며 비면 예약 서비스가 기동하지 않는다. 공개 도메인 `reservation.dmu.gosky.kr`는 관리자 화면(6017)도 서빙해 도메인 통째 차단이 아니라 `/api/` 경로만 외부에서 막는 방향이다(배포 단계 결정). **예약 서비스의 seed 계정(`admin@example.com`·`user*@example.com`)은 비밀번호가 저장소 seed 파일에 고정돼 있어 2026-10-20에 운영 DB에서 무작위 값으로 무효화했다**(삭제하지 않은 이유: 예약 163건을 소유하고 유일한 ADMIN이다). 새 환경에서 `prisma db seed`를 돌리면 고정 비밀번호 계정이 다시 생기므로 곧바로 비밀번호를 바꾸고, 운영 DB에서는 `db seed`를 돌리지 말 것(예약 전체 삭제). 상세 `docs/(2026-10-20) fix-chat-reservation-security.md`.
