@@ -134,6 +134,20 @@ class MedicationReminderServiceTest {
     }
 
     @Test
+    @DisplayName("같은 시각이면 시간대가 달라도 한 건으로 묶는다 — 어긋나 저장된 옛 약(점심 01:40) 때문에 두 건이 나가지 않게 (2026-10-30)")
+    void 같은시각_다른시간대_한건() {
+        MedicationReminderTarget oldMismatched = new MedicationReminderTarget(1L, WARD_ID, "감기약", MedicationTimeSlot.LUNCH,
+                LocalTime.of(1, 40), BigDecimal.ONE, MedicationClock.today(), MedicationReminderLog.ATTEMPT_FIRST);
+        MedicationReminderTarget bedtime = new MedicationReminderTarget(2L, WARD_ID, "수면제", MedicationTimeSlot.BEDTIME,
+                LocalTime.of(1, 40), BigDecimal.ONE, MedicationClock.today(), MedicationReminderLog.ATTEMPT_FIRST);
+        when(planner.claimFirstReminders()).thenReturn(List.of(oldMismatched, bedtime));
+
+        assertThat(reminderService.sendFirstReminders()).isEqualTo(1);
+
+        verify(notificationDispatcher, times(1)).dispatch(eq(WARD_ID), eq(WARD_ID), any(), any());
+    }
+
+    @Test
     @DisplayName("재알림 — 체크를 부탁하는 말로 안내한다(안 드셨다고 단정하지 않는다)")
     void 재알림_문구() {
         when(planner.claimRetryReminders()).thenReturn(List.of(target(MedicationReminderLog.ATTEMPT_RETRY)));

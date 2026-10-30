@@ -1,7 +1,6 @@
 package kr.silverbridge.main.domain.medication.service;
 
 import kr.silverbridge.main.domain.medication.entity.MedicationReminderLog;
-import kr.silverbridge.main.domain.medication.entity.MedicationTimeSlot;
 import kr.silverbridge.main.domain.notification.channel.NotificationContent;
 import kr.silverbridge.main.domain.notification.channel.WardNotificationText;
 import kr.silverbridge.main.domain.notification.dispatch.NotificationDispatcher;
@@ -52,7 +51,7 @@ public class MedicationReminderService {
     /** @return 실제로 나간 알림 수(같은 시각의 약 묶음 하나 = 1건) */
     private int send(List<MedicationReminderTarget> targets) {
         Map<GroupKey, List<MedicationReminderTarget>> groups = targets.stream().collect(Collectors.groupingBy(
-                target -> new GroupKey(target.wardId(), target.doseDate(), target.timeSlot(), target.doseTime(), target.attempt()),
+                target -> new GroupKey(target.wardId(), target.doseDate(), target.doseTime(), target.attempt()),
                 LinkedHashMap::new, Collectors.toList()));
         int sent = 0;
         for (List<MedicationReminderTarget> group : groups.values()) {
@@ -71,7 +70,11 @@ public class MedicationReminderService {
         return sent;
     }
 
-    private record GroupKey(String wardId, LocalDate doseDate, MedicationTimeSlot timeSlot, LocalTime doseTime, int attempt) {
+    /**
+     * 묶음 키에 시간대는 넣지 않는다(2026-10-30) - 문구에 시간대 이름이 없으니(2026-10-27) 같은 시각이면 한 알림으로 충분하다.
+     * 시간대를 넣으면 시간대와 시각이 어긋나 저장된 옛 약("점심 01:40")이 같은 시각의 다른 약과 갈라져 같은 분에 두 건이 나갔다.
+     */
+    private record GroupKey(String wardId, LocalDate doseDate, LocalTime doseTime, int attempt) {
     }
 
     /**

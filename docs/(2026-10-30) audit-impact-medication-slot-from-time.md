@@ -56,3 +56,12 @@ ssh gosky 'docker exec dmu-dev-db sh -c "psql -U \$POSTGRES_USER -d \$POSTGRES_D
 ## 종합 판정
 
 **PASS(조건부)** - 새로 저장되는 약은 모든 경로에서 불변식을 지킨다. M-1(Swagger 설명)은 다음 작업에서 고치고, L-1은 옛 행 개수를 본 뒤 결정한다.
+
+## 반영 (2026-10-30, 같은 날)
+
+| ID | 반영 |
+|---|---|
+| M-1 | 등록·수정 `@Operation` 설명에 규칙 추가, `MedicationSlotFromTimeApiDocTest`로 고정 |
+| L-1 | 알림 묶음 키에서 시간대를 뺐다(`MedicationReminderService.GroupKey`) - 옛 어긋난 약이 남아도 같은 시각은 한 건. 개수 확인·보정 마이그레이션은 필요 없어졌다 |
+| L-2 | 정책 문서 예시를 현재 문구("약 드실 시간이에요.")로 |
+| L-3·L-4 | FE PR에서 반영(경계값 테스트, 입력 칸 복용량 표기 통일) |
