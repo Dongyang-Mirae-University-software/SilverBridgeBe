@@ -64,6 +64,11 @@ public final class TokenInvalidation {
         public CorruptValueException(String reason) {
             super(reason, null, false, false);
         }
+
+        /** 손상 종류 고정 코드(non-numeric·negative·future). 저장된 값 원문은 담지 않는다 - 로그에는 이것만 남긴다. */
+        public String reason() {
+            return getMessage();
+        }
     }
 
     // iat(epoch ms, 초 단위로 절삭된 값)가 무효화 초보다 앞선 초면 무효. 같은 초는 허용한다.

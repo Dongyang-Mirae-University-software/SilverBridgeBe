@@ -391,7 +391,7 @@ public class AdminUserService {
 
     /**
      * LIKE 메타문자 이스케이프 + 소문자화. JPQL의 {@code escape '\'} 절과 짝을 이룬다.
-     * 소문자화는 이메일이 대소문자 섞여 저장되기 때문이다(가입 시 정규화하지 않는다).
+     * 소문자화는 이름 검색도 대소문자를 가리지 않게 하려는 것이다(이메일은 V55부터 소문자로 저장된다).
      */
     private String normalizeKeyword(String keyword) {
         if (!StringUtils.hasText(keyword)) {

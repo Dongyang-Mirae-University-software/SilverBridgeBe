@@ -46,8 +46,8 @@ public class AnomalyReviewReminderService {
             } catch (RuntimeException e) {
                 // 발송 기록을 이미 선점했으므로 재시도하지 않는다(중복 발송 방지 우선).
                 // 이 회차를 놓쳐도 하루 1회 요약이 두 번째 기회다.
-                log.error("[ANOMALY-REVIEW] 재촉 발송 실패 guardianId={}, incidentId={}",
-                        target.guardianId(), target.incidentId(), e);
+                log.error("[ANOMALY-REVIEW] 재촉 발송 실패 guardianId={}, incidentId={}, error={}",
+                        target.guardianId(), target.incidentId(), e.getClass().getSimpleName());
             }
         }
         return sent;
@@ -63,7 +63,7 @@ public class AnomalyReviewReminderService {
                         target.guardianId(), NotificationType.ANOMALY_REVIEW_REQUIRED, summaryContent(target));
                 sent++;
             } catch (RuntimeException e) {
-                log.error("[ANOMALY-REVIEW] 미응답 요약 발송 실패 guardianId={}", target.guardianId(), e);
+                log.error("[ANOMALY-REVIEW] 미응답 요약 발송 실패 guardianId={}, error={}", target.guardianId(), e.getClass().getSimpleName());
             }
         }
         return sent;
@@ -81,8 +81,8 @@ public class AnomalyReviewReminderService {
                 sent++;
             } catch (RuntimeException e) {
                 // 선점했으므로 재시도하지 않는다. 안내를 놓쳐도 응답 API와 이력 화면의 CONFLICTED 표시는 그대로다.
-                log.error("[ANOMALY-REVIEW] 동수 재확인 안내 발송 실패 guardianId={}, incidentId={}",
-                        target.guardianId(), target.incidentId(), e);
+                log.error("[ANOMALY-REVIEW] 동수 재확인 안내 발송 실패 guardianId={}, incidentId={}, error={}",
+                        target.guardianId(), target.incidentId(), e.getClass().getSimpleName());
             }
         }
         return sent;

@@ -50,7 +50,13 @@ class LogRawExceptionGuardTest {
             "domain/admin/client/AiServerHealthClient.java",
             "domain/hospital/client/ReservationAdminClient.java",
             "domain/admin/service/AdminHospitalService.java",
-            "global/exception/GlobalExceptionHandler.java");
+            "global/exception/GlobalExceptionHandler.java",
+            // 2026-10 전체 점검 M-3·L-2
+            "global/jwt/JwtTokenProvider.java",
+            "global/jwt/JwtAuthenticationFilter.java",
+            "global/websocket/JwtHandshakeInterceptor.java",
+            "domain/anomaly/service/AnomalyEventCooldown.java",
+            "domain/anomaly/service/AnomalyReviewReminderService.java");
 
     @Test
     void guarded_files_do_not_log_exception_messages() throws IOException {
@@ -64,6 +70,13 @@ class LogRawExceptionGuardTest {
         assertThat(violations)
                 .as("예외 메시지(getMessage)를 로그에 남기는 파일 - 클래스명·고정 코드만 남길 것")
                 .isEmpty();
+    }
+
+    @Test
+    void anomaly_review_reminder_does_not_log_exception_object() throws IOException {
+        String source = Files.readString(Path.of(BASE + "domain/anomaly/service/AnomalyReviewReminderService.java"));
+        // dispatch 경로라 예외 메시지에 수신처·본문이 섞일 수 있다 - 스택째 남기지 않는다(2026-10 점검 M-3).
+        assertThat(source).doesNotContain(", e);");
     }
 
     @Test
