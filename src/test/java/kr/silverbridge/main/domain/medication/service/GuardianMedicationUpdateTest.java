@@ -129,6 +129,61 @@ class GuardianMedicationUpdateTest {
         verify(reminderLogRepository, never()).deleteByMedicationIdAndDoseDate(anyLong(), any());
     }
 
+    // ─── 시간대는 시각으로 (2026-10-30, "점심 01:40" 방지) ─────────────────
+
+    @Test
+    @DisplayName("시간대와 시각이 어긋나게 오면 시각 기준으로 시간대를 정한다 - 점심+01:40은 취침 전으로 저장")
+    void 어긋난_시간대_시각_기준() {
+        Medication medication = givenConnectedMedication();
+
+        guardianMedicationService.update(GUARDIAN_ID, 1L,
+                new MedicationUpdateRequest(null, MedicationTimeSlot.LUNCH, LocalTime.of(1, 40), null, null));
+
+        assertThat(medication.getTimeSlot()).isEqualTo(MedicationTimeSlot.BEDTIME);
+        assertThat(medication.getDoseTime()).isEqualTo(LocalTime.of(1, 40));
+    }
+
+    @Test
+    @DisplayName("시각만 바꿔도 시간대가 따라간다 - 아침 약을 20:30으로 고치면 저녁")
+    void 시각만_변경_시간대_따라감() {
+        Medication medication = givenConnectedMedication();
+
+        guardianMedicationService.update(GUARDIAN_ID, 1L,
+                new MedicationUpdateRequest(null, null, LocalTime.of(20, 30), null, null));
+
+        assertThat(medication.getTimeSlot()).isEqualTo(MedicationTimeSlot.DINNER);
+        assertThat(medication.getDoseTime()).isEqualTo(LocalTime.of(20, 30));
+    }
+
+    @Test
+    @DisplayName("이름·복용량·메모만 고치면 이미 어긋난 옛 약의 시간대도 건드리지 않는다")
+    void 이름만_수정_옛_시간대_유지() {
+        Medication medication = givenConnectedMedication();
+        ReflectionTestUtils.setField(medication, "timeSlot", MedicationTimeSlot.LUNCH);
+        ReflectionTestUtils.setField(medication, "doseTime", LocalTime.of(1, 40));
+
+        guardianMedicationService.update(GUARDIAN_ID, 1L,
+                new MedicationUpdateRequest("감기약", null, null, null, null));
+
+        assertThat(medication.getTimeSlot()).isEqualTo(MedicationTimeSlot.LUNCH);
+        assertThat(medication.getDoseTime()).isEqualTo(LocalTime.of(1, 40));
+    }
+
+    @Test
+    @DisplayName("이미 어긋난 옛 약은 시간대를 다시 보내 저장하면 시각에 맞게 바로잡힌다(시각·발송 기록은 그대로)")
+    void 옛_약_재저장_바로잡힘() {
+        Medication medication = givenConnectedMedication();
+        ReflectionTestUtils.setField(medication, "timeSlot", MedicationTimeSlot.LUNCH);
+        ReflectionTestUtils.setField(medication, "doseTime", LocalTime.of(1, 40));
+
+        guardianMedicationService.update(GUARDIAN_ID, 1L,
+                new MedicationUpdateRequest(null, MedicationTimeSlot.LUNCH, null, null, null));
+
+        assertThat(medication.getTimeSlot()).isEqualTo(MedicationTimeSlot.BEDTIME);
+        assertThat(medication.getDoseTime()).isEqualTo(LocalTime.of(1, 40));
+        verify(reminderLogRepository, never()).deleteByMedicationIdAndDoseDate(anyLong(), any());
+    }
+
     @Test
     @DisplayName("복용 시각이 아직 오지 않은 시각으로 바뀌면 당일 발송 기록을 지워 새 시각으로 다시 알림이 나가게 한다")
     void 시각변경_발송기록_초기화() {

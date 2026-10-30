@@ -116,8 +116,12 @@ public class GuardianMedicationService {
     public MedicationItem create(String guardianId, String wardId, MedicationCreateRequest request) {
         requireActiveConnection(guardianId, wardId, "약 등록");
 
+        // 시각을 주면 시간대는 그 시각으로 정한다(일괄 등록과 같은 규칙) - "점심 01:40"처럼 어긋나면
+        // 화면 시간대 칸 순서와 알림 묶음 문구가 틀어진다(2026-10-30 gosky). 시각이 없으면 시간대 기본 시각이라 늘 맞는다
+        LocalTime doseTime = request.resolveDoseTime();
+        MedicationTimeSlot timeSlot = request.doseTime() != null ? MedicationTimeSlot.fromDoseTime(doseTime) : request.timeSlot();
         Medication medication = medicationRepository.save(newMedication(wardId, guardianId, request.name(),
-                request.timeSlot(), request.resolveDoseTime(), request.resolveDoseAmount(), request.memo()));
+                timeSlot, doseTime, request.resolveDoseAmount(), request.memo()));
 
         log.info("복약 등록: medicationId={}, wardId={}, guardianId={}", medication.getId(), wardId, guardianId);
         // 방금 등록한 약은 오늘 아직 복용 전이다.
@@ -208,6 +212,11 @@ public class GuardianMedicationService {
         LocalTime previousDoseTime = medication.getDoseTime();
         MedicationTimeSlot timeSlot = request.timeSlot() != null ? request.timeSlot() : medication.getTimeSlot();
         LocalTime doseTime = resolveDoseTime(request, medication, timeSlot);
+        // 시간대나 시각을 보냈으면 시간대는 최종 시각으로 다시 정한다 - 둘이 어긋나면 시각이 기준이다(400으로 막지 않는다,
+        // 예전 화면 호환). 이름·복용량·메모만 고치면 시간대를 건드리지 않는다(2026-10-30, 어긋난 옛 약은 이렇게 바로잡힌다)
+        if (request.timeSlot() != null || request.doseTime() != null) {
+            timeSlot = MedicationTimeSlot.fromDoseTime(doseTime);
+        }
 
         medication.update(
                 resolveName(request, medication),

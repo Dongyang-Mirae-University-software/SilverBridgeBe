@@ -188,6 +188,21 @@ class GuardianMedicationServiceTest {
     }
 
     @Test
+    @DisplayName("약 등록 — 시각을 주면 시간대는 그 시각으로 정한다(점심+01:40 → 취침 전, 일괄 등록과 같은 규칙)")
+    void create_시각으로_시간대() {
+        when(connectionService.isActiveConnection(GUARDIAN_ID, WARD_ID)).thenReturn(true);
+        when(medicationRepository.save(any(Medication.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        guardianMedicationService.create(GUARDIAN_ID, WARD_ID,
+                new MedicationCreateRequest("감기약", MedicationTimeSlot.LUNCH, LocalTime.of(1, 40), null, null));
+
+        ArgumentCaptor<Medication> captor = ArgumentCaptor.forClass(Medication.class);
+        verify(medicationRepository).save(captor.capture());
+        assertThat(captor.getValue().getTimeSlot()).isEqualTo(MedicationTimeSlot.BEDTIME);
+        assertThat(captor.getValue().getDoseTime()).isEqualTo(LocalTime.of(1, 40));
+    }
+
+    @Test
     @DisplayName("[MED-G11] 약 등록 — 이름 앞뒤 공백을 지우고, 공백뿐인 메모는 null로 저장한다(수정과 같은 규칙)")
     void create_이름메모_정리() {
         when(connectionService.isActiveConnection(GUARDIAN_ID, WARD_ID)).thenReturn(true);
