@@ -227,6 +227,10 @@ PHASE D. 운영·기술  [스킬: security-audit, concurrency-review]  [모델: 
 - AI 서버 재시작 (스트림 세션이 사라져 카메라 재등록 필요)
 - 비가역 마이그레이션이 든 PR의 머지
 
+**배포는 gosky dev만 (2026-10-30 사용자 지시)**: BE·FE 모두 gosky에서는 **dev 컨테이너만** 반영한다(BE `dmu-dev-api`, FE `silver-bridge-fe-dev-web` - 소스 마운트라 `git pull`로 반영). prod(`dmu-prod-api`·`silver-bridge-fe-prod-web` 등)는 사용자가 따로 지시할 때만 재빌드·재기동한다. 프롬프트에 "prod 재빌드"를 넣지 말 것.
+
+**세션 종료 정리 (2026-10-30, 디스크 장애 후 사용자 지시)**: 모든 실행 프롬프트의 마지막에 아래 "세션 정리" 단계를 넣는다. 이번 작업으로 생긴 것만 지우고, 다른 세션이 쓰는 worktree·파일은 건드리지 않는다. 공용 서버(gosky)에서 `docker system prune`·`volume prune`·`image prune -a`는 금지(다른 프로젝트 데이터·이미지), 빌드 캐시 정리(`docker builder prune`)는 디스크 85% 이상일 때 사용자 확인 후에만.
+
 ```
 PHASE 5. 마무리
 1. 커밋: 빌드·테스트 통과 후 커밋 (한 커밋 = 한 작업, conventional commit "type: 내용") [스킬: git-commit]
@@ -235,12 +239,18 @@ PHASE 5. 마무리
 3. 머지: CI 통과 확인 후 gh pr merge --merge → dev 반영 확인 (마이그레이션·JPQL 변경 PR은 머지 전 vkcs 통합 테스트)
 4. 자동 배포 확인: vkcs-linux CD(cd.yml) 성공 확인 (통합 테스트 단계 포함)
 5. gosky 수동 배포:
-   ssh gosky → cd /home/apps/SilverBridgeSky/SilverBridgeBe && git pull origin dev && docker compose -f docker-compose.dev.yml up -d --build api
+   ssh gosky → cd /home/apps/SilverBridgeSky/SilverBridgeBe && git pull origin dev && docker compose -f docker-compose.dev.yml -f docker-compose.gosky.yml up -d --build api
+   (dev만 - prod는 사용자 지시 없이 건드리지 않는다)
    확인(두 서버 각각): git log --oneline -1 / docker ps / 기동 로그의 AiLiveStreamSubscriber 연결 / 오류 없음
 6. (필요할 때만) 운영 설정 변경 - ⚠️ 실행 전 확인: .env.dev 백업 → 값 추가 → up -d api (restart 아님)
 7. 브랜치 정리: 머지 반영 확인 후 git branch -d <브랜치> / git push origin --delete <브랜치>
 8. worktree 정리: git worktree list → 이번 작업 worktree 를 git worktree remove <경로> → git worktree prune
-9. 최종 보고(한국어): PR 링크·머지 커밋·두 서버 반영 커밋·설정 적용 여부·테스트 결과·PHASE 4 점검 제안
+9. 세션 정리 (이번 작업으로 생긴 것만, 지우기 전 대상 확인):
+   - 로컬: 임시 스크립트·조사 결과 파일(~/, /tmp), 스크린샷·테스트 리포트(build/reports·playwright-report·test-results 중 커밋 대상 아닌 것)
+   - gosky: 이번에 만든 임시 파일(/tmp·홈), 이번 빌드로 생긴 dangling 이미지만 `docker image prune -f`
+     (system/volume prune·image prune -a 금지, builder prune은 디스크 85% 이상 + 사용자 확인 후)
+   - 정리 전·후 디스크(df -h /)를 최종 보고에 한 줄로
+10. 최종 보고(한국어): PR 링크·머지 커밋·두 서버 반영 커밋·설정 적용 여부·테스트 결과·정리 결과·PHASE 4 점검 제안
 금지: dev/main 직접 커밋(코드)·force push·--no-verify, 시크릿·.env 내용 출력
 ```
 
