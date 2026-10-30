@@ -5,8 +5,10 @@ import kr.silverbridge.main.domain.sos.entity.SosTriggerType;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.time.OffsetDateTime;
 import java.util.Collection;
@@ -92,6 +94,15 @@ public interface SosEventRepository extends JpaRepository<SosEvent, Long> {
      *               타임존과 무관하다 - KST 변환이 필요 없다
      */
     long countByWardIdAndCreatedAtGreaterThanEqual(String wardId, OffsetDateTime from);
+
+    /**
+     * 탈퇴로 피보호자가 사라진(ward_id NULL) 익명 이력의 위치 문구를 비운다(2026-10-31 전체 점검 D-2).
+     * 이력(언제·어떤 경로로)은 감사 목적으로 남기되, 집 안 위치 같은 자유 문구는 붙들지 않는다. 반환: 비운 건수.
+     */
+    @Transactional
+    @Modifying
+    @Query("UPDATE SosEvent e SET e.location = NULL WHERE e.wardId IS NULL AND e.location IS NOT NULL")
+    int clearLocationOfWithdrawn();
 
     /**
      * 보호자 대시보드용 - 인가된 피보호자 범위에서 {@code from} 이후 발생한 SOS 건수("이번 달").
