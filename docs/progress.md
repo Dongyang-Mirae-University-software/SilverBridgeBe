@@ -2526,7 +2526,7 @@ AI 챗 집계 점검 L-1에서 남겨 둔 공용 `GlobalExceptionHandler`의 `e.
 - 남은 일: data 전용 켜기(FE SW 배포 후, 운영 `.env` 수정이라 확인 필요), FCM 토큰 누적 정리(별도 세션). 상세 `docs/(2026-10-30) feature-web-push-copy.md`.
 
 ### [2026-10-30] 복약 시간대를 복용 시각으로 정하기 (branch `fix/medication-slot-from-time`, FE `fix/medication-edit-slot-from-time`)
-- 원인: 수정(PATCH)·단건 등록(POST)이 시간대·시각을 따로 받아 "점심 01:40"이 저장됐다 - 보호자 시간대 칸이 뒤집히고 알림 묶음 문구도 틀어짐(gosky 실측).
+- 원인: 수정(PATCH)·단건 등록(POST)이 시간대·시각을 따로 받아 "점심 01:40"이 저장됐다 - 보호자 시간대 칸이 뒤집히고 같은 시각 알림 묶음이 갈릴 수 있음(gosky 실측). 영향 범위 점검 PASS(조건부) - `docs/(2026-10-30) audit-impact-medication-slot-from-time.md`.
 - BE: 수정은 `timeSlot`이나 `doseTime`을 보내면, 등록은 `doseTime`을 보내면 시간대 = `fromDoseTime(최종 시각)`(어긋나면 시각 기준, 400 아님). 이름·복용량·메모만 고치면 시간대 유지. 마이그레이션 없음 - 옛 약은 다음 수정 때 바로잡힘(사용자 결정).
 - FE: 수정 창에서 시각↔시간대 연동, 어긋난 옛 약은 열 때부터 시각 기준 시간대로 표시.
 - 테스트: BE 5건 추가(수정 전 코드 4건 실패 확인), FE 수정 창 3건 추가. 상세 `docs/(2026-10-30) fix-medication-slot-from-time.md`.
