@@ -4,6 +4,17 @@
 
 ---
 
+### [2026-10-30] SOS 이력 연타 묶음·전화받은 보호자 기능 점검 - 조건부 PASS
+
+#401·#402를 템플릿 B로 함께 점검(코드 변경 없음). 독립 검토(Sonnet)의 지적을 코드로 재확인하고 gosky를 읽기 전용으로 확인했다(비로그인 401, api-docs, V64 스키마, 묶음 쿼리 EXPLAIN 0.5ms·123 누름 → 66 묶음).
+
+- 🔴 0 · 🟠 0 · 🟡 1 · 🟢 6. **M-1 다른 보호자의 사용자 ID가 이력 응답에 나간다**(칩에는 이름만 필요) - 응답에서 ID 제외 권장.
+- 🟢 L-1 이력 IDOR 로그 wardId 원문(기존 코드) · L-2 요청당 윈도 쿼리 3회 · L-3 Swagger 응답 설명 · L-4 null 방어 · L-5 끊긴 보호자 묶음(수용) · L-6 테스트 빈틈.
+- 에이전트 지적 중 호출 순서·이벤트 구조 가드 없음은 기존 테스트로 반박, 대시보드 이름 없음은 결정 사항.
+- 산출물: `docs/(2026-10-30) audit-sos-history-group-called-guardian.md`.
+
+---
+
 ### [2026-10-30] SOS 보호자 연락 - 전화받은 보호자 기록·이름 칩 (branch `feature/sos-called-guardian`, V64)
 
 보호자 이력 시안의 보호자 연락 줄 이름 칩을 위해 `POST /api/ward/sos`에 선택 `calledGuardianId`를 받아 `sos_event.called_guardian_id`(V64, FK SET NULL, 가역)에 저장한다.
