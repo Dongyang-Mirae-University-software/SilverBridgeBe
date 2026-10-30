@@ -123,7 +123,8 @@ public class AnomalyReviewReminderPlanner {
         for (AnomalyIncident incident : candidates) {
             for (String guardianId : guardiansByWard.getOrDefault(incident.getWardId(), List.of())) {
                 if (answered.contains(key(incident.getId(), guardianId))
-                        || alreadyReminded.contains(key(incident.getId(), guardianId))) {
+                        || alreadyReminded.contains(key(incident.getId(), guardianId))
+                        || !visibleTo(guardianId, incident)) {
                     continue;
                 }
                 claims.add(new Claim(guardianId, incident));
@@ -200,7 +201,8 @@ public class AnomalyReviewReminderPlanner {
             if (reminder.getSentAt().isAfter(remindedBy)) {
                 continue;
             }
-            if (!guardiansByWard.getOrDefault(incident.getWardId(), List.of()).contains(reminder.getGuardianId())) {
+            if (!guardiansByWard.getOrDefault(incident.getWardId(), List.of()).contains(reminder.getGuardianId())
+                    || !visibleTo(reminder.getGuardianId(), incident)) {
                 continue;
             }
             pendingCounts.merge(reminder.getGuardianId(), 1, Integer::sum);
@@ -288,7 +290,8 @@ public class AnomalyReviewReminderPlanner {
         for (AnomalyIncident incident : candidates) {
             List<String> active = guardiansByWard.getOrDefault(incident.getWardId(), List.of());
             for (String guardianId : respondentsByIncident.getOrDefault(incident.getId(), List.of())) {
-                if (!active.contains(guardianId) || handled.contains(key(incident.getId(), guardianId))) {
+                if (!active.contains(guardianId) || handled.contains(key(incident.getId(), guardianId))
+                        || !visibleTo(guardianId, incident)) {
                     continue;
                 }
                 claims.add(new Claim(guardianId, incident));
@@ -400,6 +403,12 @@ public class AnomalyReviewReminderPlanner {
     }
 
     /** 수신 설정을 <b>명시적으로 끈</b> 보호자. 행이 없으면 기본값 ON이라 여기 포함되지 않는다. */
+    // 보호자 화면에 보이지 않는 상황(지금 연결이 맺어지기 전의 상황)은 재촉·요약·동수 안내도 하지 않는다 - 볼 수도 답할 수도
+    // 없는 상황을 물으면 안 된다(2026-10-31 전체 점검 D-1). 후보는 마감 3일 안의 미응답 상황이라 건수가 적다.
+    private boolean visibleTo(String guardianId, AnomalyIncident incident) {
+        return connectionService.isVisibleSinceConnection(guardianId, incident.getWardId(), incident.getLastDetectedAt());
+    }
+
     private Set<String> disabledGuardians(Set<String> guardianIds) {
         return settingRepository.findByGuardianIdIn(guardianIds).stream()
                 .filter(setting -> !setting.isReviewReminderEnabled())
