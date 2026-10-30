@@ -137,6 +137,7 @@ public enum ErrorCode {
     MEDICATION_NOT_OWNED(HttpStatus.FORBIDDEN, "본인의 약만 체크할 수 있습니다."),
     // 약 봉투 OCR (2026-10-22) - AI 오류 문구는 내리지 않고 고정 문구만 쓴다
     MEDICATION_OCR_IMAGE_TOO_LARGE(HttpStatus.CONTENT_TOO_LARGE, "사진 크기는 8MB를 넘을 수 없습니다."),
+    CHAT_REQUEST_TOO_LARGE(HttpStatus.CONTENT_TOO_LARGE, "보낼 수 있는 대화 내용보다 큽니다. 내용을 줄여 다시 보내 주세요."),
     MEDICATION_OCR_INVALID_IMAGE(HttpStatus.BAD_REQUEST, "JPG, PNG, WebP 사진만 올릴 수 있습니다."),
     MEDICATION_OCR_LIMIT_EXCEEDED(HttpStatus.TOO_MANY_REQUESTS, "이전 사진을 읽는 중입니다. 잠시 후 다시 시도해주세요."),
     MEDICATION_OCR_UNAVAILABLE(HttpStatus.SERVICE_UNAVAILABLE, "약 봉투 읽기를 지금 사용할 수 없습니다. 잠시 후 다시 시도해주세요."),

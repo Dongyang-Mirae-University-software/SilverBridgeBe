@@ -365,3 +365,4 @@ chat:
     per-minute: ${CHAT_RELAY_PER_MINUTE:10}
     per-hour: ${CHAT_RELAY_PER_HOUR:120}
     max-message-chars: ${CHAT_RELAY_MAX_MESSAGE_CHARS:2000}
+    max-request-bytes: ${CHAT_RELAY_MAX_REQUEST_BYTES:524288}

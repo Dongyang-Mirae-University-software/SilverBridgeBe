@@ -33,6 +33,11 @@ public class ChatRelayProperties {
     private int perMinute = 10;
     private int perHour = 120;
     private int maxMessageChars = 2000;
+    /**
+     * 챗 전송 요청 본문 최대 크기(파싱 전, 2026-10 전체 점검 M-4). 정상 최대치는 기록 24개 × 4000자 + 메시지 2000자 +
+     * context 8KB라 한글 UTF-8로 약 300KB다. 넘으면 파싱·속도 제한 전에 413으로 끊는다.
+     */
+    private int maxRequestBytes = 512 * 1024;
     /** AI 응답 본문 최대 크기(전송). 기록 목록은 {@link #maxLogsBytes}. */
     private int maxReplyBytes = 2 * 1024 * 1024;
     private int maxLogsBytes = 10 * 1024 * 1024;
