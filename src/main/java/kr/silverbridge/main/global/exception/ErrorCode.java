@@ -62,6 +62,9 @@ public enum ErrorCode {
     CONNECTION_NOT_AUTHORIZED(HttpStatus.FORBIDDEN, "해당 연결에 대한 권한이 없습니다."),
     CONNECTION_TARGET_NOT_ACTIVE(HttpStatus.BAD_REQUEST,
             "이용 중인 회원만 연결할 수 있습니다. 이용 제한·탈퇴 처리 중인 계정은 연결할 수 없습니다."),
+    // 피보호자가 수락할 때 요청한 보호자가 정지·탈퇴 진행 상태 - 수신자(피보호자) 기준 문구(2026-10 전체 점검 M-6)
+    CONNECTION_REQUESTER_NOT_ACTIVE(HttpStatus.BAD_REQUEST,
+            "요청을 보낸 보호자가 지금은 연결할 수 없는 상태입니다. 보호자에게 다시 요청해 달라고 해 주세요."),
     CANNOT_CONNECT_SELF(HttpStatus.BAD_REQUEST, "자기 자신과 연결할 수 없습니다."),
     // 같은 피보호자에게 요청·취소를 반복해 알림을 계속 보내는 것을 막는다(CONN-G04) - retryAfterSeconds 동봉
     CONNECTION_REQUEST_COOLDOWN(HttpStatus.TOO_MANY_REQUESTS,
