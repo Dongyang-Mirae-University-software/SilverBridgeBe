@@ -179,6 +179,36 @@ class CameraStreamSlotsTest {
     }
 
     @Test
+    @DisplayName("AI 연결을 붙이기 전에 같은 카메라 다시 열기로 대체되면, 뒤늦게 붙인 연결은 즉시 닫힌다 (2026-10 점검 H-1)")
+    void 대체후_attach() {
+        CameraStreamSlots slots = slots(20, 1);
+        CameraStreamSlots.Slot previous = slots.acquire("G1", "living");
+        slots.acquire("G1", "living");   // 이전 슬롯은 연결이 아직 없어 자리만 반납된다
+        AtomicInteger closed = new AtomicInteger();
+
+        previous.attach(closed::incrementAndGet);
+
+        assertThat(closed).hasValue(1);
+        assertThat(previous.isReleased()).isTrue();
+        assertThat(slots.activeCount()).isEqualTo(1);
+    }
+
+    @Test
+    @DisplayName("대체되지 않은 자리에 붙인 연결은 닫지 않는다")
+    void 정상_attach() {
+        CameraStreamSlots slots = slots(20, 2);
+        CameraStreamSlots.Slot slot = slots.acquire("G1", "living");
+        AtomicInteger closed = new AtomicInteger();
+
+        slot.attach(closed::incrementAndGet);
+
+        assertThat(closed).hasValue(0);
+        assertThat(slot.isReleased()).isFalse();
+        slot.close();
+        assertThat(closed).hasValue(1);
+    }
+
+    @Test
     @DisplayName("대체된 이전 중계가 나중에 스스로 닫혀도 자리를 두 번 돌려주지 않는다")
     void 대체후_이전슬롯_닫기() {
         CameraStreamSlots slots = slots(20, 1);
