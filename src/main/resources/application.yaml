@@ -211,6 +211,8 @@ sos:
   # 같은 피보호자의 SOS 알림 최소 간격(초). 목적은 보호자 폰의 알림 폭주 방지이며 서버 부하 방어가 아니다.
   # 이력은 쿨다운과 무관하게 전부 저장된다. 1~300 밖의 값은 기본 10으로 대체된다.
   notify-cooldown-seconds: ${SOS_NOTIFY_COOLDOWN_SECONDS:10}
+  # 보호자 이력 연타 묶음 간격(초, ?group=true). 앞 누름과 이 간격 이내면 같은 묶음. 표시 전용(알림 무관), 1~3600 밖은 60.
+  history-group-gap-seconds: ${SOS_HISTORY_GROUP_GAP_SECONDS:60}
 
 anomaly:
   enabled: ${ANOMALY_ENABLED:true}

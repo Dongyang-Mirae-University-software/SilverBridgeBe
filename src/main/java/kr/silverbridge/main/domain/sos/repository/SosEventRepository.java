@@ -73,6 +73,98 @@ public interface SosEventRepository extends JpaRepository<SosEvent, Long> {
      */
     long countByWardIdInAndCreatedAtGreaterThanEqual(Collection<String> wardIds, OffsetDateTime from);
 
+    /**
+     * 연타 묶음 공통 CTE(2026-10-30). 같은 피보호자·같은 경로에서 <b>앞 누름과의 간격</b>이 {@code :gapSeconds} 이하면
+     * 같은 묶음이다 - 시계 기준 칸이 아니라 연쇄라 30초 간격으로 5분 동안 누르면 한 묶음이 된다.
+     *
+     * <p>{@code marked.is_start}는 묶음의 첫 누름이면 1이고, {@code numbered.grp}는 그 누적합(묶음 번호)이다. 묶음을
+     * DB 안에서 만드는 이유는 페이지 경계다 - 페이지로 자른 뒤 자바에서 묶으면 경계에 걸친 묶음이 두 칸으로 갈린다.</p>
+     *
+     * <p>{@code :triggerType}은 빈 문자열이면 전체다(null 바인딩의 타입 추론 문제를 피한다). 경로로 파티션을 나누므로
+     * 필터를 걸어도 묶음은 전체 조회 때의 그 경로 묶음과 같다. {@code ward_id IN}이라 탈퇴로 {@code ward_id}가 NULL인
+     * 익명 이력은 애초에 대상이 아니다.</p>
+     */
+    String PRESS_GROUP_CTE = """
+            WITH marked AS (
+                SELECT id, ward_id, trigger_type, created_at,
+                       CASE WHEN LAG(created_at) OVER w IS NULL
+                              OR created_at - LAG(created_at) OVER w > :gapSeconds * INTERVAL '1 second'
+                            THEN 1 ELSE 0 END AS is_start
+                FROM sos_event
+                WHERE ward_id IN (:wardIds)
+                  AND (:triggerType = '' OR trigger_type = :triggerType)
+                WINDOW w AS (PARTITION BY ward_id, trigger_type ORDER BY created_at, id)
+            ), numbered AS (
+                SELECT id, ward_id, trigger_type, created_at,
+                       SUM(is_start) OVER (PARTITION BY ward_id, trigger_type ORDER BY created_at, id) AS grp
+                FROM marked
+            )
+            """;
+
+    /**
+     * 보호자 이력 연타 묶음 한 페이지 - 묶음의 마지막 누름 최신순(2026-10-30).
+     *
+     * <p>시각·위치는 프로젝션으로 받지 않고 묶음의 최신·최초 이력 ID만 돌려준다. 호출부가 엔티티로 다시 읽어 기존
+     * 항목과 같은 매핑을 쓴다.</p>
+     *
+     * @param wardIds     <b>인가된(ACTIVE 연결) 목록만</b> 넘겨야 한다(IDOR 방지)
+     * @param triggerType 경로 이름. 빈 문자열이면 전체
+     * @param gapSeconds  같은 묶음으로 볼 앞 누름과의 최대 간격(초)
+     */
+    @Query(value = PRESS_GROUP_CTE + """
+            SELECT (array_agg(id ORDER BY created_at DESC, id DESC))[1] AS "latestId",
+                   (array_agg(id ORDER BY created_at ASC, id ASC))[1] AS "firstId",
+                   COUNT(*) AS "pressCount"
+            FROM numbered
+            GROUP BY ward_id, trigger_type, grp
+            ORDER BY MAX(created_at) DESC, 1 DESC
+            LIMIT :limit OFFSET :offset
+            """, nativeQuery = true)
+    List<PressGroupRow> findPressGroups(@Param("wardIds") Collection<String> wardIds,
+                                        @Param("triggerType") String triggerType,
+                                        @Param("gapSeconds") int gapSeconds,
+                                        @Param("limit") int limit,
+                                        @Param("offset") long offset);
+
+    /** {@link #findPressGroups}와 같은 조건의 묶음 수 - 묶음 모드의 {@code totalElements}. */
+    @Query(value = PRESS_GROUP_CTE + """
+            SELECT COALESCE(SUM(is_start), 0) FROM marked
+            """, nativeQuery = true)
+    long countPressGroups(@Param("wardIds") Collection<String> wardIds,
+                          @Param("triggerType") String triggerType,
+                          @Param("gapSeconds") int gapSeconds);
+
+    /**
+     * 경로별 묶음 수 - 묶음 모드의 탭 숫자. 필터·페이지와 무관하게 조회 범위 전체를 센다({@link #countByTriggerType}의
+     * 묶음 버전).
+     *
+     * @param wardIds <b>인가된(ACTIVE 연결) 목록만</b> 넘겨야 한다(IDOR 방지)
+     */
+    @Query(value = PRESS_GROUP_CTE + """
+            SELECT trigger_type AS "triggerType", SUM(is_start) AS "total"
+            FROM marked
+            GROUP BY trigger_type
+            """, nativeQuery = true)
+    List<PressGroupCount> countPressGroupsByTriggerType(@Param("wardIds") Collection<String> wardIds,
+                                                        @Param("triggerType") String triggerType,
+                                                        @Param("gapSeconds") int gapSeconds);
+
+    /** 연타 묶음 한 행 - 묶음의 최신·최초 이력 ID와 누름 수. */
+    interface PressGroupRow {
+        Long getLatestId();
+
+        Long getFirstId();
+
+        Long getPressCount();
+    }
+
+    /** 경로별 묶음 수 프로젝션(네이티브라 경로는 문자열로 받는다). */
+    interface PressGroupCount {
+        String getTriggerType();
+
+        Long getTotal();
+    }
+
     /** 경로별 건수 프로젝션. */
     interface TriggerTypeCount {
         SosTriggerType getTriggerType();

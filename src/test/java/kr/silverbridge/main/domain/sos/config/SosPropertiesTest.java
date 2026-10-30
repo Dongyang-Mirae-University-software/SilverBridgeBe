@@ -66,4 +66,23 @@ class SosPropertiesTest {
 
         assertThat(props.effectiveNotifyCooldownSeconds()).isEqualTo(value);
     }
+
+    @Test
+    @DisplayName("이력 묶음 간격 기본값은 60초이고 sos.history-group-gap-seconds 키가 바인딩된다")
+    void 이력묶음간격_기본값과_바인딩() {
+        assertThat(new SosProperties().effectiveHistoryGroupGapSeconds()).isEqualTo(60);
+
+        Binder binder = new Binder(new MapConfigurationPropertySource(Map.of("sos.history-group-gap-seconds", "90")));
+        assertThat(binder.bind("sos", SosProperties.class).get().effectiveHistoryGroupGapSeconds()).isEqualTo(90);
+    }
+
+    @ParameterizedTest
+    @ValueSource(ints = {Integer.MIN_VALUE, -1, 0, 3601})
+    @DisplayName("이력 묶음 간격이 범위(1~3600) 밖이면 기본 60초로 대체")
+    void 이력묶음간격_범위밖_기본값(int value) {
+        SosProperties props = new SosProperties();
+        props.setHistoryGroupGapSeconds(value);
+
+        assertThat(props.effectiveHistoryGroupGapSeconds()).isEqualTo(60);
+    }
 }

@@ -46,6 +46,16 @@ public class GuardianSosController {
                     - SOS_BUTTON(긴급 SOS 버튼) · GUARDIAN_CALL(보호자에게 직접 전화) 중 하나만 조회
                     - 생략: 전체 경로
 
+                    [group 파라미터] (선택, 기본 false)
+                    - true: 연타를 한 칸으로 묶어 반환합니다("2번 연달아 누름").
+                      같은 피보호자·같은 발생 경로의 다음 누름이 "앞 누름"과 1분(60초) 이내면 같은 묶음입니다.
+                      시계 기준 칸이 아니라 연쇄라, 30초 간격으로 5분 동안 누르면 한 묶음입니다. 정확히 60초 간격도 같은 묶음입니다.
+                    - 묶음 항목의 sosEventId·triggeredAt·location은 묶음의 최신 건 값이고,
+                      pressCount(누름 수)·firstTriggeredAt(첫 누름)·lastTriggeredAt(마지막 누름 = triggeredAt)이 더해집니다.
+                    - page·totalElements·totalPages와 counts(all·sosButton·guardianCall)는 모두 "묶음 수"입니다.
+                    - false·생략: 지금과 같이 누를 때마다 한 줄(위 세 필드는 응답에 없음), counts는 누름 수입니다.
+                    - 묶음은 표시 전용입니다 - 푸시 문구의 "최근 10분 내 N번째"와 기준이 다릅니다.
+
                     [응답] data: SosHistoryPage
                     - content[].sosEventId / wardId / wardName / triggeredAt / location
                     - content[].triggerType: SOS_BUTTON(긴급 SOS 버튼) · GUARDIAN_CALL(보호자에게 직접 전화)
@@ -69,9 +79,13 @@ public class GuardianSosController {
             @AuthenticationPrincipal String guardianId,
             @Parameter(description = "특정 피보호자만 조회 (생략 시 연결된 피보호자 전원)") @RequestParam(required = false) String wardId,
             @Parameter(description = "발생 경로 필터 (생략 시 전체)") @RequestParam(required = false) SosTriggerType triggerType,
+            @Parameter(description = "true면 연타를 묶음 단위로 반환 (앞 누름과 1분 이내·같은 경로, 기본 false)")
+            @RequestParam(defaultValue = "false") boolean group,
             @Parameter(description = "페이지 번호 (0-based)") @RequestParam(defaultValue = "0") int page,
             @Parameter(description = "페이지 크기 (최대 50)") @RequestParam(defaultValue = "20") int size) {
-        return ResponseEntity.ok(ApiResponse.ok(
-                guardianSosService.getHistory(guardianId, wardId, triggerType, page, size)));
+        SosHistoryPage history = group
+                ? guardianSosService.getGroupedHistory(guardianId, wardId, triggerType, page, size)
+                : guardianSosService.getHistory(guardianId, wardId, triggerType, page, size);
+        return ResponseEntity.ok(ApiResponse.ok(history));
     }
 }

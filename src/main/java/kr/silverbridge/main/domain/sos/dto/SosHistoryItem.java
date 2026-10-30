@@ -1,5 +1,6 @@
 package kr.silverbridge.main.domain.sos.dto;
 
+import com.fasterxml.jackson.annotation.JsonInclude;
 import io.swagger.v3.oas.annotations.media.Schema;
 import kr.silverbridge.main.domain.sos.entity.SosEvent;
 import kr.silverbridge.main.domain.sos.entity.SosTriggerType;
@@ -21,6 +22,12 @@ import java.time.OffsetDateTime;
  * @param triggeredAt SOS 발생 시각
  * @param location    발생 위치 자유 문구. 프론트가 보내지 않았으면 null(위치 미상 → 화면에서 위치 줄 생략)
  * @param triggerType 발생 경로 - 긴급 SOS 버튼(SOS_BUTTON) / 보호자에게 직접 전화(GUARDIAN_CALL)
+ * @param pressCount       연타 묶음의 누름 수. 묶음 조회({@code group=true})에서만 채우고 그 밖에는 null(JSON에서 생략)
+ * @param firstTriggeredAt 묶음의 첫 누름 시각. 묶음 조회에서만
+ * @param lastTriggeredAt  묶음의 마지막 누름 시각({@code triggeredAt}과 같다). 묶음 조회에서만
+ *
+ * <p>묶음 항목의 {@code sosEventId}·{@code triggeredAt}·{@code location}은 <b>묶음의 최신 건</b> 값이다
+ * (2026-10-30). 세 칸은 기존 응답·대시보드 응답을 바꾸지 않도록 null이면 내리지 않는다.</p>
  */
 @Schema(description = "보호자용 SOS 이력 항목")
 public record SosHistoryItem(
@@ -42,7 +49,19 @@ public record SosHistoryItem(
 
         @Schema(description = "발생 경로", example = "SOS_BUTTON",
                 allowableValues = {"SOS_BUTTON", "GUARDIAN_CALL"})
-        SosTriggerType triggerType
+        SosTriggerType triggerType,
+
+        @JsonInclude(JsonInclude.Include.NON_NULL)
+        @Schema(description = "연타 묶음의 누름 수 (group=true일 때만)", example = "2")
+        Long pressCount,
+
+        @JsonInclude(JsonInclude.Include.NON_NULL)
+        @Schema(description = "묶음의 첫 누름 시각 (group=true일 때만)")
+        OffsetDateTime firstTriggeredAt,
+
+        @JsonInclude(JsonInclude.Include.NON_NULL)
+        @Schema(description = "묶음의 마지막 누름 시각 = triggeredAt (group=true일 때만)")
+        OffsetDateTime lastTriggeredAt
 ) {
     public static SosHistoryItem of(SosEvent event, String wardName) {
         return new SosHistoryItem(
@@ -51,7 +70,31 @@ public record SosHistoryItem(
                 wardName,
                 event.getCreatedAt(),
                 event.getLocation(),
-                event.getTriggerType()
+                event.getTriggerType(),
+                null,
+                null,
+                null
+        );
+    }
+
+    /**
+     * 연타 묶음 한 칸. 표시 값은 최신 건({@code latest})을 쓰고 첫 누름 시각만 {@code first}에서 가져온다.
+     *
+     * @param latest     묶음의 마지막 누름
+     * @param first      묶음의 첫 누름 (1번 누름이면 {@code latest}와 같다)
+     * @param pressCount 묶음의 누름 수
+     */
+    public static SosHistoryItem ofGroup(SosEvent latest, SosEvent first, long pressCount, String wardName) {
+        return new SosHistoryItem(
+                latest.getId(),
+                latest.getWardId(),
+                wardName,
+                latest.getCreatedAt(),
+                latest.getLocation(),
+                latest.getTriggerType(),
+                pressCount,
+                first.getCreatedAt(),
+                latest.getCreatedAt()
         );
     }
 }

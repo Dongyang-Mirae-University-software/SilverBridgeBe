@@ -1,6 +1,7 @@
 package kr.silverbridge.main.domain.sos.service;
 
 import kr.silverbridge.main.domain.connection.service.ConnectionService;
+import kr.silverbridge.main.domain.sos.config.SosProperties;
 import kr.silverbridge.main.domain.sos.dto.SosHistoryItem;
 import kr.silverbridge.main.domain.sos.dto.SosHistoryPage;
 import kr.silverbridge.main.domain.sos.entity.SosEvent;
@@ -17,6 +18,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
+import org.mockito.Spy;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
@@ -48,6 +50,7 @@ class GuardianSosServiceTest {
     @Mock private SosEventRepository sosEventRepository;
     @Mock private ConnectionService connectionService;
     @Mock private UserRepository userRepository;
+    @Spy private SosProperties sosProperties = new SosProperties();
 
     @InjectMocks private GuardianSosService guardianSosService;
 
@@ -314,6 +317,138 @@ class GuardianSosServiceTest {
         assertThat(result.latest().wardId()).isNull();
         assertThat(result.latest().wardName()).isNull();
         verifyNoInteractions(userRepository);
+    }
+
+    @Test
+    @DisplayName("묶지 않는 조회는 묶음 칸(pressCount·first/lastTriggeredAt)을 채우지 않는다 - 기존 응답 회귀")
+    void getHistory_묶음칸_없음() {
+        when(connectionService.getActiveWardIds(GUARDIAN_ID)).thenReturn(List.of(WARD_ID));
+        when(sosEventRepository.findByWardIdInOrderByCreatedAtDesc(any(), any(Pageable.class)))
+                .thenReturn(new PageImpl<>(List.of(sosEvent(1L, WARD_ID, OffsetDateTime.now())), PageRequest.of(0, 20), 1));
+        when(sosEventRepository.countByTriggerType(any())).thenReturn(List.of(count(SosTriggerType.SOS_BUTTON, 1)));
+
+        SosHistoryItem item = guardianSosService.getHistory(GUARDIAN_ID, null, null, 0, 20).content().get(0);
+
+        assertThat(item.pressCount()).isNull();
+        assertThat(item.firstTriggeredAt()).isNull();
+        assertThat(item.lastTriggeredAt()).isNull();
+        verify(sosEventRepository, never()).findPressGroups(any(), any(), anyInt(), anyInt(), anyLong());
+    }
+
+    @Test
+    @DisplayName("묶음 조회: 인가 목록·간격 60초·전체 경로('')로 묻고, 최신 건 값 + 누름 수·첫/마지막 시각으로 매핑한다")
+    void getGroupedHistory_묶음매핑() {
+        OffsetDateTime now = OffsetDateTime.now();
+        SosEvent first = sosEvent(1L, WARD_ID, now.minusSeconds(40), "안방", SosTriggerType.SOS_BUTTON);
+        SosEvent latest = sosEvent(3L, WARD_ID, now, "자택 거실", SosTriggerType.SOS_BUTTON);
+        SosEvent single = sosEvent(5L, OTHER_WARD_ID, now.minusDays(1), null, SosTriggerType.GUARDIAN_CALL);
+
+        when(connectionService.getActiveWardIds(GUARDIAN_ID)).thenReturn(List.of(WARD_ID, OTHER_WARD_ID));
+        when(sosEventRepository.countPressGroups(any(), eq(""), eq(60))).thenReturn(2L);
+        when(sosEventRepository.findPressGroups(any(), eq(""), eq(60), eq(20), eq(0L)))
+                .thenReturn(List.of(row(3L, 1L, 3L), row(5L, 5L, 1L)));
+        when(sosEventRepository.findAllById(any())).thenReturn(List.of(first, latest, single));
+        when(userRepository.findAllById(any())).thenReturn(List.of(user(WARD_ID, WARD_NAME), user(OTHER_WARD_ID, "박철수")));
+        when(sosEventRepository.countPressGroupsByTriggerType(any(), eq(""), eq(60)))
+                .thenReturn(List.of(groupCount("SOS_BUTTON", 4L), groupCount("GUARDIAN_CALL", 1L)));
+
+        SosHistoryPage result = guardianSosService.getGroupedHistory(GUARDIAN_ID, null, null, 0, 20);
+
+        ArgumentCaptor<Collection<String>> wardIdsCaptor = ArgumentCaptor.captor();
+        verify(sosEventRepository).findPressGroups(wardIdsCaptor.capture(), eq(""), eq(60), eq(20), eq(0L));
+        assertThat(wardIdsCaptor.getValue()).containsExactly(WARD_ID, OTHER_WARD_ID);
+
+        assertThat(result.totalElements()).isEqualTo(2);
+        SosHistoryItem grouped = result.content().get(0);
+        assertThat(grouped.sosEventId()).isEqualTo(3L);
+        assertThat(grouped.wardName()).isEqualTo(WARD_NAME);
+        assertThat(grouped.triggeredAt()).isEqualTo(now);
+        assertThat(grouped.location()).isEqualTo("자택 거실"); // 묶음 안 위치가 달라도 최신 건 값
+        assertThat(grouped.pressCount()).isEqualTo(3L);
+        assertThat(grouped.firstTriggeredAt()).isEqualTo(now.minusSeconds(40));
+        assertThat(grouped.lastTriggeredAt()).isEqualTo(now);
+
+        SosHistoryItem alone = result.content().get(1);
+        assertThat(alone.pressCount()).isEqualTo(1L);
+        assertThat(alone.firstTriggeredAt()).isEqualTo(alone.lastTriggeredAt());
+        assertThat(alone.wardName()).isEqualTo("박철수");
+
+        // counts는 묶음 수
+        assertThat(result.counts()).isEqualTo(new SosHistoryPage.Counts(5, 4, 1));
+    }
+
+    @Test
+    @DisplayName("묶음 조회: 경로 필터는 이름으로 넘기고, counts는 필터와 무관하게 전체 경로('')로 센다")
+    void getGroupedHistory_경로필터() {
+        when(connectionService.isActiveConnection(GUARDIAN_ID, WARD_ID)).thenReturn(true);
+        when(sosEventRepository.countPressGroups(any(), eq("GUARDIAN_CALL"), eq(60))).thenReturn(0L);
+        when(sosEventRepository.findPressGroups(any(), eq("GUARDIAN_CALL"), eq(60), anyInt(), anyLong()))
+                .thenReturn(List.of());
+        when(sosEventRepository.countPressGroupsByTriggerType(any(), eq(""), eq(60)))
+                .thenReturn(List.of(groupCount("SOS_BUTTON", 2L)));
+
+        SosHistoryPage result = guardianSosService.getGroupedHistory(
+                GUARDIAN_ID, WARD_ID, SosTriggerType.GUARDIAN_CALL, 0, 20);
+
+        assertThat(result.content()).isEmpty();
+        assertThat(result.counts()).isEqualTo(new SosHistoryPage.Counts(2, 2, 0));
+    }
+
+    @Test
+    @DisplayName("묶음 조회: 연결되지 않은 피보호자 지정 → 403 SOS_NOT_AUTHORIZED, 쿼리 없음")
+    void getGroupedHistory_연결없는피보호자_거부() {
+        when(connectionService.isActiveConnection(GUARDIAN_ID, OTHER_WARD_ID)).thenReturn(false);
+
+        assertThatThrownBy(() -> guardianSosService.getGroupedHistory(GUARDIAN_ID, OTHER_WARD_ID, null, 0, 20))
+                .isInstanceOf(CustomException.class)
+                .hasFieldOrPropertyWithValue("errorCode", ErrorCode.SOS_NOT_AUTHORIZED);
+        verifyNoInteractions(sosEventRepository);
+    }
+
+    @Test
+    @DisplayName("묶음 조회: 연결된 피보호자가 없으면 빈 페이지·counts 0, 쿼리 없음")
+    void getGroupedHistory_연결없음_빈페이지() {
+        when(connectionService.getActiveWardIds(GUARDIAN_ID)).thenReturn(List.of());
+
+        SosHistoryPage result = guardianSosService.getGroupedHistory(GUARDIAN_ID, null, null, 0, 20);
+
+        assertThat(result.content()).isEmpty();
+        assertThat(result.totalElements()).isZero();
+        assertThat(result.counts()).isEqualTo(SosHistoryPage.Counts.EMPTY);
+        verifyNoInteractions(sosEventRepository);
+    }
+
+    private static SosEventRepository.PressGroupRow row(Long latestId, Long firstId, Long pressCount) {
+        return new SosEventRepository.PressGroupRow() {
+            @Override
+            public Long getLatestId() {
+                return latestId;
+            }
+
+            @Override
+            public Long getFirstId() {
+                return firstId;
+            }
+
+            @Override
+            public Long getPressCount() {
+                return pressCount;
+            }
+        };
+    }
+
+    private static SosEventRepository.PressGroupCount groupCount(String triggerType, Long total) {
+        return new SosEventRepository.PressGroupCount() {
+            @Override
+            public String getTriggerType() {
+                return triggerType;
+            }
+
+            @Override
+            public Long getTotal() {
+                return total;
+            }
+        };
     }
 
     private static SosEvent sosEvent(long id, String wardId, OffsetDateTime createdAt) {
