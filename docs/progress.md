@@ -2530,3 +2530,7 @@ AI 챗 집계 점검 L-1에서 남겨 둔 공용 `GlobalExceptionHandler`의 `e.
 - BE: 수정은 `timeSlot`이나 `doseTime`을 보내면, 등록은 `doseTime`을 보내면 시간대 = `fromDoseTime(최종 시각)`(어긋나면 시각 기준, 400 아님). 이름·복용량·메모만 고치면 시간대 유지. 마이그레이션 없음 - 옛 약은 다음 수정 때 바로잡힘(사용자 결정).
 - FE: 수정 창에서 시각↔시간대 연동, 어긋난 옛 약은 열 때부터 시각 기준 시간대로 표시.
 - 테스트: BE 5건 추가(수정 전 코드 4건 실패 확인), FE 수정 창 3건 추가. 상세 `docs/(2026-10-30) fix-medication-slot-from-time.md`.
+
+### [2026-10-30] AI 의료 챗봇 이어서 물어볼 질문 (AI #135, branch `feature/chat-suggested-questions`)
+- AI가 답마다 `suggestedQuestions`(0~3개)를 내려 FE 빠른 질문 칸이 대화 흐름대로 바뀐다. 응급·자해·위기·되묻기·예약 흐름 답에는 빈 목록.
+- BE: 전송 응답의 이 칸만 `SuggestedQuestions.sanitize`로 정리(문자열·1~30자·최대 3개, 배열 아니면 삭제). 기록 허용 목록은 그대로. 테스트 4건. 상세 `docs/(2026-10-30) feature-chat-suggested-questions.md`.

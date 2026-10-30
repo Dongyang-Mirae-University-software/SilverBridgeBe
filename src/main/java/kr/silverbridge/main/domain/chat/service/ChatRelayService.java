@@ -100,6 +100,7 @@ public class ChatRelayService {
             JsonNode reply = aiChatClient.send(body);
             log.info("[CHAT-RELAY] 전송 완료: userId={}, elapsedMs={}", userId,
                     (System.nanoTime() - startedAt) / 1_000_000);
+            SuggestedQuestions.sanitize(reply); // FE가 버튼으로 그리는 칸 - 형식만 보장(2026-10-30)
             return plain(reply);
         }
     }

@@ -85,6 +85,17 @@ class ChatRelayServiceTest {
     }
 
     @Test
+    @DisplayName("전송 응답의 suggestedQuestions는 정리해서 넘긴다 - 형식이 틀린 항목은 빠지고 답은 그대로(2026-10-30)")
+    void 이어질_질문_정리_후_전달() throws Exception {
+        JsonNode reply = objectMapper.readTree(
+                "{\"reply\":\"ok\",\"suggestedQuestions\":[\"병원에 가야 할까요?\",7,\"집에서\\n뭘 하면 좋아요?\"]}");
+        when(aiChatClient.send(any())).thenReturn(reply);
+
+        assertThat(service.send(ME, msg("두통"))).isEqualTo(java.util.Map.of(
+                "reply", "ok", "suggestedQuestions", java.util.List.of("병원에 가야 할까요?", "집에서 뭘 하면 좋아요?")));
+    }
+
+    @Test
     @DisplayName("요청의 history는 AI로 보내지 않는다 - AI가 서버 기록으로 이력을 만든다(2026-10-29)")
     void history는_AI로_보내지_않는다() throws Exception {
         when(aiChatClient.send(any())).thenReturn(objectMapper.readTree("{}"));
