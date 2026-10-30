@@ -55,4 +55,6 @@ SOS 알림(ACTIVE 보호자 전원 - 전화받은 보호자도 포함)·쿨다�
 
 ## 8. 테스트 결과
 
-(PR 단계에서 채움)
+- 로컬 `./gradlew build`(단위 테스트 포함): **BUILD SUCCESSFUL** - 2113건, 실패 0·오류 0·건너뜀 1(기존).
+  - 신규: `SosCalledGuardianResolverTest`(연결/미연결/확인 실패/경로 아님/형식 오류 7종/트랜잭션 없음), `WardSosControllerHttpTest`(확인 → 저장 순서·1000자 값도 201·바디 없음), `SosServiceTest` +2(저장되지만 이벤트에 없음), `GuardianSosServiceTest` +3(지금 연결된 보호자만 이름·연결 목록 1회·묶음 최신 건).
+- vkcs `tools/integration-test.sh feature/sos-called-guardian` @ `0989d9a8`: **통과** - 전체 113건 실패 0, `SosCalledGuardianIntegrationTest` 3건(저장·보호자 삭제 시 SET NULL·보호자별 묶음·미기록 연락/SOS 버튼 묶음) + `SosHistoryPressGroupIntegrationTest` 8건 회귀 통과.

@@ -4,6 +4,18 @@
 
 ---
 
+### [2026-10-30] SOS 보호자 연락 - 전화받은 보호자 기록·이름 칩 (branch `feature/sos-called-guardian`, V64)
+
+보호자 이력 시안의 보호자 연락 줄 이름 칩을 위해 `POST /api/ward/sos`에 선택 `calledGuardianId`를 받아 `sos_event.called_guardian_id`(V64, FK SET NULL, 가역)에 저장한다.
+
+- **SOS는 거절하지 않는다**: GUARDIAN_CALL 아님·형식 오류·ACTIVE 보호자 아님·확인 실패 → NULL + `[SOS-CALLED-GUARDIAN-IGNORED]` WARN.
+- **구현 중 발견**: 확인을 SOS 저장 트랜잭션 안에서 하면 `isActiveConnection` 예외가 잡혀도 rollback-only로 SOS 이력까지 잃는다 → `SosCalledGuardianResolver`(트랜잭션 없음)가 저장 전에 확인.
+- 이력 `calledGuardianId`·`calledGuardianName`은 지금 연결된 보호자만, 묶음 기준에 포함. 알림 무변경(이벤트에 싣지 않음).
+- **검증**: 로컬 2113건, vkcs 통합 113건 통과(신규 3 + #401 8 회귀).
+- 산출물: `docs/(2026-10-30) feature-sos-called-guardian.md`, 정책 파일 SOS 이력 절.
+
+---
+
 ### [2026-10-30] 보호자 SOS 이력 연타 묶음 조회 (branch `feature/sos-history-press-group`)
 
 보호자 이력 화면의 "N번 연달아 누름" 한 칸을 위해 `GET /api/guardian/sos/history?group=true`를 더했다. FE가 페이지 단위로 묶으면 경계에서 잘려 BE가 DB 윈도 함수(LAG + 누적합)로 묶는다. 마이그레이션 없음.
