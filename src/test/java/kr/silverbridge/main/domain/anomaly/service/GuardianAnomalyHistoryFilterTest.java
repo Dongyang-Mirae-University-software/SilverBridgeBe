@@ -80,11 +80,11 @@ class GuardianAnomalyHistoryFilterTest {
     @DisplayName("type을 지정하면 그 유형이 쿼리로 넘어간다")
     void typeIsPassedToQuery() {
         when(connectionService.getActiveWardIds(GUARDIAN_ID)).thenReturn(List.of(WARD_ID));
-        when(incidentRepository.findHistory(any(), any(), anyBoolean(), anyBoolean(), any(), any(Pageable.class))).thenReturn(Page.empty());
+        when(incidentRepository.findHistory(eq(GUARDIAN_ID), any(), any(), anyBoolean(), anyBoolean(), any(), any(Pageable.class))).thenReturn(Page.empty());
 
         service.getHistory(GUARDIAN_ID, null, AnomalyTypeFilter.FALL, null, 0, 20);
 
-        verify(incidentRepository).findHistory(eq(List.of(WARD_ID)), eq(DetectedType.FALL), eq(false), eq(false), any(),
+        verify(incidentRepository).findHistory(eq(GUARDIAN_ID), eq(List.of(WARD_ID)), eq(DetectedType.FALL), eq(false), eq(false), any(),
                 any(Pageable.class));
     }
 
@@ -92,12 +92,12 @@ class GuardianAnomalyHistoryFilterTest {
     @DisplayName("type을 생략하면 null이 넘어가 전체 조회다")
     void nullTypeMeansAll() {
         when(connectionService.getActiveWardIds(GUARDIAN_ID)).thenReturn(List.of(WARD_ID));
-        when(incidentRepository.findHistory(any(), any(), anyBoolean(), anyBoolean(), any(), any(Pageable.class))).thenReturn(new PageImpl<>(List.of()));
+        when(incidentRepository.findHistory(eq(GUARDIAN_ID), any(), any(), anyBoolean(), anyBoolean(), any(), any(Pageable.class))).thenReturn(new PageImpl<>(List.of()));
 
         service.getHistory(GUARDIAN_ID, null, null, null, 0, 20);
 
         ArgumentCaptor<DetectedType> captor = ArgumentCaptor.forClass(DetectedType.class);
-        verify(incidentRepository).findHistory(any(), captor.capture(), anyBoolean(), anyBoolean(), any(), any(Pageable.class));
+        verify(incidentRepository).findHistory(eq(GUARDIAN_ID), any(), captor.capture(), anyBoolean(), anyBoolean(), any(), any(Pageable.class));
         assertThat(captor.getValue()).isNull();
     }
 
@@ -109,7 +109,7 @@ class GuardianAnomalyHistoryFilterTest {
         assertThatThrownBy(() -> service.getHistory(GUARDIAN_ID, WARD_ID, AnomalyTypeFilter.FIRE, null, 0, 20))
                 .isInstanceOf(CustomException.class)
                 .hasFieldOrPropertyWithValue("errorCode", ErrorCode.ANOMALY_NOT_AUTHORIZED);
-        verify(incidentRepository, never()).findHistory(any(), any(), anyBoolean(), anyBoolean(), any(), any());
+        verify(incidentRepository, never()).findHistory(eq(GUARDIAN_ID), any(), any(), anyBoolean(), anyBoolean(), any(), any());
     }
 
     @Test
@@ -122,7 +122,7 @@ class GuardianAnomalyHistoryFilterTest {
                 row(DetectedType.FALL, AnomalyReviewStatus.CONFLICTED, 1),
                 row(DetectedType.FALL, AnomalyReviewStatus.FALSE_ALARM, 4));
         when(cameraService.findSessionIdsByWardIds(List.of(WARD_ID))).thenReturn(List.of("ward_live"));
-        when(incidentRepository.countForGuardianSummary(List.of(WARD_ID), List.of("ward_live"))).thenReturn(rows);
+        when(incidentRepository.countForGuardianSummary(GUARDIAN_ID, List.of(WARD_ID), List.of("ward_live"))).thenReturn(rows);
 
         GuardianAnomalyHistorySummary summary = service.getHistorySummary(GUARDIAN_ID, null);
 
@@ -141,12 +141,12 @@ class GuardianAnomalyHistoryFilterTest {
     void deletedCameraFilterPassesLiveSessions() {
         when(connectionService.getActiveWardIds(GUARDIAN_ID)).thenReturn(List.of(WARD_ID));
         when(cameraService.findSessionIdsByWardIds(List.of(WARD_ID))).thenReturn(List.of("ward_live"));
-        when(incidentRepository.findHistory(any(), any(), anyBoolean(), anyBoolean(), any(), any(Pageable.class)))
+        when(incidentRepository.findHistory(eq(GUARDIAN_ID), any(), any(), anyBoolean(), anyBoolean(), any(), any(Pageable.class)))
                 .thenReturn(Page.empty());
 
         service.getHistory(GUARDIAN_ID, null, AnomalyTypeFilter.FIRE, AnomalyCameraFilter.DELETED, 0, 20);
 
-        verify(incidentRepository).findHistory(eq(List.of(WARD_ID)), eq(DetectedType.FIRE), eq(true), eq(false),
+        verify(incidentRepository).findHistory(eq(GUARDIAN_ID), eq(List.of(WARD_ID)), eq(DetectedType.FIRE), eq(true), eq(false),
                 eq(List.of("ward_live")), any(Pageable.class));
     }
 
@@ -155,12 +155,12 @@ class GuardianAnomalyHistoryFilterTest {
     void existingCameraFilterWithoutCamerasUsesNoMatch() {
         when(connectionService.getActiveWardIds(GUARDIAN_ID)).thenReturn(List.of(WARD_ID));
         when(cameraService.findSessionIdsByWardIds(List.of(WARD_ID))).thenReturn(List.of());
-        when(incidentRepository.findHistory(any(), any(), anyBoolean(), anyBoolean(), any(), any(Pageable.class)))
+        when(incidentRepository.findHistory(eq(GUARDIAN_ID), any(), any(), anyBoolean(), anyBoolean(), any(), any(Pageable.class)))
                 .thenReturn(Page.empty());
 
         service.getHistory(GUARDIAN_ID, null, null, AnomalyCameraFilter.EXISTING, 0, 20);
 
-        verify(incidentRepository).findHistory(eq(List.of(WARD_ID)), eq(null), eq(false), eq(true),
+        verify(incidentRepository).findHistory(eq(GUARDIAN_ID), eq(List.of(WARD_ID)), eq(null), eq(false), eq(true),
                 eq(List.of("")), any(Pageable.class));
     }
 
@@ -168,7 +168,7 @@ class GuardianAnomalyHistoryFilterTest {
     @DisplayName("camera를 생략하면 카메라 목록을 조회하지 않는다")
     void noCameraFilterSkipsCameraLookup() {
         when(connectionService.getActiveWardIds(GUARDIAN_ID)).thenReturn(List.of(WARD_ID));
-        when(incidentRepository.findHistory(any(), any(), anyBoolean(), anyBoolean(), any(), any(Pageable.class)))
+        when(incidentRepository.findHistory(eq(GUARDIAN_ID), any(), any(), anyBoolean(), anyBoolean(), any(), any(Pageable.class)))
                 .thenReturn(Page.empty());
 
         service.getHistory(GUARDIAN_ID, null, null, null, 0, 20);
@@ -185,7 +185,7 @@ class GuardianAnomalyHistoryFilterTest {
                 .isInstanceOf(CustomException.class)
                 .hasFieldOrPropertyWithValue("errorCode", ErrorCode.ANOMALY_NOT_AUTHORIZED);
         verify(cameraService, never()).findSessionIdsByWardIds(any());
-        verify(incidentRepository, never()).findHistory(any(), any(), anyBoolean(), anyBoolean(), any(), any());
+        verify(incidentRepository, never()).findHistory(eq(GUARDIAN_ID), any(), any(), anyBoolean(), anyBoolean(), any(), any());
     }
 
     @Test
@@ -195,8 +195,8 @@ class GuardianAnomalyHistoryFilterTest {
         when(cameraService.findSessionIdsByWardIds(List.of(WARD_ID))).thenReturn(List.of("ward_live"));
         List<AnomalyIncidentRepository.GuardianTypeStatusCount> rows =
                 List.of(row(DetectedType.FIRE, AnomalyReviewStatus.PENDING, 2));
-        when(incidentRepository.countForGuardianSummary(List.of(WARD_ID), List.of("ward_live"))).thenReturn(rows);
-        when(incidentRepository.countDeletedCameraForGuardian(List.of(WARD_ID), List.of("ward_live"))).thenReturn(4L);
+        when(incidentRepository.countForGuardianSummary(GUARDIAN_ID, List.of(WARD_ID), List.of("ward_live"))).thenReturn(rows);
+        when(incidentRepository.countDeletedCameraForGuardian(GUARDIAN_ID, List.of(WARD_ID), List.of("ward_live"))).thenReturn(4L);
 
         GuardianAnomalyHistorySummary summary = service.getHistorySummary(GUARDIAN_ID, null);
 
@@ -211,8 +211,8 @@ class GuardianAnomalyHistoryFilterTest {
     void summaryWithoutCamerasUsesNoMatch() {
         when(connectionService.getActiveWardIds(GUARDIAN_ID)).thenReturn(List.of(WARD_ID));
         when(cameraService.findSessionIdsByWardIds(List.of(WARD_ID))).thenReturn(List.of());
-        when(incidentRepository.countForGuardianSummary(List.of(WARD_ID), List.of(""))).thenReturn(List.of());
-        when(incidentRepository.countDeletedCameraForGuardian(List.of(WARD_ID), List.of(""))).thenReturn(3L);
+        when(incidentRepository.countForGuardianSummary(GUARDIAN_ID, List.of(WARD_ID), List.of(""))).thenReturn(List.of());
+        when(incidentRepository.countDeletedCameraForGuardian(GUARDIAN_ID, List.of(WARD_ID), List.of(""))).thenReturn(3L);
 
         GuardianAnomalyHistorySummary summary = service.getHistorySummary(GUARDIAN_ID, null);
 
@@ -228,7 +228,7 @@ class GuardianAnomalyHistoryFilterTest {
         List<AnomalyIncidentRepository.GuardianTypeStatusCount> rows = List.of(
                 row(DetectedType.FIRE, AnomalyReviewStatus.REAL, 2),
                 row(DetectedType.UNKNOWN, AnomalyReviewStatus.PENDING, 1));
-        when(incidentRepository.countForGuardianSummary(eq(List.of(WARD_ID)), any())).thenReturn(rows);
+        when(incidentRepository.countForGuardianSummary(eq(GUARDIAN_ID), eq(List.of(WARD_ID)), any())).thenReturn(rows);
 
         GuardianAnomalyHistorySummary summary = service.getHistorySummary(GUARDIAN_ID, null);
 
@@ -246,10 +246,10 @@ class GuardianAnomalyHistoryFilterTest {
                 new StatusRow(DetectedType.FIRE, AnomalyReviewStatus.PENDING, 2),
                 new StatusRow(DetectedType.FALL, AnomalyReviewStatus.CONFLICTED, 1),
                 new StatusRow(DetectedType.FIRE, AnomalyReviewStatus.REAL, 5));
-        when(incidentRepository.countForGuardianSummary(List.of(WARD_ID), List.of("ward_live"))).thenReturn(rows);
+        when(incidentRepository.countForGuardianSummary(GUARDIAN_ID, List.of(WARD_ID), List.of("ward_live"))).thenReturn(rows);
 
         assertThat(service.getNeedsReviewCount(GUARDIAN_ID, null)).isEqualTo(3);
-        verify(incidentRepository, never()).countDeletedCameraForGuardian(any(), any());
+        verify(incidentRepository, never()).countDeletedCameraForGuardian(eq(GUARDIAN_ID), any(), any());
     }
 
     @Test
@@ -262,7 +262,7 @@ class GuardianAnomalyHistoryFilterTest {
 
         when(connectionService.getActiveWardIds(GUARDIAN_ID)).thenReturn(List.of());
         assertThat(service.getNeedsReviewCount(GUARDIAN_ID, null)).isZero();
-        verify(incidentRepository, never()).countForGuardianSummary(any(), any());
+        verify(incidentRepository, never()).countForGuardianSummary(eq(GUARDIAN_ID), any(), any());
     }
 
     @Test
@@ -273,7 +273,7 @@ class GuardianAnomalyHistoryFilterTest {
         assertThatThrownBy(() -> service.getHistorySummary(GUARDIAN_ID, WARD_ID))
                 .isInstanceOf(CustomException.class)
                 .hasFieldOrPropertyWithValue("errorCode", ErrorCode.ANOMALY_NOT_AUTHORIZED);
-        verify(incidentRepository, never()).countForGuardianSummary(any(), any());
+        verify(incidentRepository, never()).countForGuardianSummary(eq(GUARDIAN_ID), any(), any());
     }
 
     @Test
@@ -282,20 +282,20 @@ class GuardianAnomalyHistoryFilterTest {
         when(connectionService.getActiveWardIds(GUARDIAN_ID)).thenReturn(List.of());
 
         assertThat(service.getHistorySummary(GUARDIAN_ID, null)).isEqualTo(GuardianAnomalyHistorySummary.EMPTY);
-        verify(incidentRepository, never()).countForGuardianSummary(any(), any());
+        verify(incidentRepository, never()).countForGuardianSummary(eq(GUARDIAN_ID), any(), any());
     }
 
     @Test
     @DisplayName("offset이 int를 넘는 page → 마지막 가능 페이지로 보정(넘으면 500이었다, 2026-10-26)")
     void 큰페이지_보정() {
         when(connectionService.getActiveWardIds(GUARDIAN_ID)).thenReturn(List.of(WARD_ID));
-        when(incidentRepository.findHistory(any(), any(), anyBoolean(), anyBoolean(), any(), any(Pageable.class)))
+        when(incidentRepository.findHistory(eq(GUARDIAN_ID), any(), any(), anyBoolean(), anyBoolean(), any(), any(Pageable.class)))
                 .thenReturn(new PageImpl<>(List.of()));
 
         service.getHistory(GUARDIAN_ID, null, null, null, 100_000_000, 50);
 
         org.mockito.ArgumentCaptor<Pageable> captor = org.mockito.ArgumentCaptor.forClass(Pageable.class);
-        verify(incidentRepository).findHistory(any(), any(), anyBoolean(), anyBoolean(), any(), captor.capture());
+        verify(incidentRepository).findHistory(eq(GUARDIAN_ID), any(), any(), anyBoolean(), anyBoolean(), any(), captor.capture());
         assertThat(captor.getValue().getPageNumber()).isEqualTo(Integer.MAX_VALUE / 50);
         assertThat(captor.getValue().getOffset()).isLessThanOrEqualTo(Integer.MAX_VALUE);
     }

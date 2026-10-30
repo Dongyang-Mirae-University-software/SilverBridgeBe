@@ -8,6 +8,7 @@ import org.springframework.data.repository.query.Param;
 
 import java.time.OffsetDateTime;
 import java.util.Collection;
+import java.util.Optional;
 import java.util.List;
 
 public interface ConnectionRepository extends JpaRepository<Connection, Long> {
@@ -27,6 +28,9 @@ public interface ConnectionRepository extends JpaRepository<Connection, Long> {
 
     // 동일한 guardian-ward 쌍의 live(PENDING/ACTIVE) 연결 존재 여부 — 중복 요청·연결 차단용
     boolean existsByGuardianIdAndWardIdAndStatusIn(String guardianId, String wardId, List<ConnectionStatus> statuses);
+
+    // 보호자 열람 범위(연결 이후 기록만, 2026-10-31 D-1) 판정용 - 같은 쌍의 ACTIVE 연결은 하나뿐이다
+    Optional<Connection> findFirstByGuardianIdAndWardIdAndStatus(String guardianId, String wardId, ConnectionStatus status);
 
     // 사용자가 보호자 또는 피보호자로 참여 중인 특정 상태 연결 — 회원 탈퇴 시 일괄 정리용 (D-USER-3)
     @Query("SELECT c FROM Connection c WHERE (c.guardianId = :userId OR c.wardId = :userId) AND c.status IN :statuses")

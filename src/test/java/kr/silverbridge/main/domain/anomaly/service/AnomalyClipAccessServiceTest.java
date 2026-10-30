@@ -83,6 +83,8 @@ class AnomalyClipAccessServiceTest {
         void 연결됨_허용() {
             when(incidentRepository.findById(INCIDENT_ID)).thenReturn(Optional.of(incidentOf(WARD)));
             when(connectionService.isActiveConnection(GUARDIAN, WARD)).thenReturn(true);
+            when(connectionService.isVisibleSinceConnection(org.mockito.ArgumentMatchers.eq(GUARDIAN),
+                    org.mockito.ArgumentMatchers.eq(WARD), org.mockito.ArgumentMatchers.any())).thenReturn(true);
             when(clipService.visibleClipsOf(INCIDENT_ID)).thenReturn(List.of(clipOf(WARD)));
             when(clipService.findViewable(CLIP_ID)).thenReturn(Optional.of(clipOf(WARD)));
             when(storage.find("00000000-0000-0000-0000-000000000001.webm")).thenReturn(Optional.of(Path.of("/x")));
@@ -106,6 +108,21 @@ class AnomalyClipAccessServiceTest {
         }
 
         @Test
+        @DisplayName("연결 이전 상황의 클립은 목록·파일 모두 404 - 이력처럼 보이지 않는다 (2026-10-31 D-1)")
+        void 연결이전_404() {
+            when(incidentRepository.findById(INCIDENT_ID)).thenReturn(Optional.of(incidentOf(WARD)));
+            when(clipService.findViewable(CLIP_ID)).thenReturn(Optional.of(clipOf(WARD)));
+            when(connectionService.isActiveConnection(GUARDIAN, WARD)).thenReturn(true);
+            when(connectionService.isVisibleSinceConnection(org.mockito.ArgumentMatchers.eq(GUARDIAN),
+                    org.mockito.ArgumentMatchers.eq(WARD), org.mockito.ArgumentMatchers.any())).thenReturn(false);
+
+            assertError(() -> service.guardianClips(GUARDIAN, INCIDENT_ID), ErrorCode.ANOMALY_INCIDENT_NOT_FOUND);
+            assertError(() -> service.guardianFile(GUARDIAN, CLIP_ID), ErrorCode.ANOMALY_CLIP_NOT_FOUND);
+            verify(clipService, never()).visibleClipsOf(anyLong());
+            verify(storage, never()).find(org.mockito.ArgumentMatchers.anyString());
+        }
+
+        @Test
         @DisplayName("없는 상황 404, 없음·비공개·만료 클립 404")
         void 없음() {
             when(incidentRepository.findById(INCIDENT_ID)).thenReturn(Optional.empty());
@@ -120,6 +137,9 @@ class AnomalyClipAccessServiceTest {
         void 파일_없음() {
             when(clipService.findViewable(CLIP_ID)).thenReturn(Optional.of(clipOf(WARD)));
             when(connectionService.isActiveConnection(GUARDIAN, WARD)).thenReturn(true);
+            when(incidentRepository.findById(INCIDENT_ID)).thenReturn(Optional.of(incidentOf(WARD)));
+            when(connectionService.isVisibleSinceConnection(org.mockito.ArgumentMatchers.eq(GUARDIAN),
+                    org.mockito.ArgumentMatchers.eq(WARD), org.mockito.ArgumentMatchers.any())).thenReturn(true);
             when(storage.find("00000000-0000-0000-0000-000000000001.webm")).thenReturn(Optional.empty());
 
             assertError(() -> service.guardianFile(GUARDIAN, CLIP_ID), ErrorCode.ANOMALY_CLIP_NOT_FOUND);

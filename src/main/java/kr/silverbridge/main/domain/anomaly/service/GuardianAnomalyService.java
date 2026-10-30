@@ -94,7 +94,7 @@ public class GuardianAnomalyService {
         // 카메라 필터가 없으면 카메라 목록을 조회하지 않는다(쿼리도 목록을 보지 않는다)
         Collection<String> liveSessionIds = camera == null ? NO_MATCH : liveSessionIds(wardIds);
         Page<AnomalyIncident> incidents = anomalyIncidentRepository.findHistory(
-                wardIds, type == null ? null : type.toDetectedType(),
+                guardianId, wardIds, type == null ? null : type.toDetectedType(),
                 camera == AnomalyCameraFilter.DELETED, camera == AnomalyCameraFilter.EXISTING,
                 liveSessionIds, pageable);
         List<AnomalyIncident> content = incidents.getContent();
@@ -143,7 +143,7 @@ public class GuardianAnomalyService {
         long pending = 0;
         long conflicted = 0;
         for (AnomalyIncidentRepository.GuardianTypeStatusCount row
-                : anomalyIncidentRepository.countForGuardianSummary(wardIds, liveSessionIds)) {
+                : anomalyIncidentRepository.countForGuardianSummary(guardianId, wardIds, liveSessionIds)) {
             // total은 유형과 무관하게 모든 행을 센다 - type 없이 camera=EXISTING으로 조회한 이력의 totalElements와
             // 항상 같아야 한다(점검 L-1)
             all += row.getTotal();
@@ -160,7 +160,7 @@ public class GuardianAnomalyService {
                 conflicted += row.getTotal();
             }
         }
-        long deletedCamera = anomalyIncidentRepository.countDeletedCameraForGuardian(wardIds, liveSessionIds);
+        long deletedCamera = anomalyIncidentRepository.countDeletedCameraForGuardian(guardianId, wardIds, liveSessionIds);
         return new GuardianAnomalyHistorySummary(all, pending, conflicted,
                 pending + conflicted,
                 new GuardianAnomalyHistorySummary.ByType(fire, fall, weapon),
@@ -183,7 +183,7 @@ public class GuardianAnomalyService {
         }
         long count = 0;
         for (AnomalyIncidentRepository.GuardianTypeStatusCount row
-                : anomalyIncidentRepository.countForGuardianSummary(wardIds, liveSessionIds(wardIds))) {
+                : anomalyIncidentRepository.countForGuardianSummary(guardianId, wardIds, liveSessionIds(wardIds))) {
             if (row.getReviewStatus() == AnomalyReviewStatus.PENDING
                     || row.getReviewStatus() == AnomalyReviewStatus.CONFLICTED) {
                 count += row.getTotal();
@@ -215,7 +215,7 @@ public class GuardianAnomalyService {
             return null;
         }
         List<AnomalyIncident> found = anomalyIncidentRepository.findLatestByStatuses(
-                wardIds, liveSessionIds(wardIds), List.of(AnomalyReviewStatus.PENDING, AnomalyReviewStatus.CONFLICTED),
+                guardianId, wardIds, liveSessionIds(wardIds), List.of(AnomalyReviewStatus.PENDING, AnomalyReviewStatus.CONFLICTED),
                 PageRequest.of(0, 1));
         if (found.isEmpty()) {
             return null;
@@ -251,6 +251,12 @@ public class GuardianAnomalyService {
             log.warn("[IDOR-ATTEMPT] 연결되지 않은 피보호자 이상감지 응답 시도: guardianId={}, incidentId={}",
                     guardianId, incidentId);
             throw new CustomException(ErrorCode.ANOMALY_NOT_AUTHORIZED);
+        }
+        // 연결 이전 상황은 이력에도 보이지 않으므로 없는 상황과 같게 답한다 - 존재를 드러내지 않는다(2026-10-31 D-1)
+        if (!connectionService.isVisibleSinceConnection(guardianId, incident.getWardId(), incident.getLastDetectedAt())) {
+            log.info("[ANOMALY-BEFORE-CONNECTION] 연결 이전 상황 응답 시도: guardianId={}, incidentId={}",
+                    guardianId, incidentId);
+            throw new CustomException(ErrorCode.ANOMALY_INCIDENT_NOT_FOUND);
         }
 
         List<AnomalyIncidentFeedback> feedbacks = feedbackRepository.findByIncidentId(incidentId);

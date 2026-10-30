@@ -97,6 +97,8 @@ class AnomalyReviewReminderPlannerTest {
         // 기본: 요청한 보호자는 모두 계정 ACTIVE (RESTRICTED 시나리오만 개별 테스트에서 덮어쓴다)
         when(userRepository.findIdsByIdInAndStatus(anyCollection(), eq(Status.ACTIVE)))
                 .thenAnswer(invocation -> List.copyOf(invocation.<java.util.Collection<String>>getArgument(0)));
+        // 기본: 상황은 보호자의 지금 연결 이후 것이다(연결 이전 시나리오만 개별 테스트에서 덮어쓴다, 2026-10-31 D-1)
+        when(connectionService.isVisibleSinceConnection(anyString(), anyString(), any())).thenReturn(true);
     }
 
     private AnomalyIncident incident() {
@@ -207,6 +209,19 @@ class AnomalyReviewReminderPlannerTest {
             when(feedbackRepository.findByIncidentIdIn(anyCollection())).thenReturn(List.of());
             when(reminderLogRepository.findByIncidentIdIn(anyCollection())).thenReturn(List.of());
             when(settingRepository.findByGuardianIdIn(anyCollection())).thenReturn(List.of());
+
+            assertThat(planner.claimReminders()).isEmpty();
+            verify(reminderLogRepository, never()).saveAll(anyCollection());
+        }
+
+        @Test
+        @DisplayName("지금 연결이 맺어지기 전의 상황은 재촉하지 않는다 - 보호자 화면에 보이지 않는 상황이다 (2026-10-31 D-1)")
+        void incidentBeforeConnectionIsNotClaimed() {
+            candidateIsFound(incident());
+            when(connectionService.getActiveGuardianIds(WARD_ID)).thenReturn(List.of(GUARDIAN_ID));
+            when(connectionService.isVisibleSinceConnection(eq(GUARDIAN_ID), eq(WARD_ID), any())).thenReturn(false);
+            when(feedbackRepository.findByIncidentIdIn(anyCollection())).thenReturn(List.of());
+            when(reminderLogRepository.findByIncidentIdIn(anyCollection())).thenReturn(List.of());
 
             assertThat(planner.claimReminders()).isEmpty();
             verify(reminderLogRepository, never()).saveAll(anyCollection());

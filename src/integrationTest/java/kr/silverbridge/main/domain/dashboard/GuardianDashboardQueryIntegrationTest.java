@@ -34,16 +34,22 @@ class GuardianDashboardQueryIntegrationTest extends PostgresIntegrationTest {
             List.of(AnomalyReviewStatus.PENDING, AnomalyReviewStatus.CONFLICTED);
     /** 지금 등록된 카메라 세션(서비스가 카메라 도메인에서 받아 넘기는 값). 이 쿼리는 카메라 행이 아니라 이 목록만 본다. */
     private static final List<String> LIVE = List.of("sess-WD0001", "sess-WD0002");
+    private static final String VIEWER = "GDQ009";
 
     @Autowired private AnomalyIncidentRepository incidentRepository;
     @Autowired private SosEventRepository sosEventRepository;
     @Autowired private UserRepository userRepository;
+    @Autowired private kr.silverbridge.main.domain.connection.repository.ConnectionRepository connectionRepository;
     @Autowired private EntityManager entityManager;
 
     @BeforeEach
     void setUp() {
         userRepository.save(TestData.user("WD0001", "김영희", Role.WARD));
         userRepository.save(TestData.user("WD0002", "이순자", Role.WARD));
+        // 보호자용 쿼리는 "이 보호자의 ACTIVE 연결 이후" 기록만 센다(2026-10-31 D-1) - 기존 데이터보다 앞서 연결해 둔다
+        userRepository.save(TestData.user(VIEWER, "보는보호자", Role.GUARDIAN));
+        connectionRepository.save(TestData.activeConnection(VIEWER, "WD0001", java.time.OffsetDateTime.parse("2000-01-01T00:00:00Z")));
+        connectionRepository.save(TestData.activeConnection(VIEWER, "WD0002", java.time.OffsetDateTime.parse("2000-01-01T00:00:00Z")));
     }
 
     @Test
@@ -55,13 +61,13 @@ class GuardianDashboardQueryIntegrationTest extends PostgresIntegrationTest {
         incident("WD0001", 4, AnomalyReviewStatus.FALSE_ALARM);    // 더 최근이지만 확인 필요 아님
         incident("WD0002", 5, AnomalyReviewStatus.PENDING);        // 다른 피보호자
 
-        List<AnomalyIncident> latest = incidentRepository.findLatestByStatuses(
+        List<AnomalyIncident> latest = incidentRepository.findLatestByStatuses(VIEWER, 
                 List.of("WD0001"), LIVE, NEEDS_REVIEW, PageRequest.of(0, 1));
         assertThat(latest).hasSize(1);
         assertThat(latest.get(0).getReviewStatus()).isEqualTo(AnomalyReviewStatus.CONFLICTED);
         assertThat(latest.get(0).getWardId()).isEqualTo("WD0001");
 
-        assertThat(incidentRepository.findLatestByStatuses(List.of("WD0001", "WD0002"), LIVE, NEEDS_REVIEW,
+        assertThat(incidentRepository.findLatestByStatuses(VIEWER, List.of("WD0001", "WD0002"), LIVE, NEEDS_REVIEW,
                 PageRequest.of(0, 1)).get(0).getReviewStatus()).isEqualTo(AnomalyReviewStatus.PENDING); // WD0002 05시
 
         assertThat(needsReviewCount(List.of("WD0001"), LIVE)).isEqualTo(2);
@@ -75,13 +81,13 @@ class GuardianDashboardQueryIntegrationTest extends PostgresIntegrationTest {
         incident("WD0001", "sess-gone", 3, AnomalyReviewStatus.PENDING);       // 삭제된 카메라
 
         assertThat(needsReviewCount(List.of("WD0001"), LIVE)).isEqualTo(1);
-        List<AnomalyIncident> latest = incidentRepository.findLatestByStatuses(
+        List<AnomalyIncident> latest = incidentRepository.findLatestByStatuses(VIEWER, 
                 List.of("WD0001"), LIVE, NEEDS_REVIEW, PageRequest.of(0, 1));
         assertThat(latest).singleElement().extracting(AnomalyIncident::getSessionId).isEqualTo("sess-WD0001");
 
         // 등록된 카메라가 하나도 없으면(매칭 불가 값) 확인 필요는 0건·최신 1건 없음
         assertThat(needsReviewCount(List.of("WD0001"), List.of(""))).isZero();
-        assertThat(incidentRepository.findLatestByStatuses(List.of("WD0001"), List.of(""), NEEDS_REVIEW,
+        assertThat(incidentRepository.findLatestByStatuses(VIEWER, List.of("WD0001"), List.of(""), NEEDS_REVIEW,
                 PageRequest.of(0, 1))).isEmpty();
     }
 
@@ -89,12 +95,12 @@ class GuardianDashboardQueryIntegrationTest extends PostgresIntegrationTest {
     @DisplayName("확인 필요 상황이 없으면 빈 목록")
     void latestNeedsReviewEmpty() {
         incident("WD0001", 1, AnomalyReviewStatus.REAL);
-        assertThat(incidentRepository.findLatestByStatuses(List.of("WD0001"), LIVE, NEEDS_REVIEW, PageRequest.of(0, 1)))
+        assertThat(incidentRepository.findLatestByStatuses(VIEWER, List.of("WD0001"), LIVE, NEEDS_REVIEW, PageRequest.of(0, 1)))
                 .isEmpty();
     }
 
     private long needsReviewCount(List<String> wardIds, List<String> liveSessionIds) {
-        return incidentRepository.countForGuardianSummary(wardIds, liveSessionIds).stream()
+        return incidentRepository.countForGuardianSummary(VIEWER, wardIds, liveSessionIds).stream()
                 .filter(r -> r.getReviewStatus() == AnomalyReviewStatus.PENDING
                         || r.getReviewStatus() == AnomalyReviewStatus.CONFLICTED)
                 .mapToLong(AnomalyIncidentRepository.GuardianTypeStatusCount::getTotal).sum();
@@ -110,12 +116,12 @@ class GuardianDashboardQueryIntegrationTest extends PostgresIntegrationTest {
         sosAt("WD0001", OffsetDateTime.of(2026, 10, 7, 9, 0, 0, 0, KST));      // 센다
         sosAt("WD0002", OffsetDateTime.of(2026, 10, 7, 9, 0, 0, 0, KST));      // 인가 밖
 
-        assertThat(sosEventRepository.countByWardIdInAndCreatedAtGreaterThanEqual(List.of("WD0001"), monthStart))
+        assertThat(sosEventRepository.countVisibleSince(VIEWER, List.of("WD0001"), monthStart))
                 .isEqualTo(2);
-        assertThat(sosEventRepository.countByWardIdInAndCreatedAtGreaterThanEqual(
+        assertThat(sosEventRepository.countVisibleSince(VIEWER, 
                 List.of("WD0001", "WD0002"), monthStart)).isEqualTo(3);
         // UTC로 표현한 같은 순간이어도 결과는 같다(오프셋이 아니라 순간으로 비교)
-        assertThat(sosEventRepository.countByWardIdInAndCreatedAtGreaterThanEqual(
+        assertThat(sosEventRepository.countVisibleSince(VIEWER, 
                 List.of("WD0001"), monthStart.withOffsetSameInstant(ZoneOffset.UTC))).isEqualTo(2);
     }
 

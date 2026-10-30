@@ -88,15 +88,15 @@ public class GuardianSosService {
         }
 
         Page<SosEvent> events = (triggerType == null)
-                ? sosEventRepository.findByWardIdInOrderByCreatedAtDesc(wardIds, pageable)
-                : sosEventRepository.findByWardIdInAndTriggerTypeOrderByCreatedAtDesc(wardIds, triggerType, pageable);
+                ? sosEventRepository.findVisibleHistory(guardianId, wardIds, pageable)
+                : sosEventRepository.findVisibleHistoryByTriggerType(guardianId, wardIds, triggerType, pageable);
         Map<String, String> names = resolveWardNames(events.getContent());
         CalledGuardianNames called = resolveCalledGuardianNames(events.getContent());
 
         return SosHistoryPage.of(
                 events.map(event -> SosHistoryItem.of(event, names.get(event.getWardId()))
                         .withCalledGuardianName(called.nameFor(event))),
-                countByTriggerType(wardIds));
+                countByTriggerType(guardianId, wardIds));
     }
 
     /**
@@ -122,11 +122,11 @@ public class GuardianSosService {
 
         String type = (triggerType == null) ? "" : triggerType.name();
         int gap = sosProperties.effectiveHistoryGroupGapSeconds();
-        SosHistoryPage.Counts counts = countGroupsByTriggerType(wardIds, gap);
+        SosHistoryPage.Counts counts = countGroupsByTriggerType(guardianId, wardIds, gap);
         // 경로 필터가 없으면 전체 묶음 수 = 경로별 묶음 수의 합이라 같은 윈도 쿼리를 한 번 더 돌리지 않는다(점검 L-2)
-        long total = (triggerType == null) ? counts.all() : sosEventRepository.countPressGroups(wardIds, type, gap);
+        long total = (triggerType == null) ? counts.all() : sosEventRepository.countPressGroups(guardianId, wardIds, type, gap);
         List<SosEventRepository.PressGroupRow> rows = sosEventRepository.findPressGroups(
-                wardIds, type, gap, pageSize, pageable.getOffset());
+                guardianId, wardIds, type, gap, pageSize, pageable.getOffset());
 
         // 묶음 행은 ID만 준다 - 최신·최초 이력을 한 번에 읽어 기존 항목과 같은 매핑을 쓴다
         Set<Long> eventIds = rows.stream()
@@ -163,9 +163,9 @@ public class GuardianSosService {
         if (wardIds.isEmpty()) {
             return new RecentSos(0, null);
         }
-        long count = sosEventRepository.countByWardIdInAndCreatedAtGreaterThanEqual(wardIds, from);
+        long count = sosEventRepository.countVisibleSince(guardianId, wardIds, from);
         List<SosEvent> latest = sosEventRepository
-                .findByWardIdInOrderByCreatedAtDesc(wardIds, PageRequest.of(0, 1)).getContent();
+                .findVisibleHistory(guardianId, wardIds, PageRequest.of(0, 1)).getContent();
         SosHistoryItem item = latest.isEmpty() ? null
                 : SosHistoryItem.of(latest.get(0), resolveWardNames(latest).get(latest.get(0).getWardId()));
         return new RecentSos(count, item);
@@ -176,10 +176,10 @@ public class GuardianSosService {
     }
 
     /** 인가된 피보호자 범위의 경로별 전체 건수. 집계에 없는 경로는 0건이다(범위 안에서 실제로 센 값). */
-    private SosHistoryPage.Counts countByTriggerType(List<String> wardIds) {
+    private SosHistoryPage.Counts countByTriggerType(String guardianId, List<String> wardIds) {
         long sosButton = 0;
         long guardianCall = 0;
-        for (SosEventRepository.TriggerTypeCount row : sosEventRepository.countByTriggerType(wardIds)) {
+        for (SosEventRepository.TriggerTypeCount row : sosEventRepository.countVisibleByTriggerType(guardianId, wardIds)) {
             if (row.getTriggerType() == SosTriggerType.GUARDIAN_CALL) {
                 guardianCall += row.getTotal();
             } else if (row.getTriggerType() == SosTriggerType.SOS_BUTTON) {
@@ -190,11 +190,11 @@ public class GuardianSosService {
     }
 
     /** 인가된 피보호자 범위의 경로별 묶음 수(필터·페이지와 무관). 집계에 없는 경로는 0이다. */
-    private SosHistoryPage.Counts countGroupsByTriggerType(List<String> wardIds, int gap) {
+    private SosHistoryPage.Counts countGroupsByTriggerType(String guardianId, List<String> wardIds, int gap) {
         long sosButton = 0;
         long guardianCall = 0;
         for (SosEventRepository.PressGroupCount row
-                : sosEventRepository.countPressGroupsByTriggerType(wardIds, "", gap)) {
+                : sosEventRepository.countPressGroupsByTriggerType(guardianId, wardIds, "", gap)) {
             if (SosTriggerType.GUARDIAN_CALL.name().equals(row.getTriggerType())) {
                 guardianCall += row.getTotal();
             } else if (SosTriggerType.SOS_BUTTON.name().equals(row.getTriggerType())) {

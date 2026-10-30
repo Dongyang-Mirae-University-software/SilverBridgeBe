@@ -37,6 +37,7 @@ public class GuardianSosController {
                     Authorization: Bearer {accessToken}
 
                     ACTIVE 연결된 피보호자의 SOS 발생 이력을 최신순으로 반환합니다.
+                    지금 연결이 맺어진 뒤의 이력만 보입니다 - 연결을 끊었다 다시 맺으면 그 이전 이력은 보이지 않습니다.
 
                     [wardId 파라미터]
                     - 지정: 해당 피보호자의 이력만 (연결이 ACTIVE가 아니면 403)

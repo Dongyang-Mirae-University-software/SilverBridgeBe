@@ -29,6 +29,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.Map;
 
@@ -75,6 +76,16 @@ public class ConnectionService {
     public boolean isActiveConnection(String guardianId, String wardId) {
         return connectionRepository.existsByGuardianIdAndWardIdAndStatusIn(
                 guardianId, wardId, List.of(ConnectionStatus.ACTIVE));
+    }
+
+    // 보호자가 그 시각의 기록(SOS·이상감지 상황)을 볼 수 있는지 - ACTIVE 연결이 있고, 그 연결이 맺어진 뒤의 기록이면 true.
+    // 끊었다 다시 맺은 연결·관리자 강제 연결은 연결 이전 기록을 보지 못한다(2026-10-31 전체 점검 D-1, 사용자 결정).
+    // connected_at이 비어 있는 옛 ACTIVE 행은 시점을 모르므로 전부 보인다(목록 쿼리의 조건과 같다).
+    @Transactional(readOnly = true)
+    public boolean isVisibleSinceConnection(String guardianId, String wardId, OffsetDateTime at) {
+        return connectionRepository.findFirstByGuardianIdAndWardIdAndStatus(guardianId, wardId, ConnectionStatus.ACTIVE)
+                .map(connection -> connection.getConnectedAt() == null || !at.isBefore(connection.getConnectedAt()))
+                .orElse(false);
     }
 
     // 보호자: 본인이 보낸 모든 연결 요청 이력 (PENDING + ACTIVE + CANCELLED, 최신 요청순)

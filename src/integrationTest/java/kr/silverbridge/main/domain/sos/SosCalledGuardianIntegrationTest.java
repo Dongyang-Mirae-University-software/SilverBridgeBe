@@ -31,9 +31,11 @@ class SosCalledGuardianIntegrationTest extends PostgresIntegrationTest {
     private static final String WARD_ID = "WCG001";
     private static final String GUARDIAN_A = "GCG001";
     private static final String GUARDIAN_B = "GCG002";
+    private static final String VIEWER = "GCG009";
 
     @Autowired private SosEventRepository sosEventRepository;
     @Autowired private UserRepository userRepository;
+    @Autowired private kr.silverbridge.main.domain.connection.repository.ConnectionRepository connectionRepository;
     @Autowired private EntityManager entityManager;
 
     private OffsetDateTime base;
@@ -43,6 +45,9 @@ class SosCalledGuardianIntegrationTest extends PostgresIntegrationTest {
         userRepository.save(TestData.user(WARD_ID, "피보호자", Role.WARD));
         userRepository.save(TestData.user(GUARDIAN_A, "보호자가", Role.GUARDIAN));
         userRepository.save(TestData.user(GUARDIAN_B, "보호자나", Role.GUARDIAN));
+        // 보호자용 쿼리는 "이 보호자의 ACTIVE 연결 이후" 기록만 센다(2026-10-31 D-1) - 기존 데이터보다 앞서 연결해 둔다
+        userRepository.save(TestData.user(VIEWER, "보는보호자", Role.GUARDIAN));
+        connectionRepository.save(TestData.activeConnection(VIEWER, WARD_ID, java.time.OffsetDateTime.parse("2000-01-01T00:00:00Z")));
         base = OffsetDateTime.now().minusDays(1).truncatedTo(ChronoUnit.SECONDS);
     }
 
@@ -70,14 +75,14 @@ class SosCalledGuardianIntegrationTest extends PostgresIntegrationTest {
         long toB = saveAt(SosTriggerType.GUARDIAN_CALL, GUARDIAN_B, base.plusSeconds(10));
         long toA = saveAt(SosTriggerType.GUARDIAN_CALL, GUARDIAN_A, base.plusSeconds(20));
 
-        List<PressGroupRow> rows = sosEventRepository.findPressGroups(List.of(WARD_ID), "", GAP, 50, 0);
+        List<PressGroupRow> rows = sosEventRepository.findPressGroups(VIEWER, List.of(WARD_ID), "", GAP, 50, 0);
 
         assertThat(rows).hasSize(2);
         assertThat(rows.get(0).getLatestId()).isEqualTo(toA);
         assertThat(rows.get(0).getPressCount()).isEqualTo(2L);
         assertThat(rows.get(1).getLatestId()).isEqualTo(toB);
         assertThat(rows.get(1).getPressCount()).isEqualTo(1L);
-        assertThat(sosEventRepository.countPressGroups(List.of(WARD_ID), "", GAP)).isEqualTo(2);
+        assertThat(sosEventRepository.countPressGroups(VIEWER, List.of(WARD_ID), "", GAP)).isEqualTo(2);
     }
 
     @Test
@@ -88,7 +93,7 @@ class SosCalledGuardianIntegrationTest extends PostgresIntegrationTest {
         saveAt(SosTriggerType.SOS_BUTTON, null, base.plusSeconds(5));
         saveAt(SosTriggerType.SOS_BUTTON, null, base.plusSeconds(15));
 
-        assertThat(sosEventRepository.findPressGroups(List.of(WARD_ID), "", GAP, 50, 0))
+        assertThat(sosEventRepository.findPressGroups(VIEWER, List.of(WARD_ID), "", GAP, 50, 0))
                 .extracting(PressGroupRow::getPressCount)
                 .containsExactly(2L, 2L);
     }
@@ -100,7 +105,7 @@ class SosCalledGuardianIntegrationTest extends PostgresIntegrationTest {
         long sameTimeLater = saveAt(SosTriggerType.SOS_BUTTON, null, base);
         long next = saveAt(SosTriggerType.SOS_BUTTON, null, base.plusSeconds(30));
 
-        List<PressGroupRow> rows = sosEventRepository.findPressGroups(List.of(WARD_ID), "", GAP, 50, 0);
+        List<PressGroupRow> rows = sosEventRepository.findPressGroups(VIEWER, List.of(WARD_ID), "", GAP, 50, 0);
         assertThat(rows).singleElement().satisfies(row -> {
             assertThat(row.getPressCount()).isEqualTo(3L);
             assertThat(row.getLatestId()).isEqualTo(next);
@@ -120,7 +125,7 @@ class SosCalledGuardianIntegrationTest extends PostgresIntegrationTest {
 
         long sosButton = 0;
         long guardianCall = 0;
-        for (SosEventRepository.PressGroupCount c : sosEventRepository.countPressGroupsByTriggerType(List.of(WARD_ID), "", GAP)) {
+        for (SosEventRepository.PressGroupCount c : sosEventRepository.countPressGroupsByTriggerType(VIEWER, List.of(WARD_ID), "", GAP)) {
             if (SosTriggerType.SOS_BUTTON.name().equals(c.getTriggerType())) {
                 sosButton = c.getTotal();
             } else {
@@ -130,10 +135,10 @@ class SosCalledGuardianIntegrationTest extends PostgresIntegrationTest {
 
         assertThat(sosButton).isEqualTo(1);
         assertThat(guardianCall).isEqualTo(4);
-        assertThat(sosEventRepository.countPressGroups(List.of(WARD_ID), "", GAP)).isEqualTo(sosButton + guardianCall);
-        assertThat(sosEventRepository.countPressGroups(List.of(WARD_ID), SosTriggerType.GUARDIAN_CALL.name(), GAP))
+        assertThat(sosEventRepository.countPressGroups(VIEWER, List.of(WARD_ID), "", GAP)).isEqualTo(sosButton + guardianCall);
+        assertThat(sosEventRepository.countPressGroups(VIEWER, List.of(WARD_ID), SosTriggerType.GUARDIAN_CALL.name(), GAP))
                 .isEqualTo(guardianCall);
-        assertThat(sosEventRepository.findPressGroups(List.of(WARD_ID), "", GAP, 50, 0)).hasSize(5);
+        assertThat(sosEventRepository.findPressGroups(VIEWER, List.of(WARD_ID), "", GAP, 50, 0)).hasSize(5);
     }
 
     /** {@code created_at}은 감사 필드(수정 불가 매핑)라 저장 후 네이티브 UPDATE로 시각을 옮긴다. */

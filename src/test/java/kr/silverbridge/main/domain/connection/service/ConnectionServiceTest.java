@@ -76,6 +76,47 @@ class ConnectionServiceTest {
     private static final String RELATION = "아들";
     private static final String GUARDIAN_PHONE = "010-1111-2222";
 
+    @Nested
+    @DisplayName("isVisibleSinceConnection - 연결 이후 기록만 보인다 (2026-10-31 D-1)")
+    class VisibleSinceConnection {
+
+        private final java.time.OffsetDateTime connectedAt = java.time.OffsetDateTime.parse("2026-10-01T09:00:00+09:00");
+
+        private void active(java.time.OffsetDateTime at) {
+            Connection connection = Connection.builder().id(1L).guardianId(GUARDIAN_ID).wardId(WARD_ID)
+                    .status(ConnectionStatus.ACTIVE).connectedAt(at).build();
+            when(connectionRepository.findFirstByGuardianIdAndWardIdAndStatus(GUARDIAN_ID, WARD_ID, ConnectionStatus.ACTIVE))
+                    .thenReturn(Optional.of(connection));
+        }
+
+        @Test
+        @DisplayName("연결 시각과 같거나 뒤의 기록은 보이고, 앞의 기록은 보이지 않는다")
+        void 연결시각_경계() {
+            active(connectedAt);
+
+            assertThat(connectionService.isVisibleSinceConnection(GUARDIAN_ID, WARD_ID, connectedAt)).isTrue();
+            assertThat(connectionService.isVisibleSinceConnection(GUARDIAN_ID, WARD_ID, connectedAt.plusSeconds(1))).isTrue();
+            assertThat(connectionService.isVisibleSinceConnection(GUARDIAN_ID, WARD_ID, connectedAt.minusSeconds(1))).isFalse();
+        }
+
+        @Test
+        @DisplayName("ACTIVE 연결이 없으면 언제의 기록이든 보이지 않는다")
+        void 연결없음() {
+            when(connectionRepository.findFirstByGuardianIdAndWardIdAndStatus(GUARDIAN_ID, WARD_ID, ConnectionStatus.ACTIVE))
+                    .thenReturn(Optional.empty());
+
+            assertThat(connectionService.isVisibleSinceConnection(GUARDIAN_ID, WARD_ID, connectedAt)).isFalse();
+        }
+
+        @Test
+        @DisplayName("연결 시각이 없는 옛 ACTIVE 행은 시점을 모르므로 전부 보인다(목록 쿼리와 같은 기준)")
+        void 연결시각없음() {
+            active(null);
+
+            assertThat(connectionService.isVisibleSinceConnection(GUARDIAN_ID, WARD_ID, connectedAt.minusYears(1))).isTrue();
+        }
+    }
+
     // ─── 보호자: 페어링 요청 ────────────────────────────────────────────────
 
     @Nested

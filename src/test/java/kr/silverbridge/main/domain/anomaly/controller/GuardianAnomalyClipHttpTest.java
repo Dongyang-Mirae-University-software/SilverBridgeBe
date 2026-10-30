@@ -111,6 +111,17 @@ class GuardianAnomalyClipHttpTest {
 
     private void connected(String wardId, boolean active) {
         when(connectionService.isActiveConnection(GUARDIAN, wardId)).thenReturn(active);
+        if (active) {
+            // 파일 열람은 그 클립 상황이 연결 이후인지도 본다(2026-10-31 D-1)
+            lenient().when(incidentRepository.findById(37L)).thenReturn(Optional.of(
+                    kr.silverbridge.main.domain.anomaly.entity.AnomalyIncident.builder().wardId(wardId)
+                            .sessionId("ward_k3m9Q2aZ7pLx01Bc")
+                            .detectedType(kr.silverbridge.main.global.enums.DetectedType.FIRE)
+                            .detectedAt(OffsetDateTime.now()).confidence(0.9).build()));
+            lenient().when(connectionService.isVisibleSinceConnection(
+                    org.mockito.ArgumentMatchers.eq(GUARDIAN), org.mockito.ArgumentMatchers.eq(wardId),
+                    org.mockito.ArgumentMatchers.any())).thenReturn(true);
+        }
     }
 
     private static String fileUrl() {

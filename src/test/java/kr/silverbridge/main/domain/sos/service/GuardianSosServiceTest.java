@@ -67,7 +67,7 @@ class GuardianSosServiceTest {
         SosEvent older = sosEvent(2L, OTHER_WARD_ID, now.minusDays(1), null, SosTriggerType.GUARDIAN_CALL);
 
         when(connectionService.getActiveWardIds(GUARDIAN_ID)).thenReturn(List.of(WARD_ID, OTHER_WARD_ID));
-        when(sosEventRepository.findByWardIdInOrderByCreatedAtDesc(any(), any(Pageable.class)))
+        when(sosEventRepository.findVisibleHistory(eq(GUARDIAN_ID), any(), any(Pageable.class)))
                 .thenReturn(new PageImpl<>(List.of(recent, older), PageRequest.of(0, 20), 2));
         when(userRepository.findAllById(any())).thenReturn(List.of(
                 user(WARD_ID, WARD_NAME),
@@ -77,7 +77,7 @@ class GuardianSosServiceTest {
 
         // 인가된 목록만 쿼리에 전달됐는지 (IDOR 방지의 핵심)
         ArgumentCaptor<Collection<String>> wardIdsCaptor = ArgumentCaptor.captor();
-        verify(sosEventRepository).findByWardIdInOrderByCreatedAtDesc(wardIdsCaptor.capture(), any(Pageable.class));
+        verify(sosEventRepository).findVisibleHistory(eq(GUARDIAN_ID), wardIdsCaptor.capture(), any(Pageable.class));
         assertThat(wardIdsCaptor.getValue()).containsExactly(WARD_ID, OTHER_WARD_ID);
 
         assertThat(result.totalElements()).isEqualTo(2);
@@ -103,14 +103,14 @@ class GuardianSosServiceTest {
     void getHistory_특정피보호자() {
         SosEvent event = sosEvent(1L, WARD_ID, OffsetDateTime.now());
         when(connectionService.isActiveConnection(GUARDIAN_ID, WARD_ID)).thenReturn(true);
-        when(sosEventRepository.findByWardIdInOrderByCreatedAtDesc(any(), any(Pageable.class)))
+        when(sosEventRepository.findVisibleHistory(eq(GUARDIAN_ID), any(), any(Pageable.class)))
                 .thenReturn(new PageImpl<>(List.of(event), PageRequest.of(0, 20), 1));
         when(userRepository.findAllById(any())).thenReturn(List.of(user(WARD_ID, WARD_NAME)));
 
         SosHistoryPage result = guardianSosService.getHistory(GUARDIAN_ID, WARD_ID, null, 0, 20);
 
         ArgumentCaptor<Collection<String>> wardIdsCaptor = ArgumentCaptor.captor();
-        verify(sosEventRepository).findByWardIdInOrderByCreatedAtDesc(wardIdsCaptor.capture(), any(Pageable.class));
+        verify(sosEventRepository).findVisibleHistory(eq(GUARDIAN_ID), wardIdsCaptor.capture(), any(Pageable.class));
         assertThat(wardIdsCaptor.getValue()).containsExactly(WARD_ID);
         assertThat(result.content()).hasSize(1);
         verify(connectionService, never()).getActiveWardIds(anyString());
@@ -147,7 +147,7 @@ class GuardianSosServiceTest {
     void getHistory_탈퇴피보호자_익명이력() {
         SosEvent anonymous = sosEvent(3L, null, OffsetDateTime.now());
         when(connectionService.getActiveWardIds(GUARDIAN_ID)).thenReturn(List.of(WARD_ID));
-        when(sosEventRepository.findByWardIdInOrderByCreatedAtDesc(any(), any(Pageable.class)))
+        when(sosEventRepository.findVisibleHistory(eq(GUARDIAN_ID), any(), any(Pageable.class)))
                 .thenReturn(new PageImpl<>(List.of(anonymous), PageRequest.of(0, 20), 1));
 
         SosHistoryPage result = guardianSosService.getHistory(GUARDIAN_ID, null, null, 0, 20);
@@ -163,13 +163,13 @@ class GuardianSosServiceTest {
     @DisplayName("과대 size·음수 page 요청 → size는 상한 50, page는 0으로 보정")
     void getHistory_페이지파라미터_보정() {
         when(connectionService.getActiveWardIds(GUARDIAN_ID)).thenReturn(List.of(WARD_ID));
-        when(sosEventRepository.findByWardIdInOrderByCreatedAtDesc(any(), any(Pageable.class)))
+        when(sosEventRepository.findVisibleHistory(eq(GUARDIAN_ID), any(), any(Pageable.class)))
                 .thenReturn(new PageImpl<>(List.of(), PageRequest.of(0, 50), 0));
 
         guardianSosService.getHistory(GUARDIAN_ID, null, null, -5, 500);
 
         ArgumentCaptor<Pageable> pageableCaptor = ArgumentCaptor.captor();
-        verify(sosEventRepository).findByWardIdInOrderByCreatedAtDesc(any(), pageableCaptor.capture());
+        verify(sosEventRepository).findVisibleHistory(eq(GUARDIAN_ID), any(), pageableCaptor.capture());
         assertThat(pageableCaptor.getValue().getPageNumber()).isZero();
         assertThat(pageableCaptor.getValue().getPageSize()).isEqualTo(50);
         // 정렬은 메서드 이름에 고정 - Pageable에 Sort를 넣으면 이중 적용된다
@@ -180,13 +180,13 @@ class GuardianSosServiceTest {
     @DisplayName("offset이 int를 넘는 page → 마지막 가능 페이지로 보정(넘으면 500이었다, 2026-10-26)")
     void getHistory_큰페이지_보정() {
         when(connectionService.getActiveWardIds(GUARDIAN_ID)).thenReturn(List.of(WARD_ID));
-        when(sosEventRepository.findByWardIdInOrderByCreatedAtDesc(any(), any(Pageable.class)))
-                .thenAnswer(inv -> new PageImpl<>(List.of(), inv.getArgument(1), 3));
+        when(sosEventRepository.findVisibleHistory(eq(GUARDIAN_ID), any(), any(Pageable.class)))
+                .thenAnswer(inv -> new PageImpl<>(List.of(), inv.getArgument(2), 3));
 
         guardianSosService.getHistory(GUARDIAN_ID, null, null, 100_000_000, 50);
 
         ArgumentCaptor<Pageable> pageableCaptor = ArgumentCaptor.captor();
-        verify(sosEventRepository).findByWardIdInOrderByCreatedAtDesc(any(), pageableCaptor.capture());
+        verify(sosEventRepository).findVisibleHistory(eq(GUARDIAN_ID), any(), pageableCaptor.capture());
         assertThat(pageableCaptor.getValue().getPageNumber()).isEqualTo(Integer.MAX_VALUE / 50);
         assertThat(pageableCaptor.getValue().getOffset()).isLessThanOrEqualTo(Integer.MAX_VALUE);
     }
@@ -196,10 +196,10 @@ class GuardianSosServiceTest {
     void getHistory_경로필터_전체기준건수() {
         SosEvent call = sosEvent(5L, WARD_ID, OffsetDateTime.now(), null, SosTriggerType.GUARDIAN_CALL);
         when(connectionService.getActiveWardIds(GUARDIAN_ID)).thenReturn(List.of(WARD_ID, OTHER_WARD_ID));
-        when(sosEventRepository.findByWardIdInAndTriggerTypeOrderByCreatedAtDesc(
+        when(sosEventRepository.findVisibleHistoryByTriggerType(eq(GUARDIAN_ID), 
                 any(), eq(SosTriggerType.GUARDIAN_CALL), any(Pageable.class)))
                 .thenReturn(new PageImpl<>(List.of(call), PageRequest.of(0, 1), 5)); // 1건/페이지 - 전체 5건
-        when(sosEventRepository.countByTriggerType(any())).thenReturn(List.of(
+        when(sosEventRepository.countVisibleByTriggerType(eq(GUARDIAN_ID), any())).thenReturn(List.of(
                 count(SosTriggerType.SOS_BUTTON, 55),
                 count(SosTriggerType.GUARDIAN_CALL, 5)));
         when(userRepository.findAllById(any())).thenReturn(List.of(user(WARD_ID, WARD_NAME)));
@@ -213,15 +213,15 @@ class GuardianSosServiceTest {
                 .containsOnly(SosTriggerType.GUARDIAN_CALL);
         // 탭 건수는 필터·페이지와 무관한 전체 기준
         assertThat(result.counts()).isEqualTo(new SosHistoryPage.Counts(60, 55, 5));
-        verify(sosEventRepository, never()).findByWardIdInOrderByCreatedAtDesc(any(), any());
+        verify(sosEventRepository, never()).findVisibleHistory(eq(GUARDIAN_ID), any(), any());
 
         // 목록·집계 모두 인가된(ACTIVE) 목록으로만 질의한다 (IDOR 방지)
         ArgumentCaptor<Collection<String>> listCaptor = ArgumentCaptor.captor();
-        verify(sosEventRepository).findByWardIdInAndTriggerTypeOrderByCreatedAtDesc(
+        verify(sosEventRepository).findVisibleHistoryByTriggerType(eq(GUARDIAN_ID), 
                 listCaptor.capture(), any(), any(Pageable.class));
         assertThat(listCaptor.getValue()).containsExactly(WARD_ID, OTHER_WARD_ID);
         ArgumentCaptor<Collection<String>> countCaptor = ArgumentCaptor.captor();
-        verify(sosEventRepository).countByTriggerType(countCaptor.capture());
+        verify(sosEventRepository).countVisibleByTriggerType(eq(GUARDIAN_ID), countCaptor.capture());
         assertThat(countCaptor.getValue()).containsExactly(WARD_ID, OTHER_WARD_ID);
     }
 
@@ -229,9 +229,9 @@ class GuardianSosServiceTest {
     @DisplayName("집계에 없는 경로는 0건으로 채운다 - 인가 범위 안에서 실제로 센 값")
     void getHistory_건수_없는경로_0() {
         when(connectionService.isActiveConnection(GUARDIAN_ID, WARD_ID)).thenReturn(true);
-        when(sosEventRepository.findByWardIdInOrderByCreatedAtDesc(any(), any(Pageable.class)))
+        when(sosEventRepository.findVisibleHistory(eq(GUARDIAN_ID), any(), any(Pageable.class)))
                 .thenReturn(new PageImpl<>(List.of(), PageRequest.of(0, 20), 3));
-        when(sosEventRepository.countByTriggerType(any()))
+        when(sosEventRepository.countVisibleByTriggerType(eq(GUARDIAN_ID), any()))
                 .thenReturn(List.of(count(SosTriggerType.SOS_BUTTON, 3)));
 
         SosHistoryPage result = guardianSosService.getHistory(GUARDIAN_ID, WARD_ID, null, 0, 20);
@@ -286,8 +286,8 @@ class GuardianSosServiceTest {
         OffsetDateTime from = OffsetDateTime.parse("2026-10-01T00:00:00+09:00");
         SosEvent latest = sosEvent(9L, WARD_ID, from.minusDays(3), "침실", SosTriggerType.SOS_BUTTON);
         when(connectionService.getActiveWardIds(GUARDIAN_ID)).thenReturn(List.of(WARD_ID));
-        when(sosEventRepository.countByWardIdInAndCreatedAtGreaterThanEqual(List.of(WARD_ID), from)).thenReturn(0L);
-        when(sosEventRepository.findByWardIdInOrderByCreatedAtDesc(any(), any(Pageable.class)))
+        when(sosEventRepository.countVisibleSince(GUARDIAN_ID, List.of(WARD_ID), from)).thenReturn(0L);
+        when(sosEventRepository.findVisibleHistory(eq(GUARDIAN_ID), any(), any(Pageable.class)))
                 .thenReturn(new PageImpl<>(List.of(latest), PageRequest.of(0, 1), 1));
         when(userRepository.findAllById(any())).thenReturn(List.of(user(WARD_ID, WARD_NAME)));
 
@@ -298,7 +298,7 @@ class GuardianSosServiceTest {
         assertThat(result.latest().sosEventId()).isEqualTo(9L);
         assertThat(result.latest().wardName()).isEqualTo(WARD_NAME);
         ArgumentCaptor<Pageable> page = ArgumentCaptor.forClass(Pageable.class);
-        verify(sosEventRepository).findByWardIdInOrderByCreatedAtDesc(any(), page.capture());
+        verify(sosEventRepository).findVisibleHistory(eq(GUARDIAN_ID), any(), page.capture());
         assertThat(page.getValue().getPageSize()).isEqualTo(1);
     }
 
@@ -307,8 +307,8 @@ class GuardianSosServiceTest {
     void getRecent_탈퇴피보호자_익명() {
         SosEvent anonymous = sosEvent(3L, null, OffsetDateTime.now());
         when(connectionService.getActiveWardIds(GUARDIAN_ID)).thenReturn(List.of(WARD_ID));
-        when(sosEventRepository.countByWardIdInAndCreatedAtGreaterThanEqual(any(), any())).thenReturn(1L);
-        when(sosEventRepository.findByWardIdInOrderByCreatedAtDesc(any(), any(Pageable.class)))
+        when(sosEventRepository.countVisibleSince(eq(GUARDIAN_ID), any(), any())).thenReturn(1L);
+        when(sosEventRepository.findVisibleHistory(eq(GUARDIAN_ID), any(), any(Pageable.class)))
                 .thenReturn(new PageImpl<>(List.of(anonymous), PageRequest.of(0, 1), 1));
 
         GuardianSosService.RecentSos result = guardianSosService.getRecent(GUARDIAN_ID, null, OffsetDateTime.now());
@@ -323,16 +323,16 @@ class GuardianSosServiceTest {
     @DisplayName("묶지 않는 조회는 묶음 칸(pressCount·first/lastTriggeredAt)을 채우지 않는다 - 기존 응답 회귀")
     void getHistory_묶음칸_없음() {
         when(connectionService.getActiveWardIds(GUARDIAN_ID)).thenReturn(List.of(WARD_ID));
-        when(sosEventRepository.findByWardIdInOrderByCreatedAtDesc(any(), any(Pageable.class)))
+        when(sosEventRepository.findVisibleHistory(eq(GUARDIAN_ID), any(), any(Pageable.class)))
                 .thenReturn(new PageImpl<>(List.of(sosEvent(1L, WARD_ID, OffsetDateTime.now())), PageRequest.of(0, 20), 1));
-        when(sosEventRepository.countByTriggerType(any())).thenReturn(List.of(count(SosTriggerType.SOS_BUTTON, 1)));
+        when(sosEventRepository.countVisibleByTriggerType(eq(GUARDIAN_ID), any())).thenReturn(List.of(count(SosTriggerType.SOS_BUTTON, 1)));
 
         SosHistoryItem item = guardianSosService.getHistory(GUARDIAN_ID, null, null, 0, 20).content().get(0);
 
         assertThat(item.pressCount()).isNull();
         assertThat(item.firstTriggeredAt()).isNull();
         assertThat(item.lastTriggeredAt()).isNull();
-        verify(sosEventRepository, never()).findPressGroups(any(), any(), anyInt(), anyInt(), anyLong());
+        verify(sosEventRepository, never()).findPressGroups(eq(GUARDIAN_ID), any(), any(), anyInt(), anyInt(), anyLong());
     }
 
     @Test
@@ -344,17 +344,17 @@ class GuardianSosServiceTest {
         SosEvent single = sosEvent(5L, OTHER_WARD_ID, now.minusDays(1), null, SosTriggerType.GUARDIAN_CALL);
 
         when(connectionService.getActiveWardIds(GUARDIAN_ID)).thenReturn(List.of(WARD_ID, OTHER_WARD_ID));
-        when(sosEventRepository.findPressGroups(any(), eq(""), eq(60), eq(20), eq(0L)))
+        when(sosEventRepository.findPressGroups(eq(GUARDIAN_ID), any(), eq(""), eq(60), eq(20), eq(0L)))
                 .thenReturn(List.of(row(3L, 1L, 3L), row(5L, 5L, 1L)));
         when(sosEventRepository.findAllById(any())).thenReturn(List.of(first, latest, single));
         when(userRepository.findAllById(any())).thenReturn(List.of(user(WARD_ID, WARD_NAME), user(OTHER_WARD_ID, "박철수")));
-        when(sosEventRepository.countPressGroupsByTriggerType(any(), eq(""), eq(60)))
+        when(sosEventRepository.countPressGroupsByTriggerType(eq(GUARDIAN_ID), any(), eq(""), eq(60)))
                 .thenReturn(List.of(groupCount("SOS_BUTTON", 1L), groupCount("GUARDIAN_CALL", 1L)));
 
         SosHistoryPage result = guardianSosService.getGroupedHistory(GUARDIAN_ID, null, null, 0, 20);
 
         ArgumentCaptor<Collection<String>> wardIdsCaptor = ArgumentCaptor.captor();
-        verify(sosEventRepository).findPressGroups(wardIdsCaptor.capture(), eq(""), eq(60), eq(20), eq(0L));
+        verify(sosEventRepository).findPressGroups(eq(GUARDIAN_ID), wardIdsCaptor.capture(), eq(""), eq(60), eq(20), eq(0L));
         assertThat(wardIdsCaptor.getValue()).containsExactly(WARD_ID, OTHER_WARD_ID);
 
         assertThat(result.totalElements()).isEqualTo(2);
@@ -374,17 +374,17 @@ class GuardianSosServiceTest {
 
         // counts는 묶음 수, 경로 필터가 없으면 전체 묶음 수는 그 합이라 전체 묶음 수 쿼리를 따로 돌리지 않는다(점검 L-2)
         assertThat(result.counts()).isEqualTo(new SosHistoryPage.Counts(2, 1, 1));
-        verify(sosEventRepository, never()).countPressGroups(any(), any(), anyInt());
+        verify(sosEventRepository, never()).countPressGroups(eq(GUARDIAN_ID), any(), any(), anyInt());
     }
 
     @Test
     @DisplayName("묶음 조회: 경로 필터는 이름으로 넘기고, counts는 필터와 무관하게 전체 경로('')로 센다")
     void getGroupedHistory_경로필터() {
         when(connectionService.isActiveConnection(GUARDIAN_ID, WARD_ID)).thenReturn(true);
-        when(sosEventRepository.countPressGroups(any(), eq("GUARDIAN_CALL"), eq(60))).thenReturn(0L);
-        when(sosEventRepository.findPressGroups(any(), eq("GUARDIAN_CALL"), eq(60), anyInt(), anyLong()))
+        when(sosEventRepository.countPressGroups(eq(GUARDIAN_ID), any(), eq("GUARDIAN_CALL"), eq(60))).thenReturn(0L);
+        when(sosEventRepository.findPressGroups(eq(GUARDIAN_ID), any(), eq("GUARDIAN_CALL"), eq(60), anyInt(), anyLong()))
                 .thenReturn(List.of());
-        when(sosEventRepository.countPressGroupsByTriggerType(any(), eq(""), eq(60)))
+        when(sosEventRepository.countPressGroupsByTriggerType(eq(GUARDIAN_ID), any(), eq(""), eq(60)))
                 .thenReturn(List.of(groupCount("SOS_BUTTON", 2L)));
 
         SosHistoryPage result = guardianSosService.getGroupedHistory(
@@ -427,9 +427,9 @@ class GuardianSosServiceTest {
         SosEvent button = sosEvent(3L, WARD_ID, now.minusHours(2), null, SosTriggerType.SOS_BUTTON);
 
         when(connectionService.getActiveWardIds(GUARDIAN_ID)).thenReturn(List.of(WARD_ID));
-        when(sosEventRepository.findByWardIdInOrderByCreatedAtDesc(any(), any(Pageable.class)))
+        when(sosEventRepository.findVisibleHistory(eq(GUARDIAN_ID), any(), any(Pageable.class)))
                 .thenReturn(new PageImpl<>(List.of(toActive, toLeft, button), PageRequest.of(0, 20), 3));
-        when(sosEventRepository.countByTriggerType(any())).thenReturn(List.of());
+        when(sosEventRepository.countVisibleByTriggerType(eq(GUARDIAN_ID), any())).thenReturn(List.of());
         when(connectionService.getActiveGuardianIds(WARD_ID)).thenReturn(List.of(GUARDIAN_ID, "GD0001"));
         when(userRepository.findAllById(any())).thenAnswer(inv -> {
             Collection<String> ids = inv.getArgument(0);
@@ -450,9 +450,9 @@ class GuardianSosServiceTest {
     @DisplayName("전화받은 보호자가 없는 페이지는 연결 목록을 조회하지 않는다")
     void getHistory_전화받은보호자_없으면_조회없음() {
         when(connectionService.getActiveWardIds(GUARDIAN_ID)).thenReturn(List.of(WARD_ID));
-        when(sosEventRepository.findByWardIdInOrderByCreatedAtDesc(any(), any(Pageable.class)))
+        when(sosEventRepository.findVisibleHistory(eq(GUARDIAN_ID), any(), any(Pageable.class)))
                 .thenReturn(new PageImpl<>(List.of(sosEvent(1L, WARD_ID, OffsetDateTime.now())), PageRequest.of(0, 20), 1));
-        when(sosEventRepository.countByTriggerType(any())).thenReturn(List.of());
+        when(sosEventRepository.countVisibleByTriggerType(eq(GUARDIAN_ID), any())).thenReturn(List.of());
 
         guardianSosService.getHistory(GUARDIAN_ID, null, null, 0, 20);
 
@@ -467,14 +467,14 @@ class GuardianSosServiceTest {
         SosEvent first = called(sosEvent(1L, WARD_ID, now.minusSeconds(30), null, SosTriggerType.GUARDIAN_CALL), "GD0001");
 
         when(connectionService.getActiveWardIds(GUARDIAN_ID)).thenReturn(List.of(WARD_ID));
-        when(sosEventRepository.findPressGroups(any(), eq(""), eq(60), eq(20), eq(0L))).thenReturn(List.of(row(3L, 1L, 2L)));
+        when(sosEventRepository.findPressGroups(eq(GUARDIAN_ID), any(), eq(""), eq(60), eq(20), eq(0L))).thenReturn(List.of(row(3L, 1L, 2L)));
         when(sosEventRepository.findAllById(any())).thenReturn(List.of(first, latest));
         when(connectionService.getActiveGuardianIds(WARD_ID)).thenReturn(List.of("GD0001"));
         when(userRepository.findAllById(any())).thenAnswer(inv -> {
             Collection<String> ids = inv.getArgument(0);
             return ids.contains("GD0001") ? List.of(user("GD0001", "박지영")) : List.of(user(WARD_ID, WARD_NAME));
         });
-        when(sosEventRepository.countPressGroupsByTriggerType(any(), eq(""), eq(60))).thenReturn(List.of());
+        when(sosEventRepository.countPressGroupsByTriggerType(eq(GUARDIAN_ID), any(), eq(""), eq(60))).thenReturn(List.of());
 
         SosHistoryItem item = guardianSosService.getGroupedHistory(GUARDIAN_ID, null, null, 0, 20).content().get(0);
 
@@ -502,9 +502,9 @@ class GuardianSosServiceTest {
         SosEvent latest = sosEvent(3L, WARD_ID, now, null, SosTriggerType.SOS_BUTTON);
 
         when(connectionService.getActiveWardIds(GUARDIAN_ID)).thenReturn(List.of(WARD_ID));
-        when(sosEventRepository.countPressGroupsByTriggerType(any(), eq(""), eq(60)))
+        when(sosEventRepository.countPressGroupsByTriggerType(eq(GUARDIAN_ID), any(), eq(""), eq(60)))
                 .thenReturn(List.of(groupCount("SOS_BUTTON", 2L)));
-        when(sosEventRepository.findPressGroups(any(), eq(""), eq(60), eq(20), eq(0L)))
+        when(sosEventRepository.findPressGroups(eq(GUARDIAN_ID), any(), eq(""), eq(60), eq(20), eq(0L)))
                 .thenReturn(List.of(row(3L, 1L, 2L), row(9L, 8L, 1L)));
         when(sosEventRepository.findAllById(any())).thenReturn(List.of(latest)); // 1·8·9번이 사라짐
         when(userRepository.findAllById(any())).thenReturn(List.of(user(WARD_ID, WARD_NAME)));
