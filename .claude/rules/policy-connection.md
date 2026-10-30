@@ -56,3 +56,8 @@ paths:
 - **이용 제한·탈퇴 진행 계정은 연결 대상이 아니다**(400 `CONNECTION_TARGET_NOT_ACTIVE`) - 로그인도 알림도 되지 않는 계정이라 연결해 두어도 아무것도 동작하지 않는다.
   - **피보호자의 일반 수락 경로도 같은 기준이다 (2026-09-11 회귀 재점검 R-1)**: 요청 뒤 보호자가 정지·탈퇴 진행 상태가 되면 `acceptConnectionAsWard`가 같은 400으로 막는다. 그대로 수락하면 알림은 디스패처가 막지만 연결은 살아 있어 **정지 해제 즉시 SOS·카메라·복약 이력이 열린다.** 요청 시점 검사(`validateConnectionRequest`)만으로는 요청과 수락 사이의 상태 변화를 못 본다.
 - **연결 조회 API를 따로 만들지 않았다** - 회원 상세(`GET /api/admin/user/{userId}`)가 이미 그 회원의 연결 전체를 준다. 별도 "연결 관리" 화면이 생기면 그때 판단한다.
+
+## 2026-10-31 전체 점검 반영 (M-6·L-3)
+
+- **피보호자 수락 시 보호자 정지·탈퇴 진행은 `CONNECTION_REQUESTER_NOT_ACTIVE`(400)**: 받는 사람이 피보호자라 요청 쪽 문구(`CONNECTION_TARGET_NOT_ACTIVE`)를 쓰면 뜻이 통하지 않는다(수신자 기준 문구 정책). 보호자 요청·관리자 강제 연결은 `CONNECTION_TARGET_NOT_ACTIVE` 그대로. FE 수락 화면은 모르는 코드면 서버 문구를 보여 준다.
+- **강제 연결도 요청 횟수를 지운다**: `forceConnect`가 일반 수락처럼 `ConnectionRequestLimiter.reset`을 부른다 - 강제 해제 뒤 보호자의 정상 재요청이 옛 횟수로 막히지 않게.

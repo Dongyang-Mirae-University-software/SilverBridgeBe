@@ -38,6 +38,7 @@
 - **우아한 종료** (B-3): `server.shutdown=graceful` + executor 종료 대기 20초. 배포마다 컨테이너가 교체되므로 이것이 없으면 그 순간 큐에 있던 SOS 알림이 사라진다.
 - **스케줄러 풀 3스레드** (B-1): 기본 1스레드에 스케줄러와 AI WS 재접속 예약이 함께 줄을 선다. 복약 Planner가 느려지면 AI 재접속이 밀려 그 사이 화재 신호를 놓친다. 스케줄러를 추가하면 이 값을 다시 본다.
   - **재검토 (2026-09-22, 알림 이력 점검 L-2)**: 6종이 됐다 - 주기형 3종(복약 1분·판정 재촉 5분·탈퇴 스윕 10분) + 일일 정리 3종(토큰 03:00·FCM 토큰 04:00·알림 이력 04:30). 일일 정리는 시각을 비껴 두어 주기형과만 겹칠 수 있고, 3스레드로 감당된다고 보고 **3을 유지**했다. 일일 작업을 같은 시각에 몰아 넣지 말 것.
+  - **재검토 (2026-10-31 전체 점검)**: 8종이다 - 위 6종 + 클립 청소 일일 05:00·고아 파일 매시 :15(2026-10-04). 일일 03:00·04:00·04:30·05:00과 매시 :15는 겹치지 않고 주기형 3종과만 겹칠 수 있어 **3을 유지**했다.
 - **외부 연동 타임아웃**: 카카오(기존)·SMTP(C-1, 각 10초)·파일서버(C-2, connect 3초·read 10초)·Solapi(P16, 호출 10초 - 아래). 새 HTTP 클라이언트를 추가할 때 타임아웃 없이 두지 말 것 - 요청 스레드를 붙든다.
   - **FCM에도 시간 제한을 걸었다 (2026-09-30 전체 점검 M-2)**: `FcmConfig`에 연결 3초·응답 10초. Solapi는 SDK 제한이 50초 고정이라 별도로 감쌌다(아래 P16). FCM이 느려지면 `notificationExecutor`가 묶여 뒤따르는 SOS·화재 알림이 밀린다.
 - **긴급 알림 전용 executor (2026-10-02 QA SOS-G13·XCUT-G11)**: SOS·이상감지 발생 알림(`SosNotificationListener`·`AnomalyNotificationListener`)은 `urgentNotificationExecutor`(core 4 / max 8 / queue 200, 스레드명 `notify-urgent-`)를 쓰고, 연결·문의·복약 체크·카카오 가입 접속로그는 `notificationExecutor`에 남는다. 포화·종료 정책은 일반 풀과 같다(폐기 + `[NOTIFY-REJECTED]` ERROR, CallerRuns 금지, 종료 대기 20초). **긴급 리스너를 일반 풀로 되돌리거나 일반 알림을 긴급 풀에 태우지 말 것**(`NotificationExecutorAssignmentTest`가 고정). 새 `@Async` 리스너는 executor 이름을 명시한다.
@@ -96,3 +97,10 @@
 
 - Spring Boot 4 웹 응답 변환기는 Jackson 3(`tools.jackson`)이다. `com.fasterxml.jackson.databind` 의 `JsonNode`·`ObjectNode` 를 컨트롤러가 반환하면 모르는 타입이라 bean getter(array·nodeType…)가 직렬화된다(챗 중계가 이 때문에 한때 사용 불가).
 - 응답 경계(서비스)에서 일반 객체·DTO 로 바꾼 뒤 반환한다. 컨트롤러 테스트는 실제 HTTP 직렬화를 거친다(`GuardianChatControllerHttpTest`).
+
+## 2026-10-31 전체 점검 반영 - 공통
+
+- **원문 로그 금지 대상 추가**: `JwtTokenProvider`(만료 메시지)·`JwtAuthenticationFilter`·`JwtHandshakeInterceptor`(토큰 손상 사유는 고정 코드 `TokenInvalidation.CorruptValueException.reason()`)·`AnomalyEventCooldown`·`AnomalyReviewReminderService`(dispatch 경로라 스택째 남기지 않음)를 `LogRawExceptionGuardTest`에 넣었다. 대시보드 IDOR 로그는 SOS 이력처럼 형식 오류 wardId를 길이만 남긴다.
+- **동기 AFTER_COMMIT 리스너 표 (`SyncAfterCommitListenerPropagationTest`)**: `@Async` 없는 AFTER_COMMIT 리스너는 스스로 REQUIRES_NEW이거나, 표에 적은 위임 대상이 모두 REQUIRES_NEW이거나, 쓰기가 없다는 이유를 표에 적어야 한다. 새 동기 리스너를 만들면 이 테스트가 실패한다 - 표에 넣어 정하고, 리스너에 저장소 쓰기를 직접 넣지 말 것.
+- **챗 전송 본문 상한**: `ChatRequestSizeFilter`(512KB, 413 `CHAT_REQUEST_TOO_LARGE`) - policy-chat.
+- **결정 대기(2026-10-31)**: D-1 재연결 시 공백 기간 이력(SOS·이상감지는 지금 "요청 시점 ACTIVE"만 본다 - 재연결·강제 연결 시 과거 전체가 보인다) / D-2 익명 보존 데이터(`access_logs` IP·UA, `admin_audit_log.detail`, `sos_event.location`) 보관 기간. 상세 `docs/(2026-10-31) audit-full-2026-10.md`.

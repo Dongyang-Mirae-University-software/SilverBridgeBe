@@ -120,3 +120,7 @@ paths:
 - **불변 규칙 ④(보안 규칙은 전달 방식과 무관)**: 회전·재사용 감지(H-3)·단일 기기 정책·AUTH-G03 단순 401은 `AuthService.refresh(String)` 한 곳에 있다. 쿠키 경로에서 따로 우회하거나 grace(유예)를 끼우지 말 것(XCUT-G06 유예는 여전히 보류).
 - **전환 기간**: `auth.refresh-cookie.body-compat`(기본 true)이면 본문 `refreshToken`을 내리고 받는다(본문 우선). FE 전환 배포 확인 후 7일 뒤 false로 바꾸면 응답 본문 값은 null(키 유지), 요청 본문은 무시된다. 그 뒤 본문 경로 코드를 삭제한다. 롤백은 `AUTH_REFRESH_COOKIE_ENABLED=false`.
 - **FE 프록시 주의**: FE `api/[...path]/route.ts`는 요청의 `cookie`·`origin` 헤더를 지운다 - `/auth/refresh`에 한해 `careai_rt`를 BE로 넘겨야 쿠키가 동작한다.
+
+## 2026-10-31 전체 점검 반영 (H-2)
+
+- **비밀번호 변경·재설정 뒤 정리는 단계별 best-effort**: `UserAccountEventListener.handlePasswordChanged`는 refresh 삭제와 access 무효화(Redis)를 각각 감싼다. 예외 하나가 메서드 밖으로 새면 REQUIRES_NEW가 롤백돼 **이미 지운 refresh 토큰이 되살아난다**(탈취를 의심해 재설정했는데 옛 세션이 7일 유지). 정지·역할 변경·탈퇴 핸들러와 같은 형태이며, 감싼 블록을 하나로 합치거나 풀지 말 것.

@@ -10,7 +10,7 @@ paths:
 
 ## 기능 요약 (CLAUDE.md §1에서 이동, 2026-10-30)
 
-- **보호자 SOS 이력 연타 묶음**(sos, 2026-10-30, 마이그레이션 없음): `GET /api/guardian/sos/history?group=true`만 묶음 단위(같은 피보호자·같은 경로에서 **앞 누름과 60초 이내** 연쇄, `sos.history-group-gap-seconds`, DB 윈도 함수로 묶어 페이지 경계에서 안 잘림 - 자바에서 묶지 말 것). 항목 = 최신 건 값 + `pressCount`·`firstTriggeredAt`·`lastTriggeredAt`(생략 모드엔 없음), `totalElements`·`counts`는 **묶음 수**. 표시 전용 - 푸시 "최근 10분 내 N번째"·쿨다운과 별개. 상세 `docs/(2026-10-30) feature-sos-history-press-group.md`. **전화받은 보호자**(2026-10-30, V64): `POST /api/ward/sos`의 선택 `calledGuardianId`(GUARDIAN_CALL·ACTIVE 보호자만 저장, 아니면 NULL - **SOS는 거절하지 않음**, 확인은 저장 트랜잭션 밖 `SosCalledGuardianResolver`) → 이력 `calledGuardianName`(지금 연결된 보호자만, **사용자 ID는 내리지 않음** - 2026-10-30 점검 M-1), 묶음 기준에도 포함. 알림에 쓰지 않음 - `docs/(2026-10-30) feature-sos-called-guardian.md`.
+- **보호자 SOS 이력 연타 묶음**(sos, 2026-10-30, 마이그레이션 없음): `GET /api/guardian/sos/history?group=true`만 묶음 단위(같은 피보호자·같은 경로·같은 전화받은 보호자에서 **앞 누름과 60초 이내** 연쇄, `sos.history-group-gap-seconds`, DB 윈도 함수로 묶어 페이지 경계에서 안 잘림 - 자바에서 묶지 말 것). 항목 = 최신 건 값 + `pressCount`·`firstTriggeredAt`·`lastTriggeredAt`(생략 모드엔 없음), `totalElements`·`counts`는 **묶음 수**. 표시 전용 - 푸시 "최근 10분 내 N번째"·쿨다운과 별개. 상세 `docs/(2026-10-30) feature-sos-history-press-group.md`. **전화받은 보호자**(2026-10-30, V64): `POST /api/ward/sos`의 선택 `calledGuardianId`(GUARDIAN_CALL·ACTIVE 보호자만 저장, 아니면 NULL - **SOS는 거절하지 않음**, 확인은 저장 트랜잭션 밖 `SosCalledGuardianResolver`) → 이력 `calledGuardianName`(지금 연결된 보호자만, **사용자 ID는 내리지 않음** - 2026-10-30 점검 M-1), 묶음 기준에도 포함. 알림에 쓰지 않음 - `docs/(2026-10-30) feature-sos-called-guardian.md`.
 
 ## SOS 동작 설정 — 알림 억제 용도로 쓰지 말 것 (2026-07-23)
 
@@ -61,3 +61,7 @@ paths:
 - **디스패처 결과 반환**: `NotificationDispatcher`가 수신자별 `NotificationLogResult`를 돌려주고, SOS 리스너는 **전달된 보호자가 0명이면 쿨다운을 해제**해 재시도가 막히지 않게 한다. ⚠️ **SOS 알림은 항상 발송**한다는 정책은 그대로다 - 이 결과는 쿨다운 해제용일 뿐 발송 여부를 가르지 않는다.
 - **설정 최초 저장**: 알림 설정·SOS 설정은 행이 없을 때 동시에 저장하면 UNIQUE 위반으로 500이 났다. `ON CONFLICT DO NOTHING` 후 재조회한다.
 - **보호자 SOS 이력**: `triggerType` 필터와 `counts`(경로별 건수)를 제공한다. 열람 범위(ACTIVE 연결만)는 그대로다.
+
+## 2026-10-31 전체 점검 반영 (M-5)
+
+- **사용자 속도 제한 제외는 피보호자 SOS 경로만**: `UserRateLimitFilter`는 `/api/ward/sos`·`/api/ward/sos/**`·`/api/ward/sos-setting`만 뺀다. 보호자 SOS 이력(`/api/guardian/sos/**`)은 읽기라 분당 상한을 받는다(묶음 조회가 윈도 함수로 무겁다). "SOS라서 전부 제외"로 넓히지 말 것 - 막히면 안 되는 것은 발신이다.
