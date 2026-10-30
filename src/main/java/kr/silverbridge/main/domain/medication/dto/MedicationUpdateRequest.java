@@ -18,6 +18,8 @@ import java.time.LocalTime;
  *
  * @param doseTime {@code timeSlot}만 바꾸고 이 값을 생략하면 <b>새 시간대의 기본 시각</b>으로 갱신된다
  *                 (아침→저녁이면 18:00). 그러지 않으면 "저녁 08:00" 같은 상태가 남는다.
+ *                 {@code timeSlot}이나 이 값을 보내면 저장되는 시간대는 <b>최종 시각으로 다시 정해진다</b>
+ *                 (04~10 아침 / 11~15 점심 / 16~20 저녁 / 그 외 취침 전, 일괄 등록과 같은 규칙 - 2026-10-30).
  * @param memo     메모를 지우려면 <b>빈 문자열</b>을 보낸다({@code null}은 미변경이라 지울 수 없다).
  */
 @Schema(description = "약 수정 요청 (부분 수정 — null 필드는 미변경)")
@@ -30,7 +32,8 @@ public record MedicationUpdateRequest(
         @Schema(description = "약 이름", example = "혈압약 (암로디핀 5mg)", nullable = true)
         String name,
 
-        @Schema(description = "복용 시간대", example = "DINNER", nullable = true,
+        @Schema(description = "복용 시간대 (시간대나 시각을 보내면 저장되는 시간대는 최종 시각으로 정해진다: "
+                + "04~10시 아침 / 11~15시 점심 / 16~20시 저녁 / 그 외 취침 전)", example = "DINNER", nullable = true,
                 allowableValues = {"MORNING", "LUNCH", "DINNER", "BEDTIME"})
         MedicationTimeSlot timeSlot,
 

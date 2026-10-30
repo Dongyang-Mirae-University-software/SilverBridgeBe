@@ -18,6 +18,7 @@ import java.time.temporal.ChronoUnit;
  * 약 추가 요청(보호자 전용).
  *
  * @param doseTime 생략하면 {@code timeSlot}의 기본 시각을 쓴다(아침 08:00 / 점심 13:00 / 저녁 18:00 / 취침 전 22:00).
+ *                 보내면 시간대는 이 시각으로 정해진다({@code timeSlot}과 어긋나면 시각 기준, 2026-10-30).
  */
 @Schema(description = "약 추가 요청")
 public record MedicationCreateRequest(
@@ -31,7 +32,8 @@ public record MedicationCreateRequest(
         String name,
 
         @NotNull(message = "복용 시간대는 필수입니다.")
-        @Schema(description = "복용 시간대", example = "MORNING",
+        @Schema(description = "복용 시간대 (복용 시각을 보내면 시간대는 그 시각으로 정해진다: "
+                + "04~10시 아침 / 11~15시 점심 / 16~20시 저녁 / 그 외 취침 전)", example = "MORNING",
                 allowableValues = {"MORNING", "LUNCH", "DINNER", "BEDTIME"})
         MedicationTimeSlot timeSlot,
 
