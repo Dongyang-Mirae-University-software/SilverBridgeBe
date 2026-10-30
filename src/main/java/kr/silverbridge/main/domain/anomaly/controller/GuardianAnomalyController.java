@@ -51,6 +51,7 @@ public class GuardianAnomalyController {
                     Authorization: Bearer {accessToken}
 
                     ACTIVE 연결된 피보호자의 이상감지 이력을 최신순으로 반환합니다.
+                    지금 연결이 맺어진 뒤에도 감지가 이어진 상황만 보입니다 - 연결을 끊었다 다시 맺으면 그 이전 상황은 보이지 않습니다.
 
                     [단위는 "상황"입니다]
                     같은 카메라에서 화재가 이어지면 감지 이력은 1분 간격으로 여러 건 쌓이지만,
