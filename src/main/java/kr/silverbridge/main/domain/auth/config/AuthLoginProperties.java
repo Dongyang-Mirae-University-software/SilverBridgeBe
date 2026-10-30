@@ -18,5 +18,5 @@ public class AuthLoginProperties {
     private int maxAttempts = 5;
 
     /** 잠금 유지 시간 (분) */
-    private long lockTtlMinutes = 30L;
+    private long lockTtlMinutes = 10L;
 }

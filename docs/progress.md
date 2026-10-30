@@ -4,6 +4,16 @@
 
 ---
 
+### [2026-10-30] 로그인 잠금 시간 30분 → 10분 (branch `fix/login-lock-ttl-10min`)
+
+사용자 결정: 5회 실패 잠금 30분은 시니어에게 길다. 마이그레이션 없음, 두 서버 `.env.dev`에 `AUTH_LOGIN_LOCK_TTL_MINUTES` 없음(코드 기본값 적용).
+
+- `auth.login.lock-ttl-minutes` 기본 30 → 10(yaml·`AuthLoginProperties`). 실패 집계 창도 같은 값이라 "10분 안 5회"가 된다.
+- 비밀번호 변경·탈퇴 확인 잠금은 30분 유지 - 공용이던 `LOGIN_LOCKED` 문구를 "10분 후"로 바꾸면서 이쪽은 새 `PASSWORD_CHECK_LOCKED`(429, "30분 후")로 분리(FE가 code로 분기하면 반영 필요).
+- 주석·Swagger 429 설명 갱신, 테스트: `AuthLoginPropertiesTest`(yaml 기본 10·env 지정 시 그 값·문구 분 수 일치), `AuthServiceTest`(설정값대로 잠금·집계 TTL).
+
+---
+
 ### [2026-10-30] SOS 이력 기능 점검 이슈 반영 (branch `fix/sos-history-audit-followup`)
 
 점검(조건부 PASS)의 M-1·L-1~L-6을 반영했다. 마이그레이션 없음.

@@ -28,6 +28,7 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 
 import java.time.OffsetDateTime;
 import java.util.Optional;
+import java.util.concurrent.TimeUnit;
 
 import org.mockito.quality.Strictness;
 
@@ -71,7 +72,7 @@ class AuthServiceTest {
     void setUp() {
         when(redisTemplate.opsForValue()).thenReturn(valueOperations);
         when(authLoginProperties.getMaxAttempts()).thenReturn(5);
-        when(authLoginProperties.getLockTtlMinutes()).thenReturn(30L);
+        when(authLoginProperties.getLockTtlMinutes()).thenReturn(10L);
     }
 
     // ─── login ─────────────────────────────────────────────────────────────
@@ -345,6 +346,22 @@ class AuthServiceTest {
         assertThat(ex.getErrorCode()).isEqualTo(ErrorCode.INVALID_CREDENTIALS);
         verify(valueOperations).set(eq(RedisKeys.LOGIN_LOCK + TEST_USER_ID), eq("1"), anyLong(), any());
         verify(redisTemplate, never()).delete(RedisKeys.LOGIN_FAIL + TEST_USER_ID);
+    }
+
+    @Test
+    @DisplayName("잠금 시간과 실패 집계 창은 설정값(auth.login.lock-ttl-minutes)을 따른다")
+    void login_잠금시간_설정값을_따른다() {
+        when(authLoginProperties.getLockTtlMinutes()).thenReturn(7L);
+        LoginRequest req = loginRequest(TEST_EMAIL, "WrongPass1!");
+        when(userRepository.findByEmail(TEST_EMAIL)).thenReturn(Optional.of(activeUser()));
+        when(redisTemplate.hasKey(RedisKeys.LOGIN_LOCK + TEST_USER_ID)).thenReturn(false);
+        when(passwordEncoder.matches(anyString(), anyString())).thenReturn(false);
+        when(redisCounter.incrementWithTtl(eq(RedisKeys.LOGIN_FAIL + TEST_USER_ID), anyLong())).thenReturn(5L);
+
+        assertThrows(CustomException.class, () -> authService.login(req, TEST_IP, TEST_AGENT));
+
+        verify(redisCounter).incrementWithTtl(RedisKeys.LOGIN_FAIL + TEST_USER_ID, 7L * 60);
+        verify(valueOperations).set(RedisKeys.LOGIN_LOCK + TEST_USER_ID, "1", 7L, TimeUnit.MINUTES);
     }
 
     // ─── register ──────────────────────────────────────────────────────────

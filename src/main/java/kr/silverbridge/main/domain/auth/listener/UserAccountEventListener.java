@@ -108,7 +108,7 @@ public class UserAccountEventListener {
     }
 
     // 비밀번호 변경·재설정 성공 = 본인 확인을 마친 것이므로 로그인 잠금·실패 횟수를 함께 푼다 (AUTH-G01).
-    // 안 풀면 5회 실패로 잠긴 사람이 재설정을 끝내고도 최대 30분간 새 비밀번호로 로그인하지 못한다.
+    // 안 풀면 5회 실패로 잠긴 사람이 재설정을 끝내고도 잠금 시간(기본 10분) 동안 새 비밀번호로 로그인하지 못한다.
     // 키 형식은 AuthService.login과 같다(RedisKeys.LOGIN_LOCK/LOGIN_FAIL + userId).
     // best-effort - 실패해도 잠금은 TTL로 풀리고, 이미 끝난 토큰 무효화를 되돌릴 이유가 없다.
     private void clearLoginLock(String userId) {

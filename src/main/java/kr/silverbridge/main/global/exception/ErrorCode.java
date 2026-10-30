@@ -22,7 +22,10 @@ public enum ErrorCode {
     USER_NOT_FOUND(HttpStatus.NOT_FOUND, "사용자를 찾을 수 없습니다."),
     // 비밀번호 재설정 — 미가입 이메일 안내 (시니어 친화 UX, 2026-05-23). SMS 미일치는 USER_NOT_FOUND 재사용
     EMAIL_ACCOUNT_NOT_FOUND(HttpStatus.NOT_FOUND, "해당 이메일로 가입된 계정이 없습니다."),
-    LOGIN_LOCKED(HttpStatus.TOO_MANY_REQUESTS, "비밀번호를 5회 이상 틀렸습니다. 30분 후 다시 시도해주세요."),
+    // 분 수는 auth.login.lock-ttl-minutes 기본값(10)과 맞춘다 - 설정을 바꾸면 이 문구도 함께 바꿀 것
+    LOGIN_LOCKED(HttpStatus.TOO_MANY_REQUESTS, "비밀번호를 5회 이상 틀렸습니다. 10분 후 다시 시도해주세요."),
+    // 비밀번호 변경·탈퇴의 현재 비밀번호 확인 잠금(UserService, 30분) - 로그인 잠금과 시간이 달라 코드를 나눴다(2026-10-30)
+    PASSWORD_CHECK_LOCKED(HttpStatus.TOO_MANY_REQUESTS, "비밀번호를 5회 이상 틀렸습니다. 30분 후 다시 시도해주세요."),
     CANNOT_MODIFY_ADMIN(HttpStatus.FORBIDDEN, "관리자 계정은 변경하거나 삭제할 수 없습니다."),
     // 관리자 본인 탈퇴 차단(USER-G08, 결정 D4-A) - 관리자는 DB로만 만들어져 마지막 관리자가 사라지면 운영 주체가 없어진다
     ADMIN_CANNOT_WITHDRAW(HttpStatus.FORBIDDEN, "관리자 계정은 탈퇴할 수 없습니다."),

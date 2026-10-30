@@ -129,14 +129,14 @@ public class AuthController {
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "입력값 오류", content = @Content),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "이메일 또는 비밀번호가 올바르지 않음 (가입 안 된 이메일과 비밀번호 불일치를 동일 응답으로 통합 — 계정 enumeration 차단)", content = @Content),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "비활성화된 계정 (비밀번호 검증을 통과한 본인에게만 노출)", content = @Content),
-            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "429", description = "비밀번호 5회 이상 틀려 30분 잠금 상태", content = @Content),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "429", description = "비밀번호 5회 이상 틀려 10분 잠금 상태(LOGIN_LOCKED)", content = @Content),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "500", description = "서버 오류", content = @Content)
     })
     @PostMapping("/signin")
     public ApiResponse<LoginResponse> login(@Valid @RequestBody LoginRequest request,
                                             HttpServletRequest httpRequest,
                                             HttpServletResponse httpResponse) {
-        // IP 기준 속도 제한 — per-user 잠금(5회/30분)이 막지 못하는 계정 분산 credential stuffing/
+        // IP 기준 속도 제한 — per-user 잠금(5회/10분)이 막지 못하는 계정 분산 credential stuffing/
         // password spraying 차단 (A-H2). 다른 인증 엔드포인트와 동일 정책(1분 10회).
         rateLimitService.check("signin", ClientIpResolver.resolve(httpRequest));
         LoginResponse login = authService.login(
