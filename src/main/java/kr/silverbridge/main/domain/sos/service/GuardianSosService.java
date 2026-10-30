@@ -1,6 +1,7 @@
 package kr.silverbridge.main.domain.sos.service;
 
 import kr.silverbridge.main.domain.connection.service.ConnectionService;
+import kr.silverbridge.main.domain.sos.config.SosProperties;
 import kr.silverbridge.main.domain.sos.dto.SosHistoryItem;
 import kr.silverbridge.main.domain.sos.dto.SosHistoryPage;
 import kr.silverbridge.main.domain.sos.entity.SosEvent;
@@ -14,6 +15,7 @@ import kr.silverbridge.main.global.response.PageOffsets;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
@@ -26,7 +28,9 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
+import java.util.function.Function;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 /**
  * 보호자용 SOS 이력 조회 서비스.
@@ -52,6 +56,7 @@ public class GuardianSosService {
     private final SosEventRepository sosEventRepository;
     private final ConnectionService connectionService;
     private final UserRepository userRepository;
+    private final SosProperties sosProperties;
 
     /**
      * 보호자용 SOS 이력 조회(발생 최신순).
@@ -85,6 +90,52 @@ public class GuardianSosService {
         return SosHistoryPage.of(
                 events.map(event -> SosHistoryItem.of(event, names.get(event.getWardId()))),
                 countByTriggerType(wardIds));
+    }
+
+    /**
+     * 보호자용 SOS 이력 - 연타 묶음 단위 조회({@code group=true}, 2026-10-30).
+     *
+     * <p>같은 피보호자·같은 경로의 다음 누름이 <b>앞 누름과</b> {@code sos.history-group-gap-seconds}(기본 60초) 이내면
+     * 한 칸으로 묶는다. 묶음은 DB 안에서 만든다 - 페이지로 자른 뒤 묶으면 경계에 걸친 묶음이 두 칸으로 갈린다.
+     * 페이지·{@code totalElements}·{@code counts}는 모두 <b>묶음 수</b>다. 인가는 {@link #getHistory}와 같다.</p>
+     *
+     * <p>표시 전용이다 - 알림 쿨다운·푸시 문구의 "최근 10분 내 N번째"와 별개이며 이력 저장·알림에 관여하지 않는다.</p>
+     *
+     * @throws CustomException {@code SOS_NOT_AUTHORIZED} - wardId를 지정했으나 ACTIVE 연결이 아닐 때
+     */
+    @Transactional(readOnly = true)
+    public SosHistoryPage getGroupedHistory(String guardianId, String wardId, SosTriggerType triggerType,
+                                            int page, int size) {
+        int pageSize = normalizeSize(size);
+        Pageable pageable = PageRequest.of(PageOffsets.clampPage(page, pageSize), pageSize);
+        List<String> wardIds = resolveVisibleWardIds(guardianId, wardId);
+        if (wardIds.isEmpty()) {
+            return SosHistoryPage.of(Page.empty(pageable), SosHistoryPage.Counts.EMPTY);
+        }
+
+        String type = (triggerType == null) ? "" : triggerType.name();
+        int gap = sosProperties.effectiveHistoryGroupGapSeconds();
+        long total = sosEventRepository.countPressGroups(wardIds, type, gap);
+        List<SosEventRepository.PressGroupRow> rows = sosEventRepository.findPressGroups(
+                wardIds, type, gap, pageSize, pageable.getOffset());
+
+        // 묶음 행은 ID만 준다 - 최신·최초 이력을 한 번에 읽어 기존 항목과 같은 매핑을 쓴다
+        Set<Long> eventIds = rows.stream()
+                .flatMap(row -> Stream.of(row.getLatestId(), row.getFirstId()))
+                .collect(Collectors.toSet());
+        Map<Long, SosEvent> events = sosEventRepository.findAllById(eventIds).stream()
+                .collect(Collectors.toMap(SosEvent::getId, Function.identity()));
+        Map<String, String> names = resolveWardNames(List.copyOf(events.values()));
+
+        List<SosHistoryItem> items = rows.stream()
+                .map(row -> {
+                    SosEvent latest = events.get(row.getLatestId());
+                    return SosHistoryItem.ofGroup(latest, events.get(row.getFirstId()),
+                            row.getPressCount(), names.get(latest.getWardId()));
+                })
+                .toList();
+
+        return SosHistoryPage.of(new PageImpl<>(items, pageable, total), countGroupsByTriggerType(wardIds, gap));
     }
 
     /**
@@ -125,6 +176,21 @@ public class GuardianSosService {
         return SosHistoryPage.Counts.of(sosButton, guardianCall);
     }
 
+    /** 인가된 피보호자 범위의 경로별 묶음 수(필터·페이지와 무관). 집계에 없는 경로는 0이다. */
+    private SosHistoryPage.Counts countGroupsByTriggerType(List<String> wardIds, int gap) {
+        long sosButton = 0;
+        long guardianCall = 0;
+        for (SosEventRepository.PressGroupCount row
+                : sosEventRepository.countPressGroupsByTriggerType(wardIds, "", gap)) {
+            if (SosTriggerType.GUARDIAN_CALL.name().equals(row.getTriggerType())) {
+                guardianCall += row.getTotal();
+            } else if (SosTriggerType.SOS_BUTTON.name().equals(row.getTriggerType())) {
+                sosButton += row.getTotal();
+            }
+        }
+        return SosHistoryPage.Counts.of(sosButton, guardianCall);
+    }
+
     /**
      * 조회 대상 피보호자 ID 목록을 인가 검증과 함께 결정한다. 이 메서드를 통과한 목록만 쿼리에 넘긴다.
      */
@@ -143,6 +209,8 @@ public class GuardianSosService {
     /**
      * 이력에 등장하는 피보호자 이름을 한 번에 조회한다(건별 조회로 인한 N+1 회피).
      * 탈퇴로 사라진 사용자는 맵에 없어 {@code null}로 표시된다(관리자 문의 목록의 작성자 처리와 동일).
+     * 참고: 보호자 이력 쿼리는 {@code ward_id IN (인가 목록)}이라 탈퇴로 {@code ward_id}가 NULL이 된 익명 이력은
+     * 보호자 화면에 나오지 않는다(2026-10-30 확인) - 아래 방어는 이름 조회 중 사용자가 막 탈퇴한 경우 등을 위한 것이다.
      *
      * <p>빈 결과로 {@code Map.of()}를 쓰지 않는다 - 탈퇴 피보호자의 익명 이력({@code wardId == null})만
      * 조회되면 호출부가 {@code get(null)}을 하는데, {@code Map.of()}는 null 키 조회에 NPE를 던진다.</p>

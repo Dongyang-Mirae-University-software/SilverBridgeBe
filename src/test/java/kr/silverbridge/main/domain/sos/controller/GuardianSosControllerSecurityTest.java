@@ -53,14 +53,14 @@ class GuardianSosControllerSecurityTest {
         when(guardianSosService.getHistory(anyString(), any(), any(), anyInt(), anyInt()))
                 .thenReturn(new SosHistoryPage(List.of(), 0, 20, 0, 0, true, SosHistoryPage.Counts.EMPTY));
 
-        assertThatNoException().isThrownBy(() -> controller.getSosHistory("GD0001", null, null, 0, 20));
+        assertThatNoException().isThrownBy(() -> controller.getSosHistory("GD0001", null, null, false, 0, 20));
     }
 
     @Test
     @WithMockUser(roles = "WARD")
     @DisplayName("피보호자(WARD) → 이력 조회 403 (AccessDeniedException)")
     void ward_거부() {
-        assertThatThrownBy(() -> controller.getSosHistory("WD0001", null, null, 0, 20))
+        assertThatThrownBy(() -> controller.getSosHistory("WD0001", null, null, false, 0, 20))
                 .isInstanceOf(AccessDeniedException.class);
     }
 
@@ -68,7 +68,7 @@ class GuardianSosControllerSecurityTest {
     @WithMockUser(roles = "ADMIN")
     @DisplayName("관리자(ADMIN) → 이력 조회 403 (AccessDeniedException)")
     void admin_거부() {
-        assertThatThrownBy(() -> controller.getSosHistory("AD0001", null, null, 0, 20))
+        assertThatThrownBy(() -> controller.getSosHistory("AD0001", null, null, false, 0, 20))
                 .isInstanceOf(AccessDeniedException.class);
     }
 }
