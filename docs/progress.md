@@ -4,6 +4,18 @@
 
 ---
 
+### [2026-10-30] 보호자 SOS 이력 연타 묶음 조회 (branch `feature/sos-history-press-group`)
+
+보호자 이력 화면의 "N번 연달아 누름" 한 칸을 위해 `GET /api/guardian/sos/history?group=true`를 더했다. FE가 페이지 단위로 묶으면 경계에서 잘려 BE가 DB 윈도 함수(LAG + 누적합)로 묶는다. 마이그레이션 없음.
+
+- **기준**: 같은 피보호자·같은 경로에서 앞 누름과 60초 이내 연쇄(`sos.history-group-gap-seconds`, 정확히 60초 포함). 항목 = 최신 건 값 + `pressCount`·`firstTriggeredAt`·`lastTriggeredAt`(생략 모드엔 JSON에 없음), `totalElements`·`counts`는 묶음 수.
+- **그대로**: SOS 발생·알림·쿨다운·`repeatCount`(10분)·대시보드·인가 경로·`group` 없는 응답.
+- **발견(drift)**: 실제 경로는 `/history`. 보호자 이력 쿼리는 `ward_id IN`이라 익명 이력(탈퇴)은 원래 조회되지 않는다 - 서비스 주석 정정.
+- **검증**: 로컬 build 2093건 통과, vkcs 통합 110건 통과(신규 8건).
+- 산출물: `docs/(2026-10-30) feature-sos-history-press-group.md`.
+
+---
+
 ### [2026-06-09] 피보호자 SOS 긴급 알림 기능 스팟 점검 — PASS
 
 신규 SOS 기능(`POST /api/ward/sos`, PR #199 / `d66343f`)을 생명 관련 긴급 기능 기준으로 점검 — **"알림이 확실히 가는가"** 최우선. **코드 변경 없음(점검만).** 빌드·SOS 단위 테스트 3클래스 모두 성공.

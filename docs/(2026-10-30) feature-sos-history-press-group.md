@@ -74,4 +74,6 @@ SOS 발생(`POST /api/ward/sos`)·이력 저장·알림·쿨다운(10초)·`repe
 
 ## 8. 테스트 결과
 
-(아래 PR 단계에서 채움)
+- 로컬 `./gradlew build`(단위 테스트 포함): **BUILD SUCCESSFUL** - 2093건, 실패 0·오류 0·건너뜀 1(기존).
+  - 신규: `GuardianSosServiceTest` 묶음 매핑·경로 필터·403·연결 0명·기존 조회 회귀 5건, `GuardianSosControllerHttpTest` 2건(생략 시 세 칸 JSON 없음 / `group=true` 분기), `SosPropertiesTest` 2건.
+- vkcs `tools/integration-test.sh feature/sos-history-press-group` @ `449a6eb6`: **통과** - 전체 110건 실패 0, `SosHistoryPressGroupIntegrationTest` 8건 전부 통과(캐시 아님, 5 tasks executed).
