@@ -12,7 +12,7 @@
 | Q1 | `POST /api/ward/sos` 본문에 선택 필드 `calledGuardianId` |
 | Q2 | **SOS는 거절하지 않는다.** GUARDIAN_CALL이 아님 / 형식(영숫자 1~6자) 오류 / 그 피보호자의 ACTIVE 보호자 아님 / 확인 실패 → 값만 NULL로 저장, `[SOS-CALLED-GUARDIAN-IGNORED] wardId=…, reason=NOT_GUARDIAN_CALL\|FORMAT\|NOT_CONNECTED\|CHECK_FAILED` WARN(입력 원문 미기록) |
 | Q3 | V64: `sos_event.called_guardian_id VARCHAR(6) NULL`, FK `users` `ON DELETE SET NULL`, 부분 인덱스(값 있는 행). 기존 행 NULL(백필 없음). **가역**(DROP COLUMN) |
-| Q4 | 이력 응답 `calledGuardianId`·`calledGuardianName` - 그 보호자가 **지금** 그 피보호자와 ACTIVE 연결일 때만, 아니면 둘 다 생략(JSON에 없음). 묶지 않는·묶음 모드 모두. 대시보드 `latest`는 그대로 |
+| Q4 | 이력 응답 `calledGuardianName` - 그 보호자가 **지금** 그 피보호자와 ACTIVE 연결일 때만, 아니면 생략(JSON에 없음). 묶지 않는·묶음 모드 모두. 대시보드 `latest`는 그대로. ~~`calledGuardianId`~~는 점검 M-1(2026-10-30)로 응답에서 뺐다 - 보호자끼리 서로의 사용자 ID를 볼 이유가 없다 |
 | Q5 | 묶음(`group=true`) 기준에 전화받은 보호자 포함 - 1분 안이어도 다른 보호자에게 건 전화는 다른 줄. SOS 버튼은 그대로. 기록 없는 보호자 연락끼리는 같은 값으로 묶음. 칩은 묶음의 최신 건 기준 |
 | Q6 | 알림 무변경 - `SosTriggeredEvent`에 싣지 않아 리스너가 읽을 수 없다 |
 
@@ -31,9 +31,9 @@ POST /api/ward/sos
 
 응답 (보호자 이력 `GET /api/guardian/sos/history[?group=true]`) 항목에 추가:
 ```json
-{ "triggerType": "GUARDIAN_CALL", "calledGuardianId": "G1B2C3", "calledGuardianName": "박지영", ... }
+{ "triggerType": "GUARDIAN_CALL", "calledGuardianName": "박지영", ... }
 ```
-SOS 버튼·옛 이력·해제/탈퇴한 보호자면 두 칸 모두 없다.
+SOS 버튼·옛 이력·해제/탈퇴한 보호자면 칸이 없다. 전화받은 보호자의 사용자 ID는 응답에 싣지 않는다(점검 M-1).
 
 ## 5. 바뀌지 않는 것
 

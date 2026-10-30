@@ -59,6 +59,10 @@ public class GuardianSosController {
                     [응답] data: SosHistoryPage
                     - content[].sosEventId / wardId / wardName / triggeredAt / location
                     - content[].triggerType: SOS_BUTTON(긴급 SOS 버튼) · GUARDIAN_CALL(보호자에게 직접 전화)
+                    - content[].calledGuardianName: 보호자 연락(GUARDIAN_CALL)에서 전화받은 보호자 이름.
+                      피보호자가 전화받은 보호자를 함께 보냈고 그 보호자가 지금도 연결돼 있을 때만 있습니다
+                      (SOS 버튼·옛 이력·연결 해제/탈퇴한 보호자면 필드가 없습니다)
+                    - content[].pressCount / firstTriggeredAt / lastTriggeredAt: group=true일 때만 (위 group 설명)
                     - page / size / totalElements / totalPages / last: 기존 페이지 응답과 같은 필드 (triggerType 필터 기준)
                     - counts.all / counts.sosButton / counts.guardianCall: 경로별 전체 건수
                       (triggerType·페이지와 무관, 조회 범위 피보호자 전체 기준 - 탭 숫자는 이 값으로 그립니다)

@@ -30,6 +30,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import java.util.function.Function;
+import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
@@ -53,6 +54,9 @@ public class GuardianSosService {
 
     /** 페이지 크기 상한 - 과대 요청으로 전체 이력을 한 번에 끌어가는 것을 막는다. */
     private static final int MAX_PAGE_SIZE = 50;
+
+    /** 사용자 ID 형식(영숫자 1~6자). 요청 wardId가 어긋나면 로그에 원문을 남기지 않는다. */
+    private static final Pattern WARD_ID_FORMAT = Pattern.compile("[A-Za-z0-9]{1,6}");
 
     private final SosEventRepository sosEventRepository;
     private final ConnectionService connectionService;
@@ -91,7 +95,7 @@ public class GuardianSosService {
 
         return SosHistoryPage.of(
                 events.map(event -> SosHistoryItem.of(event, names.get(event.getWardId()))
-                        .withCalledGuardian(event.getCalledGuardianId(), called.nameFor(event))),
+                        .withCalledGuardianName(called.nameFor(event))),
                 countByTriggerType(wardIds));
     }
 
@@ -118,7 +122,9 @@ public class GuardianSosService {
 
         String type = (triggerType == null) ? "" : triggerType.name();
         int gap = sosProperties.effectiveHistoryGroupGapSeconds();
-        long total = sosEventRepository.countPressGroups(wardIds, type, gap);
+        SosHistoryPage.Counts counts = countGroupsByTriggerType(wardIds, gap);
+        // 경로 필터가 없으면 전체 묶음 수 = 경로별 묶음 수의 합이라 같은 윈도 쿼리를 한 번 더 돌리지 않는다(점검 L-2)
+        long total = (triggerType == null) ? counts.all() : sosEventRepository.countPressGroups(wardIds, type, gap);
         List<SosEventRepository.PressGroupRow> rows = sosEventRepository.findPressGroups(
                 wardIds, type, gap, pageSize, pageable.getOffset());
 
@@ -131,16 +137,18 @@ public class GuardianSosService {
         Map<String, String> names = resolveWardNames(List.copyOf(events.values()));
         CalledGuardianNames called = resolveCalledGuardianNames(events.values());
 
+        // 두 쿼리 사이에 이력이 지워졌으면(지금은 삭제 경로가 없지만 보관 정리가 생길 때 대비) 그 칸을 건너뛴다 - 500 대신 한 칸 덜 보임(점검 L-4)
         List<SosHistoryItem> items = rows.stream()
+                .filter(row -> events.containsKey(row.getLatestId()))
                 .map(row -> {
                     SosEvent latest = events.get(row.getLatestId());
-                    return SosHistoryItem.ofGroup(latest, events.get(row.getFirstId()),
-                                    row.getPressCount(), names.get(latest.getWardId()))
-                            .withCalledGuardian(latest.getCalledGuardianId(), called.nameFor(latest));
+                    SosEvent first = events.getOrDefault(row.getFirstId(), latest);
+                    return SosHistoryItem.ofGroup(latest, first, row.getPressCount(), names.get(latest.getWardId()))
+                            .withCalledGuardianName(called.nameFor(latest));
                 })
                 .toList();
 
-        return SosHistoryPage.of(new PageImpl<>(items, pageable, total), countGroupsByTriggerType(wardIds, gap));
+        return SosHistoryPage.of(new PageImpl<>(items, pageable, total), counts);
     }
 
     /**
@@ -202,6 +210,13 @@ public class GuardianSosService {
     private List<String> resolveVisibleWardIds(String guardianId, String wardId) {
         if (!StringUtils.hasText(wardId)) {
             return connectionService.getActiveWardIds(guardianId);
+        }
+        // 형식이 틀린 값은 DB 조회 없이 거절하고 로그에는 원문 대신 길이만 남긴다 - 줄바꿈 삽입으로 로그 줄 위조 방지(점검 L-1,
+        // 복약 MedicationWardIds·챗 대리 상담과 같은 방식)
+        if (!WARD_ID_FORMAT.matcher(wardId).matches()) {
+            log.warn("[IDOR-ATTEMPT] 형식이 맞지 않는 피보호자 SOS 이력 조회 시도: guardianId={}, wardIdLength={}",
+                    guardianId, wardId.length());
+            throw new CustomException(ErrorCode.SOS_NOT_AUTHORIZED);
         }
         if (!connectionService.isActiveConnection(guardianId, wardId)) {
             log.warn("[IDOR-ATTEMPT] 연결되지 않은 피보호자 SOS 이력 조회 시도: guardianId={}, wardId={}",
