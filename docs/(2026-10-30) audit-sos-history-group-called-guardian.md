@@ -90,4 +90,4 @@
 | L-5 | 수용(표시 전용) - 코드 변경 없음 |
 | L-6 | 통합 테스트 2건: 같은 시각 연타 한 묶음·최신 건 id, 보호자 혼합 시 전체 = 경로별 합·필터 건수 일치 |
 
-테스트 결과는 PR 본문과 아래에 적는다.
+테스트: 로컬 `./gradlew build` 단위 2115건 실패 0 / vkcs `integration-test.sh fix/sos-history-audit-followup` @ `cd7f3922` 통과 - 전체 115건 실패 0(`SosCalledGuardianIntegrationTest` 5건 · `SosHistoryPressGroupIntegrationTest` 8건).
