@@ -2512,3 +2512,15 @@ AI 챗 집계 점검 L-1에서 남겨 둔 공용 `GlobalExceptionHandler`의 `e.
 - 운영에서 달라 보이는 점: `CustomException` 로그가 한국어 문구 대신 `code=USER_NOT_FOUND` 형태다.
 - 배포(PR #399 `dcbb2f3`): vkcs CD 성공(14:44 기동), gosky 수동 배포(14:45 기동), 두 서버 AI WS 연결. gosky 실측 - 지원하지 않는 Content-Type 요청 415 그대로·로그는 `HttpMediaTypeNotSupportedException`만(요청에 넣은 표식 0건), 쿠키 없는 토큰 갱신 400 그대로·로그 `CustomException: code=INVALID_INPUT`.
 
+---
+
+### [2026-10-30] 웹푸시 문구 정리·두 줄 본문·웹 토큰 data 전용 발송 (branch `feature/web-push-copy-data`)
+
+새 웹푸시 디자인(제목 = 누가·어디서 + 종류, 본문 = 무슨 일 / 다음 줄 할 일)과 "알림 두 번 표시"(notification 블록 자동 표시 + FE `onBackgroundMessage`) 해결을 위한 BE 쪽 변경.
+
+- 문구: SOS·이상감지·복약 요약 보호자 제목·본문 변경, 재촉 3종·카메라 끊김·복약 중지는 두 문장 사이만 `\n`. 피보호자·알림톡 무변경.
+- FCM: data에 `title`·`body`(모든 종류), `notification.fcm.webpush-data-only`(기본 false, 켜면 웹 토큰 data 전용), `notification.fcm.high-urgency-types`(사용자 선택 10종 `Urgency: high`). 전달 판정 불변.
+- 문자: SOS 대체 문자는 옛 문구 고정(사용자 결정), 문자 채널은 `[` 제목에 괄호를 겹치지 않음.
+- 테스트: 단위 2135건 통과, `FcmServiceMessageTest` 신규.
+- 배포: PR #405(`2a15120`)는 CD 통합 테스트 3건 실패로 배포 중단(`FcmService`를 직접 Import하는 `WithdrawalListenerCommitIntegrationTest`에 새 설정 빈 없음) → #406(`2a27492`) 목 추가, vkcs 브랜치 통합 테스트 통과 후 머지. vkcs CD 성공(16:13 기동)·gosky 수동 배포(16:14 기동), 두 서버 AI WS 연결·ERROR 0.
+- 남은 일: data 전용 켜기(FE SW 배포 후, 운영 `.env` 수정이라 확인 필요), FCM 토큰 누적 정리(별도 세션). 상세 `docs/(2026-10-30) feature-web-push-copy.md`.
