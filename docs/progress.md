@@ -11,6 +11,8 @@
 - `auth.login.lock-ttl-minutes` 기본 30 → 10(yaml·`AuthLoginProperties`). 실패 집계 창도 같은 값이라 "10분 안 5회"가 된다.
 - 비밀번호 변경·탈퇴 확인 잠금은 30분 유지 - 공용이던 `LOGIN_LOCKED` 문구를 "10분 후"로 바꾸면서 이쪽은 새 `PASSWORD_CHECK_LOCKED`(429, "30분 후")로 분리(FE가 code로 분기하면 반영 필요).
 - 주석·Swagger 429 설명 갱신, 테스트: `AuthLoginPropertiesTest`(yaml 기본 10·env 지정 시 그 값·문구 분 수 일치), `AuthServiceTest`(설정값대로 잠금·집계 TTL).
+- 배포: BE PR #404(머지 `7214bbd`) vkcs CD·gosky 수동 반영. gosky 실측 - 6번째 시도 429 `LOGIN_LOCKED` "10분 후", `login:lock` TTL 600초(확인 후 키 삭제).
+- FE PR #162(머지 `0031ad3`, gosky FE 반영·`/login` 200): 로그인 화면이 429에 "30분 동안 제한"을 고정 표시하던 것을 서버 문구 우선(없으면 10분 기본 문구)으로. 비밀번호 변경·탈퇴 화면은 이미 서버 문구를 표시해 `PASSWORD_CHECK_LOCKED` 대응 불필요.
 
 ---
 
