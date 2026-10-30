@@ -1,14 +1,17 @@
 package kr.silverbridge.main.support;
 
 import kr.silverbridge.main.domain.camera.entity.Camera;
+import kr.silverbridge.main.domain.connection.entity.Connection;
 import kr.silverbridge.main.domain.medication.entity.Medication;
 import kr.silverbridge.main.domain.medication.entity.MedicationTimeSlot;
 import kr.silverbridge.main.domain.user.entity.User;
+import kr.silverbridge.main.global.enums.ConnectionStatus;
 import kr.silverbridge.main.global.enums.Provider;
 import kr.silverbridge.main.global.enums.Role;
 import kr.silverbridge.main.global.enums.Status;
 
 import java.math.BigDecimal;
+import java.time.OffsetDateTime;
 
 /** 통합 테스트용 최소 엔티티. NOT NULL 컬럼만 채운다(가짜 값 - 실제 개인정보·비밀값을 쓰지 않는다). */
 public final class TestData {
@@ -48,6 +51,17 @@ public final class TestData {
                 .timeSlot(MedicationTimeSlot.MORNING)
                 .doseTime(MedicationTimeSlot.MORNING.defaultTime())
                 .doseAmount(BigDecimal.valueOf(1))
+                .build();
+    }
+
+    /** 지정한 시각에 맺어진 ACTIVE 연결 - 보호자 이력 열람 범위(연결 이후만, 2026-10-31 D-1) 검증용. */
+    public static Connection activeConnection(String guardianId, String wardId, OffsetDateTime connectedAt) {
+        return Connection.builder()
+                .guardianId(guardianId)
+                .wardId(wardId)
+                .status(ConnectionStatus.ACTIVE)
+                .initiatedBy(guardianId)
+                .connectedAt(connectedAt)
                 .build();
     }
 }

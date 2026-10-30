@@ -45,6 +45,7 @@ public class AnomalyClipAccessService {
         AnomalyIncident incident = incidentRepository.findById(incidentId)
                 .orElseThrow(() -> new CustomException(ErrorCode.ANOMALY_INCIDENT_NOT_FOUND));
         requireGuardianConnected(guardianId, incident.getWardId(), "incidentId", incidentId);
+        requireSinceConnection(guardianId, incident);
         return toItems(clipService.visibleClipsOf(incidentId));
     }
 
@@ -52,6 +53,11 @@ public class AnomalyClipAccessService {
         AnomalyClip clip = clipService.findViewable(clipId)
                 .orElseThrow(() -> new CustomException(ErrorCode.ANOMALY_CLIP_NOT_FOUND));
         requireGuardianConnected(guardianId, clip.getWardId(), "clipId", clipId);
+        AnomalyIncident incident = incidentRepository.findById(clip.getIncidentId())
+                .orElseThrow(() -> new CustomException(ErrorCode.ANOMALY_CLIP_NOT_FOUND));
+        if (!connectionService.isVisibleSinceConnection(guardianId, incident.getWardId(), incident.getLastDetectedAt())) {
+            throw new CustomException(ErrorCode.ANOMALY_CLIP_NOT_FOUND);
+        }
         return fileOf(clip);
     }
 
@@ -74,6 +80,13 @@ public class AnomalyClipAccessService {
             log.warn("[IDOR-ATTEMPT] 연결되지 않은 피보호자 이상감지 영상 접근 시도: guardianId={}, {}={}",
                     guardianId, target, targetId);
             throw new CustomException(ErrorCode.ANOMALY_NOT_AUTHORIZED);
+        }
+    }
+
+    // 연결 이전 상황의 클립은 이력처럼 보이지 않는다 - 없는 상황과 같은 404(2026-10-31 D-1)
+    private void requireSinceConnection(String guardianId, AnomalyIncident incident) {
+        if (!connectionService.isVisibleSinceConnection(guardianId, incident.getWardId(), incident.getLastDetectedAt())) {
+            throw new CustomException(ErrorCode.ANOMALY_INCIDENT_NOT_FOUND);
         }
     }
 

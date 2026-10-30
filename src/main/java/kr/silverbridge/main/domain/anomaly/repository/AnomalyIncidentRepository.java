@@ -41,6 +41,18 @@ public interface AnomalyIncidentRepository extends JpaRepository<AnomalyIncident
             String wardId, String sessionId, DetectedType detectedType);
 
     /**
+     * 보호자 열람 범위(2026-10-31 전체 점검 D-1, 사용자 결정): 그 보호자의 <b>지금 ACTIVE인 연결이 맺어진 뒤</b>에도 감지가
+     * 이어진 상황만 보인다(마지막 감지 시각 기준 - 연결 직후까지 이어진 상황은 이미 알림을 받은 것이라 보인다). 끊었다 다시
+     * 맺으면 그 이전 상황은 보이지 않고, 관리자 강제 연결도 같다. {@code connected_at}이 비어 있는 옛 ACTIVE 행은 전부 보인다.
+     */
+    String VISIBLE_SINCE_CONNECTED = """
+              AND EXISTS (SELECT 1 FROM Connection c
+                          WHERE c.guardianId = :guardianId AND c.wardId = i.wardId
+                            AND c.status = kr.silverbridge.main.global.enums.ConnectionStatus.ACTIVE
+                            AND (c.connectedAt IS NULL OR i.lastDetectedAt >= c.connectedAt))
+            """;
+
+    /**
      * 보호자 이력 목록 - 연결된 피보호자들의 상황을 최신순으로. 정렬 기준이 {@code startedAt}인 이유는
      * 통계의 날짜 소속과 목록의 순서가 어긋나지 않게 하기 위함이다(둘 다 "언제 시작된 상황인가"를 본다).
      * 동률이면 id 내림차순이라 페이지 경계에서 중복·누락이 생기지 않는다.
@@ -58,9 +70,9 @@ public interface AnomalyIncidentRepository extends JpaRepository<AnomalyIncident
               AND (:type IS NULL OR i.detectedType = :type)
               AND (:onlyDeleted = false OR i.sessionId NOT IN :liveSessionIds)
               AND (:onlyExisting = false OR i.sessionId IN :liveSessionIds)
-            ORDER BY i.startedAt DESC, i.id DESC
-            """)
-    Page<AnomalyIncident> findHistory(@Param("wardIds") Collection<String> wardIds,
+            """ + VISIBLE_SINCE_CONNECTED + " ORDER BY i.startedAt DESC, i.id DESC")
+    Page<AnomalyIncident> findHistory(@Param("guardianId") String guardianId,
+                                      @Param("wardIds") Collection<String> wardIds,
                                       @Param("type") DetectedType type,
                                       @Param("onlyDeleted") boolean onlyDeleted,
                                       @Param("onlyExisting") boolean onlyExisting,
@@ -75,8 +87,9 @@ public interface AnomalyIncidentRepository extends JpaRepository<AnomalyIncident
             SELECT COUNT(i) FROM AnomalyIncident i
             WHERE i.wardId IN :wardIds
               AND i.sessionId NOT IN :liveSessionIds
-            """)
-    long countDeletedCameraForGuardian(@Param("wardIds") Collection<String> wardIds,
+            """ + VISIBLE_SINCE_CONNECTED)
+    long countDeletedCameraForGuardian(@Param("guardianId") String guardianId,
+                                       @Param("wardIds") Collection<String> wardIds,
                                        @Param("liveSessionIds") Collection<String> liveSessionIds);
 
     /**
@@ -92,9 +105,9 @@ public interface AnomalyIncidentRepository extends JpaRepository<AnomalyIncident
             FROM AnomalyIncident i
             WHERE i.wardId IN :wardIds
               AND i.sessionId IN :liveSessionIds
-            GROUP BY i.detectedType, i.reviewStatus
-            """)
-    List<GuardianTypeStatusCount> countForGuardianSummary(@Param("wardIds") Collection<String> wardIds,
+            """ + VISIBLE_SINCE_CONNECTED + " GROUP BY i.detectedType, i.reviewStatus")
+    List<GuardianTypeStatusCount> countForGuardianSummary(@Param("guardianId") String guardianId,
+                                                          @Param("wardIds") Collection<String> wardIds,
                                                           @Param("liveSessionIds") Collection<String> liveSessionIds);
 
     /**
@@ -108,9 +121,9 @@ public interface AnomalyIncidentRepository extends JpaRepository<AnomalyIncident
             WHERE i.wardId IN :wardIds
               AND i.sessionId IN :liveSessionIds
               AND i.reviewStatus IN :statuses
-            ORDER BY i.startedAt DESC, i.id DESC
-            """)
-    List<AnomalyIncident> findLatestByStatuses(@Param("wardIds") Collection<String> wardIds,
+            """ + VISIBLE_SINCE_CONNECTED + " ORDER BY i.startedAt DESC, i.id DESC")
+    List<AnomalyIncident> findLatestByStatuses(@Param("guardianId") String guardianId,
+                                               @Param("wardIds") Collection<String> wardIds,
                                                @Param("liveSessionIds") Collection<String> liveSessionIds,
                                                @Param("statuses") Collection<AnomalyReviewStatus> statuses,
                                                Pageable pageable);

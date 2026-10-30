@@ -79,7 +79,7 @@ class GuardianAnomalyServiceTest {
 
             assertThat(service.getLatestNeedsReview(GUARDIAN_ID, null)).isNull();
 
-            verify(incidentRepository, never()).findLatestByStatuses(any(), any(), any(), any());
+            verify(incidentRepository, never()).findLatestByStatuses(eq(GUARDIAN_ID), any(), any(), any(), any());
         }
 
         @Test
@@ -91,14 +91,14 @@ class GuardianAnomalyServiceTest {
                     .isInstanceOf(CustomException.class)
                     .hasFieldOrPropertyWithValue("errorCode", ErrorCode.ANOMALY_NOT_AUTHORIZED);
 
-            verify(incidentRepository, never()).findLatestByStatuses(any(), any(), any(), any());
+            verify(incidentRepository, never()).findLatestByStatuses(eq(GUARDIAN_ID), any(), any(), any(), any());
         }
 
         @Test
         @DisplayName("확인 필요 상황이 없으면 null")
         void 없으면_null() {
             when(connectionService.getActiveWardIds(GUARDIAN_ID)).thenReturn(List.of(WARD_ID));
-            when(incidentRepository.findLatestByStatuses(any(), any(), any(), any())).thenReturn(List.of());
+            when(incidentRepository.findLatestByStatuses(eq(GUARDIAN_ID), any(), any(), any(), any())).thenReturn(List.of());
 
             assertThat(service.getLatestNeedsReview(GUARDIAN_ID, null)).isNull();
         }
@@ -110,7 +110,7 @@ class GuardianAnomalyServiceTest {
             org.springframework.test.util.ReflectionTestUtils.setField(found, "id", INCIDENT_ID);
             when(connectionService.getActiveWardIds(GUARDIAN_ID)).thenReturn(List.of(WARD_ID));
             when(cameraService.findSessionIdsByWardIds(List.of(WARD_ID))).thenReturn(List.of("ward_a9cC5f_k3m"));
-            when(incidentRepository.findLatestByStatuses(any(), any(), any(), any())).thenReturn(List.of(found));
+            when(incidentRepository.findLatestByStatuses(eq(GUARDIAN_ID), any(), any(), any(), any())).thenReturn(List.of(found));
 
             var item = service.getLatestNeedsReview(GUARDIAN_ID, null);
 
@@ -121,7 +121,7 @@ class GuardianAnomalyServiceTest {
                     org.mockito.ArgumentCaptor.forClass(java.util.Collection.class);
             org.mockito.ArgumentCaptor<org.springframework.data.domain.Pageable> page =
                     org.mockito.ArgumentCaptor.forClass(org.springframework.data.domain.Pageable.class);
-            verify(incidentRepository).findLatestByStatuses(eq(List.of(WARD_ID)), eq(List.of("ward_a9cC5f_k3m")),
+            verify(incidentRepository).findLatestByStatuses(eq(GUARDIAN_ID), eq(List.of(WARD_ID)), eq(List.of("ward_a9cC5f_k3m")),
                     statuses.capture(), page.capture());
             assertThat(statuses.getValue())
                     .containsExactlyInAnyOrder(AnomalyReviewStatus.PENDING, AnomalyReviewStatus.CONFLICTED);
@@ -160,7 +160,7 @@ class GuardianAnomalyServiceTest {
                     .isInstanceOf(CustomException.class)
                     .hasFieldOrPropertyWithValue("errorCode", ErrorCode.ANOMALY_NOT_AUTHORIZED);
 
-            verify(incidentRepository, never()).findHistory(any(), any(), anyBoolean(), anyBoolean(), any(), any());
+            verify(incidentRepository, never()).findHistory(eq(GUARDIAN_ID), any(), any(), anyBoolean(), anyBoolean(), any(), any());
         }
 
         @Test
@@ -183,7 +183,7 @@ class GuardianAnomalyServiceTest {
             when(connectionService.getActiveWardIds(GUARDIAN_ID)).thenReturn(List.of());
 
             assertThat(service.getHistory(GUARDIAN_ID, null, null, null, 0, 20).content()).isEmpty();
-            verify(incidentRepository, never()).findHistory(any(), any(), anyBoolean(), anyBoolean(), any(), any());
+            verify(incidentRepository, never()).findHistory(eq(GUARDIAN_ID), any(), any(), anyBoolean(), anyBoolean(), any(), any());
         }
 
         @Test
@@ -239,6 +239,21 @@ class GuardianAnomalyServiceTest {
         @BeforeEach
         void allowConnection() {
             when(connectionService.isActiveConnection(GUARDIAN_ID, WARD_ID)).thenReturn(true);
+            org.mockito.Mockito.lenient().when(connectionService.isVisibleSinceConnection(eq(GUARDIAN_ID), eq(WARD_ID), any()))
+                    .thenReturn(true);
+        }
+
+        @Test
+        @DisplayName("연결 이전 상황에는 응답할 수 없다 - 없는 상황과 같은 404, 응답을 저장하지 않는다 (2026-10-31 D-1)")
+        void 연결이전_상황_404() {
+            AnomalyIncident incident = incident();
+            when(incidentRepository.findByIdForUpdate(77L)).thenReturn(Optional.of(incident));
+            when(connectionService.isVisibleSinceConnection(eq(GUARDIAN_ID), eq(WARD_ID), any())).thenReturn(false);
+
+            assertThatThrownBy(() -> service.submitFeedback(GUARDIAN_ID, 77L, AnomalyVerdict.FALSE_ALARM))
+                    .isInstanceOfSatisfying(CustomException.class,
+                            e -> assertThat(e.getErrorCode()).isEqualTo(ErrorCode.ANOMALY_INCIDENT_NOT_FOUND));
+            verify(feedbackRepository, never()).save(any());
         }
 
         @Test

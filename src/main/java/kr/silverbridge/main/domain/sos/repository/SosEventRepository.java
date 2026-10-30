@@ -15,6 +15,26 @@ import java.util.List;
 public interface SosEventRepository extends JpaRepository<SosEvent, Long> {
 
     /**
+     * 보호자 열람 범위(2026-10-31 전체 점검 D-1, 사용자 결정): 그 보호자의 <b>지금 ACTIVE인 연결이 맺어진 뒤</b>에 생긴 이력만 보인다.
+     * 연결을 끊었다 다시 맺으면 끊긴 동안·그 이전의 이력은 보이지 않고, 관리자 강제 연결도 같다. {@code connected_at}이 비어 있는
+     * 옛 ACTIVE 행은 시점을 모르므로 전부 보인다. 인가 목록({@code wardIds})과 별개로 쿼리 안에서 한 번 더 건다.
+     */
+    String VISIBLE_SINCE_CONNECTED = """
+             AND EXISTS (SELECT 1 FROM Connection c
+                         WHERE c.guardianId = :guardianId AND c.wardId = e.wardId
+                           AND c.status = kr.silverbridge.main.global.enums.ConnectionStatus.ACTIVE
+                           AND (c.connectedAt IS NULL OR e.createdAt >= c.connectedAt))
+            """;
+
+    /** {@link #VISIBLE_SINCE_CONNECTED}의 네이티브 판(연타 묶음 CTE용). */
+    String VISIBLE_SINCE_CONNECTED_NATIVE = """
+                  AND EXISTS (SELECT 1 FROM connection c
+                              WHERE c.guardian_id = :guardianId AND c.ward_id = sos_event.ward_id
+                                AND c.status = 'ACTIVE'
+                                AND (c.connected_at IS NULL OR sos_event.created_at >= c.connected_at))
+            """;
+
+    /**
      * 보호자 화면용 SOS 이력 조회 — 여러 피보호자의 이력을 발생 최신순으로 합쳐서 페이징한다.
      *
      * <p>정렬을 메서드 이름에 고정했으므로 호출부는 {@code Sort} 없는 {@code PageRequest}를 넘긴다
@@ -23,16 +43,25 @@ public interface SosEventRepository extends JpaRepository<SosEvent, Long> {
      *
      * @param wardIds 조회 대상 피보호자 ID들 — <b>인가된(ACTIVE 연결) 목록만</b> 넘겨야 한다(IDOR 방지)
      */
-    Page<SosEvent> findByWardIdInOrderByCreatedAtDesc(Collection<String> wardIds, Pageable pageable);
+    @Query(value = "SELECT e FROM SosEvent e WHERE e.wardId IN :wardIds" + VISIBLE_SINCE_CONNECTED
+            + " ORDER BY e.createdAt DESC, e.id DESC",
+            countQuery = "SELECT COUNT(e) FROM SosEvent e WHERE e.wardId IN :wardIds" + VISIBLE_SINCE_CONNECTED)
+    Page<SosEvent> findVisibleHistory(@Param("guardianId") String guardianId,
+                                      @Param("wardIds") Collection<String> wardIds, Pageable pageable);
 
     /**
      * 발생 경로 필터를 건 보호자 이력 조회(SOS-G12). 정렬·인가 전제는 위 메서드와 같다.
      *
      * @param wardIds 조회 대상 피보호자 ID들 — <b>인가된(ACTIVE 연결) 목록만</b> 넘겨야 한다(IDOR 방지)
      */
-    Page<SosEvent> findByWardIdInAndTriggerTypeOrderByCreatedAtDesc(Collection<String> wardIds,
-                                                                     SosTriggerType triggerType,
-                                                                     Pageable pageable);
+    @Query(value = "SELECT e FROM SosEvent e WHERE e.wardId IN :wardIds AND e.triggerType = :triggerType"
+            + VISIBLE_SINCE_CONNECTED + " ORDER BY e.createdAt DESC, e.id DESC",
+            countQuery = "SELECT COUNT(e) FROM SosEvent e WHERE e.wardId IN :wardIds AND e.triggerType = :triggerType"
+                    + VISIBLE_SINCE_CONNECTED)
+    Page<SosEvent> findVisibleHistoryByTriggerType(@Param("guardianId") String guardianId,
+                                                   @Param("wardIds") Collection<String> wardIds,
+                                                   @Param("triggerType") SosTriggerType triggerType,
+                                                   Pageable pageable);
 
     /**
      * 경로별 전체 건수 - 보호자 이력 화면의 탭 숫자용(SOS-G12).
@@ -43,12 +72,10 @@ public interface SosEventRepository extends JpaRepository<SosEvent, Long> {
      *
      * @param wardIds 집계 대상 피보호자 ID들 — <b>인가된(ACTIVE 연결) 목록만</b> 넘겨야 한다(IDOR 방지)
      */
-    @Query("""
-            SELECT e.triggerType AS triggerType, COUNT(e) AS total FROM SosEvent e
-            WHERE e.wardId IN :wardIds
-            GROUP BY e.triggerType
-            """)
-    List<TriggerTypeCount> countByTriggerType(@Param("wardIds") Collection<String> wardIds);
+    @Query("SELECT e.triggerType AS triggerType, COUNT(e) AS total FROM SosEvent e WHERE e.wardId IN :wardIds"
+            + VISIBLE_SINCE_CONNECTED + " GROUP BY e.triggerType")
+    List<TriggerTypeCount> countVisibleByTriggerType(@Param("guardianId") String guardianId,
+                                                     @Param("wardIds") Collection<String> wardIds);
 
     /**
      * 최근 집계 창 안에서 같은 피보호자가 발생시킨 SOS 건수 - 보호자 알림 문구의 "N번째" 표기용.
@@ -71,7 +98,11 @@ public interface SosEventRepository extends JpaRepository<SosEvent, Long> {
      *
      * @param wardIds <b>인가된(ACTIVE 연결) 목록만</b> 넘겨야 한다(IDOR 방지)
      */
-    long countByWardIdInAndCreatedAtGreaterThanEqual(Collection<String> wardIds, OffsetDateTime from);
+    @Query("SELECT COUNT(e) FROM SosEvent e WHERE e.wardId IN :wardIds AND e.createdAt >= :from"
+            + VISIBLE_SINCE_CONNECTED)
+    long countVisibleSince(@Param("guardianId") String guardianId,
+                           @Param("wardIds") Collection<String> wardIds,
+                           @Param("from") OffsetDateTime from);
 
     /**
      * 연타 묶음 공통 CTE(2026-10-30). 같은 피보호자·같은 경로에서 <b>앞 누름과의 간격</b>이 {@code :gapSeconds} 이하면
@@ -97,6 +128,7 @@ public interface SosEventRepository extends JpaRepository<SosEvent, Long> {
                 FROM sos_event
                 WHERE ward_id IN (:wardIds)
                   AND (:triggerType = '' OR trigger_type = :triggerType)
+            """ + VISIBLE_SINCE_CONNECTED_NATIVE + """
                 WINDOW w AS (PARTITION BY ward_id, trigger_type, COALESCE(called_guardian_id, '') ORDER BY created_at, id)
             ), numbered AS (
                 SELECT id, ward_id, trigger_type, called_guardian_id, created_at,
@@ -125,7 +157,8 @@ public interface SosEventRepository extends JpaRepository<SosEvent, Long> {
             ORDER BY MAX(created_at) DESC, 1 DESC
             LIMIT :limit OFFSET :offset
             """, nativeQuery = true)
-    List<PressGroupRow> findPressGroups(@Param("wardIds") Collection<String> wardIds,
+    List<PressGroupRow> findPressGroups(@Param("guardianId") String guardianId,
+                                        @Param("wardIds") Collection<String> wardIds,
                                         @Param("triggerType") String triggerType,
                                         @Param("gapSeconds") int gapSeconds,
                                         @Param("limit") int limit,
@@ -135,7 +168,8 @@ public interface SosEventRepository extends JpaRepository<SosEvent, Long> {
     @Query(value = PRESS_GROUP_CTE + """
             SELECT COALESCE(SUM(is_start), 0) FROM marked
             """, nativeQuery = true)
-    long countPressGroups(@Param("wardIds") Collection<String> wardIds,
+    long countPressGroups(@Param("guardianId") String guardianId,
+                          @Param("wardIds") Collection<String> wardIds,
                           @Param("triggerType") String triggerType,
                           @Param("gapSeconds") int gapSeconds);
 
@@ -150,7 +184,8 @@ public interface SosEventRepository extends JpaRepository<SosEvent, Long> {
             FROM marked
             GROUP BY trigger_type
             """, nativeQuery = true)
-    List<PressGroupCount> countPressGroupsByTriggerType(@Param("wardIds") Collection<String> wardIds,
+    List<PressGroupCount> countPressGroupsByTriggerType(@Param("guardianId") String guardianId,
+                                                        @Param("wardIds") Collection<String> wardIds,
                                                         @Param("triggerType") String triggerType,
                                                         @Param("gapSeconds") int gapSeconds);
 

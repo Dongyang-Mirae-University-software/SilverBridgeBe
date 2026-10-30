@@ -28,15 +28,21 @@ class SosHistoryTriggerTypeIntegrationTest extends PostgresIntegrationTest {
 
     private static final String WARD_ID = "WSH001";
     private static final String OTHER_WARD_ID = "WSH002";
+    private static final String VIEWER = "GSH009";
 
     @Autowired private SosEventRepository sosEventRepository;
     @Autowired private UserRepository userRepository;
+    @Autowired private kr.silverbridge.main.domain.connection.repository.ConnectionRepository connectionRepository;
 
     @Test
     @DisplayName("경로별 건수는 넘긴 피보호자 범위의 전체를 세고, 경로 필터 조회는 그 경로만 돌려준다")
     void 경로별_건수와_필터() {
         userRepository.save(TestData.user(WARD_ID, "피보호자", Role.WARD));
         userRepository.save(TestData.user(OTHER_WARD_ID, "다른피보호자", Role.WARD));
+        // 보호자용 쿼리는 "이 보호자의 ACTIVE 연결 이후" 기록만 센다(2026-10-31 D-1) - 기존 데이터보다 앞서 연결해 둔다
+        userRepository.save(TestData.user(VIEWER, "보는보호자", Role.GUARDIAN));
+        connectionRepository.save(TestData.activeConnection(VIEWER, WARD_ID, java.time.OffsetDateTime.parse("2000-01-01T00:00:00Z")));
+        connectionRepository.save(TestData.activeConnection(VIEWER, OTHER_WARD_ID, java.time.OffsetDateTime.parse("2000-01-01T00:00:00Z")));
 
         for (int i = 0; i < 3; i++) {
             save(WARD_ID, SosTriggerType.SOS_BUTTON);
@@ -44,7 +50,7 @@ class SosHistoryTriggerTypeIntegrationTest extends PostgresIntegrationTest {
         save(WARD_ID, SosTriggerType.GUARDIAN_CALL);
         save(OTHER_WARD_ID, SosTriggerType.GUARDIAN_CALL); // 범위 밖 - 세지 않는다
 
-        Map<SosTriggerType, Long> counts = sosEventRepository.countByTriggerType(List.of(WARD_ID)).stream()
+        Map<SosTriggerType, Long> counts = sosEventRepository.countVisibleByTriggerType(VIEWER, List.of(WARD_ID)).stream()
                 .collect(Collectors.toMap(SosEventRepository.TriggerTypeCount::getTriggerType,
                         SosEventRepository.TriggerTypeCount::getTotal));
         assertThat(counts).containsOnly(
@@ -52,7 +58,7 @@ class SosHistoryTriggerTypeIntegrationTest extends PostgresIntegrationTest {
                 Map.entry(SosTriggerType.GUARDIAN_CALL, 1L));
 
         // 페이지 크기 1이어도 필터 기준 전체 건수가 나온다
-        var page = sosEventRepository.findByWardIdInAndTriggerTypeOrderByCreatedAtDesc(
+        var page = sosEventRepository.findVisibleHistoryByTriggerType(VIEWER, 
                 List.of(WARD_ID), SosTriggerType.SOS_BUTTON, PageRequest.of(0, 1));
         assertThat(page.getTotalElements()).isEqualTo(3);
         assertThat(page.getContent()).extracting(SosEvent::getTriggerType)
