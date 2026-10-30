@@ -18,6 +18,7 @@ import kr.silverbridge.main.domain.camera.service.CameraService;
 import kr.silverbridge.main.domain.connection.service.ConnectionService;
 import kr.silverbridge.main.domain.user.entity.User;
 import kr.silverbridge.main.domain.user.repository.UserRepository;
+import kr.silverbridge.main.global.enums.Status;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -29,6 +30,7 @@ import java.time.LocalTime;
 import java.time.OffsetDateTime;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -380,10 +382,20 @@ public class AnomalyReviewReminderPlanner {
      * ("ACTIVE 연결이 유일한 열람 근거").</p>
      */
     private Map<String, List<String>> activeGuardiansByWard(List<AnomalyIncident> incidents) {
-        Map<String, List<String>> result = new LinkedHashMap<>();
+        Map<String, List<String>> connected = new LinkedHashMap<>();
         for (String wardId : incidents.stream().map(AnomalyIncident::getWardId).collect(Collectors.toCollection(LinkedHashSet::new))) {
-            result.put(wardId, connectionService.getActiveGuardianIds(wardId));
+            connected.put(wardId, connectionService.getActiveGuardianIds(wardId));
         }
+        // 연결이 ACTIVE여도 계정이 이용 제한(RESTRICTED)·탈퇴 진행이면 발송이 막히는데, 그 보호자를 선점하면
+        // 1회성 재촉 기록만 소진된다(L-12). 계정 ACTIVE가 아닌 보호자는 선점하지 않아 제한이 풀린 뒤(마감 안이면) 나갈 수 있다.
+        Set<String> allGuardians = connected.values().stream().flatMap(List::stream).collect(Collectors.toSet());
+        if (allGuardians.isEmpty()) {
+            return connected;
+        }
+        Set<String> usable = new HashSet<>(userRepository.findIdsByIdInAndStatus(allGuardians, Status.ACTIVE));
+        Map<String, List<String>> result = new LinkedHashMap<>();
+        connected.forEach((wardId, guardians) ->
+                result.put(wardId, guardians.stream().filter(usable::contains).toList()));
         return result;
     }
 

@@ -50,7 +50,17 @@ class ChatRelayRequestValidationTest {
     @Test
     @DisplayName("sessionId 65자 → 위반")
     void sessionId_상한() {
-        assertThat(validator.validate(request("s".repeat(65), null, null, null))).hasSize(1);
+        assertThat(validator.validate(request("s".repeat(65), null, null, null))).isNotEmpty();
+    }
+
+    @Test
+    @DisplayName("sessionId는 영숫자·_·-만 허용 - UUID·base36은 통과, 공백·줄바꿈·특수문자·빈 값은 위반 (L-10)")
+    void sessionId_문자() {
+        assertThat(validator.validate(request("3f2b8c1e-5a4d-4e7f-9b0a-1c2d3e4f5a6b", null, null, null))).isEmpty();
+        assertThat(validator.validate(request("k3j9x0a8s7d", null, null, null))).isEmpty();
+        for (String bad : List.of("a b", "a\nb", "a/../b", "a'b", "한글", "")) {
+            assertThat(validator.validate(request(bad, null, null, null))).as(bad).hasSize(1);
+        }
     }
 
     @Test

@@ -93,6 +93,10 @@ public interface UserRepository extends JpaRepository<User, String> {
             + "           else 3 end)) ";
 
     /** 회원관리 목록 - 키워드·역할·계정 상태·연결 상태 필터, 가입일 역순은 호출부 Pageable이 정한다. */
+    /** 주어진 ID 중 해당 상태인 사용자 ID만(한 번의 조회로 보호자 상태를 거를 때). */
+    @Query("select u.id from User u where u.id in :ids and u.status = :status")
+    List<String> findIdsByIdInAndStatus(@Param("ids") java.util.Collection<String> ids, @Param("status") Status status);
+
     @Query(value = "select u from User u where " + ADMIN_USER_SEARCH_WHERE,
            countQuery = "select count(u) from User u where " + ADMIN_USER_SEARCH_WHERE)
     Page<User> searchForAdmin(@Param("excludedStatus") Status excludedStatus,

@@ -196,7 +196,10 @@ public class AuthController {
             result = authService.refresh(token);
         } catch (CustomException e) {
             // 더 쓸 수 없는 토큰이면 쿠키도 치운다(HttpOnly라 화면이 지울 수 없다). 429·5xx 같은 일시 오류는 남긴다.
-            if (cookieToken.isPresent() && isDeadTokenError(e.getErrorCode())) {
+            // 거절된 토큰이 쿠키 것일 때만 치운다 - 본문 토큰이 거절됐는데 쿠키가 다른(유효할 수 있는) 토큰이면 남긴다(L-14)
+            boolean rejectedTokenIsCookie = cookieToken.isPresent()
+                    && (bodyToken.isEmpty() || bodyToken.get().equals(cookieToken.get()));
+            if (rejectedTokenIsCookie && isDeadTokenError(e.getErrorCode())) {
                 refreshCookieManager.clear(httpResponse);
             }
             throw e;

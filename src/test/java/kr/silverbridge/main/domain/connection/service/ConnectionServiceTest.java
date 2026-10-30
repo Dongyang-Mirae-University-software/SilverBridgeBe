@@ -464,15 +464,15 @@ class ConnectionServiceTest {
         }
 
         @Test
-        @DisplayName("다른 피보호자가 수락 시도 → CONNECTION_NOT_AUTHORIZED (IDOR 차단)")
-        void 타인연결수락_CONNECTION_NOT_AUTHORIZED() {
+        @DisplayName("다른 피보호자가 수락 시도 → CONNECTION_NOT_OWNED (IDOR 차단)")
+        void 타인연결수락_CONNECTION_NOT_OWNED() {
             Connection connection = connection(ConnectionStatus.PENDING);
             when(connectionRepository.findById(CONNECTION_ID)).thenReturn(java.util.Optional.of(connection));
 
             CustomException ex = assertThrows(CustomException.class,
                     () -> connectionService.acceptConnectionAsWard(OTHER_WARD_ID, CONNECTION_ID));
 
-            assertThat(ex.getErrorCode()).isEqualTo(ErrorCode.CONNECTION_NOT_AUTHORIZED);
+            assertThat(ex.getErrorCode()).isEqualTo(ErrorCode.CONNECTION_NOT_OWNED);
             verify(eventPublisher, never()).publishEvent(any());
         }
 
@@ -748,15 +748,15 @@ class ConnectionServiceTest {
         }
 
         @Test
-        @DisplayName("타인이 피보호자 해제 시도 → CONNECTION_NOT_AUTHORIZED (IDOR 차단)")
-        void 타인해제_CONNECTION_NOT_AUTHORIZED() {
+        @DisplayName("타인이 피보호자 해제 시도 → CONNECTION_NOT_OWNED (IDOR 차단)")
+        void 타인해제_CONNECTION_NOT_OWNED() {
             Connection connection = connection(ConnectionStatus.ACTIVE);
             when(connectionRepository.findById(CONNECTION_ID)).thenReturn(java.util.Optional.of(connection));
 
             CustomException ex = assertThrows(CustomException.class,
                     () -> connectionService.disconnectAsWard(OTHER_WARD_ID, CONNECTION_ID));
 
-            assertThat(ex.getErrorCode()).isEqualTo(ErrorCode.CONNECTION_NOT_AUTHORIZED);
+            assertThat(ex.getErrorCode()).isEqualTo(ErrorCode.CONNECTION_NOT_OWNED);
             verify(eventPublisher, never()).publishEvent(any());
         }
     }

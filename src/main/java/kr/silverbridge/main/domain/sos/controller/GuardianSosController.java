@@ -48,7 +48,8 @@ public class GuardianSosController {
 
                     [group 파라미터] (선택, 기본 false)
                     - true: 연타를 한 칸으로 묶어 반환합니다("2번 연달아 누름").
-                      같은 피보호자·같은 발생 경로의 다음 누름이 "앞 누름"과 1분(60초) 이내면 같은 묶음입니다.
+                      같은 피보호자·같은 발생 경로·같은 전화받은 보호자(called_guardian_id)의 다음 누름이 "앞 누름"과 1분(60초) 이내면 같은 묶음입니다.
+                      묶음 기준은 피보호자 + 발생 경로 + 전화받은 보호자이며, 간격은 sos.history-group-gap-seconds입니다.
                       시계 기준 칸이 아니라 연쇄라, 30초 간격으로 5분 동안 누르면 한 묶음입니다. 정확히 60초 간격도 같은 묶음입니다.
                     - 묶음 항목의 sosEventId·triggeredAt·location은 묶음의 최신 건 값이고,
                       pressCount(누름 수)·firstTriggeredAt(첫 누름)·lastTriggeredAt(마지막 누름 = triggeredAt)이 더해집니다.

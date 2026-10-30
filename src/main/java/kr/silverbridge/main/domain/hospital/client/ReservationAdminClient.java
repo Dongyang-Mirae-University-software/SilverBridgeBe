@@ -28,6 +28,7 @@ import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.locks.ReentrantLock;
 import java.util.function.Supplier;
 
 /**
@@ -75,7 +76,9 @@ public class ReservationAdminClient {
     private final ThreadLocal<Long> callDeadline = new ThreadLocal<>();
     private final AtomicInteger loginCount = new AtomicInteger();
 
-    private CachedToken cachedToken;
+    /** 로그인(토큰 갱신) 직렬화. 로그인 HTTP 호출 동안 잡고 있으므로 대기 쪽은 자기 마감까지만 기다린다(tryLock). */
+    private final ReentrantLock tokenLock = new ReentrantLock();
+    private volatile CachedToken cachedToken;
     private Instant loginBlockedUntil = Instant.EPOCH;
 
     public ReservationAdminClient(ReservationAdminProperties properties, ObjectMapper objectMapper) {
@@ -200,9 +203,35 @@ public class ReservationAdminClient {
         return new CustomException(ErrorCode.HOSPITAL_SERVICE_UNAVAILABLE);
     }
 
-    private synchronized String currentToken(long deadlineNanos) {
-        if (cachedToken != null && Instant.now().isBefore(cachedToken.refreshAt())) {
-            return cachedToken.value();
+    private String currentToken(long deadlineNanos) {
+        CachedToken cached = cachedToken;
+        if (cached != null && Instant.now().isBefore(cached.refreshAt())) {
+            return cached.value();
+        }
+        // 다른 호출이 로그인 중이면 자기 마감까지만 기다린다(synchronized는 마감을 무시하고 무한정 대기했다)
+        boolean locked;
+        try {
+            locked = tokenLock.tryLock(Math.max(0L, deadlineNanos - System.nanoTime()), TimeUnit.NANOSECONDS);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            throw new CustomException(ErrorCode.HOSPITAL_SERVICE_UNAVAILABLE);
+        }
+        if (!locked) {
+            // 마감 안에 락을 못 얻음 - exchange()가 마감을 넘겼을 때와 같은 오류
+            throw new CustomException(ErrorCode.HOSPITAL_SERVICE_TIMEOUT);
+        }
+        try {
+            return loginLocked(deadlineNanos);
+        } finally {
+            tokenLock.unlock();
+        }
+    }
+
+    private String loginLocked(long deadlineNanos) {
+        // 락을 기다리는 사이 다른 호출이 갱신했을 수 있다
+        CachedToken fresh = cachedToken;
+        if (fresh != null && Instant.now().isBefore(fresh.refreshAt())) {
+            return fresh.value();
         }
         cachedToken = null;
         if (Instant.now().isBefore(loginBlockedUntil)) {
@@ -233,8 +262,10 @@ public class ReservationAdminClient {
         return value;
     }
 
-    private synchronized void invalidate(String used) {
-        if (cachedToken != null && cachedToken.value().equals(used)) {
+    private void invalidate(String used) {
+        // 로그인 중인 호출을 기다리지 않도록 락 없이 처리 - 경합해도 최악은 다음 호출이 다시 로그인하는 것
+        CachedToken cached = cachedToken;
+        if (cached != null && cached.value().equals(used)) {
             cachedToken = null;
         }
     }
