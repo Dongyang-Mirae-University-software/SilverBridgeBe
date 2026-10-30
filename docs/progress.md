@@ -2535,3 +2535,8 @@ AI 챗 집계 점검 L-1에서 남겨 둔 공용 `GlobalExceptionHandler`의 `e.
 - AI가 답마다 `suggestedQuestions`(0~3개)를 내려 FE 빠른 질문 칸이 대화 흐름대로 바뀐다. 응급·자해·위기·되묻기·예약 흐름 답에는 빈 목록.
 - BE: 전송 응답의 이 칸만 `SuggestedQuestions.sanitize`로 정리(문자열·1~30자·최대 3개, 배열 아니면 삭제). 기록 허용 목록은 그대로. 테스트 4건. 상세 `docs/(2026-10-30) feature-chat-suggested-questions.md`.
 - **data 전용 켜기 완료(2026-10-30 17:09)**: FE #184 배포 확인 후 사용자 확인을 받아 두 서버 `.env.dev`에 `NOTIFICATION_FCM_WEBPUSH_DATA_ONLY=true`(백업 `.env.dev.bak-20261030-1709`), `up -d api`, 기동·AI WS·ERROR 0. 실기기 한 번 표시 확인은 사용자 몫.
+
+### [2026-10-30] 복약 시간대 영향 범위 점검 후속 - M-1·L-1·L-2 (branch `fix/medication-audit-followups`)
+- M-1: 등록·수정 `@Operation` 설명에 "시간대는 시각으로, 어긋나면 시각 기준" 추가 + `MedicationSlotFromTimeApiDocTest`.
+- L-1: 복약 알림 묶음 키에서 시간대를 뺌(문구에 시간대 없음) - 옛 어긋난 약이 같은 시각 알림을 두 건으로 가르지 않게. 옛 행 보정 마이그레이션은 하지 않음.
+- L-2: 정책 문서의 옛 알림 문구 예시를 현재 문구로. L-3·L-4는 FE PR에서 반영.
