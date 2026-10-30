@@ -40,6 +40,7 @@ FCM 메시지에 `notification` 블록이 있으면 Firebase SW 라이브러리(
 1. BE 배포(완료 2026-10-30 16:13 vkcs·16:14 gosky) - data.title·body 추가, Urgency 적용. 표시는 지금과 같다.
 2. FE 웹푸시 PR 머지·배포 - SW가 `data.title`·`data.body`로 그리는지 확인. ⚠️ 2026-10-30 현재 SW(`public/firebase-messaging-sw.js`)는 `payload.notification`만 읽어서 **먼저 켜면 "알림"·빈 본문으로 뜬다**.
 3. 두 서버 `.env.dev` 백업 → `NOTIFICATION_FCM_WEBPUSH_DATA_ONLY=true` → `up -d api`(restart 아님) → 기동 확인.
+   - **완료(2026-10-30 17:09, 사용자 확인 후)**: FE #184 배포(16:42, SW가 `data.title`·`body`로 그리고 `notification` 블록이 있으면 그리지 않음)를 배포된 파일로 확인한 뒤 두 서버에 적용. 백업 `.env.dev.bak-20261030-1709`(두 서버), 컨테이너 `printenv` = true, 기동·AI WS 연결·ERROR 0. gosky prod 무변경.
 4. 확인: 테스트 계정(SOS·이상감지 제외 종류)으로 PC·휴대폰에서 한 번만 뜨는지.
 5. 되돌리기: 그 줄 삭제 후 `up -d api`.
 

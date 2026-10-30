@@ -2534,3 +2534,4 @@ AI 챗 집계 점검 L-1에서 남겨 둔 공용 `GlobalExceptionHandler`의 `e.
 ### [2026-10-30] AI 의료 챗봇 이어서 물어볼 질문 (AI #135, branch `feature/chat-suggested-questions`)
 - AI가 답마다 `suggestedQuestions`(0~3개)를 내려 FE 빠른 질문 칸이 대화 흐름대로 바뀐다. 응급·자해·위기·되묻기·예약 흐름 답에는 빈 목록.
 - BE: 전송 응답의 이 칸만 `SuggestedQuestions.sanitize`로 정리(문자열·1~30자·최대 3개, 배열 아니면 삭제). 기록 허용 목록은 그대로. 테스트 4건. 상세 `docs/(2026-10-30) feature-chat-suggested-questions.md`.
+- **data 전용 켜기 완료(2026-10-30 17:09)**: FE #184 배포 확인 후 사용자 확인을 받아 두 서버 `.env.dev`에 `NOTIFICATION_FCM_WEBPUSH_DATA_ONLY=true`(백업 `.env.dev.bak-20261030-1709`), `up -d api`, 기동·AI WS·ERROR 0. 실기기 한 번 표시 확인은 사용자 몫.
