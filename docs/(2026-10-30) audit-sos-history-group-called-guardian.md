@@ -91,3 +91,18 @@
 | L-6 | 통합 테스트 2건: 같은 시각 연타 한 묶음·최신 건 id, 보호자 혼합 시 전체 = 경로별 합·필터 건수 일치 |
 
 테스트: 로컬 `./gradlew build` 단위 2115건 실패 0 / vkcs `integration-test.sh fix/sos-history-audit-followup` @ `cd7f3922` 통과 - 전체 115건 실패 0(`SosCalledGuardianIntegrationTest` 5건 · `SosHistoryPressGroupIntegrationTest` 8건).
+
+## 실서버 확인 (2026-10-30 13:20, gosky, 보호자 시험 계정 조회만)
+
+보호자 시험 계정 비밀번호를 재설정(사용자 지시)한 뒤 로그인해 #403 배포본을 확인했다. SOS 발생(알림)은 하지 않았다.
+
+| 확인 | 결과 |
+|---|---|
+| `group` 없이 기존 조회 | 200, 32건, `counts` 32(SOS 20·보호자 연락 12), 새 필드 섞임 없음 |
+| `group=true` | 200, 20묶음, `counts` 20(11·9) = `totalElements`, `pressCount` 합 32 = 기존 전체, 최대 5, 2번 이상 8칸, `lastTriggeredAt = triggeredAt`·`first ≤ last` 전부 |
+| `calledGuardianId` 응답 노출 | 없음(M-1 반영 확인) |
+| `group=true&size=1&page=1` | 200, 1칸, `totalPages` 20 |
+| 형식 오류 `wardId`(7자·줄바꿈 포함) | 403 `SOS_NOT_AUTHORIZED`, 서버 로그는 `wardIdLength=7`·`=3`만(원문 없음, L-1 반영 확인) |
+| `group=maybe` | 400 |
+
+`calledGuardianName` 칩은 이번 배포 이후 보호자 연락이 없어(FE 미반영) 실데이터로는 확인하지 못했다 - 통합 테스트로 검증.
