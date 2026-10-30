@@ -44,7 +44,7 @@ public class AnomalyEventCooldown {
         } catch (Exception e) {
             // 이력 유실보다 중복이 안전 — 쿨다운 인프라 장애가 위험 이력을 삼키지 않도록 fail-open
             log.warn("[ANOMALY] 쿨다운 확인 실패 — 이력 적재 강행(fail-open): sessionId={}, error={}",
-                    sessionId, e.getMessage());
+                    sessionId, e.getClass().getSimpleName());
             return true;
         }
     }
@@ -63,7 +63,7 @@ public class AnomalyEventCooldown {
             redisTemplate.delete(KEY_PREFIX + sessionId + ":" + detectedType.name());
         } catch (Exception e) {
             log.warn("[ANOMALY] 쿨다운 해제 실패 — TTL 만료까지 유지: sessionId={}, error={}",
-                    sessionId, e.getMessage());
+                    sessionId, e.getClass().getSimpleName());
         }
     }
 }

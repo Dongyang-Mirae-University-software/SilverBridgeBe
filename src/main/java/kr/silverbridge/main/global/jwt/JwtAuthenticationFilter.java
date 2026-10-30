@@ -174,7 +174,7 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
     // 저장값 원문은 남기지 않는다(고정 사유 코드만).
     private void logCorrupt(String check, String userId, TokenInvalidation.CorruptValueException e, boolean sosPath) {
         log.error("[AUTH-STORE-CORRUPT] 인증 저장소 값 손상 - {} check={} userId={} reason={}",
-                sosPath ? "SOS 경로라 검사 생략 후 통과" : "503 응답", check, userId, e.getMessage());
+                sosPath ? "SOS 경로라 검사 생략 후 통과" : "503 응답", check, userId, e.reason());
     }
 
     private void logSosFailOpen(String check, RuntimeException e) {

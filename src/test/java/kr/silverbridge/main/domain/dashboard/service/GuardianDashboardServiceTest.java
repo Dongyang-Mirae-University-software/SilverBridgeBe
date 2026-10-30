@@ -87,6 +87,15 @@ class GuardianDashboardServiceTest {
     }
 
     @Test
+    @DisplayName("형식이 틀린 wardId(줄바꿈 등) → DB 조회 없이 403 - 원문을 로그에 남기지 않는다 (2026-10 점검 M-1)")
+    void 형식오류_wardId_403() {
+        assertThatThrownBy(() -> service.getDashboard("G1", "W1\n[IDOR-ATTEMPT] fake"))
+                .isInstanceOfSatisfying(CustomException.class,
+                        e -> assertThat(e.getErrorCode()).isEqualTo(ErrorCode.DASHBOARD_NOT_AUTHORIZED));
+        verifyNoInteractions(connectionService, anomalyService, sosService, medicationService);
+    }
+
+    @Test
     @DisplayName("wardId 생략 → 전원 합산, 복약은 인가된 피보호자만 센다")
     void 생략_합산() {
         when(connectionService.getActiveWardIds("G1")).thenReturn(List.of("W1", "W2"));

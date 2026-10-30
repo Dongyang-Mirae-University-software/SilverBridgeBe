@@ -122,7 +122,8 @@ public class JwtTokenProvider {
             getClaims(token);
             return true;
         } catch (ExpiredJwtException e) {
-            log.warn("만료된 JWT 토큰: {}", e.getMessage());
+            // 만료 메시지 원문(시각 문자열)은 남기지 않는다 - 원문 로그 금지 규칙(2026-10 전체 점검 M-3)
+            log.warn("만료된 JWT 토큰");
             throw new CustomException(ErrorCode.EXPIRED_TOKEN);
         } catch (JwtException | IllegalArgumentException e) {
             // 파싱 실패 메시지에 토큰 일부(헤더·페이로드)가 들어갈 수 있어 예외 클래스만 남긴다.

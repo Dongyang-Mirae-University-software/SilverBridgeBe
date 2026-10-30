@@ -88,7 +88,7 @@ public class JwtHandshakeInterceptor implements HandshakeInterceptor {
         } catch (TokenInvalidation.CorruptValueException e) {
             // 손상 값 - 조회 오류와 같이 503으로 거부하되 태그를 나눈다(HTTP 필터와 같은 기준, XCUT-G03)
             log.error("[AUTH-STORE-CORRUPT] WebSocket 연결 거부: 인증 저장소 값 손상 userId={} reason={}",
-                    userId, e.getMessage());
+                    userId, e.reason());
             response.setStatusCode(HttpStatus.SERVICE_UNAVAILABLE);
             return false;
         } catch (RuntimeException e) {
