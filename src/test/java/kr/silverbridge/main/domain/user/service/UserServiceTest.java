@@ -510,8 +510,8 @@ class UserServiceTest {
     }
 
     @Test
-    @DisplayName("비밀번호 변경 - 잠금 중이면 비교 없이 429(LOGIN_LOCKED), 로그인 키는 건드리지 않는다")
-    void changePassword_잠금중_LOGIN_LOCKED() {
+    @DisplayName("비밀번호 변경 - 잠금 중이면 비교 없이 429(PASSWORD_CHECK_LOCKED), 로그인 키는 건드리지 않는다")
+    void changePassword_잠금중_PASSWORD_CHECK_LOCKED() {
         User user = localUser();
         when(userRepository.findById(USER_ID)).thenReturn(Optional.of(user));
         when(redisTemplate.hasKey(RedisKeys.USER_PW_LOCK + USER_ID)).thenReturn(true);
@@ -519,14 +519,14 @@ class UserServiceTest {
         CustomException ex = assertThrows(CustomException.class,
                 () -> userService.changePassword(USER_ID, "Current1!", "NewPass1!"));
 
-        assertThat(ex.getErrorCode()).isEqualTo(ErrorCode.LOGIN_LOCKED);
+        assertThat(ex.getErrorCode()).isEqualTo(ErrorCode.PASSWORD_CHECK_LOCKED);
         verify(passwordEncoder, never()).matches(anyString(), anyString());
         verify(redisTemplate, never()).hasKey(RedisKeys.LOGIN_LOCK + USER_ID);
     }
 
     @Test
     @DisplayName("탈퇴 - 예약 결과가 한도를 넘으면 비교 없이 429 + 잠금 설정 (동시 요청 방어)")
-    void withdraw_예약초과_LOGIN_LOCKED() {
+    void withdraw_예약초과_PASSWORD_CHECK_LOCKED() {
         User user = localUser();
         when(userRepository.findById(USER_ID)).thenReturn(Optional.of(user));
         when(redisCounter.incrementWithTtl(eq(RedisKeys.USER_PW_FAIL + USER_ID), anyLong())).thenReturn(6L);
@@ -535,7 +535,7 @@ class UserServiceTest {
         CustomException ex = assertThrows(CustomException.class,
                 () -> userService.withdraw(USER_ID, "Password1!", null, "127.0.0.1", "agent"));
 
-        assertThat(ex.getErrorCode()).isEqualTo(ErrorCode.LOGIN_LOCKED);
+        assertThat(ex.getErrorCode()).isEqualTo(ErrorCode.PASSWORD_CHECK_LOCKED);
         verify(passwordEncoder, never()).matches(anyString(), anyString());
         verify(valueOperations).setIfAbsent(eq(RedisKeys.USER_PW_LOCK + USER_ID), eq("1"), eq(30L), any());
         verify(eventPublisher, never()).publishEvent(any());

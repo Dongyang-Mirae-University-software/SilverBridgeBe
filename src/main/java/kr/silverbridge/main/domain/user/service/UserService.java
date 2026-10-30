@@ -48,7 +48,7 @@ public class UserService {
     // 카카오 가입자 탈퇴 확인 문구. 두 가지를 모두 받는다(2026-10-01 QA BE-2): FE 안내는 "회원탈퇴"인데 BE가 "탈퇴"만
     // 받아 어떤 입력으로도 탈퇴할 수 없었다. 둘 다 사용자가 직접 입력해야 하는 문구라 본인 확인 강도는 같다.
     private static final Set<String> KAKAO_WITHDRAW_CONFIRMATIONS = Set.of("탈퇴", "회원탈퇴");
-    // 비밀번호 변경·탈퇴의 현재 비밀번호 확인 시도 제한 (USER-G05) - 로그인 잠금(5회·30분)과 같은 강도.
+    // 비밀번호 변경·탈퇴의 현재 비밀번호 확인 시도 제한 (USER-G05) - 5회·30분(로그인 잠금은 2026-10-30부터 10분 - 이쪽은 유지, 오류 코드도 PASSWORD_CHECK_LOCKED로 분리).
     // access token만 탈취한 쪽이 이 경로로 비밀번호를 무제한 대입해 계정을 장악하던 틈을 막는다.
     // 로그인 설정(AuthLoginProperties)은 auth 도메인이라 user → auth 의존을 만들지 않으려고 값을 여기 둔다.
     private static final int MAX_PASSWORD_CHECK_ATTEMPTS = 5;
@@ -244,7 +244,7 @@ public class UserService {
     }
 
     // 현재 비밀번호 확인 + 시도 제한 (USER-G05) - 비밀번호 변경·탈퇴 공용.
-    // 로그인과 같은 방식으로 비교 "전에" 시도 횟수를 원자적으로 예약하고, 한도를 넘기면 비교 없이 429(LOGIN_LOCKED, 30분)다.
+    // 로그인과 같은 방식으로 비교 "전에" 시도 횟수를 원자적으로 예약하고, 한도를 넘기면 비교 없이 429(PASSWORD_CHECK_LOCKED, 30분)다.
     // 키는 userId 기준 user:pwfail/user:pwlock - 로그인 키(login:*)와 섞지 않는다. 확인에 성공하면 카운터를 지운다.
     // Redis 장애 시 RedisCounter 예외가 그대로 나가 요청이 실패한다(fail-closed, 로그인과 같다).
     private void verifyCurrentPassword(User user, String rawPassword) {
@@ -252,7 +252,7 @@ public class UserService {
         String lockKey = RedisKeys.USER_PW_LOCK + user.getId();
 
         if (Boolean.TRUE.equals(redisTemplate.hasKey(lockKey))) {
-            throw new CustomException(ErrorCode.LOGIN_LOCKED);
+            throw new CustomException(ErrorCode.PASSWORD_CHECK_LOCKED);
         }
         // 비밀번호를 아예 보내지 않은 요청은 추측 시도가 아니라 횟수에 넣지 않는다(이전엔 BCrypt가 null을 거부해 400이었다)
         if (rawPassword == null) {
@@ -261,7 +261,7 @@ public class UserService {
         long attempts = redisCounter.incrementWithTtl(failKey, PASSWORD_CHECK_LOCK_MINUTES * 60);
         if (attempts > MAX_PASSWORD_CHECK_ATTEMPTS) {
             redisTemplate.opsForValue().setIfAbsent(lockKey, "1", PASSWORD_CHECK_LOCK_MINUTES, TimeUnit.MINUTES);
-            throw new CustomException(ErrorCode.LOGIN_LOCKED);
+            throw new CustomException(ErrorCode.PASSWORD_CHECK_LOCKED);
         }
         if (!passwordEncoder.matches(rawPassword, user.getPassword())) {
             if (attempts >= MAX_PASSWORD_CHECK_ATTEMPTS) {

@@ -141,7 +141,7 @@ public class AuthService {
         long lockTtlMinutes = authLoginProperties.getLockTtlMinutes();
         int maxAttempts = authLoginProperties.getMaxAttempts();
 
-        // 잠금 상태 확인 (5회 실패 시 30분 잠금)
+        // 잠금 상태 확인 (5회 실패 시 lockTtlMinutes 동안 잠금, 기본 10분)
         if (Boolean.TRUE.equals(redisTemplate.hasKey(lockKey))) {
             throw new CustomException(ErrorCode.LOGIN_LOCKED);
         }
