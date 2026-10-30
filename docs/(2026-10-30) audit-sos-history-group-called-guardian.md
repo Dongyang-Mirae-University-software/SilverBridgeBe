@@ -77,3 +77,17 @@
 - `fix: SOS 이력 IDOR 로그에 wardId 원문 대신 형식 검사·길이만` (L-1)
 - `docs: SOS 이력 Swagger 응답 설명에 전화받은 보호자 칸 추가` (L-3)
 - `test: SOS 묶음 동시각·보호자 혼합 total 일관성 통합 테스트` (L-6)
+
+## 반영 결과 (2026-10-30, `fix/sos-history-audit-followup`)
+
+| 이슈 | 조치 |
+|---|---|
+| M-1 | 이력 응답에서 `calledGuardianId` 제거, `calledGuardianName`만(`SosHistoryItem.withCalledGuardianName`). 저장·묶음 기준은 그대로. Notion FE 페이지 수정 |
+| L-1 | `resolveVisibleWardIds`가 `wardId` 형식(영숫자 1~6자)을 먼저 확인 - 틀리면 DB 조회 없이 403, 로그는 길이만 |
+| L-2 | 경로 필터가 없으면 전체 묶음 수 = 경로별 묶음 수의 합으로 계산 - 요청당 윈도 쿼리 3회 → 2회(필터가 있을 때만 3회) |
+| L-3 | 이력 Swagger `[응답]` 절에 `calledGuardianName`·묶음 칸 설명 추가 |
+| L-4 | 묶음 매핑에서 사라진 최신 건은 칸을 건너뛰고, 첫 건만 사라지면 최신 건으로 대신 |
+| L-5 | 수용(표시 전용) - 코드 변경 없음 |
+| L-6 | 통합 테스트 2건: 같은 시각 연타 한 묶음·최신 건 id, 보호자 혼합 시 전체 = 경로별 합·필터 건수 일치 |
+
+테스트: 로컬 `./gradlew build` 단위 2115건 실패 0 / vkcs `integration-test.sh fix/sos-history-audit-followup` @ `cd7f3922` 통과 - 전체 115건 실패 0(`SosCalledGuardianIntegrationTest` 5건 · `SosHistoryPressGroupIntegrationTest` 8건).

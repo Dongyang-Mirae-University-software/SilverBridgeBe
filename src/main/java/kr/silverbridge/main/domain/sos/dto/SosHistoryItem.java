@@ -25,9 +25,9 @@ import java.time.OffsetDateTime;
  * @param pressCount       연타 묶음의 누름 수. 묶음 조회({@code group=true})에서만 채우고 그 밖에는 null(JSON에서 생략)
  * @param firstTriggeredAt 묶음의 첫 누름 시각. 묶음 조회에서만
  * @param lastTriggeredAt  묶음의 마지막 누름 시각({@code triggeredAt}과 같다). 묶음 조회에서만
- * @param calledGuardianId   보호자 연락(GUARDIAN_CALL)에서 전화받은 보호자 ID. 이력 조회에서, 그 보호자가 <b>지금</b> 그 피보호자와
- *                           ACTIVE 연결일 때만 채운다(해제·탈퇴·미기록이면 null - JSON에서 생략)
- * @param calledGuardianName 전화받은 보호자 이름. {@code calledGuardianId}와 함께 채우고 함께 비운다
+ * @param calledGuardianName 보호자 연락(GUARDIAN_CALL)에서 전화받은 보호자 이름. 이력 조회에서, 그 보호자가 <b>지금</b> 그
+ *                           피보호자와 ACTIVE 연결일 때만 채운다(해제·탈퇴·미기록이면 null - JSON에서 생략). 사용자 ID는 내리지
+ *                           않는다 - 칩에는 이름만 필요하고, 보호자끼리 서로의 ID를 볼 이유가 없다(2026-10-30 점검 M-1)
  *
  * <p>묶음 항목의 {@code sosEventId}·{@code triggeredAt}·{@code location}은 <b>묶음의 최신 건</b> 값이다
  * (2026-10-30). 세 칸은 기존 응답·대시보드 응답을 바꾸지 않도록 null이면 내리지 않는다.</p>
@@ -67,11 +67,7 @@ public record SosHistoryItem(
         OffsetDateTime lastTriggeredAt,
 
         @JsonInclude(JsonInclude.Include.NON_NULL)
-        @Schema(description = "전화받은 보호자 ID (보호자 연락이고 그 보호자가 지금 연결돼 있을 때만)", example = "G1B2C3")
-        String calledGuardianId,
-
-        @JsonInclude(JsonInclude.Include.NON_NULL)
-        @Schema(description = "전화받은 보호자 이름 (calledGuardianId와 함께만)", example = "박지영")
+        @Schema(description = "전화받은 보호자 이름 (보호자 연락이고 그 보호자가 지금 연결돼 있을 때만)", example = "박지영")
         String calledGuardianName
 ) {
     public static SosHistoryItem of(SosEvent event, String wardName) {
@@ -85,17 +81,14 @@ public record SosHistoryItem(
                 null,
                 null,
                 null,
-                null,
                 null
         );
     }
 
-    /** 이 항목에 전화받은 보호자를 붙인 사본. {@code name}이 null이면 두 칸 모두 비운다(ID만 내리지 않는다). */
-    public SosHistoryItem withCalledGuardian(String guardianId, String name) {
-        boolean visible = guardianId != null && name != null;
+    /** 이 항목에 전화받은 보호자 이름을 붙인 사본. {@code name}이 null이면 칸을 비운다. */
+    public SosHistoryItem withCalledGuardianName(String name) {
         return new SosHistoryItem(sosEventId, wardId, wardName, triggeredAt, location, triggerType,
-                pressCount, firstTriggeredAt, lastTriggeredAt,
-                visible ? guardianId : null, visible ? name : null);
+                pressCount, firstTriggeredAt, lastTriggeredAt, name);
     }
 
     /**
@@ -116,7 +109,6 @@ public record SosHistoryItem(
                 pressCount,
                 first.getCreatedAt(),
                 latest.getCreatedAt(),
-                null,
                 null
         );
     }

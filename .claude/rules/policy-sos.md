@@ -10,7 +10,7 @@ paths:
 
 ## 기능 요약 (CLAUDE.md §1에서 이동, 2026-10-30)
 
-- **보호자 SOS 이력 연타 묶음**(sos, 2026-10-30, 마이그레이션 없음): `GET /api/guardian/sos/history?group=true`만 묶음 단위(같은 피보호자·같은 경로에서 **앞 누름과 60초 이내** 연쇄, `sos.history-group-gap-seconds`, DB 윈도 함수로 묶어 페이지 경계에서 안 잘림 - 자바에서 묶지 말 것). 항목 = 최신 건 값 + `pressCount`·`firstTriggeredAt`·`lastTriggeredAt`(생략 모드엔 없음), `totalElements`·`counts`는 **묶음 수**. 표시 전용 - 푸시 "최근 10분 내 N번째"·쿨다운과 별개. 상세 `docs/(2026-10-30) feature-sos-history-press-group.md`. **전화받은 보호자**(2026-10-30, V64): `POST /api/ward/sos`의 선택 `calledGuardianId`(GUARDIAN_CALL·ACTIVE 보호자만 저장, 아니면 NULL - **SOS는 거절하지 않음**, 확인은 저장 트랜잭션 밖 `SosCalledGuardianResolver`) → 이력 `calledGuardianId`·`calledGuardianName`(지금 연결된 보호자만), 묶음 기준에도 포함. 알림에 쓰지 않음 - `docs/(2026-10-30) feature-sos-called-guardian.md`.
+- **보호자 SOS 이력 연타 묶음**(sos, 2026-10-30, 마이그레이션 없음): `GET /api/guardian/sos/history?group=true`만 묶음 단위(같은 피보호자·같은 경로에서 **앞 누름과 60초 이내** 연쇄, `sos.history-group-gap-seconds`, DB 윈도 함수로 묶어 페이지 경계에서 안 잘림 - 자바에서 묶지 말 것). 항목 = 최신 건 값 + `pressCount`·`firstTriggeredAt`·`lastTriggeredAt`(생략 모드엔 없음), `totalElements`·`counts`는 **묶음 수**. 표시 전용 - 푸시 "최근 10분 내 N번째"·쿨다운과 별개. 상세 `docs/(2026-10-30) feature-sos-history-press-group.md`. **전화받은 보호자**(2026-10-30, V64): `POST /api/ward/sos`의 선택 `calledGuardianId`(GUARDIAN_CALL·ACTIVE 보호자만 저장, 아니면 NULL - **SOS는 거절하지 않음**, 확인은 저장 트랜잭션 밖 `SosCalledGuardianResolver`) → 이력 `calledGuardianName`(지금 연결된 보호자만, **사용자 ID는 내리지 않음** - 2026-10-30 점검 M-1), 묶음 기준에도 포함. 알림에 쓰지 않음 - `docs/(2026-10-30) feature-sos-called-guardian.md`.
 
 ## SOS 동작 설정 — 알림 억제 용도로 쓰지 말 것 (2026-07-23)
 
@@ -32,7 +32,7 @@ paths:
   - 이유: 보호자 화면이 붙은 적이 없어 `ack_status`가 전건 NULL이었다. 그 상태로 관리자 화면에 "미처리 SOS" 지표를 만들면 발생한 SOS 100%를 "보호자 전원 무응답"으로 표시하는 **거짓 경보**가 된다.
   - 되살리려면 **보호자 앱의 처리 결과 입력 화면 연동이 선행**되어야 한다. 화면 없이 컬럼만 다시 넣지 말 것.
   - 삭제 근거: 배포 서버 두 곳 모두 `ack_status`가 채워진 행 0건임을 확인하고 DROP했다(비가역).
-- **전화받은 보호자(2026-10-30, V64 `called_guardian_id`)는 표시 전용이다**: 보호자 연락 줄의 이름 칩용이며 **알림 대상·발송을 가르지 않는다**(`SosTriggeredEvent`에 싣지 않아 리스너가 읽을 수 없다 - 이벤트에 더하지 말 것, 규칙 ②). 요청 값은 **SOS를 거절하지 않고** 걸러 저장한다 - GUARDIAN_CALL이 아니거나 형식(영숫자 1~6자)이 틀리거나 그 피보호자의 ACTIVE 보호자가 아니거나 확인이 실패하면 NULL + `[SOS-CALLED-GUARDIAN-IGNORED]` WARN(원문 미기록). 확인은 `SosCalledGuardianResolver`가 **SOS 저장 트랜잭션 밖에서** 먼저 한다 - 트랜잭션 안에서 `isActiveConnection`이 예외를 내면 잡아도 rollback-only가 되어 SOS 이력까지 잃는다(확인기에 `@Transactional`을 걸지 말 것). 이름은 이력 조회 시 그 보호자가 **지금** ACTIVE 연결일 때만 내린다(해제·탈퇴면 ID·이름 생략). 보호자 탈퇴는 FK SET NULL(이력 보존). 묶음(`group=true`)은 보호자 연락에서 전화받은 보호자도 기준이다. 상세 `docs/(2026-10-30) feature-sos-called-guardian.md`.
+- **전화받은 보호자(2026-10-30, V64 `called_guardian_id`)는 표시 전용이다**: 보호자 연락 줄의 이름 칩용이며 **알림 대상·발송을 가르지 않는다**(`SosTriggeredEvent`에 싣지 않아 리스너가 읽을 수 없다 - 이벤트에 더하지 말 것, 규칙 ②). 요청 값은 **SOS를 거절하지 않고** 걸러 저장한다 - GUARDIAN_CALL이 아니거나 형식(영숫자 1~6자)이 틀리거나 그 피보호자의 ACTIVE 보호자가 아니거나 확인이 실패하면 NULL + `[SOS-CALLED-GUARDIAN-IGNORED]` WARN(원문 미기록). 확인은 `SosCalledGuardianResolver`가 **SOS 저장 트랜잭션 밖에서** 먼저 한다 - 트랜잭션 안에서 `isActiveConnection`이 예외를 내면 잡아도 rollback-only가 되어 SOS 이력까지 잃는다(확인기에 `@Transactional`을 걸지 말 것). 이름은 이력 조회 시 그 보호자가 **지금** ACTIVE 연결일 때만 내린다(해제·탈퇴면 생략). **응답에 전화받은 보호자의 사용자 ID를 싣지 말 것** - 보호자끼리 서로의 ID를 볼 경로가 원래 없었고 칩에는 이름만 필요하다(2026-10-30 점검 M-1). 이력 조회 `[IDOR-ATTEMPT]` 로그는 `wardId` 형식(영숫자 1~6자)이 틀리면 원문 대신 길이만 남긴다(L-1). 보호자 탈퇴는 FK SET NULL(이력 보존). 묶음(`group=true`)은 보호자 연락에서 전화받은 보호자도 기준이다. 상세 `docs/(2026-10-30) feature-sos-called-guardian.md`.
 - 상세: `docs/(2026-07-30) feature-sos-history-ack.md`(도입), `docs/(2026-08-26) refactor-sos-flow.md`(철회·발생 경로).
 
 

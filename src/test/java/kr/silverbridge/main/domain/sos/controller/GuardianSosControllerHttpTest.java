@@ -71,7 +71,7 @@ class GuardianSosControllerHttpTest {
     void 파라미터없음_기존응답() throws Exception {
         when(guardianSosService.getHistory(eq(GUARDIAN_ID), isNull(), isNull(), anyInt(), anyInt()))
                 .thenReturn(page(new SosHistoryItem(1L, "WD0001", "김영희", AT, "거실",
-                        SosTriggerType.SOS_BUTTON, null, null, null, null, null)));
+                        SosTriggerType.SOS_BUTTON, null, null, null, null)));
 
         mvc().perform(get("/api/guardian/sos/history"))
                 .andExpect(status().isOk())
@@ -90,7 +90,7 @@ class GuardianSosControllerHttpTest {
     void 묶음조회() throws Exception {
         when(guardianSosService.getGroupedHistory(eq(GUARDIAN_ID), isNull(), isNull(), anyInt(), anyInt()))
                 .thenReturn(page(new SosHistoryItem(3L, "WD0001", "김영희", AT, "거실",
-                        SosTriggerType.SOS_BUTTON, 2L, AT.minusSeconds(40), AT, null, null)));
+                        SosTriggerType.SOS_BUTTON, 2L, AT.minusSeconds(40), AT, null)));
 
         mvc().perform(get("/api/guardian/sos/history").param("group", "true"))
                 .andExpect(status().isOk())

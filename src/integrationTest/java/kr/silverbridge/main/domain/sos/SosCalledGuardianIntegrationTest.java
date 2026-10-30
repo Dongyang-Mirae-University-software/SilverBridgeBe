@@ -93,6 +93,49 @@ class SosCalledGuardianIntegrationTest extends PostgresIntegrationTest {
                 .containsExactly(2L, 2L);
     }
 
+    @Test
+    @DisplayName("같은 시각에 찍힌 연타도 한 묶음이고, 최신 건은 같은 시각 중 id가 큰 쪽이다(점검 L-6)")
+    void 동시각_연타() {
+        saveAt(SosTriggerType.SOS_BUTTON, null, base);
+        long sameTimeLater = saveAt(SosTriggerType.SOS_BUTTON, null, base);
+        long next = saveAt(SosTriggerType.SOS_BUTTON, null, base.plusSeconds(30));
+
+        List<PressGroupRow> rows = sosEventRepository.findPressGroups(List.of(WARD_ID), "", GAP, 50, 0);
+        assertThat(rows).singleElement().satisfies(row -> {
+            assertThat(row.getPressCount()).isEqualTo(3L);
+            assertThat(row.getLatestId()).isEqualTo(next);
+            assertThat(row.getFirstId()).isLessThan(sameTimeLater);
+        });
+    }
+
+    @Test
+    @DisplayName("보호자가 섞여도 전체 묶음 수 = 경로별 묶음 수의 합, 경로 필터 건수 = 그 경로 묶음 수(점검 L-6)")
+    void 전체와_경로별_건수_일관성() {
+        saveAt(SosTriggerType.SOS_BUTTON, null, base);
+        saveAt(SosTriggerType.SOS_BUTTON, null, base.plusSeconds(20));
+        saveAt(SosTriggerType.GUARDIAN_CALL, GUARDIAN_A, base.plusSeconds(5));
+        saveAt(SosTriggerType.GUARDIAN_CALL, GUARDIAN_B, base.plusSeconds(10));
+        saveAt(SosTriggerType.GUARDIAN_CALL, null, base.plusSeconds(15));
+        saveAt(SosTriggerType.GUARDIAN_CALL, GUARDIAN_A, base.plusMinutes(5));
+
+        long sosButton = 0;
+        long guardianCall = 0;
+        for (SosEventRepository.PressGroupCount c : sosEventRepository.countPressGroupsByTriggerType(List.of(WARD_ID), "", GAP)) {
+            if (SosTriggerType.SOS_BUTTON.name().equals(c.getTriggerType())) {
+                sosButton = c.getTotal();
+            } else {
+                guardianCall = c.getTotal();
+            }
+        }
+
+        assertThat(sosButton).isEqualTo(1);
+        assertThat(guardianCall).isEqualTo(4);
+        assertThat(sosEventRepository.countPressGroups(List.of(WARD_ID), "", GAP)).isEqualTo(sosButton + guardianCall);
+        assertThat(sosEventRepository.countPressGroups(List.of(WARD_ID), SosTriggerType.GUARDIAN_CALL.name(), GAP))
+                .isEqualTo(guardianCall);
+        assertThat(sosEventRepository.findPressGroups(List.of(WARD_ID), "", GAP, 50, 0)).hasSize(5);
+    }
+
     /** {@code created_at}은 감사 필드(수정 불가 매핑)라 저장 후 네이티브 UPDATE로 시각을 옮긴다. */
     private long saveAt(SosTriggerType triggerType, String calledGuardianId, OffsetDateTime createdAt) {
         Long id = sosEventRepository.saveAndFlush(SosEvent.builder()

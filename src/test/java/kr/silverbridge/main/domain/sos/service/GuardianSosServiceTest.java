@@ -344,13 +344,12 @@ class GuardianSosServiceTest {
         SosEvent single = sosEvent(5L, OTHER_WARD_ID, now.minusDays(1), null, SosTriggerType.GUARDIAN_CALL);
 
         when(connectionService.getActiveWardIds(GUARDIAN_ID)).thenReturn(List.of(WARD_ID, OTHER_WARD_ID));
-        when(sosEventRepository.countPressGroups(any(), eq(""), eq(60))).thenReturn(2L);
         when(sosEventRepository.findPressGroups(any(), eq(""), eq(60), eq(20), eq(0L)))
                 .thenReturn(List.of(row(3L, 1L, 3L), row(5L, 5L, 1L)));
         when(sosEventRepository.findAllById(any())).thenReturn(List.of(first, latest, single));
         when(userRepository.findAllById(any())).thenReturn(List.of(user(WARD_ID, WARD_NAME), user(OTHER_WARD_ID, "박철수")));
         when(sosEventRepository.countPressGroupsByTriggerType(any(), eq(""), eq(60)))
-                .thenReturn(List.of(groupCount("SOS_BUTTON", 4L), groupCount("GUARDIAN_CALL", 1L)));
+                .thenReturn(List.of(groupCount("SOS_BUTTON", 1L), groupCount("GUARDIAN_CALL", 1L)));
 
         SosHistoryPage result = guardianSosService.getGroupedHistory(GUARDIAN_ID, null, null, 0, 20);
 
@@ -373,8 +372,9 @@ class GuardianSosServiceTest {
         assertThat(alone.firstTriggeredAt()).isEqualTo(alone.lastTriggeredAt());
         assertThat(alone.wardName()).isEqualTo("박철수");
 
-        // counts는 묶음 수
-        assertThat(result.counts()).isEqualTo(new SosHistoryPage.Counts(5, 4, 1));
+        // counts는 묶음 수, 경로 필터가 없으면 전체 묶음 수는 그 합이라 전체 묶음 수 쿼리를 따로 돌리지 않는다(점검 L-2)
+        assertThat(result.counts()).isEqualTo(new SosHistoryPage.Counts(2, 1, 1));
+        verify(sosEventRepository, never()).countPressGroups(any(), any(), anyInt());
     }
 
     @Test
@@ -438,12 +438,10 @@ class GuardianSosServiceTest {
 
         List<SosHistoryItem> items = guardianSosService.getHistory(GUARDIAN_ID, null, null, 0, 20).content();
 
-        assertThat(items.get(0).calledGuardianId()).isEqualTo("GD0001");
         assertThat(items.get(0).calledGuardianName()).isEqualTo("박지영");
         // 연결을 끊은 보호자의 이름은 남은 가족 화면에 남기지 않는다
-        assertThat(items.get(1).calledGuardianId()).isNull();
         assertThat(items.get(1).calledGuardianName()).isNull();
-        assertThat(items.get(2).calledGuardianId()).isNull();
+        assertThat(items.get(2).calledGuardianName()).isNull();
         // 피보호자별 ACTIVE 보호자 목록은 한 번만 조회한다(N+1 없음)
         verify(connectionService, times(1)).getActiveGuardianIds(WARD_ID);
     }
@@ -469,7 +467,6 @@ class GuardianSosServiceTest {
         SosEvent first = called(sosEvent(1L, WARD_ID, now.minusSeconds(30), null, SosTriggerType.GUARDIAN_CALL), "GD0001");
 
         when(connectionService.getActiveWardIds(GUARDIAN_ID)).thenReturn(List.of(WARD_ID));
-        when(sosEventRepository.countPressGroups(any(), eq(""), eq(60))).thenReturn(1L);
         when(sosEventRepository.findPressGroups(any(), eq(""), eq(60), eq(20), eq(0L))).thenReturn(List.of(row(3L, 1L, 2L)));
         when(sosEventRepository.findAllById(any())).thenReturn(List.of(first, latest));
         when(connectionService.getActiveGuardianIds(WARD_ID)).thenReturn(List.of("GD0001"));
@@ -483,6 +480,40 @@ class GuardianSosServiceTest {
 
         assertThat(item.pressCount()).isEqualTo(2L);
         assertThat(item.calledGuardianName()).isEqualTo("박지영");
+    }
+
+    @Test
+    @DisplayName("형식이 틀린 wardId(줄바꿈·7자 이상)는 DB 조회 없이 403 - 로그에 원문을 남기지 않는다(점검 L-1)")
+    void getHistory_형식오류_wardId() {
+        for (String bad : List.of("WD\n0001", "WD00011", "가나")) {
+            assertThatThrownBy(() -> guardianSosService.getHistory(GUARDIAN_ID, bad, null, 0, 20))
+                    .isInstanceOf(CustomException.class)
+                    .hasFieldOrPropertyWithValue("errorCode", ErrorCode.SOS_NOT_AUTHORIZED);
+            assertThatThrownBy(() -> guardianSosService.getGroupedHistory(GUARDIAN_ID, bad, null, 0, 20))
+                    .isInstanceOf(CustomException.class);
+        }
+        verifyNoInteractions(connectionService, sosEventRepository);
+    }
+
+    @Test
+    @DisplayName("묶음 조회: 두 쿼리 사이에 이력이 사라진 칸은 500 없이 건너뛰고, 첫 건만 사라지면 최신 건으로 대신한다(점검 L-4)")
+    void getGroupedHistory_사라진_이력() {
+        OffsetDateTime now = OffsetDateTime.now();
+        SosEvent latest = sosEvent(3L, WARD_ID, now, null, SosTriggerType.SOS_BUTTON);
+
+        when(connectionService.getActiveWardIds(GUARDIAN_ID)).thenReturn(List.of(WARD_ID));
+        when(sosEventRepository.countPressGroupsByTriggerType(any(), eq(""), eq(60)))
+                .thenReturn(List.of(groupCount("SOS_BUTTON", 2L)));
+        when(sosEventRepository.findPressGroups(any(), eq(""), eq(60), eq(20), eq(0L)))
+                .thenReturn(List.of(row(3L, 1L, 2L), row(9L, 8L, 1L)));
+        when(sosEventRepository.findAllById(any())).thenReturn(List.of(latest)); // 1·8·9번이 사라짐
+        when(userRepository.findAllById(any())).thenReturn(List.of(user(WARD_ID, WARD_NAME)));
+
+        List<SosHistoryItem> items = guardianSosService.getGroupedHistory(GUARDIAN_ID, null, null, 0, 20).content();
+
+        assertThat(items).hasSize(1);
+        assertThat(items.get(0).sosEventId()).isEqualTo(3L);
+        assertThat(items.get(0).firstTriggeredAt()).isEqualTo(now);
     }
 
     private static SosEvent called(SosEvent event, String guardianId) {
