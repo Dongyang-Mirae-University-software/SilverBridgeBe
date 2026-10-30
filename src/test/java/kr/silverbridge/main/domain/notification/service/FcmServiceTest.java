@@ -8,6 +8,7 @@ import com.google.firebase.messaging.MulticastMessage;
 import com.google.firebase.messaging.SendResponse;
 import kr.silverbridge.main.domain.notification.channel.ChannelFailureReason;
 import kr.silverbridge.main.domain.notification.channel.ChannelResult;
+import kr.silverbridge.main.domain.notification.config.FcmMessageProperties;
 import kr.silverbridge.main.domain.notification.config.FcmTokenProperties;
 import kr.silverbridge.main.domain.notification.entity.FcmToken;
 import kr.silverbridge.main.domain.notification.repository.FcmTokenRepository;
@@ -41,6 +42,8 @@ class FcmServiceTest {
     @Mock private FcmTokenRepository fcmTokenRepository;
     /** 기본값(상한 5 · 유휴 60일)을 그대로 쓰되 케이스별로 조정한다. */
     @Spy private FcmTokenProperties tokenProperties = new FcmTokenProperties();
+    /** 메시지 모양 설정은 기본값(웹 data 전용 off). 메시지 내용 검증은 {@link FcmServiceMessageTest}. */
+    @Spy private FcmMessageProperties messageProperties = new FcmMessageProperties();
 
     @InjectMocks private FcmService fcmService;
 

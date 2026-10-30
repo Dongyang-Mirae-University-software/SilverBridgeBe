@@ -106,9 +106,10 @@ class AnomalyNotificationListenerTest {
         @SuppressWarnings("unchecked")
         ArgumentCaptor<Map<String, String>> ws = ArgumentCaptor.forClass(Map.class);
         verify(webSocketEventPublisher).sendToUser(eq("GD0001"), eq("anomaly-detected"), ws.capture());
+        // 보호자: 제목 = 종류 + 누구 댁 어디, 본문 = 무슨 일(2026-10-30 웹푸시 디자인, 푸시와 같은 값)
         assertThat(ws.getValue())
-                .containsEntry("title", "화재 감지")
-                .containsEntry("body", "김순자님 댁 거실에서 화재가 감지되었습니다.")
+                .containsEntry("title", "[화재 감지] 김순자님 댁 거실")
+                .containsEntry("body", "거실 카메라에서 화재가 감지되었습니다.")
                 .containsEntry("type", "ANOMALY_DETECTED").containsEntry("wardId", WARD_ID)
                 .containsEntry("wardName", "김순자").containsEntry("location", "거실")
                 .containsEntry("sessionId", SESSION_ID).containsEntry("detectedType", "FIRE")
@@ -132,7 +133,7 @@ class AnomalyNotificationListenerTest {
 
     @org.junit.jupiter.params.ParameterizedTest
     @org.junit.jupiter.params.provider.CsvSource({"FIRE,화재가", "FALL,낙상이", "WEAPON,흉기가"})
-    @DisplayName("종류별 조사가 보호자 본문에 맞게 들어가고, WS 제목은 보호자·본인 모두 '○○ 감지'다")
+    @DisplayName("종류별 조사가 보호자 본문에 맞게 들어가고, WS 제목은 보호자 '[○○ 감지] …'·본인 '○○ 감지'다")
     void 종류별_조사와_제목(DetectedType type, String subject) {
         AnomalyDetectedEvent e = new AnomalyDetectedEvent(7L, INCIDENT_ID, WARD_ID, "김순자", SESSION_ID, "거실", type, DETECTED_AT);
         when(connectionService.getActiveGuardianIds(WARD_ID)).thenReturn(List.of("GD0001"));
@@ -145,7 +146,9 @@ class AnomalyNotificationListenerTest {
         verify(webSocketEventPublisher, org.mockito.Mockito.times(2))
                 .sendToUser(anyString(), eq("anomaly-detected"), ws.capture());
         assertThat(ws.getAllValues()).hasSize(2).allSatisfy(m ->
-                assertThat(m.get("title")).endsWith(" 감지").doesNotContain("이상 상황"));
+                assertThat(m.get("title")).contains(" 감지").doesNotContain("이상 상황"));
+        assertThat(ws.getAllValues().get(0).get("title")).startsWith("[").contains("감지] 김순자님 댁 거실");
+        assertThat(ws.getAllValues().get(1).get("title")).endsWith(" 감지").doesNotStartWith("[");
         assertThat(ws.getAllValues().get(0).get("body")).contains(subject + " 감지되었습니다");
     }
 
@@ -159,8 +162,10 @@ class AnomalyNotificationListenerTest {
 
         ArgumentCaptor<NotificationContent> guardian = ArgumentCaptor.forClass(NotificationContent.class);
         verify(notificationDispatcher).dispatch(eq("GD0001"), any(), any(), guardian.capture());
-        assertThat(guardian.getValue().title()).isEqualTo("화재 감지");
-        assertThat(guardian.getValue().body()).isEqualTo("김순자님 댁 거실에서 화재가 감지되었습니다.");
+        assertThat(guardian.getValue().title()).isEqualTo("[화재 감지] 김순자님 댁 거실");
+        // 화재는 안내 문장이 없어 한 줄이다
+        assertThat(guardian.getValue().body()).isEqualTo("거실 카메라에서 화재가 감지되었습니다.")
+                .doesNotContain("\n");
         assertThat(guardian.getValue().data())
                 .containsEntry("type", "ANOMALY_DETECTED")
                 .containsEntry("anomalyEventId", "7")
@@ -271,8 +276,10 @@ class AnomalyNotificationListenerTest {
 
         ArgumentCaptor<NotificationContent> guardian = ArgumentCaptor.forClass(NotificationContent.class);
         verify(notificationDispatcher).dispatch(eq("GD0001"), any(), any(), guardian.capture());
+        assertThat(guardian.getValue().title()).isEqualTo("[흉기 감지] 김순자님 댁 거실");
+        // 두 문장 = 무슨 일 / 다음 줄에 할 일
         assertThat(guardian.getValue().body()).isEqualTo(
-                "김순자님 댁 거실에서 흉기가 감지되었습니다. 바로 연락해 안전을 확인하고, 위험하면 112에 신고해 주세요.");
+                "거실 카메라에서 흉기가 감지되었습니다.\n바로 연락해 안전을 확인하고, 위험하면 112에 신고해 주세요.");
         assertThat(guardian.getValue().data()).containsEntry("detectedType", "WEAPON")
                 .containsEntry("detectedTypeLabel", "흉기");
 
@@ -293,8 +300,9 @@ class AnomalyNotificationListenerTest {
 
         ArgumentCaptor<NotificationContent> guardian = ArgumentCaptor.forClass(NotificationContent.class);
         verify(notificationDispatcher).dispatch(eq("GD0001"), any(), any(), guardian.capture());
+        assertThat(guardian.getValue().title()).isEqualTo("[낙상 감지] 김순자님 댁 거실");
         assertThat(guardian.getValue().body())
-                .isEqualTo("김순자님 댁 거실에서 낙상이 감지되었습니다. 바로 연락해 안전을 확인해 주세요.");
+                .isEqualTo("거실 카메라에서 낙상이 감지되었습니다.\n바로 연락해 안전을 확인해 주세요.");
 
         ArgumentCaptor<NotificationContent> self = ArgumentCaptor.forClass(NotificationContent.class);
         verify(notificationDispatcher).dispatch(eq(WARD_ID), any(), any(), self.capture());
@@ -313,6 +321,24 @@ class AnomalyNotificationListenerTest {
                         + "바로 연락해 안전을 확인하고, 위험하면 112에 신고해 주세요.");
         assertThat(AnomalyNotificationListener.smsFallbackText(eventOf(DetectedType.FIRE)))
                 .isEqualTo("[실버브릿지] 김순자님 댁 거실에서 화재 감지. 앱에서 확인해 주세요.");
+    }
+
+    @Test
+    @DisplayName("보호자 푸시 제목·본문: 이름·위치가 비면 그 부분만 빼고, 위치가 없으면 '등록된 카메라에서'")
+    void 보호자_푸시_문구_빈값() {
+        AnomalyDetectedEvent noName = new AnomalyDetectedEvent(7L, INCIDENT_ID, WARD_ID, " ", SESSION_ID, "거실",
+                DetectedType.FIRE, null);
+        AnomalyDetectedEvent noPlace = new AnomalyDetectedEvent(7L, INCIDENT_ID, WARD_ID, "김순자", SESSION_ID, null,
+                DetectedType.FALL, null);
+        AnomalyDetectedEvent neither = new AnomalyDetectedEvent(7L, INCIDENT_ID, WARD_ID, null, SESSION_ID, " ",
+                DetectedType.WEAPON, null);
+
+        assertThat(AnomalyNotificationListener.title(noName)).isEqualTo("[화재 감지] 거실");
+        assertThat(AnomalyNotificationListener.title(noPlace)).isEqualTo("[낙상 감지] 김순자님 댁");
+        assertThat(AnomalyNotificationListener.title(neither)).isEqualTo("[흉기 감지]");
+        assertThat(AnomalyNotificationListener.body(noPlace))
+                .isEqualTo("등록된 카메라에서 낙상이 감지되었습니다.\n바로 연락해 안전을 확인해 주세요.");
+        assertThat(AnomalyNotificationListener.body(noName)).doesNotContain("null");
     }
 
     @Test

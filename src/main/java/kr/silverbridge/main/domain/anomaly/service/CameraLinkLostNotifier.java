@@ -185,7 +185,7 @@ public class CameraLinkLostNotifier {
                 .orElse(FALLBACK_WARD_NAME);
         String location = StringUtils.hasText(label) ? label : FALLBACK_LOCATION;
         // 원인을 단정하지 않는다 - 서버는 "목록에 돌아오지 않았다"까지만 안다.
-        String body = "%s님 댁 %s 카메라의 영상이 확인되지 않아 감시가 멈춰 있을 수 있습니다. 카메라 기기의 송출 상태를 확인해 주세요."
+        String body = "%s님 댁 %s 카메라의 영상이 확인되지 않아 감시가 멈춰 있을 수 있습니다.\n카메라 기기의 송출 상태를 확인해 주세요."
                 .formatted(wardName, location);
         return NotificationContent.of("카메라 연결 확인 필요", body, Map.of(
                 "type", "CAMERA_LINK_LOST",

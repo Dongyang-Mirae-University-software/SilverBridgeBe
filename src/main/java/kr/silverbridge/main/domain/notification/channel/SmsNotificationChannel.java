@@ -44,9 +44,13 @@ public class SmsNotificationChannel implements NotificationChannel {
     }
 
     // SMS는 title/body 구분이 없어 한 줄로 합친다. body만 있으면 body만 발송.
+    // 제목이 이미 "[화재 감지] …"처럼 괄호로 시작하면(2026-10-30 웹푸시 제목) 괄호를 겹치지 않고 제목 줄 + 본문으로 보낸다.
     private String buildText(NotificationContent content) {
         if (content.title() == null || content.title().isBlank()) {
             return content.body();
+        }
+        if (content.title().startsWith("[")) {
+            return content.title() + "\n" + content.body();
         }
         return "[" + content.title() + "] " + content.body();
     }

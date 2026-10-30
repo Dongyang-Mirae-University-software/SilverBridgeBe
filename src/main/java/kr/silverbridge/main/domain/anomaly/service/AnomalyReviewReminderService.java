@@ -98,7 +98,7 @@ public class AnomalyReviewReminderService {
         String label = DetectedTypeLabel.of(target.detectedType());
         String location = target.cameraLabel() != null ? target.cameraLabel() : FALLBACK_LOCATION;
         String detectedAt = target.startedAt().atZoneSameInstant(AnomalyReviewClock.KST).format(DETECTED_AT_FORMAT);
-        String body = "%s · %s님 %s에서 %s 감지가 있었습니다. 실제 상황이었는지 확인해 주세요."
+        String body = "%s · %s님 %s에서 %s 감지가 있었습니다.\n실제 상황이었는지 확인해 주세요."
                 .formatted(detectedAt, target.wardName(), location, label);
 
         return NotificationContent.of("이상감지 확인이 필요해요", body, Map.of(
@@ -112,7 +112,7 @@ public class AnomalyReviewReminderService {
 
     /** 요약 문구. 단위는 <b>상황</b>이지 감지 이력 건수가 아니다. */
     private NotificationContent summaryContent(AnomalyReviewSummaryTarget target) {
-        String body = "확인이 필요한 이상감지가 %d건 있습니다. 실제 상황이었는지 알려주시면 정확도를 높이는 데 도움이 됩니다."
+        String body = "확인이 필요한 이상감지가 %d건 있습니다.\n실제 상황이었는지 알려주시면 정확도를 높이는 데 도움이 됩니다."
                 .formatted(target.pendingCount());
 
         return NotificationContent.of("이상감지 확인이 필요해요", body, Map.of(
@@ -131,7 +131,7 @@ public class AnomalyReviewReminderService {
         String label = DetectedTypeLabel.of(target.detectedType());
         String location = target.cameraLabel() != null ? target.cameraLabel() : FALLBACK_LOCATION;
         String detectedAt = target.startedAt().atZoneSameInstant(AnomalyReviewClock.KST).format(DETECTED_AT_FORMAT);
-        String body = "%s · %s님 %s의 %s 감지에 대해 다른 보호자와 판정이 다릅니다. 다시 확인해 주세요."
+        String body = "%s · %s님 %s의 %s 감지에 대해 다른 보호자와 판정이 다릅니다.\n다시 확인해 주세요."
                 .formatted(detectedAt, target.wardName(), location, label);
 
         return NotificationContent.of("판정 확인 요청", body, Map.of(

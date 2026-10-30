@@ -98,7 +98,7 @@ public class AnomalyNotificationListener {
                 String title = self ? WardNotificationText.TITLE : title(event);
                 String body = self ? selfBody(event) : body(event);
                 Map<String, String> wsPayload = new HashMap<>(data);
-                wsPayload.put("title", title(event));
+                wsPayload.put("title", self ? screenTitle(event) : title);
                 wsPayload.put("body", body);
                 webSocketEventPublisher.sendToUser(userId, "anomaly-detected", wsPayload);
                 // 본인은 별도 타입으로 보낸다 — 승인된 알림톡 템플릿이 보호자용 문구라 본인에게 나가면 안 된다.
@@ -131,18 +131,36 @@ public class AnomalyNotificationListener {
                 event.anomalyEventId(), recipients.size(), delivered);
     }
 
-    /** 알림 제목. 종류가 한눈에 보이도록 "화재 감지"처럼 명시한다(푸시·WS 공통). */
-    private static String title(AnomalyDetectedEvent event) {
+    /** 피보호자 본인 앱 화면(WS) 제목. 종류가 한눈에 보이도록 "화재 감지"처럼 명시한다(본인 문구는 바꾸지 않는다). */
+    private static String screenTitle(AnomalyDetectedEvent event) {
         return label(event.detectedType()) + " 감지";
     }
 
     /**
-     * 보호자 알림 본문. 시니어/4050 대상이라 완곡어법 없이 "감지되었습니다"로 명시한다(설계 D-3).
+     * 보호자 알림 제목(푸시·WS, 2026-10-30 웹푸시 디자인) - {@code [화재 감지] {이름}님 댁 {장소}}.
+     * 이름·장소가 비면 그 부분만 뺀다.
      */
-    private String body(AnomalyDetectedEvent event) {
-        return event.wardName() + "님 댁 " + event.cameraLabel() + "에서 "
-                + DetectedTypeLabel.withSubjectParticle(event.detectedType()) + " 감지되었습니다."
-                + guardianGuidance(event.detectedType());
+    static String title(AnomalyDetectedEvent event) {
+        StringBuilder where = new StringBuilder();
+        if (hasText(event.wardName())) {
+            where.append(event.wardName()).append("님 댁");
+        }
+        if (hasText(event.cameraLabel())) {
+            where.append(where.isEmpty() ? "" : " ").append(event.cameraLabel());
+        }
+        String head = "[" + label(event.detectedType()) + " 감지]";
+        return where.isEmpty() ? head : head + " " + where;
+    }
+
+    /**
+     * 보호자 알림 본문. 시니어/4050 대상이라 완곡어법 없이 "감지되었습니다"로 명시한다(설계 D-3).
+     * 누구 댁인지는 제목에 있어 본문은 무슨 일 / 다음 줄에 할 일이다(2026-10-30). 장소가 비면 "등록된 카메라에서".
+     */
+    static String body(AnomalyDetectedEvent event) {
+        String place = hasText(event.cameraLabel()) ? event.cameraLabel() + " 카메라에서 " : "등록된 카메라에서 ";
+        String guidance = guardianGuidance(event.detectedType());
+        return place + DetectedTypeLabel.withSubjectParticle(event.detectedType()) + " 감지되었습니다."
+                + (guidance.isEmpty() ? "" : "\n" + guidance.strip());
     }
 
     /**
