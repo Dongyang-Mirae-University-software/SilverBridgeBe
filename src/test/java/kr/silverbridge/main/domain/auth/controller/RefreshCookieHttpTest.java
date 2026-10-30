@@ -273,6 +273,34 @@ class RefreshCookieHttpTest {
     }
 
     @Test
+    @DisplayName("본문 토큰이 거절됐는데 쿠키는 다른 토큰이면 쿠키를 지우지 않는다 (L-14)")
+    void rejectedBodyTokenKeepsDifferentCookie() throws Exception {
+        when(authService.refresh("body-token")).thenThrow(new CustomException(ErrorCode.INVALID_TOKEN));
+
+        var result = mvc().perform(post("/api/auth/refresh").contentType(MediaType.APPLICATION_JSON)
+                        .cookie(new Cookie("careai_rt", "cookie-token"))
+                        .content("{\"refreshToken\":\"body-token\"}"))
+                .andExpect(status().isUnauthorized())
+                .andReturn();
+
+        assertThat(setCookie(result)).isNull();
+    }
+
+    @Test
+    @DisplayName("본문 토큰이 쿠키와 같은 값이고 거절되면 쿠키도 지운다 (L-14)")
+    void rejectedBodyTokenEqualToCookieClearsCookie() throws Exception {
+        when(authService.refresh(OLD_RT)).thenThrow(new CustomException(ErrorCode.INVALID_TOKEN));
+
+        var result = mvc().perform(post("/api/auth/refresh").contentType(MediaType.APPLICATION_JSON)
+                        .cookie(new Cookie("careai_rt", OLD_RT))
+                        .content("{\"refreshToken\":\"" + OLD_RT + "\"}"))
+                .andExpect(status().isUnauthorized())
+                .andReturn();
+
+        assertThat(setCookie(result)).contains("Max-Age=0");
+    }
+
+    @Test
     @DisplayName("이용 제한(403) 계정의 갱신도 쿠키를 만료시킨다")
     void restrictedAccountClearsCookie() throws Exception {
         when(authService.refresh(OLD_RT)).thenThrow(new CustomException(ErrorCode.INACTIVE_USER));

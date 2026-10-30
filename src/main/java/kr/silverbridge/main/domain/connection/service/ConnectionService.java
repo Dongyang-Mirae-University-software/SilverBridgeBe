@@ -98,6 +98,9 @@ public class ConnectionService {
         validateConnectionRequest(guardianId, wardId, Role.GUARDIAN, Role.WARD);
         // 같은 쌍에 요청·취소를 반복해 피보호자에게 알림을 계속 보내는 것을 막는다(CONN-G04). 중복(PENDING·ACTIVE)
         // 검사 뒤에 둬서 409로 끝나는 요청은 세지 않는다. 거절(429)은 요청을 만들지 않으므로 알림·WS도 없다.
+        // 이 Redis 조회는 users 행 잠금을 쥔 채 나가지만 앞으로 옮기지 않는다 - 검증(역할·409)보다 앞에 두면 같은 요청의
+        // 오류 우선순위(409·400이 429보다 먼저)가 바뀌고, 잠금 앞으로 옮기면 검증이 낡은 역할을 읽는다. 대기는 Redis 명령
+        // 제한시간(2초)으로 한정되고 장애 시 fail-open이다(L-4).
         requestLimiter.checkAllowed(guardianId, wardId);
 
         // 제로폭 문자·NBSP·전각공백을 걷어낸 값으로 저장한다 - DTO의 @VisibleText와 같은 기준(CONN-G14)
@@ -225,7 +228,7 @@ public class ConnectionService {
             throw new CustomException(ErrorCode.CONNECTION_NOT_PENDING);
         }
         if (wardId.equals(connection.getInitiatedBy())) {
-            throw new CustomException(ErrorCode.CONNECTION_NOT_AUTHORIZED);
+            throw new CustomException(ErrorCode.CONNECTION_NOT_OWNED);
         }
         // 요청과 관리자 역할 변경이 겹치면 역할 변경 정리(tearDownConnectionsOnRoleChange)가 아직 커밋되지 않은
         // 요청을 못 보고 지나가, 방향이 뒤집힌 PENDING이 남을 수 있다. 수락 시점에 양쪽 역할을 다시 보고,
@@ -468,7 +471,7 @@ public class ConnectionService {
                 .orElseThrow(() -> new CustomException(ErrorCode.CONNECTION_NOT_FOUND));
         if (!connection.getWardId().equals(wardId)) {
             log.warn("[IDOR-ATTEMPT] 타인 연결 접근 시도(피보호자): wardId={}, connectionId={}", wardId, connectionId);
-            throw new CustomException(ErrorCode.CONNECTION_NOT_AUTHORIZED);
+            throw new CustomException(ErrorCode.CONNECTION_NOT_OWNED);
         }
         return connection;
     }

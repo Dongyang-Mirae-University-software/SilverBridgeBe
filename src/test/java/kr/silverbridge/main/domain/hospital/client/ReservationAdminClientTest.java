@@ -181,6 +181,32 @@ class ReservationAdminClientTest {
     }
 
     @Test
+    @DisplayName("다른 호출이 로그인 중이면 자기 마감까지만 기다리고 504 HOSPITAL_SERVICE_TIMEOUT (L-8)")
+    void waiting_for_login_lock_respects_own_deadline() throws Exception {
+        loginDelayMs.set(1_500L);
+        properties.setCallTimeout(Duration.ofSeconds(5));
+        ExecutorService pool = Executors.newSingleThreadExecutor();
+        try {
+            Future<JsonNode> first = pool.submit(() -> client.listHospitals());
+            long waitUntil = System.nanoTime() + TimeUnit.SECONDS.toNanos(3);
+            while (logins.get() < 1 && System.nanoTime() < waitUntil) {
+                Thread.sleep(10);
+            }
+            assertThat(logins.get()).isEqualTo(1);
+            properties.setCallTimeout(Duration.ofMillis(300));
+
+            long started = System.nanoTime();
+            assertThat(codeOf(() -> client.listHospitals())).isEqualTo(ErrorCode.HOSPITAL_SERVICE_TIMEOUT);
+            assertThat(Duration.ofNanos(System.nanoTime() - started)).isLessThan(Duration.ofMillis(1_000));
+            // 앞선 로그인은 그대로 끝난다
+            assertThat(first.get(5, TimeUnit.SECONDS).isArray()).isTrue();
+            assertThat(logins.get()).isEqualTo(1);
+        } finally {
+            pool.shutdownNow();
+        }
+    }
+
+    @Test
     @DisplayName("동시에 여러 요청이 와도 로그인은 한 번만 나간다")
     void concurrent_requests_login_once() throws Exception {
         loginDelayMs.set(200L);

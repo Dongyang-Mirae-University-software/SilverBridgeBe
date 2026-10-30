@@ -5,6 +5,7 @@ import kr.silverbridge.main.domain.anomaly.entity.AnomalyIncident;
 import kr.silverbridge.main.domain.anomaly.entity.AnomalyIncidentFeedback;
 import kr.silverbridge.main.domain.anomaly.entity.AnomalyReviewReminderLog;
 import kr.silverbridge.main.domain.anomaly.entity.AnomalyReviewStatus;
+import kr.silverbridge.main.global.enums.Status;
 import kr.silverbridge.main.domain.anomaly.entity.AnomalyVerdict;
 import kr.silverbridge.main.domain.anomaly.entity.AnomalyReviewConflictLog;
 import kr.silverbridge.main.domain.anomaly.entity.GuardianAnomalySetting;
@@ -93,6 +94,9 @@ class AnomalyReviewReminderPlannerTest {
 
         when(cameraService.findLabelsBySessionIds(anyCollection())).thenReturn(Map.of("ward_a9cC5f_k3m", "거실"));
         when(userRepository.findAllById(anyCollection())).thenReturn(List.of(ward()));
+        // 기본: 요청한 보호자는 모두 계정 ACTIVE (RESTRICTED 시나리오만 개별 테스트에서 덮어쓴다)
+        when(userRepository.findIdsByIdInAndStatus(anyCollection(), eq(Status.ACTIVE)))
+                .thenAnswer(invocation -> List.copyOf(invocation.<java.util.Collection<String>>getArgument(0)));
     }
 
     private AnomalyIncident incident() {
@@ -192,6 +196,20 @@ class AnomalyReviewReminderPlannerTest {
             when(reminderLogRepository.findByIncidentIdIn(anyCollection())).thenReturn(List.of());
 
             assertThat(planner.claimReminders()).isEmpty();
+        }
+
+        @Test
+        @DisplayName("연결은 ACTIVE여도 계정이 이용 제한(ACTIVE 아님)이면 선점하지 않는다 - 1회성 재촉을 소진하지 않는다 (L-12)")
+        void restrictedGuardianIsNotClaimed() {
+            candidateIsFound(incident());
+            when(connectionService.getActiveGuardianIds(WARD_ID)).thenReturn(List.of(GUARDIAN_ID));
+            when(userRepository.findIdsByIdInAndStatus(anyCollection(), eq(Status.ACTIVE))).thenReturn(List.of());
+            when(feedbackRepository.findByIncidentIdIn(anyCollection())).thenReturn(List.of());
+            when(reminderLogRepository.findByIncidentIdIn(anyCollection())).thenReturn(List.of());
+            when(settingRepository.findByGuardianIdIn(anyCollection())).thenReturn(List.of());
+
+            assertThat(planner.claimReminders()).isEmpty();
+            verify(reminderLogRepository, never()).saveAll(anyCollection());
         }
 
         @Test

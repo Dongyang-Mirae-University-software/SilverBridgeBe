@@ -224,8 +224,11 @@ public class AiLiveStreamSubscriber extends TextWebSocketHandler {
         headers.add("x-api-key", properties.getApiKey());
 
         log.info("[ANOMALY] AI WS 접속 시도: url={}", properties.getWsUrl());
-        new StandardWebSocketClient(webSocketContainer())
-                .execute(this, headers, URI.create(properties.getWsUrl()))
+        StandardWebSocketClient client = new StandardWebSocketClient(webSocketContainer());
+        // 접속·핸드셰이크 제한 시간. Tomcat 컨테이너는 이 속성이 없어도 기본 5초라 이미 한정돼 있지만(L-15), 값을 코드에 드러내
+        // 둔다. 다른 구현 컨테이너에서는 무시되며, 연결 이후 수신은 이 값과 무관하다(핑·세션 유휴는 별도).
+        client.setUserProperties(Map.of("org.apache.tomcat.websocket.IO_TIMEOUT_MS", "5000"));
+        client.execute(this, headers, URI.create(properties.getWsUrl()))
                 .whenComplete((connected, error) -> {
                     if (error != null) {
                         log.warn("[ANOMALY] AI WS 접속 실패: {}", error.getMessage());

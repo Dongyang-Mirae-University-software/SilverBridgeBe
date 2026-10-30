@@ -17,7 +17,8 @@ import java.util.Map;
 @JsonIgnoreProperties(ignoreUnknown = true)
 public record ChatRelayRequest(
         String message,
-        @Size(max = 64) String sessionId,
+        // FE는 crypto.randomUUID() 또는 base36 문자열을 보낸다. AI 서버 기록 키로 쓰이므로 안전한 문자만 허용(L-10)
+        @Size(max = 64) @Pattern(regexp = "[A-Za-z0-9_-]{1,64}") String sessionId,
         @Size(max = 24) List<@Valid HistoryItem> history,
         @Size(max = 20) Map<String, Object> context,
         @Valid UiSelection uiSelection
