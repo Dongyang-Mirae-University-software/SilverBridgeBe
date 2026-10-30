@@ -187,6 +187,32 @@ class SosServiceTest {
         verify(eventPublisher).publishEvent(any(SosTriggeredEvent.class));
     }
 
+    @Test
+    @DisplayName("확인된 전화받은 보호자는 이력에 저장되지만 알림 이벤트에는 실리지 않는다 - 알림 대상을 가르지 않는다")
+    void trigger_전화받은보호자_저장_알림무관() {
+        stubSavedEvent();
+
+        sosService.trigger(WARD_ID, null, SosTriggerType.GUARDIAN_CALL, "GD0001");
+
+        ArgumentCaptor<SosEvent> saveCaptor = ArgumentCaptor.forClass(SosEvent.class);
+        verify(sosEventRepository).save(saveCaptor.capture());
+        assertThat(saveCaptor.getValue().getCalledGuardianId()).isEqualTo("GD0001");
+        // 이벤트는 (wardId, sosEventId, wardName)뿐이다 - 리스너는 전화받은 보호자를 알 수 없다
+        verify(eventPublisher).publishEvent(new SosTriggeredEvent(WARD_ID, 42L, WARD_NAME));
+    }
+
+    @Test
+    @DisplayName("기존 3인자 호출은 전화받은 보호자 없이 저장한다")
+    void trigger_기존호출_전화받은보호자_없음() {
+        stubSavedEvent();
+
+        sosService.trigger(WARD_ID, null, SosTriggerType.GUARDIAN_CALL);
+
+        ArgumentCaptor<SosEvent> saveCaptor = ArgumentCaptor.forClass(SosEvent.class);
+        verify(sosEventRepository).save(saveCaptor.capture());
+        assertThat(saveCaptor.getValue().getCalledGuardianId()).isNull();
+    }
+
     /** 세 테스트가 공유하는 저장 결과 스텁 - 반환 mock은 응답 조립에만 쓰인다. */
     private void stubSavedEvent() {
         User ward = User.builder().id(WARD_ID).name(WARD_NAME).role(Role.WARD).build();

@@ -52,14 +52,23 @@ public class SosEvent {
     @Column(name = "trigger_type", nullable = false, length = 20)
     private SosTriggerType triggerType;
 
+    /**
+     * 피보호자가 직접 전화한 보호자 ID(2026-10-30, V64). {@link SosTriggerType#GUARDIAN_CALL}이고 서버가 그 피보호자의
+     * ACTIVE 보호자임을 확인했을 때만 채운다. <b>표시 전용</b>이다 - 알림 대상에서 빼거나 발송을 가르는 데 쓰지 않는다
+     * (전화받은 보호자 외 나머지도 상황을 알아야 한다). 보호자 탈퇴 시 {@code ON DELETE SET NULL}.
+     */
+    @Column(name = "called_guardian_id", length = 6)
+    private String calledGuardianId;
+
     @CreatedDate
     @Column(name = "created_at", nullable = false, updatable = false)
     private OffsetDateTime createdAt;
 
     @Builder
-    public SosEvent(String wardId, String location, SosTriggerType triggerType) {
+    public SosEvent(String wardId, String location, SosTriggerType triggerType, String calledGuardianId) {
         this.wardId = wardId;
         this.location = location;
         this.triggerType = (triggerType == null) ? SosTriggerType.SOS_BUTTON : triggerType;
+        this.calledGuardianId = calledGuardianId;
     }
 }
