@@ -384,7 +384,7 @@ class ConnectionServiceTest {
             CustomException ex = assertThrows(CustomException.class,
                     () -> connectionService.acceptConnectionAsWard(WARD_ID, CONNECTION_ID));
 
-            assertThat(ex.getErrorCode()).isEqualTo(ErrorCode.CONNECTION_TARGET_NOT_ACTIVE);
+            assertThat(ex.getErrorCode()).isEqualTo(ErrorCode.CONNECTION_REQUESTER_NOT_ACTIVE);
             assertThat(connection.getStatus()).isEqualTo(ConnectionStatus.PENDING);
             verify(eventPublisher, never()).publishEvent(any());
         }
@@ -402,7 +402,7 @@ class ConnectionServiceTest {
             CustomException ex = assertThrows(CustomException.class,
                     () -> connectionService.acceptConnectionAsWard(WARD_ID, CONNECTION_ID));
 
-            assertThat(ex.getErrorCode()).isEqualTo(ErrorCode.CONNECTION_TARGET_NOT_ACTIVE);
+            assertThat(ex.getErrorCode()).isEqualTo(ErrorCode.CONNECTION_REQUESTER_NOT_ACTIVE);
             assertThat(connection.getStatus()).isEqualTo(ConnectionStatus.PENDING);
         }
 
@@ -961,6 +961,8 @@ class ConnectionServiceTest {
             assertThat(result.getId()).isEqualTo(7L);
             assertThat(pending.getStatus()).isEqualTo(ConnectionStatus.ACTIVE);
             verify(connectionRepository, never()).save(any(Connection.class));
+            // 일반 수락처럼 요청 횟수를 지운다 - 강제 해제 뒤 재요청이 옛 횟수로 막히지 않게(2026-10 점검 L-3)
+            verify(requestLimiter).reset(GUARDIAN_ID, WARD_ID);
         }
 
         @Test

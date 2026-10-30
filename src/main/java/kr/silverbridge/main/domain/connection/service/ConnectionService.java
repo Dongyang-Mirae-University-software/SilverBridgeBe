@@ -240,9 +240,9 @@ public class ConnectionService {
         }
         // 요청 뒤 보호자가 정지·탈퇴 진행 상태가 됐을 수 있다. 그대로 수락하면 알림은 막히지만 연결은
         // 살아 있어 정지 해제 즉시 SOS·카메라·복약 이력이 열린다. 관리자 강제 연결과 같은 기준으로 막는다
-        // (2026-09-11 회귀 재점검 R-1).
+        // (2026-09-11 회귀 재점검 R-1). 받는 사람이 피보호자라 요청 쪽 문구 대신 수락 전용 코드를 쓴다(2026-10 점검 M-6).
         if (guardian.getStatus() != Status.ACTIVE) {
-            throw new CustomException(ErrorCode.CONNECTION_TARGET_NOT_ACTIVE);
+            throw new CustomException(ErrorCode.CONNECTION_REQUESTER_NOT_ACTIVE);
         }
         connection.activate();
         // 피보호자가 받아들인 관계라 이전 요청 횟수를 지운다 - 나중에 끊긴 뒤 재연결 요청이 막히지 않게(CONN-G04)
@@ -387,6 +387,8 @@ public class ConnectionService {
                         .build()));
 
         connection.activate();
+        // 일반 수락과 같이 이전 요청 횟수를 지운다 - 강제 해제 뒤 보호자의 정상 재요청이 옛 횟수로 막히지 않게(2026-10 점검 L-3)
+        requestLimiter.reset(guardianId, wardId);
         eventPublisher.publishEvent(new ConnectionForcedEvent(
                 connection.getId(), guardianId, wardId, guardianName, wardName));
 
