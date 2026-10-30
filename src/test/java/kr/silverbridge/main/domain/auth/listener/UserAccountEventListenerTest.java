@@ -118,6 +118,37 @@ class UserAccountEventListenerTest {
     }
 
     @Test
+    @DisplayName("비밀번호 변경 후 Redis 무효화가 실패해도 예외를 밖으로 내지 않는다 - 새면 REQUIRES_NEW 롤백으로 refresh 삭제가 되살아난다 (2026-10 점검 H-2)")
+    void handlePasswordChanged_무효화실패_미전파() {
+        when(jwtProperties.getAccessTokenExpiration()).thenReturn(1_800_000L);
+        when(redisTemplate.opsForValue()).thenReturn(valueOperations);
+        org.mockito.Mockito.doThrow(new org.springframework.data.redis.RedisConnectionFailureException("down"))
+                .when(valueOperations).set(anyString(), anyString(), anyLong(), eq(TimeUnit.MILLISECONDS));
+
+        org.assertj.core.api.Assertions.assertThatCode(
+                () -> listener.handlePasswordChanged(new PasswordChangedEvent("user-8"))).doesNotThrowAnyException();
+
+        verify(refreshTokenRepository).deleteByUserId("user-8");
+        verify(webSocketSessionCloser).closeAll("user-8");
+        verify(redisTemplate).delete(java.util.List.of(RedisKeys.LOGIN_LOCK + "user-8", RedisKeys.LOGIN_FAIL + "user-8"));
+    }
+
+    @Test
+    @DisplayName("비밀번호 변경 후 refresh 삭제가 실패해도 access 무효화는 진행한다 (2026-10 점검 H-2)")
+    void handlePasswordChanged_refresh삭제실패_무효화진행() {
+        when(jwtProperties.getAccessTokenExpiration()).thenReturn(1_800_000L);
+        when(redisTemplate.opsForValue()).thenReturn(valueOperations);
+        org.mockito.Mockito.doThrow(new IllegalStateException("db"))
+                .when(refreshTokenRepository).deleteByUserId("user-9");
+
+        org.assertj.core.api.Assertions.assertThatCode(
+                () -> listener.handlePasswordChanged(new PasswordChangedEvent("user-9"))).doesNotThrowAnyException();
+
+        verify(valueOperations).set(eq(RedisKeys.PASSWORD_INVALIDATE + "user-9"), anyString(), eq(1_800_000L), eq(TimeUnit.MILLISECONDS));
+        verify(webSocketSessionCloser).closeAll("user-9");
+    }
+
+    @Test
     @DisplayName("PasswordChangedEvent 수신 시 로그인 잠금·실패 횟수 키를 삭제한다 - 재설정 후 바로 로그인 가능 (AUTH-G01)")
     void handlePasswordChanged_로그인잠금_해제() {
         when(jwtProperties.getAccessTokenExpiration()).thenReturn(1_800_000L);

@@ -112,6 +112,46 @@ class FcmServiceTest {
     }
 
     @Test
+    @DisplayName("묶음 전체가 INVALID_ARGUMENT면 메시지 문제일 수 있어 토큰을 지우지 않는다 (2026-10 점검 M-2)")
+    void sendToUser_전부INVALID_ARGUMENT_토큰보존() throws FirebaseMessagingException {
+        BatchResponse batch = batchWithSingleFailure(MessagingErrorCode.INVALID_ARGUMENT);
+        when(fcmTokenRepository.findByUserId("GD0001"))
+                .thenReturn(List.of(FcmToken.of("GD0001", "live-token", "ANDROID")));
+        when(firebaseMessaging.sendEachForMulticast(any(MulticastMessage.class))).thenReturn(batch);
+
+        ChannelResult result = fcmService.sendToUser("GD0001", "긴급 SOS", "도움 요청", Map.of("type", "WARD_SOS"));
+
+        assertThat(result).isEqualTo(ChannelResult.failed(ChannelFailureReason.PUSH_SERVER_ERROR));
+        verify(fcmTokenRepository, never()).deleteByToken(any());
+    }
+
+    @Test
+    @DisplayName("같은 묶음에서 다른 토큰은 성공했다면 INVALID_ARGUMENT 토큰은 그 토큰 탓이라 지운다 (2026-10 점검 M-2)")
+    void sendToUser_일부성공_INVALID_ARGUMENT_삭제() throws FirebaseMessagingException {
+        FirebaseMessagingException invalid = mock(FirebaseMessagingException.class);
+        when(invalid.getMessagingErrorCode()).thenReturn(MessagingErrorCode.INVALID_ARGUMENT);
+        SendResponse ok = mock(SendResponse.class);
+        when(ok.isSuccessful()).thenReturn(true);
+        SendResponse bad = mock(SendResponse.class);
+        when(bad.isSuccessful()).thenReturn(false);
+        when(bad.getException()).thenReturn(invalid);
+        BatchResponse batch = mock(BatchResponse.class);
+        when(batch.getSuccessCount()).thenReturn(1);
+        when(batch.getFailureCount()).thenReturn(1);
+        when(batch.getResponses()).thenReturn(List.of(ok, bad));
+        when(fcmTokenRepository.findByUserId("GD0001")).thenReturn(List.of(
+                FcmToken.of("GD0001", "live-token", "ANDROID"),
+                FcmToken.of("GD0001", "broken-token", "ANDROID")));
+        when(firebaseMessaging.sendEachForMulticast(any(MulticastMessage.class))).thenReturn(batch);
+
+        ChannelResult result = fcmService.sendToUser("GD0001", "제목", "본문", null);
+
+        assertThat(result.isDelivered()).isTrue();
+        verify(fcmTokenRepository).deleteByToken("broken-token");
+        verify(fcmTokenRepository, never()).deleteByToken("live-token");
+    }
+
+    @Test
     @DisplayName("만료와 일시 오류가 섞여 전부 실패하면 '만료'라고 말할 수 없어 서버 오류다")
     void sendToUser_만료와일시오류_혼합() throws FirebaseMessagingException {
         FirebaseMessagingException expired = mock(FirebaseMessagingException.class);

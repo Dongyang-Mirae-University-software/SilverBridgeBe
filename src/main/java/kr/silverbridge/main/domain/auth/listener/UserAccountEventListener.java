@@ -100,8 +100,21 @@ public class UserAccountEventListener {
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public void handlePasswordChanged(PasswordChangedEvent event) {
-        refreshTokenRepository.deleteByUserId(event.userId());
-        invalidatePreviousAccessTokens(event.userId());
+        // 단계마다 따로 감싼다(2026-10 전체 점검 H-2). 예외 하나가 메서드 밖으로 새면 REQUIRES_NEW가 롤백돼
+        // 앞서 지운 refresh 토큰이 되살아난다 - 탈취를 의심해 재설정했는데 옛 세션이 7일 살아 있게 된다.
+        // refresh 삭제(DB)와 access 무효화(Redis)는 서로 독립이라 한쪽 실패가 다른 쪽을 막지 않게 한다.
+        try {
+            refreshTokenRepository.deleteByUserId(event.userId());
+        } catch (RuntimeException e) {
+            log.error("[PW-CHANGE] refresh 토큰 삭제 실패 - 옛 refresh 토큰이 만료까지 유효할 수 있음 userId={} error={}",
+                    event.userId(), e.getClass().getSimpleName());
+        }
+        try {
+            invalidatePreviousAccessTokens(event.userId());
+        } catch (RuntimeException e) {
+            log.error("[PW-CHANGE] access 토큰 무효화 실패 - 옛 access 토큰이 만료까지 유효할 수 있음 userId={} error={}",
+                    event.userId(), e.getClass().getSimpleName());
+        }
         webSocketSessionCloser.closeAll(event.userId());
         clearLoginLock(event.userId());
         clearPasswordConfirmLock(event.userId());

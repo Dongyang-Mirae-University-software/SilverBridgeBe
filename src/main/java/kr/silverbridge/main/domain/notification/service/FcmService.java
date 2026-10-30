@@ -198,7 +198,7 @@ public class FcmService {
             log.info("FCM 발송 완료: 성공={}, 실패={}", response.getSuccessCount(), response.getFailureCount());
 
             // 만료된 토큰 정리
-            int expired = response.getFailureCount() > 0 ? cleanupInvalidTokens(tokens, response) : 0;
+            int expired = response.getFailureCount() > 0 ? cleanupInvalidTokens(tokens, response, fcmTokenRepository) : 0;
             return new BatchOutcome(response.getSuccessCount(), expired);
         } catch (FirebaseMessagingException e) {
             // 예외 메시지에 기기 토큰이 섞일 수 있어 FCM 오류 코드(열거형)만 남긴다.
@@ -236,23 +236,35 @@ public class FcmService {
     }
 
     // 유효하지 않은 토큰 DB에서 삭제. 반환: 만료·무효로 삭제한 토큰 수.
-    private int cleanupInvalidTokens(List<String> tokens, BatchResponse response) {
+    // UNREGISTERED는 토큰 문제라 항상 지운다. INVALID_ARGUMENT는 토큰이 잘못됐을 때도, 메시지 자체(페이로드 초과·잘못된 data)가
+    // 잘못됐을 때도 온다 - 같은 묶음에서 성공한 토큰이 있을 때만 그 토큰 탓으로 보고 지운다. 전부 실패했으면 메시지 탓일 수 있어
+    // 보존한다(지우면 재등록 전까지 SOS 푸시를 못 받는다, 2026-10 전체 점검 M-2). 남은 불량 토큰은 유휴 정리가 회수한다.
+    static int cleanupInvalidTokens(List<String> tokens, BatchResponse response, FcmTokenRepository repository) {
+        boolean anySuccess = response.getSuccessCount() > 0;
         int expired = 0;
+        int keptInvalidArgument = 0;
         List<SendResponse> responses = response.getResponses();
         for (int i = 0; i < responses.size(); i++) {
             SendResponse sendResponse = responses.get(i);
-            if (!sendResponse.isSuccessful()) {
-                String errorCode = sendResponse.getException().getMessagingErrorCode() != null
-                        ? sendResponse.getException().getMessagingErrorCode().name()
-                        : "UNKNOWN";
-                // UNREGISTERED, INVALID_ARGUMENT 등 복구 불가 오류 시 토큰 삭제
-                if ("UNREGISTERED".equals(errorCode) || "INVALID_ARGUMENT".equals(errorCode)) {
-                    String invalidToken = tokens.get(i);
-                    fcmTokenRepository.deleteByToken(invalidToken);
-                    expired++;
-                    log.info("만료된 FCM 토큰 삭제: {}", invalidToken.substring(0, Math.min(20, invalidToken.length())));
-                }
+            if (sendResponse.isSuccessful()) {
+                continue;
             }
+            MessagingErrorCode code = sendResponse.getException().getMessagingErrorCode();
+            boolean tokenAtFault = code == MessagingErrorCode.UNREGISTERED
+                    || (code == MessagingErrorCode.INVALID_ARGUMENT && anySuccess);
+            if (tokenAtFault) {
+                String invalidToken = tokens.get(i);
+                repository.deleteByToken(invalidToken);
+                expired++;
+                // 기기 토큰은 앞 6자만(식별 보조용) 남긴다
+                log.info("만료된 FCM 토큰 삭제: errorCode={}, token={}…", code,
+                        invalidToken.substring(0, Math.min(6, invalidToken.length())));
+            } else if (code == MessagingErrorCode.INVALID_ARGUMENT) {
+                keptInvalidArgument++;
+            }
+        }
+        if (keptInvalidArgument > 0) {
+            log.warn("[FCM-INVALID-ARGUMENT] 묶음 전체가 INVALID_ARGUMENT - 메시지 문제일 수 있어 토큰 {}건 보존", keptInvalidArgument);
         }
         return expired;
     }
