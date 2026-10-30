@@ -10,7 +10,6 @@ import kr.silverbridge.main.domain.anomaly.repository.AnomalyClipRepository;
 import kr.silverbridge.main.domain.anomaly.repository.AnomalyIncidentRepository;
 import kr.silverbridge.main.domain.anomaly.service.AnomalyClipService.ClipSummary;
 import kr.silverbridge.main.domain.anomaly.service.AnomalyClipService.StoredClip;
-import kr.silverbridge.main.domain.camera.dto.CameraOwner;
 import kr.silverbridge.main.domain.camera.service.CameraService;
 import kr.silverbridge.main.global.enums.DetectedType;
 import org.junit.jupiter.api.BeforeEach;
@@ -77,7 +76,7 @@ class AnomalyClipServiceTest {
     }
 
     private void cameraAlive() {
-        when(cameraService.findOwnerBySessionId(SESSION)).thenReturn(Optional.of(new CameraOwner(WARD, "거실")));
+        when(cameraService.lockOwnerWardIdForKeyShare(SESSION)).thenReturn(Optional.of(WARD));
     }
 
     @Test
@@ -140,7 +139,7 @@ class AnomalyClipServiceTest {
     void 기록_카메라없음() {
         wardAlive();
         when(incidentRepository.findByIdForUpdate(INCIDENT_ID)).thenReturn(Optional.of(incident(AnomalyReviewStatus.PENDING)));
-        when(cameraService.findOwnerBySessionId(SESSION)).thenReturn(Optional.of(new CameraOwner("WD0009", "거실")));
+        when(cameraService.lockOwnerWardIdForKeyShare(SESSION)).thenReturn(Optional.of("WD0009"));
 
         assertThat(service.record(stored())).isEmpty();
         verify(clipRepository, never()).save(any());

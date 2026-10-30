@@ -49,7 +49,7 @@ public class AnomalyClipService {
     /**
      * 저장된 파일을 클립 행으로 기록한다. 기록하지 않았으면(상황·카메라가 사라짐, 상한 도달) 빈 값 - 호출부가 파일을 지운다.
      *
-     * <p>잠금 순서는 <b>피보호자({@code users}) → 상황 행</b>이다 - 탈퇴 purge와 같은 순서라 둘이 겹쳐도 교착이 나지 않는다
+     * <p>잠금 순서는 <b>피보호자({@code users}) → 상황 행 → 카메라 행</b>이다 - 탈퇴 purge와 같은 순서라 둘이 겹쳐도 교착이 나지 않는다
      * (점검 L-1). 상황 행 쓰기 잠금으로 보호자 응답과 한 줄로 선다.</p>
      *
      * <p><b>클립은 언제나 공개로 저장한다</b>(점검 L-2 결정, 2026-10-04). 오탐 판정은 <b>판정 시점에 있던 클립</b>에만 적용된다 -
@@ -67,9 +67,10 @@ public class AnomalyClipService {
             log.info("[ANOMALY-CLIP] 상황이 사라져 기록 안 함: incidentId={}", stored.incidentId());
             return Optional.empty();
         }
-        // 요청 사이에 카메라가 삭제(또는 다른 회원 소유로 바뀜)됐으면 남기지 않는다 - 삭제 정리가 이미 지나갔을 수 있다
-        boolean cameraAlive = cameraService.findOwnerBySessionId(stored.sessionId())
-                .filter(owner -> owner.wardId().equals(stored.wardId()))
+        // 요청 사이에 카메라가 삭제(또는 다른 회원 소유로 바뀜)됐으면 남기지 않는다. 카메라 행도 잠근다(users → 상황 → 카메라) -
+        // 확인과 INSERT 사이에 삭제가 커밋되면 삭제 정리가 이 행을 못 보고 지나가 고아 클립이 최대 하루 열람됐다(2026-10 점검 M-7).
+        boolean cameraAlive = cameraService.lockOwnerWardIdForKeyShare(stored.sessionId())
+                .filter(stored.wardId()::equals)
                 .isPresent();
         if (!cameraAlive) {
             log.info("[ANOMALY-CLIP] 카메라가 삭제돼 기록 안 함: sessionId={}", stored.sessionId());

@@ -299,6 +299,40 @@ class AnomalyClipIntegrationTest extends PostgresIntegrationTest {
     }
 
     @Test
+    @DisplayName("클립 기록과 카메라 삭제가 동시에 와도 그 카메라의 클립 행이 남지 않는다(2026-10 점검 M-7 - 카메라 행 KEY SHARE)")
+    void 클립기록과_카메라삭제_동시() throws Exception {
+        ExecutorService pool = Executors.newFixedThreadPool(2);
+        try {
+            for (int round = 0; round < ROUNDS; round++) {
+                String session = "sess-del-" + round;
+                Long camId = cameraRepository.save(TestData.camera(WARD_ID, session, "침실")).getId();
+                Long incidentId = incidentRepository.save(AnomalyIncident.builder()
+                        .wardId(WARD_ID).sessionId(session).detectedType(DetectedType.FIRE)
+                        .detectedAt(OffsetDateTime.now()).confidence(0.8).build()).getId();
+                String fileName = storage.write(new byte[]{0x1A, 0x45, (byte) 0xDF, (byte) 0xA3});
+                CyclicBarrier start = new CyclicBarrier(2);
+
+                CompletableFuture<?> record = CompletableFuture.runAsync(() -> {
+                    await(start);
+                    clipService.record(new StoredClip(incidentId, WARD_ID, session, fileName, 4,
+                            new ClipMeta(5000, 25, 1920, 1080, null), OffsetDateTime.now()));
+                }, pool);
+                CompletableFuture<?> delete = CompletableFuture.runAsync(() -> {
+                    await(start);
+                    cameraService.delete(WARD_ID, camId);
+                }, pool);
+                CompletableFuture.allOf(record, delete).get(30, TimeUnit.SECONDS);
+
+                // 기록이 먼저면 삭제 정리가 그 행을 지우고, 삭제가 먼저면 기록하지 않는다 - 어느 쪽이든 고아 행이 없어야 한다
+                assertThat(clipRepository.findBySessionIdIn(List.of(session))).as("round %d", round).isEmpty();
+                storage.delete(fileName);
+            }
+        } finally {
+            pool.shutdownNow();
+        }
+    }
+
+    @Test
     @DisplayName("역할 변경 일괄 삭제도 클립을 지운다")
     void 일괄삭제_정리() {
         AnomalyClip clip = recordClip(openIncident());
