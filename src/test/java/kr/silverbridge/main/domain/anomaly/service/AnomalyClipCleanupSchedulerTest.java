@@ -130,13 +130,31 @@ class AnomalyClipCleanupSchedulerTest {
     @DisplayName("파일이 없는 행은 지우고, 파일이 있는 행은 둔다")
     void 파일없는_행() {
         String present = file();
-        when(clipRepository.findByCreatedAtBeforeOrderByIdAsc(any())).thenReturn(List.of(
+        when(clipRepository.findByCreatedAtBeforeAndIdGreaterThanOrderByIdAsc(any(), anyLong(), any())).thenReturn(List.of(
                 clip(5, present, AnomalyClipStatus.VISIBLE),
                 clip(6, "00000000-0000-0000-0000-00000000dead.webm", AnomalyClipStatus.VISIBLE)));
         when(clipRepository.deleteOneById(6L)).thenReturn(1);
 
         assertThat(scheduler.purgeMissingFiles(now)).isEqualTo(1);
         verify(clipRepository, never()).deleteOneById(5L);
+    }
+
+    @Test
+    @DisplayName("파일 없는 행 청소는 id 커서로 500건씩 나눠 읽는다 - 한 번에 전부 올리지 않는다 (2026-10 점검 M-8)")
+    void 파일없는_행_커서() {
+        java.util.List<AnomalyClip> first = new java.util.ArrayList<>();
+        for (long id = 1; id <= 500; id++) {
+            first.add(clip(id, "00000000-0000-0000-0000-00000000dead.webm", AnomalyClipStatus.VISIBLE));
+        }
+        when(clipRepository.findByCreatedAtBeforeAndIdGreaterThanOrderByIdAsc(any(), anyLong(), any()))
+                .thenReturn(first, List.of(clip(501, "00000000-0000-0000-0000-00000000beef.webm", AnomalyClipStatus.VISIBLE)));
+        when(clipRepository.deleteOneById(anyLong())).thenReturn(1);
+
+        assertThat(scheduler.purgeMissingFiles(now)).isEqualTo(501);
+
+        verify(clipRepository).findByCreatedAtBeforeAndIdGreaterThanOrderByIdAsc(any(), org.mockito.ArgumentMatchers.eq(0L),
+                org.mockito.ArgumentMatchers.argThat(p -> p.getPageSize() == 500));
+        verify(clipRepository).findByCreatedAtBeforeAndIdGreaterThanOrderByIdAsc(any(), org.mockito.ArgumentMatchers.eq(500L), any());
     }
 
     @Test
@@ -168,7 +186,7 @@ class AnomalyClipCleanupSchedulerTest {
         scheduler.cleanup();
 
         verify(clipRepository).findByCreatedAtBefore(any(), any());
-        verify(clipRepository).findByCreatedAtBeforeOrderByIdAsc(any());
+        verify(clipRepository).findByCreatedAtBeforeAndIdGreaterThanOrderByIdAsc(any(), anyLong(), any());
         verify(clipRepository, never()).deleteOneById(anyLong());
     }
 

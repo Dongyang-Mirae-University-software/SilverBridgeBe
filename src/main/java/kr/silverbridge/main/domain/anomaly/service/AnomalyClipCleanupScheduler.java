@@ -121,13 +121,24 @@ public class AnomalyClipCleanupScheduler {
     }
 
     /** 파일이 사라진 행. */
+    // 보관 30일치를 한 번에 읽지 않고 id 커서로 BATCH씩 나눠 읽는다 - 클립이 쌓여도 메모리가 일정하다(2026-10 점검 M-8).
     int purgeMissingFiles(OffsetDateTime now) {
+        OffsetDateTime cutoff = now.minus(SETTLE);
+        long afterId = 0L;
         int deleted = 0;
-        for (AnomalyClip clip : clipRepository.findByCreatedAtBeforeOrderByIdAsc(now.minus(SETTLE))) {
-            if (storage.find(clip.getFileName()).isEmpty()
-                    && clipRepository.deleteOneById(clip.getId()) == 1) {
-                deleted++;
+        for (int batch = 0; batch < MAX_BATCHES; batch++) {
+            List<AnomalyClip> clips = clipRepository.findByCreatedAtBeforeAndIdGreaterThanOrderByIdAsc(
+                    cutoff, afterId, PageRequest.of(0, BATCH));
+            for (AnomalyClip clip : clips) {
+                if (storage.find(clip.getFileName()).isEmpty()
+                        && clipRepository.deleteOneById(clip.getId()) == 1) {
+                    deleted++;
+                }
             }
+            if (clips.size() < BATCH) {
+                break;
+            }
+            afterId = clips.get(clips.size() - 1).getId();
         }
         return deleted;
     }

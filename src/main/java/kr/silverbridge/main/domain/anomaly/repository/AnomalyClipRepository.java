@@ -76,8 +76,9 @@ public interface AnomalyClipRepository extends JpaRepository<AnomalyClip, Long> 
     /** 청소 - 보관 기간이 지난 것(상태 무관). */
     List<AnomalyClip> findByCreatedAtBefore(OffsetDateTime cutoff, Pageable pageable);
 
-    /** 청소 - 파일이 사라졌는지 확인할 대상(만든 지 충분히 지난 행). */
-    List<AnomalyClip> findByCreatedAtBeforeOrderByIdAsc(OffsetDateTime cutoff);
+    /** 청소 - 파일이 사라졌는지 확인할 대상(만든 지 충분히 지난 행). id 커서로 나눠 읽는다(2026-10 점검 M-8). */
+    List<AnomalyClip> findByCreatedAtBeforeAndIdGreaterThanOrderByIdAsc(OffsetDateTime cutoff, Long afterId,
+                                                                        Pageable pageable);
 
     /** 청소 - 카메라가 사라졌는지 확인할 세션 목록. */
     @Query("SELECT DISTINCT c.sessionId FROM AnomalyClip c")
