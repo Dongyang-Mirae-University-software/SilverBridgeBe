@@ -49,9 +49,11 @@ class MedicationMissedAlertServiceTest {
                 eq(GUARDIAN_ID), any(), eq(NotificationType.MEDICATION_MISSED), captor.capture());
 
         NotificationContent content = captor.getValue();
-        assertThat(content.title()).isEqualTo("복약 확인이 필요해요");
+        // 누구의 요약인지는 제목에(2026-10-30 웹푸시 디자인)
+        assertThat(content.title()).isEqualTo("오늘 복약 확인 · 김영희님");
         assertThat(content.body())
-                .contains("김영희", "3건", "1건", "체크되지 않았습니다")
+                .contains("3건", "1건", "체크되지 않았습니다")
+                .endsWith("예정된 복약 3건 중 1건이 체크되지 않았습니다.")
                 .doesNotContain("안 드셨", "복용하지 않");
         assertThat(content.data())
                 .containsEntry("type", "MEDICATION_MISSED")

@@ -51,6 +51,34 @@ class AnomalyReviewReminderServiceTest {
     }
 
     @Test
+    @DisplayName("건별 재촉: 문구는 그대로('감지가 있었습니다')이고 두 문장 사이만 줄바꿈이다")
+    void reminderContentTwoLines() {
+        when(planner.claimReminders()).thenReturn(List.of(target("GD0001")));
+
+        service.sendReminders();
+
+        ArgumentCaptor<NotificationContent> captor = ArgumentCaptor.forClass(NotificationContent.class);
+        verify(notificationDispatcher).dispatch(eq("GD0001"), any(), eq(NotificationType.ANOMALY_REVIEW_REQUIRED), captor.capture());
+        assertThat(captor.getValue().title()).isEqualTo("이상감지 확인이 필요해요");
+        assertThat(captor.getValue().body())
+                .contains("감지가 있었습니다.\n실제 상황이었는지 확인해 주세요.")
+                .doesNotContain("발생했습니다");
+    }
+
+    @Test
+    @DisplayName("하루 요약: 두 문장 사이만 줄바꿈이다")
+    void summaryContentTwoLines() {
+        when(planner.claimSummaries()).thenReturn(List.of(
+                new AnomalyReviewSummaryTarget("GD0001", java.time.LocalDate.of(2026, 9, 21), 2)));
+
+        service.sendSummaries();
+
+        ArgumentCaptor<NotificationContent> captor = ArgumentCaptor.forClass(NotificationContent.class);
+        verify(notificationDispatcher).dispatch(eq("GD0001"), eq(NotificationType.ANOMALY_REVIEW_REQUIRED), captor.capture());
+        assertThat(captor.getValue().body()).startsWith("확인이 필요한 이상감지가 2건 있습니다.\n실제 상황이었는지");
+    }
+
+    @Test
     @DisplayName("동수 안내는 ANOMALY_REVIEW_CONFLICTED로 나가고, 다른 보호자의 답은 문구에 싣지 않는다")
     void conflictNoticeContent() {
         when(planner.claimConflicts()).thenReturn(List.of(target("GD0002")));
@@ -64,6 +92,7 @@ class AnomalyReviewReminderServiceTest {
         assertThat(sent).isEqualTo(1);
         assertThat(content.body())
                 .contains("9월 21일 14:05", "김영희님", "거실", "화재 감지", "다른 보호자와 판정이 다릅니다")
+                .endsWith("판정이 다릅니다.\n다시 확인해 주세요.")
                 .doesNotContain("오탐", "실제 위험", "발생했습니다");
         assertThat(content.data())
                 .containsEntry("type", "ANOMALY_REVIEW_CONFLICTED")

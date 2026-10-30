@@ -3,7 +3,9 @@ package kr.silverbridge.main.domain.notification.service;
 import com.google.firebase.messaging.*;
 import kr.silverbridge.main.domain.notification.channel.ChannelFailureReason;
 import kr.silverbridge.main.domain.notification.channel.ChannelResult;
+import kr.silverbridge.main.domain.notification.config.FcmMessageProperties;
 import kr.silverbridge.main.domain.notification.config.FcmTokenProperties;
+import kr.silverbridge.main.domain.notification.dispatch.NotificationType;
 import kr.silverbridge.main.domain.notification.entity.FcmToken;
 import kr.silverbridge.main.domain.notification.repository.FcmTokenRepository;
 import lombok.RequiredArgsConstructor;
@@ -13,6 +15,8 @@ import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.OffsetDateTime;
+import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -28,6 +32,9 @@ public class FcmService {
     private final FirebaseMessaging firebaseMessaging;
     private final FcmTokenRepository fcmTokenRepository;
     private final FcmTokenProperties tokenProperties;
+    private final FcmMessageProperties messageProperties;
+
+    private static final String WEB_PLATFORM = "WEB";
 
     // FCM 토큰 등록. 같은 토큰이 다른 사용자 소유로 남아 있으면(공유 디바이스에서 사용자 전환,
     // 이전 사용자가 로그아웃 시 삭제 API를 못 부른 경우) 소유자를 현재 사용자로 갱신한다 (M-S2-2)
@@ -114,50 +121,117 @@ public class FcmService {
         log.info("FCM 토큰 일괄 삭제(탈퇴): userId={}", userId);
     }
 
+    // 특정 사용자에게 푸시 알림 발송 (등록된 모든 디바이스). 종류를 모르는 호출용 - 우선순위는 기본(normal).
+    public ChannelResult sendToUser(String userId, String title, String body, Map<String, String> data) {
+        return sendToUser(userId, null, title, body, data);
+    }
+
     // 특정 사용자에게 푸시 알림 발송 (등록된 모든 디바이스).
     // 반환: 1건 이상 전달되면 성공. 실패면 사유(토큰 없음 / 전 토큰 만료 / 서버 오류)를 담는다.
     // 필수(긴급) 알림의 결과 기반 SMS 폴백 판단(M-S2-1)과 관리자 알림 이력의 실패 사유에 쓰인다.
-    public ChannelResult sendToUser(String userId, String title, String body, Map<String, String> data) {
+    // 웹 토큰을 data 전용으로 나눠 보내도(2026-10-30) 판정은 전 토큰을 합쳐 같은 규칙으로 한다.
+    public ChannelResult sendToUser(String userId, NotificationType type, String title, String body,
+                                    Map<String, String> data) {
         List<FcmToken> tokens = fcmTokenRepository.findByUserId(userId);
         if (tokens.isEmpty()) {
             log.debug("FCM 토큰 없음: userId={}", userId);
             return ChannelResult.failed(ChannelFailureReason.NO_DEVICE);
         }
 
-        List<String> tokenStrings = tokens.stream().map(FcmToken::getToken).toList();
-        return sendMulticast(tokenStrings, title, body, data);
-    }
-
-    // MulticastMessage로 최대 500개 토큰에 동시 발송. 반환: 성공 1건 이상이면 성공.
-    private ChannelResult sendMulticast(List<String> tokens, String title, String body, Map<String, String> data) {
-        MulticastMessage.Builder builder = MulticastMessage.builder()
-                .setNotification(Notification.builder()
-                        .setTitle(title)
-                        .setBody(body)
-                        .build())
-                .addAllTokens(tokens);
-
-        if (data != null && !data.isEmpty()) {
-            builder.putAllData(data);
+        Map<String, String> payload = pushData(title, body, data);
+        boolean highUrgency = messageProperties.isHighUrgency(type);
+        if (!messageProperties.isWebpushDataOnly()) {
+            List<String> all = tokens.stream().map(FcmToken::getToken).toList();
+            return toResult(sendMulticast(all, title, body, payload, true, highUrgency), all.size());
         }
 
+        List<String> web = new ArrayList<>();
+        List<String> others = new ArrayList<>();
+        for (FcmToken token : tokens) {
+            (WEB_PLATFORM.equals(token.getPlatform()) ? web : others).add(token.getToken());
+        }
+        BatchOutcome outcome = BatchOutcome.NONE;
+        if (!others.isEmpty()) {
+            outcome = outcome.plus(sendMulticast(others, title, body, payload, true, highUrgency));
+        }
+        if (!web.isEmpty()) {
+            // notification 블록이 있으면 Firebase SW 라이브러리가 자동 표시하고 FE가 한 번 더 띄운다(알림 두 번 표시).
+            outcome = outcome.plus(sendMulticast(web, title, body, payload, false, highUrgency));
+        }
+        return toResult(outcome, tokens.size());
+    }
+
+    /**
+     * FCM data. 호출자의 data에 제목·본문을 더한 복사본이다 - data 전용 웹푸시는 서비스 워커가 이 값으로 그린다.
+     * 호출자 맵은 알림톡 변수로도 쓰이므로 건드리지 않는다.
+     */
+    private static Map<String, String> pushData(String title, String body, Map<String, String> data) {
+        Map<String, String> payload = new HashMap<>();
+        if (data != null) {
+            payload.putAll(data);
+        }
+        if (title != null) {
+            payload.put("title", title);
+        }
+        if (body != null) {
+            payload.put("body", body);
+        }
+        return payload;
+    }
+
+    // 전부 실패 - 모두 만료였을 때만 "만료"라고 말할 수 있다. 하나라도 다른 오류가 섞이면 서버 오류로 본다.
+    private static ChannelResult toResult(BatchOutcome outcome, int tokenCount) {
+        if (outcome.success() > 0) {
+            return ChannelResult.delivered();
+        }
+        return ChannelResult.failed(outcome.expired() == tokenCount
+                ? ChannelFailureReason.ALL_TOKENS_EXPIRED
+                : ChannelFailureReason.PUSH_SERVER_ERROR);
+    }
+
+    // MulticastMessage로 최대 500개 토큰에 동시 발송. 반환: 성공 수·만료로 지운 수(발송 예외면 둘 다 0).
+    private BatchOutcome sendMulticast(List<String> tokens, String title, String body, Map<String, String> data,
+                                       boolean withNotification, boolean highUrgency) {
         try {
-            BatchResponse response = firebaseMessaging.sendEachForMulticast(builder.build());
+            BatchResponse response = firebaseMessaging.sendEachForMulticast(
+                    buildMessage(tokens, title, body, data, withNotification, highUrgency));
             log.info("FCM 발송 완료: 성공={}, 실패={}", response.getSuccessCount(), response.getFailureCount());
 
             // 만료된 토큰 정리
             int expired = response.getFailureCount() > 0 ? cleanupInvalidTokens(tokens, response) : 0;
-            if (response.getSuccessCount() > 0) {
-                return ChannelResult.delivered();
-            }
-            // 전부 실패 - 모두 만료였을 때만 "만료"라고 말할 수 있다. 하나라도 다른 오류가 섞이면 서버 오류로 본다.
-            return ChannelResult.failed(expired == tokens.size()
-                    ? ChannelFailureReason.ALL_TOKENS_EXPIRED
-                    : ChannelFailureReason.PUSH_SERVER_ERROR);
+            return new BatchOutcome(response.getSuccessCount(), expired);
         } catch (FirebaseMessagingException e) {
             // 예외 메시지에 기기 토큰이 섞일 수 있어 FCM 오류 코드(열거형)만 남긴다.
             log.error("FCM 발송 실패: errorCode={}", e.getMessagingErrorCode());
-            return ChannelResult.failed(ChannelFailureReason.PUSH_SERVER_ERROR);
+            return BatchOutcome.NONE;
+        }
+    }
+
+    static MulticastMessage buildMessage(List<String> tokens, String title, String body, Map<String, String> data,
+                                         boolean withNotification, boolean highUrgency) {
+        MulticastMessage.Builder builder = MulticastMessage.builder().addAllTokens(tokens);
+        if (withNotification) {
+            builder.setNotification(Notification.builder()
+                    .setTitle(title)
+                    .setBody(body)
+                    .build());
+        }
+        if (data != null && !data.isEmpty()) {
+            builder.putAllData(data);
+        }
+        if (highUrgency) {
+            // 웹푸시 전송 우선순위(RFC 8030). 절전 중인 기기도 바로 깨운다. 웹이 아닌 토큰은 이 설정을 무시한다.
+            builder.setWebpushConfig(WebpushConfig.builder().putHeader("Urgency", "high").build());
+        }
+        return builder.build();
+    }
+
+    /** 멀티캐스트 묶음 결과. 웹·비웹으로 나눠 보낼 때 합산한다. */
+    private record BatchOutcome(int success, int expired) {
+        static final BatchOutcome NONE = new BatchOutcome(0, 0);
+
+        BatchOutcome plus(BatchOutcome other) {
+            return new BatchOutcome(success + other.success, expired + other.expired);
         }
     }
 

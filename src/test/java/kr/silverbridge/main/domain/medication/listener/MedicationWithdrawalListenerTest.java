@@ -70,7 +70,8 @@ class MedicationWithdrawalListenerTest {
         ArgumentCaptor<NotificationContent> contentCaptor = ArgumentCaptor.forClass(NotificationContent.class);
         verify(notificationDispatcher).dispatch(
                 eq(REMAINING_GUARDIAN_ID), any(), eq(NotificationType.MEDICATION_STOPPED), contentCaptor.capture());
-        assertThat(contentCaptor.getValue().body()).contains("김영희", "3건");
+        assertThat(contentCaptor.getValue().body()).contains("김영희", "3건")
+                .contains("중지되었습니다.\n계속 복용해야 한다면 다시 등록해 주세요.");
         assertThat(contentCaptor.getValue().data()).containsEntry("wardId", WARD_ID);
 
         verify(webSocketEventPublisher).sendToUser(eq(REMAINING_GUARDIAN_ID), eq("medication-stopped"), any());

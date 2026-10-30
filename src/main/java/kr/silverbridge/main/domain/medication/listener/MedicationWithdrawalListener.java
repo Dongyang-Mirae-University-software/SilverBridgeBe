@@ -76,7 +76,7 @@ public class MedicationWithdrawalListener {
                 .orElse(FALLBACK_WARD_NAME);
         NotificationContent content = NotificationContent.of(
                 "복약 일정 중지",
-                "탈퇴한 보호자가 등록한 %s님의 약 %d건이 중지되었습니다. 계속 복용해야 한다면 다시 등록해 주세요."
+                "탈퇴한 보호자가 등록한 %s님의 약 %d건이 중지되었습니다.\n계속 복용해야 한다면 다시 등록해 주세요."
                         .formatted(wardName, stoppedCount),
                 Map.of("type", "MEDICATION_STOPPED",
                         "wardId", wardId,

@@ -87,7 +87,8 @@ class CameraLinkLostNotifierTest {
         ArgumentCaptor<NotificationContent> content = ArgumentCaptor.forClass(NotificationContent.class);
         verify(dispatcher).dispatch(eq("G1"), eq("W1"), eq(NotificationType.CAMERA_LINK_LOST), content.capture());
         verify(dispatcher).dispatch(eq("G2"), eq("W1"), eq(NotificationType.CAMERA_LINK_LOST), any());
-        assertThat(content.getValue().body()).contains("거실").doesNotContain("꺼졌").doesNotContain("고장");
+        assertThat(content.getValue().body()).contains("거실").doesNotContain("꺼졌").doesNotContain("고장")
+                .contains("멈춰 있을 수 있습니다.\n카메라 기기의 송출 상태를 확인해 주세요.");
     }
 
     @Test

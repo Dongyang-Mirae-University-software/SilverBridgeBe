@@ -44,6 +44,20 @@ class SmsNotificationChannelTest {
         assertThat(result.isDelivered()).isTrue();
     }
 
+    @Test
+    @DisplayName("제목이 이미 '['로 시작하면 괄호를 겹치지 않고 '제목 줄 + 본문'으로 보낸다(2026-10-30 웹푸시 제목)")
+    void send_괄호제목_겹치지않음() {
+        NotificationRecipient recipient = new NotificationRecipient("GD0001", "01012345678", null, Status.ACTIVE);
+        NotificationContent content = NotificationContent.of("[화재 감지] 김순자님 댁 거실",
+                "거실 카메라에서 화재가 감지되었습니다.", Map.of());
+        when(smsSender.trySend("01012345678", "[화재 감지] 김순자님 댁 거실\n거실 카메라에서 화재가 감지되었습니다."))
+                .thenReturn(SmsSender.Outcome.SENT);
+
+        ChannelResult result = channel.send(NotificationType.ANOMALY_DETECTED, recipient, content);
+
+        assertThat(result.isDelivered()).isTrue();
+    }
+
     @ParameterizedTest(name = "{0} → {1}")
     @CsvSource({"REJECTED, PROVIDER_REJECTED", "ERROR, PROVIDER_ERROR"})
     @DisplayName("발송사 실패는 예외 대신 사유로 돌려준다 - 접수 거부와 통신 오류를 구분한다")

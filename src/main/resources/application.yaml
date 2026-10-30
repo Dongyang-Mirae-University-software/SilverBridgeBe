@@ -276,6 +276,12 @@ notification:
     max-per-user: ${FCM_TOKEN_MAX_PER_USER:5}        # 초과 시 마지막 사용이 오래된 것부터 삭제
     cleanup-enabled: ${FCM_TOKEN_CLEANUP_ENABLED:true} # 킬 스위치. false면 정리만 멈춘다(등록·발송은 그대로)
     stale-days: ${FCM_TOKEN_STALE_DAYS:60}           # 이 기간 재등록이 없으면 유휴로 보고 정리(매일 04:00 KST)
+  # FCM 메시지 모양(2026-10-30). 대상·채널·전달 판정은 바꾸지 않는다.
+  fcm:
+    # true = 웹 토큰에 notification 블록 없이 data만(알림 두 번 표시 해결). ⚠️ FE SW가 data.title·body로 그리게 배포된 뒤에 켤 것
+    webpush-data-only: ${NOTIFICATION_FCM_WEBPUSH_DATA_ONLY:false}
+    # 웹푸시 Urgency: high 종류(쉼표 구분, 2026-10-30 사용자 선택). 비우면 전부 normal
+    high-urgency-types: ${NOTIFICATION_FCM_HIGH_URGENCY_TYPES:WARD_SOS,ANOMALY_DETECTED,ANOMALY_DETECTED_SELF,MEDICATION_REMINDER,ANOMALY_REVIEW_REQUIRED,CAMERA_LINK_LOST,CONNECTION_REQUEST,CONNECTION_ACCEPTED,CONNECTION_REFUSED,INQUIRY_ANSWERED}
   # 필수 알림(SOS)의 문자 폴백 상한. 푸시를 못 받는 수신자에게 문자가 유일한 수단이라 높게 잡는다(10초 간격 연타 시 5분이면 도달).
   # 넘으면 그 문자만 생략되고 푸시·WS·이력은 그대로다. 0이면 상한을 끈다. Redis 장애 시 막지 않는다.
   sms-fallback:

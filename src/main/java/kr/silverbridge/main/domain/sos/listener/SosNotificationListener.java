@@ -88,7 +88,9 @@ public class SosNotificationListener {
 
         // 쿨다운을 통과한 뒤에만 센다 - 생략된 연타가 DB를 건드리지 않게 하는 순서다.
         long repeatCount = countRecentOccurrences(event.wardId());
+        String title = buildTitle(event.wardName());
         String body = buildBody(event.wardName(), repeatCount);
+        String smsText = buildSmsFallbackText(event.wardName(), repeatCount);
         String repeatCountValue = String.valueOf(repeatCount);
         int delivered = 0;
         for (String guardianId : guardianIds) {
@@ -102,11 +104,12 @@ public class SosNotificationListener {
 
                 NotificationLogResult result = notificationDispatcher.dispatch(guardianId, event.wardId(),
                         NotificationType.WARD_SOS,
-                        NotificationContent.of("긴급 SOS", body,
+                        NotificationContent.of(title, body,
                                 Map.of("type", "WARD_SOS",
                                         "wardId", event.wardId(),
                                         "sosEventId", String.valueOf(event.sosEventId()),
-                                        "repeatCount", repeatCountValue)));
+                                        "repeatCount", repeatCountValue),
+                                smsText));
                 // 디스패처가 채널 실패를 안에서 삼키므로 예외 여부가 아니라 결과로 센다(SOS-G09).
                 // 푸시 또는 문자 대체가 접수된 경우만 전달 - 실패·보내지 않음(정지 계정 차단 등)은 미전달이다.
                 if (result != null && result.isDelivered()) {
@@ -152,17 +155,35 @@ public class SosNotificationListener {
         }
     }
 
+    /** 알림 제목(2026-10-30 웹푸시 디자인) - 누가·무슨 종류인지 한 줄로. 발생 경로(버튼·전화)는 싣지 않는다. */
+    static String buildTitle(String wardName) {
+        return "[긴급] " + wardName + "님 SOS";
+    }
+
     /**
      * 알림 본문. 2회 이상이면 "계속 요청 중"임을 횟수와 함께 알린다.
      *
      * <p>단정하지 않는다 - 횟수는 확인된 사실이지만 위급도·원인은 아직 아무도 모른다.
-     * 1회일 때 문구는 기존과 <b>글자 그대로 동일</b>하게 유지한다(기존 프론트·테스트 계약).</p>
+     * 1회일 때 문구는 기존과 <b>글자 그대로 동일</b>하게 유지한다(기존 프론트·테스트 계약).
+     * 두 문장이면 줄바꿈으로 나눠 알림에서 두 줄로 보이게 한다(2026-10-30).</p>
      */
-    private String buildBody(String wardName, long repeatCount) {
+    static String buildBody(String wardName, long repeatCount) {
         if (repeatCount < 2) {
             return wardName + "님이 긴급 도움을 요청했습니다.";
         }
-        return wardName + "님이 계속 도움을 요청하고 있습니다. (최근 "
+        return wardName + "님이 계속 도움을 요청하고 있습니다.\n최근 "
+                + REPEAT_WINDOW.toMinutes() + "분 내 " + repeatCount + "번째 요청입니다.";
+    }
+
+    /**
+     * 푸시 미전달 시 대체 문자. 푸시 제목을 바꾼(2026-10-30) 뒤에도 <b>문자는 바꾸기 전 문구 그대로</b> 보낸다
+     * (사용자 결정 - 대체 문자 문구는 이번 범위가 아니다). 형식은 예전 문자 채널 조립 결과 {@code [제목] 본문}과 같다.
+     */
+    static String buildSmsFallbackText(String wardName, long repeatCount) {
+        if (repeatCount < 2) {
+            return "[긴급 SOS] " + wardName + "님이 긴급 도움을 요청했습니다.";
+        }
+        return "[긴급 SOS] " + wardName + "님이 계속 도움을 요청하고 있습니다. (최근 "
                 + REPEAT_WINDOW.toMinutes() + "분 내 " + repeatCount + "번째)";
     }
 }

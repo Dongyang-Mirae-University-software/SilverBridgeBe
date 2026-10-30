@@ -30,16 +30,16 @@ class FcmNotificationChannelTest {
     }
 
     @Test
-    @DisplayName("send는 FcmService.sendToUser에 위임하고 전달 결과를 그대로 반환한다")
+    @DisplayName("send는 FcmService.sendToUser에 dispatch 종류와 함께 위임하고 전달 결과를 그대로 반환한다")
     void send_FcmService위임() {
         NotificationRecipient recipient = new NotificationRecipient("WD0001", "01012345678", "a@b.com", Status.ACTIVE);
         Map<String, String> data = Map.of("type", "CONNECTION_REQUEST", "connectionId", "100");
         NotificationContent content = NotificationContent.of("연결 요청", "요청이 도착했습니다.", data);
-        when(fcmService.sendToUser("WD0001", "연결 요청", "요청이 도착했습니다.", data)).thenReturn(ChannelResult.failed(ChannelFailureReason.NO_DEVICE));
+        when(fcmService.sendToUser("WD0001", NotificationType.CONNECTION_REQUEST, "연결 요청", "요청이 도착했습니다.", data)).thenReturn(ChannelResult.failed(ChannelFailureReason.NO_DEVICE));
 
         ChannelResult result = channel.send(NotificationType.CONNECTION_REQUEST, recipient, content);
 
         assertThat(result).isEqualTo(ChannelResult.failed(ChannelFailureReason.NO_DEVICE));
-        verify(fcmService).sendToUser("WD0001", "연결 요청", "요청이 도착했습니다.", data);
+        verify(fcmService).sendToUser("WD0001", NotificationType.CONNECTION_REQUEST, "연결 요청", "요청이 도착했습니다.", data);
     }
 }

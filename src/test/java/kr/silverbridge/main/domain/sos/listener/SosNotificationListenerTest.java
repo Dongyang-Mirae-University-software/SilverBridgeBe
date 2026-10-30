@@ -73,8 +73,10 @@ class SosNotificationListenerTest {
 
         ArgumentCaptor<NotificationContent> captor = ArgumentCaptor.forClass(NotificationContent.class);
         verify(notificationDispatcher).dispatch(eq("GD0001"), any(), eq(NotificationType.WARD_SOS), captor.capture());
-        assertThat(captor.getValue().title()).isEqualTo("긴급 SOS");
+        assertThat(captor.getValue().title()).isEqualTo("[긴급] 김순자님 SOS");
         assertThat(captor.getValue().body()).isEqualTo("김순자님이 긴급 도움을 요청했습니다.");
+        // 푸시 제목이 바뀌어도 대체 문자는 바꾸기 전 문구 그대로다(2026-10-30 사용자 결정)
+        assertThat(captor.getValue().smsFallbackText()).isEqualTo("[긴급 SOS] 김순자님이 긴급 도움을 요청했습니다.");
         assertThat(captor.getValue().data()).containsEntry("type", "WARD_SOS");
 
         // 디스패처가 사용자 설정을 무시하고 강제 발송(+미전달 시 SMS 폴백)하도록 보장하는 정책
@@ -205,8 +207,11 @@ class SosNotificationListenerTest {
         ArgumentCaptor<NotificationContent> captor = ArgumentCaptor.forClass(NotificationContent.class);
         verify(notificationDispatcher).dispatch(eq("GD0001"), any(), eq(NotificationType.WARD_SOS), captor.capture());
         // 위급도를 단정하지 않고 "계속 요청 중"이라는 사실만 알린다.
-        assertThat(captor.getValue().body()).isEqualTo("김순자님이 계속 도움을 요청하고 있습니다. (최근 10분 내 3번째)");
-        assertThat(captor.getValue().title()).isEqualTo("긴급 SOS");
+        // 두 문장은 줄바꿈으로 나눠 두 줄로 보이게 한다(2026-10-30)
+        assertThat(captor.getValue().body()).isEqualTo("김순자님이 계속 도움을 요청하고 있습니다.\n최근 10분 내 3번째 요청입니다.");
+        assertThat(captor.getValue().title()).isEqualTo("[긴급] 김순자님 SOS");
+        assertThat(captor.getValue().smsFallbackText())
+                .isEqualTo("[긴급 SOS] 김순자님이 계속 도움을 요청하고 있습니다. (최근 10분 내 3번째)");
         assertThat(captor.getValue().data()).containsEntry("repeatCount", "3");
 
         ArgumentCaptor<Object> wsCaptor = ArgumentCaptor.forClass(Object.class);
@@ -246,7 +251,7 @@ class SosNotificationListenerTest {
 
         ArgumentCaptor<NotificationContent> captor = ArgumentCaptor.forClass(NotificationContent.class);
         verify(notificationDispatcher).dispatch(eq("GD0001"), any(), eq(NotificationType.WARD_SOS), captor.capture());
-        assertThat(captor.getValue().body()).isEqualTo("김순자님이 계속 도움을 요청하고 있습니다. (최근 10분 내 2번째)");
+        assertThat(captor.getValue().body()).isEqualTo("김순자님이 계속 도움을 요청하고 있습니다.\n최근 10분 내 2번째 요청입니다.");
         assertThat(captor.getValue().data()).containsEntry("repeatCount", "2");
     }
 
