@@ -80,23 +80,28 @@ public interface SosEventRepository extends JpaRepository<SosEvent, Long> {
      * <p>{@code marked.is_start}는 묶음의 첫 누름이면 1이고, {@code numbered.grp}는 그 누적합(묶음 번호)이다. 묶음을
      * DB 안에서 만드는 이유는 페이지 경계다 - 페이지로 자른 뒤 자바에서 묶으면 경계에 걸친 묶음이 두 칸으로 갈린다.</p>
      *
+     * <p>보호자 연락(GUARDIAN_CALL)은 <b>전화받은 보호자</b>도 묶음 기준이다(2026-10-30) - 1분 안이어도 다른 보호자에게 건
+     * 전화는 다른 줄이다. SOS 버튼은 {@code called_guardian_id}가 늘 NULL이라 묶음이 그대로다. 전화받은 보호자가 기록되지 않은
+     * 보호자 연락(옛 이력·확인 실패)끼리는 NULL을 같은 값('')으로 보고 묶는다.</p>
+     *
      * <p>{@code :triggerType}은 빈 문자열이면 전체다(null 바인딩의 타입 추론 문제를 피한다). 경로로 파티션을 나누므로
      * 필터를 걸어도 묶음은 전체 조회 때의 그 경로 묶음과 같다. {@code ward_id IN}이라 탈퇴로 {@code ward_id}가 NULL인
      * 익명 이력은 애초에 대상이 아니다.</p>
      */
     String PRESS_GROUP_CTE = """
             WITH marked AS (
-                SELECT id, ward_id, trigger_type, created_at,
+                SELECT id, ward_id, trigger_type, called_guardian_id, created_at,
                        CASE WHEN LAG(created_at) OVER w IS NULL
                               OR created_at - LAG(created_at) OVER w > :gapSeconds * INTERVAL '1 second'
                             THEN 1 ELSE 0 END AS is_start
                 FROM sos_event
                 WHERE ward_id IN (:wardIds)
                   AND (:triggerType = '' OR trigger_type = :triggerType)
-                WINDOW w AS (PARTITION BY ward_id, trigger_type ORDER BY created_at, id)
+                WINDOW w AS (PARTITION BY ward_id, trigger_type, COALESCE(called_guardian_id, '') ORDER BY created_at, id)
             ), numbered AS (
-                SELECT id, ward_id, trigger_type, created_at,
-                       SUM(is_start) OVER (PARTITION BY ward_id, trigger_type ORDER BY created_at, id) AS grp
+                SELECT id, ward_id, trigger_type, called_guardian_id, created_at,
+                       SUM(is_start) OVER (PARTITION BY ward_id, trigger_type, COALESCE(called_guardian_id, '')
+                                           ORDER BY created_at, id) AS grp
                 FROM marked
             )
             """;
@@ -116,7 +121,7 @@ public interface SosEventRepository extends JpaRepository<SosEvent, Long> {
                    (array_agg(id ORDER BY created_at ASC, id ASC))[1] AS "firstId",
                    COUNT(*) AS "pressCount"
             FROM numbered
-            GROUP BY ward_id, trigger_type, grp
+            GROUP BY ward_id, trigger_type, COALESCE(called_guardian_id, ''), grp
             ORDER BY MAX(created_at) DESC, 1 DESC
             LIMIT :limit OFFSET :offset
             """, nativeQuery = true)

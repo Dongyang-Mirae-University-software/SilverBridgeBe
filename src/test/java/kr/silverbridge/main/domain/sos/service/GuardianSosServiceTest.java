@@ -418,6 +418,78 @@ class GuardianSosServiceTest {
         verifyNoInteractions(sosEventRepository);
     }
 
+    @Test
+    @DisplayName("보호자 연락 이력: 전화받은 보호자가 지금 ACTIVE 연결이면 이름을 붙이고, 해제됐으면 ID·이름 모두 생략")
+    void getHistory_전화받은보호자_이름() {
+        OffsetDateTime now = OffsetDateTime.now();
+        SosEvent toActive = called(sosEvent(1L, WARD_ID, now, null, SosTriggerType.GUARDIAN_CALL), "GD0001");
+        SosEvent toLeft = called(sosEvent(2L, WARD_ID, now.minusHours(1), null, SosTriggerType.GUARDIAN_CALL), "GD0009");
+        SosEvent button = sosEvent(3L, WARD_ID, now.minusHours(2), null, SosTriggerType.SOS_BUTTON);
+
+        when(connectionService.getActiveWardIds(GUARDIAN_ID)).thenReturn(List.of(WARD_ID));
+        when(sosEventRepository.findByWardIdInOrderByCreatedAtDesc(any(), any(Pageable.class)))
+                .thenReturn(new PageImpl<>(List.of(toActive, toLeft, button), PageRequest.of(0, 20), 3));
+        when(sosEventRepository.countByTriggerType(any())).thenReturn(List.of());
+        when(connectionService.getActiveGuardianIds(WARD_ID)).thenReturn(List.of(GUARDIAN_ID, "GD0001"));
+        when(userRepository.findAllById(any())).thenAnswer(inv -> {
+            Collection<String> ids = inv.getArgument(0);
+            return ids.contains("GD0001") ? List.of(user("GD0001", "박지영")) : List.of(user(WARD_ID, WARD_NAME));
+        });
+
+        List<SosHistoryItem> items = guardianSosService.getHistory(GUARDIAN_ID, null, null, 0, 20).content();
+
+        assertThat(items.get(0).calledGuardianId()).isEqualTo("GD0001");
+        assertThat(items.get(0).calledGuardianName()).isEqualTo("박지영");
+        // 연결을 끊은 보호자의 이름은 남은 가족 화면에 남기지 않는다
+        assertThat(items.get(1).calledGuardianId()).isNull();
+        assertThat(items.get(1).calledGuardianName()).isNull();
+        assertThat(items.get(2).calledGuardianId()).isNull();
+        // 피보호자별 ACTIVE 보호자 목록은 한 번만 조회한다(N+1 없음)
+        verify(connectionService, times(1)).getActiveGuardianIds(WARD_ID);
+    }
+
+    @Test
+    @DisplayName("전화받은 보호자가 없는 페이지는 연결 목록을 조회하지 않는다")
+    void getHistory_전화받은보호자_없으면_조회없음() {
+        when(connectionService.getActiveWardIds(GUARDIAN_ID)).thenReturn(List.of(WARD_ID));
+        when(sosEventRepository.findByWardIdInOrderByCreatedAtDesc(any(), any(Pageable.class)))
+                .thenReturn(new PageImpl<>(List.of(sosEvent(1L, WARD_ID, OffsetDateTime.now())), PageRequest.of(0, 20), 1));
+        when(sosEventRepository.countByTriggerType(any())).thenReturn(List.of());
+
+        guardianSosService.getHistory(GUARDIAN_ID, null, null, 0, 20);
+
+        verify(connectionService, never()).getActiveGuardianIds(any());
+    }
+
+    @Test
+    @DisplayName("묶음 조회: 칩은 묶음의 최신 건 기준")
+    void getGroupedHistory_전화받은보호자_최신건() {
+        OffsetDateTime now = OffsetDateTime.now();
+        SosEvent latest = called(sosEvent(3L, WARD_ID, now, null, SosTriggerType.GUARDIAN_CALL), "GD0001");
+        SosEvent first = called(sosEvent(1L, WARD_ID, now.minusSeconds(30), null, SosTriggerType.GUARDIAN_CALL), "GD0001");
+
+        when(connectionService.getActiveWardIds(GUARDIAN_ID)).thenReturn(List.of(WARD_ID));
+        when(sosEventRepository.countPressGroups(any(), eq(""), eq(60))).thenReturn(1L);
+        when(sosEventRepository.findPressGroups(any(), eq(""), eq(60), eq(20), eq(0L))).thenReturn(List.of(row(3L, 1L, 2L)));
+        when(sosEventRepository.findAllById(any())).thenReturn(List.of(first, latest));
+        when(connectionService.getActiveGuardianIds(WARD_ID)).thenReturn(List.of("GD0001"));
+        when(userRepository.findAllById(any())).thenAnswer(inv -> {
+            Collection<String> ids = inv.getArgument(0);
+            return ids.contains("GD0001") ? List.of(user("GD0001", "박지영")) : List.of(user(WARD_ID, WARD_NAME));
+        });
+        when(sosEventRepository.countPressGroupsByTriggerType(any(), eq(""), eq(60))).thenReturn(List.of());
+
+        SosHistoryItem item = guardianSosService.getGroupedHistory(GUARDIAN_ID, null, null, 0, 20).content().get(0);
+
+        assertThat(item.pressCount()).isEqualTo(2L);
+        assertThat(item.calledGuardianName()).isEqualTo("박지영");
+    }
+
+    private static SosEvent called(SosEvent event, String guardianId) {
+        ReflectionTestUtils.setField(event, "calledGuardianId", guardianId);
+        return event;
+    }
+
     private static SosEventRepository.PressGroupRow row(Long latestId, Long firstId, Long pressCount) {
         return new SosEventRepository.PressGroupRow() {
             @Override

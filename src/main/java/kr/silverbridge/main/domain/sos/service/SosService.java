@@ -1,5 +1,6 @@
 package kr.silverbridge.main.domain.sos.service;
 
+
 import kr.silverbridge.main.domain.sos.dto.SosResponse;
 import kr.silverbridge.main.domain.sos.entity.SosEvent;
 import kr.silverbridge.main.domain.sos.entity.SosTriggerType;
@@ -50,6 +51,21 @@ public class SosService {
      */
     @Transactional
     public SosResponse trigger(String wardId, String location, SosTriggerType triggerType) {
+        return trigger(wardId, location, triggerType, null);
+    }
+
+    /**
+     * {@link #trigger(String, String, SosTriggerType)}에 전화받은 보호자를 더한 버전(2026-10-30).
+     *
+     * <p>전화받은 보호자는 이력 표시 전용이다. 알림 이벤트에는 싣지 않는다(리스너가 이 값으로 알림 대상을 가르지 못하게
+     * 구조로 막는다).</p>
+     *
+     * @param verifiedCalledGuardianId {@link SosCalledGuardianResolver}가 <b>트랜잭션 밖에서 확인한</b> 값만 넘긴다
+     *                                 (확인 실패 예외가 이 트랜잭션을 rollback-only로 만들어 SOS 이력까지 잃지 않게)
+     */
+    @Transactional
+    public SosResponse trigger(String wardId, String location, SosTriggerType triggerType,
+                               String verifiedCalledGuardianId) {
         User ward = userRepository.findById(wardId)
                 .orElseThrow(() -> new CustomException(ErrorCode.USER_NOT_FOUND));
 
@@ -57,6 +73,7 @@ public class SosService {
                 .wardId(wardId)
                 .location(normalizeLocation(location))
                 .triggerType(triggerType)
+                .calledGuardianId(verifiedCalledGuardianId)
                 .build());
 
         String wardName = StringUtils.hasText(ward.getName()) ? ward.getName() : FALLBACK_WARD_NAME;

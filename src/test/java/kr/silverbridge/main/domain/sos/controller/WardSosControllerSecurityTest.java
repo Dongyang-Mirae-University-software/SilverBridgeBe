@@ -1,6 +1,7 @@
 package kr.silverbridge.main.domain.sos.controller;
 
 import kr.silverbridge.main.domain.sos.dto.SosResponse;
+import kr.silverbridge.main.domain.sos.service.SosCalledGuardianResolver;
 import kr.silverbridge.main.domain.sos.service.SosService;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -44,6 +45,9 @@ class WardSosControllerSecurityTest {
     @MockitoBean
     private SosService sosService;
 
+    @MockitoBean
+    private SosCalledGuardianResolver calledGuardianResolver;
+
     @Autowired
     private WardSosController controller;
 
@@ -51,7 +55,7 @@ class WardSosControllerSecurityTest {
     @WithMockUser(roles = "WARD")
     @DisplayName("WARD 역할 → SOS 호출 허용")
     void ward_허용() {
-        when(sosService.trigger(anyString(), any(), any())).thenReturn(new SosResponse(1L, OffsetDateTime.now()));
+        when(sosService.trigger(anyString(), any(), any(), any())).thenReturn(new SosResponse(1L, OffsetDateTime.now()));
 
         assertThatNoException().isThrownBy(() -> controller.triggerSos("WD0001", null));
     }

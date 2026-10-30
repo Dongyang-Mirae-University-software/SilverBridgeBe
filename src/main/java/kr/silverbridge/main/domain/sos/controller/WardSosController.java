@@ -8,6 +8,7 @@ import jakarta.validation.Valid;
 import kr.silverbridge.main.domain.sos.dto.SosResponse;
 import kr.silverbridge.main.domain.sos.dto.SosTriggerRequest;
 import kr.silverbridge.main.domain.sos.entity.SosTriggerType;
+import kr.silverbridge.main.domain.sos.service.SosCalledGuardianResolver;
 import kr.silverbridge.main.domain.sos.service.SosService;
 import kr.silverbridge.main.global.response.ApiResponse;
 import lombok.RequiredArgsConstructor;
@@ -26,6 +27,7 @@ import org.springframework.web.bind.annotation.RestController;
 public class WardSosController {
 
     private final SosService sosService;
+    private final SosCalledGuardianResolver calledGuardianResolver;
 
     @Operation(summary = "긴급 SOS 발생 (피보호자 전용)",
             description = """
@@ -37,6 +39,9 @@ public class WardSosController {
                     [요청 바디 — 전체가 선택]
                     - location (선택, 100자): 발생 위치 자유 문구. 예 "자택 거실", "역삼동 인근"
                     - triggerType (선택): SOS_BUTTON(기본) / GUARDIAN_CALL
+                    - calledGuardianId (선택): GUARDIAN_CALL일 때 전화를 건 보호자 ID(보호자 목록의 partnerUserId).
+                      보호자 SOS 이력의 보호자 연락 줄에 그 보호자 이름이 표시됩니다.
+                      연결된 보호자가 아니거나 형식이 틀리거나 SOS_BUTTON과 함께 오면 저장하지 않을 뿐, SOS는 그대로 접수됩니다(오류 없음).
                     바디 없이 호출하면 위치 미상 · SOS_BUTTON 으로 기록됩니다(기존 호출 방식 그대로 동작).
                     서버는 위치를 추정하지 않습니다 — 프론트가 아는 값(거주지 라벨·브라우저 위치 등)을 그대로 보관하며,
                     보호자 SOS 이력 화면(GET /api/guardian/sos/history)의 location 으로 표시됩니다.
@@ -81,8 +86,11 @@ public class WardSosController {
             @Valid @RequestBody(required = false) SosTriggerRequest request) {
         String location = (request == null) ? null : request.location();
         SosTriggerType triggerType = (request == null) ? null : request.triggerType();
+        // 전화받은 보호자는 SOS 저장 트랜잭션 밖에서 먼저 확인한다 - 확인이 실패해도 SOS는 그대로 접수된다
+        String calledGuardianId = calledGuardianResolver.resolve(
+                wardId, triggerType, (request == null) ? null : request.calledGuardianId());
         // SOS 이력(sos_event) 행을 생성하므로 201 Created.
         return ResponseEntity.status(HttpStatus.CREATED)
-                .body(ApiResponse.ok(sosService.trigger(wardId, location, triggerType)));
+                .body(ApiResponse.ok(sosService.trigger(wardId, location, triggerType, calledGuardianId)));
     }
 }

@@ -23,6 +23,7 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 
 import java.time.OffsetDateTime;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
@@ -86,9 +87,11 @@ public class GuardianSosService {
                 ? sosEventRepository.findByWardIdInOrderByCreatedAtDesc(wardIds, pageable)
                 : sosEventRepository.findByWardIdInAndTriggerTypeOrderByCreatedAtDesc(wardIds, triggerType, pageable);
         Map<String, String> names = resolveWardNames(events.getContent());
+        CalledGuardianNames called = resolveCalledGuardianNames(events.getContent());
 
         return SosHistoryPage.of(
-                events.map(event -> SosHistoryItem.of(event, names.get(event.getWardId()))),
+                events.map(event -> SosHistoryItem.of(event, names.get(event.getWardId()))
+                        .withCalledGuardian(event.getCalledGuardianId(), called.nameFor(event))),
                 countByTriggerType(wardIds));
     }
 
@@ -126,12 +129,14 @@ public class GuardianSosService {
         Map<Long, SosEvent> events = sosEventRepository.findAllById(eventIds).stream()
                 .collect(Collectors.toMap(SosEvent::getId, Function.identity()));
         Map<String, String> names = resolveWardNames(List.copyOf(events.values()));
+        CalledGuardianNames called = resolveCalledGuardianNames(events.values());
 
         List<SosHistoryItem> items = rows.stream()
                 .map(row -> {
                     SosEvent latest = events.get(row.getLatestId());
                     return SosHistoryItem.ofGroup(latest, events.get(row.getFirstId()),
-                            row.getPressCount(), names.get(latest.getWardId()));
+                                    row.getPressCount(), names.get(latest.getWardId()))
+                            .withCalledGuardian(latest.getCalledGuardianId(), called.nameFor(latest));
                 })
                 .toList();
 
@@ -204,6 +209,49 @@ public class GuardianSosService {
             throw new CustomException(ErrorCode.SOS_NOT_AUTHORIZED);
         }
         return List.of(wardId);
+    }
+
+    /**
+     * 전화받은 보호자 이름을 한 번에 정한다(2026-10-30). 이름은 그 보호자가 <b>지금</b> 그 피보호자와 ACTIVE 연결일 때만 준다 -
+     * 연결을 끊거나 탈퇴한 사람의 이름이 남은 가족의 화면에 계속 남지 않게 한다. 피보호자마다 ACTIVE 보호자 목록을 한 번,
+     * 이름을 한 번에 조회한다(N+1 회피).
+     */
+    private CalledGuardianNames resolveCalledGuardianNames(Collection<SosEvent> events) {
+        List<SosEvent> calls = events.stream()
+                .filter(event -> event.getCalledGuardianId() != null && event.getWardId() != null)
+                .toList();
+        if (calls.isEmpty()) {
+            return CalledGuardianNames.NONE;
+        }
+        Map<String, Set<String>> activeGuardiansByWard = calls.stream()
+                .map(SosEvent::getWardId)
+                .distinct()
+                .collect(Collectors.toMap(Function.identity(),
+                        wardId -> Set.copyOf(connectionService.getActiveGuardianIds(wardId))));
+        Set<String> guardianIds = calls.stream()
+                .filter(event -> activeGuardiansByWard.get(event.getWardId()).contains(event.getCalledGuardianId()))
+                .map(SosEvent::getCalledGuardianId)
+                .collect(Collectors.toSet());
+        if (guardianIds.isEmpty()) {
+            return CalledGuardianNames.NONE;
+        }
+        Map<String, String> guardianNames = userRepository.findAllById(guardianIds).stream()
+                .filter(user -> StringUtils.hasText(user.getName()))
+                .collect(Collectors.toMap(User::getId, User::getName));
+        return event -> {
+            String guardianId = event.getCalledGuardianId();
+            Set<String> active = (event.getWardId() == null) ? null : activeGuardiansByWard.get(event.getWardId());
+            return (guardianId == null || active == null || !active.contains(guardianId))
+                    ? null : guardianNames.get(guardianId);
+        };
+    }
+
+    /** 이력 한 건의 전화받은 보호자 이름(보여 줄 수 없으면 null). */
+    @FunctionalInterface
+    private interface CalledGuardianNames {
+        CalledGuardianNames NONE = event -> null;
+
+        String nameFor(SosEvent event);
     }
 
     /**
