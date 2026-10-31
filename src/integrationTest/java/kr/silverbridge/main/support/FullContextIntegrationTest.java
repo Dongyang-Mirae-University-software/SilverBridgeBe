@@ -18,7 +18,10 @@ import kr.silverbridge.main.domain.auth.entity.RefreshToken;
 import kr.silverbridge.main.domain.auth.repository.RefreshTokenRepository;
 import kr.silverbridge.main.domain.connection.repository.ConnectionRepository;
 import kr.silverbridge.main.domain.notification.entity.FcmToken;
+import kr.silverbridge.main.domain.notification.dispatch.NotificationDispatcher;
 import kr.silverbridge.main.domain.notification.dispatch.NotificationType;
+import kr.silverbridge.main.domain.notification.service.NotificationSettingService;
+import kr.silverbridge.main.global.websocket.WebSocketEventPublisher;
 import kr.silverbridge.main.domain.notification.repository.FcmTokenRepository;
 import kr.silverbridge.main.domain.user.entity.User;
 import kr.silverbridge.main.domain.user.repository.UserRepository;
@@ -41,6 +44,7 @@ import org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
+import org.springframework.test.context.bean.override.mockito.MockitoSpyBean;
 import org.testcontainers.containers.GenericContainer;
 
 import java.nio.file.Files;
@@ -181,6 +185,13 @@ public abstract class FullContextIntegrationTest {
     @MockitoBean protected AiServerHealthClient aiServerHealthClient;
     @MockitoBean protected ReservationAdminClient reservationAdminClient;
 
+    // ─── 실제 동작 그대로 + 호출 기록(2026-11-01, 강제 연결 순서 시나리오) ─────────────
+    // WS 신호와 알림 발송의 순서(InOrder)를 보고, 설정 조회 실패를 주입하려고 둔다. 스텁하지 않으면 실제 빈과 같다.
+    // 여기(기반 클래스)에만 둔다 - 하위 클래스가 더하면 컨텍스트가 클래스마다 다시 뜬다.
+    @MockitoSpyBean protected WebSocketEventPublisher webSocketEventPublisher;
+    @MockitoSpyBean protected NotificationDispatcher notificationDispatcher;
+    @MockitoSpyBean protected NotificationSettingService notificationSettingService;
+
     @Autowired protected JdbcTemplate jdbc;
     @Autowired protected StringRedisTemplate redis;
     @Autowired private Map<String, ThreadPoolTaskExecutor> executors;
@@ -212,7 +223,7 @@ public abstract class FullContextIntegrationTest {
         });
         reset(firebaseMessaging, smsSender, alimtalkSender, javaMailSender, kakaoOAuthClient, fileServerClient,
                 aiChatClient, aiClipClient, aiStreamClient, aiMedicationOcrClient, aiServerHealthClient,
-                reservationAdminClient);
+                reservationAdminClient, webSocketEventPublisher, notificationDispatcher, notificationSettingService);
     }
 
     /** 모든 {@code @Async} executor가 비기를 기다린다 - 앞 테스트의 알림이 다음 테스트 데이터에 섞이지 않게. */
