@@ -47,6 +47,10 @@ dependencies {
     implementation 'org.springframework.boot:spring-boot-starter-webmvc'
     implementation 'org.springframework.boot:spring-boot-starter-actuator'
     implementation 'org.springdoc:springdoc-openapi-starter-webmvc-ui:3.1.1'
+    // springdoc 3.1.1이 끌어오는 swagger-ui 5.32.14는 DOMPurify 3.4.13을 번들한다 - CVE-2026-116803(high)·116804(critical),
+    // 3.4.17에서 수정. 5.34.1이 3.4.17을 담는다(springdoc 3.2.0도 5.34.0 = 3.4.16이라 부족). springdoc이 이 버전 이상을
+    // 끌어오면 이 줄과 application.yaml의 springdoc.swagger-ui.version을 함께 지운다(2026-10-31 OWASP 스캔).
+    implementation 'org.webjars:swagger-ui:5.34.1'
     implementation 'io.jsonwebtoken:jjwt-api:0.12.6'
     runtimeOnly 'io.jsonwebtoken:jjwt-impl:0.12.6'
     runtimeOnly 'io.jsonwebtoken:jjwt-jackson:0.12.6'
