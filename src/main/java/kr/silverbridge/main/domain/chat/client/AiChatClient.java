@@ -133,6 +133,16 @@ public class AiChatClient {
                 base(RESERVATION_CREDENTIAL_PATH).queryParam("userId", "{userId}").encode().buildAndExpand(userId).toUri());
     }
 
+    /**
+     * 보호자가 그 피보호자를 대신해 상담한 기록만 삭제(연결 종료 정리용, 2026-10 전체 점검 L-13). AI의
+     * {@code DELETE /api/v1/chat/logs/proxy?guardianId=&wardId=}. 보호자 본인 상담 기록은 남는다. 성공 기준은 {@link #deleteLogs}와 같다.
+     */
+    public void deleteProxyLogs(String guardianId, String wardId) {
+        deleteByUser("proxy-logs-delete", base(CHAT_PATH + "/logs/proxy")
+                .queryParam("guardianId", "{guardianId}").queryParam("wardId", "{wardId}")
+                .encode().buildAndExpand(guardianId, wardId).toUri());
+    }
+
     private void deleteByUser(String call, URI uri) {
         AiResponse response = call(call, "DELETE", uri, null,
                 properties.getLogsCallTimeout(), properties.getMaxLogsBytes());

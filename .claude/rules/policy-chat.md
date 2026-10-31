@@ -59,3 +59,9 @@ paths:
 ## 2026-10-31 전체 점검 반영 (L-10)
 
 - **`sessionId`는 `[A-Za-z0-9_-]{1,64}`**(`ChatRelayRequest`). FE는 `crypto.randomUUID()`(없으면 base36)라 맞는다. 빈 문자열도 400이다. 세션 ID는 이력 범위의 키라 AI로 넘기기 전에 형식을 고정한다.
+
+## 2026-10-31 전체 점검 반영 (L-13) - 연결이 끝나면 대리 상담 기록도 지운다
+
+- **경위**: 보호자가 피보호자를 대신한 상담 기록(이름·전화·건강 대화·예약 초안)은 피보호자 탈퇴 때만 지워졌다(AI #129). 연결을 끊거나 역할이 바뀌어 더는 보호자가 아닌 사람의 기록에 남았다.
+- **규칙**: `AiProxyChatLogPurgeListener`가 `ConnectionDisconnectedEvent`(보호자·피보호자 해제·역할 변경 정리·관리자 강제 해제) AFTER_COMMIT에서 AI `DELETE /api/v1/chat/logs/proxy?guardianId=&wardId=`(AI #142)를 부른다 - 그 보호자가 그 피보호자를 대신한 기록만, 보호자 본인 상담은 남는다. `DisconnectedBy.WITHDRAWN`은 건너뛴다(탈퇴 정리가 이미 지운다). 탈퇴 정리와 같은 `aiPurgeExecutor`·best-effort·200만 성공·재시도 없음. AI는 삭제 직후 150초 동안 같은 쌍의 진행 중이던 대리 상담 턴이 기록을 다시 남기지 않게 한다(회원 단위 보류와 다른 키).
+- **배포 순서: AI 먼저** - 옛 AI 서버면 404/405가 `[AI-PURGE-FAILED]` WARN으로만 남는다. 연결이 끝난 뒤 다시 연결해도 지워진 기록은 돌아오지 않는다(D-1 "연결 이후 기록만"과 같은 방향).
