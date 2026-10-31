@@ -236,18 +236,33 @@ class ConnectionNotificationListenerTest {
     }
 
     @Test
-    @DisplayName("CONN-G02: 보호자 알림 발송이 예외로 끝나도 피보호자 화면 갱신 WS는 이미 나가 있다 - WS는 알림 설정·발송과 무관")
-    void handleForced_발송_실패해도_양쪽_WS는_나간다() {
+    @DisplayName("CONN-G02·불변 규칙 ①: 보호자 알림 발송이 예외로 끝나도 양쪽 WS는 나가 있고 피보호자 알림도 발송된다 (2026-11-01)")
+    void handleForced_보호자_발송_실패해도_양쪽_WS와_피보호자_알림은_나간다() {
         org.mockito.Mockito.when(notificationDispatcher.dispatch(eq(GUARDIAN_ID), eq(WARD_ID),
                         eq(NotificationType.CONNECTION_FORCED), org.mockito.ArgumentMatchers.any()))
                 .thenThrow(new IllegalStateException("설정 조회 실패"));
 
-        org.assertj.core.api.Assertions.assertThatThrownBy(() -> listener.handleForced(
-                        new ConnectionForcedEvent(CONNECTION_ID, GUARDIAN_ID, WARD_ID, GUARDIAN_NAME, "김피보")))
-                .isInstanceOf(IllegalStateException.class);
+        org.assertj.core.api.Assertions.assertThatNoException().isThrownBy(() -> listener.handleForced(
+                new ConnectionForcedEvent(CONNECTION_ID, GUARDIAN_ID, WARD_ID, GUARDIAN_NAME, "김피보")));
 
         verify(webSocketEventPublisher).sendToUser(eq(GUARDIAN_ID), eq("connection-accepted"), anyMap());
         verify(webSocketEventPublisher).sendToUser(eq(WARD_ID), eq("connection-accepted"), anyMap());
+        verify(notificationDispatcher).dispatch(eq(WARD_ID), eq(WARD_ID), eq(NotificationType.CONNECTION_FORCED),
+                org.mockito.ArgumentMatchers.any());
+    }
+
+    @Test
+    @DisplayName("불변 규칙 ①: 피보호자 알림 발송이 예외로 끝나도 보호자 알림은 이미 발송돼 있고 예외는 밖으로 나가지 않는다")
+    void handleForced_피보호자_발송_실패는_격리된다() {
+        org.mockito.Mockito.when(notificationDispatcher.dispatch(eq(WARD_ID), eq(WARD_ID),
+                        eq(NotificationType.CONNECTION_FORCED), org.mockito.ArgumentMatchers.any()))
+                .thenThrow(new IllegalStateException("수신자 조회 실패"));
+
+        org.assertj.core.api.Assertions.assertThatNoException().isThrownBy(() -> listener.handleForced(
+                new ConnectionForcedEvent(CONNECTION_ID, GUARDIAN_ID, WARD_ID, GUARDIAN_NAME, "김피보")));
+
+        verify(notificationDispatcher).dispatch(eq(GUARDIAN_ID), eq(WARD_ID), eq(NotificationType.CONNECTION_FORCED),
+                org.mockito.ArgumentMatchers.any());
     }
 
     @org.junit.jupiter.params.ParameterizedTest
