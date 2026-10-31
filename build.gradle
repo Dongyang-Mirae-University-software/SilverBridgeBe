@@ -95,6 +95,8 @@ testing {
                 // 동기 AFTER_COMMIT 리스너 테스트가 FcmService를 실제 빈으로 올릴 때 FirebaseMessaging 타입을 목으로 대체한다.
                 // main의 implementation 의존성은 이 스위트의 컴파일 경로에 전이되지 않아 버전을 맞춰 따로 둔다(2026-09-30).
                 implementation 'com.google.firebase:firebase-admin:9.10.0'
+                // 2단계(앱 전체 기동) 테스트가 운영 PasswordEncoder 빈으로 가입 회원의 비밀번호를 만든다(2026-10-31).
+                implementation 'org.springframework.security:spring-security-crypto'
                 runtimeOnly 'org.postgresql:postgresql'
                 runtimeOnly 'org.flywaydb:flyway-database-postgresql'
             }
