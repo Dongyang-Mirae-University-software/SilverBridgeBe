@@ -4,6 +4,17 @@
 
 ---
 
+### [2026-10-31] 통합 테스트 2단계 - 앱 전체를 띄워 서비스·트랜잭션·리스너 검증 (branch `test/integration-stage2`)
+
+운영 코드 변경 없음. 기존 `integrationTest` 태스크·`tools/integration-test.sh`·CD 그대로(build.gradle에는 통합 테스트 스위트 의존성 1줄만 추가).
+
+- 기반 `support/FullContextIntegrationTest`: `@SpringBootTest` + 1단계 PostgreSQL 컨테이너 안 전용 DB `sb_full` + `redis:7.2`, 외부 연동 12종 목, `@Scheduled` 처리기 정의 제거(운영 코드 무변경), 테스트 뒤 executor 대기 → 전 테이블 TRUNCATE → `FLUSHDB`. vkcs에서 컨텍스트 1회 기동 17초.
+- 시나리오 6건: 본인 탈퇴·관리자 강제 탈퇴 / 비밀번호 변경 + Redis 일시 중지(H-2) / 정상 비밀번호 변경 / 관리자 역할 변경 / 정지 보호자 SOS 차단.
+- 수정 전으로 임시로 되돌려 실패 확인: H-1(연결 해제가 ACTIVE로 남음), H-2(refresh 토큰 2개 부활), 강제 탈퇴 `delete()` 직접 호출(무효화 키 없음).
+- vkcs 전체: 122건 → 128건, 테스트 44.2초 → 62.1초, 실행 70초 → 85초. 새 시나리오 3회 반복 모두 통과.
+- 발견(🟢, 보고만): 피보호자 탈퇴 시 상대 보호자 해제 푸시는 나가지만 이력 기록이 `fk_notification_log_ward` 위반으로 실패(`[NOTIFY-LOG-FAILED]` WARN). FK가 ON DELETE CASCADE라 결과는 설계와 같다.
+- 설계·결과: `docs/(2026-10-31) design-integration-test-stage2.md`.
+
 ### [2026-10-30] 로그인 잠금 시간 30분 → 10분 (branch `fix/login-lock-ttl-10min`)
 
 사용자 결정: 5회 실패 잠금 30분은 시니어에게 길다. 마이그레이션 없음, 두 서버 `.env.dev`에 `AUTH_LOGIN_LOCK_TTL_MINUTES` 없음(코드 기본값 적용).
