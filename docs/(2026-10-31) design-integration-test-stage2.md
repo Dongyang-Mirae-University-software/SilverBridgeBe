@@ -86,8 +86,8 @@
 
 | 시나리오 | 비고 |
 |---|---|
-| 관리자 강제 연결 → 양쪽 WS(알림보다 먼저)·`CONNECTION_FORCED`·감사 로그 | 순서 단언 필요(스파이 호출 순서) |
-| 연결 종료 4경로 → `AiProxyChatLogPurgeListener`(탈퇴 제외) | `aiPurgeExecutor` |
+| 관리자 강제 연결 → 양쪽 WS(알림보다 먼저)·`CONNECTION_FORCED`·감사 로그 | 순서 단언 필요(스파이 호출 순서) - ✅ 2026-11-01 완료(§3-6) |
+| 연결 종료 4경로 → `AiProxyChatLogPurgeListener`(탈퇴 제외) | `aiPurgeExecutor` - ✅ 2026-11-01 완료(§3-6) |
 | 정지 → 열린 WS 세션 종료(1008) | `webEnvironment=RANDOM_PORT` + STOMP 클라이언트 필요 |
 | 동시성: 연결 요청 ↔ 역할 변경 잠금, 이상감지 판정 동시 쓰기 | 1단계 `ConnectionRoleChangeRaceIntegrationTest`가 저장소 수준은 이미 검증 - 서비스 수준으로 올릴지 따로 판단 |
 | 카카오 가입 → 접속로그 AFTER_COMMIT(FK) | |
@@ -177,3 +177,18 @@
 ### 3-6. 후속 시나리오
 
 §1 ②의 "후속" 표 그대로: 관리자 강제 연결(WS가 알림보다 먼저) / 연결 종료 4경로 → AI 대리 상담 기록 삭제 / 정지 → 열린 WS 세션 1008 종료(RANDOM_PORT + STOMP 클라이언트) / 서비스 수준 동시성(연결 요청 ↔ 역할 변경, 이상감지 판정) / 카카오 가입 접속로그 AFTER_COMMIT.
+
+**진행 결과 (2026-11-01, PR #424 머지 `67d8fc3`, 운영 코드 변경 없음)**
+
+| 후속 시나리오 | 상태 | 테스트 | 수정 전 재현 |
+|---|---|---|---|
+| 관리자 강제 연결 → 양쪽 WS(알림보다 먼저)·`CONNECTION_FORCED`·감사 로그 | ✅ 완료 | `AdminForceConnectFullIntegrationTest` 2건(순서 InOrder / 보호자 설정 조회 실패에도 양쪽 WS) | WS를 dispatch 뒤로 → 2건 모두 실패 |
+| 연결 종료 4경로 → `AiProxyChatLogPurgeListener`(탈퇴 제외) | ✅ 완료 | `ConnectionEndProxyChatPurgeFullIntegrationTest` 6건 - 보호자 해제·피보호자 해제 1회 / 역할 변경 정리 쌍마다 1회 / **관리자 강제 해제는 같은 쌍 2회**(양쪽 알림용 이벤트 2번, 멱등 - 코드 주석과 같음) / 탈퇴 0회 / AI 실패에도 해제 커밋 | 리스너 제거 → 경로 4건 + AI 실패 건 실패, WITHDRAWN 건너뛰기 제거 → 탈퇴 건 실패, 동기 리스너+예외 전파 → AI 실패 건 실패 |
+| 정지 → 열린 WS 세션 1008 종료 | 미진행 | | |
+| 서비스 수준 동시성 | 미진행 | | |
+| 카카오 가입 접속로그 AFTER_COMMIT | 미진행 | | |
+
+- 기반 클래스 변경: `WebSocketEventPublisher`·`NotificationDispatcher`·`NotificationSettingService`를 `@MockitoSpyBean`으로(실제 동작 + 호출 기록, 실패 주입). 기반 클래스에만 둬서 컨텍스트 1회 기동은 그대로다.
+- 정책 문서와의 차이: L-13은 "연결 종료 4경로"라 적었고 코드 주석은 탈퇴를 포함한 5경로다. 삭제 요청은 4경로이고, 관리자 강제 해제만 같은 쌍으로 2회 나간다.
+- 소요 시간(vkcs `--rerun`): 128건 62.2초·전체 85초 → 136건 72.9초·전체 100초. 새 시나리오 3회 반복 모두 통과.
+- 🟡 발견(보고만): 강제 연결 때 보호자 알림 설정 조회(DB)가 실패하면 예외가 `handleForced`를 빠져나가 피보호자 dispatch(푸시·이력)도 빠진다 - 임시 단언으로 확인. WS는 먼저 나가 CONN-G02 범위는 지켜지지만 강제 연결 정책 ①("피보호자 알림을 빼지 말 것")과 닿는다. 근거 `ConnectionNotificationListener.java:118-121`, `NotificationDispatcher.java:207-211`. 테스트는 이 동작을 고정하지 않았다(고칠 때 막지 않게).

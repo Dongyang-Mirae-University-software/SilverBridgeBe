@@ -4,6 +4,17 @@
 
 ---
 
+### [2026-11-01] 통합 테스트 2단계 후속 - 강제 연결 WS 순서·연결 종료 시 AI 대리 상담 기록 삭제 (PR #424, 머지 `67d8fc3`)
+
+운영 코드 변경 없음. 기반 클래스에 `WebSocketEventPublisher`·`NotificationDispatcher`·`NotificationSettingService` 스파이(`@MockitoSpyBean`, 실제 동작 + 호출 기록)만 추가.
+
+- `AdminForceConnectFullIntegrationTest`(2건): 강제 연결 양쪽 WS가 dispatch보다 먼저(InOrder)·양쪽 `CONNECTION_FORCED`·감사 로그 1건 / 보호자 알림 설정 조회 실패에도 양쪽 WS 발송(CONN-G02).
+- `ConnectionEndProxyChatPurgeFullIntegrationTest`(6건): 보호자·피보호자 해제·역할 변경 정리·관리자 강제 해제마다 정확한 쌍으로 `deleteProxyLogs`(강제 해제는 이벤트 2회라 2회), 탈퇴는 미요청, AI 실패에도 해제 커밋(L-13).
+- 수정 전으로 임시로 되돌려 실패 확인 4종(WS 순서·리스너 제거·WITHDRAWN 건너뛰기 제거·동기 리스너+예외 전파) - 각각 해당 시나리오만 실패.
+- vkcs 전체 `--rerun`: 128건 → 136건, 테스트 62.2초 → 72.9초, 실행 85초 → 100초. 새 시나리오 3회 모두 통과.
+- 발견(🟡, 보고만): 강제 연결 때 보호자 알림 설정 조회가 실패하면 예외가 `handleForced`를 빠져나가 **피보호자 dispatch(푸시·이력)도 빠진다**. WS는 먼저 나가 CONN-G02 범위는 지켜진다. 근거 `ConnectionNotificationListener.java:118-121`, `NotificationDispatcher.java:207-211`.
+- 상세: `docs/(2026-10-31) design-integration-test-stage2.md` §3-6.
+
 ### [2026-10-31] 통합 테스트 2단계 - 앱 전체를 띄워 서비스·트랜잭션·리스너 검증 (branch `test/integration-stage2`)
 
 운영 코드 변경 없음. 기존 `integrationTest` 태스크·`tools/integration-test.sh`·CD 그대로(build.gradle에는 통합 테스트 스위트 의존성 1줄만 추가).
