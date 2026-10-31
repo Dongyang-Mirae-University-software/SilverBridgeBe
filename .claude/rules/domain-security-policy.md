@@ -104,5 +104,6 @@
 - **원문 로그 금지 대상 추가**: `JwtTokenProvider`(만료 메시지)·`JwtAuthenticationFilter`·`JwtHandshakeInterceptor`(토큰 손상 사유는 고정 코드 `TokenInvalidation.CorruptValueException.reason()`)·`AnomalyEventCooldown`·`AnomalyReviewReminderService`(dispatch 경로라 스택째 남기지 않음)를 `LogRawExceptionGuardTest`에 넣었다. 대시보드 IDOR 로그는 SOS 이력처럼 형식 오류 wardId를 길이만 남긴다.
 - **동기 AFTER_COMMIT 리스너 표 (`SyncAfterCommitListenerPropagationTest`)**: `@Async` 없는 AFTER_COMMIT 리스너는 스스로 REQUIRES_NEW이거나, 표에 적은 위임 대상이 모두 REQUIRES_NEW이거나, 쓰기가 없다는 이유를 표에 적어야 한다. 새 동기 리스너를 만들면 이 테스트가 실패한다 - 표에 넣어 정하고, 리스너에 저장소 쓰기를 직접 넣지 말 것.
 - **챗 전송 본문 상한**: `ChatRequestSizeFilter`(512KB, 413 `CHAT_REQUEST_TOO_LARGE`) - policy-chat.
+- **swagger-ui 웹자르 고정 (2026-10-31 OWASP)**: springdoc이 끌어오는 swagger-ui 번들의 DOMPurify 취약점(CVE-2026-116803·116804) 때문에 `org.webjars:swagger-ui:5.34.1`과 `springdoc.swagger-ui.version: 5.34.1`을 함께 고정했다(둘이 다르면 Swagger 화면 404). springdoc을 올릴 때 그 swagger-ui가 이 버전 이상이면 둘 다 지운다. gosky는 Swagger가 무인증 공개라 이런 화면용 JS 취약점도 실제 노출이다.
 - **D-1 확정 - 보호자 이력은 지금 연결 이후 기록만 (2026-10-31 사용자 결정)**: SOS·이상감지(이력·요약·판정·클립·재촉)는 보호자의 지금 ACTIVE 연결이 맺어진 뒤의 기록만 보인다. 재연결·관리자 강제 연결은 그 이전을 보지 못한다. 상세 policy-sos ①·policy-anomaly ②.
 - **D-2 확정 - 개인정보 보관 기간 (2026-10-31, 학생 프로젝트 기준)**: 접속 로그 90일(탈퇴자 IP·UA는 매일 비움), 관리자 감사 로그 1년, 익명 SOS 이력의 위치 문구 비움. 일일 정리 04:40·04:45·04:50. 상세 policy-auth.
