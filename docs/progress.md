@@ -4,6 +4,16 @@
 
 ---
 
+### [2026-11-01] 알림 설정 조회 실패 격리 - 강제 연결 피보호자 알림·이상감지 강제 푸시 (PR #425, 머지 `ff2583a`)
+
+#424 통합 테스트에서 찾은 🟡(강제 연결 때 보호자 설정 조회가 실패하면 피보호자 알림도 빠짐)를 PHASE 0에서 다시 보니, 같은 원인으로 **이상감지 강제 푸시·문자 대체도 빠지는 구멍(🟠)**이 있었다. 마이그레이션 없음.
+
+- `NotificationDispatcher`: 설정 조회 예외 격리(`[NOTIFY-SETTINGS-UNAVAILABLE]`). 이상감지 = 선택 채널만 빼고 강제 FCM 유지·문자 대체 규칙 그대로, 설정 기반 종류 = 대신 보내지 않고 `FAILED`(시도 채널 0건) 기록.
+- `ConnectionNotificationListener.handleForced`: 수신자별 try/catch.
+- 테스트: 디스패처 단위 +3, 리스너 단위 갱신 1·추가 1, 통합 A'에 피보호자 이력 1건·보호자 FAILED 단언. 운영 코드를 되돌리면 A'가 "피보호자 알림 0건"으로 실패함을 vkcs에서 확인.
+- 검증: `./gradlew build` 통과, vkcs 통합 136건 통과, 강제 연결 클래스 3회 통과. SOS 경로 무변경.
+- 정책: policy-notification "알림 설정 조회 실패 격리", policy-connection 강제 연결 절. 영향 범위 점검(템플릿 C) 제안 - audit-index ❌.
+
 ### [2026-11-01] 통합 테스트 2단계 후속 - 강제 연결 WS 순서·연결 종료 시 AI 대리 상담 기록 삭제 (PR #424, 머지 `67d8fc3`)
 
 운영 코드 변경 없음. 기반 클래스에 `WebSocketEventPublisher`·`NotificationDispatcher`·`NotificationSettingService` 스파이(`@MockitoSpyBean`, 실제 동작 + 호출 기록)만 추가.

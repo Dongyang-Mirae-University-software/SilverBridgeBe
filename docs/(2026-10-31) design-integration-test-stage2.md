@@ -191,4 +191,4 @@
 - 기반 클래스 변경: `WebSocketEventPublisher`·`NotificationDispatcher`·`NotificationSettingService`를 `@MockitoSpyBean`으로(실제 동작 + 호출 기록, 실패 주입). 기반 클래스에만 둬서 컨텍스트 1회 기동은 그대로다.
 - 정책 문서와의 차이: L-13은 "연결 종료 4경로"라 적었고 코드 주석은 탈퇴를 포함한 5경로다. 삭제 요청은 4경로이고, 관리자 강제 해제만 같은 쌍으로 2회 나간다.
 - 소요 시간(vkcs `--rerun`): 128건 62.2초·전체 85초 → 136건 72.9초·전체 100초. 새 시나리오 3회 반복 모두 통과.
-- 🟡 발견(보고만): 강제 연결 때 보호자 알림 설정 조회(DB)가 실패하면 예외가 `handleForced`를 빠져나가 피보호자 dispatch(푸시·이력)도 빠진다 - 임시 단언으로 확인. WS는 먼저 나가 CONN-G02 범위는 지켜지지만 강제 연결 정책 ①("피보호자 알림을 빼지 말 것")과 닿는다. 근거 `ConnectionNotificationListener.java:118-121`, `NotificationDispatcher.java:207-211`. 테스트는 이 동작을 고정하지 않았다(고칠 때 막지 않게).
+- 🟡 발견 → **해소(2026-11-01, PR #425 `ff2583a`)** - 같은 원인으로 이상감지 강제 푸시도 빠지던 구멍까지 디스패처에서 함께 고쳤고, 통합 테스트 A'의 단언(피보호자 이력 1건)을 채웠다. 원래 내용: 강제 연결 때 보호자 알림 설정 조회(DB)가 실패하면 예외가 `handleForced`를 빠져나가 피보호자 dispatch(푸시·이력)도 빠진다 - 임시 단언으로 확인. WS는 먼저 나가 CONN-G02 범위는 지켜지지만 강제 연결 정책 ①("피보호자 알림을 빼지 말 것")과 닿는다. 근거 `ConnectionNotificationListener.java:118-121`, `NotificationDispatcher.java:207-211`. 테스트는 이 동작을 고정하지 않았다(고칠 때 막지 않게).

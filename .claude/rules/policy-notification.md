@@ -78,6 +78,13 @@ paths:
 - **운영 상태(2026-10-13)**: 두 서버 `.env.dev`에 `NOTIFICATION_EMAIL_ENABLED=true`로 활성화했다(코드 기본값은 false). 복약 미복용 요약은 스케줄러 스레드에서 동기 발송이라, SMTP 호출은 전용 `EmailSendExecutor`에서 **호출 전체 시간 제한**(`notification.email.call-timeout-seconds`, 기본 10초)을 걸어 실행한다(점검 M-1 조치, 상세 `docs/(2026-10-13) audit-impact-email-notification.md`). 이 래퍼를 빼거나 CallerRuns로 바꾸지 말 것.
 - **수용한 한계**: 시간 초과·풀 포화 건은 실패(`PROVIDER_ERROR`)로 기록되며 실제로 늦게 접수됐을 수 있다(Solapi 래퍼와 같음). SDK가 인터럽트에 반응하지 않으면 풀 스레드(4개)는 SMTP 자체 제한까지 남지만 호출자는 제한 시간에 풀려난다. Gmail SMTP 일일 발송 한도에 걸리면 `PROVIDER_ERROR`로 기록된다. 정지·탈퇴 진행 계정 차단은 기존 `dispatch()` 한 곳 그대로다.
 
+## 알림 설정 조회 실패 격리 (2026-11-01, #425)
+
+- **경위**: `FORCED_PUSH_PLUS_SETTINGS`(이상감지)가 강제 FCM을 보내기 **전에** `settingService.enabledChannels`를 읽어, 설정 조회(DB)가 실패하면 그 수신자의 화재 강제 푸시·문자 대체·이력이 모두 빠졌다. `SETTINGS_ONLY`는 예외가 호출자로 올라가 같은 리스너의 다른 수신자(강제 연결의 피보호자) 발송까지 막았다.
+- **규칙**: 디스패처가 설정 조회 예외를 격리한다(`[NOTIFY-SETTINGS-UNAVAILABLE]` WARN, 예외 클래스명만). 강제 정책은 선택 채널만 빼고 **강제 FCM을 그대로** 보내며, 푸시가 실패하면 문자 대체 규칙을 그대로 적용한다(켠 문자를 확인 못 해 "시도 안 함"으로 본다). `SETTINGS_ONLY`는 **기본 채널로 대신 보내지 않고**(꺼 둔 채널로 가면 안 된다) `FAILED`·시도 채널 0건으로 기록하고 반환한다 - 사용자 선택이 아니므로 `NOT_SENT`가 아니다.
+- **되돌리지 말 것**: 강제 FCM 계산 앞에서 설정 조회 예외가 빠져나가게 두지 말 것, 디스패처가 예외를 호출자로 올리지 말 것. SOS(`FORCED_PUSH_WITH_SMS_FALLBACK`)는 설정을 읽지 않아 영향이 없었다.
+- **수용**: 이 `FAILED` 행은 채널 결과가 비어 관리자 이력 화면의 실패 사유 칸이 비어 보인다(사유 코드를 늘리면 V54 CHECK 재정의가 필요해 미룸).
+
 ## 2026-10-31 전체 점검 반영 (M-2)
 
 - **FCM 토큰 삭제 조건**: `UNREGISTERED`는 항상 삭제, `INVALID_ARGUMENT`는 **같은 묶음에서 성공한 토큰이 있을 때만** 그 토큰 탓으로 보고 삭제한다. 묶음 전체가 `INVALID_ARGUMENT`면 메시지 자체(페이로드 초과·잘못된 data) 문제일 수 있어 보존하고 `[FCM-INVALID-ARGUMENT]` WARN을 남긴다 - 지우면 재등록 전까지 SOS 푸시를 못 받는다. 남은 불량 토큰은 유휴 정리(04:00)가 회수한다. 만료 토큰 로그는 앞 6자만.
