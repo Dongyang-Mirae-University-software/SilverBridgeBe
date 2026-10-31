@@ -39,7 +39,9 @@ import java.util.function.Function;
  * {@code withReceivableRecipient()} 참조. 수신자 기준이며, 정지된 사람이 <i>원인</i>인 알림은 그대로 나간다.</p>
  *
  * <p>공통: <b>채널별 실패 격리</b>(한 채널 실패가 다른 채널을 막지 않음), <b>미구현 채널 무시</b>
- * (enabled여도 구현체 빈이 없거나 설정이 꺼져 있으면 — EMAIL·알림톡 템플릿 미승인 — 조용히 건너뜀).</p>
+ * (enabled여도 구현체 빈이 없거나 설정이 꺼져 있으면 — EMAIL·알림톡 템플릿 미승인 — 조용히 건너뜀).
+ * <b>설정 조회 실패도 격리한다</b>(2026-11-01): 강제 푸시는 그대로 나가고, 설정만 쓰는 종류는 예외 대신 실패로 기록한다
+ * ({@code [NOTIFY-SETTINGS-UNAVAILABLE]} WARN). 예외를 호출자로 올리지 않는다 - 같은 리스너의 다른 수신자 발송이 함께 빠진다.</p>
  *
  * <p><b>발송 결과는 수신자 1명당 1행으로 {@code notification_log}에 남는다</b>(관리자 알림 이력, 2026-09-22).
  * 기록은 발송이 끝난 뒤 한 번만 하며, 기록이 실패해도 발송에는 영향이 없다({@code [NOTIFY-LOG-FAILED]} WARN).</p>
@@ -144,7 +146,16 @@ public class NotificationDispatcher {
     /** 사용자 설정의 활성 채널로만 발송(연결·문의 알림). 종류별 허용 채널이 좁으면 그만큼 더 줄어든다. */
     private Outcome dispatchBySettings(String userId, NotificationType type, NotificationContent content) {
         // 활성 채널 판단이 먼저다 - 보낼 채널이 하나도 없으면 수신자 조회(DB) 자체를 하지 않는다.
-        Set<NotificationChannelType> targets = settingsChannels(userId, type);
+        Set<NotificationChannelType> targets;
+        try {
+            targets = settingsChannels(userId, type);
+        } catch (RuntimeException e) {
+            // 설정을 모르면 보내지 않는다 - 기본 채널로 대신 보내면 그 채널을 꺼 둔 사람에게 간다. 대신 예외를 호출자로
+            // 올리지 않고 실패로 기록한다: 올리면 같은 리스너의 다른 수신자 발송까지 함께 빠진다(강제 연결의 피보호자
+            // 알림, 2026-11-01). 시도한 채널이 없어 이력의 채널 결과는 비어 있다.
+            logSettingsUnavailable(userId, type, e);
+            return Outcome.settingsUnavailable();
+        }
         if (targets.isEmpty()) {
             log.debug("발송할 활성 채널 없음: userId={}, type={}", userId, type);
             return Outcome.notSent(NotificationNotSentReason.NO_ENABLED_CHANNEL);
@@ -172,7 +183,13 @@ public class NotificationDispatcher {
     private Outcome dispatchForcedPushPlusSettings(NotificationRecipient recipient, NotificationType type,
                                                    NotificationContent content) {
         Set<NotificationChannelType> targets = EnumSet.of(FORCED_PUSH);
-        targets.addAll(settingsChannels(recipient.userId(), type));
+        try {
+            targets.addAll(settingsChannels(recipient.userId(), type));
+        } catch (RuntimeException e) {
+            // 설정 조회 실패가 강제 푸시를 막으면 안 된다 - 강제 FCM은 설정으로 줄어들지 않는다(2026-11-01). 선택 채널은
+            // 켰는지 모르므로 빼고 강제 푸시만 보낸다. 켠 문자를 확인할 수 없으니 "시도하지 않음"으로 보고 문자 대체 규칙은 그대로다.
+            logSettingsUnavailable(recipient.userId(), type, e);
+        }
 
         List<ChannelAttempt> attempts = new ArrayList<>();
         boolean pushDelivered = false;
@@ -209,6 +226,12 @@ public class NotificationDispatcher {
         enabled.addAll(settingService.enabledChannels(userId));
         enabled.retainAll(type.allowedChannels());
         return enabled;
+    }
+
+    /** 설정 조회 실패 - 예외 원문·스택에는 SQL 값이 섞일 수 있어 클래스명만 남긴다(2026-10-06 로그 원문 정책). */
+    private static void logSettingsUnavailable(String userId, NotificationType type, RuntimeException e) {
+        log.warn("[NOTIFY-SETTINGS-UNAVAILABLE] 알림 설정 조회 실패: userId={}, type={}, exception={}",
+                userId, type, e.getClass().getSimpleName());
     }
 
     /** 채널 1건 발송. 미구현 채널은 대상 아님으로 건너뛰고, 발송 예외는 격리해 실패로 돌려준다. */
@@ -329,6 +352,11 @@ public class NotificationDispatcher {
     /** 수신자 1명에 대한 발송 결과. */
     private record Outcome(NotificationLogResult result, NotificationNotSentReason notSentReason,
                            List<ChannelAttempt> attempts) {
+
+        /** 설정을 읽지 못해 어떤 채널도 시도하지 않았다 - 사용자 선택이 아니므로 NOT_SENT가 아니라 실패다. */
+        static Outcome settingsUnavailable() {
+            return new Outcome(NotificationLogResult.FAILED, null, List.of());
+        }
 
         static Outcome notSent(NotificationNotSentReason reason) {
             return new Outcome(NotificationLogResult.NOT_SENT, reason, List.of());

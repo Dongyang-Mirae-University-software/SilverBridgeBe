@@ -89,8 +89,11 @@ class AdminForceConnectFullIntegrationTest extends FullContextIntegrationTest {
         assertThat(jdbc.queryForObject("SELECT status FROM connection WHERE id = ?", String.class, connectionId))
                 .isEqualTo("ACTIVE");
         assertThat(count("SELECT count(*) FROM admin_audit_log WHERE action = 'FORCE_CONNECT'")).isEqualTo(1);
-        // 피보호자 푸시가 이 경우 함께 빠지는지는 단언하지 않는다 - 현재 동작은 PHASE 3 이슈 표(🟡)로 보고했다.
-        // 여기서 고정하면 그 문제를 고칠 때 이 테스트가 막는다.
+        // 보호자 쪽 설정 실패가 피보호자 알림을 막지 않는다(불변 규칙 ①, 2026-11-01 수정 - 그 전에는 피보호자 이력 0건).
+        // 보호자 쪽은 예외 대신 실패로 기록된다(시도 채널 없음).
+        assertThat(notificationLogs(WARD, NotificationType.CONNECTION_FORCED)).as("피보호자 알림").isEqualTo(1);
+        assertThat(count("SELECT count(*) FROM notification_log WHERE recipient_id = ? AND type = 'CONNECTION_FORCED' "
+                + "AND result = 'FAILED'", GUARDIAN)).as("보호자는 실패로 기록").isEqualTo(1);
     }
 
     private void saveUsers() {

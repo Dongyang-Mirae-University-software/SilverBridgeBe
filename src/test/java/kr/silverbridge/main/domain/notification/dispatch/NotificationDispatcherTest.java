@@ -363,6 +363,49 @@ class NotificationDispatcherTest {
         assertThat(result).isEqualTo(NotificationLogResult.SMS_FALLBACK);
     }
 
+    // ─── 설정 조회 실패 격리 (2026-11-01, 강제 연결 피보호자 알림 누락 후속) ───────────
+
+    @Test
+    @DisplayName("이상감지: 알림 설정 조회가 실패해도 강제 푸시는 나가고 결과가 기록된다(선택 채널은 빠진다)")
+    void 이상감지_설정조회실패_강제푸시는_발송() {
+        given(settingService.enabledChannels(USER_ID)).willThrow(new IllegalStateException("settings down"));
+
+        NotificationLogResult result = dispatcher.dispatch(USER_ID, NotificationType.ANOMALY_DETECTED, anomalyContent);
+
+        verify(fcmChannel).send(eq(NotificationType.ANOMALY_DETECTED), any(), any());
+        verify(smsChannel, never()).send(any(), any(), any());
+        assertThat(result).isEqualTo(NotificationLogResult.DELIVERED);
+        assertThat(recordedLog().getResult()).isEqualTo(NotificationLogResult.DELIVERED);
+    }
+
+    @Test
+    @DisplayName("이상감지: 설정 조회 실패 + 푸시 미전달이면 문자 대체가 나간다(켠 문자를 확인 못 해 '시도 안 함'으로 본다)")
+    void 이상감지_설정조회실패_푸시미전달_문자대체() {
+        given(settingService.enabledChannels(USER_ID)).willThrow(new IllegalStateException("settings down"));
+        when(fcmChannel.send(any(), any(), any())).thenReturn(ChannelResult.failed(ChannelFailureReason.NO_DEVICE));
+
+        NotificationLogResult result = dispatcher.dispatch(USER_ID, NotificationType.ANOMALY_DETECTED, anomalyContent);
+
+        verify(smsChannel).send(eq(NotificationType.ANOMALY_DETECTED), any(), any());
+        assertThat(result).isEqualTo(NotificationLogResult.SMS_FALLBACK);
+    }
+
+    @Test
+    @DisplayName("설정 기반 종류: 설정 조회가 실패하면 예외를 올리지 않고 아무 채널도 보내지 않은 채 실패(FAILED)로 기록한다")
+    void 설정기반_설정조회실패_실패로기록() {
+        given(settingService.enabledChannels(USER_ID)).willThrow(new IllegalStateException("settings down"));
+
+        NotificationLogResult result = dispatcher.dispatch(USER_ID, WARD_ID, NotificationType.CONNECTION_FORCED, content);
+
+        assertThat(result).isEqualTo(NotificationLogResult.FAILED);
+        verify(fcmChannel, never()).send(any(), any(), any());
+        verify(smsChannel, never()).send(any(), any(), any());
+        NotificationLog log = recordedLog();
+        assertThat(log.getResult()).isEqualTo(NotificationLogResult.FAILED);
+        assertThat(log.getNotSentReason()).as("사용자 선택이 아니므로 NOT_SENT 사유가 아니다").isNull();
+        assertThat(log.getChannelResults()).as("시도한 채널 없음").isEmpty();
+    }
+
     @Test
     @DisplayName("이상감지: 본인 알림도 같은 규칙으로 문자 대체된다")
     void 이상감지_본인_문자대체() {

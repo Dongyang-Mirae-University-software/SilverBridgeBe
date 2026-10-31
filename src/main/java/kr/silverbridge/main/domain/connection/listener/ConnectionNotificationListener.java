@@ -115,10 +115,20 @@ public class ConnectionNotificationListener {
         webSocketEventPublisher.sendToUser(event.wardId(), "connection-accepted",
                 forcedPayload(event.connectionId(), wardScreenTitle, FORCED_WARD_BODY));
 
-        notificationDispatcher.dispatch(event.guardianId(), event.wardId(), NotificationType.CONNECTION_FORCED,
-                NotificationContent.of(guardianTitle, guardianBody, data));
-        notificationDispatcher.dispatch(event.wardId(), event.wardId(), NotificationType.CONNECTION_FORCED,
-                NotificationContent.of(WardNotificationText.TITLE, FORCED_WARD_BODY, data));
+        // 수신자마다 격리한다 - 보호자 쪽 발송이 예외로 끝나도 피보호자 알림은 나가야 한다(강제 연결 불변 규칙 ①
+        // "피보호자 알림을 빼지 말 것", 2026-11-01). SOS·이상감지 리스너와 같은 형태다.
+        dispatchForced(event, event.guardianId(), NotificationContent.of(guardianTitle, guardianBody, data));
+        dispatchForced(event, event.wardId(), NotificationContent.of(WardNotificationText.TITLE, FORCED_WARD_BODY, data));
+    }
+
+    private void dispatchForced(ConnectionForcedEvent event, String recipientId, NotificationContent content) {
+        try {
+            notificationDispatcher.dispatch(recipientId, event.wardId(), NotificationType.CONNECTION_FORCED, content);
+        } catch (RuntimeException e) {
+            // 예외 원문·스택에는 수신자·SQL 값이 섞일 수 있다 - 클래스명만(2026-10-06 로그 원문 정책).
+            log.error("[CONNECTION] 강제 연결 알림 발송 실패: userId={}, connectionId={}, exception={}",
+                    recipientId, event.connectionId(), e.getClass().getSimpleName());
+        }
     }
 
     private static Map<String, Object> forcedPayload(Long connectionId, String title, String body) {
