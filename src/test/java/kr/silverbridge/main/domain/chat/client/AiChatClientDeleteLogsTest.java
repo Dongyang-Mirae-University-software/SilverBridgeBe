@@ -75,6 +75,25 @@ class AiChatClientDeleteLogsTest {
     }
 
     @Test
+    @DisplayName("대리 상담 기록 삭제는 DELETE /api/v1/chat/logs/proxy?guardianId=&wardId= - 두 ID 모두 엄격히 인코딩 (2026-10 점검 L-13)")
+    void 대리상담_삭제_요청_형태() {
+        assertThatNoException().isThrownBy(() -> client.deleteProxyLogs("GD0001", "W&x=1"));
+
+        assertThat(method.get()).isEqualTo("DELETE");
+        assertThat(key.get()).isEqualTo(KEY);
+        assertThat(rawUri.get()).isEqualTo("/api/v1/chat/logs/proxy?guardianId=GD0001&wardId=W%26x%3D1");
+    }
+
+    @Test
+    @DisplayName("대리 상담 기록 삭제도 200이 아니면 실패다 - 옛 AI 서버(404/405)를 성공으로 보지 않는다")
+    void 대리상담_비정상_응답은_실패() {
+        responseStatus = 404;
+
+        assertThatThrownBy(() -> client.deleteProxyLogs("GD0001", "WD0001"))
+                .isInstanceOf(CustomException.class);
+    }
+
+    @Test
     @DisplayName("userId는 엄격히 인코딩된다 - 다른 경로·쿼리를 가리킬 수 없다")
     void userId_인코딩() {
         client.deleteLogs("a&userId=VICTIM/../x");

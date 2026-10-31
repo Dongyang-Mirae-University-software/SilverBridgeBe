@@ -64,6 +64,9 @@ class NotificationExecutorAssignmentTest {
     @DisplayName("탈퇴 시 AI 챗 기록 삭제는 전용 executor다 - 알림 풀(FCM·SMS)과 폐기 로그를 섞지 않는다, 2026-10-09")
     void 챗_기록_삭제_리스너_executor() {
         assertThat(asyncQualifiers(AiMemberDataPurgeListener.class)).containsExactly("aiPurgeExecutor");
+        // 연결 종료 시 대리 상담 기록 삭제도 같은 전용 executor(2026-10 전체 점검 L-13)
+        assertThat(asyncQualifiers(kr.silverbridge.main.domain.chat.listener.AiProxyChatLogPurgeListener.class))
+                .containsExactly("aiPurgeExecutor");
     }
 
     @Test

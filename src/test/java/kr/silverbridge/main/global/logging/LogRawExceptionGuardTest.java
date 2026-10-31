@@ -43,6 +43,7 @@ class LogRawExceptionGuardTest {
             "domain/chat/client/AiChatClient.java",
             "domain/chat/service/ChatRelayService.java",
             "domain/chat/listener/AiMemberDataPurgeListener.java",
+            "domain/chat/listener/AiProxyChatLogPurgeListener.java",
             "domain/medication/client/AiMedicationOcrClient.java",
             "domain/medication/service/MedicationOcrService.java",
             "domain/medication/service/MedicationOcrSlots.java",
