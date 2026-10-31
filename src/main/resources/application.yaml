@@ -318,6 +318,9 @@ springdoc:
     enabled: ${SWAGGER_ENABLED:true}
   swagger-ui:
     enabled: ${SWAGGER_ENABLED:true}
+    # springdoc은 웹자르 경로를 이 값으로 찾는다(기본값은 springdoc이 묶인 5.32.14) - build.gradle의 swagger-ui 고정과 같은 값이어야
+    # 화면이 404가 나지 않는다(2026-10-31 DOMPurify CVE 대응).
+    version: 5.34.1
 
 # Actuator — 외부 노출은 health/info만 (민감 정보 유출 방지)
 management:
