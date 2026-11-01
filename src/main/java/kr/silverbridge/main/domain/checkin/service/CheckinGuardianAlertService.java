@@ -4,6 +4,7 @@ import kr.silverbridge.main.domain.checkin.entity.CheckinSlot;
 import kr.silverbridge.main.domain.checkin.repository.CheckinNotifyLogRepository;
 import kr.silverbridge.main.domain.connection.service.ConnectionService;
 import kr.silverbridge.main.domain.notification.channel.NotificationContent;
+import kr.silverbridge.main.domain.notification.channel.WardNotificationText;
 import kr.silverbridge.main.domain.notification.dispatch.NotificationDispatcher;
 import kr.silverbridge.main.domain.notification.dispatch.NotificationType;
 import kr.silverbridge.main.domain.notification.service.GuardianNotificationPreferenceService;
@@ -34,6 +35,7 @@ public class CheckinGuardianAlertService {
     static final String KIND_ATTENTION = "ATTENTION";
     static final String KIND_MISSED = "MISSED";
     private static final String FALLBACK_WARD_NAME = "보호 대상자";
+    static final String RISK_SMS_WITHOUT_NAME = "[실버브릿지] 안부 대화 중 도움이 필요할 수 있는 말씀이 있었어요. 연락해 주세요.";
 
     private final ConnectionService connectionService;
     private final CheckinNotifyLogRepository logRepository;
@@ -48,7 +50,7 @@ public class CheckinGuardianAlertService {
                 "[긴급] %s님 안부 대화".formatted(name),
                 "안부 대화 중 도움이 필요할 수 있는 말씀이 있었어요.\n바로 연락해서 확인해 주세요.",
                 data("CHECKIN_RISK", wardId, name, date, slot),
-                "[실버브릿지] %s님 안부 대화 중 도움이 필요할 수 있는 말씀이 있었어요. 바로 연락해 주세요.".formatted(name));
+                riskSmsText(name));
         return send(KIND_RISK, NotificationType.CHECKIN_RISK, wardId, date, slot,
                 connectionService.getActiveGuardianIds(wardId), content);
     }
@@ -120,6 +122,17 @@ public class CheckinGuardianAlertService {
         } catch (RuntimeException e) {
             return FALLBACK_WARD_NAME;
         }
+    }
+
+    /**
+     * 푸시가 전달되지 않았을 때의 대체 문자 - <b>단문 한도(EUC-KR 90바이트) 안</b>(2026-11-01 점검 M-1). 이상감지 대체 문자와 같은
+     * 기준이다(장문 과금·분할 방지). 이름이 길어 넘치면 이름을 뺀 문구로 보낸다.
+     */
+    static String riskSmsText(String wardName) {
+        String withName = "[실버브릿지] %s님 안부 대화에 도움이 필요할 수 있어요. 연락해 주세요.".formatted(wardName);
+        // 대체 문자는 제목 없이 이 문자열 그대로 나간다(디스패처가 title=null로 보냄) - 접두어를 다시 붙이는 fitsSingleSms가 아니라 그대로 잰다
+        return WardNotificationText.eucKrBytes(withName) <= WardNotificationText.SINGLE_SMS_MAX_BYTES
+                ? withName : RISK_SMS_WITHOUT_NAME;
     }
 
     static String hourLabel(CheckinSlot slot) {

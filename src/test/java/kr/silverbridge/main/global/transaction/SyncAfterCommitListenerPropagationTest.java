@@ -48,7 +48,9 @@ class SyncAfterCommitListenerPropagationTest {
             "UserWithdrawalConnectionListener#handleWithdrawn",
             List.of("kr.silverbridge.main.domain.connection.service.ConnectionService#tearDownConnectionsOnWithdrawal"),
             "MedicationWithdrawalListener#handleWithdrawn",
-            List.of("kr.silverbridge.main.domain.medication.service.MedicationWithdrawalService#removeMedicationsRegisteredBy"));
+            List.of("kr.silverbridge.main.domain.medication.service.MedicationWithdrawalService#removeMedicationsRegisteredBy"),
+            "CheckinConnectionEndedListener#handleDisconnected",
+            List.of("kr.silverbridge.main.domain.checkin.service.CheckinSettingService#disablePromptEnabledBy"));
 
     /** 쓰기가 없는 동기 리스너와 그 이유. */
     private static final Map<String, String> NO_WRITE = Map.of(

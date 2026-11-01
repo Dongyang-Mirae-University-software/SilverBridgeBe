@@ -8,6 +8,7 @@ import kr.silverbridge.main.domain.checkin.entity.CheckinSessionStatus;
 import kr.silverbridge.main.domain.checkin.entity.CheckinSetting;
 import kr.silverbridge.main.domain.checkin.entity.CheckinSlot;
 import kr.silverbridge.main.domain.checkin.repository.CheckinNotifyLogRepository;
+import kr.silverbridge.main.domain.checkin.repository.CheckinQuestionRepository;
 import kr.silverbridge.main.domain.checkin.repository.CheckinResultRepository;
 import kr.silverbridge.main.domain.checkin.repository.CheckinSessionRepository;
 import kr.silverbridge.main.domain.checkin.repository.CheckinSettingRepository;
@@ -49,6 +50,8 @@ class CheckinRepositoryIntegrationTest extends PostgresIntegrationTest {
     @Autowired private CheckinResultRepository resultRepository;
     @Autowired private CheckinSettingRepository settingRepository;
     @Autowired private CheckinNotifyLogRepository logRepository;
+    @Autowired private CheckinQuestionRepository questionRepository;
+    @Autowired private org.springframework.transaction.PlatformTransactionManager transactionManager;
 
     @BeforeEach
     void setUp() {
@@ -129,6 +132,56 @@ class CheckinRepositoryIntegrationTest extends PostgresIntegrationTest {
                 .checkDate(DAY).slot(CheckinSlot.AT_09).emotion(CheckinEmotion.CALM).sleep("나쁨")
                 .endReason(CheckinEndReason.USER_END).createdAt(AT).build()))
                 .isInstanceOf(DataIntegrityViolationException.class);
+    }
+
+    @Test
+    @DisplayName("질문 upsert(점검 L-4): 처음엔 넣고 다음엔 같은 행을 고친다 - UNIQUE 위반 없음")
+    void questionUpsert() {
+        var tx = new org.springframework.transaction.support.TransactionTemplate(transactionManager);
+        tx.executeWithoutResult(st -> questionRepository.upsert(WARD, "09:00", "첫 질문", GUARDIAN));
+        tx.executeWithoutResult(st -> questionRepository.upsert(WARD, "09:00", "고친 질문", GUARDIAN));
+
+        assertThat(questionRepository.findByWardId(WARD)).singleElement()
+                .satisfies(q -> assertThat(q.getQuestion()).isEqualTo("고친 질문"));
+    }
+
+    @Test
+    @DisplayName("연결 종료(점검 L-1): 그 보호자가 켠 안부 알림만 꺼진다")
+    void disablePromptEnabledBy() {
+        CheckinSetting setting = CheckinSetting.of(WARD, false);
+        setting.changePromptEnabled(true, GUARDIAN);
+        settingRepository.saveAndFlush(setting);
+
+        var tx = new org.springframework.transaction.support.TransactionTemplate(transactionManager);
+        Integer other = tx.execute(st -> settingRepository.disablePromptEnabledBy(WARD, "OTHER1"));
+        Integer mine = tx.execute(st -> settingRepository.disablePromptEnabledBy(WARD, GUARDIAN));
+        assertThat(other).isZero();
+        assertThat(mine).isEqualTo(1);
+        assertThat(settingRepository.findByWardId(WARD)).hasValueSatisfying(x -> {
+            assertThat(x.isPromptEnabled()).isFalse();
+            assertThat(x.getPromptChangedBy()).isNull();
+        });
+    }
+
+    @Test
+    @DisplayName("보관 정리(점검 M-4): 기준 날짜 전 발송 기록·대화(결과 CASCADE)만 지운다")
+    void retentionDeletes() {
+        logRepository.claimPrompt(WARD, DAY.minusDays(100), "09:00");
+        logRepository.claimPrompt(WARD, DAY, "09:00");
+        logRepository.claimGuardianAlert(GUARDIAN, WARD, DAY.minusDays(100), "09:00", "MISSED");
+        CheckinSession old = sessionRepository.saveAndFlush(CheckinSession.start("ck_oldoldoldoldoldoldoldold", WARD,
+                DAY.minusDays(400), CheckinSlot.AT_09, "q", AT.minusDays(400)));
+        resultRepository.saveAndFlush(CheckinResult.builder().sessionPk(old.getId()).wardId(WARD)
+                .checkDate(DAY.minusDays(400)).slot(CheckinSlot.AT_09).emotion(CheckinEmotion.CALM)
+                .endReason(CheckinEndReason.USER_END).createdAt(AT.minusDays(400)).build());
+        sessionRepository.saveAndFlush(session("ck_newnewnewnewnewnewnewnew"));
+
+        assertThat(logRepository.deletePromptLogsBefore(DAY.minusDays(90))).isEqualTo(1);
+        assertThat(logRepository.deleteGuardianAlertLogsBefore(DAY.minusDays(90))).isEqualTo(1);
+        assertThat(logRepository.deleteSessionsBefore(DAY.minusDays(365))).isEqualTo(1);
+        assertThat(resultRepository.count()).isZero();
+        assertThat(sessionRepository.count()).isEqualTo(1);
+        assertThat(logRepository.promptedSlots(WARD, DAY)).containsExactly("09:00");
     }
 
     private static CheckinSession session(String id) {

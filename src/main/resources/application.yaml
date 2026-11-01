@@ -394,3 +394,5 @@ chat:
 retention:
   access-log-days: ${RETENTION_ACCESS_LOG_DAYS:90}               # 접속 로그 삭제(매일 04:40 KST, 탈퇴자 IP·UA는 그때 바로 비움)
   admin-audit-log-days: ${RETENTION_ADMIN_AUDIT_LOG_DAYS:365}    # 관리자 감사 로그 삭제(매일 04:45 KST)
+  checkin-log-days: ${RETENTION_CHECKIN_LOG_DAYS:90}             # 안부 말벗 알림 발송 기록 삭제(매일 05:10 KST, 2026-11-01 점검 M-4)
+  checkin-result-days: ${RETENTION_CHECKIN_RESULT_DAYS:365}      # 안부 말벗 대화·결과 삭제(평소 대비 14일·보호자 조회 60일보다 길게)
