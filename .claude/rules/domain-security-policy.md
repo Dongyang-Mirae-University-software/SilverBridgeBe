@@ -17,6 +17,7 @@
 - `policy-medication.md` - 복약
 - `policy-notification.md` - 알림 채널·발송 이력
 - `policy-chat.md` - AI 챗봇 중계·관리자 AI 통계
+- `policy-checkin.md` - 안부 말벗 (음성 안부 대화·정서/생활 신호 결과, 2026-11-01)
 - `policy-admin.md` - 관리자 회원·병원·대시보드
 - `policy-dashboard.md` - 보호자 대시보드 통합 API
 

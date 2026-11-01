@@ -1,6 +1,8 @@
 package kr.silverbridge.main.domain.chat.listener;
 
 import kr.silverbridge.main.domain.chat.client.AiChatClient;
+import kr.silverbridge.main.domain.checkin.client.CheckinAiClient;
+import kr.silverbridge.main.domain.checkin.config.CheckinProperties;
 import kr.silverbridge.main.domain.user.event.UserWithdrawnEvent;
 import kr.silverbridge.main.global.exception.CustomException;
 import kr.silverbridge.main.global.exception.ErrorCode;
@@ -19,7 +21,10 @@ import java.lang.reflect.Method;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatNoException;
 import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
+import static org.mockito.ArgumentMatchers.anyString;
 
 @ExtendWith(MockitoExtension.class)
 class AiMemberDataPurgeListenerTest {
@@ -28,6 +33,10 @@ class AiMemberDataPurgeListenerTest {
 
     @Mock
     private AiChatClient aiChatClient;
+    @Mock
+    private CheckinAiClient checkinAiClient;
+    @Mock
+    private CheckinProperties checkinProperties;
     @InjectMocks
     private AiMemberDataPurgeListener listener;
 
@@ -67,6 +76,39 @@ class AiMemberDataPurgeListenerTest {
         assertThatNoException().isThrownBy(() -> listener.handleWithdrawn(EVENT));
 
         verify(aiChatClient).deleteLogs("aB3x9Z");
+    }
+
+    @Test
+    @DisplayName("말벗 AI 주소·키가 있으면 말벗 대화 기록 삭제도 요청한다(킬 스위치와 무관)")
+    void 말벗_기록도_삭제() {
+        when(checkinProperties.canCallAi()).thenReturn(true);
+
+        listener.handleWithdrawn(EVENT);
+
+        verify(checkinAiClient).deleteLogs("aB3x9Z");
+    }
+
+    @Test
+    @DisplayName("말벗 AI 주소·키가 없는 서버(gosky)는 말벗 삭제를 건너뛴다")
+    void 말벗_미설정이면_건너뜀() {
+        when(checkinProperties.canCallAi()).thenReturn(false);
+
+        listener.handleWithdrawn(EVENT);
+
+        verify(checkinAiClient, never()).deleteLogs(anyString());
+        verify(aiChatClient).deleteLogs("aB3x9Z");
+    }
+
+    @Test
+    @DisplayName("챗 AI 삭제가 모두 실패해도 말벗 기록 삭제는 시도한다 - 항목별 독립")
+    void 챗_실패해도_말벗은_시도() {
+        when(checkinProperties.canCallAi()).thenReturn(true);
+        doThrow(new CustomException(ErrorCode.CHAT_UNAVAILABLE)).when(aiChatClient).deleteLogs("aB3x9Z");
+        doThrow(new CustomException(ErrorCode.CHAT_UNAVAILABLE)).when(aiChatClient).deleteReservationCredential("aB3x9Z");
+
+        assertThatNoException().isThrownBy(() -> listener.handleWithdrawn(EVENT));
+
+        verify(checkinAiClient).deleteLogs("aB3x9Z");
     }
 
     @Test
