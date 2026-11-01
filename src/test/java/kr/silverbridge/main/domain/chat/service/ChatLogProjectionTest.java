@@ -47,6 +47,20 @@ class ChatLogProjectionTest {
     }
 
     @Test
+    @DisplayName("답 모양(layout)은 기록 조회에도 그대로 실리고, 옛 기록의 null 도 유지한다(2026-11-01)")
+    void 답모양_유지() throws Exception {
+        JsonNode log = mapper.readTree("{\"id\":1,\"reply\":\"a\",\"layout\":{\"headline\":\"h\",\"body\":[\"b\"],"
+                + "\"questions\":[],\"homeCare\":[],\"visitHospitalIf\":[\"v\"]}}");
+        JsonNode old = mapper.readTree("{\"id\":2,\"reply\":\"a\",\"layout\":null}");
+
+        JsonNode out = ChatLogProjection.project(log);
+
+        assertThat(out.get("layout").get("headline").asText()).isEqualTo("h");
+        assertThat(out.get("layout").get("visitHospitalIf").get(0).asText()).isEqualTo("v");
+        assertThat(ChatLogProjection.project(old).get("layout").isNull()).isTrue();
+    }
+
+    @Test
     @DisplayName("빈 배열은 빈 배열, 객체 아닌 입력은 null")
     void 경계() throws Exception {
         assertThat(ChatLogProjection.projectAll(mapper.readTree("[]"))).isEmpty();
