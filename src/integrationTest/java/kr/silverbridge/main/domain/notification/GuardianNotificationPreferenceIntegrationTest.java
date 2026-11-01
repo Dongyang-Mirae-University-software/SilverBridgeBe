@@ -60,11 +60,11 @@ class GuardianNotificationPreferenceIntegrationTest extends PostgresIntegrationT
     void 기본값과_왕복() {
         assertThat(service.getSettings(GUARDIAN_ID).medication().enabled()).isTrue();
 
-        service.updateSettings(GUARDIAN_ID, new GuardianNotificationTypeSettingRequest(null, false, null));
+        service.updateSettings(GUARDIAN_ID, new GuardianNotificationTypeSettingRequest(null, false, null, null));
         assertThat(service.getSettings(GUARDIAN_ID).medication().enabled()).isFalse();
         assertThat(service.medicationDisabledGuardians()).contains(GUARDIAN_ID);
 
-        service.updateSettings(GUARDIAN_ID, new GuardianNotificationTypeSettingRequest(null, true, null));
+        service.updateSettings(GUARDIAN_ID, new GuardianNotificationTypeSettingRequest(null, true, null, null));
         assertThat(service.getSettings(GUARDIAN_ID).medication().enabled()).isTrue();
         assertThat(repository.count()).isEqualTo(1);
     }
@@ -74,21 +74,37 @@ class GuardianNotificationPreferenceIntegrationTest extends PostgresIntegrationT
     void 카메라끊김_왕복() {
         assertThat(service.getSettings(GUARDIAN_ID).cameraLinkLost().enabled()).isTrue();
 
-        service.updateSettings(GUARDIAN_ID, new GuardianNotificationTypeSettingRequest(null, null, false));
+        service.updateSettings(GUARDIAN_ID, new GuardianNotificationTypeSettingRequest(null, null, false, null));
         assertThat(service.getSettings(GUARDIAN_ID).cameraLinkLost().enabled()).isFalse();
         assertThat(service.getSettings(GUARDIAN_ID).medication().enabled()).isTrue();
         assertThat(service.cameraLinkLostDisabledGuardians()).contains(GUARDIAN_ID);
 
-        service.updateSettings(GUARDIAN_ID, new GuardianNotificationTypeSettingRequest(null, null, true));
+        service.updateSettings(GUARDIAN_ID, new GuardianNotificationTypeSettingRequest(null, null, true, null));
         assertThat(service.getSettings(GUARDIAN_ID).cameraLinkLost().enabled()).isTrue();
         assertThat(service.cameraLinkLostDisabledGuardians()).doesNotContain(GUARDIAN_ID);
         assertThat(repository.count()).isEqualTo(1);
     }
 
     @Test
+    @DisplayName("안부 미응답(V66) - 기본 ON, 행 없이 끄면 새 행(다른 종류 ON), 켜면 같은 행 갱신, 끈 보호자 조회")
+    void 안부미응답_왕복() {
+        assertThat(service.getSettings(GUARDIAN_ID).checkinMissed().enabled()).isTrue();
+
+        service.updateSettings(GUARDIAN_ID, new GuardianNotificationTypeSettingRequest(null, null, null, false));
+        assertThat(service.getSettings(GUARDIAN_ID).checkinMissed().enabled()).isFalse();
+        assertThat(service.getSettings(GUARDIAN_ID).medication().enabled()).isTrue();
+        assertThat(service.getSettings(GUARDIAN_ID).cameraLinkLost().enabled()).isTrue();
+        assertThat(service.checkinMissedDisabledGuardians()).contains(GUARDIAN_ID);
+
+        service.updateSettings(GUARDIAN_ID, new GuardianNotificationTypeSettingRequest(null, null, null, true));
+        assertThat(service.checkinMissedDisabledGuardians()).doesNotContain(GUARDIAN_ID);
+        assertThat(repository.count()).isEqualTo(1);
+    }
+
+    @Test
     @DisplayName("복약을 끈 행에서 카메라 끊김 값은 기본 ON으로 유지된다 (기존 행 DEFAULT)")
     void 두_설정은_독립() {
-        service.updateSettings(GUARDIAN_ID, new GuardianNotificationTypeSettingRequest(null, false, null));
+        service.updateSettings(GUARDIAN_ID, new GuardianNotificationTypeSettingRequest(null, false, null, null));
 
         assertThat(service.getSettings(GUARDIAN_ID).cameraLinkLost().enabled()).isTrue();
         assertThat(service.cameraLinkLostDisabledGuardians()).doesNotContain(GUARDIAN_ID);
@@ -110,7 +126,7 @@ class GuardianNotificationPreferenceIntegrationTest extends PostgresIntegrationT
                         } catch (Exception e) {
                             throw new IllegalStateException(e);
                         }
-                        service.updateSettings(GUARDIAN_ID, new GuardianNotificationTypeSettingRequest(false, null, null));
+                        service.updateSettings(GUARDIAN_ID, new GuardianNotificationTypeSettingRequest(false, null, null, null));
                     }, pool);
                 }
                 CompletableFuture.allOf(futures).get(30, TimeUnit.SECONDS);
@@ -139,7 +155,7 @@ class GuardianNotificationPreferenceIntegrationTest extends PostgresIntegrationT
                         } catch (Exception e) {
                             throw new IllegalStateException(e);
                         }
-                        service.updateSettings(GUARDIAN_ID, new GuardianNotificationTypeSettingRequest(null, false, null));
+                        service.updateSettings(GUARDIAN_ID, new GuardianNotificationTypeSettingRequest(null, false, null, null));
                     }, pool);
                 }
                 CompletableFuture.allOf(futures).get(30, TimeUnit.SECONDS);
