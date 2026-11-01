@@ -108,12 +108,22 @@ public class CheckinResult {
     @Column(name = "created_at", nullable = false, updatable = false)
     private OffsetDateTime createdAt;
 
+    /** 평소 대비 "확인 필요"(V66). 정리 때 한 번 계산한다 - {@code CheckinAttentionJudge}. */
+    @Column(name = "attention", nullable = false)
+    private boolean attention;
+
+    /** 확인 필요 근거 고정 코드({@code CheckinAttentionJudge.Reason} 이름). 원문 없음. */
+    @JdbcTypeCode(SqlTypes.JSON)
+    @Column(name = "attention_reasons", nullable = false, columnDefinition = "jsonb")
+    private List<String> attentionReasons;
+
     @Builder
     private CheckinResult(Long sessionPk, String wardId, LocalDate checkDate, CheckinSlot slot, CheckinEmotion emotion,
                           CheckinEmotion selfReport, String sleep, String meal, String pain, String mood, String lonely,
                           boolean riskEmergency, boolean riskSelfHarm, String summary, List<Evidence> evidence,
                           int turns, CheckinEndReason endReason, Double avgAnswerSec, Double avgSpeechSec,
-                          Double avgPauseRatio, Double avgCharsPerSec, Double avgLoudnessDb, OffsetDateTime createdAt) {
+                          Double avgPauseRatio, Double avgCharsPerSec, Double avgLoudnessDb, OffsetDateTime createdAt,
+                          boolean attention, List<String> attentionReasons) {
         this.sessionPk = sessionPk;
         this.wardId = wardId;
         this.checkDate = checkDate;
@@ -137,6 +147,8 @@ public class CheckinResult {
         this.avgCharsPerSec = avgCharsPerSec;
         this.avgLoudnessDb = avgLoudnessDb;
         this.createdAt = createdAt;
+        this.attention = attention;
+        this.attentionReasons = attentionReasons == null ? List.of() : List.copyOf(attentionReasons);
     }
 
     /** 근거 = 어느 신호를 몇 번째 턴에서 들었는지(원문 없음). */
