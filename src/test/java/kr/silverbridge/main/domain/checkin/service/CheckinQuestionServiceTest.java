@@ -42,7 +42,7 @@ class CheckinQuestionServiceTest {
         properties.setEnabled(true);
         properties.setAiBaseUrl("http://127.0.0.1:1");
         properties.setApiKey("k");
-        service = new CheckinQuestionService(properties, repository, connectionService);
+        service = new CheckinQuestionService(properties, repository, new CheckinGuardianAccess(connectionService));
         when(connectionService.isActiveConnection(GUARDIAN, WARD)).thenReturn(true);
     }
 

@@ -24,7 +24,8 @@ class GuardianNotificationPreferenceUsageGuardTest {
             "GuardianNotificationPreferenceService.java",
             "GuardianNotificationTypeSettingController.java",
             "MedicationMissedAlertPlanner.java",
-            "CameraLinkLostNotifier.java");
+            "CameraLinkLostNotifier.java",
+            "CheckinGuardianAlertService.java");
 
     @Test
     @DisplayName("종류 설정(서비스·저장소·엔티티)은 설정 API와 미복용 요약 플래너만 참조한다")

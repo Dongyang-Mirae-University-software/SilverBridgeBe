@@ -49,6 +49,15 @@ public class CheckinProperties {
     private long maxFrameBytes = 300L * 1024;
     private int maxReplyBytes = 64 * 1024;
 
+    /** 응답 창 - 시각부터 이 시간 안에만 대화를 시작할 수 있다(2026-11-01 결정 Q2: 1시간). */
+    private Duration responseWindow = Duration.ofMinutes(60);
+    /** 안부 알림 분산 - 피보호자마다 시각 + 0~(이 값-1)분에 보낸다(같은 분에 몰리지 않게). */
+    private int promptSpreadMinutes = 5;
+    /** 미응답 알림은 응답 창이 닫힌 뒤 이 시간 안에만 보낸다(서버 재시작 뒤 아침 미응답이 밤에 나가지 않게). */
+    private Duration missedNotifyDeadline = Duration.ofMinutes(60);
+    /** 평소 대비 기준 기간(일) - 결정 Q2: 14일. */
+    private int baselineDays = 14;
+
     /** 대화 API를 쓸 수 있는지 - 켜져 있고 주소·키가 모두 있어야 한다. */
     public boolean isActive() {
         return enabled && canCallAi();

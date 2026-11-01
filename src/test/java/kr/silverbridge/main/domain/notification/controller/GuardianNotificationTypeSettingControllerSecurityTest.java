@@ -45,7 +45,7 @@ class GuardianNotificationTypeSettingControllerSecurityTest {
     void guardian_허용() {
         assertThatNoException().isThrownBy(() -> controller.getSettings("GD0001"));
         assertThatNoException().isThrownBy(() ->
-                controller.updateSettings("GD0001", new GuardianNotificationTypeSettingRequest(null, false, null)));
+                controller.updateSettings("GD0001", new GuardianNotificationTypeSettingRequest(null, false, null, null)));
     }
 
     @Test
@@ -54,7 +54,7 @@ class GuardianNotificationTypeSettingControllerSecurityTest {
     void 보호자_아니면_거부() {
         assertThatThrownBy(() -> controller.getSettings("WD0001")).isInstanceOf(AccessDeniedException.class);
         assertThatThrownBy(() -> controller.updateSettings("WD0001",
-                new GuardianNotificationTypeSettingRequest(null, false, null))).isInstanceOf(AccessDeniedException.class);
+                new GuardianNotificationTypeSettingRequest(null, false, null, null))).isInstanceOf(AccessDeniedException.class);
     }
 
     @Test
@@ -62,6 +62,6 @@ class GuardianNotificationTypeSettingControllerSecurityTest {
     void 요청_필드_고정() {
         assertThat(Arrays.stream(GuardianNotificationTypeSettingRequest.class.getRecordComponents())
                 .map(RecordComponent::getName))
-                .containsExactlyInAnyOrder("anomalyReviewReminder", "medication", "cameraLinkLost");
+                .containsExactlyInAnyOrder("anomalyReviewReminder", "medication", "cameraLinkLost", "checkinMissed");
     }
 }

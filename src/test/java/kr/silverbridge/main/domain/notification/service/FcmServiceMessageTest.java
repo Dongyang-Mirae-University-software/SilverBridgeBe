@@ -264,7 +264,7 @@ class FcmServiceMessageTest {
                     NotificationType.MEDICATION_REMINDER, NotificationType.ANOMALY_REVIEW_REQUIRED,
                     NotificationType.CAMERA_LINK_LOST, NotificationType.CONNECTION_REQUEST,
                     NotificationType.CONNECTION_ACCEPTED, NotificationType.CONNECTION_REFUSED,
-                    NotificationType.INQUIRY_ANSWERED));
+                    NotificationType.INQUIRY_ANSWERED, NotificationType.CHECKIN_PROMPT, NotificationType.CHECKIN_RISK));
         }
 
         @Test
