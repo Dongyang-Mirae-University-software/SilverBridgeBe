@@ -66,7 +66,23 @@
 
 ## 6. 결과 기록
 
-(PR·머지·vkcs 반영·실제 대화 시험 결과는 마무리 단계에서 추가)
+### 1차 - PR #427 (머지 `827eddd`, 2026-11-01)
+
+- 로컬 `./gradlew build`: 테스트 2,244개 통과. vkcs 통합 테스트(`integration-test.sh`): 첫 실행에서 `WithdrawalAiPurgeIntegrationTest` 실패(슬라이스 컨텍스트에 말벗 빈 없음) → 목 추가(`54951db`) 후 통과.
+- vkcs CD 성공, V65 적용(0.13초). `.env.dev`에 `CHECKIN_ENABLED`·`CHECKIN_AI_BASE_URL`·`CHECKIN_AI_API_KEY` 추가(백업 `.env.dev.bak-20261101-1705`) 후 `up -d api`.
+- gosky: 배포·설정하지 않음(`CHECKIN_` 키 0개, HEAD `8458e15`). pull해도 기본 꺼짐·주소 없음이라 503이고 탈퇴 정리도 건너뛴다.
+- **실제 AI 대화 시험**(vkcs `dmu-dev-api` → 172.18.0.1:16020 → DGX, aihub WAV 3.3초, 시험 피보호자 `CKT001`):
+
+| 단계 | 결과 |
+|---|---|
+| 설정 조회 | 200 `faceConsent:false` |
+| 시작 | 200 시각 `15:00`, 세션 ID `ck_…` |
+| 턴 1·2 | 200, 받아쓰기 11자·답 57/47자, BE 측정 974/624ms |
+| 정리 | 200 정서 `CALM`·본인 `CALM`·`USER_END`, 결과 행 저장(요약 22자·목소리 평균 있음·신호 null) |
+| 다시 정리 / 다시 시작 | 200 같은 결과(멱등) / 409 `CHECKIN_ALREADY_DONE` |
+| 탈퇴(API) | 200 → BE 행 0건(CASCADE), `[AI-PURGE] item=checkin-logs` 완료, AI 잔여 0 |
+
+- 로그 확인: `[CHECKIN]` 줄에는 wardId·세션 ID·턴 번호·소요 시간·정서 코드만 있고 대화 내용은 없다.
 
 ## 7. 2차 계획
 
