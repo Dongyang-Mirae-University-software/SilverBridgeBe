@@ -4,6 +4,18 @@
 
 ---
 
+### [2026-11-01] 안부 말벗(checkin) 1차 - 질문·대화 중계·결과 저장 (V65)
+
+AI 계약 v0(AiServer PR #152)으로 피보호자 음성 안부 대화를 말벗 AI(DGX)에 중계하고 정리 결과만 저장한다. 결정: Q1 위험 알림 = 강제 FCM + 설정(2차) / Q2 응답 창 1시간·기준 14일(2차) / Q3 보호자에게 원문 미노출 / Q4 사진 8장·질문은 피보호자 단위 공유.
+
+- 새 도메인 `domain/checkin`: 보호자 질문 GET·PUT, 피보호자 시작·턴(multipart)·정리·표정 동의. V65 테이블 4개(`checkin_question`·`checkin_setting`·`checkin_session`·`checkin_result`, CHECK로 값 고정, 진행 중 세션 부분 UNIQUE).
+- 기본 꺼짐 + 말벗 AI 주소·키 코드 기본값 없음 → 모든 API 503 `CHECKIN_DISABLED`(gosky 무동작). 키는 `CHECKIN_AI_*`로 챗봇 AI와 분리.
+- `CheckinAiClient`(키 헤더·리다이렉트 미추종·전용 마감 스레드·오류는 고정 `errorCode` 허용 목록만), 동시 6/1인 1, 턴·시간은 BE가 셈, 동의 꺼짐 시 사진 미전달, 남의 세션 403 + `[IDOR-ATTEMPT]`, 본문 로그 금지(`CheckinLogGuardTest`).
+- 탈퇴: `AiMemberDataPurgeListener`에 `checkin-logs` 항목(주소·키가 있을 때만, 킬 스위치 무관).
+- PHASE 0 실측으로 문서와 다른 AI 계약 세부(slot `"09:00"`, finish reason 열거, `avg*` 목소리 키) 반영. 상세 `docs/(2026-11-01) feature-checkin-companion.md`, 정책 `.claude/rules/policy-checkin.md`.
+
+---
+
 ### [2026-11-01] 알림 설정 조회 실패 격리 - 강제 연결 피보호자 알림·이상감지 강제 푸시 (PR #425, 머지 `ff2583a`)
 
 #424 통합 테스트에서 찾은 🟡(강제 연결 때 보호자 설정 조회가 실패하면 피보호자 알림도 빠짐)를 PHASE 0에서 다시 보니, 같은 원인으로 **이상감지 강제 푸시·문자 대체도 빠지는 구멍(🟠)**이 있었다. 마이그레이션 없음.

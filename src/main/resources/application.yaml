@@ -196,6 +196,25 @@ medication:
     per-minute: ${MEDICATION_OCR_PER_MINUTE:10}
     per-hour: ${MEDICATION_OCR_PER_HOUR:60}
 
+# 안부 말벗(2026-11-01) - 피보호자 음성 대화를 말벗 AI(DGX)로 중계하고 정리 결과만 저장한다.
+# 기본 꺼짐 + 주소·키 코드 기본값 없음 → 셋 중 하나라도 없으면 모든 말벗 API 503 CHECKIN_DISABLED(gosky는 켜지 않는다).
+# 챗봇·이상감지의 AI_HTTP_BASE_URL·AI_API_KEY와 분리한다(다른 서버).
+checkin:
+  enabled: ${CHECKIN_ENABLED:false}
+  ai-base-url: ${CHECKIN_AI_BASE_URL:}
+  api-key: ${CHECKIN_AI_API_KEY:}                          # 서버 안에서만 헤더로 사용(평문 커밋 금지)
+  connect-timeout: ${CHECKIN_CONNECT_TIMEOUT:3s}
+  start-timeout: ${CHECKIN_START_TIMEOUT:10s}
+  turn-timeout: ${CHECKIN_TURN_TIMEOUT:20s}                # 받아쓰기 + 답 생성(DGX 실측 1~2초, AI 생성 대기 상한 10초)
+  finish-timeout: ${CHECKIN_FINISH_TIMEOUT:30s}
+  purge-timeout: ${CHECKIN_PURGE_TIMEOUT:15s}
+  session-duration: ${CHECKIN_SESSION_DURATION:2m}
+  turn-grace: ${CHECKIN_TURN_GRACE:60s}                    # 마지막 녹음(최대 60초)이 도착할 여유
+  max-turns: ${CHECKIN_MAX_TURNS:8}
+  max-concurrent: ${CHECKIN_MAX_CONCURRENT:6}
+  max-per-user: ${CHECKIN_MAX_PER_USER:1}
+  max-frames: ${CHECKIN_MAX_FRAMES:8}                      # multipart 전역 10MB 안에 음성 5MB와 함께 들어가게
+
 # 관리자 제휴 병원 관리 - 예약 서비스(SilverBridgeReservation) 관리자 API 중계 (2026-10-26).
 # 주소·자격은 코드 기본값 없음: 비면 이 API들만 503(기동은 막지 않음). vkcs-linux는 예약 서비스가 없어 비어 있는 것이 정상.
 # gosky: base-url = http://reservation-api:6015 (도커 네트워크 sb-internal - docker-compose.gosky.yml), 자격 = BE 전용 관리자 계정.
