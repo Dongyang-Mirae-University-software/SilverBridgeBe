@@ -103,4 +103,20 @@
 
 ### 2차 결과
 
-(PR·머지·vkcs 반영 결과는 마무리 단계에서 추가)
+PR #429 (머지 `26042cf`, 2026-11-01). 로컬 `./gradlew build` 테스트 2,297개 통과. vkcs 통합 테스트: 첫 실행은 `GuardianNotificationPreferenceIntegrationTest` 컴파일 실패(요청 record 인자 추가) → 수정 + `CheckinRepositoryIntegrationTest`(선점 ON CONFLICT·진행 중 부분 UNIQUE·JSONB·신호 CHECK·CASCADE)·`checkinMissed` 실 DB 시험 추가(`df7df00`) 후 통과. vkcs CD 성공, V66 적용(0.06초).
+
+**실서버 시험**(vkcs, 시험 보호자 `CKG002`·피보호자 `CKT002`·ACTIVE 연결 17:38):
+
+| 단계 | 결과 |
+|---|---|
+| 보호자 알림 받기 켜기 → 피보호자 설정 | 200 `promptEnabled:true` / 피보호자 GET에도 true |
+| 보호자 알림 종류 `checkinMissed` | 기본 `{enabled:true, required:false}` |
+| 17:39 하루 조회 | 09·12·15시 `BEFORE_CONNECTION`(연결 전, D-1), 18·21시 `UPCOMING` |
+| 응답 창 밖 시작 / 남의 피보호자 조회 | 409 `CHECKIN_NOT_OPEN` / 403 `CHECKIN_NOT_AUTHORIZED` |
+| 스케줄러 | 18:01:17 `checkin_prompt_log` 선점 → `CHECKIN_PROMPT` 발송(분산 1분, 이력 `FAILED` = 시험 계정에 FCM 토큰 없음) |
+| 대화(18시) | 시작·턴 2·정리 200, 본인 기분 `WORRIED` |
+| 하루 조회 | 18:00 `DONE`·요약 22자·근거 `SELF_REPORT_NEGATIVE` 하나 → **확인 필요 아님**(신호 하나로는 안 붙음) |
+| 주간 조회 | 오늘 done 1·missed 0·attention 0 |
+| 탈퇴(두 계정) | 200, 말벗 테이블·연결 0건, `[AI-PURGE] item=checkin-logs` |
+
+- 실서버에서 확인하지 못한 것: 위험 알림(`CHECKIN_RISK` - 응급·자해 문장 녹음이 필요), 미응답 알림(창 닫힌 뒤, 19시대), 실제 FCM 수신(시험 계정 토큰 없음) - 단위 테스트로만 고정.
