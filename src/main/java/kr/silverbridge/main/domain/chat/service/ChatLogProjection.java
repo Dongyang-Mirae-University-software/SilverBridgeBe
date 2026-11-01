@@ -25,6 +25,10 @@ final class ChatLogProjection {
             "tool", "toolData", "ui", "riskLevel", "recommendedAction", "reservationRequired", "emergencyWarning",
             "layout", "createdAt");
 
+    /** layout 안에서 내리는 칸(2026-11-01 점검 L-5). headline 은 문자열, 나머지는 문자열 목록. 그 밖의 하위 칸은 뺀다
+     *  - 위 허용 목록이 맨 위 칸만 거르므로, AI가 layout 안에 새 칸을 더해도 자동으로 빠지게 한 단계 더 거른다. */
+    static final List<String> LAYOUT_LIST_FIELDS = List.of("body", "questions", "homeCare", "visitHospitalIf");
+
     private ChatLogProjection() {
     }
 
@@ -37,7 +41,33 @@ final class ChatLogProjection {
         for (String field : ALLOWED_FIELDS) {
             JsonNode value = log.get(field);
             if (value != null) {
-                out.set(field, value.deepCopy());
+                out.set(field, "layout".equals(field) ? projectLayout(value) : value.deepCopy());
+            }
+        }
+        return out;
+    }
+
+    /** 답 모양. 객체가 아니면(옛 기록 null 포함) null - FE는 reply 로 그린다. 문자열이 아닌 줄은 뺀다. */
+    static JsonNode projectLayout(JsonNode layout) {
+        if (layout == null || !layout.isObject()) {
+            return JsonNodeFactory.instance.nullNode();
+        }
+        ObjectNode out = JsonNodeFactory.instance.objectNode();
+        JsonNode headline = layout.get("headline");
+        if (headline != null && headline.isTextual()) {
+            out.put("headline", headline.asText());
+        } else {
+            out.putNull("headline");
+        }
+        for (String field : LAYOUT_LIST_FIELDS) {
+            ArrayNode lines = out.putArray(field);
+            JsonNode value = layout.get(field);
+            if (value != null && value.isArray()) {
+                for (JsonNode line : value) {
+                    if (line.isTextual()) {
+                        lines.add(line.asText());
+                    }
+                }
             }
         }
         return out;

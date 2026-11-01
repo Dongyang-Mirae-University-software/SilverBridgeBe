@@ -47,6 +47,30 @@ class ChatLogProjectionTest {
     }
 
     @Test
+    @DisplayName("layout 안의 모르는 하위 칸·문자열이 아닌 줄은 빠지고, 객체가 아닌 layout 은 null 이 된다(2026-11-01 점검 L-5)")
+    void 답모양_하위칸_허용목록() throws Exception {
+        JsonNode log = mapper.readTree("{\"id\":1,\"layout\":{\"headline\":\"h\",\"body\":[\"b\",3,{\"x\":1},null],"
+                + "\"questions\":\"q\",\"visitHospitalIf\":[\"v\"],\"debug\":{\"userId\":\"u1\"},\"trace\":[1]}}");
+        JsonNode badHeadline = mapper.readTree("{\"id\":2,\"layout\":{\"headline\":{\"a\":1}}}");
+        JsonNode notObject = mapper.readTree("{\"id\":3,\"layout\":[\"a\"]}");
+
+        JsonNode out = ChatLogProjection.project(log).get("layout");
+
+        assertThat(out.has("debug")).isFalse();
+        assertThat(out.has("trace")).isFalse();
+        assertThat(out.toString()).doesNotContain("u1");
+        assertThat(out.get("headline").asText()).isEqualTo("h");
+        assertThat(out.get("body")).hasSize(1);
+        assertThat(out.get("body").get(0).asText()).isEqualTo("b");
+        assertThat(out.get("questions").isArray()).isTrue();
+        assertThat(out.get("questions")).isEmpty();
+        assertThat(out.get("homeCare")).isEmpty();
+        assertThat(out.get("visitHospitalIf").get(0).asText()).isEqualTo("v");
+        assertThat(ChatLogProjection.project(badHeadline).get("layout").get("headline").isNull()).isTrue();
+        assertThat(ChatLogProjection.project(notObject).get("layout").isNull()).isTrue();
+    }
+
+    @Test
     @DisplayName("답 모양(layout)은 기록 조회에도 그대로 실리고, 옛 기록의 null 도 유지한다(2026-11-01)")
     void 답모양_유지() throws Exception {
         JsonNode log = mapper.readTree("{\"id\":1,\"reply\":\"a\",\"layout\":{\"headline\":\"h\",\"body\":[\"b\"],"
