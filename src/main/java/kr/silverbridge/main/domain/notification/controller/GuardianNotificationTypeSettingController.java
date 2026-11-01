@@ -34,6 +34,7 @@ public class GuardianNotificationTypeSettingController {
                       - anomalyReviewReminder : 판정 확인 요청(재촉) 알림. 기본 true
                       - medication        : 복약 미복용 요약 알림. 기본 true
                       - cameraLinkLost    : 카메라 연결 끊김 안내(AI 서버 연결이 끊긴 뒤 돌아오지 않은 카메라). 기본 true
+                      - checkinMissed     : 안부 말벗 미응답 알림(피보호자당 하루 한 번). 기본 true
                     required=true 항목은 FE가 잠금 표시만 하면 됩니다.
 
                     [참고]
@@ -53,7 +54,7 @@ public class GuardianNotificationTypeSettingController {
 
     @Operation(summary = "알림 종류별 수신 설정 변경 (보호자 전용)",
             description = """
-                    변경 가능한 종류(anomalyReviewReminder, medication, cameraLinkLost)만 받습니다. null/생략은 변경하지 않습니다.
+                    변경 가능한 종류(anomalyReviewReminder, medication, cameraLinkLost, checkinMissed)만 받습니다. null/생략은 변경하지 않습니다.
                     sos·anomalyDetection 등 필수 알림이나 알 수 없는 키를 보내도 무시되며 저장되지 않습니다.
 
                     [복약] 끄면 미복용 요약이 오지 않습니다. 피보호자별 미복용 요약 설정

@@ -24,6 +24,7 @@ public class GuardianNotificationPreferenceService {
 
     private static final boolean DEFAULT_MEDICATION_ENABLED = true;
     private static final boolean DEFAULT_CAMERA_LINK_LOST_ENABLED = true;
+    private static final boolean DEFAULT_CHECKIN_MISSED_ENABLED = true;
 
     private final GuardianNotificationPreferenceRepository repository;
     private final GuardianAnomalySettingService anomalySettingService;
@@ -48,6 +49,12 @@ public class GuardianNotificationPreferenceService {
             repository.findByGuardianId(guardianId)
                     .orElseThrow(() -> new IllegalStateException("알림 종류 설정 동시 저장 후 행을 찾지 못함"))
                     .changeCameraLinkLostEnabled(cameraLinkLost);
+        }
+        Boolean checkinMissed = request.checkinMissed();
+        if (checkinMissed != null && repository.insertCheckinMissedIfAbsent(guardianId, checkinMissed) == 0) {
+            repository.findByGuardianId(guardianId)
+                    .orElseThrow(() -> new IllegalStateException("알림 종류 설정 동시 저장 후 행을 찾지 못함"))
+                    .changeCheckinMissedEnabled(checkinMissed);
         }
         if (request.anomalyReviewReminder() != null) {
             anomalySettingService.updateSetting(guardianId, request.anomalyReviewReminder());
@@ -77,16 +84,30 @@ public class GuardianNotificationPreferenceService {
                 .collect(Collectors.toSet());
     }
 
+    /**
+     * 안부 미응답 알림을 계정 차원에서 <b>끈</b> 보호자 전체. 행이 없으면 기본값 ON이라 포함되지 않는다.
+     * 미응답 알림 대상만 좁힌다 - 안부 위험 알림(CHECKIN_RISK)에는 쓰지 않는다.
+     */
+    @Transactional(readOnly = true)
+    public Set<String> checkinMissedDisabledGuardians() {
+        return repository.findByCheckinMissedEnabledFalse().stream()
+                .map(GuardianNotificationPreference::getGuardianId)
+                .collect(Collectors.toSet());
+    }
+
     private GuardianNotificationTypeSettingResponse toResponse(String guardianId) {
         GuardianNotificationPreference preference = repository.findByGuardianId(guardianId).orElse(null);
         boolean medication = preference != null ? preference.isMedicationEnabled() : DEFAULT_MEDICATION_ENABLED;
         boolean cameraLinkLost = preference != null
                 ? preference.isCameraLinkLostEnabled() : DEFAULT_CAMERA_LINK_LOST_ENABLED;
+        boolean checkinMissed = preference != null
+                ? preference.isCheckinMissedEnabled() : DEFAULT_CHECKIN_MISSED_ENABLED;
         return new GuardianNotificationTypeSettingResponse(
                 TypeSetting.locked(),
                 TypeSetting.locked(),
                 TypeSetting.optional(anomalySettingService.getSetting(guardianId).reviewReminderEnabled()),
                 TypeSetting.optional(medication),
-                TypeSetting.optional(cameraLinkLost));
+                TypeSetting.optional(cameraLinkLost),
+                TypeSetting.optional(checkinMissed));
     }
 }

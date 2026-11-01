@@ -84,9 +84,39 @@
 
 - 로그 확인: `[CHECKIN]` 줄에는 wardId·세션 ID·턴 번호·소요 시간·정서 코드만 있고 대화 내용은 없다.
 
-## 7. 2차 계획
+## 7. 2차 - 알림·평소 대비·보호자 조회 (V66)
 
-- 피보호자 알림 `CHECKIN_PROMPT`(SETTINGS_ONLY, FCM·문자, 90바이트 문구), 5시각 0~5분 분산, 응답 창 1시간, 선점 후 발송 UNIQUE(ward, date, slot).
-- 평소 대비(최근 14일) "확인 필요" - 신호 하나만으로 붙이지 않음. 생활 신호·본인 응답·위험은 강하게, 목소리는 보조, 표정은 null.
-- 보호자 조회 `GET /api/guardian/checkin?wardId=&date=`·주간 추세(요약·근거만, 원문 없음).
-- 보호자 알림: 위험 = 강제 FCM + 설정(`FORCED_PUSH_PLUS_SETTINGS`), 확인 필요 = 설정 기반, 미응답 = 보호자 알림 종류 설정의 끌 수 있는 항목.
+| API | 역할 | 설명 |
+|---|---|---|
+| `GET·PUT /api/guardian/ward/{wardId}/checkin/setting` | GUARDIAN | `{promptEnabled}` 안부 알림 받기(기본 false) |
+| `GET /api/guardian/checkin?wardId=&date=` | GUARDIAN | 시각별 상태(`DONE`·`IN_PROGRESS`·`OPEN`·`UPCOMING`·`MISSED`·`NO_RECORD`·`BEFORE_CONNECTION`) + 정서·본인 기분·신호·위험·확인 필요(근거 코드)·요약·근거 |
+| `GET /api/guardian/checkin/weekly?wardId=&endDate=` | GUARDIAN | 7일 마친 수·미응답 수·확인 필요 수·위험·시각별 정서 |
+| `GET·PUT /api/ward/checkin/setting` | WARD | 응답·요청에 `promptEnabled` 추가(본인이 끌 수 있음, 요청은 보낸 항목만) |
+| `GET·PUT /api/guardian/notification-type-setting` | GUARDIAN | `checkinMissed` 추가(기본 true) |
+
+- **피보호자 안부 알림** `CHECKIN_PROMPT`: `CheckinPromptPlanner` 1분 주기, 켠 피보호자 중 이용 중·ACTIVE 보호자 있음·결과 없음인 사람에게 시각 + 0~4분(피보호자별 고정)에 FCM. 선점 후 발송(`checkin_prompt_log`).
+- **응답 창 1시간**: 창 밖 시작은 409 `CHECKIN_NOT_OPEN`(창 안에 말을 나눈 대화는 이어받아 정리 가능).
+- **평소 대비 판정** `CheckinAttentionJudge`: 정리 때 그날 전 14일 결과로 계산해 `checkin_result.attention`·`attention_reasons`에 저장. 근거 둘 이상 + 점수 2.0 이상(생활 신호·본인 기분 1.0, AI 정서·목소리 0.5), 위험은 곧바로.
+- **보호자 알림**: 위험 `CHECKIN_RISK`(턴에서 처음 올라갈 때 바로, 긴급 executor, 강제 FCM + 설정) / 확인 필요 `CHECKIN_ATTENTION`(위험이 아닐 때만) / 미응답 `CHECKIN_MISSED`(창 닫힌 뒤 1시간 안, 하루 한 번, 끌 수 있음). 보호자별 선점 후 발송(`checkin_guardian_alert_log`).
+- 문구: 위험 "[긴급] {이름}님 안부 대화 / 안부 대화 중 도움이 필요할 수 있는 말씀이 있었어요." · 확인 필요 "안부 확인 · {이름}님 / 오늘 오후 3시 안부 대화가 평소와 조금 달랐어요." · 미응답 "… 안부 인사에 아직 답이 없으셨어요." · 피보호자 "안부 인사 드려요. 앱에서 잠깐 이야기 나눠요."(90바이트 안).
+- **가정(사용자 확인 전 기본값)**: 안부 알림은 기본 꺼짐(보호자가 켬) / 피보호자 알림은 FCM만(문자 없음) / 관리자 이력은 "기타" 탭.
+
+### 2차 결과
+
+PR #429 (머지 `26042cf`, 2026-11-01). 로컬 `./gradlew build` 테스트 2,297개 통과. vkcs 통합 테스트: 첫 실행은 `GuardianNotificationPreferenceIntegrationTest` 컴파일 실패(요청 record 인자 추가) → 수정 + `CheckinRepositoryIntegrationTest`(선점 ON CONFLICT·진행 중 부분 UNIQUE·JSONB·신호 CHECK·CASCADE)·`checkinMissed` 실 DB 시험 추가(`df7df00`) 후 통과. vkcs CD 성공, V66 적용(0.06초).
+
+**실서버 시험**(vkcs, 시험 보호자 `CKG002`·피보호자 `CKT002`·ACTIVE 연결 17:38):
+
+| 단계 | 결과 |
+|---|---|
+| 보호자 알림 받기 켜기 → 피보호자 설정 | 200 `promptEnabled:true` / 피보호자 GET에도 true |
+| 보호자 알림 종류 `checkinMissed` | 기본 `{enabled:true, required:false}` |
+| 17:39 하루 조회 | 09·12·15시 `BEFORE_CONNECTION`(연결 전, D-1), 18·21시 `UPCOMING` |
+| 응답 창 밖 시작 / 남의 피보호자 조회 | 409 `CHECKIN_NOT_OPEN` / 403 `CHECKIN_NOT_AUTHORIZED` |
+| 스케줄러 | 18:01:17 `checkin_prompt_log` 선점 → `CHECKIN_PROMPT` 발송(분산 1분, 이력 `FAILED` = 시험 계정에 FCM 토큰 없음) |
+| 대화(18시) | 시작·턴 2·정리 200, 본인 기분 `WORRIED` |
+| 하루 조회 | 18:00 `DONE`·요약 22자·근거 `SELF_REPORT_NEGATIVE` 하나 → **확인 필요 아님**(신호 하나로는 안 붙음) |
+| 주간 조회 | 오늘 done 1·missed 0·attention 0 |
+| 탈퇴(두 계정) | 200, 말벗 테이블·연결 0건, `[AI-PURGE] item=checkin-logs` |
+
+- 실서버에서 확인하지 못한 것: 위험 알림(`CHECKIN_RISK` - 응급·자해 문장 녹음이 필요), 미응답 알림(창 닫힌 뒤, 19시대), 실제 FCM 수신(시험 계정 토큰 없음) - 단위 테스트로만 고정.

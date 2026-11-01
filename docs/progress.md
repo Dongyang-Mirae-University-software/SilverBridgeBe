@@ -4,6 +4,16 @@
 
 ---
 
+### [2026-11-01] 안부 말벗(checkin) 2차 - 5시각 알림·평소 대비 확인 필요·보호자 알림·조회 (V66, PR #429, 머지 `26042cf`)
+
+1차(#427) 위에 결정 Q1(위험 = 강제 FCM + 설정)·Q2(응답 창 1시간·기준 14일)·Q3(원문 미노출)을 반영했다.
+
+- 알림 종류 4개 `CHECKIN_PROMPT`·`CHECKIN_RISK`(FORCED_PUSH_PLUS_SETTINGS)·`CHECKIN_ATTENTION`·`CHECKIN_MISSED`, 보호자 알림 종류 설정 `checkinMissed`.
+- `CheckinPromptPlanner`(1분, 선점 후 발송, 0~4분 분산, 미응답은 창 닫힌 뒤 1시간 안·하루 한 번), `CheckinAttentionJudge`(신호 하나로는 안 붙음), 보호자 하루·주간 조회(D-1 연결 이후만), 안부 알림 받기 설정(기본 꺼짐 - 가정).
+- V66: `checkin_setting.prompt_enabled`, `checkin_result.attention`·`attention_reasons`, `checkin_prompt_log`, `checkin_guardian_alert_log`, `guardian_notification_preference.checkin_missed_enabled`(모두 추가만).
+
+---
+
 ### [2026-11-01] 안부 말벗(checkin) 1차 - 질문·대화 중계·결과 저장 (V65, PR #427, 머지 `827eddd`)
 
 AI 계약 v0(AiServer PR #152)으로 피보호자 음성 안부 대화를 말벗 AI(DGX)에 중계하고 정리 결과만 저장한다. 결정: Q1 위험 알림 = 강제 FCM + 설정(2차) / Q2 응답 창 1시간·기준 14일(2차) / Q3 보호자에게 원문 미노출 / Q4 사진 8장·질문은 피보호자 단위 공유.

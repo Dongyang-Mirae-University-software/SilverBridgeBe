@@ -143,6 +143,27 @@ class CheckinConversationServiceTest {
         }
 
         @Test
+        @DisplayName("응답 창(1시간)이 닫혔고 나눈 말이 없으면 409 CHECKIN_NOT_OPEN")
+        void windowClosed() {
+            when(clock.now()).thenReturn(OffsetDateTime.of(2026, 11, 1, 16, 0, 0, 0, KST));
+            assertCode(() -> service.start(WARD), ErrorCode.CHECKIN_NOT_OPEN);
+            verifyNoInteractions(aiClient);
+        }
+
+        @Test
+        @DisplayName("응답 창이 닫혀도 말을 나눈 대화는 정리할 수 있게 돌려준다")
+        void windowClosedButTalked() {
+            when(clock.now()).thenReturn(OffsetDateTime.of(2026, 11, 1, 16, 5, 0, 0, KST));
+            CheckinSession talked = session(WARD, OffsetDateTime.of(2026, 11, 1, 15, 58, 0, 0, KST), 2);
+            when(store.findInProgress(WARD, LocalDate.of(2026, 11, 1), CheckinSlot.AT_15)).thenReturn(Optional.of(talked));
+
+            CheckinSessionResponse response = service.start(WARD);
+
+            assertThat(response.resumed()).isTrue();
+            assertThat(response.finishRequired()).isTrue();
+        }
+
+        @Test
         @DisplayName("이번 시각 결과가 이미 있으면 409 CHECKIN_ALREADY_DONE")
         void alreadyDone() {
             when(store.hasResult(WARD, LocalDate.of(2026, 11, 1), CheckinSlot.AT_15)).thenReturn(true);
@@ -395,6 +416,24 @@ class CheckinConversationServiceTest {
             assertThat(r.isRiskEmergency()).isTrue();
             assertThat(r.getEvidence()).extracting(CheckinResult.Evidence::signal).containsExactly("sleep");
             assertThat(r.getAvgLoudnessDb()).isNull(); // 범위 밖 값은 버린다
+        }
+
+        @Test
+        @DisplayName("정리 때 최근 14일 결과로 평소 대비 판정을 해 결과에 저장한다")
+        void attentionStored() throws Exception {
+            CheckinSession s = session(WARD, AT_1530.minusSeconds(30), 2);
+            when(store.find(SESSION_ID)).thenReturn(Optional.of(s));
+            when(store.baseline(WARD, LocalDate.of(2026, 11, 1), 14)).thenReturn(List.of());
+            when(aiClient.finish(anyString(), anyString(), any(), anyString())).thenReturn(finishData());
+            ArgumentCaptor<CheckinResult> saved = ArgumentCaptor.forClass(CheckinResult.class);
+            when(store.finish(any(), saved.capture(), any(), any())).thenAnswer(inv -> inv.getArgument(1));
+
+            service.finish(WARD, SESSION_ID, CheckinEmotion.WORRIED);
+
+            // 잠 나쁨 + 외로움 있음 + 본인 걱정 (기준 없음 = 평소를 모름) → 확인 필요
+            assertThat(saved.getValue().isAttention()).isTrue();
+            assertThat(saved.getValue().getAttentionReasons())
+                    .contains("SLEEP_UNUSUAL", "LONELY_UNUSUAL", "SELF_REPORT_NEGATIVE");
         }
 
         @Test
