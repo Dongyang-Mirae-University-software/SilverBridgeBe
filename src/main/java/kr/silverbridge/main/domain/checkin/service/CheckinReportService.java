@@ -63,6 +63,7 @@ public class CheckinReportService {
             }
         }
         Set<String> prompted = new HashSet<>(logRepository.promptedSlots(wardId, day));
+        Visibility visibility = new Visibility(guardianId, wardId);
 
         List<SlotItem> items = new ArrayList<>();
         boolean dayAttention = false;
@@ -70,7 +71,7 @@ public class CheckinReportService {
             OffsetDateTime slotStart = day.atTime(slot.time()).atZone(KST).toOffsetDateTime();
             CheckinResult result = results.get(slot);
             OffsetDateTime basis = result != null ? result.getCreatedAt() : slotStart;
-            if (!access.visible(guardianId, wardId, basis)) {
+            if (!visibility.at(basis)) {
                 items.add(SlotItem.empty(slot, SlotStatus.BEFORE_CONNECTION));
                 continue;
             }
@@ -98,8 +99,9 @@ public class CheckinReportService {
         LocalDate to = validDate(endDate, now.toLocalDate());
         LocalDate from = to.minusDays(6);
         Map<LocalDate, List<CheckinResult>> byDay = new java.util.TreeMap<>();
+        Visibility visibility = new Visibility(guardianId, wardId);
         for (CheckinResult r : resultRepository.findByWardIdAndCheckDateBetweenOrderByCheckDateAscSlotAsc(wardId, from, to)) {
-            if (access.visible(guardianId, wardId, r.getCreatedAt())) {
+            if (visibility.at(r.getCreatedAt())) {
                 byDay.computeIfAbsent(r.getCheckDate(), d -> new ArrayList<>()).add(r);
             }
         }
@@ -115,7 +117,7 @@ public class CheckinReportService {
                     continue;
                 }
                 OffsetDateTime slotStart = d.atTime(slot.time()).atZone(KST).toOffsetDateTime();
-                if (windowClosed(slot, d, now) && access.visible(guardianId, wardId, slotStart)) {
+                if (windowClosed(slot, d, now) && visibility.at(slotStart)) {
                     missed++;
                 }
             }
@@ -158,6 +160,38 @@ public class CheckinReportService {
     private void requireActive() {
         if (!properties.isActive()) {
             throw new CustomException(ErrorCode.CHECKIN_DISABLED);
+        }
+    }
+
+    /**
+     * 조회 한 번 안의 "지금 연결 이후인가" 판정 기억(2026-11-01 점검 L-2). 판정은 시각에 대해 단조라(어느 시각에 보이면 그 뒤도 보인다)
+     * 보인 가장 이른 시각·안 보인 가장 늦은 시각만 기억하면 같은 연결을 칸마다 다시 조회하지 않는다.
+     */
+    private final class Visibility {
+        private final String guardianId;
+        private final String wardId;
+        private OffsetDateTime earliestVisible;
+        private OffsetDateTime latestHidden;
+
+        private Visibility(String guardianId, String wardId) {
+            this.guardianId = guardianId;
+            this.wardId = wardId;
+        }
+
+        boolean at(OffsetDateTime time) {
+            if (earliestVisible != null && !time.isBefore(earliestVisible)) {
+                return true;
+            }
+            if (latestHidden != null && !time.isAfter(latestHidden)) {
+                return false;
+            }
+            boolean visible = access.visible(guardianId, wardId, time);
+            if (visible) {
+                earliestVisible = time;
+            } else {
+                latestHidden = time;
+            }
+            return visible;
         }
     }
 }

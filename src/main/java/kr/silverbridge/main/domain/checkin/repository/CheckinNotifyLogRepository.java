@@ -54,4 +54,22 @@ public interface CheckinNotifyLogRepository extends Repository<CheckinSetting, L
             """, nativeQuery = true)
     boolean alertedOnDate(@Param("guardianId") String guardianId, @Param("wardId") String wardId,
                           @Param("date") LocalDate date, @Param("kind") String kind);
+
+    /** 보관 기간이 지난 피보호자 안부 알림 발송 기록 삭제(2026-11-01 점검 M-4). */
+    @Modifying
+    @Transactional
+    @Query(value = "DELETE FROM checkin_prompt_log WHERE check_date < :before", nativeQuery = true)
+    int deletePromptLogsBefore(@Param("before") LocalDate before);
+
+    /** 보관 기간이 지난 보호자 안부 알림 발송 기록 삭제(M-4). */
+    @Modifying
+    @Transactional
+    @Query(value = "DELETE FROM checkin_guardian_alert_log WHERE check_date < :before", nativeQuery = true)
+    int deleteGuardianAlertLogsBefore(@Param("before") LocalDate before);
+
+    /** 보관 기간이 지난 대화 삭제 - 결과는 FK CASCADE로 함께 지워진다(M-4). */
+    @Modifying
+    @Transactional
+    @Query(value = "DELETE FROM checkin_session WHERE check_date < :before", nativeQuery = true)
+    int deleteSessionsBefore(@Param("before") LocalDate before);
 }

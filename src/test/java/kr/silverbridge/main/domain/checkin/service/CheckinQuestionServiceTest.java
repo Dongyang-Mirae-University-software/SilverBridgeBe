@@ -84,13 +84,10 @@ class CheckinQuestionServiceTest {
     @Test
     @DisplayName("새 질문은 정리해서 저장하고, 고친 보호자를 남긴다")
     void savesNew() {
-        when(repository.findByWardIdAndSlot(WARD, CheckinSlot.AT_12)).thenReturn(Optional.empty());
-
         service.update(GUARDIAN, WARD, request(new Item(CheckinSlot.AT_12, "  점심은   드셨어요? ")));
 
-        verify(repository).save(org.mockito.ArgumentMatchers.argThat(q ->
-                q.getQuestion().equals("점심은 드셨어요?") && GUARDIAN.equals(q.getUpdatedBy())
-                        && q.getSlot() == CheckinSlot.AT_12));
+        // 동시 최초 저장도 DB가 흡수하도록 upsert(점검 L-4)
+        verify(repository).upsert(WARD, "12:00", "점심은 드셨어요?", GUARDIAN);
     }
 
     @Test
@@ -114,15 +111,14 @@ class CheckinQuestionServiceTest {
         assertCode(() -> service.update(GUARDIAN, WARD,
                         request(new Item(CheckinSlot.AT_09, "a"), new Item(CheckinSlot.AT_09, "b"))),
                 ErrorCode.CHECKIN_INVALID_QUESTION);
-        verify(repository, never()).save(any());
+        verify(repository, never()).upsert(anyString(), anyString(), anyString(), anyString());
     }
 
     @Test
     @DisplayName("200자 정확히는 허용")
     void exactly200() {
-        when(repository.findByWardIdAndSlot(WARD, CheckinSlot.AT_09)).thenReturn(Optional.empty());
         service.update(GUARDIAN, WARD, request(new Item(CheckinSlot.AT_09, "가".repeat(200))));
-        verify(repository).save(any());
+        verify(repository).upsert(WARD, "09:00", "가".repeat(200), GUARDIAN);
     }
 
     @Test

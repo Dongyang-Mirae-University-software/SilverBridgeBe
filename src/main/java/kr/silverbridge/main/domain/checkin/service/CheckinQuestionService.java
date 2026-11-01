@@ -64,9 +64,7 @@ public class CheckinQuestionService {
                 if (TextSanitizer.codePointLength(question) > MAX_QUESTION || !TextSanitizer.hasVisibleChar(question)) {
                     throw new CustomException(ErrorCode.CHECKIN_INVALID_QUESTION);
                 }
-                repository.findByWardIdAndSlot(wardId, item.slot()).ifPresentOrElse(
-                        saved -> saved.change(question, guardianId),
-                        () -> repository.save(CheckinQuestion.of(wardId, item.slot(), question, guardianId)));
+                repository.upsert(wardId, item.slot().value(), question, guardianId);
             }
             changed.add(item.slot());
         }

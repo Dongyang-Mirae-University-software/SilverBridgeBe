@@ -100,4 +100,22 @@ class CheckinGuardianAlertServiceTest {
         assertThat(CheckinGuardianAlertService.hourLabel(CheckinSlot.AT_12)).isEqualTo("낮 12시");
         assertThat(CheckinGuardianAlertService.hourLabel(CheckinSlot.AT_15)).isEqualTo("오후 3시");
     }
+
+    @Test
+    @DisplayName("위험 대체 문자는 단문(90바이트) 안 - 이름이 길면 이름 없는 문구 (점검 M-1)")
+    void riskSmsFitsSingleSms() {
+        assertThat(CheckinGuardianAlertService.riskSmsText("홍길동")).contains("홍길동님");
+        for (String name : List.of("홍길동", "남궁민수", "가나다라마바사아자차", "가나다라마바사아자차카타파하가나다라")) {
+            // 대체 문자는 제목 없이 그대로 나가므로 문자열 자체를 잰다
+            assertThat(kr.silverbridge.main.domain.notification.channel.WardNotificationText.eucKrBytes(
+                    CheckinGuardianAlertService.riskSmsText(name))).as(name)
+                    .isLessThanOrEqualTo(kr.silverbridge.main.domain.notification.channel.WardNotificationText.SINGLE_SMS_MAX_BYTES);
+        }
+        assertThat(CheckinGuardianAlertService.riskSmsText("가나다라마바사아자차카타파하가나다라"))
+                .isEqualTo(CheckinGuardianAlertService.RISK_SMS_WITHOUT_NAME);
+        // 실제 발송 경로와 같은지: 디스패처는 대체 문자를 제목 없이 보낸다
+        var content = kr.silverbridge.main.domain.notification.channel.NotificationContent.of("t", "b", java.util.Map.of(),
+                CheckinGuardianAlertService.riskSmsText("홍길동"));
+        assertThat(content.smsFallbackText()).startsWith("[실버브릿지] ");
+    }
 }

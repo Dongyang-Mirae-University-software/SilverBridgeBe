@@ -91,6 +91,9 @@ class CheckinReportServiceTest {
         assertThat(done.summary()).isEqualTo("잠을 설치셨다고 하셨어요.");
         assertThat(done.signals().sleep()).isEqualTo("BAD");
         assertThat(done.attentionReasons()).containsExactly("SLEEP_UNUSUAL", "MEAL_UNUSUAL");
+        // 판정이 시각에 단조라 처음 보인 뒤로는 연결을 다시 조회하지 않는다(점검 L-2)
+        org.mockito.Mockito.verify(connectionService, org.mockito.Mockito.times(1))
+                .isVisibleSinceConnection(eq(GUARDIAN), eq(WARD), any());
     }
 
     @Test
