@@ -31,7 +31,9 @@
 | M3 WS `title`·`body` 키 제거 | 검출 |
 | M4 WS `title`·`body` 값 뒤바꿈 | 검출 |
 
-## 잔여 (🟢, 조치 불요)
+## 잔여 (🟢) - 2026-11-02 전부 조치
 
 - **L-1** FE 예비 제목이 아직 "긴급 SOS"다(`realtime.ts`·`PushNotificationListener.tsx` `getConnectionPushNotification`). BE가 `title`을 늘 싣는 지금은 쓰이지 않는 경로라 화면에 영향 없음. FE 담당이 다음에 그 파일을 고칠 때 "[긴급] ○○님 SOS"로 맞추면 된다(사용자 결정으로 FE 전달 문서는 쓰지 않음).
-- **L-2** Swagger 설명의 "최근 10분"은 문장으로 적혀 있어 `REPEAT_WINDOW`를 바꾸면 함께 고쳐야 한다(기존 1회 문구 설명과 같은 방식, 수용).
+  - **조치**: FE #206(머지 `31a6c27`) - 두 예비 제목을 `[긴급] ${wardName || '피보호자'}님 SOS`로 맞추고 테스트 갱신·추가(`npm test` 454·`test:browser` 349·lint·build 통과). gosky FE dev 반영·`/login`·`/guardian` 200.
+- **L-2** Swagger 설명의 "최근 10분"은 문장으로 적혀 있어 `REPEAT_WINDOW`를 바꾸면 함께 고쳐야 한다(기존 1회 문구 설명과 같은 방식).
+  - **조치**: 운영 코드는 그대로 두고 `SosNotificationApiDocSyncTest`를 추가했다 - Swagger 설명에 리스너의 `buildTitle`·`buildBody`(1회·반복) 결과와 "최근 N분 안에 2번째부터"의 N이 그대로 들어 있는지 본다. 변이 2종(집계 창 10→5분, 설명의 반복 문구 변경) 모두 검출.

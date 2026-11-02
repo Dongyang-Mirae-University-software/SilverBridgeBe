@@ -4,6 +4,12 @@
 
 ---
 
+### [2026-11-02] SOS WS 제목·본문 점검 🟢 2건 조치
+
+- L-1 FE 예비 제목을 "[긴급] ○○님 SOS"로(FE #206 `31a6c27`, gosky FE dev 반영). L-2 Swagger 설명과 리스너 문구·집계 창이 어긋나면 실패하는 `SosNotificationApiDocSyncTest` 추가(운영 코드 변경 없음, 변이 2종 검출).
+
+---
+
 ### [2026-11-02] SOS WS 제목·본문(#433) 기능 점검(B) - PASS
 
 - 🔴·🟠·🟡 없음. FE 소비처 전수(보호자만 구독, `data` 값 우선, `sosEventId` 중복 제거로 이제 어느 쪽이 먼저 와도 같은 문구), 변이 4종 전부 검출, gosky api-docs 확인. 🟢 L-1 FE 예비 제목 "긴급 SOS"(쓰이지 않는 경로)·L-2 Swagger "10분" 문장 고정(수용). 상세 `docs/(2026-11-02) audit-sos-ws-title-body.md`.
