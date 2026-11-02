@@ -6,7 +6,7 @@
 
 ### [2026-11-02] SOS WebSocket(sos-triggered)에 제목·본문 싣기 (마이그레이션 없음)
 
-- WS payload에 푸시와 같은 변수의 `title`·`body` 추가 - 반복 SOS(`repeatCount` ≥ 2) 때 화면 안 알림창이 첫 문구·예비 제목 "긴급 SOS"를 보여 주던 차이를 없앴다. 기존 키·1회 본문·문자·쿨다운·전달 집계 그대로, FE 수정 불필요(`realtime.ts`가 payload 값을 먼저 씀). 상세 `docs/(2026-11-02) feature-sos-ws-title-body.md`.
+- WS payload에 푸시와 같은 변수의 `title`·`body` 추가 - 반복 SOS(`repeatCount` ≥ 2) 때 화면 안 알림창이 첫 문구·예비 제목 "긴급 SOS"를 보여 주던 차이를 없앴다. 기존 키·1회 본문·문자·쿨다운·전달 집계 그대로, FE 수정 불필요(`realtime.ts`가 payload 값을 먼저 씀). PR #433(머지 `08bae07`), gosky dev 실측 SOS 1182·1188에서 화면 안 알림창이 푸시 문구와 같음을 확인. 상세 `docs/(2026-11-02) feature-sos-ws-title-body.md`.
 
 ---
 

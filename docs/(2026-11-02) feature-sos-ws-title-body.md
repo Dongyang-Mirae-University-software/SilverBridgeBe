@@ -28,4 +28,7 @@
 
 - `SosNotificationListenerTest`: 1회 WS payload 키 6개·제목·본문이 푸시와 같음(신규), 반복(3회) WS 제목·본문이 푸시와 같음(보강), 쿨다운 중이면 WS도 없음(기존).
 - `./gradlew test`·`./gradlew build -x test` 통과.
-- gosky dev 실측: 최종 보고·`docs/progress.md` 참조.
+- gosky dev 실측(2026-11-02 15:44, PR #433 머지 `08bae07` 배포 뒤): 로컬 Playwright로 시험 보호자 탭(devdmu.gosky.kr)을 열어 두고 시험 피보호자가 SOS 2건(13초 간격).
+  - sosEventId 1182: 화면 안 알림창 "[긴급] 남궁님 SOS" / "남궁님이 긴급 도움을 요청했습니다." - 보호자 2명 대상·2명 전달
+  - sosEventId 1188: "[긴급] 남궁님 SOS" / "남궁님이 계속 도움을 요청하고 있습니다.\n최근 10분 내 2번째 요청입니다."(두 줄로 표시) - 2명 대상·2명 전달
+  - 시험 브라우저 FCM 토큰은 DELETE로 해제(200). 같은 시각의 1183~1187·1189는 다른 피보호자의 SOS로 이번 시험과 무관.
