@@ -10,9 +10,9 @@
 - **인프라**: PostgreSQL + Flyway / Redis(캐시·세션) / WebSocket(실시간)
 - **보안·연동**: Spring Security, OAuth2(카카오), JWT(jjwt) / Firebase(FCM), Solapi(SMS), SMTP / springdoc-openapi(Swagger) / OWASP DependencyCheck
 - **메인 브랜치**: `dev` — push 시 CD 자동 배포 (§3 참조)
-- **도메인**: `kr.silverbridge.main.domain/<bounded-context>` = `admin`·`announcement`·`anomaly`·`auth`·`camera`·`chat`·`connection`·`inquiry`·`medication`·`notification`·`sos`·`user`. 공통 코드는 `global/`(aop·audit·client·config·jwt·security·websocket 등) - **`global`은 `domain`을 import하지 않는다**(2026-09-30 F-1~F-3 정리 후 0건).
+- **도메인**: `kr.silverbridge.main.domain/<bounded-context>` = `admin`·`announcement`·`anomaly`·`auth`·`camera`·`chat`·`checkin`·`connection`·`inquiry`·`medication`·`notification`·`sos`·`user`. 공통 코드는 `global/`(aop·audit·client·config·jwt·security·websocket 등) - **`global`은 `domain`을 import하지 않는다**(2026-09-30 F-1~F-3 정리 후 0건).
   - ⚠️ **도메인 로직을 `global`에 넣지 말 것** — 도메인 코드는 `domain/<context>/`.
-- **기능별 요약·정책**(2026-10-30 이동): 도메인 기능 설명은 `.claude/rules/policy-<도메인>.md`의 "기능 요약" 절에 있다 (auth·connection·sos·anomaly·camera·medication·notification·chat·admin·dashboard). 해당 코드를 다루면 자동 로드되고, 코드를 열지 않고 설계·답변할 때는 직접 Read 한다.
+- **기능별 요약·정책**(2026-10-30 이동): 도메인 기능 설명은 `.claude/rules/policy-<도메인>.md`의 "기능 요약" 절에 있다 (auth·connection·sos·anomaly·camera·medication·notification·chat·checkin·admin·dashboard). 해당 코드를 다루면 자동 로드되고, 코드를 열지 않고 설계·답변할 때는 직접 Read 한다.
 
 ---
 
