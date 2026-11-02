@@ -13,7 +13,7 @@ paths:
 
 - 말벗 BE 코드는 **장기 브랜치 `feature/checkin`에만** 있다. dev·gosky에는 코드·테이블이 없다(두 서버 dev DB의 말벗 테이블·V65/66 기록은 지웠다). gosky가 dev를 받아 가므로 **말벗 PR의 base는 `feature/checkin`**, dev로 머지하지 말 것.
 - 말벗 마이그레이션은 **V1065부터**(dev 번호와 겹치지 않게). dev 변경은 feature/checkin에서 `git merge origin/dev`로 가져온다 - dev의 제거 커밋은 `-s ours`로 이미 병합해 두어 코드가 지워지지 않는다.
-- 시험 서버는 vkcs의 `dmu-checkin-api` 하나다(127.0.0.1:6521, DB `sb_checkin`, Redis DB 1, `ANOMALY_ENABLED=false`, `SPRING_FLYWAY_OUT_OF_ORDER=true`, 소스 `~/sb-checkin` worktree, CD 없음·수동 배포). dev 컨테이너와 계정·데이터가 따로다.
+- **띄워 둔 서버는 없다**(2026-11-02 사용자 결정): 검증은 vkcs에서 `./gradlew test`와 `tools/integration-test.sh <브랜치>`(Testcontainers)로만 하고, AI는 DGX에서 따로 검증한다. 처음 만든 vkcs 전용 컨테이너 `dmu-checkin-api`는 내렸다. FE와 실제로 이어 시험할 때만 다시 띄운다 - `~/dgx_tmp/ck_inst.sh`(127.0.0.1:6521, DB `sb_checkin`, Redis DB 1, `ANOMALY_ENABLED=false`, `SPRING_FLYWAY_OUT_OF_ORDER=true`, 소스 `~/sb-checkin` worktree). dev 컨테이너와 계정·데이터가 따로다.
 - 아래 내용은 feature/checkin 기준이다. dev의 다른 정책 파일에 남은 말벗 언급(알림 4종·스케줄러 수 등)도 그 브랜치 기준이다.
 
 ## 기능 요약 (2026-11-01 1차)
