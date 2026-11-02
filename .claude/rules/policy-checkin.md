@@ -36,14 +36,6 @@ paths:
 - **⑮ 보호자 알림**: `CHECKIN_RISK`는 위험이 **처음** 올라간 턴에 바로(정리를 기다리지 않음), 긴급 executor, `FORCED_PUSH_PLUS_SETTINGS`(결정 Q1 - SOS 문자 폴백까지는 아님), 끌 수 없다. `CHECKIN_ATTENTION`은 위험이 아닐 때만(겹쳐 보내지 않음), 일반 executor, FCM·설정 기반. `CHECKIN_MISSED`는 보호자 알림 종류 설정 `checkinMissed`(기본 ON)로 끌 수 있고, 설정 조회가 실패하면 그 회차는 보내지 않는다. 세 종류 모두 알림톡·이메일 없음, 문구는 단정하지 않고 대화 내용을 싣지 않는다.
 - **⑯ 보호자 조회**: ACTIVE 연결만, **지금 연결 이후 기록만**(D-1 - 이전 시각은 `BEFORE_CONNECTION`으로 내용 없이). 받아쓴 원문은 BE에 없어 내려 줄 수 없다(요약·근거·정서·신호·확인 필요만). 오늘~60일 전.
 
-- **⑰ 점검 반영 (2026-11-01, `docs/(2026-11-01) audit-impact-checkin-companion.md`)**:
-  - 위험 대체 문자는 **단문(EUC-KR 90바이트) 안**이다 - 이름이 길어 넘치면 이름 없는 문구(`CheckinGuardianAlertService.riskSmsText`, M-1). 문구를 고칠 때 `fitsSingleSms` 테스트를 지킬 것.
-  - 보호자 알림 전체 경로(쓰기 → 커밋 → SpEL 조건 리스너 → executor → 선점 → 디스패처)는 `CheckinGuardianAlertFullIntegrationTest`가 고정한다(M-2). 리스너 조건·executor를 바꾸면 이 테스트를 돌릴 것.
-  - 웹 계층 시각 직렬화(`"09:00"` ↔ `CheckinSlot`)는 `GuardianCheckinControllerHttpTest`가 고정한다(M-3).
-  - **보관 기간 (M-4, 사용자 결정)**: 발송 기록(`checkin_prompt_log`·`checkin_guardian_alert_log`) 90일, 대화·결과 365일(`retention.checkin-log-days`·`checkin-result-days`, 매일 05:10 KST `CheckinRetentionScheduler`). 결과 보관은 평소 대비 14일·조회 60일보다 길어야 한다.
-  - **연결이 끝나면 그 보호자가 켠 안부 알림을 끈다 (L-1)**: `CheckinConnectionEndedListener`(동기 AFTER_COMMIT, 쓰기 REQUIRES_NEW). 다른 보호자·본인이 켠 설정은 그대로. 남은 보호자가 원하면 다시 켠다.
-  - 보호자 조회는 "연결 이후" 판정을 조회 한 번 안에서 기억한다(L-2, 단조 판정). 질문 저장은 `ON CONFLICT` upsert(L-4). 스윕 purge의 AI 기록 잔존은 수용(L-5, AI 30일 자동 삭제).
-
 ## 수용한 한계 (1차)
 
 - **AI가 턴을 저장한 뒤 BE가 시간 초과로 끊으면** BE 턴 수가 늘지 않는다. 사용자가 다시 말하면 BE는 같은 턴 번호로 보내고 AI는 저장된 결과(앞의 말)를 돌려준다(AI 계약의 재전송 멱등). 새 말이 그 턴에서 버려질 수 있다.

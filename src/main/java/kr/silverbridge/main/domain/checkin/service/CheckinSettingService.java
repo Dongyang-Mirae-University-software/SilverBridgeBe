@@ -70,16 +70,6 @@ public class CheckinSettingService {
         return new CheckinGuardianSettingDto(setting.isPromptEnabled());
     }
 
-    /**
-     * 연결이 끝난 보호자가 켜 둔 안부 알림을 끈다(2026-11-01 점검 L-1). 남은 보호자는 켠 적이 없을 수 있어, 모르는 사이
-     * 하루 다섯 번 알림이 계속 가지 않게 한다. 다른 보호자·본인이 켠 설정은 건드리지 않는다. 동기 AFTER_COMMIT 리스너가 부르므로
-     * {@code REQUIRES_NEW}(기본 전파면 이미 커밋된 트랜잭션에 합류해 쓰기가 사라진다 - H-1).
-     */
-    @Transactional(propagation = org.springframework.transaction.annotation.Propagation.REQUIRES_NEW)
-    public int disablePromptEnabledBy(String guardianId, String wardId) {
-        return repository.disablePromptEnabledBy(wardId, guardianId);
-    }
-
     /** 저장값이 없으면 꺼짐(기본값). 대화 턴에서 사진을 AI로 보낼지 정한다. */
     @Transactional(readOnly = true)
     public boolean faceConsent(String wardId) {
