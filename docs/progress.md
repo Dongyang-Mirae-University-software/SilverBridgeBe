@@ -22,41 +22,6 @@
 
 ---
 
-### [2026-11-01] 안부 말벗 점검 이슈 전부 반영 (M-1~M-4·L-1~L-4, L-5 수용)
-
-- 위험 대체 문자 단문화, 보호자 알림 전체 경로 통합 테스트, 시각 HTTP 직렬화 테스트, 보관 정리(발송 기록 90일·결과 365일, 05:10), 연결 종료 시 그 보호자가 켠 안부 알림 끄기, 조회 연결 판정 기억, 질문 upsert, 알림 정책 문서 갱신. 마이그레이션 없음. 상세 `docs/(2026-11-01) audit-impact-checkin-companion.md` §5.
-
----
-
-### [2026-11-01] 안부 말벗 1·2차 점검(영향 범위 C + 기능 B) - ⚠️ 잔여 이슈
-
-- 🔴·🟠 없음. 인가·IDOR·로그·선점 후 발송·알림 종류 전수 반영(라벨·탭·긴급도·강제 정책·알림톡·이메일·executor·설정 참조처) PASS.
-- 🟡 M-1 위험 대체 문자 93~95바이트(단문 초과) / M-2 보호자 알림 AFTER_COMMIT→리스너→디스패치 전체 경로 테스트 없음 / M-3 질문 요청 `"09:00"` 역직렬화 HTTP 미검증 / M-4 결과·발송 기록 보관 기간 없음(결정 필요). 🟢 L-1~L-5. 상세 `docs/(2026-11-01) audit-impact-checkin-companion.md`.
-
----
-
-### [2026-11-01] 안부 말벗(checkin) 2차 - 5시각 알림·평소 대비 확인 필요·보호자 알림·조회 (V66, PR #429, 머지 `26042cf`)
-
-1차(#427) 위에 결정 Q1(위험 = 강제 FCM + 설정)·Q2(응답 창 1시간·기준 14일)·Q3(원문 미노출)을 반영했다.
-
-- 알림 종류 4개 `CHECKIN_PROMPT`·`CHECKIN_RISK`(FORCED_PUSH_PLUS_SETTINGS)·`CHECKIN_ATTENTION`·`CHECKIN_MISSED`, 보호자 알림 종류 설정 `checkinMissed`.
-- `CheckinPromptPlanner`(1분, 선점 후 발송, 0~4분 분산, 미응답은 창 닫힌 뒤 1시간 안·하루 한 번), `CheckinAttentionJudge`(신호 하나로는 안 붙음), 보호자 하루·주간 조회(D-1 연결 이후만), 안부 알림 받기 설정(기본 꺼짐 - 가정).
-- V66: `checkin_setting.prompt_enabled`, `checkin_result.attention`·`attention_reasons`, `checkin_prompt_log`, `checkin_guardian_alert_log`, `guardian_notification_preference.checkin_missed_enabled`(모두 추가만).
-
----
-
-### [2026-11-01] 안부 말벗(checkin) 1차 - 질문·대화 중계·결과 저장 (V65, PR #427, 머지 `827eddd`)
-
-AI 계약 v0(AiServer PR #152)으로 피보호자 음성 안부 대화를 말벗 AI(DGX)에 중계하고 정리 결과만 저장한다. 결정: Q1 위험 알림 = 강제 FCM + 설정(2차) / Q2 응답 창 1시간·기준 14일(2차) / Q3 보호자에게 원문 미노출 / Q4 사진 8장·질문은 피보호자 단위 공유.
-
-- 새 도메인 `domain/checkin`: 보호자 질문 GET·PUT, 피보호자 시작·턴(multipart)·정리·표정 동의. V65 테이블 4개(`checkin_question`·`checkin_setting`·`checkin_session`·`checkin_result`, CHECK로 값 고정, 진행 중 세션 부분 UNIQUE).
-- 기본 꺼짐 + 말벗 AI 주소·키 코드 기본값 없음 → 모든 API 503 `CHECKIN_DISABLED`(gosky 무동작). 키는 `CHECKIN_AI_*`로 챗봇 AI와 분리.
-- `CheckinAiClient`(키 헤더·리다이렉트 미추종·전용 마감 스레드·오류는 고정 `errorCode` 허용 목록만), 동시 6/1인 1, 턴·시간은 BE가 셈, 동의 꺼짐 시 사진 미전달, 남의 세션 403 + `[IDOR-ATTEMPT]`, 본문 로그 금지(`CheckinLogGuardTest`).
-- 탈퇴: `AiMemberDataPurgeListener`에 `checkin-logs` 항목(주소·키가 있을 때만, 킬 스위치 무관).
-- PHASE 0 실측으로 문서와 다른 AI 계약 세부(slot `"09:00"`, finish reason 열거, `avg*` 목소리 키) 반영. 상세 `docs/(2026-11-01) feature-checkin-companion.md`, 정책 `.claude/rules/policy-checkin.md`.
-
----
-
 ### [2026-11-01] 알림 설정 조회 실패 격리 - 강제 연결 피보호자 알림·이상감지 강제 푸시 (PR #425, 머지 `ff2583a`)
 
 #424 통합 테스트에서 찾은 🟡(강제 연결 때 보호자 설정 조회가 실패하면 피보호자 알림도 빠짐)를 PHASE 0에서 다시 보니, 같은 원인으로 **이상감지 강제 푸시·문자 대체도 빠지는 구멍(🟠)**이 있었다. 마이그레이션 없음.
