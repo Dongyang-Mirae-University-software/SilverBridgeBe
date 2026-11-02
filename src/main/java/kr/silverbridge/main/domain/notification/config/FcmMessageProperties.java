@@ -41,8 +41,6 @@ public class FcmMessageProperties {
             NotificationType.MEDICATION_REMINDER,
             NotificationType.ANOMALY_REVIEW_REQUIRED,
             NotificationType.CAMERA_LINK_LOST,
-            NotificationType.CHECKIN_PROMPT,
-            NotificationType.CHECKIN_RISK,
             NotificationType.CONNECTION_REQUEST,
             NotificationType.CONNECTION_ACCEPTED,
             NotificationType.CONNECTION_REFUSED,

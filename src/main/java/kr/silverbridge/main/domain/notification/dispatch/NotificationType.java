@@ -121,38 +121,7 @@ public enum NotificationType {
      * 알림톡 매핑 금지(다발성 메시지 - 별도 승인 필요), 이메일 제외, 강제 채널로 승격하지 말 것 - 이 알림은
      * 위험 발생이 아니라 "감시 상태 확인 요청"이다.</p>
      */
-    CAMERA_LINK_LOST(Policy.SETTINGS_ONLY, EnumSet.of(NotificationChannelType.FCM)),
-
-    /**
-     * 안부 말벗 시각 안내 → <b>피보호자 본인</b>에게(2026-11-01). 하루 다섯 번(09·12·15·18·21시, 0~5분 분산),
-     * 보호자나 본인이 "안부 알림 받기"를 켠 피보호자만 받는다.
-     *
-     * <p><b>FCM뿐</b> - 하루 다섯 번이라 문자는 과금·소음이다. 알림톡은 다발성이라 승인 템플릿 없이 금지,
-     * 이메일 제외. 강제 채널로 승격하지 말 것(안부는 즉시 대응이 필요한 알림이 아니다). 피보호자 문구는
-     * {@code WardNotificationText} 단문 규칙을 따른다.</p>
-     */
-    CHECKIN_PROMPT(Policy.SETTINGS_ONLY, EnumSet.of(NotificationChannelType.FCM)),
-
-    /**
-     * 안부 대화 중 위험 신호(응급·자해 키워드) → <b>ACTIVE 보호자</b>에게(2026-11-01 결정 Q1). 대화 시각당 한 번.
-     *
-     * <p>이상감지와 같은 정책(FCM 강제 + 나머지 설정대로, 어느 채널로도 전달되지 않았을 때만 문자 대체) - 키워드
-     * 판정이라 SOS의 무조건 문자 폴백까지는 올리지 않는다. 문구는 단정하지 않는다("도움이 필요할 수 있는 말씀").
-     * 알림톡 매핑 금지(승인 템플릿 없음), 이메일 제외. 보호자 알림 종류 설정으로 끌 수 없다.</p>
-     */
-    CHECKIN_RISK(Policy.FORCED_PUSH_PLUS_SETTINGS),
-
-    /**
-     * 안부 대화가 평소와 달랐음("확인 필요") → <b>ACTIVE 보호자</b>에게(2026-11-01). 대화 시각당 한 번.
-     * 평소 대비 판정은 신호 둘 이상이 겹칠 때만 붙는다(신호 하나만으로는 붙지 않음). FCM만·설정 기반.
-     */
-    CHECKIN_ATTENTION(Policy.SETTINGS_ONLY, EnumSet.of(NotificationChannelType.FCM)),
-
-    /**
-     * 안부 알림을 받고 응답 창(1시간) 안에 대화하지 않음 → <b>ACTIVE 보호자</b>에게(2026-11-01). 피보호자당 하루 한 번.
-     * 보호자 알림 종류 설정 {@code checkinMissed}로 끌 수 있다. FCM만·설정 기반, 강제 승격 금지.
-     */
-    CHECKIN_MISSED(Policy.SETTINGS_ONLY, EnumSet.of(NotificationChannelType.FCM));
+    CAMERA_LINK_LOST(Policy.SETTINGS_ONLY, EnumSet.of(NotificationChannelType.FCM));
 
     /**
      * 이메일 허용 표시. 이메일은 즉시성이 보장되지 않는 채널이라 <b>기본은 제외</b>이고, 안내성 종류만 이
