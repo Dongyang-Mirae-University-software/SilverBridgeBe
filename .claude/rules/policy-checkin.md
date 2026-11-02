@@ -9,12 +9,12 @@ paths:
 > 이 파일은 위 경로의 파일을 다룰 때 자동으로 로드된다. 코드를 열지 않고 이 도메인 작업을 설계·답변할 때는 직접 Read 한다.
 > 공통 불변 규칙은 `domain-security-policy.md`(항상 로드).
 
-## ⚠️ 코드 위치 - dev에 없다 (2026-11-02 사용자 결정, PR #432)
+## ⚠️ 현재 상태 - 재희 말벗 기준으로 dev·gosky에 다시 만든다 (2026-11-02 사용자 결정)
 
-- 말벗 BE 코드는 **장기 브랜치 `feature/checkin`에만** 있다. dev·gosky에는 코드·테이블이 없다(두 서버 dev DB의 말벗 테이블·V65/66 기록은 지웠다). gosky가 dev를 받아 가므로 **말벗 PR의 base는 `feature/checkin`**, dev로 머지하지 말 것.
-- 말벗 마이그레이션은 **V1065부터**(dev 번호와 겹치지 않게). dev 변경은 feature/checkin에서 `git merge origin/dev`로 가져온다 - dev의 제거 커밋은 `-s ours`로 이미 병합해 두어 코드가 지워지지 않는다.
-- **띄워 둔 서버는 없다**(2026-11-02 사용자 결정): 검증은 vkcs에서 `./gradlew test`와 `tools/integration-test.sh <브랜치>`(Testcontainers)로만 하고, AI는 DGX에서 따로 검증한다. 처음 만든 vkcs 전용 컨테이너 `dmu-checkin-api`는 내렸다. FE와 실제로 이어 시험할 때만 다시 띄운다 - `~/dgx_tmp/ck_inst.sh`(127.0.0.1:6521, DB `sb_checkin`, Redis DB 1, `ANOMALY_ENABLED=false`, `SPRING_FLYWAY_OUT_OF_ORDER=true`, 소스 `~/sb-checkin` worktree). dev 컨테이너와 계정·데이터가 따로다.
-- 아래 내용은 feature/checkin 기준이다. dev의 다른 정책 파일에 남은 말벗 언급(알림 4종·스케줄러 수 등)도 그 브랜치 기준이다.
+- 말벗 AI는 **재희 구현**(`companion-emotion2` 저장소, `/companion/dialogues` 4개 경로, `X-API-Key`)을 쓴다. BE는 그 계약에 맞춰 **일반 흐름(feat 브랜치 → PR → dev → gosky)**으로 만든다. 기준 문서: 노션 "말벗(AI) 데이터 연동 제안 - 2026-11-02".
+- 우리 말벗 서버(AI PR #152, DGX)와 vkcs 전용 시험 서버·터널은 **없앴다**. DGX는 모델 학습·평가에만 쓴다.
+- dev·gosky에는 아직 말벗 코드·테이블이 없다(PR #432로 뺐다). 장기 브랜치 `feature/checkin`에 옛 v0(우리 서버 `/api/v1/checkin`용, 마이그레이션 V1065·V1066)가 남아 있다 - 재사용할 부분만 가져오고, 새 마이그레이션은 dev 번호 체계(V65~)를 따른다.
+- **아래 내용은 옛 v0 기준 기록이다.** 새 설계가 확정되면 그 기준으로 고쳐 쓴다. dev의 다른 정책 파일에 남은 말벗 언급(알림 4종·스케줄러 수 등)도 v0 기준이다.
 
 ## 기능 요약 (2026-11-01 1차)
 
@@ -25,7 +25,7 @@ paths:
 
 ## 불변 규칙
 
-- **① 기본 꺼짐 · vkcs에서만 켠다 (2026-11-01 사용자 규칙)**: `checkin.enabled`(기본 false) AND `CHECKIN_AI_BASE_URL` AND `CHECKIN_AI_API_KEY`가 모두 있어야 동작하고, 아니면 **모든 말벗 API가 503 `CHECKIN_DISABLED`**다. 주소·키에 **코드·compose 기본값을 두지 말 것** - dev가 gosky에 pull돼도 아무 일도 없어야 한다. 말벗 AI 키는 챗봇·이상감지의 `AI_HTTP_BASE_URL`·`AI_API_KEY`와 **분리**한다(다른 서버). gosky에는 배포·설정하지 않는다(비교 측정만 예외).
+- **① 기본 꺼짐 (2026-11-01 사용자 규칙, v0 - "vkcs에서만 켠다·gosky 미배포"는 2026-11-02 폐기)**: `checkin.enabled`(기본 false) AND `CHECKIN_AI_BASE_URL` AND `CHECKIN_AI_API_KEY`가 모두 있어야 동작하고, 아니면 **모든 말벗 API가 503 `CHECKIN_DISABLED`**다. 주소·키에 **코드·compose 기본값을 두지 말 것** - dev가 gosky에 pull돼도 아무 일도 없어야 한다. 말벗 AI 키는 챗봇·이상감지의 `AI_HTTP_BASE_URL`·`AI_API_KEY`와 **분리**한다(다른 서버). gosky에는 배포·설정하지 않는다(비교 측정만 예외).
 - **② 대화 원문은 BE에 없다**: 받아쓴 글자·AI 답은 피보호자 본인 화면용으로 턴 응답에만 싣고 저장하지 않는다. `checkin_result`에는 정서·신호(영문 코드)·위험·AI의 고정 요약 문장·근거(신호 + 턴 번호)·목소리 평균만 둔다. **보호자 화면에 받아쓴 원문을 보여 주지 않는다**(2026-11-01 결정 Q3 - 요약·근거만). 원문은 AI 서버에 30일(탈퇴 시 삭제).
 - **③ 로그에 대화 내용 금지**: 받아쓴 글자·답·요약·근거·보호자 질문·음성·사진·키를 로그·예외 메시지에 남기지 않는다(사용자 ID·세션 ID·턴 번호·개수·상태 코드·고정 오류 코드·예외 클래스명까지). `CheckinLogGuardTest`(패키지 전체)·`LogRawExceptionGuardTest`가 고정. 응답은 `Cache-Control: no-store`.
 - **④ AI 오류는 고정 코드만 읽는다**: 챗 중계는 오류 본문을 읽지 않지만, 말벗은 같은 422·413 안에서 "못 알아들음/파일 못 읽음", "너무 큼/너무 김"을 다르게 안내해야 해 본문의 `errorCode`만 **허용 목록**(`KNOWN_ERROR_CODES`)으로 읽는다. `message`는 읽지 않는다. 키 불일치·BE와 어긋난 409·모르는 코드는 503.

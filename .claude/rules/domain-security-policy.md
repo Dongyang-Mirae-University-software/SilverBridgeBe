@@ -17,7 +17,7 @@
 - `policy-medication.md` - 복약
 - `policy-notification.md` - 알림 채널·발송 이력
 - `policy-chat.md` - AI 챗봇 중계·관리자 AI 통계
-- `policy-checkin.md` - 안부 말벗 (음성 안부 대화·정서/생활 신호 결과, 2026-11-01) - **코드는 `feature/checkin` 브랜치에만, dev·gosky에 없음, 검증은 vkcs 테스트로만**(2026-11-02)
+- `policy-checkin.md` - 안부 말벗 (음성 안부 대화·정서/생활 신호 결과, 2026-11-01) - **재희 말벗 AI 기준으로 dev·gosky에 다시 만든다, 지금 dev에는 없음**(2026-11-02)
 - `policy-admin.md` - 관리자 회원·병원·대시보드
 - `policy-dashboard.md` - 보호자 대시보드 통합 API
 

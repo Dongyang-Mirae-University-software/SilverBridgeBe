@@ -1,5 +1,7 @@
 # 안부 말벗(checkin) 연동 - 1차 (2026-11-01)
 
+> ⚠️ **폐기됨 (2026-11-02 사용자 결정)**: 이 문서의 v0(우리 말벗 서버 `/api/v1/checkin`, vkcs 전용 시험·사용자 PC 터널)는 쓰지 않는다. 코드는 dev에서 뺐고(PR #432), vkcs 시험 서버·터널과 DGX 말벗 서버는 없앴다. 새 기준은 재희 말벗 AI(`/companion/dialogues`)이고 dev·gosky에 다시 만든다 - `.claude/rules/policy-checkin.md` 첫 절. 아래는 당시 기록이다.
+
 > 근거: AI 계약 v0 = SilverBridgeAiServer PR #152 `docs/checkin-companion.md`(미머지). 정책·불변 규칙은 `.claude/rules/policy-checkin.md`.
 > 2차(알림·평소 대비·보호자 조회)는 이 PR 머지 뒤 별도 PR.
 
