@@ -8,6 +8,7 @@ import kr.silverbridge.main.domain.notification.channel.NotificationContent;
 import kr.silverbridge.main.domain.notification.service.GuardianNotificationPreferenceService;
 import kr.silverbridge.main.domain.notification.dispatch.NotificationDispatcher;
 import kr.silverbridge.main.domain.notification.dispatch.NotificationType;
+import kr.silverbridge.main.domain.notification.entity.NotificationLogResult;
 import kr.silverbridge.main.domain.user.repository.UserRepository;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Qualifier;
@@ -137,15 +138,31 @@ public class CameraLinkLostNotifier {
                 return;
             }
             NotificationContent content = content(wardId, owner.get().label());
+            int delivered = 0;
+            boolean failed = false;
             for (String guardianId : guardianIds) {
                 try {
-                    dispatcher.dispatch(guardianId, wardId, NotificationType.CAMERA_LINK_LOST, content);
+                    NotificationLogResult result =
+                            dispatcher.dispatch(guardianId, wardId, NotificationType.CAMERA_LINK_LOST, content);
+                    if (result != null && result.isDelivered()) {
+                        delivered++;
+                    } else if (result == NotificationLogResult.FAILED) {
+                        failed = true;
+                    }
                 } catch (RuntimeException e) {
+                    failed = true;
                     log.warn("[CAMERA-LINK-LOST-FAILED] 발송 실패: sessionId={}, error={}",
                             sessionId, e.getClass().getSimpleName());
                 }
             }
-            log.info("[CAMERA-LINK-LOST] 보호자 안내 발송: sessionId={}, 대상={}명", sessionId, guardianIds.size());
+            // 아무에게도 전달되지 않았고 실패가 있었으면 쿨다운을 푼다 - 남겨 두면 6시간 동안 다음 끊김을 알릴 기회가 없다
+            // (2026-11-02 #425 영향 범위 점검 L-4, SOS·이상감지와 같은 판단). 정지 계정 차단·채널 꺼 둠(NOT_SENT)뿐이면
+            // 다시 보내도 막히므로 유지한다.
+            if (delivered == 0 && failed) {
+                releaseCooldown(sessionId);
+            }
+            log.info("[CAMERA-LINK-LOST] 보호자 안내 발송: sessionId={}, 대상={}명, 전달={}명",
+                    sessionId, guardianIds.size(), delivered);
         } catch (RuntimeException e) {
             log.warn("[CAMERA-LINK-LOST-FAILED] 처리 실패: sessionId={}, error={}",
                     sessionId, e.getClass().getSimpleName());
@@ -176,6 +193,14 @@ public class CameraLinkLostNotifier {
             log.warn("[CAMERA-LINK-LOST] 쿨다운 확인 실패 - 보내지 않음(fail-closed): sessionId={}, error={}",
                     sessionId, e.getClass().getSimpleName());
             return false;
+        }
+    }
+
+    private void releaseCooldown(String sessionId) {
+        try {
+            redisTemplate.delete(KEY_PREFIX + sessionId);
+        } catch (RuntimeException e) {
+            log.warn("[CAMERA-LINK-LOST] 쿨다운 해제 실패: sessionId={}, error={}", sessionId, e.getClass().getSimpleName());
         }
     }
 

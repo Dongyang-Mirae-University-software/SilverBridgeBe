@@ -4,6 +4,7 @@ import kr.silverbridge.main.domain.anomaly.dto.DetectedTypeLabel;
 import kr.silverbridge.main.domain.notification.channel.NotificationContent;
 import kr.silverbridge.main.domain.notification.dispatch.NotificationDispatcher;
 import kr.silverbridge.main.domain.notification.dispatch.NotificationType;
+import kr.silverbridge.main.domain.notification.entity.NotificationLogResult;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -39,10 +40,12 @@ public class AnomalyReviewReminderService {
         int sent = 0;
         for (AnomalyReviewReminderTarget target : targets) {
             try {
-                notificationDispatcher.dispatch(
+                // FAILED(설정·수신자 조회 실패 포함)는 세지 않는다 - 예외였던 #425 이전과 같은 집계(2026-11-02 점검 L-3)
+                if (notificationDispatcher.dispatch(
                         target.guardianId(), target.wardId(), NotificationType.ANOMALY_REVIEW_REQUIRED,
-                        reminderContent(target));
-                sent++;
+                        reminderContent(target)) != NotificationLogResult.FAILED) {
+                    sent++;
+                }
             } catch (RuntimeException e) {
                 // 발송 기록을 이미 선점했으므로 재시도하지 않는다(중복 발송 방지 우선).
                 // 이 회차를 놓쳐도 하루 1회 요약이 두 번째 기회다.
@@ -59,9 +62,11 @@ public class AnomalyReviewReminderService {
         int sent = 0;
         for (AnomalyReviewSummaryTarget target : targets) {
             try {
-                notificationDispatcher.dispatch(
-                        target.guardianId(), NotificationType.ANOMALY_REVIEW_REQUIRED, summaryContent(target));
-                sent++;
+                // FAILED(설정·수신자 조회 실패 포함)는 세지 않는다 - 예외였던 #425 이전과 같은 집계(2026-11-02 점검 L-3)
+                if (notificationDispatcher.dispatch(
+                        target.guardianId(), NotificationType.ANOMALY_REVIEW_REQUIRED, summaryContent(target)) != NotificationLogResult.FAILED) {
+                    sent++;
+                }
             } catch (RuntimeException e) {
                 log.error("[ANOMALY-REVIEW] 미응답 요약 발송 실패 guardianId={}, error={}", target.guardianId(), e.getClass().getSimpleName());
             }
@@ -75,10 +80,12 @@ public class AnomalyReviewReminderService {
         int sent = 0;
         for (AnomalyReviewReminderTarget target : targets) {
             try {
-                notificationDispatcher.dispatch(
+                // FAILED(설정·수신자 조회 실패 포함)는 세지 않는다 - 예외였던 #425 이전과 같은 집계(2026-11-02 점검 L-3)
+                if (notificationDispatcher.dispatch(
                         target.guardianId(), target.wardId(), NotificationType.ANOMALY_REVIEW_CONFLICTED,
-                        conflictContent(target));
-                sent++;
+                        conflictContent(target)) != NotificationLogResult.FAILED) {
+                    sent++;
+                }
             } catch (RuntimeException e) {
                 // 선점했으므로 재시도하지 않는다. 안내를 놓쳐도 응답 API와 이력 화면의 CONFLICTED 표시는 그대로다.
                 log.error("[ANOMALY-REVIEW] 동수 재확인 안내 발송 실패 guardianId={}, incidentId={}, error={}",

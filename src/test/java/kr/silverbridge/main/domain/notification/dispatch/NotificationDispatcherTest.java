@@ -19,6 +19,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.EnumSource;
 import org.junit.jupiter.params.provider.MethodSource;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
@@ -404,6 +405,90 @@ class NotificationDispatcherTest {
         assertThat(log.getResult()).isEqualTo(NotificationLogResult.FAILED);
         assertThat(log.getNotSentReason()).as("사용자 선택이 아니므로 NOT_SENT 사유가 아니다").isNull();
         assertThat(log.getChannelResults()).as("시도한 채널 없음").isEmpty();
+    }
+
+    // ─── #425 영향 범위 점검 (2026-11-02): 강제 정책 전 종류·정지 수신자·수신자 조회 실패 ───────────
+
+    static Stream<NotificationType> 강제푸시_설정병행_종류() {
+        return Arrays.stream(NotificationType.values())
+                .filter(type -> type.policy() == NotificationType.Policy.FORCED_PUSH_PLUS_SETTINGS);
+    }
+
+    @Test
+    @DisplayName("T-1 전제: 강제 푸시+설정 정책 종류에 이상감지 2종과 안부 위험이 들어 있다")
+    void 강제푸시_설정병행_종류_목록() {
+        assertThat(강제푸시_설정병행_종류())
+                .contains(NotificationType.ANOMALY_DETECTED, NotificationType.ANOMALY_DETECTED_SELF,
+                        NotificationType.CHECKIN_RISK);
+    }
+
+    @ParameterizedTest(name = "{0}")
+    @MethodSource("강제푸시_설정병행_종류")
+    @DisplayName("T-1 불변식 ①: 강제 푸시+설정 정책의 모든 종류는 설정 조회가 실패해도 강제 푸시를 보낸다")
+    void 강제정책_전종류_설정조회실패_강제푸시(NotificationType type) {
+        given(settingService.enabledChannels(USER_ID)).willThrow(new IllegalStateException("settings down"));
+
+        NotificationLogResult result = dispatcher.dispatch(USER_ID, WARD_ID, type, anomalyContent);
+
+        verify(fcmChannel).send(eq(type), any(), any());
+        assertThat(result).isEqualTo(NotificationLogResult.DELIVERED);
+    }
+
+    @Test
+    @DisplayName("T-2 불변식 ②: 정지 수신자에게는 강제 정책이라도 설정을 읽기 전에 막고 아무 채널도 보내지 않는다")
+    void 강제정책_정지수신자_설정조회없이_차단() {
+        givenRestrictedRecipient();
+
+        NotificationLogResult result = dispatcher.dispatch(USER_ID, NotificationType.ANOMALY_DETECTED, anomalyContent);
+
+        assertThat(result).isEqualTo(NotificationLogResult.NOT_SENT);
+        verifyNoInteractions(settingService);
+        verify(fcmChannel, never()).send(any(), any(), any());
+        verify(smsChannel, never()).send(any(), any(), any());
+    }
+
+    @Test
+    @DisplayName("T-2·L-2: 설정 기반 종류에서 설정 조회가 실패해도 정지 수신자면 실패가 아니라 차단(NOT_SENT)으로 남고 보내지 않는다")
+    void 설정기반_설정조회실패_정지수신자는_차단사유() {
+        given(settingService.enabledChannels(USER_ID)).willThrow(new IllegalStateException("settings down"));
+        givenRestrictedRecipient();
+
+        NotificationLogResult result = dispatcher.dispatch(USER_ID, NotificationType.CONNECTION_REQUEST, content);
+
+        assertThat(result).isEqualTo(NotificationLogResult.NOT_SENT);
+        assertThat(recordedLog().getNotSentReason()).isEqualTo(NotificationNotSentReason.RESTRICTED_ACCOUNT);
+        verify(fcmChannel, never()).send(any(), any(), any());
+        verify(smsChannel, never()).send(any(), any(), any());
+    }
+
+    @ParameterizedTest(name = "{0}")
+    @EnumSource(value = NotificationType.class, names = {"WARD_SOS", "ANOMALY_DETECTED", "CONNECTION_REQUEST"})
+    @DisplayName("L-1: 수신자 조회가 실패하면 예외를 올리지 않고 아무 채널도 보내지 않은 채 실패로 기록한다(상태를 모르면 보내지 않는다)")
+    void 수신자조회실패_실패로기록(NotificationType type) {
+        lenient().when(settingService.enabledChannels(USER_ID)).thenReturn(EnumSet.of(NotificationChannelType.FCM));
+        given(recipientResolver.resolve(USER_ID)).willThrow(new IllegalStateException("users down"));
+
+        NotificationLogResult result = dispatcher.dispatch(USER_ID, WARD_ID, type, anomalyContent);
+
+        assertThat(result).isEqualTo(NotificationLogResult.FAILED);
+        verify(fcmChannel, never()).send(any(), any(), any());
+        verify(smsChannel, never()).send(any(), any(), any());
+        NotificationLog log = recordedLog();
+        assertThat(log.getResult()).isEqualTo(NotificationLogResult.FAILED);
+        assertThat(log.getNotSentReason()).isNull();
+        assertThat(log.getChannelResults()).isEmpty();
+    }
+
+    @Test
+    @DisplayName("L-1: 설정 조회와 수신자 조회가 모두 실패해도 예외 없이 실패로 기록한다")
+    void 설정과수신자_모두조회실패_실패로기록() {
+        given(settingService.enabledChannels(USER_ID)).willThrow(new IllegalStateException("settings down"));
+        given(recipientResolver.resolve(USER_ID)).willThrow(new IllegalStateException("users down"));
+
+        NotificationLogResult result = dispatcher.dispatch(USER_ID, NotificationType.CONNECTION_REQUEST, content);
+
+        assertThat(result).isEqualTo(NotificationLogResult.FAILED);
+        assertThat(recordedLog().getResult()).isEqualTo(NotificationLogResult.FAILED);
     }
 
     @Test

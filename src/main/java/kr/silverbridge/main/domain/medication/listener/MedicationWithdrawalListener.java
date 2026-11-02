@@ -82,11 +82,19 @@ public class MedicationWithdrawalListener {
                         "wardId", wardId,
                         "stoppedCount", String.valueOf(stoppedCount)));
 
-        recipients.forEach(guardianId -> {
-            webSocketEventPublisher.sendToUser(guardianId, "medication-stopped",
-                    Map.of("wardId", wardId, "stoppedCount", String.valueOf(stoppedCount)));
-            notificationDispatcher.dispatch(guardianId, wardId, NotificationType.MEDICATION_STOPPED, content);
-        });
+        // 보호자마다 격리한다 - 한 명의 WS·발송 예외가 남은 보호자와 다음 피보호자 안내까지 끊지 않게
+        // (2026-11-02 #425 영향 범위 점검 M-1, 강제 연결 리스너와 같은 형태).
+        for (String guardianId : recipients) {
+            try {
+                webSocketEventPublisher.sendToUser(guardianId, "medication-stopped",
+                        Map.of("wardId", wardId, "stoppedCount", String.valueOf(stoppedCount)));
+                notificationDispatcher.dispatch(guardianId, wardId, NotificationType.MEDICATION_STOPPED, content);
+            } catch (RuntimeException e) {
+                // 예외 원문에는 수신자·SQL 값이 섞일 수 있다 - 클래스명만(2026-10-06 로그 원문 정책).
+                log.error("[WITHDRAW] 복약 중지 안내 실패: guardianId={}, wardId={}, exception={}",
+                        guardianId, wardId, e.getClass().getSimpleName());
+            }
+        }
 
         log.info("[WITHDRAW] 복약 중지 안내: wardId={}, 중지={}건, 수신 보호자={}명",
                 wardId, stoppedCount, recipients.size());
