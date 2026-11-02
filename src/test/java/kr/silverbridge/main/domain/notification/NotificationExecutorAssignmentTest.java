@@ -5,7 +5,6 @@ import kr.silverbridge.main.domain.anomaly.listener.AnomalyClipListener;
 import kr.silverbridge.main.domain.anomaly.listener.AnomalyNotificationListener;
 import kr.silverbridge.main.domain.auth.listener.KakaoRegisterEventListener;
 import kr.silverbridge.main.domain.chat.listener.AiMemberDataPurgeListener;
-import kr.silverbridge.main.domain.checkin.listener.CheckinGuardianAlertListener;
 import kr.silverbridge.main.domain.connection.listener.ConnectionNotificationListener;
 import kr.silverbridge.main.domain.inquiry.listener.InquiryNotificationListener;
 import kr.silverbridge.main.domain.medication.listener.MedicationIntakeNotificationListener;
@@ -87,16 +86,5 @@ class NotificationExecutorAssignmentTest {
                 .filter(a -> a != null)
                 .map(Async::value)
                 .collect(Collectors.toSet());
-    }
-
-    @Test
-    @DisplayName("안부 말벗: 위험 알림은 긴급 executor, 확인 필요 알림은 일반 executor - 2026-11-01")
-    void 안부_알림_executor() throws Exception {
-        assertThat(CheckinGuardianAlertListener.class.getMethod("onRisk",
-                kr.silverbridge.main.domain.checkin.event.CheckinGuardianAlertEvent.class)
-                .getAnnotation(org.springframework.scheduling.annotation.Async.class).value()).isEqualTo(URGENT);
-        assertThat(CheckinGuardianAlertListener.class.getMethod("onAttention",
-                kr.silverbridge.main.domain.checkin.event.CheckinGuardianAlertEvent.class)
-                .getAnnotation(org.springframework.scheduling.annotation.Async.class).value()).isEqualTo("notificationExecutor");
     }
 }

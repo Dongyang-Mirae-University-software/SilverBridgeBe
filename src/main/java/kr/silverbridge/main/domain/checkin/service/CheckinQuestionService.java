@@ -6,6 +6,7 @@ import kr.silverbridge.main.domain.checkin.dto.CheckinQuestionsUpdateRequest;
 import kr.silverbridge.main.domain.checkin.entity.CheckinQuestion;
 import kr.silverbridge.main.domain.checkin.entity.CheckinSlot;
 import kr.silverbridge.main.domain.checkin.repository.CheckinQuestionRepository;
+import kr.silverbridge.main.domain.connection.service.ConnectionService;
 import kr.silverbridge.main.global.exception.CustomException;
 import kr.silverbridge.main.global.exception.ErrorCode;
 import kr.silverbridge.main.global.validation.TextSanitizer;
@@ -35,19 +36,19 @@ public class CheckinQuestionService {
 
     private final CheckinProperties properties;
     private final CheckinQuestionRepository repository;
-    private final CheckinGuardianAccess access;
+    private final ConnectionService connectionService;
 
     @Transactional(readOnly = true)
     public CheckinQuestionsResponse get(String guardianId, String wardId) {
         requireActive();
-        access.require(guardianId, wardId, "questions-get");
+        requireActiveConnection(guardianId, wardId, "get");
         return toResponse(wardId);
     }
 
     @Transactional
     public CheckinQuestionsResponse update(String guardianId, String wardId, CheckinQuestionsUpdateRequest request) {
         requireActive();
-        access.require(guardianId, wardId, "questions-update");
+        requireActiveConnection(guardianId, wardId, "update");
         Set<CheckinSlot> seen = EnumSet.noneOf(CheckinSlot.class);
         List<CheckinSlot> changed = new ArrayList<>();
         for (CheckinQuestionsUpdateRequest.Item item : request.questions()) {
@@ -98,6 +99,19 @@ public class CheckinQuestionService {
     private void requireActive() {
         if (!properties.isActive()) {
             throw new CustomException(ErrorCode.CHECKIN_DISABLED);
+        }
+    }
+
+    private void requireActiveConnection(String guardianId, String wardId, String action) {
+        if (!CheckinIds.isUserIdFormat(wardId)) {
+            log.warn("[IDOR-ATTEMPT] 형식이 맞지 않는 피보호자 ID로 안부 질문 접근 시도: guardianId={}, wardIdLength={}, action={}",
+                    guardianId, CheckinIds.lengthOf(wardId), action);
+            throw new CustomException(ErrorCode.CHECKIN_NOT_AUTHORIZED);
+        }
+        if (!connectionService.isActiveConnection(guardianId, wardId)) {
+            log.warn("[IDOR-ATTEMPT] 연결되지 않은 피보호자 안부 질문 접근 시도: guardianId={}, wardId={}, action={}",
+                    guardianId, wardId, action);
+            throw new CustomException(ErrorCode.CHECKIN_NOT_AUTHORIZED);
         }
     }
 }

@@ -14,7 +14,7 @@ paths:
 - **안부 말벗**(checkin, V65): 하루 다섯 번(09·12·15·18·21시 KST) 피보호자와 2분·8턴 이내 음성 대화 → AI(DGX, SenseVoice + EXAONE)가 정서 5가지(기쁨·편안·외로움·기운 없음·걱정, 판단 보류)·생활 신호 5칸(잠·식사·통증·기분·외로움)·위험을 정리 → BE가 `checkin_result`에 저장. AI 계약은 AiServer PR #152 `docs/checkin-companion.md`(v0).
   - 보호자 `GET·PUT /api/guardian/ward/{wardId}/checkin/questions`(시각별 질문 200자, ACTIVE 연결만, 피보호자 단위 공유).
   - 피보호자(WARD) `POST /api/ward/checkin/sessions` → `.../{sessionId}/turns`(multipart `audio` + 선택 `frames`) → `.../{sessionId}/finish`(`selfReport`), `GET·PUT /api/ward/checkin/setting`(`faceConsent`, 기본 false).
-  - **2차**(V66): 보호자 `GET·PUT /api/guardian/ward/{wardId}/checkin/setting`(`promptEnabled`, 기본 false) → 5시각 피보호자 푸시 `CHECKIN_PROMPT`(0~4분 분산, 응답 창 1시간), 정리 때 평소 대비 판정(`attention`·`attentionReasons`), 보호자 알림 `CHECKIN_RISK`(강제 FCM + 설정)·`CHECKIN_ATTENTION`·`CHECKIN_MISSED`(끌 수 있음, 하루 한 번), 보호자 조회 `GET /api/guardian/checkin?wardId=&date=`·`/weekly?wardId=&endDate=`. 상세 `docs/(2026-11-01) feature-checkin-companion.md`.
+  - 2차(예정): 5시각 피보호자 푸시·평소 대비 "확인 필요"·보호자 조회·보호자 알림. 상세 `docs/(2026-11-01) feature-checkin-companion.md`.
 
 ## 불변 규칙
 
@@ -29,17 +29,15 @@ paths:
 - **⑨ 동시 상한·시간 제한**: AI 호출은 전체 6 / 1인 1(`CheckinSlots` - 1인 1건이 턴 순서를 지키는 장치이기도 하다), 시작 10초·턴 20초·정리 30초·삭제 15초, 마감은 전용 데몬 스레드(빈 등록 금지). 속도 제한: 시작 분 10/시간 60, 턴·정리 분 20/시간 200.
 - **⑩ 탈퇴 정리**: BE 테이블은 회원 CASCADE. AI 기록은 `AiMemberDataPurgeListener`가 `checkin-logs` 항목으로 `DELETE /api/v1/checkin/logs?userId=`를 부른다(항목별 독립·best-effort·200만 성공). **킬 스위치와 무관하게 주소·키가 있으면 지운다**(AI도 꺼져 있어도 삭제는 동작). 주소·키가 없는 서버(gosky)는 건너뛴다. 정리 대상 질문(`updated_by`)은 SET NULL - 질문은 피보호자 것이다.
 
-- **⑪ 안부 알림은 켠 피보호자에게만 (2026-11-01 2차, 가정으로 정함)**: 말벗을 켠 서버의 모든 피보호자에게 하루 다섯 번 푸시가 갑자기 가지 않도록 `checkin_setting.prompt_enabled` 기본 false다. 보호자(ACTIVE 연결)가 켜고, 본인도 끌 수 있다(하루 다섯 번 오는 알림을 본인이 멈출 수 있어야 한다). 표정 동의는 여전히 본인만. 기본값을 true로 바꾸지 말 것.
-- **⑫ 선점 후 발송**: 피보호자 알림은 `checkin_prompt_log` UNIQUE(ward, date, slot), 보호자 알림은 `checkin_guardian_alert_log` UNIQUE(guardian, ward, date, slot, kind)를 **먼저 커밋(REQUIRES_NEW)한 뒤** 보낸다. 순서를 뒤집지 말 것(1분 주기라 창 내내 중복 발송). 실패 회차는 재시도하지 않는다(복약 규칙과 같다).
-- **⑬ 응답 창 1시간 (결정 Q2)**: 시각부터 1시간 안에만 대화를 시작할 수 있다(409 `CHECKIN_NOT_OPEN`). 단 창 안에 말을 나눈 대화는 창이 닫혀도 정리할 수 있게 이어받는다. 미응답 알림은 창이 닫힌 뒤 1시간 안에만 본다(재시작 뒤 아침 미응답이 밤에 가지 않게). 알림을 받지 않은 시각은 미응답이 아니다(`NO_RECORD`).
-- **⑭ 평소 대비 판정 (`CheckinAttentionJudge`)**: 기준 = 그날 전 14일 결과(결정 Q2). 생활 신호 평소와 다름 1.0·본인 부정 기분 1.0·AI 부정 정서 0.5·목소리(대답 시간·말 빠르기 2σ) 0.5, **근거 둘 이상이고 2.0 이상**이어야 확인 필요 - 신호 하나·보조 근거만으로는 붙지 않는다. 위험(응급·자해)만 곧바로. 평소를 모르면(기준 3건 미만) 부정 값을 다르다고 본다. 표정은 null이라 쓰지 않는다. 가중치를 바꿀 때 "신호 하나로 붙지 않음"을 지키는지 `CheckinAttentionJudgeTest`로 확인.
-- **⑮ 보호자 알림**: `CHECKIN_RISK`는 위험이 **처음** 올라간 턴에 바로(정리를 기다리지 않음), 긴급 executor, `FORCED_PUSH_PLUS_SETTINGS`(결정 Q1 - SOS 문자 폴백까지는 아님), 끌 수 없다. `CHECKIN_ATTENTION`은 위험이 아닐 때만(겹쳐 보내지 않음), 일반 executor, FCM·설정 기반. `CHECKIN_MISSED`는 보호자 알림 종류 설정 `checkinMissed`(기본 ON)로 끌 수 있고, 설정 조회가 실패하면 그 회차는 보내지 않는다. 세 종류 모두 알림톡·이메일 없음, 문구는 단정하지 않고 대화 내용을 싣지 않는다.
-- **⑯ 보호자 조회**: ACTIVE 연결만, **지금 연결 이후 기록만**(D-1 - 이전 시각은 `BEFORE_CONNECTION`으로 내용 없이). 받아쓴 원문은 BE에 없어 내려 줄 수 없다(요약·근거·정서·신호·확인 필요만). 오늘~60일 전.
-
 ## 수용한 한계 (1차)
 
 - **AI가 턴을 저장한 뒤 BE가 시간 초과로 끊으면** BE 턴 수가 늘지 않는다. 사용자가 다시 말하면 BE는 같은 턴 번호로 보내고 AI는 저장된 결과(앞의 말)를 돌려준다(AI 계약의 재전송 멱등). 새 말이 그 턴에서 버려질 수 있다.
 - **시작 경합**에서 진 쪽의 AI 세션은 빈 채로 AI에 남는다(30일 자동 삭제).
 - 60초 길이 검사는 AI(`AUDIO_TOO_LONG` 413)에 맡긴다 - BE는 크기만 본다.
-- (해소, 2차) 1차에는 응답 창이 없었다 - 2차에서 1시간 창 적용.
-- **2차 한계**: 피보호자 안부 알림은 FCM만이라 앱 알림을 꺼 둔 어르신은 받지 못한다(하루 다섯 번 문자는 과금·소음). 스케줄러는 단일 인스턴스 기준(선점 UNIQUE가 다중 인스턴스 중복은 막는다). 관리자 알림 이력에서 안부 종류는 "기타" 탭에 섞인다(전용 탭은 관리자 FE 결정).
+- 1차에는 응답 창이 없어 그 시각부터 다음 시각 전까지 언제든 시작할 수 있다(2차에서 알림과 함께 1시간 창 - 결정 Q2).
+
+## 2차에서 정할 것 (결정 반영)
+
+- Q1: AI 위험(자해·응급)이 오르면 보호자 알림 = **강제 FCM + 설정 채널**(`FORCED_PUSH_PLUS_SETTINGS`, 이상감지와 같은 정책). SOS의 문자 폴백까지는 올리지 않는다(키워드 판정).
+- Q2: 응답 창 1시간 · 평소 대비 기준 14일(설정값).
+- 새 `NotificationType`을 더하면 `NotificationTypeLabel`·`FcmMessageProperties`·yaml·`NotificationTypeEmailPolicyTest`(이메일 없음)·`AlimtalkTemplateMappingGuardTest`(알림톡 없음 - 다발성)를 함께 맞추고, 영향 범위 점검(템플릿 C)을 제안한다.

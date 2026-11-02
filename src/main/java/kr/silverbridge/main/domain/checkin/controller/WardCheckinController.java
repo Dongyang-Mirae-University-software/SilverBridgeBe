@@ -7,8 +7,7 @@ import jakarta.validation.Valid;
 import kr.silverbridge.main.domain.checkin.dto.CheckinFinishRequest;
 import kr.silverbridge.main.domain.checkin.dto.CheckinFinishResponse;
 import kr.silverbridge.main.domain.checkin.dto.CheckinSessionResponse;
-import kr.silverbridge.main.domain.checkin.dto.CheckinWardSettingRequest;
-import kr.silverbridge.main.domain.checkin.dto.CheckinWardSettingResponse;
+import kr.silverbridge.main.domain.checkin.dto.CheckinSettingDto;
 import kr.silverbridge.main.domain.checkin.dto.CheckinTurnResponse;
 import kr.silverbridge.main.domain.checkin.service.CheckinConversationService;
 import kr.silverbridge.main.domain.checkin.service.CheckinSettingService;
@@ -51,7 +50,7 @@ public class WardCheckinController {
             같은 시각에 진행 중인 대화가 있으면 그 대화를 돌려줍니다(resumed=true). finishRequired=true면 정리만 남은 대화입니다.
             대화는 최대 maxTurns번·endsAt까지입니다.
 
-            [오류 code] CHECKIN_NOT_OPEN(409, 응답 창 밖 - 시각부터 1시간) / CHECKIN_ALREADY_DONE(409, 이번 시각 대화를 이미 마침)
+            [오류 code] CHECKIN_NOT_OPEN(409, 09시 전) / CHECKIN_ALREADY_DONE(409, 이번 시각 대화를 이미 마침)
             """ + COMMON_ERRORS)
     @PostMapping("/api/ward/checkin/sessions")
     public ResponseEntity<ApiResponse<CheckinSessionResponse>> start(@AuthenticationPrincipal String wardId) {
@@ -99,25 +98,21 @@ public class WardCheckinController {
                         request == null ? null : request.selfReport())));
     }
 
-    @Operation(summary = "말벗 설정 조회 (피보호자 전용)",
-            description = "표정 분석 동의(faceConsent, 기본 false)·안부 알림 받기(promptEnabled, 기본 false - 보호자가 켬)." + COMMON_ERRORS)
+    @Operation(summary = "말벗 설정 조회 (피보호자 전용)", description = "표정 분석 동의(faceConsent, 기본 false)." + COMMON_ERRORS)
     @GetMapping("/api/ward/checkin/setting")
-    public ResponseEntity<ApiResponse<CheckinWardSettingResponse>> getSetting(@AuthenticationPrincipal String wardId) {
+    public ResponseEntity<ApiResponse<CheckinSettingDto>> getSetting(@AuthenticationPrincipal String wardId) {
         return ResponseEntity.ok().cacheControl(CacheControl.noStore())
-                .body(ApiResponse.ok(settingService.getForWard(wardId)));
+                .body(ApiResponse.ok(settingService.get(wardId)));
     }
 
     @Operation(summary = "말벗 설정 변경 (피보호자 전용)", description = """
-            보낸 항목만 바꿉니다(null = 그대로).
-            - faceConsent=true면 대화 중 얼굴 사진을 AI로 보내 표정을 참고합니다(현재 AI는 표정 결과를 내지 않음). false면 사진을 버립니다.
-            - promptEnabled=false면 하루 다섯 번 오는 안부 알림을 멈춥니다(본인이 끌 수 있음).
-
-            [오류 code] CHECKIN_INVALID_SETTING(400, 바꿀 항목 없음)
+            faceConsent=true면 대화 중 얼굴 사진을 AI로 보내 표정을 참고합니다(현재 AI는 표정 결과를 내지 않음).
+            false면 사진을 보내도 서버가 버립니다.
             """ + COMMON_ERRORS)
     @PutMapping("/api/ward/checkin/setting")
-    public ResponseEntity<ApiResponse<CheckinWardSettingResponse>> updateSetting(
-            @AuthenticationPrincipal String wardId, @RequestBody(required = false) CheckinWardSettingRequest request) {
+    public ResponseEntity<ApiResponse<CheckinSettingDto>> updateSetting(
+            @AuthenticationPrincipal String wardId, @Valid @RequestBody CheckinSettingDto request) {
         return ResponseEntity.ok().cacheControl(CacheControl.noStore())
-                .body(ApiResponse.ok(settingService.updateForWard(wardId, request)));
+                .body(ApiResponse.ok(settingService.update(wardId, request)));
     }
 }

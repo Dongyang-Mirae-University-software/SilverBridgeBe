@@ -31,13 +31,6 @@ public class CheckinSetting extends BaseTimeEntity {
     @Column(name = "face_consent", nullable = false)
     private boolean faceConsent;
 
-    /** 하루 다섯 번 안부 알림을 받을지(V66, 기본 꺼짐). 보호자가 켜고, 본인도 끌 수 있다. */
-    @Column(name = "prompt_enabled", nullable = false)
-    private boolean promptEnabled;
-
-    @Column(name = "prompt_changed_by", length = 6)
-    private String promptChangedBy;
-
     private CheckinSetting(String wardId, boolean faceConsent) {
         this.wardId = wardId;
         this.faceConsent = faceConsent;
@@ -49,10 +42,5 @@ public class CheckinSetting extends BaseTimeEntity {
 
     public void changeFaceConsent(boolean faceConsent) {
         this.faceConsent = faceConsent;
-    }
-
-    public void changePromptEnabled(boolean promptEnabled, String changedBy) {
-        this.promptEnabled = promptEnabled;
-        this.promptChangedBy = changedBy;
     }
 }

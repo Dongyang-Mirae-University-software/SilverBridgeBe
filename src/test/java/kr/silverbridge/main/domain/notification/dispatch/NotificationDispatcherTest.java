@@ -561,9 +561,7 @@ class NotificationDispatcherTest {
         assertThat(forced).containsExactlyInAnyOrder(
                 NotificationType.WARD_SOS,
                 NotificationType.ANOMALY_DETECTED,
-                NotificationType.ANOMALY_DETECTED_SELF,
-                // 안부 대화 위험 신호(2026-11-01 결정 Q1) - 이상감지와 같은 FORCED_PUSH_PLUS_SETTINGS
-                NotificationType.CHECKIN_RISK);
+                NotificationType.ANOMALY_DETECTED_SELF);
 
         // 본인 수신분은 알림톡 템플릿만 없을 뿐 채널 정책은 보호자분과 동일해야 한다
         // (FCM 고정 유지 — 화재 시 본인 대피 안내가 설정으로 꺼지면 안 된다, D-1)

@@ -85,10 +85,6 @@ paths:
 - **되돌리지 말 것**: 강제 FCM 계산 앞에서 설정 조회 예외가 빠져나가게 두지 말 것, 디스패처가 예외를 호출자로 올리지 말 것. SOS(`FORCED_PUSH_WITH_SMS_FALLBACK`)는 설정을 읽지 않아 영향이 없었다.
 - **수용**: 이 `FAILED` 행은 채널 결과가 비어 관리자 이력 화면의 실패 사유 칸이 비어 보인다(사유 코드를 늘리면 V54 CHECK 재정의가 필요해 미룸).
 
-## 안부 말벗 알림 4종 (2026-11-01)
-
-- `CHECKIN_PROMPT`(피보호자, FCM만·설정 기반), `CHECKIN_RISK`(보호자, `FORCED_PUSH_PLUS_SETTINGS` - 결정 Q1, 강제 정책 가드 `NotificationDispatcherTest` 갱신), `CHECKIN_ATTENTION`·`CHECKIN_MISSED`(보호자, FCM만·설정 기반). 알림톡 매핑·이메일 없음. 웹푸시 high urgency에 `CHECKIN_PROMPT`·`CHECKIN_RISK` 추가. 관리자 이력 탭은 "기타". 보호자 알림 종류 설정에 `checkinMissed`(V66, 기본 ON, 끌 수 있음)를 더했다 - 위험 알림은 설정이 없다(필수). 정책은 `policy-checkin.md` ⑪~⑯.
-
 ## 2026-10-31 전체 점검 반영 (M-2)
 
 - **FCM 토큰 삭제 조건**: `UNREGISTERED`는 항상 삭제, `INVALID_ARGUMENT`는 **같은 묶음에서 성공한 토큰이 있을 때만** 그 토큰 탓으로 보고 삭제한다. 묶음 전체가 `INVALID_ARGUMENT`면 메시지 자체(페이로드 초과·잘못된 data) 문제일 수 있어 보존하고 `[FCM-INVALID-ARGUMENT]` WARN을 남긴다 - 지우면 재등록 전까지 SOS 푸시를 못 받는다. 남은 불량 토큰은 유휴 정리(04:00)가 회수한다. 만료 토큰 로그는 앞 6자만.

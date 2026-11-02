@@ -38,10 +38,7 @@ class AdminNotificationFilterTest {
                 NotificationType.CONNECTION_REQUEST, NotificationType.CONNECTION_ACCEPTED,
                 NotificationType.CONNECTION_REFUSED, NotificationType.CONNECTION_DISCONNECTED,
                 NotificationType.CONNECTION_FORCED, NotificationType.INQUIRY_ANSWERED,
-                NotificationType.CAMERA_LINK_LOST,
-                // 안부 말벗(2026-11-01) - 전용 탭은 관리자 FE 결정 전까지 기타에 둔다
-                NotificationType.CHECKIN_PROMPT, NotificationType.CHECKIN_RISK,
-                NotificationType.CHECKIN_ATTENTION, NotificationType.CHECKIN_MISSED);
+                NotificationType.CAMERA_LINK_LOST);
     }
 
     @Test

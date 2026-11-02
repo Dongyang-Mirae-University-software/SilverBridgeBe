@@ -1,7 +1,6 @@
 package kr.silverbridge.main.domain.checkin.service;
 
 import kr.silverbridge.main.domain.checkin.entity.CheckinEndReason;
-import kr.silverbridge.main.domain.checkin.event.CheckinGuardianAlertEvent;
 import kr.silverbridge.main.domain.checkin.entity.CheckinResult;
 import kr.silverbridge.main.domain.checkin.entity.CheckinSession;
 import kr.silverbridge.main.domain.checkin.entity.CheckinSessionStatus;
@@ -11,13 +10,11 @@ import kr.silverbridge.main.domain.checkin.repository.CheckinSessionRepository;
 import kr.silverbridge.main.global.exception.CustomException;
 import kr.silverbridge.main.global.exception.ErrorCode;
 import lombok.RequiredArgsConstructor;
-import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDate;
 import java.time.OffsetDateTime;
-import java.util.List;
 import java.util.Optional;
 
 /**
@@ -30,7 +27,6 @@ public class CheckinSessionStore {
 
     private final CheckinSessionRepository sessionRepository;
     private final CheckinResultRepository resultRepository;
-    private final ApplicationEventPublisher eventPublisher;
 
     @Transactional(readOnly = true)
     public Optional<CheckinSession> find(String sessionId) {
@@ -46,13 +42,6 @@ public class CheckinSessionStore {
     @Transactional(readOnly = true)
     public boolean hasResult(String wardId, LocalDate date, CheckinSlot slot) {
         return resultRepository.existsByWardIdAndCheckDateAndSlot(wardId, date, slot);
-    }
-
-    /** 평소 대비 기준 = 그 날 전 {@code days}일 결과(그 날은 빼고). */
-    @Transactional(readOnly = true)
-    public List<CheckinResult> baseline(String wardId, LocalDate date, int days) {
-        return resultRepository.findByWardIdAndCheckDateBetweenOrderByCheckDateAscSlotAsc(
-                wardId, date.minusDays(days), date.minusDays(1));
     }
 
     @Transactional(readOnly = true)
@@ -82,13 +71,7 @@ public class CheckinSessionStore {
         if (!session.isInProgress() || session.getTurnCount() != expectedTurnCount) {
             throw new CustomException(ErrorCode.CHECKIN_SESSION_CLOSED);
         }
-        boolean hadRisk = session.isRiskEmergency() || session.isRiskSelfHarm();
         session.recordTurn(done, emergency, selfHarm);
-        if (!hadRisk && (emergency || selfHarm)) {
-            // 위험이 처음 올라간 턴 - 정리를 기다리지 않고 커밋 뒤 보호자에게 알린다
-            eventPublisher.publishEvent(new CheckinGuardianAlertEvent(CheckinGuardianAlertEvent.Kind.RISK,
-                    session.getWardId(), session.getCheckDate(), session.getSlot()));
-        }
         return session;
     }
 
@@ -106,17 +89,7 @@ public class CheckinSessionStore {
         }
         // 즉시 flush - 같은 시각 결과 UNIQUE 위반이 커밋 시점이 아니라 여기서 DataIntegrityViolationException으로 나오게 한다
         CheckinResult saved = resultRepository.saveAndFlush(result);
-        boolean hadRisk = session.isRiskEmergency() || session.isRiskSelfHarm();
-        boolean risk = result.isRiskEmergency() || result.isRiskSelfHarm();
         session.finish(reason, result.isRiskEmergency(), result.isRiskSelfHarm(), at);
-        if (risk && !hadRisk) {
-            eventPublisher.publishEvent(new CheckinGuardianAlertEvent(CheckinGuardianAlertEvent.Kind.RISK,
-                    saved.getWardId(), saved.getCheckDate(), saved.getSlot()));
-        } else if (!risk && saved.isAttention()) {
-            // 위험이면 위험 알림이 이미 갔다 - 확인 필요를 겹쳐 보내지 않는다
-            eventPublisher.publishEvent(new CheckinGuardianAlertEvent(CheckinGuardianAlertEvent.Kind.ATTENTION,
-                    saved.getWardId(), saved.getCheckDate(), saved.getSlot()));
-        }
         return saved;
     }
 }

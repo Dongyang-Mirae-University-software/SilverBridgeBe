@@ -1,9 +1,7 @@
 package kr.silverbridge.main.domain.checkin.service;
 
 import kr.silverbridge.main.domain.checkin.config.CheckinProperties;
-import kr.silverbridge.main.domain.checkin.dto.CheckinGuardianSettingDto;
-import kr.silverbridge.main.domain.checkin.dto.CheckinWardSettingRequest;
-import kr.silverbridge.main.domain.checkin.dto.CheckinWardSettingResponse;
+import kr.silverbridge.main.domain.checkin.dto.CheckinSettingDto;
 import kr.silverbridge.main.domain.checkin.entity.CheckinSetting;
 import kr.silverbridge.main.domain.checkin.repository.CheckinSettingRepository;
 import kr.silverbridge.main.global.exception.CustomException;
@@ -13,10 +11,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-/**
- * 말벗 설정(피보호자 단위 한 행). 표정 분석 동의는 <b>본인만</b> 바꾼다(보호자 경로 없음).
- * 안부 알림 받기는 보호자(ACTIVE 연결)가 켜고 끄며, 본인도 끌 수 있다 - 하루 다섯 번 오는 푸시를 본인이 멈출 수 있어야 한다.
- */
+/** 피보호자 본인의 말벗 설정(표정 분석 동의). 본인만 읽고 바꾼다 - 보호자 경로는 없다. */
 @Slf4j
 @Service
 @RequiredArgsConstructor
@@ -24,67 +19,28 @@ public class CheckinSettingService {
 
     private final CheckinProperties properties;
     private final CheckinSettingRepository repository;
-    private final CheckinGuardianAccess access;
 
     @Transactional(readOnly = true)
-    public CheckinWardSettingResponse getForWard(String wardId) {
+    public CheckinSettingDto get(String wardId) {
         requireActive();
-        return toWardResponse(repository.findByWardId(wardId).orElse(null));
+        return new CheckinSettingDto(faceConsent(wardId));
     }
 
     @Transactional
-    public CheckinWardSettingResponse updateForWard(String wardId, CheckinWardSettingRequest request) {
+    public CheckinSettingDto update(String wardId, CheckinSettingDto request) {
         requireActive();
-        if (request == null || (request.faceConsent() == null && request.promptEnabled() == null)) {
-            throw new CustomException(ErrorCode.CHECKIN_INVALID_SETTING);
-        }
-        CheckinSetting setting = settingOf(wardId);
-        if (request.faceConsent() != null) {
-            setting.changeFaceConsent(request.faceConsent());
-        }
-        if (request.promptEnabled() != null) {
-            setting.changePromptEnabled(request.promptEnabled(), wardId);
-        }
-        log.info("[CHECKIN] 피보호자 말벗 설정 변경: wardId={}, faceConsent={}, promptEnabled={}",
-                wardId, setting.isFaceConsent(), setting.isPromptEnabled());
-        return toWardResponse(setting);
-    }
-
-    @Transactional(readOnly = true)
-    public CheckinGuardianSettingDto getForGuardian(String guardianId, String wardId) {
-        requireActive();
-        access.require(guardianId, wardId, "setting-get");
-        return new CheckinGuardianSettingDto(
-                repository.findByWardId(wardId).map(CheckinSetting::isPromptEnabled).orElse(false));
-    }
-
-    @Transactional
-    public CheckinGuardianSettingDto updateForGuardian(String guardianId, String wardId,
-                                                       CheckinGuardianSettingDto request) {
-        requireActive();
-        access.require(guardianId, wardId, "setting-update");
-        CheckinSetting setting = settingOf(wardId);
-        setting.changePromptEnabled(Boolean.TRUE.equals(request.promptEnabled()), guardianId);
-        log.info("[CHECKIN] 안부 알림 받기 변경(보호자): guardianId={}, wardId={}, promptEnabled={}",
-                guardianId, wardId, setting.isPromptEnabled());
-        return new CheckinGuardianSettingDto(setting.isPromptEnabled());
+        boolean consent = Boolean.TRUE.equals(request.faceConsent());
+        repository.findByWardId(wardId).ifPresentOrElse(
+                setting -> setting.changeFaceConsent(consent),
+                () -> repository.save(CheckinSetting.of(wardId, consent)));
+        log.info("[CHECKIN] 표정 분석 동의 변경: wardId={}, faceConsent={}", wardId, consent);
+        return new CheckinSettingDto(consent);
     }
 
     /** 저장값이 없으면 꺼짐(기본값). 대화 턴에서 사진을 AI로 보낼지 정한다. */
     @Transactional(readOnly = true)
     public boolean faceConsent(String wardId) {
         return repository.findByWardId(wardId).map(CheckinSetting::isFaceConsent).orElse(false);
-    }
-
-    private CheckinSetting settingOf(String wardId) {
-        return repository.findByWardId(wardId)
-                .orElseGet(() -> repository.save(CheckinSetting.of(wardId, false)));
-    }
-
-    private static CheckinWardSettingResponse toWardResponse(CheckinSetting setting) {
-        return setting == null
-                ? new CheckinWardSettingResponse(false, false)
-                : new CheckinWardSettingResponse(setting.isFaceConsent(), setting.isPromptEnabled());
     }
 
     private void requireActive() {

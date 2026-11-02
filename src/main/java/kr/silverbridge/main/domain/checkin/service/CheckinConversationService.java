@@ -61,13 +61,8 @@ public class CheckinConversationService {
         if (store.hasResult(wardId, today, slot)) {
             throw new CustomException(ErrorCode.CHECKIN_ALREADY_DONE);
         }
-        boolean windowOpen = now.toLocalDateTime().isBefore(today.atTime(slot.time()).plus(properties.getResponseWindow()));
-        Optional<CheckinSession> existing = store.findInProgress(wardId, today, slot);
-        if (!windowOpen && existing.filter(s -> s.getTurnCount() > 0).isEmpty()) {
-            // 응답 창(결정 Q2: 1시간)이 닫혔다. 나눈 말이 있는 대화는 정리할 수 있게 아래에서 돌려준다.
-            throw new CustomException(ErrorCode.CHECKIN_NOT_OPEN);
-        }
 
+        Optional<CheckinSession> existing = store.findInProgress(wardId, today, slot);
         if (existing.isPresent()) {
             CheckinSession session = existing.get();
             // 이어서 말할 수 있거나, 나눈 말이 있어 정리만 남았으면 그 대화를 돌려준다(나눈 말을 버리지 않는다).
@@ -158,12 +153,6 @@ public class CheckinConversationService {
             finish = CheckinAiProjection.finish(aiClient.finish(session.getSessionId(), wardId,
                     selfReport == null ? null : selfReport.aiValue(), reason.name()));
         }
-        boolean risk = finish.emergency() || session.isRiskEmergency() || finish.selfHarm() || session.isRiskSelfHarm();
-        CheckinAttentionJudge.Verdict verdict = CheckinAttentionJudge.judge(new CheckinAttentionJudge.Current(
-                        risk, finish.emotion(), selfReport, finish.signal("sleep"), finish.signal("meal"),
-                        finish.signal("pain"), finish.signal("mood"), finish.signal("lonely"),
-                        finish.avgAnswerSec(), finish.avgCharsPerSec()),
-                store.baseline(wardId, session.getCheckDate(), properties.getBaselineDays()));
         CheckinResult result = CheckinResult.builder()
                 .sessionPk(session.getId())
                 .wardId(wardId)
@@ -188,8 +177,6 @@ public class CheckinConversationService {
                 .avgCharsPerSec(finish.avgCharsPerSec())
                 .avgLoudnessDb(finish.avgLoudnessDb())
                 .createdAt(now)
-                .attention(verdict.attention())
-                .attentionReasons(verdict.reasons())
                 .build();
         CheckinResult saved;
         try {
@@ -199,9 +186,9 @@ public class CheckinConversationService {
             saved = store.findResult(session.getId())
                     .orElseThrow(() -> new CustomException(ErrorCode.CHECKIN_ALREADY_DONE));
         }
-        log.info("[CHECKIN] 대화 정리: wardId={}, sessionId={}, turns={}, reason={}, emotion={}, risk={}, attention={}",
+        log.info("[CHECKIN] 대화 정리: wardId={}, sessionId={}, turns={}, reason={}, emotion={}, risk={}",
                 wardId, session.getSessionId(), session.getTurnCount(), reason, saved.getEmotion(),
-                saved.isRiskEmergency() || saved.isRiskSelfHarm(), saved.isAttention());
+                saved.isRiskEmergency() || saved.isRiskSelfHarm());
         return toFinishResponse(saved);
     }
 

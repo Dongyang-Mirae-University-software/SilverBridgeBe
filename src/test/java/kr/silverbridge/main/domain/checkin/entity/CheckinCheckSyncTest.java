@@ -39,16 +39,6 @@ class CheckinCheckSyncTest {
             assertThat(latestCheck("chk_checkin_session_slot")).contains("'" + v.value() + "'");
             assertThat(latestCheck("chk_checkin_result_slot")).contains("'" + v.value() + "'");
             assertThat(latestCheck("chk_checkin_question_slot")).contains("'" + v.value() + "'");
-            assertThat(latestCheck("chk_checkin_prompt_log_slot")).contains("'" + v.value() + "'");
-            assertThat(latestCheck("chk_checkin_guardian_alert_log_slot")).contains("'" + v.value() + "'");
-        }
-    }
-
-    @Test
-    @DisplayName("보호자 알림 기록 종류(서비스 상수)가 CHECK 허용 목록과 같다")
-    void alertKinds() throws IOException {
-        for (String kind : java.util.List.of("RISK", "ATTENTION", "MISSED")) {
-            assertThat(latestCheck("chk_checkin_guardian_alert_log_kind")).contains("'" + kind + "'");
         }
     }
 
