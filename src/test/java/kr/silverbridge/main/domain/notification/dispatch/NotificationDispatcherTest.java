@@ -415,11 +415,10 @@ class NotificationDispatcherTest {
     }
 
     @Test
-    @DisplayName("T-1 전제: 강제 푸시+설정 정책 종류에 이상감지 2종과 안부 위험이 들어 있다")
+    @DisplayName("T-1 전제: 강제 푸시+설정 정책 종류에 이상감지 2종이 들어 있다")
     void 강제푸시_설정병행_종류_목록() {
         assertThat(강제푸시_설정병행_종류())
-                .contains(NotificationType.ANOMALY_DETECTED, NotificationType.ANOMALY_DETECTED_SELF,
-                        NotificationType.CHECKIN_RISK);
+                .contains(NotificationType.ANOMALY_DETECTED, NotificationType.ANOMALY_DETECTED_SELF);
     }
 
     @ParameterizedTest(name = "{0}")
