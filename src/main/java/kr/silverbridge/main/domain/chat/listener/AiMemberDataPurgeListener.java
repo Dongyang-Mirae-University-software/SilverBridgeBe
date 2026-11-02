@@ -1,8 +1,6 @@
 package kr.silverbridge.main.domain.chat.listener;
 
 import kr.silverbridge.main.domain.chat.client.AiChatClient;
-import kr.silverbridge.main.domain.checkin.client.CheckinAiClient;
-import kr.silverbridge.main.domain.checkin.config.CheckinProperties;
 import kr.silverbridge.main.domain.user.event.UserWithdrawnEvent;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -32,19 +30,12 @@ import org.springframework.transaction.event.TransactionalEventListener;
 public class AiMemberDataPurgeListener {
 
     private final AiChatClient aiChatClient;
-    private final CheckinAiClient checkinAiClient;
-    private final CheckinProperties checkinProperties;
 
     @Async("aiPurgeExecutor")
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
     public void handleWithdrawn(UserWithdrawnEvent event) {
         purge("chat-logs", event.userId(), () -> aiChatClient.deleteLogs(event.userId()));
         purge("reservation-credential", event.userId(), () -> aiChatClient.deleteReservationCredential(event.userId()));
-        // 안부 말벗 대화 기록(2026-11-01) - 말벗 AI(챗봇과 다른 서버). 킬 스위치와 무관하게 주소·키가 있으면 지운다.
-        // 주소·키가 없는 서버(gosky)는 말벗을 쓴 적이 없으므로 건너뛴다.
-        if (checkinProperties.canCallAi()) {
-            purge("checkin-logs", event.userId(), () -> checkinAiClient.deleteLogs(event.userId()));
-        }
     }
 
     private void purge(String item, String userId, Runnable call) {

@@ -185,27 +185,7 @@ public enum ErrorCode {
     AI_STATS_TIMEOUT(HttpStatus.GATEWAY_TIMEOUT, "AI 통계 응답이 늦습니다. 잠시 후 다시 시도해주세요."),
     CHAT_LOG_NOT_FOUND(HttpStatus.NOT_FOUND, "상담 기록을 찾을 수 없습니다."),
     CHAT_LIMIT_EXCEEDED(HttpStatus.TOO_MANY_REQUESTS, "이전 상담 응답을 기다리는 중입니다. 잠시 후 다시 시도해주세요."),
-    CHAT_WARD_NOT_CONNECTED(HttpStatus.FORBIDDEN, "연결된 피보호자만 대신 상담·예약할 수 있습니다."),
-
-    // 안부 말벗 (2026-11-01)
-    CHECKIN_DISABLED(HttpStatus.SERVICE_UNAVAILABLE, "안부 말벗을 지금 사용할 수 없습니다."),
-    CHECKIN_NOT_AUTHORIZED(HttpStatus.FORBIDDEN, "연결된 피보호자의 안부 질문만 보고 바꿀 수 있습니다."),
-    CHECKIN_SESSION_NOT_OWNED(HttpStatus.FORBIDDEN, "본인의 안부 대화만 이어갈 수 있습니다."),
-    CHECKIN_SESSION_NOT_FOUND(HttpStatus.NOT_FOUND, "안부 대화를 찾을 수 없습니다."),
-    CHECKIN_NOT_OPEN(HttpStatus.CONFLICT, "아직 안부 인사 시간이 아니에요. 오전 9시부터 이야기할 수 있어요."),
-    CHECKIN_ALREADY_DONE(HttpStatus.CONFLICT, "이번 시간 안부 이야기는 이미 마쳤어요."),
-    CHECKIN_SESSION_CLOSED(HttpStatus.CONFLICT, "이미 끝난 대화예요."),
-    CHECKIN_FINISH_REQUIRED(HttpStatus.CONFLICT, "이야기 시간이 끝났어요. 대화를 마무리해 주세요."),
-    CHECKIN_INVALID_QUESTION(HttpStatus.BAD_REQUEST, "질문은 시각마다 하나씩, 200자 이하로 적어 주세요."),
-    CHECKIN_INVALID_SELF_REPORT(HttpStatus.BAD_REQUEST, "오늘 기분은 다섯 가지 중에서 골라 주세요."),
-    CHECKIN_INVALID_AUDIO(HttpStatus.BAD_REQUEST, "녹음 파일을 읽을 수 없습니다. 다시 녹음해 주세요."),
-    CHECKIN_AUDIO_TOO_LARGE(HttpStatus.CONTENT_TOO_LARGE, "녹음 파일은 5MB를 넘을 수 없습니다."),
-    CHECKIN_AUDIO_TOO_LONG(HttpStatus.CONTENT_TOO_LARGE, "한 번에 1분까지 말씀하실 수 있어요."),
-    CHECKIN_INVALID_FRAME(HttpStatus.BAD_REQUEST, "사진은 JPG로 8장까지, 장당 300KB 이하만 보낼 수 있습니다."),
-    CHECKIN_SPEECH_NOT_RECOGNIZED(HttpStatus.valueOf(422), "말씀을 알아듣지 못했어요. 한 번 더 말씀해 주세요."),
-    CHECKIN_BUSY(HttpStatus.TOO_MANY_REQUESTS, "앞의 말씀을 듣는 중이에요. 잠시 후 다시 해 주세요."),
-    CHECKIN_UNAVAILABLE(HttpStatus.SERVICE_UNAVAILABLE, "안부 말벗 서버에 연결할 수 없습니다. 잠시 후 다시 시도해주세요."),
-    CHECKIN_TIMEOUT(HttpStatus.GATEWAY_TIMEOUT, "말벗 응답이 너무 오래 걸립니다. 잠시 후 다시 시도해주세요.");
+    CHAT_WARD_NOT_CONNECTED(HttpStatus.FORBIDDEN, "연결된 피보호자만 대신 상담·예약할 수 있습니다.");
 
     private final HttpStatus status;
     private final String message;

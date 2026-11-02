@@ -1,8 +1,6 @@
 package kr.silverbridge.main.domain.user;
 
 import kr.silverbridge.main.domain.chat.client.AiChatClient;
-import kr.silverbridge.main.domain.checkin.client.CheckinAiClient;
-import kr.silverbridge.main.domain.checkin.config.CheckinProperties;
 import kr.silverbridge.main.domain.chat.listener.AiMemberDataPurgeListener;
 import kr.silverbridge.main.domain.user.event.UserWithdrawnEvent;
 import kr.silverbridge.main.global.config.AsyncConfig;
@@ -26,7 +24,6 @@ import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.timeout;
 import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.when;
 
 /**
  * 탈퇴 이벤트가 실제 Spring 컨텍스트에서 AI 회원 데이터 삭제 리스너에 도달하는가 (audit-chat-log-purge-on-withdraw M-1, 2026-10-09).
@@ -48,13 +45,10 @@ class WithdrawalAiPurgeIntegrationTest extends PostgresIntegrationTest {
     @Autowired private ApplicationEventPublisher eventPublisher;
 
     @MockitoBean private AiChatClient aiChatClient;
-    @MockitoBean private CheckinAiClient checkinAiClient;
-    @MockitoBean private CheckinProperties checkinProperties;
 
     @Test
-    @DisplayName("탈퇴 트랜잭션이 커밋되면 비동기로 AI 상담 기록·예약 API 키·말벗 기록 삭제가 요청된다")
+    @DisplayName("탈퇴 트랜잭션이 커밋되면 비동기로 AI 상담 기록과 예약 API 키 삭제가 요청된다")
     void 커밋하면_삭제가_요청된다() {
-        when(checkinProperties.canCallAi()).thenReturn(true);
         String requestThread = Thread.currentThread().getName();
         AtomicReference<String> calledOn = new AtomicReference<>();
         doAnswer(invocation -> {
@@ -67,7 +61,6 @@ class WithdrawalAiPurgeIntegrationTest extends PostgresIntegrationTest {
 
         verify(aiChatClient, timeout(5_000)).deleteLogs(USER_ID);
         verify(aiChatClient, timeout(5_000)).deleteReservationCredential(USER_ID);
-        verify(checkinAiClient, timeout(5_000)).deleteLogs(USER_ID);
         assertThat(calledOn.get())
                 .as("전용 executor 스레드에서 실행(탈퇴 요청 스레드를 붙들지 않는다)")
                 .startsWith("ai-purge-")
@@ -84,6 +77,5 @@ class WithdrawalAiPurgeIntegrationTest extends PostgresIntegrationTest {
 
         verify(aiChatClient, after(1_000).never()).deleteLogs(USER_ID);
         verify(aiChatClient, never()).deleteReservationCredential(USER_ID);
-        verify(checkinAiClient, never()).deleteLogs(USER_ID);
     }
 }

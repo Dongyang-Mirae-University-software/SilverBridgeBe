@@ -78,11 +78,6 @@ class SecurityConfigAccessDeniedTest {
             return "ok";
         }
 
-        @org.springframework.web.bind.annotation.PostMapping("/api/ward/checkin/sessions/{sessionId}/turns")
-        String checkinTurn() {
-            return "ok";
-        }
-
         @org.springframework.web.bind.annotation.DeleteMapping("/api/notifications/fcm-token")
         String fcmDelete() {
             return "ok";
@@ -104,24 +99,6 @@ class SecurityConfigAccessDeniedTest {
     @BeforeEach
     void setUp() {
         mockMvc = MockMvcBuilders.webAppContextSetup(context).apply(springSecurity()).build();
-    }
-
-    @Test
-    @DisplayName("안부 말벗 턴 경로는 URL 단계에서 WARD 만 - GUARDIAN·ADMIN 은 음성 본문 파싱 전에 403, 비로그인 401")
-    void checkinTurn_wardOnlyAtUrlLevel() throws Exception {
-        String url = "/api/ward/checkin/sessions/ck_abcdefghijklmnopqrstuvwx/turns";
-        mockMvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post(url)
-                        .with(user("g1").roles("GUARDIAN")))
-                .andExpect(status().isForbidden())
-                .andExpect(jsonPath("$.code").value("FORBIDDEN"));
-        mockMvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post(url)
-                        .with(user("a1").roles("ADMIN")))
-                .andExpect(status().isForbidden());
-        mockMvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post(url))
-                .andExpect(status().isUnauthorized());
-        mockMvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post(url)
-                        .with(user("w1").roles("WARD")))
-                .andExpect(status().isOk());
     }
 
     @Test
