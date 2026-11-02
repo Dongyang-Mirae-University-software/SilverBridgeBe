@@ -46,6 +46,7 @@ paths:
 - **대가**: 문자 폴백 대상 보호자는 연타 시 문자가 최대 3배 빈도로 나갈 수 있다. 이상감지 쿨다운(이력 1분·보호자 5분·본인 3분)과는 별개 값이다.
 - **문자 폴백 시간당 상한 (2026-10-05, 점검 M-2)**: 대가로 늘어난 문자를 막기 위해 `WARD_SOS`의 **문자 폴백에만** 수신자별 시간당 30건 상한을 둔다(`notification.sms-fallback.max-per-hour`, 0=끔). 쿨다운은 푸시·문자 단일 10초 그대로다. **푸시·WebSocket·SOS 이력은 이 상한과 무관하다** - 초과하면 문자만 생략하고 알림 이력에 `RATE_LIMITED`로 남긴다. SOS 알림 자체를 막는 429가 아니므로 "SOS는 항상 발송" 규칙은 그대로다. 복약·이상감지 등 설정 기반 문자에는 걸지 말 것. Redis 장애 시 fail-open. 문자가 접수되지 않으면(번호 없음·발송사 장애) 센 한 건을 환불한다. 키는 (알림 종류, 수신자)이며 디스패처의 `wardId`(표시 전용)를 쓰지 않는다 - 그래서 한 보호자의 여러 피보호자가 한도를 공유한다(수용). 전원이 상한을 넘으면 SOS 쿨다운이 풀린다(수용, SOS-G09). 증가는 반드시 원자 유틸(`RedisCounter.incrementWithTtl`)로 - `setIfAbsent`+`increment` 분리는 창 만료 경합으로 TTL 없는 영구 키를 만든다. 상세 `docs/(2026-10-05) feature-sos-sms-fallback-cap.md`.
 - 상세: `docs/(2026-10-05) fix-sos-notify-cooldown.md`.
+- **WS payload의 `title`·`body`는 푸시와 같은 문자열이다 (2026-11-02)**: `sos-triggered`에 `buildTitle`·`buildBody` 결과를 푸시와 같은 변수로 싣는다(반복 SOS 문구가 화면 안 알림창과 갈라지던 문제). WS용 문구를 따로 만들지 말 것. 상세 `docs/(2026-11-02) feature-sos-ws-title-body.md`.
 
 
 ## SOS 119 연결 - 화면만 띄우고 발신하지 않는다 (2026-08-26)

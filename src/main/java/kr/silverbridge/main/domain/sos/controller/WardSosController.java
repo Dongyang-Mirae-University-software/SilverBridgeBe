@@ -57,7 +57,9 @@ public class WardSosController {
                     1. SOS 발생 이력(sos_event)을 저장합니다 - 알림 발송 성공 여부와 무관하게 항상 기록됩니다.
                     2. 연결된 ACTIVE 보호자 전원에게 긴급 알림을 발송합니다(커밋 후 비동기):
                        - WebSocket: /topic/{guardianId}/sos-triggered  → 보호자 웹 실시간 반응
-                       - FCM 푸시:  "긴급 SOS" / "{피보호자}님이 긴급 도움을 요청했습니다."
+                         (wardId·wardName·sosEventId·repeatCount + 푸시와 같은 title·body)
+                       - FCM 푸시:  "[긴급] {피보호자}님 SOS" / "{피보호자}님이 긴급 도움을 요청했습니다."
+                         최근 10분 안에 2번째부터는 "{피보호자}님이 계속 도움을 요청하고 있습니다.\\n최근 10분 내 N번째 요청입니다."
                     긴급 알림은 필수 알림으로, 보호자의 알림 설정(ON/OFF)과 무관하게 항상 발송됩니다.
                     푸시가 전달되지 않으면 문자로 대신 보내며, 문자 대체 발송은 같은 보호자에게 1시간에 최대 30건까지입니다.
                     넘으면 문자만 생략되고 푸시·WebSocket 알림과 SOS 이력은 그대로입니다.
