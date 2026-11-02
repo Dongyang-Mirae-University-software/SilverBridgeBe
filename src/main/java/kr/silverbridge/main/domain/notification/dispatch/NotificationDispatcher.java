@@ -132,12 +132,26 @@ public class NotificationDispatcher {
      */
     private Outcome withReceivableRecipient(String userId, NotificationType type,
                                             Function<NotificationRecipient, Outcome> send) {
-        NotificationRecipient recipient = recipientResolver.resolve(userId);
+        NotificationRecipient recipient;
+        try {
+            recipient = recipientResolver.resolve(userId);
+        } catch (RuntimeException e) {
+            // 수신자 상태를 모르면 보내지 않는다 - 정지 계정 차단은 강제 FCM도 예외가 아니다(불변 규칙). 대신 예외를
+            // 호출자로 올리지 않고 실패로 기록한다: 올리면 같은 리스너의 다른 수신자 발송이 함께 빠지고 이력도 남지
+            // 않는다(2026-11-02 #425 영향 범위 점검 L-1). 실패라서 SOS·이상감지 리스너는 쿨다운을 푼다.
+            log.warn("[NOTIFY-RECIPIENT-UNAVAILABLE] 알림 수신자 조회 실패: userId={}, type={}, exception={}",
+                    userId, type, e.getClass().getSimpleName());
+            return Outcome.unavailable();
+        }
         if (recipient.canReceive()) {
             return send.apply(recipient);
         }
+        return blocked(recipient, type);
+    }
+
+    private static Outcome blocked(NotificationRecipient recipient, NotificationType type) {
         log.warn("[NOTIFY-BLOCKED] 이용 제한 계정이라 발송하지 않음: userId={}, type={}, status={}",
-                userId, type, recipient.status());
+                recipient.userId(), type, recipient.status());
         return Outcome.notSent(recipient.status() == Status.RESTRICTED
                 ? NotificationNotSentReason.RESTRICTED_ACCOUNT
                 : NotificationNotSentReason.WITHDRAWING_ACCOUNT);
@@ -154,7 +168,9 @@ public class NotificationDispatcher {
             // 올리지 않고 실패로 기록한다: 올리면 같은 리스너의 다른 수신자 발송까지 함께 빠진다(강제 연결의 피보호자
             // 알림, 2026-11-01). 시도한 채널이 없어 이력의 채널 결과는 비어 있다.
             logSettingsUnavailable(userId, type, e);
-            return Outcome.settingsUnavailable();
+            // 정지·탈퇴 진행 계정이면 이력 사유를 실패가 아니라 차단으로 남긴다 - 설정을 읽었어도 보내지 않았을 사람이다
+            // (2026-11-02 점검 L-2). 수신자도 못 읽으면 그대로 실패다.
+            return withReceivableRecipient(userId, type, recipient -> Outcome.unavailable());
         }
         if (targets.isEmpty()) {
             log.debug("발송할 활성 채널 없음: userId={}, type={}", userId, type);
@@ -353,8 +369,11 @@ public class NotificationDispatcher {
     private record Outcome(NotificationLogResult result, NotificationNotSentReason notSentReason,
                            List<ChannelAttempt> attempts) {
 
-        /** 설정을 읽지 못해 어떤 채널도 시도하지 않았다 - 사용자 선택이 아니므로 NOT_SENT가 아니라 실패다. */
-        static Outcome settingsUnavailable() {
+        /**
+         * 설정·수신자를 읽지 못해 어떤 채널도 시도하지 않았다 - 사용자 선택이 아니므로 NOT_SENT가 아니라 실패다.
+         * 이력의 채널 결과가 비어 있는 FAILED는 이 경우뿐이다(관리자 화면 안내, 2026-11-02 점검 M-2).
+         */
+        static Outcome unavailable() {
             return new Outcome(NotificationLogResult.FAILED, null, List.of());
         }
 

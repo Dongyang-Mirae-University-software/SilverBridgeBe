@@ -5,6 +5,7 @@ import kr.silverbridge.main.domain.notification.channel.NotificationContent;
 import kr.silverbridge.main.domain.notification.channel.WardNotificationText;
 import kr.silverbridge.main.domain.notification.dispatch.NotificationDispatcher;
 import kr.silverbridge.main.domain.notification.dispatch.NotificationType;
+import kr.silverbridge.main.domain.notification.entity.NotificationLogResult;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -57,9 +58,11 @@ public class MedicationReminderService {
         for (List<MedicationReminderTarget> group : groups.values()) {
             MedicationReminderTarget first = group.get(0);
             try {
-                notificationDispatcher.dispatch(first.wardId(), first.wardId(), NotificationType.MEDICATION_REMINDER,
-                        group.size() == 1 ? content(first) : groupContent(group));
-                sent++;
+                // FAILED(설정·수신자 조회 실패 포함)는 세지 않는다 - 예외였던 #425 이전과 같은 집계(2026-11-02 점검 L-3)
+                if (notificationDispatcher.dispatch(first.wardId(), first.wardId(), NotificationType.MEDICATION_REMINDER,
+                        group.size() == 1 ? content(first) : groupContent(group)) != NotificationLogResult.FAILED) {
+                    sent++;
+                }
             } catch (RuntimeException e) {
                 // 이미 발송 기록을 선점했으므로 이 회차는 재시도하지 않는다(중복 발송 방지 우선).
                 // 최초 알림이 실패해도 재알림이 두 번째 기회가 된다.

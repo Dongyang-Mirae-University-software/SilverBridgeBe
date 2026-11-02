@@ -3,6 +3,7 @@ package kr.silverbridge.main.domain.anomaly.service;
 import kr.silverbridge.main.domain.notification.channel.NotificationContent;
 import kr.silverbridge.main.domain.notification.dispatch.NotificationDispatcher;
 import kr.silverbridge.main.domain.notification.dispatch.NotificationType;
+import kr.silverbridge.main.domain.notification.entity.NotificationLogResult;
 import kr.silverbridge.main.global.enums.DetectedType;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -111,5 +112,17 @@ class AnomalyReviewReminderServiceTest {
 
         assertThat(sent).isEqualTo(1);
         verify(notificationDispatcher, times(2)).dispatch(any(), any(), eq(NotificationType.ANOMALY_REVIEW_CONFLICTED), any());
+    }
+
+    @Test
+    @DisplayName("L-3: 디스패처가 FAILED(설정·수신자 조회 실패 등)를 돌려준 건은 발송 건수에 세지 않는다 (2026-11-02)")
+    void failedResultIsNotCounted() {
+        when(planner.claimReminders()).thenReturn(List.of(target("GD0001"), target("GD0002")));
+        when(notificationDispatcher.dispatch(eq("GD0001"), any(), any(), any())).thenReturn(NotificationLogResult.FAILED);
+        when(notificationDispatcher.dispatch(eq("GD0002"), any(), any(), any())).thenReturn(NotificationLogResult.DELIVERED);
+
+        int sent = service.sendReminders();
+
+        assertThat(sent).isEqualTo(1);
     }
 }

@@ -92,4 +92,19 @@
 - 고칠 후보: M-1(코드+테스트), M-2(Swagger 문구+FE 전달 메모), T-1·T-2(테스트만). L-1~L-4는 수용·기록이다.
 - 정책 변경은 없어 `policy-notification.md`는 그대로 둔다(수정 시 M-1 결과만 반영 여부 판단).
 
-**상태**: PHASE D 보고 완료 - 수정 범위 승인 대기.
+## 7. PHASE E 반영 (2026-11-02, 사용자 승인: 권장안 + 이슈 전부 + 테스트 제안)
+
+브랜치 `fix/impact-dispatcher-isolation`. 🟢 L-1~L-4도 "수용" 대신 코드로 반영했다.
+
+| ID | 반영 | 고정 테스트 |
+|---|---|---|
+| M-1 | `MedicationWithdrawalListener` 보호자별 try/catch(클래스명만 ERROR) | `MedicationWithdrawalListenerTest.한보호자_실패해도_나머지_안내` |
+| M-2 | Swagger `GET /api/admin/notification` 결과 설명에 "채널 결과가 빈 FAILED = 설정·수신자 조회 실패" 추가. 관리자 FE는 FE 담당이라 FE 전달 메모로 남김 | - |
+| L-1 | 디스패처 `withReceivableRecipient`가 수신자 조회 예외를 잡아 `FAILED`(시도 0건) 기록 - 상태를 모르면 강제 정책이라도 보내지 않는다(정지 차단 우선, 실제로는 같은 DB 장애로 토큰·번호도 못 읽는다) | `NotificationDispatcherTest.수신자조회실패_실패로기록`(SOS·이상감지·설정 기반), `설정과수신자_모두조회실패_실패로기록` |
+| L-2 | 설정 조회 실패 시 수신자 상태를 확인해 정지·탈퇴 진행이면 `NOT_SENT`(차단 사유) | `설정기반_설정조회실패_정지수신자는_차단사유` |
+| L-3 | 스케줄러 6곳(재촉·요약·동수·복약 시각·미복용·말벗 안내·말벗 보호자 알림)의 `sent`가 `FAILED`를 세지 않음 | `AnomalyReviewReminderServiceTest.failedResultIsNotCounted` |
+| L-4 | `CameraLinkLostNotifier` - 전원 미전달 + 실패(FAILED·예외)면 6시간 쿨다운 해제, `NOT_SENT`뿐이면 유지 | `CameraLinkLostNotifierTest` 3건 |
+| T-1 | `FORCED_PUSH_PLUS_SETTINGS` 전 종류 × 설정 조회 실패 → 강제 푸시(목록 전제 테스트 포함) | `강제정책_전종류_설정조회실패_강제푸시` |
+| T-2 | 정지 수신자 + 강제 정책 → 설정 조회 없이 차단 | `강제정책_정지수신자_설정조회없이_차단` |
+
+마이그레이션·통합 테스트 변경 없음(vkcs 브랜치 통합 테스트 불요, CD가 배포 전에 돌린다). 정책 갱신: `policy-notification.md` #425 절, `policy-anomaly.md` 카메라 연결 끊김.
