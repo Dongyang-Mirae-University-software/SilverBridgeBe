@@ -7,6 +7,7 @@ import kr.silverbridge.main.domain.notification.channel.NotificationContent;
 import kr.silverbridge.main.domain.notification.channel.WardNotificationText;
 import kr.silverbridge.main.domain.notification.dispatch.NotificationDispatcher;
 import kr.silverbridge.main.domain.notification.dispatch.NotificationType;
+import kr.silverbridge.main.domain.notification.entity.NotificationLogResult;
 import kr.silverbridge.main.domain.notification.service.GuardianNotificationPreferenceService;
 import kr.silverbridge.main.domain.user.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
@@ -103,8 +104,10 @@ public class CheckinGuardianAlertService {
                 if (logRepository.claimGuardianAlert(guardianId, wardId, date, slot.value(), kind) == 0) {
                     continue;   // 이미 보냈다
                 }
-                dispatcher.dispatch(guardianId, wardId, type, content);
-                sent++;
+                // FAILED(설정·수신자 조회 실패 포함)는 세지 않는다 - 예외였던 #425 이전과 같은 집계(2026-11-02 점검 L-3)
+                if (dispatcher.dispatch(guardianId, wardId, type, content) != NotificationLogResult.FAILED) {
+                    sent++;
+                }
             } catch (RuntimeException e) {
                 log.warn("[CHECKIN-ALERT-FAILED] 보호자 알림 실패: kind={}, wardId={}, guardianId={}, error={}",
                         kind, wardId, guardianId, e.getClass().getSimpleName());

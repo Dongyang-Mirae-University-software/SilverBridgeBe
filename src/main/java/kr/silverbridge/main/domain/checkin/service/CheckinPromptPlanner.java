@@ -12,6 +12,7 @@ import kr.silverbridge.main.domain.notification.channel.NotificationContent;
 import kr.silverbridge.main.domain.notification.channel.WardNotificationText;
 import kr.silverbridge.main.domain.notification.dispatch.NotificationDispatcher;
 import kr.silverbridge.main.domain.notification.dispatch.NotificationType;
+import kr.silverbridge.main.domain.notification.entity.NotificationLogResult;
 import kr.silverbridge.main.domain.user.repository.UserRepository;
 import kr.silverbridge.main.global.enums.Role;
 import kr.silverbridge.main.global.enums.Status;
@@ -93,10 +94,12 @@ public class CheckinPromptPlanner {
                 if (logRepository.claimPrompt(wardId, today, slot.value()) == 0) {
                     continue;   // 이미 보냈다
                 }
-                dispatcher.dispatch(wardId, wardId, NotificationType.CHECKIN_PROMPT, NotificationContent.of(
+                // FAILED(설정·수신자 조회 실패 포함)는 세지 않는다 - 예외였던 #425 이전과 같은 집계(2026-11-02 점검 L-3)
+                if (dispatcher.dispatch(wardId, wardId, NotificationType.CHECKIN_PROMPT, NotificationContent.of(
                         WardNotificationText.TITLE, PROMPT_BODY,
-                        Map.of("type", "CHECKIN_PROMPT", "slot", slot.value(), "checkDate", today.toString())));
-                sent++;
+                        Map.of("type", "CHECKIN_PROMPT", "slot", slot.value(), "checkDate", today.toString()))) != NotificationLogResult.FAILED) {
+                    sent++;
+                }
             } catch (RuntimeException e) {
                 log.warn("[CHECKIN-PLANNER] 안부 알림 실패: wardId={}, slot={}, error={}",
                         wardId, slot.value(), e.getClass().getSimpleName());

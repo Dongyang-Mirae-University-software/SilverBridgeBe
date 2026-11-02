@@ -3,6 +3,7 @@ package kr.silverbridge.main.domain.medication.service;
 import kr.silverbridge.main.domain.notification.channel.NotificationContent;
 import kr.silverbridge.main.domain.notification.dispatch.NotificationDispatcher;
 import kr.silverbridge.main.domain.notification.dispatch.NotificationType;
+import kr.silverbridge.main.domain.notification.entity.NotificationLogResult;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -36,9 +37,11 @@ public class MedicationMissedAlertService {
         int sent = 0;
         for (MedicationMissedAlertTarget target : targets) {
             try {
-                notificationDispatcher.dispatch(
-                        target.guardianId(), target.wardId(), NotificationType.MEDICATION_MISSED, content(target));
-                sent++;
+                // FAILED(설정·수신자 조회 실패 포함)는 세지 않는다 - 예외였던 #425 이전과 같은 집계(2026-11-02 점검 L-3)
+                if (notificationDispatcher.dispatch(
+                        target.guardianId(), target.wardId(), NotificationType.MEDICATION_MISSED, content(target)) != NotificationLogResult.FAILED) {
+                    sent++;
+                }
             } catch (RuntimeException e) {
                 // 이미 발송 기록을 선점했으므로 재시도하지 않는다(중복 발송 방지 우선, 2차와 동일한 방침).
                 log.error("[MEDICATION-MISSED] 발송 실패 guardianId={}, wardId={}",

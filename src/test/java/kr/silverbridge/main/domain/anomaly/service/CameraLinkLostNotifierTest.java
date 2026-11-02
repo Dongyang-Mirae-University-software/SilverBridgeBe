@@ -7,6 +7,7 @@ import kr.silverbridge.main.domain.connection.service.ConnectionService;
 import kr.silverbridge.main.domain.notification.channel.NotificationContent;
 import kr.silverbridge.main.domain.notification.dispatch.NotificationDispatcher;
 import kr.silverbridge.main.domain.notification.dispatch.NotificationType;
+import kr.silverbridge.main.domain.notification.entity.NotificationLogResult;
 import kr.silverbridge.main.domain.user.repository.UserRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -70,6 +71,52 @@ class CameraLinkLostNotifierTest {
     @SuppressWarnings({"unchecked", "rawtypes"})
     private void stubSchedule() {
         when(taskScheduler.schedule(any(Runnable.class), any(Instant.class))).thenReturn((ScheduledFuture) future);
+    }
+
+    private void givenLostWithGuardians(String... guardianIds) {
+        stubSchedule();
+        when(cameraService.findOwnerBySessionId(SESSION)).thenReturn(Optional.of(new CameraOwner("W1", "거실")));
+        when(connectionService.getActiveGuardianIds("W1")).thenReturn(List.of(guardianIds));
+        when(valueOps.setIfAbsent(anyString(), eq("1"), any(Duration.class))).thenReturn(true);
+        when(userRepository.findById("W1")).thenReturn(Optional.empty());
+    }
+
+    @Test
+    @DisplayName("L-4: 아무에게도 전달되지 않고 실패(FAILED·예외)가 있으면 쿨다운을 풀어 다음 끊김을 다시 알린다 (2026-11-02)")
+    void 전원_미전달_실패면_쿨다운_해제() {
+        givenLostWithGuardians("G1", "G2");
+        when(dispatcher.dispatch(eq("G1"), anyString(), any(), any())).thenReturn(NotificationLogResult.FAILED);
+        when(dispatcher.dispatch(eq("G2"), anyString(), any(), any())).thenThrow(new IllegalStateException("down"));
+
+        notifier.onLost(Set.of(SESSION));
+        scheduledTask().run();
+
+        verify(redisTemplate).delete("camera:link-lost-notify:" + SESSION);
+    }
+
+    @Test
+    @DisplayName("L-4: 한 명이라도 전달됐으면 쿨다운을 유지한다")
+    void 한명이라도_전달되면_쿨다운_유지() {
+        givenLostWithGuardians("G1", "G2");
+        when(dispatcher.dispatch(eq("G1"), anyString(), any(), any())).thenReturn(NotificationLogResult.DELIVERED);
+        when(dispatcher.dispatch(eq("G2"), anyString(), any(), any())).thenReturn(NotificationLogResult.FAILED);
+
+        notifier.onLost(Set.of(SESSION));
+        scheduledTask().run();
+
+        verify(redisTemplate, never()).delete(anyString());
+    }
+
+    @Test
+    @DisplayName("L-4: 정지 계정 차단·채널 꺼 둠(NOT_SENT)뿐이면 다시 보내도 막히므로 쿨다운을 유지한다")
+    void 보내지않음뿐이면_쿨다운_유지() {
+        givenLostWithGuardians("G1");
+        when(dispatcher.dispatch(eq("G1"), anyString(), any(), any())).thenReturn(NotificationLogResult.NOT_SENT);
+
+        notifier.onLost(Set.of(SESSION));
+        scheduledTask().run();
+
+        verify(redisTemplate, never()).delete(anyString());
     }
 
     @Test

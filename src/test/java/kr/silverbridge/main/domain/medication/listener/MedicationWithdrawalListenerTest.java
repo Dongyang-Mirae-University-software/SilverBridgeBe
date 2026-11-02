@@ -17,6 +17,7 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -113,5 +114,30 @@ class MedicationWithdrawalListenerTest {
                 .thenThrow(new IllegalStateException("DB 순단"));
 
         assertThatNoException().isThrownBy(() -> listener.handleWithdrawn(withdrawnEvent()));
+    }
+
+    @Test
+    @DisplayName("T-3 불변식 ③: 한 보호자 안내가 예외로 끝나도 남은 보호자와 다음 피보호자 안내는 나간다 (2026-11-02 M-1)")
+    void 한보호자_실패해도_나머지_안내() {
+        String otherGuardianId = "GD0003";
+        String otherWardId = "WD0002";
+        String otherWardGuardianId = "GD0004";
+        Map<String, Integer> stopped = new LinkedHashMap<>();   // 실패하는 피보호자를 먼저 처리하게 순서를 고정
+        stopped.put(WARD_ID, 1);
+        stopped.put(otherWardId, 2);
+        when(medicationWithdrawalService.removeMedicationsRegisteredBy(WITHDRAWN_GUARDIAN_ID)).thenReturn(stopped);
+        when(connectionService.getActiveGuardianIds(WARD_ID))
+                .thenReturn(List.of(REMAINING_GUARDIAN_ID, otherGuardianId));
+        when(connectionService.getActiveGuardianIds(otherWardId)).thenReturn(List.of(otherWardGuardianId));
+        when(userRepository.findById(anyString())).thenReturn(Optional.empty());
+        when(notificationDispatcher.dispatch(eq(REMAINING_GUARDIAN_ID), any(), any(), any()))
+                .thenThrow(new IllegalStateException("users down"));
+
+        assertThatNoException().isThrownBy(() -> listener.handleWithdrawn(withdrawnEvent()));
+
+        verify(notificationDispatcher).dispatch(eq(otherGuardianId), eq(WARD_ID),
+                eq(NotificationType.MEDICATION_STOPPED), any());
+        verify(notificationDispatcher).dispatch(eq(otherWardGuardianId), eq(otherWardId),
+                eq(NotificationType.MEDICATION_STOPPED), any());
     }
 }

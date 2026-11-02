@@ -45,7 +45,7 @@ public class AdminNotificationController {
                     [전송 결과 - result]
                     - DELIVERED: 한 채널 이상 발송 서버가 접수
                     - SMS_FALLBACK: SOS·이상감지 푸시가 전달되지 않아 문자로 대체 발송(전달된 것으로 셉니다)
-                    - FAILED: 시도한 채널이 모두 실패
+                    - FAILED: 시도한 채널이 모두 실패. 채널 결과(channelResults)가 빈 FAILED는 알림 설정·수신자 정보를 읽지 못해 어떤 채널도 시도하지 않은 경우입니다(서버 일시 장애)
                     - NOT_SENT: 보내지 않음(이용 제한·탈퇴 처리 중 계정, 수신자가 채널을 꺼 둠). **실패가 아닙니다**
 
                     [채널]
