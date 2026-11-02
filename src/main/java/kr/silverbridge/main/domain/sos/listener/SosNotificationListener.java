@@ -100,7 +100,11 @@ public class SosNotificationListener {
                                 "wardName", event.wardName(),
                                 "sosEventId", String.valueOf(event.sosEventId()),
                                 // 기존 키는 그대로 두고 추가만 한다 - 쓰지 않는 프론트는 영향받지 않는다.
-                                "repeatCount", repeatCountValue));
+                                "repeatCount", repeatCountValue,
+                                // 화면 안 알림창이 푸시와 같은 문구를 쓰도록 같은 변수를 싣는다(2026-11-02).
+                                // 따로 만들면 반복 SOS 본문·제목이 다시 갈라진다.
+                                "title", title,
+                                "body", body));
 
                 NotificationLogResult result = notificationDispatcher.dispatch(guardianId, event.wardId(),
                         NotificationType.WARD_SOS,

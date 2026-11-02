@@ -220,7 +220,10 @@ class SosNotificationListenerTest {
         Map<String, String> wsPayload = (Map<String, String>) wsCaptor.getValue();
         assertThat(wsPayload)
                 .containsEntry("repeatCount", "3")
-                .containsEntry("sosEventId", String.valueOf(SOS_EVENT_ID));
+                .containsEntry("sosEventId", String.valueOf(SOS_EVENT_ID))
+                // 화면 안 알림창도 푸시와 같은 반복 문구를 쓴다(2026-11-02)
+                .containsEntry("title", captor.getValue().title())
+                .containsEntry("body", captor.getValue().body());
     }
 
     @Test
@@ -237,6 +240,35 @@ class SosNotificationListenerTest {
         verify(notificationDispatcher).dispatch(eq("GD0001"), any(), eq(NotificationType.WARD_SOS), captor.capture());
         assertThat(captor.getValue().body()).isEqualTo("김순자님이 긴급 도움을 요청했습니다.");
         assertThat(captor.getValue().data()).containsEntry("repeatCount", "1");
+    }
+
+    @Test
+    @DisplayName("WS(sos-triggered)는 기존 키를 유지하고 푸시와 같은 제목·본문을 싣는다 (1회)")
+    void handleSosTriggered_WS제목본문_푸시와동일() {
+        when(connectionService.getActiveGuardianIds(WARD_ID)).thenReturn(List.of("GD0001"));
+        when(cooldown.tryAcquire(WARD_ID)).thenReturn(true);
+        when(sosEventRepository.countByWardIdAndCreatedAtGreaterThanEqual(eq(WARD_ID), any()))
+                .thenReturn(1L);
+
+        listener.handleSosTriggered(event);
+
+        ArgumentCaptor<NotificationContent> captor = ArgumentCaptor.forClass(NotificationContent.class);
+        verify(notificationDispatcher).dispatch(eq("GD0001"), any(), eq(NotificationType.WARD_SOS), captor.capture());
+        ArgumentCaptor<Object> wsCaptor = ArgumentCaptor.forClass(Object.class);
+        verify(webSocketEventPublisher).sendToUser(eq("GD0001"), eq("sos-triggered"), wsCaptor.capture());
+        @SuppressWarnings("unchecked")
+        Map<String, String> wsPayload = (Map<String, String>) wsCaptor.getValue();
+
+        assertThat(wsPayload)
+                .containsOnlyKeys("wardId", "wardName", "sosEventId", "repeatCount", "title", "body")
+                .containsEntry("wardId", WARD_ID)
+                .containsEntry("wardName", "김순자")
+                .containsEntry("sosEventId", String.valueOf(SOS_EVENT_ID))
+                .containsEntry("repeatCount", "1")
+                .containsEntry("title", "[긴급] 김순자님 SOS")
+                .containsEntry("body", "김순자님이 긴급 도움을 요청했습니다.");
+        assertThat(wsPayload.get("title")).isEqualTo(captor.getValue().title());
+        assertThat(wsPayload.get("body")).isEqualTo(captor.getValue().body());
     }
 
     @Test
