@@ -196,6 +196,26 @@ medication:
     per-minute: ${MEDICATION_OCR_PER_MINUTE:10}
     per-hour: ${MEDICATION_OCR_PER_HOUR:60}
 
+# 안부 말벗(2026-11-04) - 피보호자 기기 → 백엔드 → AI(/companion/*). 대답 원문·음성·사진은 저장하지 않는다.
+# 주소·키는 코드 기본값 없음: 비거나 enabled=false면 기기 API는 503 COMPANION_DISABLED(기동은 막지 않음).
+# 말벗은 gosky 메인 AI 서버에 들어간다(2026-11-04 결정) - 주소·키·스위치는 AI가 올라온 뒤 사용자 확인을 받고 .env.dev에 넣는다.
+companion:
+  enabled: ${COMPANION_ENABLED:false}
+  ai-base-url: ${COMPANION_AI_BASE_URL:}
+  api-key: ${COMPANION_AI_API_KEY:}                       # AI COMPANION_API_KEY와 같은 값. 챗 AI_API_KEY와 다르다(평문 커밋 금지)
+  connect-timeout: ${COMPANION_CONNECT_TIMEOUT:3s}
+  # 한 턴 전체 제한 - AI에 한 턴 60초를 요청하고 BE는 90초까지 기다린다(사용자 결정 2026-11-04). 일반 외부 호출 규칙의 예외라
+  # 서버 전체 동시 상한(8)을 함께 둔다.
+  call-timeout: ${COMPANION_CALL_TIMEOUT:90s}
+  purge-call-timeout: ${COMPANION_PURGE_CALL_TIMEOUT:10s}
+  max-concurrent: ${COMPANION_MAX_CONCURRENT:8}
+  per-minute: ${COMPANION_PER_MINUTE:20}
+  per-hour: ${COMPANION_PER_HOUR:200}
+  window-minutes: ${COMPANION_WINDOW_MINUTES:60}          # 시간대 시작부터 대화를 열 수 있는 시간
+  abandon-after: ${COMPANION_ABANDON_AFTER:10m}           # 활동 없는 대화를 스케줄러(5분 주기)가 마감
+  # 질문 안내 알림을 받을 피보호자 ID(쉼표 구분). 비면 아무에게도 보내지 않는다 - PR-B(화면·알림 설정) 전까지의 허용 목록
+  prompt-ward-ids: ${COMPANION_PROMPT_WARD_IDS:}
+
 # 관리자 제휴 병원 관리 - 예약 서비스(SilverBridgeReservation) 관리자 API 중계 (2026-10-26).
 # 주소·자격은 코드 기본값 없음: 비면 이 API들만 503(기동은 막지 않음). vkcs-linux는 예약 서비스가 없어 비어 있는 것이 정상.
 # gosky: base-url = http://reservation-api:6015 (도커 네트워크 sb-internal - docker-compose.gosky.yml), 자격 = BE 전용 관리자 계정.
@@ -282,7 +302,7 @@ notification:
     # true = 웹 토큰에 notification 블록 없이 data만(알림 두 번 표시 해결). ⚠️ FE SW가 data.title·body로 그리게 배포된 뒤에 켤 것
     webpush-data-only: ${NOTIFICATION_FCM_WEBPUSH_DATA_ONLY:false}
     # 웹푸시 Urgency: high 종류(쉼표 구분, 2026-10-30 사용자 선택). 비우면 전부 normal
-    high-urgency-types: ${NOTIFICATION_FCM_HIGH_URGENCY_TYPES:WARD_SOS,ANOMALY_DETECTED,ANOMALY_DETECTED_SELF,MEDICATION_REMINDER,ANOMALY_REVIEW_REQUIRED,CAMERA_LINK_LOST,CONNECTION_REQUEST,CONNECTION_ACCEPTED,CONNECTION_REFUSED,INQUIRY_ANSWERED}
+    high-urgency-types: ${NOTIFICATION_FCM_HIGH_URGENCY_TYPES:WARD_SOS,ANOMALY_DETECTED,ANOMALY_DETECTED_SELF,MEDICATION_REMINDER,ANOMALY_REVIEW_REQUIRED,CAMERA_LINK_LOST,CONNECTION_REQUEST,CONNECTION_ACCEPTED,CONNECTION_REFUSED,INQUIRY_ANSWERED,COMPANION_RISK}
   # 필수 알림(SOS)의 문자 폴백 상한. 푸시를 못 받는 수신자에게 문자가 유일한 수단이라 높게 잡는다(10초 간격 연타 시 5분이면 도달).
   # 넘으면 그 문자만 생략되고 푸시·WS·이력은 그대로다. 0이면 상한을 끈다. Redis 장애 시 막지 않는다.
   sms-fallback:

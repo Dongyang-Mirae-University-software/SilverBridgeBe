@@ -185,7 +185,28 @@ public enum ErrorCode {
     AI_STATS_TIMEOUT(HttpStatus.GATEWAY_TIMEOUT, "AI 통계 응답이 늦습니다. 잠시 후 다시 시도해주세요."),
     CHAT_LOG_NOT_FOUND(HttpStatus.NOT_FOUND, "상담 기록을 찾을 수 없습니다."),
     CHAT_LIMIT_EXCEEDED(HttpStatus.TOO_MANY_REQUESTS, "이전 상담 응답을 기다리는 중입니다. 잠시 후 다시 시도해주세요."),
-    CHAT_WARD_NOT_CONNECTED(HttpStatus.FORBIDDEN, "연결된 피보호자만 대신 상담·예약할 수 있습니다.");
+    CHAT_WARD_NOT_CONNECTED(HttpStatus.FORBIDDEN, "연결된 피보호자만 대신 상담·예약할 수 있습니다."),
+
+    // 안부 말벗 (2026-11-04). AI 오류 문구는 그대로 내리지 않고 고정 문구만 쓴다
+    COMPANION_DISABLED(HttpStatus.SERVICE_UNAVAILABLE, "안부 말벗을 지금 사용할 수 없습니다."),
+    COMPANION_UNAVAILABLE(HttpStatus.SERVICE_UNAVAILABLE, "안부 말벗 서버에 연결할 수 없습니다. 잠시 후 다시 시도해주세요."),
+    COMPANION_TIMEOUT(HttpStatus.GATEWAY_TIMEOUT, "안부 말벗 응답이 너무 오래 걸립니다. 잠시 후 다시 시도해주세요."),
+    COMPANION_BUSY(HttpStatus.SERVICE_UNAVAILABLE, "지금 대화하시는 분이 많습니다. 잠시 후 다시 시도해주세요."),
+    COMPANION_TURN_IN_PROGRESS(HttpStatus.CONFLICT, "앞의 대답을 듣고 있어요. 잠시만 기다려주세요."),
+    COMPANION_NOT_IN_WINDOW(HttpStatus.CONFLICT, "지금은 안부 대화 시간이 아닙니다."),
+    COMPANION_SLOT_DONE(HttpStatus.CONFLICT, "이 시간의 안부 대화는 이미 마쳤습니다."),
+    COMPANION_SESSION_NOT_FOUND(HttpStatus.NOT_FOUND, "안부 대화를 찾을 수 없습니다."),
+    // 없는 대화는 404, 남의 대화는 403으로 그대로 안내한다(2026-07-14 정책). 피보호자 경로라 문구는 본인 기준이다
+    COMPANION_SESSION_NOT_OWNED(HttpStatus.FORBIDDEN, "본인의 안부 대화만 이어갈 수 있습니다."),
+    COMPANION_SESSION_ENDED(HttpStatus.CONFLICT, "이미 끝난 안부 대화입니다."),
+    COMPANION_SESSION_LOST(HttpStatus.CONFLICT, "대화가 끊겼습니다. 다음 시간에 다시 이야기해요."),
+    COMPANION_ANSWER_EMPTY(HttpStatus.BAD_REQUEST, "대답이 비어 있습니다."),
+    COMPANION_ANSWER_TOO_LONG(HttpStatus.BAD_REQUEST, "대답은 500자까지 보낼 수 있습니다."),
+    COMPANION_AUDIO_INVALID(HttpStatus.BAD_REQUEST, "WAV, WebM, MP3 음성만 보낼 수 있습니다."),
+    COMPANION_AUDIO_TOO_LARGE(HttpStatus.CONTENT_TOO_LARGE, "음성은 5MB를 넘을 수 없습니다."),
+    COMPANION_FRAME_INVALID(HttpStatus.BAD_REQUEST, "사진은 JPG, PNG만 보낼 수 있습니다."),
+    COMPANION_FRAME_TOO_LARGE(HttpStatus.CONTENT_TOO_LARGE, "사진은 5장까지, 한 장에 1MB를 넘을 수 없습니다."),
+    COMPANION_STT_UNAVAILABLE(HttpStatus.SERVICE_UNAVAILABLE, "지금은 음성을 알아듣지 못해요. 글로 대답해주세요.");
 
     private final HttpStatus status;
     private final String message;

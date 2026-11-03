@@ -22,6 +22,7 @@ public final class NotificationTypeLabel {
                  CONNECTION_FORCED -> "연결";
             case INQUIRY_ANSWERED -> "문의";
             case CAMERA_LINK_LOST -> "카메라";
+            case COMPANION_RISK, COMPANION_PROMPT -> "안부 말벗";
         };
     }
 }

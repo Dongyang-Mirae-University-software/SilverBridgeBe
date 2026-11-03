@@ -121,7 +121,25 @@ public enum NotificationType {
      * 알림톡 매핑 금지(다발성 메시지 - 별도 승인 필요), 이메일 제외, 강제 채널로 승격하지 말 것 - 이 알림은
      * 위험 발생이 아니라 "감시 상태 확인 요청"이다.</p>
      */
-    CAMERA_LINK_LOST(Policy.SETTINGS_ONLY, EnumSet.of(NotificationChannelType.FCM));
+    CAMERA_LINK_LOST(Policy.SETTINGS_ONLY, EnumSet.of(NotificationChannelType.FCM)),
+
+    /**
+     * 안부 말벗 대화의 위험 신호 → 피보호자의 <b>ACTIVE 보호자</b>에게(2026-11-04). 대화당 1번이다.
+     *
+     * <p>{@link #ANOMALY_DETECTED}와 같이 FCM은 끌 수 없고, 어떤 채널로도 전달되지 않으면 문자를 대신 보낸다 -
+     * 자해·극단 선택 신호일 수 있어 놓치면 안 된다. 채널은 <b>FCM·문자뿐</b>이다: 알림톡은 승인 템플릿이 없어 매핑하지
+     * 않고, 이메일은 즉시성이 없어 "전달됨"으로 잡혀 문자 대체를 막으면 안 된다. 문구에 원문·질병명을 넣지 않는다.</p>
+     */
+    COMPANION_RISK(Policy.FORCED_PUSH_PLUS_SETTINGS,
+            EnumSet.of(NotificationChannelType.FCM, NotificationChannelType.SMS)),
+
+    /**
+     * 안부 질문 시간 안내 → <b>피보호자 본인</b>에게(2026-11-04). 하루 5번 반복되는 다발성 알림이다.
+     *
+     * <p><b>FCM만</b>, 설정 기반이다 - 문자는 하루 5건 과금이고 알림톡은 다발성이라 승인 없이 금지다. 놓쳐도 다음
+     * 시간대가 있어 강제 채널로 승격하지 말 것. PR-B 전까지는 {@code companion.prompt-ward-ids} 허용 목록에만 보낸다.</p>
+     */
+    COMPANION_PROMPT(Policy.SETTINGS_ONLY, EnumSet.of(NotificationChannelType.FCM));
 
     /**
      * 이메일 허용 표시. 이메일은 즉시성이 보장되지 않는 채널이라 <b>기본은 제외</b>이고, 안내성 종류만 이

@@ -77,6 +77,11 @@ public class SwaggerConfig {
                                         + "※ 복용 체크는 피보호자만 할 수 있습니다(보호자에겐 체크 API가 없습니다).\n"
                                         + "※ 약 등록·수정·삭제는 보호자 전용이라 여기 없습니다. 기준일은 항상 KST.\n"
                                         + "※ WARD 역할 계정만 호출 가능."),
+                        new Tag().name("피보호자 - 안부 말벗")
+                                .description("하루 5번(09·12·15·18·21시) AI 말벗과 나누는 짧은 안부 대화\n"
+                                        + "※ 시간대·질문은 서버가 정합니다. 각 시각부터 60분 동안만 열 수 있습니다.\n"
+                                        + "※ 대답 글·음성·사진·받아 적은 글·말벗 응답 문장은 저장하지 않습니다.\n"
+                                        + "※ WARD 역할 계정만 호출 가능."),
                         new Tag().name("피보호자 - 카메라")
                                 .description("이상감지 카메라 등록·목록·수정·삭제 (SessionID 발급)\n"
                                         + "※ 본인이 등록한 카메라만 다룰 수 있습니다.\n"
@@ -261,6 +266,12 @@ public class SwaggerConfig {
                     // ── [피보호자 - 복약] ────────────────────────────
                     "/api/ward/medication/today",
                     "/api/ward/medication/{medicationId}/intake",
+                    // ── [피보호자 - 안부 말벗] ───────────────────────
+                    "/api/ward/companion/today",
+                    "/api/ward/companion/sessions",
+                    "/api/ward/companion/sessions/{sessionId}/reply",
+                    "/api/ward/companion/sessions/{sessionId}/reply/audio",
+                    "/api/ward/companion/sessions/{sessionId}/finish",
                     // ── [보호자 - 연결] ──────────────────────────────
                     "/api/guardian/connection/select",
                     // ── [보호자 - SOS 이력] ──────────────────────────

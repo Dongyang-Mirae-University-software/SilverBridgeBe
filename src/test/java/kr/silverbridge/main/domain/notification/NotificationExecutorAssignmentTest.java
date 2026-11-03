@@ -5,6 +5,8 @@ import kr.silverbridge.main.domain.anomaly.listener.AnomalyClipListener;
 import kr.silverbridge.main.domain.anomaly.listener.AnomalyNotificationListener;
 import kr.silverbridge.main.domain.auth.listener.KakaoRegisterEventListener;
 import kr.silverbridge.main.domain.chat.listener.AiMemberDataPurgeListener;
+import kr.silverbridge.main.domain.companion.listener.CompanionRiskNotificationListener;
+import kr.silverbridge.main.domain.companion.listener.CompanionWithdrawalListener;
 import kr.silverbridge.main.domain.connection.listener.ConnectionNotificationListener;
 import kr.silverbridge.main.domain.inquiry.listener.InquiryNotificationListener;
 import kr.silverbridge.main.domain.medication.listener.MedicationIntakeNotificationListener;
@@ -40,6 +42,14 @@ class NotificationExecutorAssignmentTest {
     void 긴급_리스너는_긴급_executor() {
         assertThat(asyncQualifiers(SosNotificationListener.class)).containsExactly(URGENT);
         assertThat(asyncQualifiers(AnomalyNotificationListener.class)).containsExactly(URGENT);
+        // 안부 말벗 위험 신호(2026-11-04) - 자해·극단 선택 신호일 수 있어 같은 긴급 풀이다
+        assertThat(asyncQualifiers(CompanionRiskNotificationListener.class)).containsExactly(URGENT);
+    }
+
+    @Test
+    @DisplayName("안부 말벗 탈퇴 삭제는 AI 삭제 전용 풀이다 - 탈퇴 응답·알림 풀을 붙들지 않는다(2026-11-04)")
+    void 말벗_탈퇴_삭제_executor() {
+        assertThat(asyncQualifiers(CompanionWithdrawalListener.class)).containsExactly("aiPurgeExecutor");
     }
 
     @Test

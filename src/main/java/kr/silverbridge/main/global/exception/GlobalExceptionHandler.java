@@ -39,6 +39,7 @@ public class GlobalExceptionHandler {
     // PostgreSQL SQLSTATE — 23505: unique_violation (그 외 23503 FK, 23502 NOT NULL, 23514 CHECK)
     private static final String SQLSTATE_UNIQUE_VIOLATION = "23505";
     private static final Pattern MEDICATION_OCR_PATH = Pattern.compile("^/api/guardian/ward/[^/]+/medication/ocr$");
+    private static final Pattern COMPANION_AUDIO_PATH = Pattern.compile("^/api/ward/companion/sessions/[^/]+/reply/audio$");
 
     // 22021: character_not_in_repertoire(invalid byte sequence — 문자열의 NUL(\u0000) 등), 22P05: untranslatable_character.
     // 사용자 입력 탓이라 500이 아니라 400으로 안내한다.
@@ -266,6 +267,11 @@ public class GlobalExceptionHandler {
         if (MEDICATION_OCR_PATH.matcher(request.getRequestURI()).matches()) {
             return ResponseEntity.status(ErrorCode.MEDICATION_OCR_IMAGE_TOO_LARGE.getStatus())
                     .body(ApiResponse.fail(ErrorCode.MEDICATION_OCR_IMAGE_TOO_LARGE));
+        }
+        // 안부 말벗 음성 대답(전체 10MB 초과) - 음성 크기 오류로 답한다(2026-11-04)
+        if (COMPANION_AUDIO_PATH.matcher(request.getRequestURI()).matches()) {
+            return ResponseEntity.status(ErrorCode.COMPANION_AUDIO_TOO_LARGE.getStatus())
+                    .body(ApiResponse.fail(ErrorCode.COMPANION_AUDIO_TOO_LARGE));
         }
         return ResponseEntity
                 .badRequest()
