@@ -96,6 +96,21 @@ class ChatRelayServiceTest {
     }
 
     @Test
+    @DisplayName("되묻기 답 칩: suggestedKind=answer 와 칩 4개는 그대로, 모르는 종류 값은 지워서 넘긴다(2026-11-03 점검 L-3)")
+    void 답_칩_종류_정리_후_전달() throws Exception {
+        java.util.List<String> chips = java.util.List.of("오늘부터 아파요", "며칠째 계속 아파요", "점점 심해져요", "열도 나요");
+        when(aiChatClient.send(any())).thenReturn(objectMapper.readTree(
+                "{\"reply\":\"ok\",\"suggestedKind\":\"answer\",\"suggestedQuestions\":" + objectMapper.writeValueAsString(chips) + "}"));
+        assertThat(service.send(ME, msg("머리가 아파요"))).isEqualTo(java.util.Map.of(
+                "reply", "ok", "suggestedKind", "answer", "suggestedQuestions", chips));
+
+        when(aiChatClient.send(any())).thenReturn(objectMapper.readTree(
+                "{\"reply\":\"ok\",\"suggestedKind\":\"<b>x</b>\",\"suggestedQuestions\":[\"질문\"]}"));
+        assertThat(service.send(ME, msg("머리가 아파요"))).isEqualTo(java.util.Map.of(
+                "reply", "ok", "suggestedQuestions", java.util.List.of("질문")));
+    }
+
+    @Test
     @DisplayName("요청의 history는 AI로 보내지 않는다 - AI가 서버 기록으로 이력을 만든다(2026-10-29)")
     void history는_AI로_보내지_않는다() throws Exception {
         when(aiChatClient.send(any())).thenReturn(objectMapper.readTree("{}"));
