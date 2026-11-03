@@ -38,7 +38,8 @@ class AdminNotificationFilterTest {
                 NotificationType.CONNECTION_REQUEST, NotificationType.CONNECTION_ACCEPTED,
                 NotificationType.CONNECTION_REFUSED, NotificationType.CONNECTION_DISCONNECTED,
                 NotificationType.CONNECTION_FORCED, NotificationType.INQUIRY_ANSWERED,
-                NotificationType.CAMERA_LINK_LOST);
+                NotificationType.CAMERA_LINK_LOST, NotificationType.COMPANION_RISK,
+                NotificationType.COMPANION_PROMPT);
     }
 
     @Test

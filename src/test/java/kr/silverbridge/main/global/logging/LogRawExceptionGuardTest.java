@@ -57,7 +57,15 @@ class LogRawExceptionGuardTest {
             "global/jwt/JwtAuthenticationFilter.java",
             "global/websocket/JwtHandshakeInterceptor.java",
             "domain/anomaly/service/AnomalyEventCooldown.java",
-            "domain/anomaly/service/AnomalyReviewReminderService.java");
+            "domain/anomaly/service/AnomalyReviewReminderService.java",
+            // 안부 말벗(2026-11-04) - 대답 글·음성·받아 적은 글이 오가는 경로
+            "domain/companion/client/AiCompanionClient.java",
+            "domain/companion/service/CompanionService.java",
+            "domain/companion/service/CompanionAbandonScheduler.java",
+            "domain/companion/service/CompanionPromptScheduler.java",
+            "domain/companion/service/CompanionPurgeService.java",
+            "domain/companion/listener/CompanionRiskNotificationListener.java",
+            "domain/companion/listener/CompanionWithdrawalListener.java");
 
     @Test
     void guarded_files_do_not_log_exception_messages() throws IOException {

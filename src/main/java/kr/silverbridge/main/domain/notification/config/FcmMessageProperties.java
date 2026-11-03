@@ -44,7 +44,8 @@ public class FcmMessageProperties {
             NotificationType.CONNECTION_REQUEST,
             NotificationType.CONNECTION_ACCEPTED,
             NotificationType.CONNECTION_REFUSED,
-            NotificationType.INQUIRY_ANSWERED);
+            NotificationType.INQUIRY_ANSWERED,
+            NotificationType.COMPANION_RISK);
 
     public boolean isHighUrgency(NotificationType type) {
         return type != null && highUrgencyTypes != null && highUrgencyTypes.contains(type);

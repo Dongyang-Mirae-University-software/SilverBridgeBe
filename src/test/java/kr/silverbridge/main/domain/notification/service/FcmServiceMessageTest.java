@@ -257,14 +257,14 @@ class FcmServiceMessageTest {
     class Urgency {
 
         @Test
-        @DisplayName("기본 high 목록은 2026-10-30 사용자 선택 10종이다")
+        @DisplayName("기본 high 목록은 2026-10-30 사용자 선택 10종 + 안부 말벗 위험 신호(2026-11-04)다")
         void defaultHighUrgencyTypes() {
             assertThat(new FcmMessageProperties().getHighUrgencyTypes()).containsExactlyInAnyOrderElementsOf(EnumSet.of(
                     NotificationType.WARD_SOS, NotificationType.ANOMALY_DETECTED, NotificationType.ANOMALY_DETECTED_SELF,
                     NotificationType.MEDICATION_REMINDER, NotificationType.ANOMALY_REVIEW_REQUIRED,
                     NotificationType.CAMERA_LINK_LOST, NotificationType.CONNECTION_REQUEST,
                     NotificationType.CONNECTION_ACCEPTED, NotificationType.CONNECTION_REFUSED,
-                    NotificationType.INQUIRY_ANSWERED));
+                    NotificationType.INQUIRY_ANSWERED, NotificationType.COMPANION_RISK));
         }
 
         @Test

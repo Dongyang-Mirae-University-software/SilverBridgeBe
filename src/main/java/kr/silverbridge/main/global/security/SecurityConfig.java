@@ -129,6 +129,8 @@ public class SecurityConfig {
                         // 약 봉투 OCR(최대 8MB 사진) - 역할을 본문 파싱 전에 막는다(2026-10-22 점검 L-2). 메서드 보안(@PreAuthorize)은
                         // multipart 파싱 뒤에 돌아 WARD·ADMIN 요청도 10MB까지 읽은 뒤에야 403이 나왔다. 컨트롤러의 @PreAuthorize는 그대로 둔다.
                         .requestMatchers(HttpMethod.POST, "/api/guardian/ward/*/medication/ocr").hasRole("GUARDIAN")
+                        // 안부 말벗 음성 대답(음성 5MB + 사진 5장) - 같은 이유로 본문 파싱 전에 피보호자만 통과시킨다(2026-11-04)
+                        .requestMatchers(HttpMethod.POST, "/api/ward/companion/sessions/*/reply/audio").hasRole("WARD")
                         // 관리자 전용 경로
                         .requestMatchers("/api/admin/**").hasRole("ADMIN")
                         // 나머지는 인증 필요
