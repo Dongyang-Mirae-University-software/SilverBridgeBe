@@ -4,6 +4,14 @@
 
 ---
 
+### [2026-11-04] 안부 말벗 백엔드 중계 PR-A
+
+- 재희 AI 계약(`feat/companion-ai-part`)으로 새로 구현. 기기 API 5개, V65(질문·대화 결과·질문 안내 기록·탈퇴 삭제 대기열), 위험 알림 `COMPANION_RISK`·질문 안내 `COMPANION_PROMPT` 추가. 원문은 저장하지 않는다.
+- 사용자 결정: 중계 제한 90초(AI에 한 턴 60초 요청), 질문은 독거노인 연구 근거로 정함(`(2026-11-04) companion-question-research.md`), 말벗 AI는 gosky 메인 AI 서버에 넣음.
+- 스위치 기본 꺼짐 - `.env.dev` 주소·키는 AI 배포 뒤 사용자 확인 후. 상세 `(2026-11-04) feature-companion-relay.md`.
+
+---
+
 ### [2026-11-02] SOS WS 제목·본문 점검 🟢 2건 조치
 
 - L-1 FE 예비 제목을 "[긴급] ○○님 SOS"로(FE #206 `31a6c27`, gosky FE dev 반영). L-2 Swagger 설명과 리스너 문구·집계 창이 어긋나면 실패하는 `SosNotificationApiDocSyncTest` 추가(운영 코드 변경 없음, 변이 2종 검출).
