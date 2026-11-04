@@ -58,9 +58,9 @@ class NotificationTypeEmailPolicyTest {
         assertThat(NotificationType.CONNECTION_REQUEST.allowedChannels()).containsExactlyInAnyOrder(
                 NotificationChannelType.FCM, NotificationChannelType.SMS,
                 NotificationChannelType.KAKAO_ALIMTALK, NotificationChannelType.EMAIL);
-        assertThat(NotificationType.MEDICATION_REMINDER.allowedChannels()).containsExactlyInAnyOrder(
-                NotificationChannelType.FCM, NotificationChannelType.SMS,
-                NotificationChannelType.KAKAO_ALIMTALK);
+        // 피보호자 복용 시각 알림은 푸시만(2026-11-04) - 피보호자 화면엔 설정이 없어 켜진 문자를 끌 수 없었다
+        assertThat(NotificationType.MEDICATION_REMINDER.allowedChannels())
+                .containsExactly(NotificationChannelType.FCM);
         assertThat(NotificationType.ANOMALY_REVIEW_REQUIRED.allowedChannels())
                 .containsExactly(NotificationChannelType.FCM);
     }

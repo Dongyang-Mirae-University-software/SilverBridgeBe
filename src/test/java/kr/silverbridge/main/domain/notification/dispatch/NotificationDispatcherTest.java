@@ -113,6 +113,18 @@ class NotificationDispatcherTest {
     }
 
     @Test
+    @DisplayName("복용 시각 알림은 피보호자가 문자를 켜 두어도 푸시로만 나간다 (2026-11-04)")
+    void 복용시각알림_문자설정무시() {
+        given(settingService.enabledChannels(USER_ID))
+                .willReturn(EnumSet.of(NotificationChannelType.FCM, NotificationChannelType.SMS));
+
+        dispatcher.dispatch(USER_ID, NotificationType.MEDICATION_REMINDER, content);
+
+        verify(fcmChannel).send(any(), any(), any());
+        verify(smsChannel, never()).send(any(), any(), any());
+    }
+
+    @Test
     @DisplayName("구현체 없는 채널(EMAIL)만 켜져 있으면 아무것도 발송하지 않고 예외도 없다")
     void 미구현채널_무시() {
         given(settingService.enabledChannels(USER_ID))
