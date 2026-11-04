@@ -21,5 +21,8 @@
 | MedGemma 나이·성별 | AI `_medgemma_context`가 `userContext`의 나이(없으면 생년월일)·성별로 만든다 - 피보호자 본인 상담에도 처음 들어감 |
 | FE context | 브라우저 테스트가 대리 상담 `{ role: 'GUARDIAN', wardId }` 정확히 일치로 고정 |
 
-### 🟢 L-1 보호자 화면 실측 미실시
+### 🟢 L-1 보호자 화면 실측 → 2026-11-04 15:01 완료
+- 새 시험 보호자(`pVFG3u`, env 15:00 갱신)로 devdmu 보호자 챗봇에서 1회 전송: 브라우저 요청 context 키 = `role`·`wardId`뿐, BE 연결 검증 통과(`[IDOR-ATTEMPT]` 없음, 7.9초), AI 기록 `userContext` 키 = `address,age,birthDate,gender,name,phone,role,wardId`(BE가 피보호자 DB 값으로 채움).
+
+원래 기록 - 보호자 화면 실측 미실시
 - 시험 보호자(`aB3x9A`) 로그인이 `INVALID_CREDENTIALS`(14:30, 1회, 재시도 안 함). env는 10/30 값이고 계정은 ACTIVE·11/04 10:59 로그인 기록 - 원래 주인이 비밀번호를 바꾼 것으로 보인다. 새 자격이 생기면 보호자 대리 상담 화면에서 요청 context 키만 다시 본다.
