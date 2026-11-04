@@ -21,10 +21,11 @@ import java.util.stream.Collectors;
  * 선점된 복약 알림을 실제로 발송한다.
  *
  * <p><b>트랜잭션 밖에서 보낸다</b> — 선점({@link MedicationReminderPlanner})이 커밋된 뒤 호출되므로,
- * FCM·SMS 네트워크 지연이 DB 커넥션을 붙잡지 않는다.</p>
+ * FCM 네트워크 지연이 DB 커넥션을 붙잡지 않는다.</p>
  *
- * <p><b>채널은 FCM과 문자뿐</b>이다. {@link NotificationType#MEDICATION_REMINDER}가
- * {@code SETTINGS_ONLY}라 사용자가 켠 채널로만 나가고, 알림톡은 승인 템플릿 매핑이 없어 스킵된다.
+ * <p><b>채널은 FCM뿐</b>이다(2026-11-04, 이전 FCM·문자). {@link NotificationType#MEDICATION_REMINDER}가
+ * {@code SETTINGS_ONLY} + 허용 채널 FCM이라 피보호자가 문자를 켜 두어도 문자로 나가지 않는다.
+ * 보낼지 여부는 선점 단계에서 보호자의 "복약 알림" 설정이 정한다({@link MedicationReminderPlanner}).
  * WebSocket은 보내지 않는다(복용 체크 반영용 {@code medication-taken}과 성격이 다르다).</p>
  *
  * <p><b>같은 시각의 약은 알림 한 건으로 묶는다</b>(2026-10-23) - 약 6개를 아침에 드시면 푸시·문자가 6건 나가던 것을 1건으로.

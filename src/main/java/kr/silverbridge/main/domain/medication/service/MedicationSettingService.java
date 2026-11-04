@@ -13,8 +13,9 @@ import java.util.function.Function;
 import java.util.stream.Collectors;
 
 /**
- * 피보호자별 복약 알림 설정 조회(재알림 ON/OFF). 복용 시각 알림 자체는 늘 보낸다 - 켜고 끄는 설정 API는
- * 2026-10-24 사용자 결정으로 없앴다.
+ * 피보호자별 복약 알림 설정 조회(재알림 ON/OFF). 피보호자 단위로 복용 시각 알림을 켜고 끄는 설정 API는
+ * 2026-10-24 사용자 결정으로 없앴고, 보낼지 여부는 2026-11-04부터 보호자의 "복약 알림" 설정이 정한다
+ * ({@link MedicationReminderPlanner}).
  *
  * <p><b>기본값 정책</b>: 행이 없는 사용자는 {@link MedicationPreference#DEFAULT}(재알림 켜짐)를 따른다 —
  * 기존 사용자 백필이 필요 없다({@code SosSettingService}와 동일한 방식).</p>
