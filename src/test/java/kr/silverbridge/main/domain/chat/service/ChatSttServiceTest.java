@@ -115,15 +115,23 @@ class ChatSttServiceTest {
     }
 
     @Test
-    @DisplayName("AI 실패도 자리를 돌려준다")
+    @DisplayName("AI 실패·시간 초과도 1인·서버 전체 자리를 돌려준다(전체 상한 1에서 연속 호출이 막히지 않는다)")
     void releasesOnFailure() {
-        when(client.transcribe(any())).thenThrow(new CustomException(ErrorCode.CHAT_STT_BUSY));
+        properties.setMaxConcurrent(1);
+        service = new ChatSttService(client, properties, rateLimitService);
+        when(client.transcribe(any()))
+                .thenThrow(new CustomException(ErrorCode.CHAT_STT_BUSY))
+                .thenThrow(new CustomException(ErrorCode.CHAT_STT_UNAVAILABLE))
+                .thenThrow(new IllegalStateException("unexpected"))
+                .thenReturn("ok");
         assertThatThrownBy(() -> service.transcribe(USER, audio(10)))
                 .extracting(e -> ((CustomException) e).getErrorCode()).isEqualTo(ErrorCode.CHAT_STT_BUSY);
+        assertThatThrownBy(() -> service.transcribe("WRD002", audio(10)))
+                .extracting(e -> ((CustomException) e).getErrorCode()).isEqualTo(ErrorCode.CHAT_STT_UNAVAILABLE);
+        assertThatThrownBy(() -> service.transcribe(USER, audio(10))).isInstanceOf(IllegalStateException.class);
         assertThat(service.activeUsers()).isZero();
 
-        org.mockito.Mockito.doReturn("ok").when(client).transcribe(any());
-        assertThat(service.transcribe(USER, audio(10)).text()).isEqualTo("ok");
+        assertThat(service.transcribe("WRD003", audio(10)).text()).isEqualTo("ok");
     }
 
     @Test

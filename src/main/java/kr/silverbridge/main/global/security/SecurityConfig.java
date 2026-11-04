@@ -131,6 +131,9 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.POST, "/api/guardian/ward/*/medication/ocr").hasRole("GUARDIAN")
                         // 안부 말벗 음성 대답(음성 5MB + 사진 5장) - 같은 이유로 본문 파싱 전에 피보호자만 통과시킨다(2026-11-04)
                         .requestMatchers(HttpMethod.POST, "/api/ward/companion/sessions/*/reply/audio").hasRole("WARD")
+                        // 챗봇 마이크 음성 인식(음성 10MB) - 같은 이유(2026-11-04 점검 M-1)
+                        .requestMatchers(HttpMethod.POST, "/api/ward/chat/stt").hasRole("WARD")
+                        .requestMatchers(HttpMethod.POST, "/api/guardian/chat/stt").hasRole("GUARDIAN")
                         // 관리자 전용 경로
                         .requestMatchers("/api/admin/**").hasRole("ADMIN")
                         // 나머지는 인증 필요

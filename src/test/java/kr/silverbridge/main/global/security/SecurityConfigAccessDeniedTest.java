@@ -78,6 +78,17 @@ class SecurityConfigAccessDeniedTest {
             return "ok";
         }
 
+        // 챗봇 마이크 음성 인식(2026-11-04 점검 M-1) - 같은 이유로 메서드 보안 없이 URL 규칙만 본다
+        @org.springframework.web.bind.annotation.PostMapping("/api/ward/chat/stt")
+        String wardChatStt() {
+            return "ok";
+        }
+
+        @org.springframework.web.bind.annotation.PostMapping("/api/guardian/chat/stt")
+        String guardianChatStt() {
+            return "ok";
+        }
+
         @org.springframework.web.bind.annotation.DeleteMapping("/api/notifications/fcm-token")
         String fcmDelete() {
             return "ok";
@@ -116,6 +127,26 @@ class SecurityConfigAccessDeniedTest {
                 .andExpect(status().isUnauthorized());
         mockMvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post(url)
                         .with(user("g1").roles("GUARDIAN")))
+                .andExpect(status().isOk());
+    }
+
+    @org.junit.jupiter.params.ParameterizedTest(name = "{0} - 허용 {1}")
+    @org.junit.jupiter.params.provider.CsvSource({
+            "/api/ward/chat/stt, WARD, GUARDIAN",
+            "/api/guardian/chat/stt, GUARDIAN, WARD"})
+    @DisplayName("점검 M-1: 챗봇 음성 인식 경로는 URL 단계에서 해당 역할만 - 다른 역할·ADMIN 은 본문 파싱 전에 JSON 403, 비로그인 401")
+    void chatStt_roleCheckedAtUrlLevel(String url, String allowed, String other) throws Exception {
+        mockMvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post(url)
+                        .with(user("o1").roles(other)))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.code").value("FORBIDDEN"));
+        mockMvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post(url)
+                        .with(user("a1").roles("ADMIN")))
+                .andExpect(status().isForbidden());
+        mockMvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post(url))
+                .andExpect(status().isUnauthorized());
+        mockMvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post(url)
+                        .with(user("u1").roles(allowed)))
                 .andExpect(status().isOk());
     }
 

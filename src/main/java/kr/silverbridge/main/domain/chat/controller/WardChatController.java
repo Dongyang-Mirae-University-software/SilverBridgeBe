@@ -41,10 +41,11 @@ public class WardChatController {
     @Operation(summary = "마이크 음성을 글자로 바꾸기", description = ChatSttApiDoc.DESCRIPTION)
     @ApiResponses({
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "받아 적은 글자(못 알아들으면 빈 글자)"),
-            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "CHAT_STT_AUDIO_INVALID", content = @Content),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "CHAT_STT_AUDIO_INVALID / FILE_REQUIRED(깨진 multipart)", content = @Content),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "인증 토큰 없음 또는 만료", content = @Content),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "피보호자 권한 필요", content = @Content),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "413", description = "CHAT_STT_AUDIO_TOO_LARGE", content = @Content),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "415", description = "UNSUPPORTED_MEDIA_TYPE(multipart 아님)", content = @Content),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "429", description = "TOO_MANY_REQUESTS", content = @Content),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "503", description = "CHAT_STT_BUSY / CHAT_STT_UNAVAILABLE / CHAT_STT_DISABLED", content = @Content)
     })
