@@ -63,7 +63,7 @@ public class AiSttClient {
         this.properties = properties;
         this.objectMapper = objectMapper;
         AtomicInteger seq = new AtomicInteger();
-        this.deadlineExecutor = Executors.newScheduledThreadPool(1, runnable -> {
+        this.deadlineExecutor = Executors.newScheduledThreadPool(2, runnable -> {
             Thread thread = new Thread(runnable, "chat-stt-deadline-" + seq.incrementAndGet());
             thread.setDaemon(true);
             return thread;

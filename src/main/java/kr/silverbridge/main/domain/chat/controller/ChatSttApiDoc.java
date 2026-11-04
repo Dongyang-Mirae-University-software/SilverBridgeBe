@@ -18,6 +18,8 @@ final class ChatSttApiDoc {
             CHAT_STT_AUDIO_INVALID(400, 파일 없음·형식 오류·읽을 수 없음) / CHAT_STT_AUDIO_TOO_LARGE(413, 10MB·30초 초과) /
             CHAT_STT_BUSY(503, "잠시 후 다시 눌러 주세요") / CHAT_STT_UNAVAILABLE(503, 음성 인식 서버 불가·시간 초과) /
             CHAT_STT_DISABLED(503, 기능 꺼짐) / TOO_MANY_REQUESTS(429, Retry-After 헤더)
+            multipart가 아닌 요청은 UNSUPPORTED_MEDIA_TYPE(415), 깨진 multipart 본문은 FILE_REQUIRED(400)입니다 -
+            둘 다 녹음 실패로 보고 "다시 말씀해 주세요"로 안내하세요.
             """;
 
     private ChatSttApiDoc() {

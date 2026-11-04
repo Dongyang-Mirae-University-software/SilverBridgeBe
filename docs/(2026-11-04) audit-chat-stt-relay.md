@@ -134,8 +134,20 @@ fix: 챗봇 음성 인식 경로 역할을 본문 파싱 전에 검사
 - Swagger에 415·FILE_REQUIRED 안내(L-4), 마감 스레드 2개(L-5)
 ```
 
+## 조치 (2026-11-04, 브랜치 `fix/chat-stt-hardening`)
+
+| 이슈 | 조치 |
+|---|---|
+| M-1 | `SecurityConfig`에 `POST /api/ward/chat/stt` WARD·`POST /api/guardian/chat/stt` GUARDIAN URL 규칙. `SecurityConfigAccessDeniedTest.chatStt_roleCheckedAtUrlLevel`(메서드 보안 없는 시험 매핑으로 다른 역할·ADMIN 403, 비로그인 401, 해당 역할 200) |
+| L-1 | `ChatSttUploadLimitTest` - 두 경로 413 `CHAT_STT_AUDIO_TOO_LARGE`, 비슷한 다른 경로는 바뀌지 않음 |
+| L-2 | `ChatSttServiceTest.releasesOnFailure` - 전체 상한 1에서 BUSY·UNAVAILABLE·예상 밖 예외 뒤에도 다음 호출 성공 |
+| L-4 | Swagger 400(`FILE_REQUIRED`)·415 설명 추가, `ChatSttApiDoc`에 안내 |
+| L-5 | 마감 전용 스레드 2개 |
+| L-3 | AI 범위 - BE 변경 없음, AI 팀 전달 |
+
+변이 재확인: 413 분기 무력화·`global.release()` 제거·STT URL 규칙 제거 모두 테스트가 잡는다(되돌린 뒤 `git diff`에 변이 없음). 전체 단위 테스트 2374건 통과, `build -x test` 성공.
+
 ## 다음
 
-1. 위 수정(M-1·L-1·L-2·L-4·L-5) 승인 요청 - 한 PR.
-2. AI 팀에 L-3 전달.
+1. AI 팀에 L-3 전달.
 3. AI #177 gosky 배포 뒤: 사용자 확인을 받고 `CHAT_STT_*` 주입 → 실호출(WAV·WebM·MP3, 빈 글자, 30초 초과, 동시 3건) 측정.
