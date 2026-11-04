@@ -9,6 +9,7 @@ import kr.silverbridge.main.domain.anomaly.client.AiClipClient;
 import kr.silverbridge.main.domain.auth.oauth.KakaoOAuthClient;
 import kr.silverbridge.main.domain.camera.client.AiStreamClient;
 import kr.silverbridge.main.domain.chat.client.AiChatClient;
+import kr.silverbridge.main.domain.companion.client.AiCompanionClient;
 import kr.silverbridge.main.domain.hospital.client.ReservationAdminClient;
 import kr.silverbridge.main.domain.medication.client.AiMedicationOcrClient;
 import kr.silverbridge.main.domain.notification.service.AlimtalkSender;
@@ -106,6 +107,10 @@ import static org.mockito.Mockito.when;
         "chat.relay.enabled=false",
         "notification.email.enabled=false",
         "notification.alimtalk.enabled=false",
+        // 안부 말벗(2026-11-04) - AI 클라이언트는 목이라 주소·키는 쓰이지 않는다. 켜 둬야 기기 API 경로가 돈다
+        "companion.enabled=true",
+        "companion.ai-base-url=http://companion.invalid",
+        "companion.api-key=it-companion-key",
         // JavaMailSender가 목이라 메일 헬스 체크(JavaMailSenderImpl 필요)가 뜨지 못한다
         "management.health.mail.enabled=false",
         "spring.data.redis.timeout=500ms",
@@ -184,6 +189,7 @@ public abstract class FullContextIntegrationTest {
     @MockitoBean protected AiMedicationOcrClient aiMedicationOcrClient;
     @MockitoBean protected AiServerHealthClient aiServerHealthClient;
     @MockitoBean protected ReservationAdminClient reservationAdminClient;
+    @MockitoBean protected AiCompanionClient aiCompanionClient;
 
     // ─── 실제 동작 그대로 + 호출 기록(2026-11-01, 강제 연결 순서 시나리오) ─────────────
     // WS 신호와 알림 발송의 순서(InOrder)를 보고, 설정 조회 실패를 주입하려고 둔다. 스텁하지 않으면 실제 빈과 같다.
@@ -223,7 +229,7 @@ public abstract class FullContextIntegrationTest {
         });
         reset(firebaseMessaging, smsSender, alimtalkSender, javaMailSender, kakaoOAuthClient, fileServerClient,
                 aiChatClient, aiClipClient, aiStreamClient, aiMedicationOcrClient, aiServerHealthClient,
-                reservationAdminClient, webSocketEventPublisher, notificationDispatcher, notificationSettingService);
+                reservationAdminClient, aiCompanionClient, webSocketEventPublisher, notificationDispatcher, notificationSettingService);
     }
 
     /** 모든 {@code @Async} executor가 비기를 기다린다 - 앞 테스트의 알림이 다음 테스트 데이터에 섞이지 않게. */

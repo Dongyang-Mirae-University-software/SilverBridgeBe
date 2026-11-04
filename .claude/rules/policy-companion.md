@@ -27,9 +27,13 @@ paths:
 - **질문 안내 `COMPANION_PROMPT`는 FCM만·설정 기반**: 하루 5건 다발성이라 문자·알림톡·강제 승격 금지. PR-B 전까지 `COMPANION_PROMPT_WARD_IDS` 허용 목록에만.
 - **AI 호출은 트랜잭션 밖**(최대 90초): 쓰기는 `CompanionSessionWriter`의 짧은 트랜잭션. 동시 상한 서버 8(503 `COMPANION_BUSY`)·대화 1(409 `COMPANION_TURN_IN_PROGRESS`), 단일 인스턴스 전제.
 - **중계 제한 90초**(사용자 결정 2026-11-04): AI에 한 턴 60초를 요청했다. 300초(AI 단계별 제한 합)로 늘리지 말 것 - 요청 스레드를 5분 붙든다.
-- **탈퇴 삭제는 대기열**: 탈퇴 트랜잭션 BEFORE_COMMIT에 `companion_purge_request`(FK 없음, ID만), 직후 1회 + 매시 35분 재시도(첫 실패에서 중단). 스윕 purge·AI 장애에도 빠지지 않게 하려는 것이라 AFTER_COMMIT으로 옮기지 말 것. 스위치와 무관하게 주소·키만 있으면 지운다.
+- **탈퇴 삭제는 대기열**: 탈퇴 트랜잭션 BEFORE_COMMIT에 `companion_purge_request`(FK 없음, ID만), 직후 1회 + 매시 35분 재시도(시도 안 한 것·오래 전 시도한 것부터, 첫 실패에서 중단, 24회마다 `[COMPANION-PURGE-STUCK]` ERROR). 스윕 purge·AI 장애에도 빠지지 않게 하려는 것이라 AFTER_COMMIT으로 옮기지 말 것. 스위치와 무관하게 주소·키만 있으면 지운다.
+- **역할 변경(피보호자 → 보호자) = 말벗 기록 삭제 + AI 삭제 대기열**(2026-11-04 점검 M-1): `UserRoleChangedEvent` BEFORE_COMMIT에 `companion_session`·`companion_prompt_log`를 지우고 대기열에 넣는다(카메라·복약과 같은 역할 변경 정리 원칙). 탈퇴 대기열 조건은 "피보호자이거나 말벗 기록이 있으면" - 역할만 보고 거르지 말 것(옛 피보호자의 AI 데이터가 영구히 남는다).
+- **진행 중인 대화만 고친다**(2026-11-04 점검 M-3): `CompanionSessionWriter.recordTurn`·`finish`는 OPEN이 아니면 아무것도 바꾸지 않는다. 서비스는 처리 자리를 잡은 **뒤** 대화를 다시 읽는다 - 자리 전에 읽은 스냅샷으로 결과를 쓰면 마감 스케줄러와 "마치기"가 겹칠 때 종료 이유가 덮인다.
+- **위험 알림 1회 보장은 테스트가 지킨다**: `CompanionSessionWriterTest`(선점 이김·짐·끝난 대화) + `CompanionFullIntegrationTest`(턴 → 커밋 → 긴급 리스너 → 이력 1건, 마감 URGENT, 역할 변경·탈퇴 삭제). writer를 고치면 둘 다 돌릴 것.
+- **보호자 알림 종류 설정**: `companionRisk`는 `required: true`로만 내린다(끌 수 없다, 2026-11-04 점검 L-3).
 - **남의 대화는 403 `COMPANION_SESSION_NOT_OWNED` + `[IDOR-ATTEMPT]`**(2026-07-14 정책).
-- **업로드**: 음성 WAV·WebM·MP3 5MB, 사진 JPEG·PNG 장당 1MB·5장, 앞부분 바이트로만 판별, 원래 파일 이름은 AI로 넘기지 않는다. 오디오 경로는 SecurityConfig에서 본문 파싱 전에 WARD만 통과.
+- **업로드**: 음성 WAV·WebM·MP3 5MB, 사진 JPEG·PNG 장당 1MB·5장, 앞부분 바이트로만 판별, 원래 파일 이름은 AI로 넘기지 않는다. 오디오 경로는 SecurityConfig에서 본문 파싱 전에 WARD만 통과. 합계가 서블릿 상한(10MB)을 넘으면 `COMPANION_UPLOAD_TOO_LARGE`(413, 2026-11-04 점검 L-1).
 
 ## 수용한 한계 (2026-11-04)
 

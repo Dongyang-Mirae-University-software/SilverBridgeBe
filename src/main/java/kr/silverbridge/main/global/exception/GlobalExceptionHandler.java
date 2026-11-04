@@ -268,10 +268,10 @@ public class GlobalExceptionHandler {
             return ResponseEntity.status(ErrorCode.MEDICATION_OCR_IMAGE_TOO_LARGE.getStatus())
                     .body(ApiResponse.fail(ErrorCode.MEDICATION_OCR_IMAGE_TOO_LARGE));
         }
-        // 안부 말벗 음성 대답(전체 10MB 초과) - 음성 크기 오류로 답한다(2026-11-04)
+        // 안부 말벗 음성 대답(음성 + 사진 합계 10MB 초과) - 합계 문구로 답한다(2026-11-04 점검 L-1)
         if (COMPANION_AUDIO_PATH.matcher(request.getRequestURI()).matches()) {
-            return ResponseEntity.status(ErrorCode.COMPANION_AUDIO_TOO_LARGE.getStatus())
-                    .body(ApiResponse.fail(ErrorCode.COMPANION_AUDIO_TOO_LARGE));
+            return ResponseEntity.status(ErrorCode.COMPANION_UPLOAD_TOO_LARGE.getStatus())
+                    .body(ApiResponse.fail(ErrorCode.COMPANION_UPLOAD_TOO_LARGE));
         }
         return ResponseEntity
                 .badRequest()

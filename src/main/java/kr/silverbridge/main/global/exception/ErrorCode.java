@@ -204,6 +204,8 @@ public enum ErrorCode {
     COMPANION_ANSWER_TOO_LONG(HttpStatus.BAD_REQUEST, "대답은 500자까지 보낼 수 있습니다."),
     COMPANION_AUDIO_INVALID(HttpStatus.BAD_REQUEST, "WAV, WebM, MP3 음성만 보낼 수 있습니다."),
     COMPANION_AUDIO_TOO_LARGE(HttpStatus.CONTENT_TOO_LARGE, "음성은 5MB를 넘을 수 없습니다."),
+    // 서블릿 요청 상한(10MB)에 걸린 경우 - 음성과 사진을 합친 크기라 음성 문구와 나눈다(2026-11-04 점검 L-1)
+    COMPANION_UPLOAD_TOO_LARGE(HttpStatus.CONTENT_TOO_LARGE, "음성과 사진을 합쳐 10MB까지 보낼 수 있습니다."),
     COMPANION_FRAME_INVALID(HttpStatus.BAD_REQUEST, "사진은 JPG, PNG만 보낼 수 있습니다."),
     COMPANION_FRAME_TOO_LARGE(HttpStatus.CONTENT_TOO_LARGE, "사진은 5장까지, 한 장에 1MB를 넘을 수 없습니다."),
     COMPANION_STT_UNAVAILABLE(HttpStatus.SERVICE_UNAVAILABLE, "지금은 음성을 알아듣지 못해요. 글로 대답해주세요.");

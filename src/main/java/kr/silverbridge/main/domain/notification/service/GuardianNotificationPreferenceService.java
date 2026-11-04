@@ -87,6 +87,8 @@ public class GuardianNotificationPreferenceService {
                 TypeSetting.locked(),
                 TypeSetting.optional(anomalySettingService.getSetting(guardianId).reviewReminderEnabled()),
                 TypeSetting.optional(medication),
-                TypeSetting.optional(cameraLinkLost));
+                TypeSetting.optional(cameraLinkLost),
+                // 안부 말벗 위험 신호(2026-11-04 점검 L-3) - 강제 푸시라 끌 수 없음을 화면에 보인다
+                TypeSetting.locked());
     }
 }

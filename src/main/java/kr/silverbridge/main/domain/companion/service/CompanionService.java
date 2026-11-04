@@ -141,7 +141,9 @@ public class CompanionService {
             throw new CustomException(ErrorCode.COMPANION_ANSWER_TOO_LONG);
         }
         try (CompanionTurnSlots.Slot ignored = slots.acquire(sessionId)) {
-            return handleTurn(session, () -> aiClient.replyText(session.getDialogueId(), answer), false);
+            // 자리를 잡은 뒤 다시 읽는다 - 앞 요청이 그사이 대화를 끝냈을 수 있다(2026-11-04 점검 M-3)
+            CompanionSession current = requireOpenOwned(wardId, sessionId);
+            return handleTurn(current, () -> aiClient.replyText(current.getDialogueId(), answer), false);
         }
     }
 
@@ -158,7 +160,8 @@ public class CompanionService {
         List<CompanionMedia> frameFormats = new ArrayList<>();
         readFrames(frames, frameBytes, frameFormats);
         try (CompanionTurnSlots.Slot ignored = slots.acquire(sessionId)) {
-            return handleTurn(session, () -> aiClient.replyAudio(session.getDialogueId(), audioBytes, audioFormat,
+            CompanionSession current = requireOpenOwned(wardId, sessionId);
+            return handleTurn(current, () -> aiClient.replyAudio(current.getDialogueId(), audioBytes, audioFormat,
                     frameBytes, frameFormats), true);
         }
     }
@@ -170,14 +173,24 @@ public class CompanionService {
         if (session.getStatus() == CompanionSessionStatus.FINISHED) {
             return toResult(session);
         }
+        rejectUnfinishable(session);
+        try (CompanionTurnSlots.Slot ignored = slots.acquire(sessionId)) {
+            // 자리를 잡은 뒤 다시 읽는다 - 마지막 턴이나 마감 스케줄러가 그사이 끝냈으면 저장된 결과를 준다(점검 M-3)
+            CompanionSession current = requireOwned(wardId, sessionId);
+            if (current.getStatus() == CompanionSessionStatus.FINISHED) {
+                return toResult(current);
+            }
+            rejectUnfinishable(current);
+            return toResult(finalizeWithAi(current, false));
+        }
+    }
+
+    private static void rejectUnfinishable(CompanionSession session) {
         if (session.getStatus() == CompanionSessionStatus.LOST) {
             throw new CustomException(ErrorCode.COMPANION_SESSION_LOST);
         }
         if (!session.isDialogueAttached()) {
             throw new CustomException(ErrorCode.COMPANION_TURN_IN_PROGRESS);
-        }
-        try (CompanionTurnSlots.Slot ignored = slots.acquire(sessionId)) {
-            return toResult(finalizeWithAi(session, false));
         }
     }
 
@@ -188,11 +201,17 @@ public class CompanionService {
             return false;
         }
         try (slot) {
-            if (!session.isDialogueAttached()) {
-                writer.releaseClaim(session.getId());
+            // 목록은 자리를 잡기 전에 읽었다 - 그사이 "마치기"·마지막 턴으로 끝났으면 건드리지 않는다(점검 M-3)
+            CompanionSession current = sessionRepository.findById(session.getId())
+                    .filter(CompanionSession::isOpen).orElse(null);
+            if (current == null) {
+                return false;
+            }
+            if (!current.isDialogueAttached()) {
+                writer.releaseClaim(current.getId());
                 return true;
             }
-            finalizeWithAi(session, true);
+            finalizeWithAi(current, true);
             return true;
         }
     }

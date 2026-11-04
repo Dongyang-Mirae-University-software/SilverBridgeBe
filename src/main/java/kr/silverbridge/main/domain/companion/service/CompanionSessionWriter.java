@@ -53,6 +53,10 @@ public class CompanionSessionWriter {
     @Transactional
     public CompanionSession recordTurn(long sessionId, int turnNo, boolean riskSeen, OffsetDateTime now) {
         CompanionSession session = load(sessionId);
+        // 진행 중(OPEN)인 대화만 고친다 - 이미 끝난 대화는 그대로 돌려준다(2026-11-04 점검 M-3)
+        if (!session.isOpen()) {
+            return session;
+        }
         session.recordTurn(turnNo, riskSeen, now);
         if (riskSeen) {
             claimRiskAlert(session, now);
@@ -60,9 +64,16 @@ public class CompanionSessionWriter {
         return session;
     }
 
+    /**
+     * 결과 저장. 진행 중(OPEN)인 대화만 마감한다 - 낡은 스냅샷으로 들어온 두 번째 마감(마감 스케줄러와 "마치기"가 겹침,
+     * 끝난 뒤 들어온 턴의 DIALOGUE_ENDED)이 끝난 대화의 종료 이유·끝난 시각을 덮지 않게 한다(2026-11-04 점검 M-3).
+     */
     @Transactional
     public CompanionSession finish(long sessionId, CompanionResult result, OffsetDateTime now) {
         CompanionSession session = load(sessionId);
+        if (!session.isOpen()) {
+            return session;
+        }
         session.finish(result.endReason(), result.mood(), result.turnCount(), result.answeredCount(),
                 result.noResponseCount(), result.riskFlag(), result.urgent(), result.promptVersion(), now);
         // 위험 신호 턴에서 이미 보냈으면 선점에서 진다 - 마감 때는 "URGENT인데 아직 안 보낸" 경우만 남는다(결정 J)
