@@ -4,6 +4,13 @@
 
 ---
 
+### [2026-11-04] AI 챗봇 예약 선택지화 점검 조치 - 전부 반영
+
+- AI #172 `bed6a06`(gosky 14:14): 진료과 버튼의 옛 병원·시간 되살림 제거(M-1), 화면 이동 버튼 값 이력 제외(L-1), 지역 질문 문구(L-2), 마감 예외 전달(L-3). 테스트 1614 통과, 새 테스트 변이 4종 검출.
+- M-2는 다른 세션 BE #444(환자 주소 DB 값 전송)가 먼저 해결 - 이 작업의 BE #445는 사용자 결정 1A와 부딪혀 닫았다. devdmu에서 주소 기준 바로 검색·[다른 지역] 문구 확인. policy-chat에 "다른 지역" 상시화 이유(L-4) 기록.
+
+---
+
 ### [2026-11-04] 내 알림 기록 API (종 아이콘)
 
 - `GET /api/user/me/notifications`(category URGENT·MEDICATION·CONNECTION·OTHER)·`/unread-count`·`POST /{id}/read`·`/read-all`. 보호자·피보호자만, 최근 90일·실제로 보낸 알림(NOT_SENT 제외, FAILED 포함). V67 `notification_log.read_at` + 부분 인덱스 2개, 기존 행은 읽음으로 채움(가역).
