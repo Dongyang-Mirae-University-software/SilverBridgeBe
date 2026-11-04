@@ -108,6 +108,10 @@ public class SwaggerConfig {
                                         + "※ 요청 시점에 ACTIVE 연결인 피보호자의 이력만 보입니다(연결 해제 시 과거 이력도 비공개).\n"
                                         + "※ 발생 경로(SOS_BUTTON·GUARDIAN_CALL)는 이력 표시 전용이며 알림 대상을 가르지 않습니다.\n"
                                         + "※ GUARDIAN 역할 계정만 호출 가능."),
+                        new Tag().name("보호자 - AI 기분 체크")
+                                .description("연결된 피보호자의 오늘 안부 대화(시간대별 질문·상태·기분)와 걱정·우울 이어짐\n"
+                                        + "※ 대답 원문은 없습니다. 기분 null은 \"확인할 수 없어요\"입니다.\n"
+                                        + "※ GUARDIAN 역할 계정만 호출 가능."),
                         new Tag().name("보호자 - 복약")
                                 .description("피보호자별 오늘 복약 현황 조회 / 약 추가·수정·삭제 / 알림 설정(피보호자별·본인 수신)\n"
                                         + "※ 약 등록·수정·삭제는 보호자만, 복용 체크는 피보호자만입니다.\n"
@@ -278,6 +282,7 @@ public class SwaggerConfig {
                     "/api/guardian/sos/history",
                     // ── [보호자 - 복약] ──────────────────────────────
                     "/api/guardian/medication",
+                    "/api/guardian/ward/{wardId}/companion/today",
                     "/api/guardian/ward/{wardId}/medication",
                     "/api/guardian/medication/{medicationId}",
                     "/api/guardian/ward/{wardId}/medication-alert-setting",

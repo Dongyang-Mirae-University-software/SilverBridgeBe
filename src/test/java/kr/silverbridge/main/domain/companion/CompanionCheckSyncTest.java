@@ -38,6 +38,12 @@ class CompanionCheckSyncTest {
         Set<String> slots = Arrays.stream(CompanionSlot.values()).map(CompanionSlot::code).collect(Collectors.toSet());
         assertThat(checkValues(sql, "chk_companion_session_slot")).isEqualTo(slots);
         assertThat(checkValues(sql, "chk_companion_question_slot")).isEqualTo(slots);
+
+        // V66 주의 알림 기록 - 걱정·우울만(CompanionMoodDays.isConcerning과 같은 두 값)
+        String v66 = Files.readString(Path.of("src/main/resources/db/migration/V66__add_companion_notice.sql"),
+                StandardCharsets.UTF_8);
+        assertThat(checkValues(v66, "chk_companion_notice_mood"))
+                .isEqualTo(Set.of(CompanionMood.WORRY.name(), CompanionMood.DEPRESSED.name()));
     }
 
     private static Set<String> checkValues(String sql, String constraint) {

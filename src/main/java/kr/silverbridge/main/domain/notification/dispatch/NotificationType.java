@@ -139,7 +139,16 @@ public enum NotificationType {
      * <p><b>FCM만</b>, 설정 기반이다 - 문자는 하루 5건 과금이고 알림톡은 다발성이라 승인 없이 금지다. 놓쳐도 다음
      * 시간대가 있어 강제 채널로 승격하지 말 것. PR-B 전까지는 {@code companion.prompt-ward-ids} 허용 목록에만 보낸다.</p>
      */
-    COMPANION_PROMPT(Policy.SETTINGS_ONLY, EnumSet.of(NotificationChannelType.FCM));
+    COMPANION_PROMPT(Policy.SETTINGS_ONLY, EnumSet.of(NotificationChannelType.FCM)),
+
+    /**
+     * 안부 말벗 <b>주의 알림</b> → 피보호자의 ACTIVE 보호자에게(2026-11-04, PR-B). 걱정·우울이 3일 이상 이어지면 하루 1번.
+     *
+     * <p><b>FCM만</b>, 설정 기반이다 - 날마다 반복될 수 있는 안내라 문자는 반복 과금이고 알림톡은 승인 템플릿이 없다.
+     * 보호자가 알림 종류 설정의 {@code companionNotice}로 끌 수 있다(게이트는 리스너가 건다). 위험 신호가 아니라
+     * "기분이 이어진다"는 관찰이라 강제 채널로 승격하지 말 것. 문구에 병명·대답 원문을 넣지 않는다.</p>
+     */
+    COMPANION_NOTICE(Policy.SETTINGS_ONLY, EnumSet.of(NotificationChannelType.FCM));
 
     /**
      * 이메일 허용 표시. 이메일은 즉시성이 보장되지 않는 채널이라 <b>기본은 제외</b>이고, 안내성 종류만 이

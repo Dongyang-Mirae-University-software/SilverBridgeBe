@@ -65,7 +65,11 @@ class LogRawExceptionGuardTest {
             "domain/companion/service/CompanionPromptScheduler.java",
             "domain/companion/service/CompanionPurgeService.java",
             "domain/companion/listener/CompanionRiskNotificationListener.java",
-            "domain/companion/listener/CompanionWithdrawalListener.java");
+            "domain/companion/listener/CompanionWithdrawalListener.java",
+            // 안부 말벗 PR-B(2026-11-04)
+            "domain/companion/listener/CompanionNoticeListener.java",
+            "domain/companion/service/CompanionGuardianService.java",
+            "domain/companion/service/CompanionStatsService.java");
 
     @Test
     void guarded_files_do_not_log_exception_messages() throws IOException {

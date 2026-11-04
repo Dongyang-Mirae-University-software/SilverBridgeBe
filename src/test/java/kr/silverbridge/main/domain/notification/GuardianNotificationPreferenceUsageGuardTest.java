@@ -24,7 +24,9 @@ class GuardianNotificationPreferenceUsageGuardTest {
             "GuardianNotificationPreferenceService.java",
             "GuardianNotificationTypeSettingController.java",
             "MedicationMissedAlertPlanner.java",
-            "CameraLinkLostNotifier.java");
+            "CameraLinkLostNotifier.java",
+            // 안부 말벗 주의 알림(2026-11-04) - 끈 보호자를 빼는 데만 쓴다(위험 알림에는 쓰지 않는다)
+            "CompanionNoticeListener.java");
 
     @Test
     @DisplayName("종류 설정(서비스·저장소·엔티티)은 설정 API와 미복용 요약 플래너만 참조한다")

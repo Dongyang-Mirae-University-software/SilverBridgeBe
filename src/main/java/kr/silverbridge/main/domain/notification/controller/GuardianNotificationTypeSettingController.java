@@ -35,12 +35,13 @@ public class GuardianNotificationTypeSettingController {
                       - medication        : 복약 미복용 요약 알림. 기본 true
                       - cameraLinkLost    : 카메라 연결 끊김 안내(AI 서버 연결이 끊긴 뒤 돌아오지 않은 카메라). 기본 true
                       - companionRisk     : 안부 말벗 대화의 위험 신호 알림. 필수(required=true), 항상 켜짐. 변경 불가
+                      - companionNotice   : 안부 말벗 주의 알림(걱정·우울이 3일 이상 이어지면 하루 1번). 기본 true
                     required=true 항목은 FE가 잠금 표시만 하면 됩니다.
 
                     [참고]
                     - 알림을 받는 방법(푸시·문자·알림톡·이메일)은 /api/user/me/notification-settings 입니다.
                       이메일은 설정값만 저장되고 발송은 아직 구현되지 않았습니다.
-                    - 정서 변화·병원 예약 알림은 BE가 보내지 않아 설정 대상이 아닙니다.
+                    - 정서 변화는 안부 말벗 주의 알림(companionNotice)입니다. 병원 예약 알림은 BE가 보내지 않아 설정 대상이 아닙니다.
                     """)
     @ApiResponses({
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "현재 설정 반환"),
@@ -54,13 +55,14 @@ public class GuardianNotificationTypeSettingController {
 
     @Operation(summary = "알림 종류별 수신 설정 변경 (보호자 전용)",
             description = """
-                    변경 가능한 종류(anomalyReviewReminder, medication, cameraLinkLost)만 받습니다. null/생략은 변경하지 않습니다.
+                    변경 가능한 종류(anomalyReviewReminder, medication, cameraLinkLost, companionNotice)만 받습니다. null/생략은 변경하지 않습니다.
                     sos·anomalyDetection 등 필수 알림이나 알 수 없는 키를 보내도 무시되며 저장되지 않습니다.
 
                     [복약] 끄면 미복용 요약이 오지 않습니다. 피보호자별 미복용 요약 설정
                     (/api/guardian/ward/{wardId}/medication-alert-setting)과 둘 다 켜져 있어야 발송됩니다.
                     등록 보호자 탈퇴로 약이 중지됐다는 안내는 이 설정과 무관하게 갑니다.
                     [카메라 연결 끊김] 끄면 이 안내만 오지 않습니다. 화재·SOS 같은 필수 알림에는 영향이 없습니다.
+                    [안부 말벗 주의] 끄면 걱정·우울 이어짐 알림만 오지 않습니다. 위험 신호 알림(companionRisk)은 계속 갑니다.
                     [재촉] 기존 /api/guardian/anomaly/reminder-setting 과 같은 값입니다.
                     응답으로 변경 후 전체 설정을 반환합니다.
                     """)

@@ -2,6 +2,7 @@ package kr.silverbridge.main.domain.companion.service;
 
 import kr.silverbridge.main.domain.companion.entity.CompanionSession;
 import kr.silverbridge.main.domain.companion.entity.CompanionSlot;
+import kr.silverbridge.main.domain.companion.event.CompanionMoodRecordedEvent;
 import kr.silverbridge.main.domain.companion.event.CompanionRiskDetectedEvent;
 import kr.silverbridge.main.domain.companion.repository.CompanionSessionRepository;
 import kr.silverbridge.main.global.exception.CustomException;
@@ -79,6 +80,10 @@ public class CompanionSessionWriter {
         // 위험 신호 턴에서 이미 보냈으면 선점에서 진다 - 마감 때는 "URGENT인데 아직 안 보낸" 경우만 남는다(결정 J)
         if (result.needsRiskAlert()) {
             claimRiskAlert(session, now);
+        }
+        // 걱정·우울로 끝난 대화 - 커밋 뒤 연속 일수를 보고 주의 알림을 정한다(PR-B, 결정 I)
+        if (CompanionMoodDays.isConcerning(result.mood())) {
+            eventPublisher.publishEvent(new CompanionMoodRecordedEvent(session.getWardId(), session.getSessionDate()));
         }
         return session;
     }

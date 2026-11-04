@@ -18,6 +18,7 @@ import org.springframework.stereotype.Component;
 
 import java.time.ZonedDateTime;
 import java.util.Arrays;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 
@@ -52,7 +53,7 @@ public class CompanionPromptScheduler {
         if (slot.isEmpty()) {
             return;
         }
-        for (String wardId : properties.getPromptWardIds()) {
+        for (String wardId : targetWardIds()) {
             if (wardId == null || wardId.isBlank()) {
                 continue;
             }
@@ -62,6 +63,17 @@ public class CompanionPromptScheduler {
                 log.error("[COMPANION-PROMPT] 안내 발송 실패: wardId={}, error={}", wardId, e.getClass().getSimpleName());
             }
         }
+    }
+
+    /**
+     * 질문 안내 대상. 허용 목록에 {@code *}가 있으면 이용 중인 모든 피보호자다(2026-11-04 PR-B 결정 5) - 피보호자가
+     * 안내를 끄는 설정 화면이 생기기 전이라 기본은 목록에 적은 계정만이다.
+     */
+    private List<String> targetWardIds() {
+        if (properties.getPromptWardIds().stream().anyMatch(id -> "*".equals(id == null ? null : id.strip()))) {
+            return userRepository.findIdsByRoleAndStatus(Role.WARD, Status.ACTIVE);
+        }
+        return properties.getPromptWardIds();
     }
 
     private void sendOne(String wardId, CompanionSlot slot, ZonedDateTime now) {

@@ -8,6 +8,8 @@ import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import kr.silverbridge.main.domain.admin.dto.AdminAiChatStatsResponse;
 import kr.silverbridge.main.domain.admin.service.AdminAiChatStatsService;
+import kr.silverbridge.main.domain.companion.dto.CompanionAdminStatsResponse;
+import kr.silverbridge.main.domain.companion.service.CompanionStatsService;
 import kr.silverbridge.main.global.response.ApiResponse;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -33,6 +35,7 @@ import org.springframework.web.bind.annotation.RestController;
 public class AdminAiStatsController {
 
     private final AdminAiChatStatsService adminAiChatStatsService;
+    private final CompanionStatsService companionStatsService;
 
     @Operation(summary = "AI 의료 챗봇 집계",
             description = """
@@ -68,5 +71,29 @@ public class AdminAiStatsController {
             @Parameter(description = "종료일(KST, YYYY-MM-DD, 포함)", example = "2026-10-31")
             @RequestParam(required = false) String to) {
         return ApiResponse.ok(adminAiChatStatsService.getChatStats(adminId, from, to));
+    }
+
+    @Operation(summary = "AI 안부 말벗·정서 분석 오늘 집계",
+            description = """
+                    오늘(KST) 안부 말벗 숫자를 돌려줍니다. "AI 통계 > AI 안부 말벗·정서 분석" 탭과 대시보드 카드가 같이 씁니다.
+                    BE에 저장된 대화 결과로 계산합니다(AI를 부르지 않음). 대답 원문·한 줄 요약은 없습니다.
+
+                    [값 읽는 법]
+                    - askedCount: 오늘 보낸 안부 질문 안내 수
+                    - responseRate: 응답률(%) = 대답한 질문 수 ÷ 보낸 질문 수. 보낸 질문이 없으면 null(0%로 표시하지 마세요)
+                    - noDialogueWardCount·noDialogueWards: 질문을 받았지만 오늘 대답이 없는 어르신(마지막으로 대답한 시각, 없으면 null)
+                    - alertSentCount: 오늘 보낸 기분 변화 알림(주의 알림 + 위험 신호 알림)
+                    - moodDistribution: 어르신별 오늘 마지막 대화 기준. unknown은 판단할 수 없음 - 막대에 넣지 마세요
+                    - continuingWards: 걱정(WORRY)·우울(DEPRESSED)이 3일 이상 이어지는 어르신과 며칠째인지
+                    - 시험 계정도 포함됩니다
+                    """)
+    @ApiResponses({
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "집계 반환"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "인증 토큰 없음 또는 만료", content = @Content),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "관리자 권한 없음", content = @Content)
+    })
+    @GetMapping("/companion")
+    public ApiResponse<CompanionAdminStatsResponse> getCompanionStats() {
+        return ApiResponse.ok(companionStatsService.today());
     }
 }

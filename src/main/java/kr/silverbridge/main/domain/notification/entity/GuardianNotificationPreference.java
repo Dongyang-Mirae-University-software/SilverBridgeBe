@@ -35,6 +35,10 @@ public class GuardianNotificationPreference extends BaseTimeEntity {
     @Column(name = "camera_link_lost_enabled", nullable = false)
     private boolean cameraLinkLostEnabled = true;
 
+    /** 안부 말벗 주의 알림(COMPANION_NOTICE) 수신 여부. 기본 ON(V66). */
+    @Column(name = "companion_notice_enabled", nullable = false)
+    private boolean companionNoticeEnabled = true;
+
     public static GuardianNotificationPreference of(String guardianId, boolean medicationEnabled) {
         GuardianNotificationPreference preference = new GuardianNotificationPreference();
         preference.guardianId = guardianId;
@@ -48,5 +52,9 @@ public class GuardianNotificationPreference extends BaseTimeEntity {
 
     public void changeCameraLinkLostEnabled(boolean enabled) {
         this.cameraLinkLostEnabled = enabled;
+    }
+
+    public void changeCompanionNoticeEnabled(boolean enabled) {
+        this.companionNoticeEnabled = enabled;
     }
 }

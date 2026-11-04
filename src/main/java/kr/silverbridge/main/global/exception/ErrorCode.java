@@ -198,6 +198,8 @@ public enum ErrorCode {
     COMPANION_SESSION_NOT_FOUND(HttpStatus.NOT_FOUND, "안부 대화를 찾을 수 없습니다."),
     // 없는 대화는 404, 남의 대화는 403으로 그대로 안내한다(2026-07-14 정책). 피보호자 경로라 문구는 본인 기준이다
     COMPANION_SESSION_NOT_OWNED(HttpStatus.FORBIDDEN, "본인의 안부 대화만 이어갈 수 있습니다."),
+    // 보호자 경로용(2026-11-04 PR-B) - 문구는 수신자(보호자) 기준(2026-08-06 정책)
+    COMPANION_NOT_AUTHORIZED(HttpStatus.FORBIDDEN, "연결된 피보호자의 안부 대화만 볼 수 있습니다."),
     COMPANION_SESSION_ENDED(HttpStatus.CONFLICT, "이미 끝난 안부 대화입니다."),
     COMPANION_SESSION_LOST(HttpStatus.CONFLICT, "대화가 끊겼습니다. 다음 시간에 다시 이야기해요."),
     COMPANION_ANSWER_EMPTY(HttpStatus.BAD_REQUEST, "대답이 비어 있습니다."),

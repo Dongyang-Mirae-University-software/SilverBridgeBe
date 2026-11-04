@@ -10,5 +10,13 @@ import io.swagger.v3.oas.annotations.media.Schema;
 public record GuardianNotificationTypeSettingRequest(
         @Schema(description = "판정 확인 요청(재촉) 수신 여부", example = "false") Boolean anomalyReviewReminder,
         @Schema(description = "복약 미복용 요약 수신 여부", example = "false") Boolean medication,
-        @Schema(description = "카메라 연결 끊김 안내 수신 여부", example = "false") Boolean cameraLinkLost) {
+        @Schema(description = "카메라 연결 끊김 안내 수신 여부", example = "false") Boolean cameraLinkLost,
+        @Schema(description = "안부 말벗 주의 알림(걱정·우울이 3일 이상 이어짐) 수신 여부", example = "false")
+        Boolean companionNotice) {
+
+    /** 말벗 주의 알림을 바꾸지 않는 요청(2026-11-04 이전 키 3개). */
+    public GuardianNotificationTypeSettingRequest(Boolean anomalyReviewReminder, Boolean medication,
+                                                  Boolean cameraLinkLost) {
+        this(anomalyReviewReminder, medication, cameraLinkLost, null);
+    }
 }
