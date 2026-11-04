@@ -40,6 +40,7 @@ public class GlobalExceptionHandler {
     private static final String SQLSTATE_UNIQUE_VIOLATION = "23505";
     private static final Pattern MEDICATION_OCR_PATH = Pattern.compile("^/api/guardian/ward/[^/]+/medication/ocr$");
     private static final Pattern COMPANION_AUDIO_PATH = Pattern.compile("^/api/ward/companion/sessions/[^/]+/reply/audio$");
+    private static final Pattern CHAT_STT_PATH = Pattern.compile("^/api/(ward|guardian)/chat/stt$");
 
     // 22021: character_not_in_repertoire(invalid byte sequence — 문자열의 NUL(\u0000) 등), 22P05: untranslatable_character.
     // 사용자 입력 탓이라 500이 아니라 400으로 안내한다.
@@ -272,6 +273,11 @@ public class GlobalExceptionHandler {
         if (COMPANION_AUDIO_PATH.matcher(request.getRequestURI()).matches()) {
             return ResponseEntity.status(ErrorCode.COMPANION_UPLOAD_TOO_LARGE.getStatus())
                     .body(ApiResponse.fail(ErrorCode.COMPANION_UPLOAD_TOO_LARGE));
+        }
+        // 챗봇 마이크 음성 인식(10MB 초과) - 음성 문구로 413(2026-11-04)
+        if (CHAT_STT_PATH.matcher(request.getRequestURI()).matches()) {
+            return ResponseEntity.status(ErrorCode.CHAT_STT_AUDIO_TOO_LARGE.getStatus())
+                    .body(ApiResponse.fail(ErrorCode.CHAT_STT_AUDIO_TOO_LARGE));
         }
         return ResponseEntity
                 .badRequest()

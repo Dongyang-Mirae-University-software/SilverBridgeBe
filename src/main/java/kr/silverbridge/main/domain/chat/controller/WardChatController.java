@@ -6,10 +6,13 @@ import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import kr.silverbridge.main.domain.chat.dto.ChatRelayRequest;
+import kr.silverbridge.main.domain.chat.dto.ChatSttResponse;
 import kr.silverbridge.main.domain.chat.service.ChatRelayService;
+import kr.silverbridge.main.domain.chat.service.ChatSttService;
 import kr.silverbridge.main.global.response.ApiResponse;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.CacheControl;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
@@ -17,7 +20,9 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestPart;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.multipart.MultipartFile;
 
 /**
  * 피보호자용 AI 의료 챗봇 중계 API(2026-10-09). 보호자 경로({@link GuardianChatController})와 같은 서비스·응답 스펙이다. FE → 백엔드 → AI.
@@ -31,6 +36,25 @@ import org.springframework.web.bind.annotation.RestController;
 public class WardChatController {
 
     private final ChatRelayService chatRelayService;
+    private final ChatSttService chatSttService;
+
+    @Operation(summary = "마이크 음성을 글자로 바꾸기", description = ChatSttApiDoc.DESCRIPTION)
+    @ApiResponses({
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "받아 적은 글자(못 알아들으면 빈 글자)"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "CHAT_STT_AUDIO_INVALID", content = @Content),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "인증 토큰 없음 또는 만료", content = @Content),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "피보호자 권한 필요", content = @Content),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "413", description = "CHAT_STT_AUDIO_TOO_LARGE", content = @Content),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "429", description = "TOO_MANY_REQUESTS", content = @Content),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "503", description = "CHAT_STT_BUSY / CHAT_STT_UNAVAILABLE / CHAT_STT_DISABLED", content = @Content)
+    })
+    @PostMapping(value = "/api/ward/chat/stt", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    public ResponseEntity<ApiResponse<ChatSttResponse>> speechToText(
+            @AuthenticationPrincipal String userId,
+            @RequestPart(value = "audio", required = false) MultipartFile audio) {
+        return ResponseEntity.ok().cacheControl(CacheControl.noStore())
+                .body(ApiResponse.ok(chatSttService.transcribe(userId, audio)));
+    }
 
     @Operation(summary = "AI 챗봇에게 메시지 보내기",
             description = """
