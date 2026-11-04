@@ -472,4 +472,39 @@ class ChatRelayWardContextTest {
                 User.builder().id(WARD).name("김영희").birthDate(LocalDate.of(2030, 1, 1)).build(), LocalDate.of(2026, 3, 1));
         assertThat(future).doesNotContainKeys("age", "birthDate");
     }
+
+    @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.ValueSource(strings = {
+            "서울 강남구 테헤란로 1", "서울특별시 서초구 반포대로 1", "경기 성남시 분당구 판교로 1", "경기도 수원시 팔달구",
+            "부산광역시 해운대구 우동", "제주특별자치도 제주시 연동", "강원특별자치도 춘천시", "충청북도 청주시 상당구",
+            "세종특별자치시 한누리대로 2130", "세종 다솜로 1", "  서울 강남구  "})
+    @DisplayName("시·도 + 시·군·구(세종은 시·도만)로 시작하는 주소는 AI 병원 검색에 보낸다")
+    void 검색할_수_있는_주소(String address) {
+        assertThat(ChatRelayService.isSearchableAddress(address)).isTrue();
+    }
+
+    @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.ValueSource(strings = {
+            "<주소>", "주소", "서울", "서울특별시", "강남구 테헤란로", "Seoul Gangnam-gu", "123 Main St",
+            "테스트 주소", "서울 테헤란로 1", "서울시청", " "})
+    @DisplayName("자리표시·외국·시·도만 있는 주소는 보내지 않는다 - AI 가 원문으로 검색해 0건이 되기 때문")
+    void 검색할_수_없는_주소(String address) {
+        assertThat(ChatRelayService.isSearchableAddress(address)).isFalse();
+    }
+
+    @Test
+    @DisplayName("자리표시 주소(<주소>)인 피보호자: address 키 없이 보내 AI 가 지역을 묻게 한다(클라이언트 address 도 버림)")
+    void 자리표시_주소는_보내지_않는다() throws Exception {
+        when(userRepository.findById(WARD)).thenReturn(Optional.of(
+                User.builder().id(WARD).name("김영희").address("<주소>").build()));
+        when(aiChatClient.send(any())).thenReturn(objectMapper.readTree("{}"));
+        Map<String, Object> context = new HashMap<>();
+        context.put("address", "서울 강남구 위조로 1");
+
+        service.send(WARD, withContext(context));
+
+        JsonNode sent = sentBody().path("context");
+        assertThat(sent.has("address")).isFalse();
+        assertThat(sent.path("name").asText()).isEqualTo("김영희");
+    }
 }
