@@ -43,6 +43,7 @@ class GuardianChatControllerHttpTest {
     private static final ObjectMapper JACKSON2 = new ObjectMapper();
 
     @Mock private ChatRelayService chatRelayService;
+    @Mock private kr.silverbridge.main.domain.chat.service.ChatSttService chatSttService;
 
     @BeforeEach
     void setUp() {
@@ -56,7 +57,7 @@ class GuardianChatControllerHttpTest {
     }
 
     private MockMvc mvc() {
-        return MockMvcBuilders.standaloneSetup(new GuardianChatController(chatRelayService))
+        return MockMvcBuilders.standaloneSetup(new GuardianChatController(chatRelayService, chatSttService))
                 .setCustomArgumentResolvers(new AuthenticationPrincipalArgumentResolver())
                 .build();
     }
@@ -105,6 +106,20 @@ class GuardianChatControllerHttpTest {
     }
 
     @Test
+    @DisplayName("음성 인식: 보호자 경로도 토큰 사용자로 넘기고 data.text만 내려간다")
+    void speechToTextReturnsTextOnly() throws Exception {
+        org.springframework.mock.web.MockMultipartFile audio = new org.springframework.mock.web.MockMultipartFile(
+                "audio", "rec.wav", "audio/wav", new byte[]{'R', 'I', 'F', 'F'});
+        when(chatSttService.transcribe(eq("aB3x9Z"), any()))
+                .thenReturn(new kr.silverbridge.main.domain.chat.dto.ChatSttResponse(""));
+
+        mvc().perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders
+                        .multipart("/api/guardian/chat/stt").file(audio))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.text").value(""));
+    }
+
+    @Test
     @DisplayName("기록 상세: 객체로 내려간다")
     void logDetailSerializesAsObject() throws Exception {
         when(chatRelayService.logDetail(eq("aB3x9Z"), anyLong())).thenReturn(plain("{\"id\":9,\"reply\":\"r\"}"));
@@ -117,7 +132,8 @@ class GuardianChatControllerHttpTest {
     @Test
     @DisplayName("가드: 컨트롤러·서비스 공개 메서드의 반환 타입에 Jackson 2(com.fasterxml.jackson.databind) 타입이 없다")
     void noJackson2TypesAtResponseBoundary() {
-        for (Class<?> type : List.of(GuardianChatController.class, WardChatController.class, ChatRelayService.class)) {
+        for (Class<?> type : List.of(GuardianChatController.class, WardChatController.class, ChatRelayService.class,
+                kr.silverbridge.main.domain.chat.service.ChatSttService.class)) {
             for (Method m : type.getDeclaredMethods()) {
                 if (!Modifier.isPublic(m.getModifiers())) {
                     continue;

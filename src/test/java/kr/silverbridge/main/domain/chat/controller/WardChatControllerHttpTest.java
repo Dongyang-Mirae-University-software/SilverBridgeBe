@@ -39,6 +39,7 @@ class WardChatControllerHttpTest {
     private static final ObjectMapper JACKSON2 = new ObjectMapper();
 
     @Mock private ChatRelayService chatRelayService;
+    @Mock private kr.silverbridge.main.domain.chat.service.ChatSttService chatSttService;
 
     @BeforeEach
     void setUp() {
@@ -52,7 +53,7 @@ class WardChatControllerHttpTest {
     }
 
     private MockMvc mvc() {
-        return MockMvcBuilders.standaloneSetup(new WardChatController(chatRelayService))
+        return MockMvcBuilders.standaloneSetup(new WardChatController(chatRelayService, chatSttService))
                 .setCustomArgumentResolvers(new AuthenticationPrincipalArgumentResolver())
                 .build();
     }
@@ -98,6 +99,22 @@ class WardChatControllerHttpTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data").isArray())
                 .andExpect(jsonPath("$.data").isEmpty());
+    }
+
+    @Test
+    @DisplayName("음성 인식: multipart audio를 토큰 사용자로 넘기고 data.text만 no-store로 내려간다")
+    void speechToTextReturnsTextOnly() throws Exception {
+        org.springframework.mock.web.MockMultipartFile audio = new org.springframework.mock.web.MockMultipartFile(
+                "audio", "rec.webm", "audio/webm", new byte[]{0x1A, 0x45, (byte) 0xDF, (byte) 0xA3, 1});
+        when(chatSttService.transcribe(eq("aB3x9Z"), any()))
+                .thenReturn(new kr.silverbridge.main.domain.chat.dto.ChatSttResponse("머리가 아파요"));
+
+        mvc().perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders
+                        .multipart("/api/ward/chat/stt").file(audio))
+                .andExpect(status().isOk())
+                .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.header()
+                        .string("Cache-Control", org.hamcrest.Matchers.containsString("no-store")))
+                .andExpect(jsonPath("$.data.text").value("머리가 아파요"));
     }
 
     @Test

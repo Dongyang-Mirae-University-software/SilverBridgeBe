@@ -39,6 +39,9 @@ class WardChatControllerSecurityTest {
     @MockitoBean
     private ChatRelayService chatRelayService;
 
+    @MockitoBean
+    private kr.silverbridge.main.domain.chat.service.ChatSttService chatSttService;
+
     @Autowired
     private WardChatController controller;
 
@@ -51,6 +54,7 @@ class WardChatControllerSecurityTest {
         assertThatNoException().isThrownBy(() -> controller.send("WRD001", REQUEST));
         assertThatNoException().isThrownBy(() -> controller.logs("WRD001"));
         assertThatNoException().isThrownBy(() -> controller.logDetail("WRD001", 1L));
+        assertThatNoException().isThrownBy(() -> controller.speechToText("WRD001", null));
     }
 
     @Test
@@ -60,7 +64,8 @@ class WardChatControllerSecurityTest {
         assertThatThrownBy(() -> controller.send("GRD001", REQUEST)).isInstanceOf(AccessDeniedException.class);
         assertThatThrownBy(() -> controller.logs("GRD001")).isInstanceOf(AccessDeniedException.class);
         assertThatThrownBy(() -> controller.logDetail("GRD001", 1L)).isInstanceOf(AccessDeniedException.class);
-        verifyNoInteractions(chatRelayService);
+        assertThatThrownBy(() -> controller.speechToText("GRD001", null)).isInstanceOf(AccessDeniedException.class);
+        verifyNoInteractions(chatRelayService, chatSttService);
     }
 
     @Test
@@ -70,7 +75,8 @@ class WardChatControllerSecurityTest {
         assertThatThrownBy(() -> controller.send("ADM001", REQUEST)).isInstanceOf(AccessDeniedException.class);
         assertThatThrownBy(() -> controller.logs("ADM001")).isInstanceOf(AccessDeniedException.class);
         assertThatThrownBy(() -> controller.logDetail("ADM001", 1L)).isInstanceOf(AccessDeniedException.class);
-        verifyNoInteractions(chatRelayService);
+        assertThatThrownBy(() -> controller.speechToText("ADM001", null)).isInstanceOf(AccessDeniedException.class);
+        verifyNoInteractions(chatRelayService, chatSttService);
     }
 
     @Test

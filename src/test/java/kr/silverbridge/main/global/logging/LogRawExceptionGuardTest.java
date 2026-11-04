@@ -42,6 +42,9 @@ class LogRawExceptionGuardTest {
             "domain/anomaly/listener/AnomalyNotificationListener.java",
             "domain/chat/client/AiChatClient.java",
             "domain/chat/service/ChatRelayService.java",
+            // 챗봇 마이크 음성 인식(2026-11-04) - 음성·받아 적은 글자가 오가는 경로
+            "domain/chat/client/AiSttClient.java",
+            "domain/chat/service/ChatSttService.java",
             "domain/chat/listener/AiMemberDataPurgeListener.java",
             "domain/chat/listener/AiProxyChatLogPurgeListener.java",
             "domain/medication/client/AiMedicationOcrClient.java",

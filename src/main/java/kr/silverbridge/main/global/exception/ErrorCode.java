@@ -191,6 +191,13 @@ public enum ErrorCode {
     CHAT_LIMIT_EXCEEDED(HttpStatus.TOO_MANY_REQUESTS, "이전 상담 응답을 기다리는 중입니다. 잠시 후 다시 시도해주세요."),
     CHAT_WARD_NOT_CONNECTED(HttpStatus.FORBIDDEN, "연결된 피보호자만 대신 상담·예약할 수 있습니다."),
 
+    // 챗봇 마이크 음성 인식 중계 (2026-11-04). AI 오류 문구는 그대로 내리지 않고 고정 문구만 쓴다
+    CHAT_STT_DISABLED(HttpStatus.SERVICE_UNAVAILABLE, "지금은 음성 입력을 쓸 수 없어요. 글로 입력해 주세요."),
+    CHAT_STT_UNAVAILABLE(HttpStatus.SERVICE_UNAVAILABLE, "지금은 음성을 알아듣지 못해요. 글로 입력해 주세요."),
+    CHAT_STT_BUSY(HttpStatus.SERVICE_UNAVAILABLE, "잠시 후 다시 눌러 주세요."),
+    CHAT_STT_AUDIO_INVALID(HttpStatus.BAD_REQUEST, "음성을 읽을 수 없어요. 다시 말씀해 주세요."),
+    CHAT_STT_AUDIO_TOO_LARGE(HttpStatus.CONTENT_TOO_LARGE, "음성은 30초, 10MB까지 보낼 수 있어요."),
+
     // 안부 말벗 (2026-11-04). AI 오류 문구는 그대로 내리지 않고 고정 문구만 쓴다
     COMPANION_DISABLED(HttpStatus.SERVICE_UNAVAILABLE, "안부 말벗을 지금 사용할 수 없습니다."),
     COMPANION_UNAVAILABLE(HttpStatus.SERVICE_UNAVAILABLE, "안부 말벗 서버에 연결할 수 없습니다. 잠시 후 다시 시도해주세요."),

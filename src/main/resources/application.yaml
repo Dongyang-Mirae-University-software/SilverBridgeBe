@@ -390,6 +390,18 @@ chat:
     per-hour: ${CHAT_RELAY_PER_HOUR:120}
     max-message-chars: ${CHAT_RELAY_MAX_MESSAGE_CHARS:2000}
     max-request-bytes: ${CHAT_RELAY_MAX_REQUEST_BYTES:524288}
+  # 챗봇 마이크 음성 인식 중계(2026-11-04) - AI POST /companion/stt. 음성·글자 저장·로그 없음.
+  # 주소·키는 코드 기본값 없음: 비거나 enabled=false면 503 CHAT_STT_DISABLED(기동은 막지 않음).
+  stt:
+    enabled: ${CHAT_STT_ENABLED:false}
+    ai-base-url: ${CHAT_STT_AI_BASE_URL:}
+    api-key: ${CHAT_STT_API_KEY:}                           # AI COMPANION_API_KEY와 같은 값. 챗 AI_API_KEY와 다르다(평문 커밋 금지)
+    connect-timeout: ${CHAT_STT_CONNECT_TIMEOUT:3s}
+    call-timeout: ${CHAT_STT_CALL_TIMEOUT:30s}              # AI 자리 대기 5초 + 받아쓰기(30초 이하 음성)
+    max-concurrent: ${CHAT_STT_MAX_CONCURRENT:4}            # 넘치면 AI를 부르지 않고 503 CHAT_STT_BUSY
+    max-per-user: ${CHAT_STT_MAX_PER_USER:1}
+    per-minute: ${CHAT_STT_PER_MINUTE:10}
+    per-hour: ${CHAT_STT_PER_HOUR:100}
 
 # 개인정보 보관 기간(2026-10-31 전체 점검 D-2, 학생 프로젝트 기준). 0 이하면 그 삭제만 끈다.
 retention:
