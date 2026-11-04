@@ -26,6 +26,12 @@ public interface GuardianMedicationSettingRepository extends JpaRepository<Guard
     List<GuardianMedicationSetting> findByGuardianIdAndWardIdIn(String guardianId, Collection<String> wardIds);
 
     /**
+     * 복약 시각 알림 대상 선정용 - 여러 피보호자에 대해 보호자가 <b>끈</b> 행만 한 번에 조회(2026-11-04).
+     * 행이 없으면 켜짐(기본값)이라 끈 행만 읽으면 충분하다.
+     */
+    List<GuardianMedicationSetting> findByWardIdInAndMissedAlertEnabledFalse(Collection<String> wardIds);
+
+    /**
      * 시각을 직접 지정한 설정 중 가장 이른 발송 시각. 지정한 설정이 없으면 비어 있다.
      *
      * <p>스케줄러가 매 분 복약 테이블을 훑지 않도록, "아직 아무도 받을 시각이 아니다"를
