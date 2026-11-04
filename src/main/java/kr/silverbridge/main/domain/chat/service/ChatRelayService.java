@@ -62,6 +62,12 @@ public class ChatRelayService {
             "name", "phone", "age", "birthDate", "gender", "email", "address", "addressDetail", "postcode", "relation",
             "patientId", "patientName", "patientBirthDate", "patientPhone", "patientGender");
     private static final java.time.ZoneId KST = java.time.ZoneId.of("Asia/Seoul");
+    /** 시·도(약칭·정식). 세종은 시·군·구가 없다. */
+    private static final java.util.regex.Pattern SIDO = java.util.regex.Pattern.compile(
+            "(서울|부산|대구|인천|광주|대전|울산|경기|강원|충북|충남|충청북도|충청남도|전북|전남|전라북도|전라남도|경북|경남|경상북도|경상남도|제주)"
+                    + "(특별시|광역시|특별자치도|도)?");
+    private static final java.util.regex.Pattern SEJONG = java.util.regex.Pattern.compile("세종(특별자치시|시)?");
+    private static final java.util.regex.Pattern SIGUNGU = java.util.regex.Pattern.compile("\\S+[시군구]");
     /** 사용자 ID 형식(UserIdGenerator: 영숫자, users.id VARCHAR(6)). */
     private static final java.util.regex.Pattern USER_ID_FORMAT = java.util.regex.Pattern.compile("\\A[A-Za-z0-9]{1,6}\\z");
 
@@ -190,6 +196,22 @@ public class ChatRelayService {
     }
 
     /** 환자 DB 값으로 프로필 키를 채운다. 값이 없는 칸은 키를 두지 않는다. 나이는 KST 오늘 기준 만 나이. */
+    /**
+     * AI 가 병원 검색에 쓸 수 있는 주소인지. AI 는 location 이 없으면 주소 <b>원문</b>으로 검색해서, 자리표시 값({@code <주소>})·
+     * 외국 주소·낙서가 가면 검색이 0건이 되고 지역 선택지 대신 "찾지 못했습니다"가 나온다(2026-11-04 실측).
+     * "시·도 + 시·군·구"(세종은 시·도만)로 시작할 때만 보내고, 아니면 빼서 AI 가 지역을 묻게 한다.
+     */
+    static boolean isSearchableAddress(String address) {
+        if (!StringUtils.hasText(address)) {
+            return false;
+        }
+        String[] tokens = address.strip().split("\\s+");
+        if (SEJONG.matcher(tokens[0]).matches()) {
+            return true;
+        }
+        return tokens.length >= 2 && SIDO.matcher(tokens[0]).matches() && SIGUNGU.matcher(tokens[1]).matches();
+    }
+
     static void putProfile(Map<String, Object> context, User patient, java.time.LocalDate today) {
         if (StringUtils.hasText(patient.getName())) {
             context.put("name", patient.getName());
@@ -204,8 +226,8 @@ public class ChatRelayService {
         if (patient.getGender() != null) {
             context.put("gender", patient.getGender().name());
         }
-        if (StringUtils.hasText(patient.getAddress())) {
-            context.put("address", patient.getAddress());
+        if (isSearchableAddress(patient.getAddress())) {
+            context.put("address", patient.getAddress().strip());
         }
     }
 
