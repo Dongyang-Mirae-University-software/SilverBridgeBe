@@ -11,7 +11,8 @@ public record GuardianNotificationTypeSettingResponse(
         @Schema(description = "복약 미복용 요약 알림. 끌 수 있다(피보호자별 설정과 둘 다 켜져야 발송)") TypeSetting medication,
         @Schema(description = "카메라 연결 끊김 안내 알림(AI 연결 끊김 뒤 돌아오지 않은 카메라). 끌 수 있다") TypeSetting cameraLinkLost,
         @Schema(description = "안부 말벗 대화의 위험 신호 알림 - 필수, 항상 켜짐(변경 불가). 푸시는 어떤 설정으로도 줄지 않는다")
-        TypeSetting companionRisk) {
+        TypeSetting companionRisk,
+        @Schema(description = "안부 말벗 주의 알림(걱정·우울이 3일 이상 이어짐, 하루 1번). 끌 수 있다") TypeSetting companionNotice) {
 
     @Schema(description = "종류별 설정")
     public record TypeSetting(

@@ -97,6 +97,11 @@ public interface UserRepository extends JpaRepository<User, String> {
     @Query("select u.id from User u where u.id in :ids and u.status = :status")
     List<String> findIdsByIdInAndStatus(@Param("ids") java.util.Collection<String> ids, @Param("status") Status status);
 
+    /** 역할·상태로 사용자 ID만(안부 말벗 질문 안내 대상 "*", 2026-11-04). */
+    @Query("select u.id from User u where u.role = :role and u.status = :status")
+    List<String> findIdsByRoleAndStatus(@Param("role") kr.silverbridge.main.global.enums.Role role,
+                                        @Param("status") Status status);
+
     @Query(value = "select u from User u where " + ADMIN_USER_SEARCH_WHERE,
            countQuery = "select count(u) from User u where " + ADMIN_USER_SEARCH_WHERE)
     Page<User> searchForAdmin(@Param("excludedStatus") Status excludedStatus,

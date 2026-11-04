@@ -21,6 +21,30 @@ public interface CompanionSessionRepository extends JpaRepository<CompanionSessi
     Optional<CompanionSession> findByWardIdAndSessionDateAndSlot(String wardId, LocalDate sessionDate,
                                                                  CompanionSlot slot);
 
+    List<CompanionSession> findBySessionDate(LocalDate sessionDate);
+
+    /** 연속 일수 계산용 - 한 피보호자의 {@code from} 이후 마친 대화. */
+    @Query("SELECT s FROM CompanionSession s WHERE s.wardId = :wardId AND s.status = :status "
+            + "AND s.sessionDate >= :from")
+    List<CompanionSession> findFinishedSince(@Param("wardId") String wardId,
+                                             @Param("status") CompanionSessionStatus status,
+                                             @Param("from") LocalDate from);
+
+    /** 관리자 집계용 - 모든 피보호자의 {@code from} 이후 마친 대화. */
+    @Query("SELECT s FROM CompanionSession s WHERE s.status = :status AND s.sessionDate >= :from")
+    List<CompanionSession> findAllFinishedSince(@Param("status") CompanionSessionStatus status,
+                                                @Param("from") LocalDate from);
+
+    /** 피보호자별 마지막으로 대답한 대화가 끝난 시각(관리자 "오늘 대화가 없는 어르신"). */
+    @Query("SELECT s.wardId, MAX(s.endedAt) FROM CompanionSession s WHERE s.wardId IN :wardIds "
+            + "AND s.status = :status AND s.answeredCount > 0 GROUP BY s.wardId")
+    List<Object[]> findLastAnsweredAt(@Param("wardIds") java.util.Collection<String> wardIds,
+                                      @Param("status") CompanionSessionStatus status);
+
+    /** 관리자 집계 - 그 날 보낸 위험 알림 수(대화당 1번이라 대화 수와 같다). */
+    @Query("SELECT COUNT(s) FROM CompanionSession s WHERE s.riskNotifiedAt >= :from AND s.riskNotifiedAt < :to")
+    long countRiskNotifiedBetween(@Param("from") OffsetDateTime from, @Param("to") OffsetDateTime to);
+
     /** 오래 멈춘 대화 - 마지막 활동이 {@code cutoff} 이전인 OPEN. 오래된 것부터. */
     @Query("SELECT s FROM CompanionSession s WHERE s.status = :status AND s.lastActivityAt < :cutoff "
             + "ORDER BY s.lastActivityAt ASC")

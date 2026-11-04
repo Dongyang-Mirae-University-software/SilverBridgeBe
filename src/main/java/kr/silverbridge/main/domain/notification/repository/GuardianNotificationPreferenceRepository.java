@@ -18,6 +18,20 @@ public interface GuardianNotificationPreferenceRepository extends JpaRepository<
     /** 발송 판정용. 카메라 연결 끊김 안내를 끈 보호자만 읽는다(행이 없는 보호자는 기본값 ON). */
     List<GuardianNotificationPreference> findByCameraLinkLostEnabledFalse();
 
+    /** 발송 판정용. 말벗 주의 알림을 끈 보호자만 읽는다(행이 없는 보호자는 기본값 ON). */
+    List<GuardianNotificationPreference> findByCompanionNoticeEnabledFalse();
+
+    /** 말벗 주의 알림 설정을 행이 없을 때만 넣는다(다른 값은 기본 ON). 반환 0 = 이미 있음. */
+    @Modifying
+    @Query(value = """
+            INSERT INTO guardian_notification_preference
+                (guardian_id, medication_enabled, companion_notice_enabled, created_at, updated_at)
+            VALUES (:guardianId, TRUE, :companionNoticeEnabled, now(), now())
+            ON CONFLICT (guardian_id) DO NOTHING
+            """, nativeQuery = true)
+    int insertCompanionNoticeIfAbsent(@Param("guardianId") String guardianId,
+                                      @Param("companionNoticeEnabled") boolean companionNoticeEnabled);
+
     /** 카메라 연결 끊김 안내 설정을 행이 없을 때만 넣는다(복약 값은 기본 ON). 반환 0 = 이미 있음. */
     @Modifying
     @Query(value = """

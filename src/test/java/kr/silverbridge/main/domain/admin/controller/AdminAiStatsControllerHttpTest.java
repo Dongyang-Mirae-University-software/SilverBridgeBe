@@ -41,6 +41,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 class AdminAiStatsControllerHttpTest {
 
     @Mock private AdminAiChatStatsService adminAiChatStatsService;
+    @Mock private kr.silverbridge.main.domain.companion.service.CompanionStatsService companionStatsService;
 
     @BeforeEach
     void setUp() {
@@ -54,7 +55,7 @@ class AdminAiStatsControllerHttpTest {
     }
 
     private MockMvc mvc() {
-        return MockMvcBuilders.standaloneSetup(new AdminAiStatsController(adminAiChatStatsService))
+        return MockMvcBuilders.standaloneSetup(new AdminAiStatsController(adminAiChatStatsService, companionStatsService))
                 .setCustomArgumentResolvers(new AuthenticationPrincipalArgumentResolver())
                 .setControllerAdvice(new GlobalExceptionHandler())
                 .build();

@@ -45,6 +45,9 @@ class AdminAiStatsControllerSecurityTest {
     @MockitoBean
     private AdminAiChatStatsService adminAiChatStatsService;
 
+    @MockitoBean
+    private kr.silverbridge.main.domain.companion.service.CompanionStatsService companionStatsService;
+
     @Autowired
     private AdminAiStatsController controller;
 

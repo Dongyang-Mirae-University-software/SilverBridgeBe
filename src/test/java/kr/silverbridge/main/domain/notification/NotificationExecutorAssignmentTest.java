@@ -53,6 +53,13 @@ class NotificationExecutorAssignmentTest {
     }
 
     @Test
+    @DisplayName("안부 말벗 주의 알림은 일반 풀이다 - 위험 신호가 아니라 관찰 안내(2026-11-04 PR-B)")
+    void 말벗_주의_알림_executor() {
+        assertThat(asyncQualifiers(kr.silverbridge.main.domain.companion.listener.CompanionNoticeListener.class))
+                .containsExactly(GENERAL);
+    }
+
+    @Test
     @DisplayName("연결·문의·복약 체크·카카오 가입 리스너는 일반 executor를 그대로 쓴다")
     void 일반_리스너는_일반_executor() {
         for (Class<?> listener : List.of(ConnectionNotificationListener.class, InquiryNotificationListener.class,

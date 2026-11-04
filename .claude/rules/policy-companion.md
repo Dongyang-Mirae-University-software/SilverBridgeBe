@@ -16,6 +16,15 @@ paths:
 - 질문은 BE가 고른다: `companion_question`(V65 초기 19문장, 근거 `docs/(2026-11-04) companion-question-research.md`)에서 시간대 활성 질문 중 `epochDay mod 개수`.
 - 대화 결과(종료 이유·기분·턴 수·위험 여부)는 `companion_session`에 저장한다. 위험 신호는 보호자에게 `COMPANION_RISK`.
 - 스위치 `COMPANION_ENABLED`(기본 꺼짐) + `COMPANION_AI_BASE_URL`·`COMPANION_AI_API_KEY`(기본값 없음). 상세 `docs/(2026-11-04) feature-companion-relay.md`.
+- **PR-B(2026-11-04)**: 보호자 `GET /api/guardian/ward/{wardId}/companion/today`(지금 기분·시간대별 질문·상태·기분·확인할 일), 주의 알림 `COMPANION_NOTICE`(걱정·우울 3일 이상, 하루 1번, V66), 관리자 `GET /api/admin/ai-stats/companion`(오늘 집계). 상세 `docs/(2026-11-04) feature-companion-screens.md`.
+
+## 하루 기분·연속 일수·주의 알림 (2026-11-04 사용자 결정, PR-B)
+
+- **하루 기분** = 그날 마지막으로 판정된 대화의 기분(판단 불가 건너뜀). **연속 일수** = 기준일(오늘 판정이 있으면 오늘, 없으면 어제)부터 거꾸로 걱정·우울인 날 수, **대화가 없는 날은 끊는다**. 규칙은 `CompanionMoodDays` 한 곳 - 보호자 화면·주의 알림·관리자 집계가 같이 쓴다. 따로 계산하지 말 것.
+- **주의 알림**: 3일째부터 날마다 하루 1번(`companion_notice_log` (ward, date) UNIQUE 선점). FCM만·설정 기반·일반 풀. 보호자가 `companionNotice`로 끌 수 있고 게이트는 `CompanionNoticeListener`가 건다(디스패처는 모른다). 받을 보호자가 없으면 선점하지 않는다. 문구에 병명·원문 금지("걱정스럽거나 가라앉은 기분이 N일째").
+- **보호자 조회 권한**: ACTIVE 연결 + **지금 연결 이후 대화만**(D-1, `ConnectionService.findActiveConnectedAt`). 남의 피보호자 403 `COMPANION_NOT_AUTHORIZED` + `[IDOR-ATTEMPT]`. 대답 원문 칸을 만들지 말 것(디자인 시안에 있었지만 결정 B).
+- **관리자 집계**: BE DB로 계산(AI 호출 없음). 응답률 = 보낸 질문 안내 중 그 (피보호자, 시간대) 대화에 대답이 있는 비율, 안내가 없으면 null. 어르신 이름은 BE가 붙인다. 원문·요약 금지.
+- **질문 안내 대상**: `COMPANION_PROMPT_WARD_IDS`에 `*`면 이용 중인 모든 피보호자. 피보호자 끄기 설정이 생기기 전에는 기본으로 켜지 말 것.
 
 ## 불변 규칙
 

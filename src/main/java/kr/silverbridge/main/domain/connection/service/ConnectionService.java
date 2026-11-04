@@ -32,6 +32,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 
 @Slf4j
 @Service
@@ -86,6 +87,14 @@ public class ConnectionService {
         return connectionRepository.findFirstByGuardianIdAndWardIdAndStatus(guardianId, wardId, ConnectionStatus.ACTIVE)
                 .map(connection -> connection.getConnectedAt() == null || !at.isBefore(connection.getConnectedAt()))
                 .orElse(false);
+    }
+
+    // 보호자의 지금 ACTIVE 연결이 맺어진 시각 - 기록 목록을 한 번에 거를 때 쓴다(isVisibleSinceConnection의 목록용, 2026-11-04 말벗).
+    // ACTIVE 연결이 없으면 empty, connected_at이 비어 있는 옛 행이면 OffsetDateTime.MIN(전부 보임 - 위 메서드와 같은 규칙).
+    @Transactional(readOnly = true)
+    public Optional<OffsetDateTime> findActiveConnectedAt(String guardianId, String wardId) {
+        return connectionRepository.findFirstByGuardianIdAndWardIdAndStatus(guardianId, wardId, ConnectionStatus.ACTIVE)
+                .map(connection -> connection.getConnectedAt() == null ? OffsetDateTime.MIN : connection.getConnectedAt());
     }
 
     // 보호자: 본인이 보낸 모든 연결 요청 이력 (PENDING + ACTIVE + CANCELLED, 최신 요청순)

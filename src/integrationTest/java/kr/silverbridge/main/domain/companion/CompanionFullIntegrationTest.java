@@ -44,6 +44,8 @@ class CompanionFullIntegrationTest extends FullContextIntegrationTest {
     @Autowired private CompanionSessionRepository sessionRepository;
     @Autowired private AdminUserService adminUserService;
     @Autowired private UserService userService;
+    @Autowired private kr.silverbridge.main.domain.companion.service.CompanionGuardianService companionGuardianService;
+    @Autowired private kr.silverbridge.main.domain.companion.service.CompanionStatsService companionStatsService;
 
     @Test
     @DisplayName("위험 신호 턴 → 보호자에게 COMPANION_RISK 1번, 같은 대화의 두 번째 위험 턴과 URGENT 마감은 더 보내지 않는다")
@@ -120,16 +122,75 @@ class CompanionFullIntegrationTest extends FullContextIntegrationTest {
         eventually().untilAsserted(() -> verify(aiCompanionClient).deleteWardData(WARD));
     }
 
+    @Test
+    @DisplayName("PR-B 주의 알림: 걱정·우울 3일째에 켠 보호자에게 하루 1번 - 같은 날 두 번째 걱정 대화는 더 보내지 않는다")
+    void 주의_알림은_하루_한_번() throws Exception {
+        saveUser(GUARDIAN, Role.GUARDIAN, Status.ACTIVE);
+        saveUser(WARD, Role.WARD, Status.ACTIVE);
+        saveActiveConnection(GUARDIAN, WARD);
+        signedIn(GUARDIAN);
+        LocalDate today = LocalDate.now(ZoneId.of("Asia/Seoul"));
+        saveFinished(today.minusDays(2), CompanionSlot.S21, "WORRY");
+        saveFinished(today.minusDays(1), CompanionSlot.S21, "DEPRESSED");
+        long first = openSession("d-notice-1");
+        when(aiCompanionClient.finish("d-notice-1")).thenReturn(json(
+                "{\"dialogueId\":\"d-notice-1\",\"endReason\":\"USER_STOP\",\"turnCount\":2,\"answeredCount\":2,"
+                        + "\"mood\":\"걱정\",\"riskFlag\":false,\"alertLevel\":\"INFO\"}"));
+
+        companionService.finish(WARD, first);
+        eventually().untilAsserted(() -> assertThat(notificationLogs(GUARDIAN, NotificationType.COMPANION_NOTICE))
+                .isEqualTo(1));
+
+        long second = openSession("d-notice-2", CompanionSlot.S12);
+        when(aiCompanionClient.finish("d-notice-2")).thenReturn(json(
+                "{\"dialogueId\":\"d-notice-2\",\"endReason\":\"USER_STOP\",\"turnCount\":2,\"answeredCount\":2,"
+                        + "\"mood\":\"우울\",\"riskFlag\":false,\"alertLevel\":\"INFO\"}"));
+        companionService.finish(WARD, second);
+        awaitAsyncIdle();
+
+        assertThat(notificationLogs(GUARDIAN, NotificationType.COMPANION_NOTICE)).as("하루 1번").isEqualTo(1);
+        assertThat(count("SELECT count(*) FROM companion_notice_log WHERE ward_id = ? AND days = 3", WARD)).isEqualTo(1);
+        assertThat(companionStatsService.today().alertSentCount()).as("관리자 알림 보냄 수").isEqualTo(1);
+    }
+
+    @Test
+    @DisplayName("PR-B 보호자 조회: 연결된 보호자는 오늘 기분을 보고, 연결되지 않은 보호자는 403")
+    void 보호자_조회_권한() {
+        saveUser(GUARDIAN, Role.GUARDIAN, Status.ACTIVE);
+        saveUser("GCM002", Role.GUARDIAN, Status.ACTIVE);
+        saveUser(WARD, Role.WARD, Status.ACTIVE);
+        saveActiveConnection(GUARDIAN, WARD);
+        saveFinished(LocalDate.now(ZoneId.of("Asia/Seoul")), CompanionSlot.S09, "CALM");
+
+        assertThat(companionGuardianService.today(GUARDIAN, WARD).current().mood()).isEqualTo("CALM");
+        org.assertj.core.api.Assertions.assertThatThrownBy(() -> companionGuardianService.today("GCM002", WARD))
+                .isInstanceOf(kr.silverbridge.main.global.exception.CustomException.class);
+    }
+
+    /** 지난날 마친 대화(연속 일수 준비). 연결 이후로 보이게 시작 시각을 지금으로 둔다. */
+    private void saveFinished(LocalDate date, CompanionSlot slot, String mood) {
+        Long questionId = jdbc.queryForObject(
+                "INSERT INTO companion_question (slot, text) VALUES (?, '시험 질문') RETURNING id", Long.class, slot.code());
+        jdbc.update("INSERT INTO companion_session (ward_id, session_date, slot, question_id, dialogue_id, status, "
+                        + "end_reason, mood, turn_count, answered_count, no_response_count, started_at, last_activity_at, "
+                        + "ended_at) VALUES (?, ?, ?, ?, ?, 'FINISHED', 'MAX_TURNS', ?, 8, 8, 0, now(), now(), now())",
+                WARD, date, slot.code(), questionId, "d-past-" + date + slot.code(), mood);
+    }
+
+    private long openSession(String dialogueId) {
+        return openSession(dialogueId, CompanionSlot.S09);
+    }
+
     /**
      * AI에 열린 대화 1개. 시간대 창과 무관하게 대화를 이어 갈 수 있다. 질문은 직접 넣는다 - 기반 클래스가 테스트마다
      * 전 표를 TRUNCATE해 V65 초기 질문도 지워진다.
      */
-    private long openSession(String dialogueId) {
+    private long openSession(String dialogueId, CompanionSlot slot) {
         OffsetDateTime now = OffsetDateTime.now(ZoneId.of("Asia/Seoul"));
         Long questionId = jdbc.queryForObject(
-                "INSERT INTO companion_question (slot, text) VALUES ('09:00', '시험 질문') RETURNING id", Long.class);
+                "INSERT INTO companion_question (slot, text) VALUES (?, '시험 질문') RETURNING id", Long.class, slot.code());
         CompanionSession session = CompanionSession.claim(WARD, LocalDate.now(ZoneId.of("Asia/Seoul")),
-                CompanionSlot.S09, questionId, now);
+                slot, questionId, now);
         session.attachDialogue(dialogueId, 8, now);
         return sessionRepository.save(session).getId();
     }

@@ -64,7 +64,7 @@ paths:
 - **불변 규칙 ①(필수 알림은 이 설정으로 줄지 않는다)**: `sos`·`anomalyDetection`은 응답에 `required: true`·`enabled: true`로만 내리고 변경 경로가 없다(요청에 넣어도 무시). 이 설정은 **"보내지 않는 쪽으로만"** 작용하며 `WARD_SOS`·`ANOMALY_DETECTED*`의 푸시/문자 대체 경로를 건드리지 않는다. 게이트는 해당 알림의 플래너가 건다 - `NotificationDispatcher`는 이 설정을 모른다(`GuardianNotificationPreferenceUsageGuardTest`가 참조처를 고정). 디스패처에 제외 채널 파라미터를 넣지 말 것.
 - **불변 규칙 ②(복약 = 계정 AND 피보호자별)**: 계정 토글이 OFF면 `MedicationMissedAlertPlanner`가 **선점 기록도 만들지 않는다**(선점 후 발송·UNIQUE 불변). `MEDICATION_STOPPED`(조치가 필요한 안내)는 게이트하지 않는다.
 - **불변 규칙 ③(재촉은 저장소를 늘리지 않는다)**: `anomalyReviewReminder`는 기존 `guardian_anomaly_setting`에 위임한다. 같은 값을 새 테이블에 복제하지 말 것.
-- **불변 규칙 ④(정서 변화·병원 예약 설정 금지)**: BE가 발송하지 않는 알림의 토글은 보내지 못하는 약속을 저장하는 거짓 UI다. 발송 기능이 생기기 전에는 필드·컬럼을 만들지 말 것.
+- **불변 규칙 ④(정서 변화·병원 예약 설정 금지)**: BE가 발송하지 않는 알림의 토글은 보내지 못하는 약속을 저장하는 거짓 UI다. 발송 기능이 생기기 전에는 필드·컬럼을 만들지 말 것. **정서 변화는 2026-11-04 안부 말벗 주의 알림(`COMPANION_NOTICE`)으로 발송이 생겨 `companionNotice`(V66, 끌 수 있음)를 만들었다** - 말벗 위험 알림 `companionRisk`는 필수(`required`)다. 병원 예약은 여전히 금지.
 
 
 ## 이메일 알림 채널 - 안내성 알림 전용, 긴급 알림의 전달 수단이 아니다 (2026-10-13)

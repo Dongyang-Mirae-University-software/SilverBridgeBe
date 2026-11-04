@@ -49,6 +49,12 @@ public class GuardianNotificationPreferenceService {
                     .orElseThrow(() -> new IllegalStateException("알림 종류 설정 동시 저장 후 행을 찾지 못함"))
                     .changeCameraLinkLostEnabled(cameraLinkLost);
         }
+        Boolean companionNotice = request.companionNotice();
+        if (companionNotice != null && repository.insertCompanionNoticeIfAbsent(guardianId, companionNotice) == 0) {
+            repository.findByGuardianId(guardianId)
+                    .orElseThrow(() -> new IllegalStateException("알림 종류 설정 동시 저장 후 행을 찾지 못함"))
+                    .changeCompanionNoticeEnabled(companionNotice);
+        }
         if (request.anomalyReviewReminder() != null) {
             anomalySettingService.updateSetting(guardianId, request.anomalyReviewReminder());
         }
@@ -77,11 +83,23 @@ public class GuardianNotificationPreferenceService {
                 .collect(Collectors.toSet());
     }
 
+    /**
+     * 안부 말벗 주의 알림을 계정 차원에서 <b>끈</b> 보호자 전체(2026-11-04). 행이 없으면 기본값 ON이라 포함되지 않는다.
+     * 주의 알림 대상을 좁히는 데만 쓴다 - 위험 알림(COMPANION_RISK)에는 쓰지 않는다.
+     */
+    @Transactional(readOnly = true)
+    public Set<String> companionNoticeDisabledGuardians() {
+        return repository.findByCompanionNoticeEnabledFalse().stream()
+                .map(GuardianNotificationPreference::getGuardianId)
+                .collect(Collectors.toSet());
+    }
+
     private GuardianNotificationTypeSettingResponse toResponse(String guardianId) {
         GuardianNotificationPreference preference = repository.findByGuardianId(guardianId).orElse(null);
         boolean medication = preference != null ? preference.isMedicationEnabled() : DEFAULT_MEDICATION_ENABLED;
         boolean cameraLinkLost = preference != null
                 ? preference.isCameraLinkLostEnabled() : DEFAULT_CAMERA_LINK_LOST_ENABLED;
+        boolean companionNotice = preference == null || preference.isCompanionNoticeEnabled();
         return new GuardianNotificationTypeSettingResponse(
                 TypeSetting.locked(),
                 TypeSetting.locked(),
@@ -89,6 +107,7 @@ public class GuardianNotificationPreferenceService {
                 TypeSetting.optional(medication),
                 TypeSetting.optional(cameraLinkLost),
                 // 안부 말벗 위험 신호(2026-11-04 점검 L-3) - 강제 푸시라 끌 수 없음을 화면에 보인다
-                TypeSetting.locked());
+                TypeSetting.locked(),
+                TypeSetting.optional(companionNotice));
     }
 }

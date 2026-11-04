@@ -58,10 +58,10 @@ class GuardianNotificationTypeSettingControllerSecurityTest {
     }
 
     @Test
-    @DisplayName("요청에는 변경 가능한 세 종류만 있고 userId·필수 알림 필드는 없다")
+    @DisplayName("요청에는 변경 가능한 네 종류만 있고 userId·필수 알림 필드는 없다(말벗 주의 알림 2026-11-04)")
     void 요청_필드_고정() {
         assertThat(Arrays.stream(GuardianNotificationTypeSettingRequest.class.getRecordComponents())
                 .map(RecordComponent::getName))
-                .containsExactlyInAnyOrder("anomalyReviewReminder", "medication", "cameraLinkLost");
+                .containsExactlyInAnyOrder("anomalyReviewReminder", "medication", "cameraLinkLost", "companionNotice");
     }
 }

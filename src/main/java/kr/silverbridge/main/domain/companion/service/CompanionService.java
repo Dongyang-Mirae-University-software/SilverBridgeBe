@@ -303,7 +303,8 @@ public class CompanionService {
         return new SessionResponse(session.getId(), session.getSlot().code(), question, session.getMaxTurns(), true);
     }
 
-    private CompanionQuestion pickQuestion(CompanionSlot slot, LocalDate date) {
+    /** 그 날 그 시간대에 고를 질문(보호자 화면의 아직 열리지 않은 시간대 표시에도 쓴다). */
+    CompanionQuestion pickQuestion(CompanionSlot slot, LocalDate date) {
         List<CompanionQuestion> questions = questionRepository.findBySlotAndActiveTrueOrderByIdAsc(slot);
         if (questions.isEmpty()) {
             log.error("[COMPANION] 시간대 활성 질문 없음: slot={}", slot.code());
@@ -387,13 +388,18 @@ public class CompanionService {
         }
     }
 
-    private java.util.Optional<CompanionSlot> currentSlot(ZonedDateTime now) {
+    /** 지금 시각(KST). 테스트는 {@link #setClock}으로 고정한다. */
+    ZonedDateTime now() {
+        return ZonedDateTime.now(clock).withZoneSameInstant(KST);
+    }
+
+    java.util.Optional<CompanionSlot> currentSlot(ZonedDateTime now) {
         return Arrays.stream(CompanionSlot.values())
                 .filter(slot -> slot.contains(now.toLocalTime(), properties.getWindowMinutes()))
                 .findFirst();
     }
 
-    private SlotStatus slotStatus(CompanionSlot slot, CompanionSession session, ZonedDateTime now) {
+    SlotStatus slotStatus(CompanionSlot slot, CompanionSession session, ZonedDateTime now) {
         if (session != null) {
             return switch (session.getStatus()) {
                 case OPEN -> new SlotStatus(slot.code(), "IN_PROGRESS", null);
