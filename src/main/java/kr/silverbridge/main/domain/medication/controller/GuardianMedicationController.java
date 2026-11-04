@@ -268,6 +268,8 @@ public class GuardianMedicationController {
                     Authorization: Bearer {accessToken}
 
                     그 피보호자에 대해 "내가" 받을 미복용 요약 설정을 반환합니다.
+                    missedAlertEnabled는 그 피보호자 기기로 가는 "약 드실 시간" 알림에도 쓰입니다(2026-11-04 -
+                    그 피보호자의 보호자 중 한 명이라도 계정 복약 알림과 이 값을 모두 켜 두면 나갑니다).
                     설정한 적이 없으면 기본값(missedAlertEnabled=true, missedAlertTime=21:00)입니다.
 
                     ※ missedAlertTime은 항상 실제 적용되는 시각입니다(미설정이면 기본값이 담깁니다).
@@ -295,6 +297,8 @@ public class GuardianMedicationController {
 
                     [요청 바디] 두 필드 모두 선택 - 생략(null)하면 기존값을 유지합니다.
                     - missedAlertEnabled: true면 이 피보호자가 복약을 체크하지 않은 날 요약을 받습니다.
+                      ⚠️ false로 바꾸면 이 피보호자의 "약 드실 시간" 알림 판정에서도 나는 꺼진 보호자로 셉니다 -
+                      켜 둔 다른 보호자가 없으면 피보호자 기기 알림이 멈춥니다(2026-11-04).
                     - missedAlertTime: 요약을 받을 시각(KST, 분 단위 · 예 "19:30:00").
                       기본값(21:00)으로 되돌리려면 21:00을 직접 지정하세요.
 

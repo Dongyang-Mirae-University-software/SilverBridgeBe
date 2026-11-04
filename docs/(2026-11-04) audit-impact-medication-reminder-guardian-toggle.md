@@ -57,6 +57,13 @@
 - 불변식 2: `MedicationReminderPlannerTest` gate 10건으로 고정됨. 파생 쿼리 `findByWardIdInAndMissedAlertEnabledFalse`는 두 서버 기동 시 이름 파싱이 검증됐고 SQL이 단순해 통합 테스트는 추가하지 않는다.
 - M-1 조치 시 Swagger 문구 테스트 1건 추가 제안.
 
+## 조치 (2026-11-04, 사용자 "전부 반영")
+
+- M-1: 알림 종류 설정(조회·변경 설명, 요청·응답 `medication`)과 피보호자별 설정(조회·변경 설명, `WardMedicationSummary.missedAlertEnabled`)에 "피보호자 '약 드실 시간' 알림도 함께 켜고 끈다·끄면 멈춘다·보호자 중 한 명이라도 켜면 나간다"를 넣었다. `MedicationToggleApiDocTest`(2건)가 고정한다. 동작·응답 형식 무변경.
+- L-1: `MedicationReminderService`·`MedicationPreference`·`MedicationSettingService` 주석 갱신.
+- L-2: FE 보호자 환경설정 "복약 알림" 설명 문구와 `WardMedicationCard` 주석을 FE PR로 갱신.
+- L-3·L-4: 기록만(조치 없음).
+
 ## 종합
 
 **조건부 PASS** - 동작 불변식은 모두 지켜진다. 남은 것은 계약 문서(Swagger)·주석 drift(M-1·L-1)이며 동작 변경 없는 문구 PR 하나로 닫을 수 있다.

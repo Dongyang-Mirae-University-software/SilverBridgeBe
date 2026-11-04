@@ -37,7 +37,7 @@ public record WardMedicationSummary(
         @Schema(description = "재알림 ON/OFF (최초 알림 15분 뒤 한 번 더)", example = "true")
         boolean remindAgainEnabled,
 
-        @Schema(description = "이 피보호자 건 미복용 요약을 내가 받을지", example = "true")
+        @Schema(description = "이 피보호자 건 미복용 요약을 내가 받을지. 이 피보호자의 \"약 드실 시간\" 알림 판정에도 쓰인다(보호자 중 한 명이라도 켜면 나감)", example = "true")
         boolean missedAlertEnabled,
 
         @Schema(description = "이 피보호자 건 요약을 받을 시각(KST). 이 시각까지 예정된 약만 집계됩니다.",

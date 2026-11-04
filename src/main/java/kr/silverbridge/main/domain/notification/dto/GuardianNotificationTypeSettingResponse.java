@@ -8,7 +8,7 @@ public record GuardianNotificationTypeSettingResponse(
         @Schema(description = "이상감지(화재·흉기·낙상) 발생 알림 - 필수, 항상 켜짐(변경 불가). 푸시는 어떤 설정으로도 줄지 않는다")
         TypeSetting anomalyDetection,
         @Schema(description = "이상감지 판정 확인 요청(재촉) 알림. 끌 수 있다") TypeSetting anomalyReviewReminder,
-        @Schema(description = "복약 미복용 요약 알림. 끌 수 있다(피보호자별 설정과 둘 다 켜져야 발송)") TypeSetting medication,
+        @Schema(description = "복약 알림. 끌 수 있다 - 내 미복용 요약과 피보호자의 \"약 드실 시간\" 알림을 함께 켜고 끈다(피보호자별 설정과 둘 다 켜져야 함, 피보호자 알림은 보호자 중 한 명이라도 켜면 나감)") TypeSetting medication,
         @Schema(description = "카메라 연결 끊김 안내 알림(AI 연결 끊김 뒤 돌아오지 않은 카메라). 끌 수 있다") TypeSetting cameraLinkLost,
         @Schema(description = "안부 말벗 대화의 위험 신호 알림 - 필수, 항상 켜짐(변경 불가). 푸시는 어떤 설정으로도 줄지 않는다")
         TypeSetting companionRisk,
