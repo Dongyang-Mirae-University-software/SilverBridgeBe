@@ -64,7 +64,8 @@ paths:
 - **불변 규칙 ①(실제로 보낸 것만)**: 보이는 행 = `result <> 'NOT_SENT'` + 최근 `retention-days`(90일). `FAILED`는 포함한다 - 보냈지만 기기에 닿지 않았을 수 있는 SOS·화재를 앱 안에서라도 봐야 한다(시도 채널 0인 FAILED 포함). 쿼리의 `NOT_SENT` 조건은 V67 부분 인덱스와 같은 **리터럴**로 둔다(파라미터로 바꾸지 말 것).
 - **불변 규칙 ②(D-1을 적용하지 않는다)**: D-1(보호자 이력은 지금 연결 이후만)은 피보호자 기록의 **열람 권한**이고, 이 목록은 **내게 이미 도착한 메시지의 사본**이라 연결이 끝나도 보인다. 피보호자가 탈퇴하면 `ward_id` CASCADE로 함께 지워진다(⑤ 그대로). 이 목록에 연결 조건을 덧붙여 "이미 받은 알림"을 숨기지 말 것, 반대로 이 근거로 SOS·이상감지 이력 API의 D-1을 풀지 말 것.
 - **불변 규칙 ③(응답에 싣지 않는 칼럼)**: `result`·`channel_results`·`not_sent_reason`·`recipient_id`는 관리자용이다. 사용자 응답은 `UserNotificationItem` 9개 필드로 고정(`UserNotificationControllerSecurityTest`). 로그에 제목·본문을 남기지 않는다.
-- **불변 규칙 ④(본인 것만, 한 번의 UPDATE)**: 사용자 ID는 토큰에서만. 읽음은 `UPDATE … WHERE id AND recipient_id AND result <> NOT_SENT`, 이미 읽었으면 처음 시각 유지(멱등). 남의 알림 403 `NOTIFICATION_NOT_OWNED` + `[IDOR-ATTEMPT]`(소유자 ID 없음), 없음·본인의 NOT_SENT 404.
+- **불변 규칙 ④(본인 것만, 한 번의 UPDATE)**: 사용자 ID는 토큰에서만. 읽음은 `UPDATE … WHERE id AND recipient_id AND result <> NOT_SENT AND created_at >= 하한`, 이미 읽었으면 처음 시각 유지(멱등). 남의 알림 403 `NOTIFICATION_NOT_OWNED` + `[IDOR-ATTEMPT]`(소유자 ID 없음), 없음·본인의 NOT_SENT·보관 기간 밖 404. **목록·안 읽은 수·읽음·모두 읽음은 같은 범위(보이는 행)를 쓴다**(2026-11-04 점검 L-2) - 한쪽만 조건을 바꾸지 말 것.
+- **연결이 끝난 피보호자 알림의 이동 (2026-11-04 점검 M-1)**: 목록에는 남지만 이력 화면은 D-1·연결 인가로 403이다. FE가 403을 안내로 받고 목록에 머무는 것으로 정했다(FE 전달 절). 이 403을 피하려고 이력 API의 인가를 넓히지 말 것.
 - **불변 규칙 ⑤(묶음은 한 곳)**: `UserNotificationCategory.of()`의 `switch`에 default를 넣지 말 것 - 새 `NotificationType`이 묶음 없이 배포되는 것을 컴파일이 막는다. `COMPANION_RISK`는 URGENT(사용자 결정). 관리자 탭 `AdminNotificationCategory`와 섞지 말 것.
 - **수용**: 배포 전 기존 행은 V67이 읽음으로 채웠다(뱃지 폭증 방지). 발송 `data`(incidentId 등)는 저장하지 않아 FE는 `type`·`wardId`로 목록 화면에 보낸다. 안 읽은 수의 실시간 이벤트는 없다(FE가 진입·포커스·푸시 수신 때 조회).
 

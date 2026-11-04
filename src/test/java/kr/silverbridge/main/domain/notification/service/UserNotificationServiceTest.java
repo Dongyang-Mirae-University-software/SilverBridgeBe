@@ -109,7 +109,7 @@ class UserNotificationServiceTest {
     @Test
     @DisplayName("읽음: 본인 것이면 UPDATE 한 번으로 끝난다(이미 읽은 것도 1을 돌려줘 멱등)")
     void 읽음_성공() {
-        given(repository.markRead(eq(10L), eq(GUARDIAN_ID), any())).willReturn(1);
+        given(repository.markRead(eq(10L), eq(GUARDIAN_ID), any(), any())).willReturn(1);
 
         assertThatNoException().isThrownBy(() -> service.markRead(GUARDIAN_ID, 10L));
         verify(repository, never()).findRecipientIdById(any());
@@ -118,7 +118,7 @@ class UserNotificationServiceTest {
     @Test
     @DisplayName("읽음: 남의 알림 → 403 NOTIFICATION_NOT_OWNED + [IDOR-ATTEMPT] (제목·본문·소유자 ID는 로그에 없다)")
     void 읽음_남의것(CapturedOutput output) {
-        given(repository.markRead(eq(10L), eq(GUARDIAN_ID), any())).willReturn(0);
+        given(repository.markRead(eq(10L), eq(GUARDIAN_ID), any(), any())).willReturn(0);
         given(repository.findRecipientIdById(10L)).willReturn(Optional.of("GD0002"));
 
         assertThatThrownBy(() -> service.markRead(GUARDIAN_ID, 10L))
@@ -129,9 +129,9 @@ class UserNotificationServiceTest {
     }
 
     @Test
-    @DisplayName("읽음: 없는 알림 → 404, 본인의 보내지 않은(NOT_SENT) 알림도 목록에 없으므로 404")
+    @DisplayName("읽음: 없는 알림 → 404, 본인의 보내지 않은(NOT_SENT)·보관 기간이 지난 알림도 목록에 없으므로 404")
     void 읽음_없음() {
-        given(repository.markRead(any(), eq(GUARDIAN_ID), any())).willReturn(0);
+        given(repository.markRead(any(), eq(GUARDIAN_ID), any(), any())).willReturn(0);
         given(repository.findRecipientIdById(11L)).willReturn(Optional.empty());
         given(repository.findRecipientIdById(12L)).willReturn(Optional.of(GUARDIAN_ID));
 
@@ -144,11 +144,28 @@ class UserNotificationServiceTest {
     @Test
     @DisplayName("모두 읽음·안 읽은 수는 토큰 사용자 기준이다")
     void 모두_읽음과_개수() {
-        given(repository.markAllRead(eq(WARD_ID), any())).willReturn(3);
+        given(repository.markAllRead(eq(WARD_ID), any(), any())).willReturn(3);
         given(repository.countUnread(eq(WARD_ID), any())).willReturn(0L);
 
         assertThat(service.markAllRead(WARD_ID).updated()).isEqualTo(3);
         assertThat(service.countUnread(WARD_ID).count()).isZero();
+    }
+
+    @Test
+    @DisplayName("읽음·모두 읽음도 목록과 같은 90일 하한을 넘긴다(점검 L-2 - 목록에 없는 알림을 읽음 처리하지 않는다)")
+    void 읽음_보관기간_하한() {
+        given(repository.markRead(eq(10L), eq(GUARDIAN_ID), any(), any())).willReturn(1);
+
+        service.markRead(GUARDIAN_ID, 10L);
+        service.markAllRead(GUARDIAN_ID);
+
+        ArgumentCaptor<OffsetDateTime> readFrom = ArgumentCaptor.forClass(OffsetDateTime.class);
+        ArgumentCaptor<OffsetDateTime> allFrom = ArgumentCaptor.forClass(OffsetDateTime.class);
+        verify(repository).markRead(eq(10L), eq(GUARDIAN_ID), readFrom.capture(), any());
+        verify(repository).markAllRead(eq(GUARDIAN_ID), allFrom.capture(), any());
+        OffsetDateTime expected = OffsetDateTime.now().minusDays(90);
+        assertThat(readFrom.getValue()).isCloseTo(expected, within(java.time.Duration.ofMinutes(1)));
+        assertThat(allFrom.getValue()).isCloseTo(expected, within(java.time.Duration.ofMinutes(1)));
     }
 
     private static NotificationLog log(Long id, String recipientId, String wardId, NotificationType type,

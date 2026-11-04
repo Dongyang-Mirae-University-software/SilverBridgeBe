@@ -88,13 +88,15 @@ public class UserNotificationController {
 
     @Operation(summary = "알림 한 건 읽음", description = """
             본인이 받은 알림만 읽음 처리합니다. 이미 읽은 알림이면 그대로 200입니다(처음 읽은 시각 유지).
+            목록에 보이는 알림(최근 90일, 실제로 보낸 알림)만 대상입니다.
             [요청 헤더] Authorization: Bearer {accessToken}
             """)
     @ApiResponses({
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "읽음 처리됨"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "INVALID_INPUT - id가 숫자가 아님", content = @Content),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "인증 토큰 없음 또는 만료", content = @Content),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "NOTIFICATION_NOT_OWNED - 다른 사용자의 알림 / 관리자", content = @Content),
-            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "NOTIFICATION_NOT_FOUND - 없는 알림(보관 기간이 지나 지워진 알림 포함)", content = @Content)
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "NOTIFICATION_NOT_FOUND - 없는 알림, 보관 기간(90일)이 지난 알림, 보내지 않은 알림", content = @Content)
     })
     @PostMapping("/{id}/read")
     public ApiResponse<Void> markRead(@AuthenticationPrincipal String userId, @PathVariable Long id) {
@@ -103,7 +105,7 @@ public class UserNotificationController {
     }
 
     @Operation(summary = "알림 모두 읽음", description = """
-            본인의 안 읽은 알림을 모두 읽음 처리합니다. 응답 updated = 이번에 바뀐 건수.
+            본인의 안 읽은 알림(최근 90일, 실제로 보낸 알림)을 모두 읽음 처리합니다. 응답 updated = 이번에 바뀐 건수(안 읽은 수와 같은 범위).
             [요청 헤더] Authorization: Bearer {accessToken}
             """)
     @ApiResponses({

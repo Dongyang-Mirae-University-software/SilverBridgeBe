@@ -75,10 +75,10 @@ public class UserNotificationService {
     }
 
     /**
-     * 한 건 읽음(멱등). 남의 알림은 403 + {@code [IDOR-ATTEMPT]}, 없는 알림·보내지 않은 알림은 404.
+     * 한 건 읽음(멱등). 남의 알림은 403 + {@code [IDOR-ATTEMPT]}, 없는 알림·보내지 않은 알림·보관 기간(90일)이 지난 알림은 404.
      */
     public void markRead(String userId, Long notificationId) {
-        if (notificationLogRepository.markRead(notificationId, userId, OffsetDateTime.now()) > 0) {
+        if (notificationLogRepository.markRead(notificationId, userId, lowerBound(), OffsetDateTime.now()) > 0) {
             return;
         }
         Optional<String> owner = notificationLogRepository.findRecipientIdById(notificationId);
@@ -86,15 +86,15 @@ public class UserNotificationService {
             log.warn("[IDOR-ATTEMPT] 다른 사용자의 알림 읽음 시도: userId={}, notificationId={}", userId, notificationId);
             throw new CustomException(ErrorCode.NOTIFICATION_NOT_OWNED);
         }
-        // 행이 없거나, 본인 것이지만 보내지 않은(NOT_SENT) 알림 - 목록에 없는 알림이라 없는 것과 같다.
+        // 행이 없거나, 본인 것이지만 보내지 않았거나(NOT_SENT) 보관 기간이 지난 알림 - 목록에 없는 알림이라 없는 것과 같다.
         throw new CustomException(ErrorCode.NOTIFICATION_NOT_FOUND);
     }
 
     public UserNotificationReadAllResponse markAllRead(String userId) {
-        return new UserNotificationReadAllResponse(notificationLogRepository.markAllRead(userId, OffsetDateTime.now()));
+        return new UserNotificationReadAllResponse(notificationLogRepository.markAllRead(userId, lowerBound(), OffsetDateTime.now()));
     }
 
-    /** 보관 정리(매일 04:30)가 돌기 전까지 남아 있는 기간 밖 행을 목록·안 읽은 수에서 뺀다. */
+    /** 보관 정리(매일 04:30)가 돌기 전까지 남아 있는 기간 밖 행을 목록·안 읽은 수·읽음 처리에서 뺀다. */
     private OffsetDateTime lowerBound() {
         return OffsetDateTime.now().minusDays(logProperties.getRetentionDays());
     }
