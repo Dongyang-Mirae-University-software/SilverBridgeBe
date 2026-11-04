@@ -59,6 +59,10 @@ public class SwaggerConfig {
                                         + "※ 토큰 등록은 기기 단위, 채널 설정은 계정 단위입니다.\n"
                                         + "※ SOS 등 필수 알림은 이 설정과 무관하게 항상 발송됩니다.\n"
                                         + "※ Authorization: Bearer {accessToken} 헤더 필수."),
+                        new Tag().name("공통 - 내 알림 기록")
+                                .description("웹 상단 종 아이콘 - 보호자·피보호자가 그동안 받은 알림 목록·안 읽은 수·읽음 처리 (관리자 403).\n"
+                                        + "※ 최근 90일 동안 실제로 보낸 알림만 보입니다(보내지 않은 알림 제외).\n"
+                                        + "※ Authorization: Bearer {accessToken} 헤더 필수."),
                         new Tag().name("공통 - 공지사항")
                                 .description("로그인한 사용자(피보호자·보호자·관리자)가 열람하는 공지사항 조회.\n"
                                         + "※ 공지 작성·수정은 [관리자 - 공지사항] 참고.\n"
