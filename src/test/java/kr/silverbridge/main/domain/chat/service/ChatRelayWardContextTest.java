@@ -89,6 +89,10 @@ class ChatRelayWardContextTest {
         return User.builder().id(WARD).name("김영희").phone("010-1234-5678").build();
     }
 
+    private User guardian() {
+        return User.builder().id(GUARDIAN).name("박보호").phone("010-2222-3333").build();
+    }
+
     @Test
     @DisplayName("연결되지 않은 wardId → 403 CHAT_WARD_NOT_CONNECTED, AI 호출 없음")
     void 연결_안_된_wardId는_거절() {
@@ -145,8 +149,9 @@ class ChatRelayWardContextTest {
     }
 
     @Test
-    @DisplayName("빈 wardId 는 본인 상담 - 대리 키(wardName·wardPhone 포함)는 모두 지운다")
+    @DisplayName("빈 wardId 는 본인 상담 - 대리 키는 모두 지우고 name·phone 은 보호자 본인의 DB 값이다")
     void 빈_wardId는_대리_키를_지운다() throws Exception {
+        when(userRepository.findById(GUARDIAN)).thenReturn(Optional.of(guardian()));
         when(aiChatClient.send(any())).thenReturn(objectMapper.readTree("{}"));
 
         service.sendAsGuardian(GUARDIAN, withContext(forged("  ")));
@@ -155,23 +160,80 @@ class ChatRelayWardContextTest {
         assertThat(context.has("wardId")).isFalse();
         assertThat(context.has("wardName")).isFalse();
         assertThat(context.has("wardPhone")).isFalse();
-        assertThat(context.path("name").asText()).isEqualTo("보호자");
+        assertThat(context.path("name").asText()).isEqualTo("박보호");
+        assertThat(context.path("phone").asText()).isEqualTo("010-2222-3333");
         verifyNoInteractions(connectionService);
     }
 
     @Test
-    @DisplayName("피보호자(본인) 경로: context 의 wardId·wardName·wardPhone 을 지운다")
-    void 피보호자_경로는_대리_키를_지운다() throws Exception {
+    @DisplayName("보호자 본인 상담(wardId 없음): 클라이언트 name·phone 위조는 보호자 DB 값으로 바뀐다")
+    void 보호자_본인_상담은_보호자_DB_값() throws Exception {
+        when(userRepository.findById(GUARDIAN)).thenReturn(Optional.of(guardian()));
         when(aiChatClient.send(any())).thenReturn(objectMapper.readTree("{}"));
+        Map<String, Object> context = new HashMap<>();
+        context.put("name", "위조이름");
+        context.put("phone", "010-9999-9999");
 
-        service.send(WARD, withContext(forged("VICTIM")));
+        service.sendAsGuardian(GUARDIAN, withContext(context));
+
+        JsonNode sent = sentBody().path("context");
+        assertThat(sent.path("name").asText()).isEqualTo("박보호");
+        assertThat(sent.path("phone").asText()).isEqualTo("010-2222-3333");
+        assertThat(sent.toString()).doesNotContain("위조이름").doesNotContain("9999");
+        verifyNoInteractions(connectionService);
+    }
+
+    @Test
+    @DisplayName("피보호자(본인) 경로: 대리 키는 지우고 name·phone 은 로그인한 본인의 DB 값이다(클라이언트 위조 무시)")
+    void 피보호자_경로는_대리_키를_지운다() throws Exception {
+        when(userRepository.findById(WARD)).thenReturn(Optional.of(ward()));
+        when(aiChatClient.send(any())).thenReturn(objectMapper.readTree("{}"));
+        Map<String, Object> forged = forged("VICTIM");
+        forged.put("phone", "010-7777-7777");
+
+        service.send(WARD, withContext(forged));
 
         JsonNode context = sentBody().path("context");
         assertThat(context.has("wardId")).isFalse();
         assertThat(context.has("wardName")).isFalse();
         assertThat(context.has("wardPhone")).isFalse();
-        assertThat(context.path("name").asText()).isEqualTo("보호자");
-        verifyNoInteractions(connectionService, userRepository);
+        assertThat(context.path("name").asText()).isEqualTo("김영희");
+        assertThat(context.path("phone").asText()).isEqualTo("010-1234-5678");
+        assertThat(context.toString()).doesNotContain("보호자").doesNotContain("7777").doesNotContain("위조");
+        verify(userRepository).findById(WARD);
+        verifyNoInteractions(connectionService);
+    }
+
+    @Test
+    @DisplayName("피보호자 본인 상담: DB 에 전화가 없으면 phone 키를 보내지 않는다(클라이언트 phone 도 제거)")
+    void 피보호자_본인_전화_없음() throws Exception {
+        when(userRepository.findById(WARD)).thenReturn(Optional.of(User.builder().id(WARD).name("김영희").build()));
+        when(aiChatClient.send(any())).thenReturn(objectMapper.readTree("{}"));
+        Map<String, Object> context = new HashMap<>();
+        context.put("phone", "010-7777-7777");
+
+        service.send(WARD, withContext(context));
+
+        JsonNode sent = sentBody().path("context");
+        assertThat(sent.path("name").asText()).isEqualTo("김영희");
+        assertThat(sent.has("phone")).isFalse();
+    }
+
+    @Test
+    @DisplayName("피보호자 본인 상담: 본인 행이 없으면 name·phone 없이 진행하고 클라이언트 값은 남지 않는다")
+    void 본인_행이_없으면_이름_전화_없이() throws Exception {
+        when(userRepository.findById(WARD)).thenReturn(Optional.empty());
+        when(aiChatClient.send(any())).thenReturn(objectMapper.readTree("{}"));
+        Map<String, Object> context = new HashMap<>();
+        context.put("name", "위조이름");
+        context.put("phone", "010-7777-7777");
+
+        service.send(WARD, withContext(context));
+
+        JsonNode sent = sentBody().path("context");
+        assertThat(sent.has("name")).isFalse();
+        assertThat(sent.has("phone")).isFalse();
+        assertThat(sent.path("role").asText()).isEqualTo("WARD");
     }
 
     @Test
