@@ -4,6 +4,13 @@
 
 ---
 
+### [2026-11-04] 내 알림 기록 API (종 아이콘)
+
+- `GET /api/user/me/notifications`(category URGENT·MEDICATION·CONNECTION·OTHER)·`/unread-count`·`POST /{id}/read`·`/read-all`. 보호자·피보호자만, 최근 90일·실제로 보낸 알림(NOT_SENT 제외, FAILED 포함). V67 `notification_log.read_at` + 부분 인덱스 2개, 기존 행은 읽음으로 채움(가역).
+- 사용자 결정: 연결이 끝난 피보호자 알림도 보임(D-1은 열람 권한, 이건 받은 알림의 사본), `COMPANION_RISK`=URGENT, ADMIN 403, 실시간 이벤트·새 속도 제한 없음. 상세 `docs/(2026-11-04) feature-user-notification-inbox.md`.
+
+---
+
 ### [2026-11-04] AI 챗봇 예약 선택지화(#171) 기능 점검(B) - 조건부 PASS
 
 - 🔴·🟠 없음, 🟡 2·🟢 5. devdmu 피보호자 실화면에서 "신경과 예약은 어떻게 하면 되나요?"·진료과 답 버튼 두 경로 모두 글 입력 없이 확인 카드까지 갔다(예약 생성은 안 함).

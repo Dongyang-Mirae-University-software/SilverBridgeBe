@@ -65,6 +65,13 @@ public class NotificationLog {
     @Column(name = "channel_results", nullable = false, columnDefinition = "jsonb")
     private List<ChannelAttempt> channelResults;
 
+    /**
+     * 수신자가 내 알림 기록에서 읽은 시각(V67). 안 읽었으면 null. 읽음 처리는 저장소의 UPDATE 한 번으로만 한다
+     * ({@code NotificationLogRepository.markRead}) - 엔티티를 읽어 바꾸면 동시 요청에서 처음 읽은 시각이 덮인다.
+     */
+    @Column(name = "read_at")
+    private OffsetDateTime readAt;
+
     @Builder
     private NotificationLog(OffsetDateTime createdAt, NotificationType type, String recipientId, String wardId,
                             String title, String body, NotificationLogResult result,

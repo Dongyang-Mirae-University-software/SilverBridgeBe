@@ -54,6 +54,64 @@ public interface NotificationLogRepository extends JpaRepository<NotificationLog
                                     @Param("keywordApplied") boolean keywordApplied,
                                     @Param("userIds") Collection<String> userIds);
 
+    // ── 사용자 알림 기록 (2026-11-04, V67) ─────────────────────────────────────────
+    // 보이는 행 = 실제로 보낸 알림(result <> NOT_SENT). 조건은 V67 부분 인덱스와 같은 리터럴로 둔다 -
+    // 바인딩 파라미터로 바꾸면 PostgreSQL이 부분 인덱스를 고르지 못할 수 있다.
+
+    /** 내 알림 목록(최신순). {@code types}는 묶음 필터를 풀어 쓴 종류 목록, 묶음이 없으면 {@code typesApplied=false}. */
+    @Query("""
+            SELECT n FROM NotificationLog n
+            WHERE n.recipientId = :recipientId
+              AND n.result <> kr.silverbridge.main.domain.notification.entity.NotificationLogResult.NOT_SENT
+              AND n.createdAt >= :from
+              AND (:typesApplied = false OR n.type IN :types)
+            ORDER BY n.createdAt DESC, n.id DESC
+            """)
+    Page<NotificationLog> searchForRecipient(@Param("recipientId") String recipientId,
+                                             @Param("from") OffsetDateTime from,
+                                             @Param("typesApplied") boolean typesApplied,
+                                             @Param("types") Collection<NotificationType> types,
+                                             Pageable pageable);
+
+    /** 안 읽은 수. 목록과 같은 보이는 행·기간 조건이다. */
+    @Query("""
+            SELECT COUNT(n) FROM NotificationLog n
+            WHERE n.recipientId = :recipientId
+              AND n.readAt IS NULL
+              AND n.result <> kr.silverbridge.main.domain.notification.entity.NotificationLogResult.NOT_SENT
+              AND n.createdAt >= :from
+            """)
+    long countUnread(@Param("recipientId") String recipientId, @Param("from") OffsetDateTime from);
+
+    /**
+     * 한 건 읽음. 본인 것이고 보이는 행일 때만 바뀐다(0 또는 1). 이미 읽었으면 처음 읽은 시각을 유지하고 1을 돌려준다(멱등).
+     * 조회 후 수정이 아니라 UPDATE 한 번이라 동시 요청에도 경합이 없다.
+     */
+    @Transactional
+    @Modifying(clearAutomatically = true)
+    @Query("""
+            UPDATE NotificationLog n SET n.readAt = COALESCE(n.readAt, :now)
+            WHERE n.id = :id
+              AND n.recipientId = :recipientId
+              AND n.result <> kr.silverbridge.main.domain.notification.entity.NotificationLogResult.NOT_SENT
+            """)
+    int markRead(@Param("id") Long id, @Param("recipientId") String recipientId, @Param("now") OffsetDateTime now);
+
+    /** 본인의 안 읽은(보이는) 알림 전부 읽음. 반환: 이번에 바뀐 건수. */
+    @Transactional
+    @Modifying(clearAutomatically = true)
+    @Query("""
+            UPDATE NotificationLog n SET n.readAt = :now
+            WHERE n.recipientId = :recipientId
+              AND n.readAt IS NULL
+              AND n.result <> kr.silverbridge.main.domain.notification.entity.NotificationLogResult.NOT_SENT
+            """)
+    int markAllRead(@Param("recipientId") String recipientId, @Param("now") OffsetDateTime now);
+
+    /** 읽음 요청 실패 시 원인 구분(남의 것 403 / 없음 404)용 - 수신자 ID만 읽는다. */
+    @Query("SELECT n.recipientId FROM NotificationLog n WHERE n.id = :id")
+    java.util.Optional<String> findRecipientIdById(@Param("id") Long id);
+
     /** 보관 기간이 지난 이력 삭제. 반환: 삭제 건수. 트랜잭션을 여기 둬서 호출자(스케줄러)가 예외만 다루게 한다. */
     @Transactional
     @Modifying

@@ -130,6 +130,10 @@ public enum ErrorCode {
     SOS_NOT_AUTHORIZED(HttpStatus.FORBIDDEN, "연결된 피보호자의 SOS 이력만 볼 수 있습니다."),
     DASHBOARD_NOT_AUTHORIZED(HttpStatus.FORBIDDEN, "연결된 피보호자의 대시보드만 볼 수 있습니다."),
 
+    // 내 알림 기록 (2026-11-04) - 남의 알림은 404 위장 대신 그대로 안내한다(2026-07-14 IDOR 정책)
+    NOTIFICATION_NOT_FOUND(HttpStatus.NOT_FOUND, "알림을 찾을 수 없습니다."),
+    NOTIFICATION_NOT_OWNED(HttpStatus.FORBIDDEN, "본인이 받은 알림만 읽음 처리할 수 있습니다."),
+
     // 복약 알림
     MEDICATION_NOT_FOUND(HttpStatus.NOT_FOUND, "복약 정보를 찾을 수 없습니다."),
     // 연결되지 않은 피보호자의 약 접근(보호자 경로) — 404 위장 대신 그대로 안내한다(2026-07-14 정책)
