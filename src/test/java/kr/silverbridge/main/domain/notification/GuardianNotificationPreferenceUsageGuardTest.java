@@ -24,6 +24,7 @@ class GuardianNotificationPreferenceUsageGuardTest {
             "GuardianNotificationPreferenceService.java",
             "GuardianNotificationTypeSettingController.java",
             "MedicationMissedAlertPlanner.java",
+            "MedicationReminderPlanner.java",
             "CameraLinkLostNotifier.java",
             // 안부 말벗 주의 알림(2026-11-04) - 끈 보호자를 빼는 데만 쓴다(위험 알림에는 쓰지 않는다)
             "CompanionNoticeListener.java");
@@ -40,7 +41,7 @@ class GuardianNotificationPreferenceUsageGuardTest {
                     .toList();
 
             assertThat(users).allMatch(ALLOWED::contains);
-            assertThat(users).contains("MedicationMissedAlertPlanner.java");
+            assertThat(users).contains("MedicationMissedAlertPlanner.java", "MedicationReminderPlanner.java");
         }
     }
 
