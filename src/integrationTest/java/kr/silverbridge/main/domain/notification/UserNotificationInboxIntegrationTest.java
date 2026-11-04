@@ -104,10 +104,10 @@ class UserNotificationInboxIntegrationTest extends PostgresIntegrationTest {
         flushClear();
 
         OffsetDateTime first = NOW.minusMinutes(5);
-        assertThat(repository.markRead(mine.getId(), GUARDIAN_ID, first)).isEqualTo(1);
-        assertThat(repository.markRead(mine.getId(), GUARDIAN_ID, NOW)).isEqualTo(1);
-        assertThat(repository.markRead(notSent.getId(), GUARDIAN_ID, NOW)).isZero();
-        assertThat(repository.markRead(others.getId(), GUARDIAN_ID, NOW)).isZero();
+        assertThat(repository.markRead(mine.getId(), GUARDIAN_ID, FROM, first)).isEqualTo(1);
+        assertThat(repository.markRead(mine.getId(), GUARDIAN_ID, FROM, NOW)).isEqualTo(1);
+        assertThat(repository.markRead(notSent.getId(), GUARDIAN_ID, FROM, NOW)).isZero();
+        assertThat(repository.markRead(others.getId(), GUARDIAN_ID, FROM, NOW)).isZero();
 
         // DB는 마이크로초까지 저장한다 - 두 번째 호출 시각(5분 뒤)이 아니라 처음 시각이어야 한다.
         assertThat(repository.findById(mine.getId()).orElseThrow().getReadAt().toInstant())
@@ -126,10 +126,23 @@ class UserNotificationInboxIntegrationTest extends PostgresIntegrationTest {
         save(OTHER_GUARDIAN_ID, NotificationType.WARD_SOS, NotificationLogResult.DELIVERED, NOW);
         flushClear();
 
-        assertThat(repository.markAllRead(GUARDIAN_ID, NOW)).isEqualTo(2);
-        assertThat(repository.markAllRead(GUARDIAN_ID, NOW)).isZero();
+        assertThat(repository.markAllRead(GUARDIAN_ID, FROM, NOW)).isEqualTo(2);
+        assertThat(repository.markAllRead(GUARDIAN_ID, FROM, NOW)).isZero();
         assertThat(repository.countUnread(GUARDIAN_ID, FROM)).isZero();
         assertThat(repository.countUnread(OTHER_GUARDIAN_ID, FROM)).isEqualTo(1);
+    }
+
+    @Test
+    @DisplayName("보관 기간(90일) 밖 행은 읽음·모두 읽음 대상이 아니다 - 목록·안 읽은 수와 같은 범위 (점검 L-2)")
+    void 보관기간_밖_읽음_제외() {
+        NotificationLog old = save(GUARDIAN_ID, NotificationType.WARD_SOS, NotificationLogResult.DELIVERED, NOW.minusDays(91));
+        save(GUARDIAN_ID, NotificationType.WARD_SOS, NotificationLogResult.DELIVERED, NOW);
+        flushClear();
+
+        assertThat(repository.markRead(old.getId(), GUARDIAN_ID, FROM, NOW)).isZero();
+        assertThat(repository.countUnread(GUARDIAN_ID, FROM)).isEqualTo(1);
+        assertThat(repository.markAllRead(GUARDIAN_ID, FROM, NOW)).isEqualTo(1);
+        assertThat(repository.findById(old.getId()).orElseThrow().getReadAt()).isNull();
     }
 
     @Test

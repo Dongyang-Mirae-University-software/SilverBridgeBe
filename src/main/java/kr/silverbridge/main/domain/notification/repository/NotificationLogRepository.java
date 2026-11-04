@@ -84,8 +84,10 @@ public interface NotificationLogRepository extends JpaRepository<NotificationLog
     long countUnread(@Param("recipientId") String recipientId, @Param("from") OffsetDateTime from);
 
     /**
-     * 한 건 읽음. 본인 것이고 보이는 행일 때만 바뀐다(0 또는 1). 이미 읽었으면 처음 읽은 시각을 유지하고 1을 돌려준다(멱등).
-     * 조회 후 수정이 아니라 UPDATE 한 번이라 동시 요청에도 경합이 없다.
+     * 한 건 읽음. 본인 것이고 보이는 행(보관 기간 안)일 때만 바뀐다(0 또는 1). 이미 읽었으면 처음 읽은 시각을 유지하고
+     * 1을 돌려준다(멱등). 조회 후 수정이 아니라 UPDATE 한 번이라 동시 요청에도 경합이 없다.
+     *
+     * <p>{@code from}은 목록과 같은 보관 기간 하한이다 - 목록에 없는 알림을 읽음 처리하지 않는다(2026-11-04 점검 L-2).</p>
      */
     @Transactional
     @Modifying(clearAutomatically = true)
@@ -94,10 +96,15 @@ public interface NotificationLogRepository extends JpaRepository<NotificationLog
             WHERE n.id = :id
               AND n.recipientId = :recipientId
               AND n.result <> kr.silverbridge.main.domain.notification.entity.NotificationLogResult.NOT_SENT
+              AND n.createdAt >= :from
             """)
-    int markRead(@Param("id") Long id, @Param("recipientId") String recipientId, @Param("now") OffsetDateTime now);
+    int markRead(@Param("id") Long id, @Param("recipientId") String recipientId,
+                 @Param("from") OffsetDateTime from, @Param("now") OffsetDateTime now);
 
-    /** 본인의 안 읽은(보이는) 알림 전부 읽음. 반환: 이번에 바뀐 건수. */
+    /**
+     * 본인의 안 읽은(보이는) 알림 전부 읽음. 반환: 이번에 바뀐 건수 - 안 읽은 수({@link #countUnread})와 같은 범위다
+     * (보관 정리 전 남은 기간 밖 행을 세지 않는다, 2026-11-04 점검 L-2).
+     */
     @Transactional
     @Modifying(clearAutomatically = true)
     @Query("""
@@ -105,8 +112,10 @@ public interface NotificationLogRepository extends JpaRepository<NotificationLog
             WHERE n.recipientId = :recipientId
               AND n.readAt IS NULL
               AND n.result <> kr.silverbridge.main.domain.notification.entity.NotificationLogResult.NOT_SENT
+              AND n.createdAt >= :from
             """)
-    int markAllRead(@Param("recipientId") String recipientId, @Param("now") OffsetDateTime now);
+    int markAllRead(@Param("recipientId") String recipientId, @Param("from") OffsetDateTime from,
+                    @Param("now") OffsetDateTime now);
 
     /** 읽음 요청 실패 시 원인 구분(남의 것 403 / 없음 404)용 - 수신자 ID만 읽는다. */
     @Query("SELECT n.recipientId FROM NotificationLog n WHERE n.id = :id")
