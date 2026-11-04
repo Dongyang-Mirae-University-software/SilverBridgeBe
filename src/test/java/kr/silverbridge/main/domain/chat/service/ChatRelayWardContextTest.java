@@ -363,4 +363,72 @@ class ChatRelayWardContextTest {
             assertThat(objectMapper.readTree(b).path("context").path("role").asText()).isEqualTo("GUARDIAN");
         }
     }
+
+    // ---- 환자 지역(2026-11-04, AI #171 점검 M-2) ----
+
+    private static Map<String, Object> forgedLocation(Map<String, Object> base) {
+        base.put("location", "부산 해운대구");
+        base.put("address", "부산광역시 해운대구 위조로 1");
+        base.put("addressDetail", "101동 1001호");
+        base.put("postcode", "48000");
+        return base;
+    }
+
+    @Test
+    @DisplayName("본인 상담: 클라이언트 지역 키는 버리고 본인 주소를 시·군·구까지만 location 으로 보낸다")
+    void 본인_상담은_본인_주소_시군구만() throws Exception {
+        when(userRepository.findById(WARD)).thenReturn(Optional.of(User.builder().id(WARD).name("김영희")
+                .address("서울특별시 송파구 올림픽로 300").addressDetail("2층").postcode("05551").build()));
+        when(aiChatClient.send(any())).thenReturn(objectMapper.readTree("{}"));
+
+        service.send(WARD, withContext(forgedLocation(new HashMap<>())));
+
+        JsonNode context = sentBody().path("context");
+        assertThat(context.path("location").asText()).isEqualTo("서울특별시 송파구");
+        assertThat(context.has("address")).isFalse();
+        assertThat(context.has("addressDetail")).isFalse();
+        assertThat(context.has("postcode")).isFalse();
+        assertThat(context.toString()).doesNotContain("해운대").doesNotContain("올림픽로").doesNotContain("2층").doesNotContain("05551");
+    }
+
+    @Test
+    @DisplayName("대리 상담: location 은 보호자가 아니라 피보호자 주소다")
+    void 대리_상담은_피보호자_주소() throws Exception {
+        when(connectionService.isActiveConnection(GUARDIAN, WARD)).thenReturn(true);
+        when(userRepository.findById(WARD)).thenReturn(Optional.of(User.builder().id(WARD).name("김영희")
+                .address("경기 성남시 분당구 판교역로 1").build()));
+        when(aiChatClient.send(any())).thenReturn(objectMapper.readTree("{}"));
+
+        service.sendAsGuardian(GUARDIAN, withContext(forgedLocation(forged(WARD))));
+
+        JsonNode context = sentBody().path("context");
+        assertThat(context.path("location").asText()).isEqualTo("경기 성남시 분당구");
+        assertThat(context.toString()).doesNotContain("해운대").doesNotContain("판교역로");
+    }
+
+    @Test
+    @DisplayName("주소가 없으면 location 키를 두지 않는다(클라이언트 값도 남지 않는다)")
+    void 주소가_없으면_location_없음() throws Exception {
+        when(userRepository.findById(WARD)).thenReturn(Optional.of(ward()));
+        when(aiChatClient.send(any())).thenReturn(objectMapper.readTree("{}"));
+
+        service.send(WARD, withContext(forgedLocation(new HashMap<>())));
+
+        JsonNode context = sentBody().path("context");
+        assertThat(context.has("location")).isFalse();
+        assertThat(context.has("address")).isFalse();
+    }
+
+    @Test
+    @DisplayName("주소 줄이기: 시·도 + 시·군·구(일반구까지), 도로명·번지·동은 버린다")
+    void 주소_시군구까지만() {
+        assertThat(ChatRelayService.coarseRegion("서울특별시 강남구 테헤란로 123")).isEqualTo("서울특별시 강남구");
+        assertThat(ChatRelayService.coarseRegion("서울 강남구 역삼동 1-2")).isEqualTo("서울 강남구");
+        assertThat(ChatRelayService.coarseRegion("경기 성남시 분당구 판교역로 1")).isEqualTo("경기 성남시 분당구");
+        assertThat(ChatRelayService.coarseRegion("경기도 수원시 장안로 1")).isEqualTo("경기도 수원시");
+        assertThat(ChatRelayService.coarseRegion("세종특별자치시 한누리대로 2130")).isEqualTo("세종특별자치시");
+        assertThat(ChatRelayService.coarseRegion("테헤란로 123")).isNull();
+        assertThat(ChatRelayService.coarseRegion("  ")).isNull();
+        assertThat(ChatRelayService.coarseRegion(null)).isNull();
+    }
 }

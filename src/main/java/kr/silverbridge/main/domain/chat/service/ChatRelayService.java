@@ -54,6 +54,17 @@ public class ChatRelayService {
     private static final java.util.Set<String> WARD_KEYS = java.util.Set.of("wardId", "wardName", "wardPhone");
     /** 환자 이름·전화. AI 는 wardId 가 없으면 이 둘을 예약 환자·예약 계정 정보로 쓴다 - 클라이언트 값은 항상 버리고 BE가 DB 값으로 채운다(2026-11-04). */
     private static final java.util.Set<String> IDENTITY_KEYS = java.util.Set.of("name", "phone");
+    /**
+     * 환자 지역. AI 예약 흐름이 지역 선택지(같은 시·도 지역 먼저)와 병원 검색에 쓴다(2026-11-04, AI #171 점검 M-2).
+     * 클라이언트 값은 버리고 환자(대리 상담은 피보호자, 본인 상담은 본인)의 users.address 를 시·군·구까지만 줄여 location 에 넣는다 -
+     * 도로명·번지·상세주소·우편번호는 AI(챗 기록 userContext 포함)로 보내지 않는다.
+     */
+    private static final java.util.Set<String> LOCATION_KEYS = java.util.Set.of("location", "address", "addressDetail", "postcode");
+    private static final java.util.Set<String> SIDO_SHORT = java.util.Set.of(
+            "서울", "부산", "대구", "인천", "광주", "대전", "울산", "세종", "경기", "강원",
+            "충북", "충남", "전북", "전남", "경북", "경남", "제주");
+    private static final java.util.regex.Pattern REGION_UNIT =
+            java.util.regex.Pattern.compile("[가-힣]+(특별시|광역시|특별자치시|특별자치도|도|시|군|구)");
     /** 사용자 ID 형식(UserIdGenerator: 영숫자, users.id VARCHAR(6)). */
     private static final java.util.regex.Pattern USER_ID_FORMAT = java.util.regex.Pattern.compile("\\A[A-Za-z0-9]{1,6}\\z");
 
@@ -154,7 +165,7 @@ public class ChatRelayService {
     }
 
     /**
-     * 대리 상담 키와 name·phone 을 모두 지우고 DB 값으로만 다시 채운다(클라이언트 값은 어느 것도 통과하지 못한다).
+     * 대리 상담 키와 name·phone·지역 키를 모두 지우고 DB 값으로만 다시 채운다(클라이언트 값은 어느 것도 통과하지 못한다).
      * 대리 상담이면 검증된 피보호자, 본인 상담이면 로그인한 본인(self)의 값이다. 전화가 없으면 phone 키를 두지 않는다.
      * role 은 호출 경로의 역할로 덮어쓴다(AI 챗 집계의 역할별 수 근거).
      */
@@ -165,6 +176,7 @@ public class ChatRelayService {
         }
         context.keySet().removeAll(WARD_KEYS);
         context.keySet().removeAll(IDENTITY_KEYS);
+        context.keySet().removeAll(LOCATION_KEYS);
         context.put("role", role.name());
         if (ward != null) {
             context.put("wardId", ward.getId());
@@ -182,8 +194,34 @@ public class ChatRelayService {
             if (StringUtils.hasText(patient.getPhone())) {
                 context.put("phone", patient.getPhone());
             }
+            String region = coarseRegion(patient.getAddress());
+            if (region != null) {
+                context.put("location", region);
+            }
         }
         return context;
+    }
+
+    /**
+     * 주소에서 시·도와 시·군·구까지만 남긴다("서울특별시 강남구 테헤란로 1" -> "서울특별시 강남구", "경기 성남시 분당구 …" -> 세 칸).
+     * 동·도로명·번지는 버리고, 알아볼 수 없으면 null(보내지 않는다). AI coarse_region 과 같은 규칙이다.
+     */
+    static String coarseRegion(String address) {
+        if (!StringUtils.hasText(address)) {
+            return null;
+        }
+        String[] tokens = address.trim().split("\\s+");
+        java.util.List<String> kept = new java.util.ArrayList<>();
+        for (int i = 0; i < Math.min(3, tokens.length); i++) {
+            String token = tokens[i];
+            boolean unit = SIDO_SHORT.contains(token) || REGION_UNIT.matcher(token).matches();
+            // 셋째 칸은 "OO시 OO구"(일반구)일 때만 - 도로명 낱말이 붙지 않게
+            if (!unit || (i == 2 && !(kept.get(1).endsWith("시") && token.endsWith("구")))) {
+                break;
+            }
+            kept.add(token);
+        }
+        return kept.isEmpty() ? null : String.join(" ", kept);
     }
 
     /** 본인 상담의 환자 정보용 본인 행. 없으면(탈퇴 직후 경합 등) null - 이름·전화 없이 진행한다(로그에 값을 남기지 않는다). */
