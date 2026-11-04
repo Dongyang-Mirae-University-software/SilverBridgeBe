@@ -3,9 +3,21 @@
 > 템플릿 B + C(알림 종류 2개 추가). 대상: dev `4815c36`(#437), AI 계약 `feat/companion-ai-part` `ae621f3`(변경 없음 확인).
 > 점검만 했다 - 코드 수정 없음. 근거 문서(`feature-companion-relay.md`·`policy-companion.md`)는 코드로 다시 확인했다.
 
+## 조치 결과 (2026-11-04, `fix/companion-audit`)
+
+| 항목 | 조치 |
+|---|---|
+| M-1 | 역할 변경 BEFORE_COMMIT에 말벗 기록·질문 안내 기록 삭제 + AI 삭제 대기열, AFTER_COMMIT 비동기 1회 시도. 탈퇴 대기열 조건을 "피보호자이거나 말벗 기록이 있으면"으로 넓힘 |
+| M-2 | `CompanionSessionWriterTest`(4) + `CompanionFullIntegrationTest`(4: 위험 1회·마감 URGENT·역할 변경·탈퇴). 결함 주입 3종(턴 선점·마감 선점·끝난 대화 보호 제거) 모두 검출 |
+| M-3 | writer는 OPEN만 고침, 서비스는 자리를 잡은 뒤 다시 읽음(턴·마치기·멈춘 대화 마감) |
+| L-1 | 합계 초과 413 `COMPANION_UPLOAD_TOO_LARGE` "음성과 사진을 합쳐 10MB까지" |
+| L-2 | 재시도 순서 `last_attempt_at NULLS FIRST, requested_at`, 24회마다 `[COMPANION-PURGE-STUCK]` ERROR |
+| L-3 | 보호자 알림 종류 설정 응답에 `companionRisk` `{enabled:true, required:true}` |
+| L-4 | AI 쪽(대화 TTL) - 재희 전달 목록 |
+
 ## 종합 판정
 
-**조건부 PASS** · 🔴 0 · 🟠 0 · 🟡 3 · 🟢 4
+**조건부 PASS** · 🔴 0 · 🟠 0 · 🟡 3 · 🟢 4 → 위 조치 후 🟡·🟢(L-4 제외) 모두 해소
 
 인가·원문 미저장·AI 키·알림 공용 규칙은 통과. 위험 알림 1회 보장 로직은 맞지만 **테스트가 지키지 않고**(변이 2종 미검출), 역할 변경 경로의 데이터 정리와 낡은 스냅샷으로 결과를 덮어쓰는 경로가 남았다.
 

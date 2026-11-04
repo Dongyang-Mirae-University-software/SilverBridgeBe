@@ -6,7 +6,6 @@ import kr.silverbridge.main.domain.admin.dto.AdminUserUpdateRequest;
 import kr.silverbridge.main.domain.admin.service.AdminUserService;
 import kr.silverbridge.main.domain.companion.entity.CompanionSession;
 import kr.silverbridge.main.domain.companion.entity.CompanionSlot;
-import kr.silverbridge.main.domain.companion.repository.CompanionQuestionRepository;
 import kr.silverbridge.main.domain.companion.repository.CompanionSessionRepository;
 import kr.silverbridge.main.domain.companion.service.CompanionService;
 import kr.silverbridge.main.domain.notification.dispatch.NotificationType;
@@ -43,7 +42,6 @@ class CompanionFullIntegrationTest extends FullContextIntegrationTest {
 
     @Autowired private CompanionService companionService;
     @Autowired private CompanionSessionRepository sessionRepository;
-    @Autowired private CompanionQuestionRepository questionRepository;
     @Autowired private AdminUserService adminUserService;
     @Autowired private UserService userService;
 
@@ -122,10 +120,14 @@ class CompanionFullIntegrationTest extends FullContextIntegrationTest {
         eventually().untilAsserted(() -> verify(aiCompanionClient).deleteWardData(WARD));
     }
 
-    /** AI에 열린 대화 1개(질문은 V65 초기 데이터). 시간대 창과 무관하게 대화를 이어 갈 수 있다. */
+    /**
+     * AI에 열린 대화 1개. 시간대 창과 무관하게 대화를 이어 갈 수 있다. 질문은 직접 넣는다 - 기반 클래스가 테스트마다
+     * 전 표를 TRUNCATE해 V65 초기 질문도 지워진다.
+     */
     private long openSession(String dialogueId) {
         OffsetDateTime now = OffsetDateTime.now(ZoneId.of("Asia/Seoul"));
-        Long questionId = questionRepository.findBySlotAndActiveTrueOrderByIdAsc(CompanionSlot.S09).get(0).getId();
+        Long questionId = jdbc.queryForObject(
+                "INSERT INTO companion_question (slot, text) VALUES ('09:00', '시험 질문') RETURNING id", Long.class);
         CompanionSession session = CompanionSession.claim(WARD, LocalDate.now(ZoneId.of("Asia/Seoul")),
                 CompanionSlot.S09, questionId, now);
         session.attachDialogue(dialogueId, 8, now);
