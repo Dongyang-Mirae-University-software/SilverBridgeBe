@@ -97,7 +97,8 @@ public class WardCompanionController {
 
                     [오류 code]
                     COMPANION_AUDIO_INVALID(400) / COMPANION_AUDIO_TOO_LARGE(413) / COMPANION_FRAME_INVALID(400) /
-                    COMPANION_FRAME_TOO_LARGE(413) / COMPANION_STT_UNAVAILABLE(503, 글로 대답 안내) / 그 밖은 글 대답과 같음
+                    COMPANION_FRAME_TOO_LARGE(413) / COMPANION_UPLOAD_TOO_LARGE(413, 음성·사진 합계 10MB 초과) /
+                    COMPANION_STT_UNAVAILABLE(503, 글로 대답 안내) / 그 밖은 글 대답과 같음
                     """ + COMMON_ERRORS)
     @PostMapping(value = "/sessions/{sessionId}/reply/audio", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     public ResponseEntity<ApiResponse<TurnResponse>> replyAudio(

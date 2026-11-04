@@ -34,6 +34,7 @@ public class GuardianNotificationTypeSettingController {
                       - anomalyReviewReminder : 판정 확인 요청(재촉) 알림. 기본 true
                       - medication        : 복약 미복용 요약 알림. 기본 true
                       - cameraLinkLost    : 카메라 연결 끊김 안내(AI 서버 연결이 끊긴 뒤 돌아오지 않은 카메라). 기본 true
+                      - companionRisk     : 안부 말벗 대화의 위험 신호 알림. 필수(required=true), 항상 켜짐. 변경 불가
                     required=true 항목은 FE가 잠금 표시만 하면 됩니다.
 
                     [참고]

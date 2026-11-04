@@ -211,6 +211,7 @@ class CompanionServiceTest {
     @DisplayName("멈춘 대화 마감은 AI의 USER_STOP을 NO_RESPONSE로 바꿔 저장한다")
     void abandonedIsNoResponse() throws Exception {
         CompanionSession session = sessionWithId(60L, "d-60");
+        when(sessionRepository.findById(60L)).thenReturn(Optional.of(session));
         when(aiClient.finish("d-60")).thenReturn(json(
                 "{\"dialogueId\":\"d-60\",\"endReason\":\"USER_STOP\",\"turnCount\":2,\"mood\":null,"
                         + "\"riskFlag\":true,\"alertLevel\":\"URGENT\"}"));
@@ -222,6 +223,35 @@ class CompanionServiceTest {
         assertThat(captor.getValue().endReason()).isEqualTo(CompanionEndReason.NO_RESPONSE);
         assertThat(captor.getValue().mood()).isNull();
         assertThat(captor.getValue().needsRiskAlert()).isTrue();
+    }
+
+    @Test
+    @DisplayName("멈춘 대화 마감: 목록을 읽은 뒤 그사이 끝난 대화는 건드리지 않는다(점검 M-3)")
+    void abandonedSkipsAlreadyFinished() {
+        CompanionSession stale = sessionWithId(61L, "d-61");
+        CompanionSession nowDone = sessionWithId(61L, "d-61");
+        nowDone.finish(CompanionEndReason.USER_STOP, null, 2, 2, 0, false, false, null, AT_0910.toOffsetDateTime());
+        when(sessionRepository.findById(61L)).thenReturn(Optional.of(nowDone));
+
+        assertThat(service.closeAbandoned(stale)).isFalse();
+
+        verify(aiClient, never()).finish(anyString());
+        verify(writer, never()).finish(anyLong(), any(), any());
+    }
+
+    @Test
+    @DisplayName("마치기: 자리를 잡은 뒤 다시 읽어 그사이 끝났으면 AI를 부르지 않고 저장된 결과를 준다(점검 M-3)")
+    void finishRereadsAfterSlot() {
+        CompanionSession open = sessionWithId(62L, "d-62");
+        CompanionSession done = sessionWithId(62L, "d-62");
+        done.finish(CompanionEndReason.MAX_TURNS, CompanionMood.JOY, 8, 8, 0, false, false, null,
+                AT_0910.toOffsetDateTime());
+        when(sessionRepository.findById(62L)).thenReturn(Optional.of(open), Optional.of(done));
+
+        ResultResponse result = service.finish(WARD, 62L);
+
+        assertThat(result.endReason()).isEqualTo("MAX_TURNS");
+        verify(aiClient, never()).finish(anyString());
     }
 
     @Test
