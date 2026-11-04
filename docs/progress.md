@@ -4,6 +4,13 @@
 
 ---
 
+### [2026-11-04] 내 알림 기록 API (종 아이콘)
+
+- `GET /api/user/me/notifications`(category URGENT·MEDICATION·CONNECTION·OTHER)·`/unread-count`·`POST /{id}/read`·`/read-all`. 보호자·피보호자만, 최근 90일·실제로 보낸 알림(NOT_SENT 제외, FAILED 포함). V67 `notification_log.read_at` + 부분 인덱스 2개, 기존 행은 읽음으로 채움(가역).
+- 사용자 결정: 연결이 끝난 피보호자 알림도 보임(D-1은 열람 권한, 이건 받은 알림의 사본), `COMPANION_RISK`=URGENT, ADMIN 403, 실시간 이벤트·새 속도 제한 없음. 상세 `docs/(2026-11-04) feature-user-notification-inbox.md`.
+
+---
+
 ### [2026-11-04] AI 챗봇 본인 상담 이름·전화 서버 값 자동 입력
 
 - 피보호자 본인 상담(`send`)과 보호자의 피보호자 미선택 본인 상담도 `context.name`·`phone`을 로그인한 본인의 DB 값으로 채운다(전화 없으면 키 없음, 본인 행 없으면 둘 다 없음). 클라이언트 `name`·`phone`은 모든 경로에서 먼저 지운다 - 그동안 본인 상담에서는 그대로 AI 예약 초안·예약 계정 정보로 넘어갔다.
