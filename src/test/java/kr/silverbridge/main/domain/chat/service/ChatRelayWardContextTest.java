@@ -26,6 +26,8 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Optional;
+import java.time.LocalDate;
+import kr.silverbridge.main.global.enums.Gender;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -362,5 +364,112 @@ class ChatRelayWardContextTest {
         for (byte[] b : bodies.getAllValues()) {
             assertThat(objectMapper.readTree(b).path("context").path("role").asText()).isEqualTo("GUARDIAN");
         }
+    }
+
+    // ---- 환자 프로필 키 (2026-11-04) ----
+
+    private static Map<String, Object> forgedProfile() {
+        Map<String, Object> context = new HashMap<>();
+        context.put("age", 99);
+        context.put("birthDate", "1900-01-01");
+        context.put("gender", "MALE");
+        context.put("email", "forged@example.com");
+        context.put("address", "위조시 위조구");
+        context.put("addressDetail", "101동");
+        context.put("postcode", "99999");
+        context.put("relation", "SON");
+        context.put("patientId", "VICTIM");
+        context.put("patientName", "위조환자");
+        context.put("patientBirthDate", "1900-01-01");
+        context.put("patientPhone", "010-9999-9999");
+        context.put("patientGender", "MALE");
+        context.put("location", "서울 강남구");
+        return context;
+    }
+
+    private User fullWard() {
+        return User.builder().id(WARD).name("김영희").phone("010-1234-5678").gender(Gender.FEMALE)
+                .birthDate(LocalDate.of(1950, 3, 1)).address("서울 서초구 반포대로 1").addressDetail("101호")
+                .postcode("06500").email("ward@example.com").build();
+    }
+
+    private static final java.util.List<String> NEVER_SENT = java.util.List.of(
+            "email", "addressDetail", "postcode", "relation",
+            "patientId", "patientName", "patientBirthDate", "patientPhone", "patientGender");
+
+    @Test
+    @DisplayName("피보호자 본인 상담: 위조 프로필 키는 버리고 생년월일·나이·성별·주소를 본인 DB 값으로 채운다(location 은 그대로)")
+    void 본인_상담_프로필은_DB_값() throws Exception {
+        when(userRepository.findById(WARD)).thenReturn(Optional.of(fullWard()));
+        when(aiChatClient.send(any())).thenReturn(objectMapper.readTree("{}"));
+
+        service.send(WARD, withContext(forgedProfile()));
+
+        JsonNode sent = sentBody().path("context");
+        assertThat(sent.path("birthDate").asText()).isEqualTo("1950-03-01");
+        assertThat(sent.path("age").asInt()).isEqualTo(java.time.Period.between(LocalDate.of(1950, 3, 1),
+                LocalDate.now(java.time.ZoneId.of("Asia/Seoul"))).getYears());
+        assertThat(sent.path("gender").asText()).isEqualTo("FEMALE");
+        assertThat(sent.path("address").asText()).isEqualTo("서울 서초구 반포대로 1");
+        assertThat(sent.path("location").asText()).isEqualTo("서울 강남구");
+        for (String key : NEVER_SENT) {
+            assertThat(sent.has(key)).as(key).isFalse();
+        }
+        assertThat(sent.toString()).doesNotContain("위조").doesNotContain("1900").doesNotContain("VICTIM")
+                .doesNotContain("101호").doesNotContain("06500").doesNotContain("ward@example.com");
+    }
+
+    @Test
+    @DisplayName("대리 상담: 프로필 키는 피보호자 DB 값이고 클라이언트 patient*·relation 은 AI 에 가지 않는다")
+    void 대리_상담_프로필은_피보호자_DB_값() throws Exception {
+        when(connectionService.isActiveConnection(GUARDIAN, WARD)).thenReturn(true);
+        when(userRepository.findById(WARD)).thenReturn(Optional.of(fullWard()));
+        when(aiChatClient.send(any())).thenReturn(objectMapper.readTree("{}"));
+        Map<String, Object> context = forgedProfile();
+        context.put("wardId", WARD);
+
+        service.sendAsGuardian(GUARDIAN, withContext(context));
+
+        JsonNode sent = sentBody().path("context");
+        assertThat(sent.path("wardId").asText()).isEqualTo(WARD);
+        assertThat(sent.path("gender").asText()).isEqualTo("FEMALE");
+        assertThat(sent.path("birthDate").asText()).isEqualTo("1950-03-01");
+        assertThat(sent.path("address").asText()).isEqualTo("서울 서초구 반포대로 1");
+        for (String key : NEVER_SENT) {
+            assertThat(sent.has(key)).as(key).isFalse();
+        }
+        assertThat(sent.toString()).doesNotContain("위조").doesNotContain("1900");
+    }
+
+    @Test
+    @DisplayName("DB 에 생년월일·성별·주소가 없으면 그 키를 보내지 않는다(클라이언트 값도 남지 않는다)")
+    void 빈_프로필은_키_없음() throws Exception {
+        when(userRepository.findById(WARD)).thenReturn(Optional.of(User.builder().id(WARD).name("김영희").build()));
+        when(aiChatClient.send(any())).thenReturn(objectMapper.readTree("{}"));
+
+        service.send(WARD, withContext(forgedProfile()));
+
+        JsonNode sent = sentBody().path("context");
+        for (String key : java.util.List.of("age", "birthDate", "gender", "address", "phone")) {
+            assertThat(sent.has(key)).as(key).isFalse();
+        }
+        assertThat(sent.path("name").asText()).isEqualTo("김영희");
+    }
+
+    @Test
+    @DisplayName("만 나이는 생일 당일에 한 살 오르고, 미래 생년월일은 보내지 않는다")
+    void 만_나이_경계() {
+        User user = User.builder().id(WARD).name("김영희").birthDate(LocalDate.of(1950, 3, 1)).build();
+        Map<String, Object> dayBefore = new HashMap<>();
+        Map<String, Object> birthday = new HashMap<>();
+        ChatRelayService.putProfile(dayBefore, user, LocalDate.of(2026, 2, 28));
+        ChatRelayService.putProfile(birthday, user, LocalDate.of(2026, 3, 1));
+        assertThat(dayBefore.get("age")).isEqualTo(75);
+        assertThat(birthday.get("age")).isEqualTo(76);
+
+        Map<String, Object> future = new HashMap<>();
+        ChatRelayService.putProfile(future,
+                User.builder().id(WARD).name("김영희").birthDate(LocalDate.of(2030, 1, 1)).build(), LocalDate.of(2026, 3, 1));
+        assertThat(future).doesNotContainKeys("age", "birthDate");
     }
 }

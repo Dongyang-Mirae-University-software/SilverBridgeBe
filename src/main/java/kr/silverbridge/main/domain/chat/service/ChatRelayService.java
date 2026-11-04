@@ -32,8 +32,8 @@ import java.util.Map;
  * <p><b>대리 상담(보호자가 피보호자 대신, 2026-10-20)</b>: AI는 {@code context.wardId}로 예약 계정을 만들어 그 계정으로 예약을
  * 조회·생성한다. 이 값을 클라이언트가 정하면 남의 예약을 보거나 남의 이름으로 예약할 수 있으므로, <b>wardId·wardName·wardPhone은
  * 항상 BE가 정한다</b> - 보호자 경로는 ACTIVE 연결({@code isActiveConnection}, {@code getMyWards} 금지)을 확인한 뒤 DB 값으로
- * 채우고, 그 밖의 경로는 이 세 키를 지운다. 환자 {@code name}·{@code phone}도 클라이언트 값을 버리고 대리 상담은 피보호자, 본인 상담은
- * 로그인한 본인의 DB 값으로 채운다(2026-11-04).</p>
+ * 채우고, 그 밖의 경로는 이 세 키를 지운다. 환자 프로필(이름·전화·생년월일·나이·성별·주소)도 클라이언트 값을 버리고 대리 상담은 피보호자,
+ * 본인 상담은 로그인한 본인의 DB 값으로 채운다(2026-11-04, {@link #PROFILE_KEYS}).</p>
  *
  * <p><b>context.role은 BE가 정한다(2026-10-28)</b>: AI 관리자 통계(챗 집계)가 역할별 상담 수를 이 값으로 센다. 클라이언트 값을
  * 그대로 넘기면 빠지거나(옛 FE는 비어 있었다) 위조된 값이 통계에 섞이므로 경로의 역할로 덮어쓴다. 권한 판단에는 여전히 쓰지 않는다.</p>
@@ -52,8 +52,16 @@ public class ChatRelayService {
     private static final int LOGS_PER_MINUTE = 30;
     private static final int LOGS_PER_HOUR = 600;
     private static final java.util.Set<String> WARD_KEYS = java.util.Set.of("wardId", "wardName", "wardPhone");
-    /** 환자 이름·전화. AI 는 wardId 가 없으면 이 둘을 예약 환자·예약 계정 정보로 쓴다 - 클라이언트 값은 항상 버리고 BE가 DB 값으로 채운다(2026-11-04). */
-    private static final java.util.Set<String> IDENTITY_KEYS = java.util.Set.of("name", "phone");
+    /**
+     * 환자 프로필 키. 클라이언트 값은 항상 버리고, 이 중 name·phone·birthDate·age·gender·address 만 BE가 환자(대리 상담이면 피보호자,
+     * 아니면 본인)의 DB 값으로 다시 채운다(2026-11-04). AI 는 이 값을 예약 초안·예약 계정(이름·전화·생년월일), MedGemma(나이·성별),
+     * 병원 검색 지역(address - location 이 없을 때, 시·구까지)에 쓴다. email·addressDetail·postcode·relation·patient* 는 AI 가 쓰지 않아 보내지 않는다.
+     * location(사용자가 고른 검색 지역)은 클라이언트 값 그대로다.
+     */
+    private static final java.util.Set<String> PROFILE_KEYS = java.util.Set.of(
+            "name", "phone", "age", "birthDate", "gender", "email", "address", "addressDetail", "postcode", "relation",
+            "patientId", "patientName", "patientBirthDate", "patientPhone", "patientGender");
+    private static final java.time.ZoneId KST = java.time.ZoneId.of("Asia/Seoul");
     /** 사용자 ID 형식(UserIdGenerator: 영숫자, users.id VARCHAR(6)). */
     private static final java.util.regex.Pattern USER_ID_FORMAT = java.util.regex.Pattern.compile("\\A[A-Za-z0-9]{1,6}\\z");
 
@@ -154,8 +162,8 @@ public class ChatRelayService {
     }
 
     /**
-     * 대리 상담 키와 name·phone 을 모두 지우고 DB 값으로만 다시 채운다(클라이언트 값은 어느 것도 통과하지 못한다).
-     * 대리 상담이면 검증된 피보호자, 본인 상담이면 로그인한 본인(self)의 값이다. 전화가 없으면 phone 키를 두지 않는다.
+     * 대리 상담 키와 환자 프로필 키를 모두 지우고 DB 값으로만 다시 채운다(클라이언트 값은 어느 것도 통과하지 못한다).
+     * 대리 상담이면 검증된 피보호자, 본인 상담이면 로그인한 본인(self)의 값이다. DB 에 값이 없는 칸은 키를 두지 않는다.
      * role 은 호출 경로의 역할로 덮어쓴다(AI 챗 집계의 역할별 수 근거).
      */
     private static Map<String, Object> sanitizedContext(Map<String, Object> raw, User ward, User self, Role role) {
@@ -164,7 +172,7 @@ public class ChatRelayService {
             context.putAll(raw);
         }
         context.keySet().removeAll(WARD_KEYS);
-        context.keySet().removeAll(IDENTITY_KEYS);
+        context.keySet().removeAll(PROFILE_KEYS);
         context.put("role", role.name());
         if (ward != null) {
             context.put("wardId", ward.getId());
@@ -176,14 +184,29 @@ public class ChatRelayService {
         // AI 는 wardName/wardPhone 이 없으면 name/phone 을 환자 정보로 쓴다 - 대리 상담도 같은 값으로 함께 정한다
         User patient = ward != null ? ward : self;
         if (patient != null) {
-            if (StringUtils.hasText(patient.getName())) {
-                context.put("name", patient.getName());
-            }
-            if (StringUtils.hasText(patient.getPhone())) {
-                context.put("phone", patient.getPhone());
-            }
+            putProfile(context, patient, java.time.LocalDate.now(KST));
         }
         return context;
+    }
+
+    /** 환자 DB 값으로 프로필 키를 채운다. 값이 없는 칸은 키를 두지 않는다. 나이는 KST 오늘 기준 만 나이. */
+    static void putProfile(Map<String, Object> context, User patient, java.time.LocalDate today) {
+        if (StringUtils.hasText(patient.getName())) {
+            context.put("name", patient.getName());
+        }
+        if (StringUtils.hasText(patient.getPhone())) {
+            context.put("phone", patient.getPhone());
+        }
+        if (patient.getBirthDate() != null && !patient.getBirthDate().isAfter(today)) {
+            context.put("birthDate", patient.getBirthDate().toString());
+            context.put("age", java.time.Period.between(patient.getBirthDate(), today).getYears());
+        }
+        if (patient.getGender() != null) {
+            context.put("gender", patient.getGender().name());
+        }
+        if (StringUtils.hasText(patient.getAddress())) {
+            context.put("address", patient.getAddress());
+        }
     }
 
     /** 본인 상담의 환자 정보용 본인 행. 없으면(탈퇴 직후 경합 등) null - 이름·전화 없이 진행한다(로그에 값을 남기지 않는다). */
