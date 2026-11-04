@@ -38,7 +38,7 @@ D-1("보호자 이력은 지금 연결 이후 기록만", 2026-10-31)은 **피�
 
 - **보이는 행**: `recipient_id = 토큰 사용자 AND result <> 'NOT_SENT' AND created_at >= now - retention-days(90)`. 기간 조건은 보관 정리(매일 04:30)가 돌기 전 최대 하루치 남는 행을 빼려는 것이다.
 - **부분 인덱스(V67)**: `(recipient_id, created_at DESC) WHERE result <> 'NOT_SENT'`(목록), `(recipient_id, created_at) WHERE read_at IS NULL AND result <> 'NOT_SENT'`(안 읽은 수). JPQL은 같은 조건을 enum 리터럴로 쓴다 - 바인딩 파라미터면 부분 인덱스를 고르지 못할 수 있다.
-- **읽음**: `UPDATE ... SET read_at = COALESCE(read_at, :now) WHERE id AND recipient_id AND result <> NOT_SENT` 한 번. 이미 읽었으면 처음 시각을 유지하고 200(멱등). 0행이면 수신자 ID만 다시 읽어 남의 것 403 `NOTIFICATION_NOT_OWNED` + `[IDOR-ATTEMPT]` WARN(userId·notificationId만, 소유자 ID·제목·본문 없음), 없음·본인의 NOT_SENT 행은 404 `NOTIFICATION_NOT_FOUND`.
+- **읽음**: `UPDATE ... SET read_at = COALESCE(read_at, :now) WHERE id AND recipient_id AND result <> NOT_SENT AND created_at >= 하한` 한 번(모두 읽음도 같은 하한 - 점검 L-2). 이미 읽었으면 처음 시각을 유지하고 200(멱등). 0행이면 수신자 ID만 다시 읽어 남의 것 403 `NOTIFICATION_NOT_OWNED` + `[IDOR-ATTEMPT]` WARN(userId·notificationId만, 소유자 ID·제목·본문 없음), 없음·본인의 NOT_SENT 행은 404 `NOTIFICATION_NOT_FOUND`.
 - **묶음(category)**: `UserNotificationCategory.of()`의 `switch`(default 없음) 한 곳. 새 `NotificationType`은 컴파일에서 막히고 `UserNotificationCategoryTest`가 전 종류·겹침 없음을 고정한다. 관리자 탭 `AdminNotificationCategory`와는 따로 둔다.
 - **응답에 싣지 않는 칼럼**: `result`·`channel_results`·`not_sent_reason`·`recipient_id`(관리자용). `UserNotificationControllerSecurityTest`가 응답 필드를 고정한다.
 - **wardName**: 페이지 안의 피보호자 ID를 모아 `findAllById` 한 번(N+1 없음). 본인에 관한 알림(`ward_id = recipient_id`)은 `wardId`·`wardName` 모두 null.
@@ -114,7 +114,7 @@ POST /api/user/me/notifications/read-all
 
 안 읽은 수: `{"success": true, "data": {"count": 3}}`
 한 건 읽음: `{"success": true, "message": "알림을 읽음 처리했습니다."}` - 이미 읽었어도 200.
-모두 읽음: `{"success": true, "data": {"updated": 3}}` - 이번에 바뀐 건수.
+모두 읽음: `{"success": true, "data": {"updated": 3}}` - 이번에 바뀐 건수(호출 직전 안 읽은 수와 같은 범위).
 
 ### category 표
 
@@ -135,7 +135,8 @@ POST /api/user/me/notifications/read-all
 | 401 | - | 토큰 없음·만료 |
 | 403 | `FORBIDDEN` | 관리자 계정 |
 | 403 | `NOTIFICATION_NOT_OWNED` | 다른 사용자의 알림 id로 읽음 요청 ("본인이 받은 알림만 읽음 처리할 수 있습니다.") |
-| 404 | `NOTIFICATION_NOT_FOUND` | 없는 id(보관 기간 90일이 지나 지워진 알림 포함) |
+| 400 | `INVALID_INPUT` | 읽음 경로의 id가 숫자가 아님 |
+| 404 | `NOTIFICATION_NOT_FOUND` | 없는 id, 보관 기간 90일이 지난 알림(정리 전이라도), 보내지 않은 알림 |
 | 429 | `TOO_MANY_REQUESTS` | 사용자 공통 제한(분당 600) |
 
 ### 안 읽은 수 갱신 시점
@@ -149,3 +150,8 @@ POST /api/user/me/notifications/read-all
 ### 이동 화면
 
 알림의 상세 식별자(`incidentId` 등)는 내려가지 않는다. 항목을 누르면 `type`·`wardId` 기준으로 목록 화면으로 보낸다(예: `ANOMALY_*` → 그 피보호자의 이상감지 이력, `WARD_SOS` → SOS 이력, `MEDICATION_*` → 복약, `CONNECTION_*` → 연결 관리, `INQUIRY_ANSWERED` → 내 문의).
+
+**연결이 끝난 피보호자의 알림 (2026-11-04 점검 M-1)**: 이 목록에는 연결이 끝난 피보호자에 관한 알림도 남는다. 그런데 이력 화면들은 "지금 연결된 피보호자의, 연결 이후 기록만" 보여 주므로, 그 `wardId`로 이동하면 403(`ANOMALY_NOT_AUTHORIZED`·`SOS_NOT_AUTHORIZED`·`MEDICATION_NOT_AUTHORIZED`·`DASHBOARD_NOT_AUTHORIZED` 등)이 온다.
+- 이동한 화면에서 403을 받으면 "연결이 끝난 피보호자의 기록은 볼 수 없습니다." 같은 안내를 보여 주고 알림 목록에 머문다(오류 화면·로그아웃으로 보내지 말 것).
+- 다시 연결했더라도 그 이전 기록은 보이지 않으므로(D-1), 이동한 이력 화면에 그 알림의 상황이 없을 수 있다. 알림 목록의 제목·본문이 남아 있는 유일한 기록이다.
+- 미리 막고 싶으면 지금 연결 목록(보호자 연결 API)에 없는 `wardId`는 항목을 눌러도 이동하지 않게 해도 된다.
