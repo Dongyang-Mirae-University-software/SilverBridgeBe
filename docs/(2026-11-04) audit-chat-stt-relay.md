@@ -164,6 +164,8 @@ fix: 챗봇 음성 인식 경로 역할을 본문 파싱 전에 검사
 - **🟠 운영 문제 - gosky AI에 SenseVoiceSmall 모델 파일이 없다**: 메시지 "받아쓰기 모델 파일이 없습니다 (SenseVoiceSmall)". 기대 위치는 호스트 `SilverBridgeAiServer/models/companion/stt-sensevoice/`(컨테이너 `/app/models`)인데 `models/companion` 폴더가 없다. DGX에도 HF 캐시 머리 파일(3.6MB)뿐이다. AI는 이 오류를 처음 한 번 기억해 두므로(`sensevoice_service._load`) **파일을 넣은 뒤 AI 재시작이 필요**하다. 같은 받아쓰기를 쓰는 **안부 말벗 음성 대답도 같은 이유로 실패**한다. 지금 BE 스위치가 켜져 있어 마이크를 누르면 항상 "지금은 음성을 알아듣지 못해요. 글로 입력해 주세요."(503)가 나온다.
 - 오류 계약(413·422·401)은 PHASE B 표와 실측이 일치한다. 처리 시간·동시 상한은 모델이 없어 재지 못했다.
 
+- **조치 (23:35, 사용자 결정)**: 모델이 들어갈 때까지 gosky BE `CHAT_STT_ENABLED=false`(백업 `.env.dev.bak-20261104-2335-stt-off`, 바뀐 줄은 이 한 줄) → `up -d api`, 컨테이너 반영·healthy 확인. 마이크 요청은 503 `CHAT_STT_DISABLED`("지금은 음성 입력을 쓸 수 없어요. 글로 입력해 주세요.")가 된다. 주소·키 줄은 그대로 두었다 - 모델 배치·AI 재시작 뒤 이 값만 `true`로 바꾸고 `up -d api`.
+
 ## L-3 AI 팀 전달문
 
 > `/companion/stt`(companion_router.py `_transcribe_with_slot`)는 받아쓰기에 시간 제한이 없습니다. 말벗 대화 경로는 `call_with_timeout(..., COMPANION_STT_TIMEOUT_SEC)`로 감싸는데 `/stt`는 `transcribe_pcm`을 바로 부릅니다. BE는 30초에 연결을 끊고 503을 주지만, AI는 받아쓰기가 멈추면 자리(동시 2)를 계속 쥐어 이후 요청이 5초 대기 뒤 `STT_BUSY`로 이어집니다. 제안: 자리를 얻은 뒤 받아쓰기를 `call_with_timeout`(새 설정 `COMPANION_STT_API_TIMEOUT_SEC`, 기본 20초, BE 30초 − 자리 대기 5초 − 여유)으로 감싸고, 시간 초과는 `STT_UNAVAILABLE`로 돌려주세요(BE 매핑 그대로). 엔진을 whisper large-v3(CPU)로 바꾸면 30초 음성이 BE 30초를 넘을 수 있으니 엔진 변경 때 BE `CHAT_STT_CALL_TIMEOUT`과 함께 봐 주세요. 별개로 gosky에 SenseVoiceSmall 모델 파일이 없어 `/stt`·말벗 음성 대답이 모두 503입니다(`models/companion/stt-sensevoice/`, 넣은 뒤 재시작 필요).
