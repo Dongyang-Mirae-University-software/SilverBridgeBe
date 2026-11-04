@@ -147,7 +147,29 @@ fix: 챗봇 음성 인식 경로 역할을 본문 파싱 전에 검사
 
 변이 재확인: 413 분기 무력화·`global.release()` 제거·STT URL 규칙 제거 모두 테스트가 잡는다(되돌린 뒤 `git diff`에 변이 없음). 전체 단위 테스트 2374건 통과, `build -x test` 성공.
 
+## AI 직접 실호출 확인 (2026-11-04 23:29 KST, gosky, `/tmp/ai-measure.lock` 사용)
+
+- gosky AI(`silverbridge-ai-server`, 6017)는 #177(`4e6cb92`)로 떠 있다. gosky BE `.env.dev`에는 이미 `CHAT_STT_*` 3개가 들어 있다(23:02, 백업 `.env.dev.bak-20261104-2302`, 주소·키 = 말벗 값, 이 세션이 넣은 것 아님) → `dmu-dev-api`가 `CHAT_STT_ENABLED=true`로 떠 있다. vkcs는 키 없음(꺼짐).
+- 측정 음성: Windows TTS(한국어) 5초·25초 WAV, ffmpeg로 WebM(Opus)·MP3·50초 WAV·무음·깨진 파일.
+
+| 입력 | AI 응답 | BE가 내릴 값 |
+|---|---|---|
+| WAV·WebM·MP3 5초, WAV 25초, 무음 3초 | **503 `STT_UNAVAILABLE`**(즉시) | 503 `CHAT_STT_UNAVAILABLE` |
+| WAV 50초 | 413 `AUDIO_TOO_LONG` | 413 `CHAT_STT_AUDIO_TOO_LARGE` |
+| 임의 바이트 | 422 `AUDIO_FORMAT_UNSUPPORTED` | 400 `CHAT_STT_AUDIO_INVALID` |
+| 머리만 WAV | 422 `AUDIO_UNREADABLE` | 400 `CHAT_STT_AUDIO_INVALID` |
+| `audio` 칸 없음 | 422 `AUDIO_MISSING` | 400 `CHAT_STT_AUDIO_INVALID` |
+| 키 없음 | 401 | 503 `CHAT_STT_UNAVAILABLE` |
+
+- **🟠 운영 문제 - gosky AI에 SenseVoiceSmall 모델 파일이 없다**: 메시지 "받아쓰기 모델 파일이 없습니다 (SenseVoiceSmall)". 기대 위치는 호스트 `SilverBridgeAiServer/models/companion/stt-sensevoice/`(컨테이너 `/app/models`)인데 `models/companion` 폴더가 없다. DGX에도 HF 캐시 머리 파일(3.6MB)뿐이다. AI는 이 오류를 처음 한 번 기억해 두므로(`sensevoice_service._load`) **파일을 넣은 뒤 AI 재시작이 필요**하다. 같은 받아쓰기를 쓰는 **안부 말벗 음성 대답도 같은 이유로 실패**한다. 지금 BE 스위치가 켜져 있어 마이크를 누르면 항상 "지금은 음성을 알아듣지 못해요. 글로 입력해 주세요."(503)가 나온다.
+- 오류 계약(413·422·401)은 PHASE B 표와 실측이 일치한다. 처리 시간·동시 상한은 모델이 없어 재지 못했다.
+
+## L-3 AI 팀 전달문
+
+> `/companion/stt`(companion_router.py `_transcribe_with_slot`)는 받아쓰기에 시간 제한이 없습니다. 말벗 대화 경로는 `call_with_timeout(..., COMPANION_STT_TIMEOUT_SEC)`로 감싸는데 `/stt`는 `transcribe_pcm`을 바로 부릅니다. BE는 30초에 연결을 끊고 503을 주지만, AI는 받아쓰기가 멈추면 자리(동시 2)를 계속 쥐어 이후 요청이 5초 대기 뒤 `STT_BUSY`로 이어집니다. 제안: 자리를 얻은 뒤 받아쓰기를 `call_with_timeout`(새 설정 `COMPANION_STT_API_TIMEOUT_SEC`, 기본 20초, BE 30초 − 자리 대기 5초 − 여유)으로 감싸고, 시간 초과는 `STT_UNAVAILABLE`로 돌려주세요(BE 매핑 그대로). 엔진을 whisper large-v3(CPU)로 바꾸면 30초 음성이 BE 30초를 넘을 수 있으니 엔진 변경 때 BE `CHAT_STT_CALL_TIMEOUT`과 함께 봐 주세요. 별개로 gosky에 SenseVoiceSmall 모델 파일이 없어 `/stt`·말벗 음성 대답이 모두 503입니다(`models/companion/stt-sensevoice/`, 넣은 뒤 재시작 필요).
+
 ## 다음
 
-1. AI 팀에 L-3 전달.
+1. 위 전달문을 AI 팀(말벗 담당)에 전달.
+2. gosky AI 모델 배치 + 재시작(사용자 확인 필요) 뒤 실호출 처리 시간·동시 상한 측정, 시험 계정으로 BE 경로 확인.
 3. AI #177 gosky 배포 뒤: 사용자 확인을 받고 `CHAT_STT_*` 주입 → 실호출(WAV·WebM·MP3, 빈 글자, 30초 초과, 동시 3건) 측정.
