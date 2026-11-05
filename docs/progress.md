@@ -2776,3 +2776,6 @@ AI 챗 집계 점검 L-1에서 남겨 둔 공용 `GlobalExceptionHandler`의 `e.
 ### [2026-11-05] AI #182 프롬프트 캐싱·오프라인 재생 도구 기능 점검 (템플릿 B, API 없이)
 - 조건부 PASS: 🟠 H-1 도구 stub·cache 모드가 `.env` 있는 저장소에서 키 재로딩으로 라우터 밖 Claude 호출 가능 / 🟡 M-1 live 상한이 라우터만 셈 / 🟢 3. 캐시 블록·사용량 로그·출력 경로·상한은 통과.
 - 상세: AI `docs/audits/2026-11-05-prompt-cache-replay-tool-audit.md`(#183). 수정은 승인 대기.
+
+### [2026-11-05] AI #182 점검 조치 - 재생 도구 API 0회 보장 강화 (AI #184 `d8ecd6f`)
+- stub·cache 모드 키 빈 값(.env 재로딩 차단)·Claude 호출 전부 차단 집계, live 상한이 Claude 호출 전체를 셈, 요약 경로 보호. 관련 테스트 1375 통과·결함 주입 5종, 가짜 키 .env 환경 stub 재생 Claude 0회.
