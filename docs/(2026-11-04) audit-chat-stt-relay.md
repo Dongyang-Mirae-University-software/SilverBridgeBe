@@ -169,9 +169,10 @@ fix: 챗봇 음성 인식 경로 역할을 본문 파싱 전에 검사
 ## L-3 AI 팀 전달문
 
 > `/companion/stt`(companion_router.py `_transcribe_with_slot`)는 받아쓰기에 시간 제한이 없습니다. 말벗 대화 경로는 `call_with_timeout(..., COMPANION_STT_TIMEOUT_SEC)`로 감싸는데 `/stt`는 `transcribe_pcm`을 바로 부릅니다. BE는 30초에 연결을 끊고 503을 주지만, AI는 받아쓰기가 멈추면 자리(동시 2)를 계속 쥐어 이후 요청이 5초 대기 뒤 `STT_BUSY`로 이어집니다. 제안: 자리를 얻은 뒤 받아쓰기를 `call_with_timeout`(새 설정 `COMPANION_STT_API_TIMEOUT_SEC`, 기본 20초, BE 30초 − 자리 대기 5초 − 여유)으로 감싸고, 시간 초과는 `STT_UNAVAILABLE`로 돌려주세요(BE 매핑 그대로). 엔진을 whisper large-v3(CPU)로 바꾸면 30초 음성이 BE 30초를 넘을 수 있으니 엔진 변경 때 BE `CHAT_STT_CALL_TIMEOUT`과 함께 봐 주세요. 별개로 gosky에 SenseVoiceSmall 모델 파일이 없어 `/stt`·말벗 음성 대답이 모두 503입니다(`models/companion/stt-sensevoice/`, 넣은 뒤 재시작 필요).
+>
+> **모델 배치 요청 (2026-11-05 추가)**: gosky 호스트 `/home/apps/SilverBridgeSky/SilverBridgeAiServer/models/companion/stt-sensevoice/`(컨테이너 `/app/models/...`)에 HuggingFace `FunAudioLLM/SenseVoiceSmall`(약 0.9GB - `model.pt`·`config.yaml`·`configuration.json`·`am.mvn`·토크나이저 `*.bpe.model`)을 넣고 `silverbridge-ai-server`를 재시작해 주세요. 코드는 `model.pt` 존재만 먼저 보고 `funasr.AutoModel(disable_update=True)`로 그 폴더를 읽습니다. 재시작 동안 화재·칼 감지와 챗봇이 멈추니 시점을 정해 주시고, 끝나면 BE에 알려 주세요 - BE가 챗봇 마이크 스위치(`CHAT_STT_ENABLED`)를 켜고 처리 시간을 잽니다.
 
 ## 다음
 
-1. 위 전달문을 AI 팀(말벗 담당)에 전달.
-2. gosky AI 모델 배치 + 재시작(사용자 확인 필요) 뒤 실호출 처리 시간·동시 상한 측정, 시험 계정으로 BE 경로 확인.
-3. AI #177 gosky 배포 뒤: 사용자 확인을 받고 `CHAT_STT_*` 주입 → 실호출(WAV·WebM·MP3, 빈 글자, 30초 초과, 동시 3건) 측정.
+1. 위 전달문(모델 배치 요청 포함)을 AI 팀(말벗 담당)에 전달 - **모델 배치·AI 재시작은 AI 팀이 한다(2026-11-05 사용자 결정)**.
+2. AI 팀 완료 알림 뒤: gosky `CHAT_STT_ENABLED=true` → `up -d api`, 실호출 처리 시간·동시 상한 측정(잠금 사용), 시험 계정으로 BE 경로 확인.
