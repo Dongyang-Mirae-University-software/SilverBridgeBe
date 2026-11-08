@@ -4,6 +4,10 @@
 
 ---
 
+### [2026-11-09] AI #188 라우터 실패 보완 기능 점검 (템플릿 B) - FAIL 🔴1·🟠2·🟡3·🟢4
+
+- 엉뚱한 질문 고정 안내가 라우터 실패 경로에서 주제 낱말이 섞인 의식 잃음·무반응·위기 의심 문장을 모델 호출 없이 막는다(🔴 C-1, 서비스 경로 재현). 가슴압박 줄은 조사 생략 꼴(실패 경로)·"안 움직여요"(성공·실패 모두)에서 빠진다(🟠 H-1·H-2). #189 상호작용·`/chat/stats` 계약·#187 지표는 정상. gosky `eed8971` 재시작 뒤 관련 로그 0건. API 키 미사용(합성 문장·stub). 상세 AI `docs/audits/2026-11-09-router-failure-followups-audit.md`(PR #190), 수정 프롬프트 초안 포함.
+
 ### [2026-11-09] 관리자 AI 통계에 라우터 실패·상태 칸 추가 (AI #188 매핑)
 
 - `GET /api/admin/ai-stats/chat`에 `routerFailures`·`routerFailuresByKind`·`routerStatus` 추가. 선택 칸이라 옛 AI·형식 이상이면 그 칸만 null(나머지 집계 유지), state 4값만, byKind 4칸 고정 record, 60초 캐시 공유. #188 배포 전 기간은 AI가 0을 준다(Swagger 명시). 단위 2401건 실패 0. 상세 `docs/(2026-11-09) feature-admin-ai-stats-router-status.md`.
