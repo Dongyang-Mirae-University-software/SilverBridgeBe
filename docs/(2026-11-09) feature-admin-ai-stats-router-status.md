@@ -54,4 +54,7 @@
 
 ## 배포·실서버 확인
 
-(PR 머지 뒤 갱신)
+- PR #450 머지 `8c68bd0` (2026-11-09).
+- vkcs: CD 성공(통합 테스트 단계 실행·통과), `dmu-dev-api` healthy, AI WS 연결, 기동 뒤 ERROR 0.
+- gosky(dev만): 수동 배포, HEAD `1504101`(`8c68bd0` 포함), `dmu-dev-api` healthy, AI WS 연결, ERROR 0. prod·AI 서버는 건드리지 않음.
+- 실서버 1회 확인(관리자 시험 계정, 2026-11-09 하루): 200, `routerFailures`·`routerFailuresByKind`·`routerStatus` 모두 있음(null 아님), `routerStatus` 하위 칸은 `state`·`recentFailures`·`windowSec`만. 값은 기록하지 않음.
