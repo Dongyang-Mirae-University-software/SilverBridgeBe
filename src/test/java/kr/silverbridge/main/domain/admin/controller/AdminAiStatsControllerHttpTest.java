@@ -4,6 +4,8 @@ import kr.silverbridge.main.domain.admin.dto.AdminAiChatStatsResponse;
 import kr.silverbridge.main.domain.admin.dto.AdminAiChatStatsResponse.ByRole;
 import kr.silverbridge.main.domain.admin.dto.AdminAiChatStatsResponse.ByRoute;
 import kr.silverbridge.main.domain.admin.dto.AdminAiChatStatsResponse.Daily;
+import kr.silverbridge.main.domain.admin.dto.AdminAiChatStatsResponse.RouterFailuresByKind;
+import kr.silverbridge.main.domain.admin.dto.AdminAiChatStatsResponse.RouterStatus;
 import kr.silverbridge.main.domain.admin.service.AdminAiChatStatsService;
 import kr.silverbridge.main.global.exception.CustomException;
 import kr.silverbridge.main.global.exception.ErrorCode;
@@ -62,12 +64,32 @@ class AdminAiStatsControllerHttpTest {
     }
 
     @Test
+    @DisplayName("옛 AI라 라우터 칸을 모르면 칸은 null로 남는다(0이 아니다)")
+    void routerFieldsNullWhenUnknown() throws Exception {
+        when(adminAiChatStatsService.getChatStats("ADM001", "2026-10-27", "2026-10-28")).thenReturn(
+                new AdminAiChatStatsResponse("2026-10-27", "2026-10-28", 9L, 3L,
+                        new ByRole(5L, 3L, 1L), new ByRoute(4L, 3L, 2L, 0L),
+                        1L, 2L, 0L, null, null, null,
+                        List.of(new Daily("2026-10-27", 7L), new Daily("2026-10-28", 2L)),
+                        "2026-10-28T11:03:27+09:00"));
+
+        mvc().perform(get("/api/admin/ai-stats/chat").param("from", "2026-10-27").param("to", "2026-10-28"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data", hasKey("routerFailures")))
+                .andExpect(jsonPath("$.data.routerFailures").value(nullValue()))
+                .andExpect(jsonPath("$.data.routerFailuresByKind").value(nullValue()))
+                .andExpect(jsonPath("$.data.routerStatus").value(nullValue()))
+                .andExpect(jsonPath("$.data.totalChats").value(9));
+    }
+
+    @Test
     @DisplayName("칸 이름·값과 토큰의 관리자 ID·기간이 서비스로 간다, 모르는 개수는 0이 아니라 null 칸으로 남는다")
     void serializes() throws Exception {
         when(adminAiChatStatsService.getChatStats("ADM001", "2026-10-27", "2026-10-28")).thenReturn(
                 new AdminAiChatStatsResponse("2026-10-27", "2026-10-28", 9L, 3L,
                         new ByRole(5L, 3L, 1L), new ByRoute(4L, 3L, 2L, 0L),
                         1L, null, 0L,
+                        3L, new RouterFailuresByKind(2L, 0L, 1L, 0L), new RouterStatus("credit_exhausted", 2L, 600L),
                         List.of(new Daily("2026-10-27", 7L), new Daily("2026-10-28", 2L)),
                         "2026-10-28T11:03:27+09:00"));
 
@@ -91,6 +113,14 @@ class AdminAiStatsControllerHttpTest {
                 .andExpect(jsonPath("$.data.daily[0].date").value("2026-10-27"))
                 .andExpect(jsonPath("$.data.daily[1].totalChats").value(2))
                 .andExpect(jsonPath("$.data.generatedAt").value("2026-10-28T11:03:27+09:00"))
+                .andExpect(jsonPath("$.data.routerFailures").value(3))
+                .andExpect(jsonPath("$.data.routerFailuresByKind.credit").value(2))
+                .andExpect(jsonPath("$.data.routerFailuresByKind.auth").value(0))
+                .andExpect(jsonPath("$.data.routerFailuresByKind.timeout").value(1))
+                .andExpect(jsonPath("$.data.routerFailuresByKind.other").value(0))
+                .andExpect(jsonPath("$.data.routerStatus.state").value("credit_exhausted"))
+                .andExpect(jsonPath("$.data.routerStatus.recentFailures").value(2))
+                .andExpect(jsonPath("$.data.routerStatus.windowSec").value(600))
                 .andExpect(jsonPath("$.data", not(hasKey("userId"))));
     }
 

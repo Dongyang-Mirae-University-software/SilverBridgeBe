@@ -103,6 +103,170 @@ class AdminAiChatStatsServiceTest {
         assertThat(res.byRole().unknown()).isNull();
     }
 
+    /** AI #188 응답 - aiData()(옛 AI 모양)에 라우터 칸 3개를 더한 것. */
+    private ObjectNode aiDataV188() throws Exception {
+        ObjectNode data = aiData();
+        data.put("routerFailures", 3);
+        data.set("routerFailuresByKind", objectMapper.readTree("""
+                {"credit":2,"auth":0,"timeout":1,"other":0}
+                """));
+        data.set("routerStatus", objectMapper.readTree("""
+                {"state":"credit_exhausted","recentFailures":2,"windowSec":600}
+                """));
+        return data;
+    }
+
+    @Test
+    @DisplayName("AI #188 라우터 칸 3개를 옮긴다")
+    void mapsRouterFields() throws Exception {
+        when(aiChatClient.stats(D27, D28)).thenReturn(aiDataV188());
+
+        AdminAiChatStatsResponse res = service.getChatStats(ADMIN, "2026-10-27", "2026-10-28");
+
+        assertThat(res.routerFailures()).isEqualTo(3L);
+        assertThat(res.routerFailuresByKind()).isEqualTo(new AdminAiChatStatsResponse.RouterFailuresByKind(2L, 0L, 1L, 0L));
+        assertThat(res.routerStatus()).isEqualTo(new AdminAiChatStatsResponse.RouterStatus("credit_exhausted", 2L, 600L));
+    }
+
+    @ParameterizedTest(name = "[{index}] state={0}")
+    @CsvSource({"ok", "failing", "credit_exhausted", "off"})
+    @DisplayName("routerStatus.state 4값은 모두 그대로 옮긴다")
+    void allRouterStates(String state) throws Exception {
+        ObjectNode data = aiDataV188();
+        ((ObjectNode) data.get("routerStatus")).put("state", state);
+        when(aiChatClient.stats(D27, D28)).thenReturn(data);
+
+        assertThat(service.getChatStats(ADMIN, "2026-10-27", "2026-10-28").routerStatus().state()).isEqualTo(state);
+    }
+
+    @Test
+    @DisplayName("옛 AI(라우터 칸 없음)면 그 칸만 null이고 나머지 집계는 그대로 - 503이 아니다(결정 ①)")
+    void oldAiWithoutRouterFields() throws Exception {
+        when(aiChatClient.stats(D27, D28)).thenReturn(aiData());
+
+        AdminAiChatStatsResponse res = service.getChatStats(ADMIN, "2026-10-27", "2026-10-28");
+
+        assertThat(res.routerFailures()).isNull();
+        assertThat(res.routerFailuresByKind()).isNull();
+        assertThat(res.routerStatus()).isNull();
+        assertThat(res.totalChats()).isEqualTo(9L);
+        assertThat(res.daily()).hasSize(2);
+    }
+
+    @ParameterizedTest(name = "[{index}] {0}")
+    @CsvSource({"state 이상값", "state 숫자", "state 없음", "recentFailures 음수", "recentFailures 문자열",
+            "windowSec 0", "windowSec 소수", "routerStatus 객체 아님"})
+    @DisplayName("routerStatus 형식이 어긋나면 routerStatus만 null, 다른 라우터 칸·집계는 그대로(결정 ②)")
+    void malformedRouterStatus(String kind) throws Exception {
+        ObjectNode data = aiDataV188();
+        ObjectNode status = (ObjectNode) data.get("routerStatus");
+        switch (kind) {
+            case "state 이상값" -> status.put("state", "degraded");
+            case "state 숫자" -> status.put("state", 1);
+            case "state 없음" -> status.remove("state");
+            case "recentFailures 음수" -> status.put("recentFailures", -1);
+            case "recentFailures 문자열" -> status.put("recentFailures", "2");
+            case "windowSec 0" -> status.put("windowSec", 0);
+            case "windowSec 소수" -> status.put("windowSec", 600.5);
+            default -> data.put("routerStatus", "ok");
+        }
+        when(aiChatClient.stats(D27, D28)).thenReturn(data);
+
+        AdminAiChatStatsResponse res = service.getChatStats(ADMIN, "2026-10-27", "2026-10-28");
+
+        assertThat(res.routerStatus()).isNull();
+        assertThat(res.routerFailures()).isEqualTo(3L);
+        assertThat(res.routerFailuresByKind()).isNotNull();
+        assertThat(res.totalChats()).isEqualTo(9L);
+    }
+
+    @ParameterizedTest(name = "[{index}] {0}")
+    @CsvSource({"credit 없음", "other 음수", "auth 문자열", "timeout null", "배열"})
+    @DisplayName("routerFailuresByKind가 일부라도 어긋나면 일부만 0으로 메우지 않고 묶음째 null")
+    void malformedByKind(String kind) throws Exception {
+        ObjectNode data = aiDataV188();
+        ObjectNode byKind = (ObjectNode) data.get("routerFailuresByKind");
+        switch (kind) {
+            case "credit 없음" -> byKind.remove("credit");
+            case "other 음수" -> byKind.put("other", -1);
+            case "auth 문자열" -> byKind.put("auth", "0");
+            case "timeout null" -> byKind.putNull("timeout");
+            default -> data.set("routerFailuresByKind", objectMapper.readTree("[2,0,1,0]"));
+        }
+        when(aiChatClient.stats(D27, D28)).thenReturn(data);
+
+        AdminAiChatStatsResponse res = service.getChatStats(ADMIN, "2026-10-27", "2026-10-28");
+
+        assertThat(res.routerFailuresByKind()).isNull();
+        assertThat(res.routerFailures()).isEqualTo(3L);
+        assertThat(res.routerStatus()).isNotNull();
+    }
+
+    @ParameterizedTest(name = "[{index}] {0}")
+    @CsvSource({"음수", "문자열", "소수", "null"})
+    @DisplayName("routerFailures가 0 이상 정수가 아니면 null - 기존 개수 칸과 달리 503이 아니다")
+    void malformedRouterFailures(String kind) throws Exception {
+        ObjectNode data = aiDataV188();
+        switch (kind) {
+            case "음수" -> data.put("routerFailures", -3);
+            case "문자열" -> data.put("routerFailures", "3");
+            case "소수" -> data.put("routerFailures", 3.5);
+            default -> data.putNull("routerFailures");
+        }
+        when(aiChatClient.stats(D27, D28)).thenReturn(data);
+
+        AdminAiChatStatsResponse res = service.getChatStats(ADMIN, "2026-10-27", "2026-10-28");
+
+        assertThat(res.routerFailures()).isNull();
+        assertThat(res.routerStatus()).isNotNull();
+        assertThat(res.emergencyGuidance()).isEqualTo(1L);
+    }
+
+    @Test
+    @DisplayName("라우터 칸이 있어도 기존 칸 형식이 어긋나면 여전히 503")
+    void existingChecksStillStrict() throws Exception {
+        ObjectNode data = aiDataV188();
+        data.remove("fallbackReplies");
+        when(aiChatClient.stats(D27, D28)).thenReturn(data);
+
+        assertCode(org.assertj.core.api.Assertions.catchThrowable(() -> service.getChatStats(ADMIN, "2026-10-27", "2026-10-28")),
+                ErrorCode.AI_STATS_UNAVAILABLE);
+    }
+
+    @Test
+    @DisplayName("routerStatus도 60초 캐시에 함께 둔다 - 캐시 적중 때 같은 값, AI 1회 호출(결정 ③)")
+    void routerStatusCachedTogether() throws Exception {
+        ObjectNode first = aiDataV188();
+        ObjectNode later = aiDataV188();
+        ((ObjectNode) later.get("routerStatus")).put("state", "ok");
+        when(aiChatClient.stats(D27, D28)).thenReturn(first, later);
+
+        AdminAiChatStatsResponse a = service.getChatStats(ADMIN, "2026-10-27", "2026-10-28");
+        now.addAndGet(30_000_000_000L);
+        AdminAiChatStatsResponse b = service.getChatStats(ADMIN, "2026-10-27", "2026-10-28");
+
+        assertThat(b.routerStatus()).isEqualTo(a.routerStatus());
+        assertThat(b.routerStatus().state()).isEqualTo("credit_exhausted");
+        verify(aiChatClient, times(1)).stats(D27, D28);
+    }
+
+    @Test
+    @DisplayName("라우터 칸 안에 AI가 더 넣은 값(원인 문구 등)은 응답에 나가지 않는다(허용 목록)")
+    void routerFieldsAllowListOnly() throws Exception {
+        ObjectNode data = aiDataV188();
+        ((ObjectNode) data.get("routerStatus")).put("lastError", "credit balance is too low");
+        ((ObjectNode) data.get("routerFailuresByKind")).put("billing", 9);
+        data.put("routerLastMessage", "원문");
+        when(aiChatClient.stats(D27, D28)).thenReturn(data);
+
+        String json = objectMapper.writeValueAsString(service.getChatStats(ADMIN, "2026-10-27", "2026-10-28"));
+
+        assertThat(json).doesNotContain("lastError").doesNotContain("credit balance").doesNotContain("billing")
+                .doesNotContain("routerLastMessage").doesNotContain("원문");
+        assertThat(objectMapper.readTree(json).get("routerStatus").properties())
+                .extracting(java.util.Map.Entry::getKey).containsExactlyInAnyOrder("state", "recentFailures", "windowSec");
+    }
+
     @ParameterizedTest(name = "[{index}] from={0}, to={1}")
     @CsvSource(value = {
             "NULL,2026-10-28", "2026-10-28,NULL", "20261027,20261028", "2026-10-1,2026-10-28",

@@ -5,6 +5,8 @@ import kr.silverbridge.main.domain.admin.dto.AdminAiChatStatsResponse;
 import kr.silverbridge.main.domain.admin.dto.AdminAiChatStatsResponse.ByRole;
 import kr.silverbridge.main.domain.admin.dto.AdminAiChatStatsResponse.ByRoute;
 import kr.silverbridge.main.domain.admin.dto.AdminAiChatStatsResponse.Daily;
+import kr.silverbridge.main.domain.admin.dto.AdminAiChatStatsResponse.RouterFailuresByKind;
+import kr.silverbridge.main.domain.admin.dto.AdminAiChatStatsResponse.RouterStatus;
 import kr.silverbridge.main.domain.chat.client.AiChatClient;
 import kr.silverbridge.main.global.exception.CustomException;
 import kr.silverbridge.main.global.exception.ErrorCode;
@@ -22,6 +24,7 @@ import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.LongSupplier;
 import java.util.regex.Pattern;
@@ -34,6 +37,9 @@ import java.util.regex.Pattern;
  *   <li>AI 응답은 {@link AdminAiChatStatsResponse} 칸만 옮긴다(허용 목록). 형식이 어긋나면 0으로 메우지 않고 503이다.</li>
  *   <li>AI를 부르지 못하면 화면 전체가 "불러올 수 없음"이다 - 503 {@code AI_STATS_UNAVAILABLE} / 시간 초과 504 {@code AI_STATS_TIMEOUT}.</li>
  *   <li>같은 기간의 성공 결과만 60초 메모리에 둔다(실패는 두지 않음). 응답의 {@code generatedAt}이 집계 시각이다.</li>
+ *   <li>라우터 칸({@code routerFailures}·{@code routerFailuresByKind}·{@code routerStatus}, AI #188)은 선택 칸이다 -
+ *       옛 AI라 없거나 형식이 어긋나면 그 칸만 null(모름)이고 나머지 집계는 그대로 낸다(2026-11-09 결정 ①②).
+ *       상태도 같은 60초 캐시에 함께 둔다(결정 ③).</li>
  *   <li>챗 킬 스위치({@code chat.relay.enabled})는 전송만 막으므로 여기엔 걸지 않는다. 조회라 감사 로그는 남기지 않는다.</li>
  * </ul>
  */
@@ -51,6 +57,8 @@ public class AdminAiChatStatsService {
     private static final int PER_HOUR = 600;
     private static final Pattern DATE = Pattern.compile("\\A\\d{4}-\\d{2}-\\d{2}\\z");
     private static final ZoneOffset KST_OFFSET = ZoneOffset.ofHours(9);
+    /** AI router_failure_monitor.status() 의 state 값. 이 밖이면 routerStatus 는 null. */
+    static final Set<String> ROUTER_STATES = Set.of("ok", "failing", "credit_exhausted", "off");
 
     private final AiChatClient aiChatClient;
     private final RateLimitService rateLimitService;
@@ -167,6 +175,9 @@ public class AdminAiChatStatsService {
                 count(data, "emergencyGuidance"),
                 count(data, "reservationCompleted"),
                 count(data, "fallbackReplies"),
+                optionalCount(data, "routerFailures"),
+                routerFailuresByKind(data.get("routerFailuresByKind")),
+                routerStatus(data.get("routerStatus")),
                 List.copyOf(daily),
                 generatedAt);
     }
@@ -184,6 +195,71 @@ public class AdminAiChatStatsService {
             throw malformed();
         }
         return value.longValue();
+    }
+
+    /**
+     * 선택 개수 칸. 칸이 없으면(옛 AI) null, 0 이상 정수가 아니면 null + 칸 이름만 WARN. 응답 전체를 503으로 만들지 않는다.
+     */
+    private static Long optionalCount(JsonNode node, String field) {
+        JsonNode value = node.get(field);
+        if (value == null || value.isNull()) {
+            return null;
+        }
+        if (!value.isIntegralNumber() || !value.canConvertToLong() || value.longValue() < 0) {
+            return optionalMalformed(field);
+        }
+        return value.longValue();
+    }
+
+    /** 종류 4칸이 모두 맞을 때만 옮긴다 - 일부만 0으로 메우지 않는다. */
+    private static RouterFailuresByKind routerFailuresByKind(JsonNode node) {
+        if (node == null || node.isNull()) {
+            return null;
+        }
+        if (!node.isObject()) {
+            return optionalMalformed("routerFailuresByKind");
+        }
+        Long credit = strictCountOrNull(node, "credit");
+        Long auth = strictCountOrNull(node, "auth");
+        Long timeout = strictCountOrNull(node, "timeout");
+        Long other = strictCountOrNull(node, "other");
+        if (credit == null || auth == null || timeout == null || other == null) {
+            return optionalMalformed("routerFailuresByKind");
+        }
+        return new RouterFailuresByKind(credit, auth, timeout, other);
+    }
+
+    /** state 가 4값 중 하나이고 개수 둘이 맞을 때만 옮긴다(windowSec 는 1 이상). */
+    private static RouterStatus routerStatus(JsonNode node) {
+        if (node == null || node.isNull()) {
+            return null;
+        }
+        if (!node.isObject()) {
+            return optionalMalformed("routerStatus");
+        }
+        JsonNode state = node.get("state");
+        Long recent = strictCountOrNull(node, "recentFailures");
+        Long window = strictCountOrNull(node, "windowSec");
+        if (state == null || !state.isTextual() || !ROUTER_STATES.contains(state.textValue())
+                || recent == null || window == null || window < 1) {
+            return optionalMalformed("routerStatus");
+        }
+        return new RouterStatus(state.textValue(), recent, window);
+    }
+
+    /** 0 이상의 정수면 값, 아니면(없음·null 포함) null. 선택 묶음 칸 안에서만 쓴다. */
+    private static Long strictCountOrNull(JsonNode node, String field) {
+        JsonNode value = node.get(field);
+        if (value == null || !value.isIntegralNumber() || !value.canConvertToLong() || value.longValue() < 0) {
+            return null;
+        }
+        return value.longValue();
+    }
+
+    private static <T> T optionalMalformed(String field) {
+        // 값·AI 응답 원문은 남기지 않는다 - 칸 이름만.
+        log.warn("[ADMIN-AI-STATS] 선택 칸 형식 이상 - null로 냄: field={}", field);
+        return null;
     }
 
     private static String text(JsonNode node, String field) {

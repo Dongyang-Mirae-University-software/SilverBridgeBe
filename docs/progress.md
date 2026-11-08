@@ -4,6 +4,12 @@
 
 ---
 
+### [2026-11-09] 관리자 AI 통계에 라우터 실패·상태 칸 추가 (AI #188 매핑)
+
+- `GET /api/admin/ai-stats/chat`에 `routerFailures`·`routerFailuresByKind`·`routerStatus` 추가. 선택 칸이라 옛 AI·형식 이상이면 그 칸만 null(나머지 집계 유지), state 4값만, byKind 4칸 고정 record, 60초 캐시 공유. #188 배포 전 기간은 AI가 0을 준다(Swagger 명시). 단위 2401건 실패 0. 상세 `docs/(2026-11-09) feature-admin-ai-stats-router-status.md`.
+
+---
+
 ### [2026-11-04] 챗봇 마이크 음성 인식 AI 직접 실호출 - gosky 받아쓰기 모델 없음
 
 - gosky BE는 이미 `CHAT_STT_ENABLED=true`(23:02 다른 작업에서 주입). AI 6017 `/companion/stt` 실측: 정상 음성(WAV·WebM·MP3)이 모두 503 `STT_UNAVAILABLE` - SenseVoiceSmall 모델 파일 없음(`models/companion/stt-sensevoice/` 없음, 말벗 음성 대답도 같은 원인). 413·422·401 오류 계약은 BE 매핑과 일치. 모델 배치 + AI 재시작은 사용자 확인 대기. L-3 전달문은 점검 문서에. **23:35 gosky `CHAT_STT_ENABLED=false`로 끔**(사용자 결정, 주소·키 유지 - 모델 배치 뒤 `true` + `up -d api`). **11-05: 모델 배치·AI 재시작은 AI 팀이 하기로 결정** - 전달문에 배치 위치·파일·재시작 영향을 추가했다. BE는 AI 팀 완료 알림 뒤 스위치를 켜고 측정한다.

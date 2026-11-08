@@ -21,6 +21,13 @@ public record AdminAiChatStatsResponse(
         @Schema(description = "응급 안내(119)를 낸 상담 수 - 고위험 판정 기준") Long emergencyGuidance,
         @Schema(description = "챗봇 안에서 예약 생성까지 끝난 수(변경으로 새로 만든 예약 포함)") Long reservationCompleted,
         @Schema(description = "모델·예약 처리가 답을 만들지 못해 기본 안내로 대신 답한 수") Long fallbackReplies,
+        @Schema(description = "기간 안 라우터(분류 모델) 호출이 실패해 키워드 경로로 답한 상담 수. "
+                + "2026-11-09 AI 배포(#188) 이후 기록만 집계한다 - 그 전 기간은 0으로 보인다. "
+                + "AI가 이 칸을 주지 않거나 형식이 어긋나면 null(모름)", nullable = true) Long routerFailures,
+        @Schema(description = "라우터 실패 종류별 수. AI가 주지 않거나 형식이 어긋나면 null(모름)", nullable = true)
+        RouterFailuresByKind routerFailuresByKind,
+        @Schema(description = "지금 라우터 상태(조회 기간과 무관, AI 서버 프로세스 기준 - AI 재시작 시 초기화, 최대 60초 늦을 수 있음). "
+                + "AI가 주지 않거나 형식이 어긋나면 null(모름)", nullable = true) RouterStatus routerStatus,
         @Schema(description = "기간 안 날짜별 상담 수(0건 날짜 포함)") List<Daily> daily,
         @Schema(description = "AI가 집계한 시각(KST, ISO-8601 +09:00)", example = "2026-10-28T11:03:27+09:00") String generatedAt) {
 
@@ -29,6 +36,16 @@ public record AdminAiChatStatsResponse(
 
     @Schema(description = "분류별 상담 수. reservation = 병원 예약, symptom = 증상 상담, general = 일반 대화, unknown = 분류 전 처리 실패")
     public record ByRoute(Long reservation, Long symptom, Long general, Long unknown) {}
+
+    @Schema(description = "라우터 실패 종류별 수. credit = 크레딧 부족, auth = 키 인증 실패, timeout = 시간 초과, other = 그 밖")
+    public record RouterFailuresByKind(Long credit, Long auth, Long timeout, Long other) {}
+
+    @Schema(description = "지금 라우터 상태. state: ok = 정상 / failing = 최근 창 안에 실패 있음 / "
+            + "credit_exhausted = 크레딧 소진(성공하면 풀림) / off = 라우터 키 없음(키워드 경로만 사용)")
+    public record RouterStatus(
+            @Schema(description = "상태", allowableValues = {"ok", "failing", "credit_exhausted", "off"}) String state,
+            @Schema(description = "최근 창 안의 실패 수(off이면 0)") Long recentFailures,
+            @Schema(description = "실패를 세는 창 길이(초)") Long windowSec) {}
 
     @Schema(description = "날짜별 상담 수")
     public record Daily(String date, Long totalChats) {}
