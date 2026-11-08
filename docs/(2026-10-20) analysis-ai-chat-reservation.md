@@ -706,3 +706,10 @@ FE → BE POST /api/{guardian|ward}/chat (userId는 토큰으로 덮어씀, cont
 - 조치: 유형별 거리 패턴(심정지·흉통·뇌졸중·출혈·경련·질식·아나필락시스·저혈당 수치+증상·의식 변화)을 **라우터 실패 경로에서만** 본다 → 누락 2(설계상 라우터 몫). 걱정 꼴("못 일어나실까봐")은 공통 판정에서 응급 제외. 일반 221개 과잉 0. 라우터 정상 경로의 응급·위기 해제·되묻기 판정은 그대로.
 - 남은 것: 라우터 실패 누적 알림(L-1, 제안만), 실패 경로 심정지의 가슴압박 줄. 상세 AI `docs/eval-results/2026-11-06-router-fallback-emergency-audit.md`.
 
+### 4-55. 라우터 실패 보완 3건 - 누적 알림·크레딧 소진 구분 / 실패 경로 가슴압박 줄 / 엉뚱한 질문 고정 안내 (2026-11-08, AI #188 `8cb86c9`)
+
+- 누적 알림: 라우터 실패 종류를 고정 코드로 나눈다(credit·auth·timeout·other, 키 없음은 off로 세지 않음). 600초 창 안 5회면 `[CHAT-ROUTER-FAILED-BURST]` ERROR 창마다 1회, 크레딧·결제 오류는 첫 건에 바로 `[CHAT-ROUTER-CREDIT-EXHAUSTED]` ERROR + 3600초마다 1회, 다시 성공하면 `[CHAT-ROUTER-CREDIT-RECOVERED]`. 로그는 코드·개수만. 크레딧 형태는 SDK 소스로 확인(`billing_error`·`billing_frozen`·`enforced_spend_limit_reached`·402·11/04 실제 사례인 400 + 크레딧 문구), 테스트는 목 예외만.
+- AI `/chat/stats`에 `routerFailures`·`routerFailuresByKind`·`routerStatus`(ok·failing·credit_exhausted·off, 서버 프로세스의 지금 값) 추가. **BE `AdminAiChatStatsResponse` 매핑은 아직 없다**(별도 작업, 관리자 화면은 FE 몫).
+- 실패 경로 가슴압박 줄: 반응·호흡 없음 패턴(`fallback_arrest`)이면 라우터 `cardiac_arrest` 칸과 같은 줄. 시험지 `cpr_aed` 18 중 라우터 없이 8 → 17, 일반 221·`cpr_aed=false` 58 오탐 0.
+- 엉뚱한 질문: 최종 경로 general + 주제 낱말 + 묻는 꼴 + 건강·증상·응급·예약 낱말 없음일 때만 고정 안내(MedGemma·이어서 물어볼 질문 모델 미호출). 시험지 326문항 걸림 0, 애매하면 상담 그대로.
+- 검증(API 미사용): 새 테스트 77건, 전체 pytest 2121 통과(말벗 환경 실패 16은 기준선과 같음), #187 응급 누락 2·일반 과잉 0 유지, 결함 주입 13종 검출. 남은 것: 기존 `arrest_conscious`가 "가슴이 안 움직여요"를 의식 있음으로 읽음(후속 점검). 상세 AI `docs/eval-results/2026-11-08-router-failure-followups.md`.
