@@ -146,7 +146,7 @@ public enum ErrorCode {
     CHAT_REQUEST_TOO_LARGE(HttpStatus.CONTENT_TOO_LARGE, "보낼 수 있는 대화 내용보다 큽니다. 내용을 줄여 다시 보내 주세요."),
     MEDICATION_OCR_INVALID_IMAGE(HttpStatus.BAD_REQUEST, "JPG, PNG, WebP 사진만 올릴 수 있습니다."),
     MEDICATION_OCR_LIMIT_EXCEEDED(HttpStatus.TOO_MANY_REQUESTS, "이전 사진을 읽는 중입니다. 잠시 후 다시 시도해주세요."),
-    MEDICATION_OCR_UNAVAILABLE(HttpStatus.SERVICE_UNAVAILABLE, "약 봉투 읽기를 지금 사용할 수 없습니다. 잠시 후 다시 시도해주세요."),
+    MEDICATION_OCR_UNAVAILABLE(HttpStatus.SERVICE_UNAVAILABLE, "약 봉투 읽기를 지금 사용할 수 없습니다. 약 이름을 직접 입력해주세요."), // AI 크레딧 소진(503 OCR_UNAVAILABLE)·일시 장애 공통 - 2026-11-09
     // 관리자 제휴 병원 관리 - 예약 서비스 중계 (2026-10-26). 예약 서비스 오류 본문은 읽지 않고 상태 코드로만 고른다
     HOSPITAL_NOT_FOUND(HttpStatus.NOT_FOUND, "병원을 찾을 수 없습니다."),
     HOSPITAL_DEPARTMENT_NOT_FOUND(HttpStatus.NOT_FOUND, "진료과를 찾을 수 없습니다."),
