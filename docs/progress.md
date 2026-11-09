@@ -2829,3 +2829,9 @@ AI 챗 집계 점검 L-1에서 남겨 둔 공용 `GlobalExceptionHandler`의 `e.
 - 기능 점검(B): 파싱(`CompanionResult` 한 곳) → 저장 → `CompanionMoodDays` → `CompanionNoticeListener` → 보호자 `current`·`slots`·`attention`·관리자 분포·이어지는 어르신 연결 정상. 🔴🟠 0.
 - 🟡 M-1: 모두 판단 불가인 날도 연속 일수를 끊는다(코드 주석 "판정된 대화가 없는 날"과 정책 문구 "대화가 없는 날" 불일치, AI가 `UNKNOWN`을 실제로 보내면서 드러남). **사용자 확정 A - 끊음 유지**: 정책·설계 문서 문구 정정, `CompanionMoodDaysTest.unknownOnlyDayBreaks` 추가.
 - 🟢 L-1: 보호자 지금 기분·관리자 기분 분포는 판단 불가 포함 마지막 대화 기준(하루 기분과 다름) → 의도로 정책·설계 문서에 기록. 🟢 L-2: `CompanionFullIntegrationTest` 주의 알림 경로가 한글만 → 첫 결과를 영문 코드(`WORRY`+`moodCode`+`moodKo`)로 바꿔 두 형식 모두 검증.
+
+### [2026-11-09] 안부 말벗 PR-B 기능·영향 범위 점검 (템플릿 B + C)
+- 기준 dev `49c141c`, 대상 PR-B `1cd3075`(+ `9002b55`·#454·#455). 조건부 PASS · 🔴🟠 0 · 🟡 1 · 🟢 2, 상세 `docs/(2026-11-09) audit-companion-screens.md`.
+- 🟡 M-1: 주의 알림 리스너가 보호자별 연결 시점(D-1) 없이 연속 일수를 세어, 새·재연결 보호자에게 연결 전 기분 일수가 푸시로 드러난다(화면 주의 칸은 null).
+- 🟢 L-1 화면 주의 칸 D-1 필터 테스트 미고정(결함 주입 미검출) / L-2 보호자 말벗 API 웹 계층 역할 테스트 없음. 미조치.
+- 확인: IDOR·원문 비저장·알림 종류 정책(FCM만·일반 풀·URGENT 묶음)·역할 변경/탈퇴 정리·질문 안내 `*`(gosky 대상 없음) 모두 PASS. 관리자 기분 분포 기준 차이는 의도(기능 문서).
