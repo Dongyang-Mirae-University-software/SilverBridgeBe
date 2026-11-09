@@ -21,6 +21,7 @@ import org.mockito.ArgumentCaptor;
 import org.springframework.dao.DataIntegrityViolationException;
 
 import java.time.LocalDate;
+import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
@@ -61,6 +62,8 @@ class CompanionNoticeListenerTest {
                 preferenceService, dispatcher, userRepository);
         when(connectionService.getActiveGuardianIds(W)).thenReturn(List.of("GD0001", "GD0002"));
         when(preferenceService.companionNoticeDisabledGuardians()).thenReturn(Set.of("GD0002"));
+        // 기본: 오래전에 맺은 연결(연결 이후 대화 전부가 보인다)
+        when(connectionService.findActiveConnectedAt(anyString(), eq(W))).thenReturn(Optional.of(OffsetDateTime.MIN));
     }
 
     @Test
@@ -99,6 +102,69 @@ class CompanionNoticeListenerTest {
         listener.handleMoodRecorded(new CompanionMoodRecordedEvent(W, TODAY));
 
         verify(dispatcher, never()).dispatch(anyString(), anyString(), any(), any());
+    }
+
+    @Test
+    @DisplayName("D-1: 연결 이후 2일뿐인 보호자는 빼고, 오래 연결한 보호자에게만 보낸다(연결 전 기분 일수를 알리지 않는다)")
+    void excludesGuardianConnectedAfterStreakStarted() {
+        concerningDays(3);
+        when(connectionService.getActiveGuardianIds(W)).thenReturn(List.of("GD0001", "GD0003"));
+        when(connectionService.findActiveConnectedAt("GD0003", W)).thenReturn(Optional.of(kstMidnight(TODAY.minusDays(1))));
+
+        listener.handleMoodRecorded(new CompanionMoodRecordedEvent(W, TODAY));
+
+        verify(dispatcher).dispatch(eq("GD0001"), eq(W), eq(NotificationType.COMPANION_NOTICE), any());
+        verify(dispatcher, never()).dispatch(eq("GD0003"), anyString(), any(), any());
+    }
+
+    @Test
+    @DisplayName("D-1: 받을 수 있는 보호자 모두 연결 이후 3일이 안 되면 선점도 발송도 하지 않는다")
+    void noClaimWhenNoGuardianReachesNoticeSinceConnection() {
+        concerningDays(5);
+        when(connectionService.getActiveGuardianIds(W)).thenReturn(List.of("GD0001"));
+        when(connectionService.findActiveConnectedAt("GD0001", W)).thenReturn(Optional.of(kstMidnight(TODAY)));
+
+        listener.handleMoodRecorded(new CompanionMoodRecordedEvent(W, TODAY));
+
+        verify(noticeLogRepository, never()).saveAndFlush(any());
+        verify(dispatcher, never()).dispatch(anyString(), anyString(), any(), any());
+    }
+
+    @Test
+    @DisplayName("D-1: 보호자마다 자기 연결 이후 일수로 보내고, 기록 일수는 그중 최댓값")
+    void eachGuardianGetsOwnDaysSinceConnection() {
+        concerningDays(4);
+        when(connectionService.getActiveGuardianIds(W)).thenReturn(List.of("GD0001", "GD0003"));
+        when(connectionService.findActiveConnectedAt("GD0003", W)).thenReturn(Optional.of(kstMidnight(TODAY.minusDays(2))));
+
+        listener.handleMoodRecorded(new CompanionMoodRecordedEvent(W, TODAY));
+
+        ArgumentCaptor<NotificationContent> first = ArgumentCaptor.forClass(NotificationContent.class);
+        ArgumentCaptor<NotificationContent> second = ArgumentCaptor.forClass(NotificationContent.class);
+        verify(dispatcher).dispatch(eq("GD0001"), eq(W), eq(NotificationType.COMPANION_NOTICE), first.capture());
+        verify(dispatcher).dispatch(eq("GD0003"), eq(W), eq(NotificationType.COMPANION_NOTICE), second.capture());
+        assertThat(first.getValue().body()).contains("4일째");
+        assertThat(second.getValue().body()).contains("3일째");
+        ArgumentCaptor<CompanionNoticeLog> log = ArgumentCaptor.forClass(CompanionNoticeLog.class);
+        verify(noticeLogRepository).saveAndFlush(log.capture());
+        assertThat(log.getValue().getDays()).isEqualTo(4);
+    }
+
+    @Test
+    @DisplayName("그사이 연결이 끝난 보호자(연결 시각 없음)에게는 보내지 않는다")
+    void skipsGuardianWhoseConnectionEnded() {
+        concerningDays(3);
+        when(connectionService.getActiveGuardianIds(W)).thenReturn(List.of("GD0001", "GD0003"));
+        when(connectionService.findActiveConnectedAt("GD0003", W)).thenReturn(Optional.empty());
+
+        listener.handleMoodRecorded(new CompanionMoodRecordedEvent(W, TODAY));
+
+        verify(dispatcher).dispatch(eq("GD0001"), eq(W), eq(NotificationType.COMPANION_NOTICE), any());
+        verify(dispatcher, never()).dispatch(eq("GD0003"), anyString(), any(), any());
+    }
+
+    private static OffsetDateTime kstMidnight(LocalDate date) {
+        return date.atStartOfDay().atOffset(java.time.ZoneOffset.ofHours(9));
     }
 
     private void concerningDays(int days) {

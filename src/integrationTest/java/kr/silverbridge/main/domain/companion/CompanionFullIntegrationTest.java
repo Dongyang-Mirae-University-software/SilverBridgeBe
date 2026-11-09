@@ -97,6 +97,41 @@ class CompanionFullIntegrationTest extends FullContextIntegrationTest {
     }
 
     @Test
+    @DisplayName("D-1: 주의 알림은 보호자마다 연결 이후 대화로 센다 - 오래 연결한 보호자만 3일째를 받고, 오늘 연결한 보호자는 받지 않는다")
+    void 주의_알림은_연결_이후_대화로_센다() throws Exception {
+        String newGuardian = "GCN002";
+        saveUser(GUARDIAN, Role.GUARDIAN, Status.ACTIVE);
+        saveUser(newGuardian, Role.GUARDIAN, Status.ACTIVE);
+        saveUser(WARD, Role.WARD, Status.ACTIVE);
+        Long oldConnection = saveActiveConnection(GUARDIAN, WARD);
+        Long newConnection = saveActiveConnection(newGuardian, WARD);
+        jdbc.update("UPDATE connection SET connected_at = now() - interval '10 days' WHERE id = ?", oldConnection);
+        jdbc.update("UPDATE connection SET connected_at = now() - interval '1 minute' WHERE id = ?", newConnection);
+        signedIn(GUARDIAN);
+        signedIn(newGuardian);
+        ZoneId kst = ZoneId.of("Asia/Seoul");
+        LocalDate today = LocalDate.now(kst);
+        saveFinished(today.minusDays(2), CompanionSlot.S21, "WORRY",
+                today.minusDays(2).atTime(21, 1).atZone(kst).toOffsetDateTime());
+        saveFinished(today.minusDays(1), CompanionSlot.S21, "DEPRESSED",
+                today.minusDays(1).atTime(21, 1).atZone(kst).toOffsetDateTime());
+        long sessionId = openSession("d-notice-d1");
+        when(aiCompanionClient.finish("d-notice-d1")).thenReturn(json(
+                "{\"dialogueId\":\"d-notice-d1\",\"endReason\":\"USER_STOP\",\"turnCount\":2,\"answeredCount\":2,"
+                        + "\"mood\":\"WORRY\",\"riskFlag\":false,\"alertLevel\":\"INFO\"}"));
+
+        companionService.finish(WARD, sessionId);
+        eventually().untilAsserted(() -> assertThat(notificationLogs(GUARDIAN, NotificationType.COMPANION_NOTICE))
+                .as("오래 연결한 보호자는 3일째").isEqualTo(1));
+        awaitAsyncIdle();
+
+        assertThat(notificationLogs(newGuardian, NotificationType.COMPANION_NOTICE))
+                .as("오늘 연결한 보호자에게는 연결 전 기분 일수를 알리지 않는다").isZero();
+        assertThat(count("SELECT count(*) FROM companion_notice_log WHERE ward_id = ? AND days = 3", WARD)).isEqualTo(1);
+        assertThat(companionGuardianService.today(newGuardian, WARD).attention()).as("새 보호자 화면도 주의 없음").isNull();
+    }
+
+    @Test
     @DisplayName("턴에는 위험 신호가 없었어도 마감 결과가 URGENT면 그때 1번 보낸다")
     void 마감_URGENT_미발송이면_보낸다() throws Exception {
         saveUser(GUARDIAN, Role.GUARDIAN, Status.ACTIVE);
@@ -191,12 +226,17 @@ class CompanionFullIntegrationTest extends FullContextIntegrationTest {
 
     /** 지난날 마친 대화(연속 일수 준비). 연결 이후로 보이게 시작 시각을 지금으로 둔다. */
     private void saveFinished(LocalDate date, CompanionSlot slot, String mood) {
+        saveFinished(date, slot, mood, java.time.OffsetDateTime.now());
+    }
+
+    /** 시작 시각을 정해 넣는다 - 연결 전에 시작한 대화(D-1)를 만들 때 쓴다. */
+    private void saveFinished(LocalDate date, CompanionSlot slot, String mood, java.time.OffsetDateTime startedAt) {
         Long questionId = jdbc.queryForObject(
                 "INSERT INTO companion_question (slot, text) VALUES (?, '시험 질문') RETURNING id", Long.class, slot.code());
         jdbc.update("INSERT INTO companion_session (ward_id, session_date, slot, question_id, dialogue_id, status, "
                         + "end_reason, mood, turn_count, answered_count, no_response_count, started_at, last_activity_at, "
-                        + "ended_at) VALUES (?, ?, ?, ?, ?, 'FINISHED', 'MAX_TURNS', ?, 8, 8, 0, now(), now(), now())",
-                WARD, date, slot.code(), questionId, "d-past-" + date + slot.code(), mood);
+                        + "ended_at) VALUES (?, ?, ?, ?, ?, 'FINISHED', 'MAX_TURNS', ?, 8, 8, 0, ?, ?, ?)",
+                WARD, date, slot.code(), questionId, "d-past-" + date + slot.code(), mood, startedAt, startedAt, startedAt);
     }
 
     private long openSession(String dialogueId) {
