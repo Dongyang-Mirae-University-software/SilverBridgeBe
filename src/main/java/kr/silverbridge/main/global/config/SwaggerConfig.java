@@ -222,6 +222,12 @@ public class SwaggerConfig {
                                         .bearerFormat("JWT")));
     }
 
+    // null 가능한 객체 칸을 anyOf[$ref, null]로 (2026-11-09 점검 L-2 - "null이면서 객체" 모순 스키마 방지)
+    @Bean
+    public OpenApiCustomizer nullableRefSchemaCustomizer() {
+        return new NullableRefSchemaCustomizer();
+    }
+
     // 전체 API 표시 순서 제어 (프론트엔드 구현 순서 기준)
     @Bean
     public OpenApiCustomizer operationOrderCustomizer() {

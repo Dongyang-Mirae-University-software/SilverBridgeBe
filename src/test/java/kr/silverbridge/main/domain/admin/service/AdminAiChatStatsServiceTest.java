@@ -133,7 +133,9 @@ class AdminAiChatStatsServiceTest {
     @DisplayName("routerStatus.state 4값은 모두 그대로 옮긴다")
     void allRouterStates(String state) throws Exception {
         ObjectNode data = aiDataV188();
-        ((ObjectNode) data.get("routerStatus")).put("state", state);
+        // ok·off 는 recentFailures 0 이어야 맞다(점검 L-3)
+        ((ObjectNode) data.get("routerStatus")).put("state", state)
+                .put("recentFailures", state.equals("ok") || state.equals("off") ? 0 : 2);
         when(aiChatClient.stats(D27, D28)).thenReturn(data);
 
         assertThat(service.getChatStats(ADMIN, "2026-10-27", "2026-10-28").routerStatus().state()).isEqualTo(state);
@@ -220,6 +222,76 @@ class AdminAiChatStatsServiceTest {
         assertThat(res.routerFailures()).isNull();
         assertThat(res.routerStatus()).isNotNull();
         assertThat(res.emergencyGuidance()).isEqualTo(1L);
+    }
+
+    @ParameterizedTest(name = "[{index}] state={0}, recentFailures={1}")
+    @CsvSource({"ok,1", "off,1", "failing,0"})
+    @DisplayName("state와 recentFailures가 모순이면 routerStatus만 null (점검 L-3)")
+    void stateRecentMismatch(String state, long recent) throws Exception {
+        ObjectNode data = aiDataV188();
+        ((ObjectNode) data.get("routerStatus")).put("state", state).put("recentFailures", recent);
+        when(aiChatClient.stats(D27, D28)).thenReturn(data);
+
+        AdminAiChatStatsResponse res = service.getChatStats(ADMIN, "2026-10-27", "2026-10-28");
+
+        assertThat(res.routerStatus()).isNull();
+        assertThat(res.routerFailures()).isEqualTo(3L);
+    }
+
+    @ParameterizedTest(name = "[{index}] state={0}, recentFailures={1}")
+    @CsvSource({"ok,0", "off,0", "failing,1", "credit_exhausted,0", "credit_exhausted,5"})
+    @DisplayName("state와 recentFailures가 맞으면 그대로 - 크레딧 소진은 창 밖이면 0일 수 있다")
+    void stateRecentConsistent(String state, long recent) throws Exception {
+        ObjectNode data = aiDataV188();
+        ((ObjectNode) data.get("routerStatus")).put("state", state).put("recentFailures", recent);
+        when(aiChatClient.stats(D27, D28)).thenReturn(data);
+
+        assertThat(service.getChatStats(ADMIN, "2026-10-27", "2026-10-28").routerStatus())
+                .isEqualTo(new AdminAiChatStatsResponse.RouterStatus(state, recent, 600L));
+    }
+
+    @Test
+    @DisplayName("종류별 합이 실패 수와 다르면 어느 쪽이 맞는지 모르므로 둘 다 null, routerStatus·집계는 그대로 (점검 L-3)")
+    void byKindSumMismatch() throws Exception {
+        ObjectNode data = aiDataV188();
+        data.put("routerFailures", 4);
+        when(aiChatClient.stats(D27, D28)).thenReturn(data);
+
+        AdminAiChatStatsResponse res = service.getChatStats(ADMIN, "2026-10-27", "2026-10-28");
+
+        assertThat(res.routerFailures()).isNull();
+        assertThat(res.routerFailuresByKind()).isNull();
+        assertThat(res.routerStatus()).isNotNull();
+        assertThat(res.totalChats()).isEqualTo(9L);
+    }
+
+    @Test
+    @DisplayName("형식 이상 WARN에는 칸 이름만 있고 AI가 준 값은 없다 (점검 L-4)")
+    void malformedWarnHasFieldNameOnly() throws Exception {
+        ch.qos.logback.classic.Logger logger =
+                (ch.qos.logback.classic.Logger) org.slf4j.LoggerFactory.getLogger(AdminAiChatStatsService.class);
+        ch.qos.logback.core.read.ListAppender<ch.qos.logback.classic.spi.ILoggingEvent> appender =
+                new ch.qos.logback.core.read.ListAppender<>();
+        appender.start();
+        logger.addAppender(appender);
+        try {
+            ObjectNode data = aiDataV188();
+            ((ObjectNode) data.get("routerStatus")).put("state", "degraded-SECRET");
+            data.put("routerFailures", 77777);
+            ((ObjectNode) data.get("routerFailuresByKind")).put("other", "x-SECRET");
+            when(aiChatClient.stats(D27, D28)).thenReturn(data);
+
+            service.getChatStats(ADMIN, "2026-10-27", "2026-10-28");
+
+            java.util.List<String> warns = appender.list.stream()
+                    .filter(e -> e.getLevel() == ch.qos.logback.classic.Level.WARN)
+                    .map(ch.qos.logback.classic.spi.ILoggingEvent::getFormattedMessage).toList();
+            assertThat(warns).anyMatch(m -> m.contains("field=routerStatus"))
+                    .anyMatch(m -> m.contains("field=routerFailuresByKind"));
+            assertThat(String.join("\n", warns)).doesNotContain("SECRET").doesNotContain("degraded").doesNotContain("77777");
+        } finally {
+            logger.detachAppender(appender);
+        }
     }
 
     @Test

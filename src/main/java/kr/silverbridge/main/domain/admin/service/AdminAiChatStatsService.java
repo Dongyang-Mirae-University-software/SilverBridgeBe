@@ -166,6 +166,7 @@ public class AdminAiChatStatsService {
         } catch (DateTimeParseException e) {
             throw malformed();
         }
+        RouterFailures router = routerFailures(data);
         return new AdminAiChatStatsResponse(
                 from, to,
                 count(data, "totalChats"),
@@ -175,8 +176,7 @@ public class AdminAiChatStatsService {
                 count(data, "emergencyGuidance"),
                 count(data, "reservationCompleted"),
                 count(data, "fallbackReplies"),
-                optionalCount(data, "routerFailures"),
-                routerFailuresByKind(data.get("routerFailuresByKind")),
+                router.failures(), router.byKind(),
                 routerStatus(data.get("routerStatus")),
                 List.copyOf(daily),
                 generatedAt);
@@ -211,6 +211,20 @@ public class AdminAiChatStatsService {
         return value.longValue();
     }
 
+    /**
+     * 실패 수와 종류별 수. 둘 다 있는데 종류별 합이 실패 수와 다르면 어느 쪽이 맞는지 모르므로 둘 다 null(2026-11-09 점검 L-3).
+     */
+    private static RouterFailures routerFailures(JsonNode data) {
+        Long failures = optionalCount(data, "routerFailures");
+        RouterFailuresByKind byKind = routerFailuresByKind(data.get("routerFailuresByKind"));
+        if (failures != null && byKind != null
+                && byKind.credit() + byKind.auth() + byKind.timeout() + byKind.other() != failures) {
+            optionalMalformed("routerFailures+routerFailuresByKind");
+            return NO_ROUTER_FAILURES;
+        }
+        return new RouterFailures(failures, byKind);
+    }
+
     /** 종류 4칸이 모두 맞을 때만 옮긴다 - 일부만 0으로 메우지 않는다. */
     private static RouterFailuresByKind routerFailuresByKind(JsonNode node) {
         if (node == null || node.isNull()) {
@@ -229,7 +243,10 @@ public class AdminAiChatStatsService {
         return new RouterFailuresByKind(credit, auth, timeout, other);
     }
 
-    /** state 가 4값 중 하나이고 개수 둘이 맞을 때만 옮긴다(windowSec 는 1 이상). */
+    /**
+     * state 가 4값 중 하나이고 개수 둘이 맞을 때만 옮긴다(windowSec 는 1 이상).
+     * state 와 recentFailures 가 서로 맞아야 한다 - ok·off 는 0, failing 은 1 이상, credit_exhausted 는 상관없음(점검 L-3).
+     */
     private static RouterStatus routerStatus(JsonNode node) {
         if (node == null || node.isNull()) {
             return null;
@@ -244,7 +261,18 @@ public class AdminAiChatStatsService {
                 || recent == null || window == null || window < 1) {
             return optionalMalformed("routerStatus");
         }
+        if (!stateMatchesRecent(state.textValue(), recent)) {
+            return optionalMalformed("routerStatus");
+        }
         return new RouterStatus(state.textValue(), recent, window);
+    }
+
+    private static boolean stateMatchesRecent(String state, long recent) {
+        return switch (state) {
+            case "ok", "off" -> recent == 0;
+            case "failing" -> recent > 0;
+            default -> true; // credit_exhausted - 창 밖이면 0일 수 있다
+        };
     }
 
     /** 0 이상의 정수면 값, 아니면(없음·null 포함) null. 선택 묶음 칸 안에서만 쓴다. */
@@ -283,6 +311,10 @@ public class AdminAiChatStatsService {
     }
 
     record Range(LocalDate from, LocalDate to) {}
+
+    private record RouterFailures(Long failures, RouterFailuresByKind byKind) {}
+
+    private static final RouterFailures NO_ROUTER_FAILURES = new RouterFailures(null, null);
 
     private record Cached(AdminAiChatStatsResponse response, long expiresAtNanos) {}
 }
