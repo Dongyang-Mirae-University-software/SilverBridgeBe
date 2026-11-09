@@ -8,7 +8,7 @@
 
 - FE #223·#224: 관리자 AI 통계 챗봇 탭에 라우터 상태 카드(배지·원인별 실패 수·크레딧 소진 경고·기준 시각·"새로 보기")를 붙였다. #223 점검 M-1은 #224로 조치, L-1(기간 변경 시 경고 재낭독)은 유지. gosky dev 웹 `ae01ff8` 반영.
 - AI #193(`c11c77d`): 라우터 실패 경로에서만 애매한 자해 표현(sh.09)을 위기 응답으로 돌린다. 시험지 재분류 fail 모드 누락 1→0, 과잉 0, stub 모드 문항별 결과 동일, 관련 테스트 204 통과, API 키 미사용. sh.11은 기존 `_crisis_continues_without_router`가 이미 잡고 있었다(#187 테스트가 history를 넘기지 않아 누락으로 셌다). 기능 점검은 미실시(audit-index ❌).
-- MedGemma: 11/08 RAM OOM 뒤 `.env`에 `MEDGEMMA_ENABLED=false`가 들어가 11/09 재기동 때 꺼진 채 떴다. 사용자 승인으로 `.env`를 true로 바꾸고(백업 `.env.bak-20261109-1416-medgemma-on`) 관리자 API로 재시작 없이 켰다. 이후 gosky AI 재기동(`9e45e8f`, #193 포함) 뒤에도 `enabled=true`·`loaded=true`. 말벗 Ollama의 GPU 적재 여부는 미확인(재희 확인 몫).
+- MedGemma: 11/08 RAM OOM 뒤 `.env`에 `MEDGEMMA_ENABLED=false`가 들어가 11/09 재기동 때 꺼진 채 떴다. 사용자 승인으로 `.env`를 true로 바꾸고(백업 `.env.bak-20261109-1416-medgemma-on`) 관리자 API로 재시작 없이 켰다. 이후 gosky AI 재기동(`9e45e8f`, #193 포함) 뒤에도 `enabled=true`·`loaded=true`. 말벗 대화 모델(EXAONE)은 Ollama가 아니라 AI 서버 안에서 GPU·int8로 올리도록 바뀌었다(AI `4cf6454`, 11/09 재희 - CPU 메모리 부족 강제 종료 원인 해소, gosky 반영).
 - 남은 기존 부채(챗봇 무관, 다음 전체 점검에서 함께): FE develop 전체 eslint 오류 18건, 브라우저 테스트 간헐 실패(NotificationInbox·GuardianDashboardContent·MedicationAddModal - FE는 CI가 없어 로컬 결과에 기대므로 우선).
 
 ---
