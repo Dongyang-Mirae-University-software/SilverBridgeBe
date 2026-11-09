@@ -4,6 +4,15 @@
 
 ---
 
+### [2026-11-09] 챗봇 라우터 실패 묶음 마무리 - FE 라우터 상태 화면·AI 남은 응급 누락·MedGemma 재활성화
+
+- FE #223·#224: 관리자 AI 통계 챗봇 탭에 라우터 상태 카드(배지·원인별 실패 수·크레딧 소진 경고·기준 시각·"새로 보기")를 붙였다. #223 점검 M-1은 #224로 조치, L-1(기간 변경 시 경고 재낭독)은 유지. gosky dev 웹 `ae01ff8` 반영.
+- AI #193(`c11c77d`): 라우터 실패 경로에서만 애매한 자해 표현(sh.09)을 위기 응답으로 돌린다. 시험지 재분류 fail 모드 누락 1→0, 과잉 0, stub 모드 문항별 결과 동일, 관련 테스트 204 통과, API 키 미사용. sh.11은 기존 `_crisis_continues_without_router`가 이미 잡고 있었다(#187 테스트가 history를 넘기지 않아 누락으로 셌다). 기능 점검은 미실시(audit-index ❌).
+- MedGemma: 11/08 RAM OOM 뒤 `.env`에 `MEDGEMMA_ENABLED=false`가 들어가 11/09 재기동 때 꺼진 채 떴다. 사용자 승인으로 `.env`를 true로 바꾸고(백업 `.env.bak-20261109-1416-medgemma-on`) 관리자 API로 재시작 없이 켰다. 이후 gosky AI 재기동(`9e45e8f`, #193 포함) 뒤에도 `enabled=true`·`loaded=true`. 말벗 Ollama의 GPU 적재 여부는 미확인(재희 확인 몫).
+- 남은 기존 부채(챗봇 무관, 다음 전체 점검에서 함께): FE develop 전체 eslint 오류 18건, 브라우저 테스트 간헐 실패(NotificationInbox·GuardianDashboardContent·MedicationAddModal - FE는 CI가 없어 로컬 결과에 기대므로 우선).
+
+---
+
 ### [2026-11-09] AI #188 점검 후속 전부 조치 (AI #192 `fd69b5b`, gosky 배포)
 
 - 고정 안내가 의식 잃음·무반응·위기 의심·부상 문장을 막지 않게 했고(C-1), 가슴압박 줄 빈틈(조사 생략·목격자 추측·"안 움직여요"·회복 꼴)을 메웠다(H-1·H-2·M-1). 크레딧 소진 중 BURST 중복 생략(M-2), 실패 분류 L-1·L-2, 결과 문서 한계 명시. pytest 2241 통과(말벗 환경 실패 19는 기준선), 새 테스트 59·결함 주입 17종 검출, 시험지 지표 유지. gosky AI 13:57 재기동·BE AI WS 14:00 재연결 확인. 상세 AI `docs/audits/2026-11-09-router-failure-followups-audit.md` "조치" 절.
