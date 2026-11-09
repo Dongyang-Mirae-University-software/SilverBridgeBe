@@ -2868,4 +2868,6 @@ AI 챗 집계 점검 L-1에서 남겨 둔 공용 `GlobalExceptionHandler`의 `e.
 - 구현: AI #201 `63a2217` - Silero 말소리 감지(말소리 0.3초 미만 무응답)·Whisper large-v3-turbo GPU fp16·같은 1~4어절 3번 이상 → 1번·확신도 < -0.3 고정 되묻기 문장(되묻는 턴도 위험 판정, 위험이면 안전 문장). 스위치 `COMPANION_VAD`·`_STT_ENGINE`·`_STT_COLLAPSE_REPEATS`·`_CONFIRM_MODE`(끄면 재희 동작), 챗봇 `/companion/stt`는 `COMPANION_STT_API_ENGINE=sensevoice` 기본 그대로(사용자 결정). API·`fuse_turn`·턴 라벨 무변경, BE 무변경.
 - 검증: pytest 새 28건 통과(로컬 환경 실패는 main과 같음) / DGX 실제 모델로 PR 코드 실행 - 어르신 200문장 clean 2.41%·n10 9.53%·n5 26.08%, 되묻기 0·25·72, 무음·생활 소음 20/20 거름, GPU 1.51GB(최대 1.67GB). gosky 미배포(turbo 가중치 복사·이미지 재빌드 필요, B 머지 뒤).
 - 기능 점검(템플릿 B): 조건부 PASS · 🟠2 🟡2 🟢4, 상세 AI `docs/audits/2026-11-09-companion-voice-stage-audit.md`(#202). H-1(되묻기 2번째부터 대체 문장)·H-2(2번째 위험 턴 안전 문장 대체, 기존 동작) 수정 PR 필요 - H-2·M-2는 문장·횟수 결정 필요.
+- 챗봇 받아쓰기(2026-11-10): 기본은 SenseVoice 그대로, `COMPANION_STT_API_ENGINE=turbo`면 Silero·turbo·반복 정리. HTTP 시험 5건 AI #203 `b8b07cb`(무음·생활 소음 빈 결과, sensevoice로 되돌리면 지금과 같음, 결함 주입 검출).
+- 조치(2026-11-10, 사용자 "전부 반영해줘"): AI #204 `309b5b2` - 되묻는 문장·안전 문장은 반복돼도 그대로(`COMPANION_KEEP_FIXED_REPLIES`), 위험 아닌 확신도 낮은 되묻기 3연속이면 마무리 문장 + `NO_RESPONSE` 종료(`COMPANION_CONFIRM_STREAK_LIMIT`), turbo 토큰 224·30초 넘으면 조용한 곳에서 나누기, 선택형 스위치 정규화·모르는 값 경고, 실행 오류 503, 로드 실패 60초 뒤 재시도. 새 테스트 17건(말벗 묶음 161 통과, 환경 실패 7은 main과 같음), DGX 긴 대답(40~62초) 글자 오류 11.96%→2.64%·짧은 문장 그대로. 배포 없음(B 머지 뒤).
 
