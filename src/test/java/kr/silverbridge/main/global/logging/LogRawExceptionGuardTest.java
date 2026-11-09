@@ -53,6 +53,7 @@ class LogRawExceptionGuardTest {
             "domain/admin/service/AdminCameraService.java",
             "domain/admin/client/AiServerHealthClient.java",
             "domain/hospital/client/ReservationAdminClient.java",
+            "domain/admin/service/AdminAiChatStatsService.java",
             "domain/admin/service/AdminHospitalService.java",
             "global/exception/GlobalExceptionHandler.java",
             // 2026-10 전체 점검 M-3·L-2

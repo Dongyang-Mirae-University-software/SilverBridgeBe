@@ -58,3 +58,14 @@
 - vkcs: CD 성공(통합 테스트 단계 실행·통과), `dmu-dev-api` healthy, AI WS 연결, 기동 뒤 ERROR 0.
 - gosky(dev만): 수동 배포, HEAD `1504101`(`8c68bd0` 포함), `dmu-dev-api` healthy, AI WS 연결, ERROR 0. prod·AI 서버는 건드리지 않음.
 - 실서버 1회 확인(관리자 시험 계정, 2026-11-09 하루): 200, `routerFailures`·`routerFailuresByKind`·`routerStatus` 모두 있음(null 아님), `routerStatus` 하위 칸은 `state`·`recentFailures`·`windowSec`만. 값은 기록하지 않음.
+
+## 기능 점검 (템플릿 B, 2026-11-09) - 조건부 PASS → 🟢4건 전부 조치
+
+| ID | 내용 | 조치 |
+|---|---|---|
+| L-1 | `AdminAiChatStatsService`가 `LogRawExceptionGuardTest` 목록에 없었다 | 목록에 추가 |
+| L-2 | OpenAPI 3.1에서 null 가능한 객체 칸이 `type: "null"` + `$ref`("null이면서 객체" 모순)로 나갔다 - 이 칸 2개와 기존 6곳(`AdminHospitalItem.status`·`AnomalyDetection.latest`·`Medication.mostUrgent`·`Sos.latest`·`CameraLiveStatusResponse.analysis`·`AdminUserListItem.firstConnection`) | `global/config/NullableRefSchemaCustomizer`가 컴포넌트 속성 중 `$ref` + null 표시를 `anyOf: [{$ref}, {type: null}]`로 바꾼다(설명 유지, 응답 JSON 무변경 - 문서만) |
+| L-3 | 값끼리 맞는지 검사하지 않았다 | 종류별 합 ≠ `routerFailures`면 둘 다 null. `state`-`recentFailures` 모순(ok·off인데 1 이상, failing인데 0)이면 `routerStatus` null. `credit_exhausted`는 0이어도 맞다(창 밖). 모두 칸 이름만 WARN |
+| L-4 | 새 WARN 로그 내용을 고정하는 테스트가 없었다 | 로그를 붙잡아 칸 이름만 있고 AI가 준 값이 없음을 확인하는 테스트 추가 |
+
+- 테스트: `AdminAiChatStatsServiceTest` 68 · `NullableRefSchemaCustomizerTest` 2(실제 DTO 주석을 springdoc 3.1 모델로 변환해 확인) · `LogRawExceptionGuardTest` 4 · 전체 단위 2413건 실패 0.
