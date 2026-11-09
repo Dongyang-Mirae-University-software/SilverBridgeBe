@@ -25,13 +25,23 @@ class CompanionValueMappingTest {
     }
 
     @Test
-    @DisplayName("기분: 기쁨·평온·걱정·우울만 코드가 되고, 판단 불가(null)·턴 라벨(슬픔 등)은 비운다")
+    @DisplayName("기분: 영문 코드(새 AI)와 한글(옛 AI) 4개씩만 코드가 되고, UNKNOWN·빈 값·소문자·모르는 값은 비운다")
     void mood() {
+        assertThat(CompanionMood.fromAi("JOY")).contains(CompanionMood.JOY);
+        assertThat(CompanionMood.fromAi("CALM")).contains(CompanionMood.CALM);
+        assertThat(CompanionMood.fromAi("WORRY")).contains(CompanionMood.WORRY);
+        assertThat(CompanionMood.fromAi("DEPRESSED")).contains(CompanionMood.DEPRESSED);
+
         assertThat(CompanionMood.fromAi("기쁨")).contains(CompanionMood.JOY);
         assertThat(CompanionMood.fromAi("평온")).contains(CompanionMood.CALM);
         assertThat(CompanionMood.fromAi("걱정")).contains(CompanionMood.WORRY);
         assertThat(CompanionMood.fromAi("우울")).contains(CompanionMood.DEPRESSED);
+
+        assertThat(CompanionMood.fromAi("UNKNOWN")).isEmpty();
         assertThat(CompanionMood.fromAi(null)).isEmpty();
+        assertThat(CompanionMood.fromAi("")).isEmpty();
+        assertThat(CompanionMood.fromAi("   ")).isEmpty();
+        assertThat(CompanionMood.fromAi("worry")).isEmpty();
         assertThat(CompanionMood.fromAi("슬픔")).isEmpty();
     }
 

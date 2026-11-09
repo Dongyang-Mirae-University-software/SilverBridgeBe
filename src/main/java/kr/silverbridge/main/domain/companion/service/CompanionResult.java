@@ -20,7 +20,7 @@ record CompanionResult(String dialogueId, CompanionEndReason endReason, Companio
     static CompanionResult from(JsonNode data) {
         CompanionEndReason endReason = CompanionEndReason.fromAi(text(data, "endReason"))
                 .orElse(CompanionEndReason.USER_STOP);
-        CompanionMood mood = CompanionMood.fromAi(text(data, "mood")).orElse(null);
+        CompanionMood mood = CompanionMood.fromAi(moodText(data)).orElse(null);
         JsonNode version = data.get("promptVersion");
         String promptVersion = version == null || version.isNull() ? null : version.toString();
         if (promptVersion != null && promptVersion.length() > PROMPT_VERSION_MAX) {
@@ -49,6 +49,12 @@ record CompanionResult(String dialogueId, CompanionEndReason endReason, Companio
 
     boolean needsRiskAlert() {
         return riskFlag || urgent;
+    }
+
+    /** {@code mood}가 비어 있을 때만 {@code moodCode}를 본다. {@code moodKo}(화면용 한글)는 읽지 않는다. */
+    private static String moodText(JsonNode data) {
+        String mood = text(data, "mood");
+        return mood == null || mood.isBlank() ? text(data, "moodCode") : mood;
     }
 
     private static String text(JsonNode data, String field) {
