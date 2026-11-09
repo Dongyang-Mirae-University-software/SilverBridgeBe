@@ -4,7 +4,7 @@
 - 변경점: #456으로 "피보호자 기록을 모아 보호자에게 보내는 알림"이 보호자별 연결 시점(D-1, 2026-10-31 사용자 결정)을 따르게 됐다.
 - 불변식: **보호자에게 가는 알림은 그 보호자 화면이 보여 주는 것보다 많은 과거 기록(건수·일수·상황)을 드러내지 않는다.**
 - 방법: 수신자 계산(`getActiveGuardianIds`·`findActiveConnectedAt`·`isVisibleSinceConnection`) 사용처 전수 + 알림 종류 18종 분류 + 결함 주입 3종(임시 worktree, 원복). 코드 수정 없음.
-- 종합: **PASS** · 🔴 0 · 🟠 0 · 🟡 0 · 🟢 1
+- 종합: **PASS** · 🔴 0 · 🟠 0 · 🟡 0 · 🟢 1 → **L-1 조치**(아래 6절)
 
 ## 1. 알림 종류 분류
 
@@ -48,3 +48,9 @@
 
 - `COMPANION_RISK`는 대화 중에 연결이 맺어지면 연결 전에 시작한 대화의 위험도 새 보호자에게 간다 - 지금 일어난 안전 신호라 SOS·화재와 같이 보낸다(수용).
 - 결함 주입 첫 시도는 치환이 실패해 무효였고(코드 무변경), 방식을 바꿔 다시 돌린 결과만 위에 적었다.
+
+## 6. 조치 (2026-11-09)
+
+- L-1: `AnomalyReviewReminderPlannerTest`에 `incidentBeforeConnectionIsNotSummarized`(하루 요약)·`incidentBeforeConnectionIsNotConflictNotified`(동수 안내) 추가 - 기존 재촉 테스트와 같은 `isVisibleSinceConnection` false stub 형태.
+- 검증: 같은 결함 주입(`:205`·`:294` 조건 무력화)을 다시 돌려 각각 새 테스트 1건이 실패함(검출)을 확인, 원복. 플래너 테스트 28건 통과. 운영 코드 변경 없음.
+

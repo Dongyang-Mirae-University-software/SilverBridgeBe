@@ -473,6 +473,16 @@ class AnomalyReviewReminderPlannerTest {
         }
 
         @Test
+        @DisplayName("지금 연결이 맺어지기 전의 상황은 하루 요약에 담지 않는다 - 보호자 화면에 보이지 않는 상황이다 (2026-10-31 D-1)")
+        void incidentBeforeConnectionIsNotSummarized() {
+            givenRemindedAt(cutoff().minusHours(1));
+            when(connectionService.isVisibleSinceConnection(eq(GUARDIAN_ID), eq(WARD_ID), any())).thenReturn(false);
+
+            assertThat(planner.claimSummaries()).isEmpty();
+            verify(summaryLogRepository, never()).saveAll(anyCollection());
+        }
+
+        @Test
         @DisplayName("요약 시각 전에는 보내지 않는다")
         void beforeSummaryTimeSendsNothing() {
             properties.getReviewReminder().setSummaryTime(LocalTime.of(23, 59));
@@ -533,6 +543,19 @@ class AnomalyReviewReminderPlannerTest {
                         assertThat(log.getGuardianId()).isEqualTo(OTHER_GUARDIAN_ID);
                         assertThat(log.isSent()).isTrue();
                     });
+        }
+
+        @Test
+        @DisplayName("지금 연결이 맺어지기 전의 동수 상황은 다시 확인을 안내하지 않는다 - 보호자 화면에 보이지 않는 상황이다 (2026-10-31 D-1)")
+        void incidentBeforeConnectionIsNotConflictNotified() {
+            tieWithTwoRespondents();
+            when(conflictLogRepository.findByIncidentIdIn(anyCollection())).thenReturn(List.of(
+                    AnomalyReviewConflictLog.builder().incidentId(INCIDENT_ID).guardianId(GUARDIAN_ID)
+                            .sent(false).createdAt(OffsetDateTime.now(KST)).build()));
+            when(connectionService.isVisibleSinceConnection(eq(OTHER_GUARDIAN_ID), eq(WARD_ID), any())).thenReturn(false);
+
+            assertThat(planner.claimConflicts()).isEmpty();
+            verify(conflictLogRepository, never()).saveAll(anyCollection());
         }
 
         @Test
