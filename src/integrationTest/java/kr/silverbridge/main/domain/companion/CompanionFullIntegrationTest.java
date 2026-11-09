@@ -143,7 +143,8 @@ class CompanionFullIntegrationTest extends FullContextIntegrationTest {
     }
 
     @Test
-    @DisplayName("PR-B 주의 알림: 걱정·우울 3일째에 켠 보호자에게 하루 1번 - 같은 날 두 번째 걱정 대화는 더 보내지 않는다")
+    @DisplayName("PR-B 주의 알림: 걱정·우울 3일째에 켠 보호자에게 하루 1번 - 같은 날 두 번째 걱정 대화는 더 보내지 않는다"
+            + "(첫 결과는 새 AI 영문 코드, 두 번째는 옛 AI 한글)")
     void 주의_알림은_하루_한_번() throws Exception {
         saveUser(GUARDIAN, Role.GUARDIAN, Status.ACTIVE);
         saveUser(WARD, Role.WARD, Status.ACTIVE);
@@ -155,7 +156,8 @@ class CompanionFullIntegrationTest extends FullContextIntegrationTest {
         long first = openSession("d-notice-1");
         when(aiCompanionClient.finish("d-notice-1")).thenReturn(json(
                 "{\"dialogueId\":\"d-notice-1\",\"endReason\":\"USER_STOP\",\"turnCount\":2,\"answeredCount\":2,"
-                        + "\"mood\":\"걱정\",\"riskFlag\":false,\"alertLevel\":\"INFO\"}"));
+                        + "\"mood\":\"WORRY\",\"moodCode\":\"WORRY\",\"moodKo\":\"걱정\",\"riskFlag\":false,"
+                        + "\"alertLevel\":\"INFO\"}"));
 
         companionService.finish(WARD, first);
         eventually().untilAsserted(() -> assertThat(notificationLogs(GUARDIAN, NotificationType.COMPANION_NOTICE))
