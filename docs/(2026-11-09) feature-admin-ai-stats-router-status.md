@@ -68,4 +68,6 @@
 | L-3 | 값끼리 맞는지 검사하지 않았다 | 종류별 합 ≠ `routerFailures`면 둘 다 null. `state`-`recentFailures` 모순(ok·off인데 1 이상, failing인데 0)이면 `routerStatus` null. `credit_exhausted`는 0이어도 맞다(창 밖). 모두 칸 이름만 WARN |
 | L-4 | 새 WARN 로그 내용을 고정하는 테스트가 없었다 | 로그를 붙잡아 칸 이름만 있고 AI가 준 값이 없음을 확인하는 테스트 추가 |
 
+- 배포: PR #452 머지 `bf1f9ce`. vkcs CD 성공(통합 테스트 통과)·healthy·ERROR 0, gosky(dev만) 수동 배포·healthy·ERROR 0·AI WS 연결.
+- 실서버: gosky `/v3/api-docs`에서 `type:null + $ref` 0건, `anyOf` 변환 8곳(설명 유지). 관리자 통계 1회 호출 200, 라우터 칸 3개 모두 값 있음(L-3 검사가 실제 AI 값을 null로 만들지 않음).
 - 테스트: `AdminAiChatStatsServiceTest` 68 · `NullableRefSchemaCustomizerTest` 2(실제 DTO 주석을 springdoc 3.1 모델로 변환해 확인) · `LogRawExceptionGuardTest` 4 · 전체 단위 2413건 실패 0.
