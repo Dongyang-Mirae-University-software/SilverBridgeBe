@@ -2822,7 +2822,7 @@ AI 챗 집계 점검 L-1에서 남겨 둔 공용 `GlobalExceptionHandler`의 `e.
 - 구현(PR #454, 머지 `7b2e337`, vkcs CD·gosky dev 반영): 턴 위험을 최상위 `riskFlag` 또는 `signals.riskFlag`로 판단(AI 확인 턴은 `signals=null`이라 위험 알림이 마감 때로 늦어졌다). `ANSWER_TOO_LONG`·`FRAME_FORMAT_UNSUPPORTED`를 기존 400 코드로 연결(전에는 503). 통합 테스트 154건 통과(확인 턴 → 긴급 리스너 → 이력 1건 추가).
 - 영향 범위 점검(AI main `3b1ec10` 대조): 🔴🟠🟡 0. 선점(`risk_notified_at` 조건부 UPDATE, flush 뒤 실행)·마감 URGENT 보완·LOST(이미 보낸 알림 유지)·관리자 위험 건수·보호자 화면 모두 그대로. 턴 경로 AI 오류 코드 전부 매핑. 일반 턴의 신호 추출 시간 초과(`pipeline.py:112-125`)도 같은 모양이라 함께 해결.
 - 🟢 L-1(AI 범위): AI 검수 목록 위험 표시가 `signals.riskFlag`만 본다(`companion_router.py:148-150`) - 최상위 `riskFlag`를 보도록 AI 쪽에서 고칠 것.
-- 🟢 조치(2026-11-09): L-1은 AI #195(`b3c48c5`) - 검수 위험 = 최상위 `riskFlag` 또는 `signals.riskFlag`. gosky 운영 이미지 임시 컨테이너 테스트 23건 통과, 옛 코드로 되돌리면 새 테스트 2건 실패. gosky AI 배포(재시작)는 사용자 승인 대기.
+- 🟢 조치(2026-11-09): L-1은 AI #195(`b3c48c5`) - 검수 위험 = 최상위 `riskFlag` 또는 `signals.riskFlag`. gosky 운영 이미지 임시 컨테이너 테스트 23건 통과, 옛 코드로 되돌리면 새 테스트 2건 실패. gosky AI 배포 완료(사용자 지시, 2026-11-09 17:47 재시작, 오류 0, BE AI WS 재연결 17:47:35).
 
 ### [2026-11-09] BE #453 말벗 기분 영문 코드 받기 - 구현·배포·기능 점검(템플릿 B)·조치
 - 구현(PR #453, 머지 `e6ca0e6`, vkcs CD·gosky dev 반영): AI main(9e45e8f)이 finish `mood`·`moodCode`를 영문 코드로 주게 바뀌어 한글만 받던 `CompanionMood.fromAi`가 모든 기분을 null로 만들 상황이었다. 영문 대문자·한글 모두 받고 `UNKNOWN`·빈 값·소문자·모르는 값은 null, `mood`가 비면 `moodCode`(`moodKo`는 안 읽음). 말벗 단위 테스트 50건 통과.
