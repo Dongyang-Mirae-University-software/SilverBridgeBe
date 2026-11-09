@@ -8,6 +8,7 @@ import java.time.OffsetDateTime;
 import java.util.Collection;
 import java.util.Comparator;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 
@@ -37,6 +38,14 @@ public final class CompanionMoodDays {
         public boolean reachesNotice() {
             return days >= NOTICE_DAYS;
         }
+    }
+
+    /**
+     * 보호자가 볼 수 있는 대화만 남긴다 - 지금 ACTIVE 연결이 맺어진 뒤 시작한 대화(D-1, 2026-10-31 사용자 결정).
+     * 보호자 화면 주의 칸과 주의 알림이 같은 기준을 쓰도록 이 한 곳에 둔다(2026-11-09 PR-B 점검 M-1).
+     */
+    public static List<CompanionSession> startedSince(Collection<CompanionSession> sessions, OffsetDateTime connectedAt) {
+        return sessions.stream().filter(s -> !s.getStartedAt().isBefore(connectedAt)).toList();
     }
 
     /** 마친 대화들 → 날짜별 하루 기분(판정된 대화가 있는 날만). */

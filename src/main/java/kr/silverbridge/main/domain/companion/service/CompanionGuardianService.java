@@ -79,10 +79,8 @@ public class CompanionGuardianService {
                 .filter(slot -> now.toLocalTime().isBefore(slot.start()))
                 .findFirst().map(CompanionSlot::code).orElse(null);
 
-        List<CompanionSession> recent = sessionRepository.findFinishedSince(wardId, CompanionSessionStatus.FINISHED,
-                        date.minusDays(CompanionMoodDays.LOOKBACK_DAYS)).stream()
-                .filter(s -> !s.getStartedAt().isBefore(connectedAt))
-                .toList();
+        List<CompanionSession> recent = CompanionMoodDays.startedSince(sessionRepository.findFinishedSince(wardId,
+                CompanionSessionStatus.FINISHED, date.minusDays(CompanionMoodDays.LOOKBACK_DAYS)), connectedAt);
         Attention attention = CompanionMoodDays.streak(CompanionMoodDays.dailyMoods(recent), date)
                 .filter(CompanionMoodDays.Streak::reachesNotice)
                 .map(streak -> new Attention(streak.mood().name(), streak.days()))

@@ -116,4 +116,20 @@ class CompanionGuardianServiceTest {
         assertThat(today.attention().days()).isEqualTo(3);
         assertThat(today.attention().mood()).isEqualTo("WORRY");
     }
+
+    @Test
+    @DisplayName("D-1: 확인할 일(주의)은 지금 연결 이후 대화로만 센다 - 연결 전 걱정 2일 + 연결 후 1일이면 null")
+    void attentionCountsOnlySinceConnection() {
+        when(connectionService.findActiveConnectedAt(G, W)).thenReturn(Optional.of(
+                TODAY.minusDays(1).atStartOfDay().atOffset(java.time.ZoneOffset.ofHours(9))));
+        when(sessionRepository.findByWardIdAndSessionDate(W, TODAY)).thenReturn(List.of());
+        when(sessionRepository.findFinishedSince(eq(W), eq(CompanionSessionStatus.FINISHED), any())).thenReturn(List.of(
+                finished(W, TODAY.minusDays(1), CompanionSlot.S21, CompanionMood.WORRY, 3),
+                finished(W, TODAY.minusDays(2), CompanionSlot.S21, CompanionMood.DEPRESSED, 3),
+                finished(W, TODAY.minusDays(3), CompanionSlot.S21, CompanionMood.WORRY, 3)));
+
+        TodayResponse today = service.today(G, W);
+
+        assertThat(today.attention()).as("연결 이후 1일뿐이라 주의 아님").isNull();
+    }
 }
