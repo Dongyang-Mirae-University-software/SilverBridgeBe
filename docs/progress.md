@@ -2817,3 +2817,8 @@ AI 챗 집계 점검 L-1에서 남겨 둔 공용 `GlobalExceptionHandler`의 `e.
 - 🟢 제안(미조치): L-1 건너뛰기 상태를 `tests/conftest.py` autouse로 초기화(지금은 새 테스트 파일만 초기화 - 다른 테스트가 실제 클라이언트로 크레딧 오류를 만들면 뒤 테스트가 규칙 문장을 받을 수 있음) / L-2 #188 `routerStatus`는 라우터만 보므로 라우터 호출 없이 OCR이 먼저 소진을 만나면 관리자 상태가 `ok`로 보인다(기록만) / L-3 `CLAUDE_CREDIT_SKIP_SEC=0`이면 건너뛰기 꺼짐 - 문서에 한 줄 / L-4 BE `MEDICATION_OCR_UNAVAILABLE` 문구가 "잠시 후 다시"지만 FE가 고정 문구를 써서 화면 영향 없음(기록만).
 - 🟢 조치(2026-11-09): L-1·L-2·L-3은 AI #191(`40ecdde`) - conftest 건너뛰기 초기화, `routerStatus.state=credit_exhausted`에 다른 호출이 본 소진 포함, `CLAUDE_CREDIT_SKIP_SEC=0`(끔) 문서. L-4는 BE #451(`807e0b2`) - `MEDICATION_OCR_UNAVAILABLE` 문구 "약 이름을 직접 입력해주세요"(BE 단위 테스트 2401 통과, gosky `dmu-dev-api` 반영). AI #191은 gosky 재시작 전(main에 다른 세션 말벗·MedGemma 스위치 커밋이 함께 있어 재시작은 사용자 확인 후).
 
+
+### [2026-11-09] BE #454 말벗 확인 턴 위험·AI 새 오류 코드 - 구현·배포·영향 범위 점검(템플릿 C)
+- 구현(PR #454, 머지 `7b2e337`, vkcs CD·gosky dev 반영): 턴 위험을 최상위 `riskFlag` 또는 `signals.riskFlag`로 판단(AI 확인 턴은 `signals=null`이라 위험 알림이 마감 때로 늦어졌다). `ANSWER_TOO_LONG`·`FRAME_FORMAT_UNSUPPORTED`를 기존 400 코드로 연결(전에는 503). 통합 테스트 154건 통과(확인 턴 → 긴급 리스너 → 이력 1건 추가).
+- 영향 범위 점검(AI main `3b1ec10` 대조): 🔴🟠🟡 0. 선점(`risk_notified_at` 조건부 UPDATE, flush 뒤 실행)·마감 URGENT 보완·LOST(이미 보낸 알림 유지)·관리자 위험 건수·보호자 화면 모두 그대로. 턴 경로 AI 오류 코드 전부 매핑. 일반 턴의 신호 추출 시간 초과(`pipeline.py:112-125`)도 같은 모양이라 함께 해결.
+- 🟢 L-1(AI 범위, 미조치): AI 검수 목록 위험 표시가 `signals.riskFlag`만 본다(`companion_router.py:148-150`) - 최상위 `riskFlag`를 보도록 AI 쪽에서 고칠 것.
