@@ -110,6 +110,19 @@ class AiCompanionClientTest {
     }
 
     @Test
+    @DisplayName("AI 새 오류 코드(422): 글 대답 500자 초과는 글 길이 오류, JPEG·PNG가 아닌 사진은 사진 형식 오류로 바꾼다")
+    void mapsAnswerTooLongAndFrameFormat() {
+        status = 422;
+        responseBody = "{\"success\":false,\"code\":\"ANSWER_TOO_LONG\",\"errorCode\":\"ANSWER_TOO_LONG\"}";
+        assertThatThrownBy(() -> client.replyText("d-1", "네"))
+                .extracting(e -> ((CustomException) e).getErrorCode()).isEqualTo(ErrorCode.COMPANION_ANSWER_TOO_LONG);
+
+        responseBody = "{\"success\":false,\"code\":\"FRAME_FORMAT_UNSUPPORTED\"}";
+        assertThatThrownBy(() -> client.replyText("d-1", "네"))
+                .extracting(e -> ((CustomException) e).getErrorCode()).isEqualTo(ErrorCode.COMPANION_FRAME_INVALID);
+    }
+
+    @Test
     @DisplayName("키 불일치(401)·FastAPI 422 detail·형식이 이상한 본문은 모두 503이다")
     void unknownFailuresAreUnavailable() {
         status = 401;

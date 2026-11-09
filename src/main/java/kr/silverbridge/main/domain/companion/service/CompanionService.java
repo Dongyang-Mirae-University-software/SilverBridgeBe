@@ -234,7 +234,10 @@ public class CompanionService {
 
         int turnNo = Math.max(0, data.path("turnNo").asInt(0));
         boolean ended = data.path("ended").asBoolean(false);
-        boolean riskSeen = data.path("signals").path("riskFlag").asBoolean(false);
+        // 턴 위험 = 최상위 riskFlag 또는 signals.riskFlag(둘 중 하나라도 true면 위험). 확인(되묻기) 턴은 signals가 null이고
+        // 낱말 규칙 결과를 최상위 riskFlag에만 싣는다 - signals만 보면 그 위험이 마감 때로 늦어진다(2026-11-09)
+        boolean riskSeen = data.path("riskFlag").asBoolean(false)
+                || data.path("signals").path("riskFlag").asBoolean(false);
         JsonNode replyNode = data.path("reply").path("text");
         String reply = replyNode.isTextual() && !replyNode.asText().isBlank() ? replyNode.asText() : null;
         if (reply == null) {

@@ -77,6 +77,26 @@ class CompanionFullIntegrationTest extends FullContextIntegrationTest {
     }
 
     @Test
+    @DisplayName("확인(되묻기) 턴은 signals가 null이고 최상위 riskFlag에만 위험을 싣는다 - 그 턴에 COMPANION_RISK 1번")
+    void 확인_턴_위험도_그_턴에_보낸다() throws Exception {
+        saveUser(GUARDIAN, Role.GUARDIAN, Status.ACTIVE);
+        saveUser(WARD, Role.WARD, Status.ACTIVE);
+        saveActiveConnection(GUARDIAN, WARD);
+        signedIn(GUARDIAN);
+        long sessionId = openSession("d-risk-confirm");
+        when(aiCompanionClient.replyText(eq("d-risk-confirm"), anyString())).thenReturn(json(
+                "{\"turnNo\":1,\"reply\":{\"text\":\"조금 더 말씀해 주실래요?\"},\"replySource\":\"CONFIRM\","
+                        + "\"needsCheck\":true,\"signals\":null,\"riskFlag\":true,\"ended\":false}"));
+
+        companionService.replyText(WARD, sessionId, "다 그만두고 싶어요");
+        eventually().untilAsserted(() -> assertThat(notificationLogs(GUARDIAN, NotificationType.COMPANION_RISK))
+                .as("마감을 기다리지 않고 확인 턴에 1번").isEqualTo(1));
+
+        assertThat(count("SELECT count(*) FROM companion_session WHERE id = ? AND status = 'OPEN'"
+                + " AND risk_flag = true AND risk_notified_at IS NOT NULL", sessionId)).isEqualTo(1);
+    }
+
+    @Test
     @DisplayName("턴에는 위험 신호가 없었어도 마감 결과가 URGENT면 그때 1번 보낸다")
     void 마감_URGENT_미발송이면_보낸다() throws Exception {
         saveUser(GUARDIAN, Role.GUARDIAN, Status.ACTIVE);

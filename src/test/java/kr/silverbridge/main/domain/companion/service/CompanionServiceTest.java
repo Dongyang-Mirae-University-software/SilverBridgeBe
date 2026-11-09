@@ -21,6 +21,8 @@ import kr.silverbridge.main.global.security.RateLimitService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 import org.mockito.ArgumentCaptor;
 import org.springframework.mock.web.MockMultipartFile;
 import org.springframework.test.util.ReflectionTestUtils;
@@ -155,6 +157,28 @@ class CompanionServiceTest {
         assertThat(response.transcript()).isNull();
         verify(writer).recordTurn(eq(30L), eq(2), eq(true), any());
         verify(aiClient, never()).finish(anyString());
+    }
+
+    @ParameterizedTest(name = "{0}")
+    @CsvSource(delimiter = '|', value = {
+            "확인 턴: signals=null, 최상위 riskFlag=true → 위험"
+                    + " | \"replySource\":\"CONFIRM\",\"needsCheck\":true,\"signals\":null,\"riskFlag\":true | true",
+            "일반 턴: 두 칸 모두 true → 위험 | \"signals\":{\"riskFlag\":true},\"riskFlag\":true | true",
+            "최상위만 false, signals만 true → 위험 | \"signals\":{\"riskFlag\":true},\"riskFlag\":false | true",
+            "두 칸 모두 false → 위험 아님 | \"signals\":{\"riskFlag\":false},\"riskFlag\":false | false",
+            "확인 턴: signals=null, 최상위 riskFlag=false → 위험 아님"
+                    + " | \"replySource\":\"CONFIRM\",\"needsCheck\":true,\"signals\":null,\"riskFlag\":false | false",
+            "위험 칸이 하나도 없음 → 위험 아님 | \"replySource\":\"LLM\" | false"
+    })
+    @DisplayName("턴 위험 = 최상위 riskFlag 또는 signals.riskFlag - 확인(되묻기) 턴의 위험도 그 턴에 기록으로 넘긴다")
+    void turnRiskReadsTopLevelOrSignals(String caseName, String riskFields, boolean expectedRisk) throws Exception {
+        when(sessionRepository.findById(32L)).thenReturn(Optional.of(sessionWithId(32L, "d-32")));
+        when(aiClient.replyText("d-32", "그냥 그래요")).thenReturn(json(
+                "{\"turnNo\":3,\"reply\":{\"text\":\"조금 더 말씀해 주실래요?\"}," + riskFields + ",\"ended\":false}"));
+
+        service.replyText(WARD, 32L, "그냥 그래요");
+
+        verify(writer).recordTurn(eq(32L), eq(3), eq(expectedRisk), any());
     }
 
     @Test

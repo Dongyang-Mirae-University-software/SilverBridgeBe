@@ -57,16 +57,19 @@ public class AiCompanionClient {
             Map.entry("DIALOGUE_NOT_FOUND", ErrorCode.COMPANION_SESSION_LOST),
             Map.entry("DIALOGUE_ENDED", ErrorCode.COMPANION_SESSION_ENDED),
             Map.entry("ANSWER_EMPTY", ErrorCode.COMPANION_ANSWER_EMPTY),
+            Map.entry("ANSWER_TOO_LONG", ErrorCode.COMPANION_ANSWER_TOO_LONG),
             Map.entry("AUDIO_MISSING", ErrorCode.COMPANION_AUDIO_INVALID),
             Map.entry("AUDIO_FORMAT_UNSUPPORTED", ErrorCode.COMPANION_AUDIO_INVALID),
             Map.entry("AUDIO_TOO_LARGE", ErrorCode.COMPANION_AUDIO_TOO_LARGE),
             Map.entry("FRAMES_TOO_MANY", ErrorCode.COMPANION_FRAME_TOO_LARGE),
             Map.entry("FRAME_TOO_LARGE", ErrorCode.COMPANION_FRAME_TOO_LARGE),
+            Map.entry("FRAME_FORMAT_UNSUPPORTED", ErrorCode.COMPANION_FRAME_INVALID),
             Map.entry("STT_UNAVAILABLE", ErrorCode.COMPANION_STT_UNAVAILABLE));
     /** 로그에 남겨도 되는 AI 오류 코드(고정 영문 값). 이 밖의 값은 "unknown"으로 남긴다. */
     private static final Set<String> LOGGABLE_AI_CODES = Set.of(
-            "DIALOGUE_NOT_FOUND", "DIALOGUE_ENDED", "ANSWER_EMPTY", "AUDIO_MISSING", "AUDIO_FORMAT_UNSUPPORTED",
-            "AUDIO_TOO_LARGE", "FRAMES_TOO_MANY", "FRAME_TOO_LARGE", "STT_UNAVAILABLE", "AUTH_INVALID_KEY",
+            "DIALOGUE_NOT_FOUND", "DIALOGUE_ENDED", "ANSWER_EMPTY", "ANSWER_TOO_LONG", "AUDIO_MISSING",
+            "AUDIO_FORMAT_UNSUPPORTED", "AUDIO_TOO_LARGE", "FRAMES_TOO_MANY", "FRAME_TOO_LARGE",
+            "FRAME_FORMAT_UNSUPPORTED", "STT_UNAVAILABLE", "AUTH_INVALID_KEY",
             "SLOT_INVALID", "QUESTION_NOT_SET", "BACKEND_UNAVAILABLE");
 
     private final CompanionProperties properties;

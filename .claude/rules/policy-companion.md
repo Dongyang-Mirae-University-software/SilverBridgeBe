@@ -33,6 +33,7 @@ paths:
 - **기분 판단 불가 = null**: `UNKNOWN`·0·"정상"으로 바꾸지 말 것(화면 "확인할 수 없어요"). AI 한글 값은 영문 코드로만 저장(결정 D). AI는 2026-11-09부터 `mood`·`moodCode`를 영문 코드(`JOY`·`CALM`·`WORRY`·`DEPRESSED`·`UNKNOWN`)로 준다 - `CompanionMood.fromAi`는 영문(대문자)·한글을 모두 받고 `UNKNOWN`·모르는 값은 null, `mood`가 비면 `moodCode`를 본다(`moodKo`는 읽지 않음).
 - **AI 판단 중 믿는 것은 `riskFlag`·`alertLevel`뿐**(결정 E). 주의(NOTICE, 걱정·우울 3일)는 PR-B에서 BE가 계산한다.
 - **위험 알림은 대화당 1번**: `risk_notified_at` 조건부 UPDATE에 이긴 쪽만 이벤트를 낸다(턴에서 처음 본 때, 또는 마감 때 URGENT인데 아직 안 보낸 때). 문구에 원문·질병명·구체 내용 금지. `COMPANION_RISK`는 강제 푸시 + 설정, FCM·문자만(알림톡·이메일 금지), 긴급 풀(`urgentNotificationExecutor`).
+  - **턴 위험 = 최상위 `riskFlag` 또는 `signals.riskFlag`**(2026-11-09): 확인(되묻기) 턴(`replySource="CONFIRM"`)은 `signals`가 null이고 낱말 규칙 결과를 최상위에만 싣는다. `signals`만 읽지 말 것 - 그 위험 알림이 마감 때로 늦어진다. AI 새 오류 코드 `ANSWER_TOO_LONG`·`FRAME_FORMAT_UNSUPPORTED`는 `COMPANION_ANSWER_TOO_LONG`·`COMPANION_FRAME_INVALID`(400)로 바꾼다.
 - **질문 안내 `COMPANION_PROMPT`는 FCM만·설정 기반**: 하루 5건 다발성이라 문자·알림톡·강제 승격 금지. PR-B 전까지 `COMPANION_PROMPT_WARD_IDS` 허용 목록에만.
 - **AI 호출은 트랜잭션 밖**(최대 90초): 쓰기는 `CompanionSessionWriter`의 짧은 트랜잭션. 동시 상한 서버 8(503 `COMPANION_BUSY`)·대화 1(409 `COMPANION_TURN_IN_PROGRESS`), 단일 인스턴스 전제.
 - **중계 제한 90초**(사용자 결정 2026-11-04): AI에 한 턴 60초를 요청했다. 300초(AI 단계별 제한 합)로 늘리지 말 것 - 요청 스레드를 5분 붙든다.
