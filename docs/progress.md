@@ -2843,3 +2843,8 @@ AI 챗 집계 점검 L-1에서 남겨 둔 공용 `GlobalExceptionHandler`의 `e.
 - 🟢 L-1 화면 주의 칸 D-1 필터 테스트 미고정(결함 주입 미검출) / L-2 보호자 말벗 API 웹 계층 역할 테스트 없음.
 - 조치(2026-11-09, `fix/companion-notice-connected-since`): M-1 리스너가 보호자마다 연결 이후 대화로 일수를 세고(`CompanionMoodDays.startedSince` 공용), L-1·L-2 테스트 추가. 결함 주입 2종 검출, `./gradlew build`·vkcs 통합 155건 통과.
 - 확인: IDOR·원문 비저장·알림 종류 정책(FCM만·일반 풀·URGENT 묶음)·역할 변경/탈퇴 정리·질문 안내 `*`(gosky 대상 없음) 모두 PASS. 관리자 기분 분포 기준 차이는 의도(기능 문서).
+
+### [2026-11-09] 보호자 알림 수신자 계산 D-1 일관성 영향 범위 점검 (템플릿 C, #456 후속)
+- 기준 dev `7bcd6f3`. PASS · 🔴🟠🟡 0 · 🟢 1, 상세 `docs/(2026-11-09) audit-impact-guardian-notice-d1.md`.
+- 지난 기록을 모아 보내는 알림 3종: 이상감지 재촉·요약·동수 안내는 모두 `isVisibleSinceConnection`(화면과 같은 `lastDetectedAt` 기준), 말벗 주의는 #456으로 보호자별, 복약 미복용 요약은 카드·대시보드도 현재 상태 기준이라 일치.
+- 🟢 L-1: 이상감지 요약·동수 안내의 D-1 조건을 무력화해도 단위 테스트가 통과(재촉 경로만 고정). 미조치.
