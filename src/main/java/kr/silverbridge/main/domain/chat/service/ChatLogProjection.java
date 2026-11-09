@@ -70,6 +70,11 @@ final class ChatLogProjection {
                 }
             }
         }
+        // 응급·위기 표시(AI 2026-11-09 #198·#200). 불리언 true 일 때만 내린다 - 문자열 "true"·숫자·false 는 뺀다(FE #229 점검 L-6).
+        JsonNode urgent = layout.get("urgent");
+        if (urgent != null && urgent.isBoolean() && urgent.booleanValue()) {
+            out.put("urgent", true);
+        }
         return out;
     }
 

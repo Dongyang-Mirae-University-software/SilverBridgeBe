@@ -71,6 +71,19 @@ class ChatLogProjectionTest {
     }
 
     @Test
+    @DisplayName("layout.urgent 는 불리언 true 일 때만 내리고 문자열·숫자·false·객체는 뺀다(2026-11-09 FE #229 점검 L-6)")
+    void 답모양_긴급표시는_불리언_true만() throws Exception {
+        JsonNode on = mapper.readTree("{\"id\":1,\"layout\":{\"headline\":\"h\",\"urgent\":true}}");
+        assertThat(ChatLogProjection.project(on).get("layout").get("urgent").asBoolean()).isTrue();
+        for (String value : new String[] {"\"true\"", "1", "false", "null", "{\"a\":1}"}) {
+            JsonNode off = mapper.readTree("{\"id\":2,\"layout\":{\"headline\":\"h\",\"urgent\":" + value + "}}");
+            assertThat(ChatLogProjection.project(off).get("layout").has("urgent")).as(value).isFalse();
+        }
+        JsonNode none = mapper.readTree("{\"id\":3,\"layout\":{\"headline\":\"h\"}}");
+        assertThat(ChatLogProjection.project(none).get("layout").has("urgent")).isFalse();
+    }
+
+    @Test
     @DisplayName("답 모양(layout)은 기록 조회에도 그대로 실리고, 옛 기록의 null 도 유지한다(2026-11-01)")
     void 답모양_유지() throws Exception {
         JsonNode log = mapper.readTree("{\"id\":1,\"reply\":\"a\",\"layout\":{\"headline\":\"h\",\"body\":[\"b\"],"
