@@ -57,6 +57,22 @@ class CompanionMoodDaysTest {
     }
 
     @Test
+    @DisplayName("대화는 했지만 모두 판단 불가(UNKNOWN → null)인 날도 연속을 끊는다(2026-11-09 사용자 확정 A)")
+    void unknownOnlyDayBreaks() {
+        Map<LocalDate, CompanionMood> moods = CompanionMoodDays.dailyMoods(List.of(
+                finished(W, TODAY, CompanionSlot.S09, CompanionMood.WORRY, 3),
+                finished(W, TODAY.minusDays(1), CompanionSlot.S09, null, 2),
+                finished(W, TODAY.minusDays(1), CompanionSlot.S21, null, 1),
+                finished(W, TODAY.minusDays(2), CompanionSlot.S09, CompanionMood.WORRY, 3),
+                finished(W, TODAY.minusDays(3), CompanionSlot.S09, CompanionMood.DEPRESSED, 3)));
+
+        assertThat(moods).doesNotContainKey(TODAY.minusDays(1));
+        CompanionMoodDays.Streak streak = CompanionMoodDays.streak(moods, TODAY).orElseThrow();
+        assertThat(streak.days()).isEqualTo(1);
+        assertThat(streak.reachesNotice()).isFalse();
+    }
+
+    @Test
     @DisplayName("오늘 아직 판정된 대화가 없으면 어제를 기준일로 센다, 오늘이 기쁨이면 이어지지 않는다")
     void baseDay() {
         Map<LocalDate, CompanionMood> yesterdayBased = Map.of(
