@@ -8,6 +8,12 @@ spring:
     username: ${DB_USERNAME}
     password: ${DB_PASSWORD}
     driver-class-name: org.postgresql.Driver
+    # 커넥션 풀 (2026-11-10 전체 점검 2차 H-1 - 그동안 설정이 없어 HikariCP 기본값이었다)
+    # 크기는 기본 10 그대로. 대기는 30초 → 10초: 풀이 비었을 때 요청 스레드를 30초씩 붙들지 않게 한다.
+    # 한 요청이 커넥션 2개를 겹쳐 쥐지 않는 것이 전제다(접속 로그는 트랜잭션 뒤 전용 풀에서 쓴다 - AccessLogService).
+    hikari:
+      maximum-pool-size: ${DB_POOL_MAX_SIZE:10}
+      connection-timeout: ${DB_POOL_CONNECTION_TIMEOUT_MS:10000}
 
   jpa:
     hibernate:
