@@ -4,10 +4,12 @@ import com.fasterxml.jackson.databind.JsonNode;
 import kr.silverbridge.main.domain.companion.client.AiCompanionClient;
 import kr.silverbridge.main.domain.companion.client.CompanionMedia;
 import kr.silverbridge.main.domain.companion.config.CompanionProperties;
+import kr.silverbridge.main.domain.companion.dto.CompanionDtos.ResultAnalysis;
 import kr.silverbridge.main.domain.companion.dto.CompanionDtos.ResultResponse;
 import kr.silverbridge.main.domain.companion.dto.CompanionDtos.SessionResponse;
 import kr.silverbridge.main.domain.companion.dto.CompanionDtos.SlotStatus;
 import kr.silverbridge.main.domain.companion.dto.CompanionDtos.TodayResponse;
+import kr.silverbridge.main.domain.companion.dto.CompanionDtos.TurnAnalysis;
 import kr.silverbridge.main.domain.companion.dto.CompanionDtos.TurnResponse;
 import kr.silverbridge.main.domain.companion.entity.CompanionQuestion;
 import kr.silverbridge.main.domain.companion.entity.CompanionSession;
@@ -32,6 +34,8 @@ import java.time.ZoneId;
 import java.time.ZonedDateTime;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Comparator;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.function.Function;
@@ -57,6 +61,13 @@ public class CompanionService {
 
     static final ZoneId KST = ZoneId.of("Asia/Seoul");
     private static final String RATE_LIMIT_ENDPOINT = "companion";
+    /** 테스트 안내 푸시 - 자기에게 보내는 것이라도 FCM을 두드리므로 따로 묶는다(2026-11-10). */
+    private static final String TEST_PROMPT_RATE_LIMIT_ENDPOINT = "companion-test-prompt";
+    private static final int TEST_PROMPT_PER_MINUTE = 3;
+    private static final int TEST_PROMPT_PER_HOUR = 30;
+    private static final Comparator<CompanionSession> LATEST_FIRST = Comparator
+            .comparing(CompanionSession::getStartedAt, Comparator.reverseOrder())
+            .thenComparing(CompanionSession::getId, Comparator.nullsLast(Comparator.reverseOrder()));
     /** AI가 응답 문장을 주지 않았을 때(계약 위반) 기기가 읽을 고정 문장. */
     private static final String FALLBACK_REPLY = "말씀해 주셔서 고맙습니다.";
 
@@ -67,6 +78,7 @@ public class CompanionService {
     private final CompanionSessionWriter writer;
     private final CompanionTurnSlots slots;
     private final RateLimitService rateLimitService;
+    private final CompanionPromptScheduler promptScheduler;
 
     /** 테스트에서 시각을 고정할 때만 바꾼다. */
     private Clock clock = Clock.system(KST);
@@ -78,14 +90,24 @@ public class CompanionService {
     public TodayResponse today(String wardId) {
         ZonedDateTime now = ZonedDateTime.now(clock).withZoneSameInstant(KST);
         LocalDate date = now.toLocalDate();
-        Map<CompanionSlot, CompanionSession> sessions = sessionRepository.findByWardIdAndSessionDate(wardId, date)
-                .stream().collect(Collectors.toMap(CompanionSession::getSlot, Function.identity(), (a, b) -> a));
+        Map<CompanionSlot, CompanionSession> sessions =
+                latestBySlot(sessionRepository.findByWardIdAndSessionDate(wardId, date));
         CompanionSlot current = currentSlot(now).orElse(null);
         List<SlotStatus> statuses = new ArrayList<>();
         for (CompanionSlot slot : CompanionSlot.values()) {
             statuses.add(slotStatus(slot, sessions.get(slot), now));
         }
-        return new TodayResponse(date.toString(), current == null ? null : current.code(), statuses);
+        return new TodayResponse(date.toString(), current == null ? null : current.code(), statuses,
+                properties.isTestWard(wardId));
+    }
+
+    /**
+     * 시간대마다 가장 최근에 시작한 대화(2026-11-10). 일반 대화는 시간대당 1행이지만 테스트 계정은 같은 시간대에 테스트
+     * 대화가 여러 행일 수 있다 - 화면은 그중 마지막 대화를 보여 준다(테스트 대화도 집계에서 빼지 않는다).
+     */
+    static Map<CompanionSlot, CompanionSession> latestBySlot(List<CompanionSession> sessions) {
+        return sessions.stream().collect(Collectors.toMap(CompanionSession::getSlot, Function.identity(),
+                (a, b) -> LATEST_FIRST.compare(a, b) <= 0 ? a : b));
     }
 
     public SessionResponse open(String wardId) {
@@ -95,7 +117,7 @@ public class CompanionService {
         CompanionSlot slot = currentSlot(now).orElseThrow(() -> new CustomException(ErrorCode.COMPANION_NOT_IN_WINDOW));
         LocalDate date = now.toLocalDate();
 
-        var existing = sessionRepository.findByWardIdAndSessionDateAndSlot(wardId, date, slot);
+        var existing = sessionRepository.findByWardIdAndSessionDateAndSlotAndTestFalse(wardId, date, slot);
         if (existing.isPresent()) {
             return resumeOrReject(existing.get());
         }
@@ -105,11 +127,63 @@ public class CompanionService {
             claimed = writer.claim(wardId, date, slot, question.getId(), now.toOffsetDateTime());
         } catch (DataIntegrityViolationException e) {
             // 같은 순간 다른 요청이 먼저 선점했다
-            return sessionRepository.findByWardIdAndSessionDateAndSlot(wardId, date, slot)
+            return sessionRepository.findByWardIdAndSessionDateAndSlotAndTestFalse(wardId, date, slot)
                     .map(this::resumeOrReject)
                     .orElseThrow(() -> new CustomException(ErrorCode.COMPANION_TURN_IN_PROGRESS));
         }
+        return openWithAi(wardId, claimed, slot, question);
+    }
 
+    /**
+     * 테스트 계정의 시간대 선택 시작(2026-11-10, 최종 QA). 60분 창을 보지 않고 고른 시간대의 오늘 질문으로 연다.
+     * 같은 시간대에 진행 중인 테스트 대화가 있으면 그 대화를 이어 가고, 끝났거나 끊겼으면 새 테스트 대화를 연다(몇 번이든).
+     * 테스트 대화도 일반 대화와 똑같이 저장·집계한다({@code is_test}는 표시만).
+     */
+    public SessionResponse openTest(String wardId, String slotCode) {
+        requireUsable();
+        requireTestWard(wardId);
+        CompanionSlot slot = parseSlot(slotCode);
+        rateLimitService.check(RATE_LIMIT_ENDPOINT, wardId, properties.getPerMinute(), properties.getPerHour());
+        ZonedDateTime now = ZonedDateTime.now(clock).withZoneSameInstant(KST);
+        LocalDate date = now.toLocalDate();
+
+        var open = sessionRepository.findFirstByWardIdAndSessionDateAndSlotAndTestTrueAndStatusOrderByIdDesc(
+                wardId, date, slot, CompanionSessionStatus.OPEN);
+        if (open.isPresent()) {
+            return resumeOrReject(open.get());
+        }
+        CompanionQuestion question = pickQuestion(slot, date);
+        CompanionSession claimed = writer.claimTest(wardId, date, slot, question.getId(), now.toOffsetDateTime());
+        log.info("[COMPANION] 테스트 대화 선점: wardId={}, sessionId={}, slot={}", wardId, claimed.getId(), slot.code());
+        return openWithAi(wardId, claimed, slot, question);
+    }
+
+    /**
+     * 테스트 계정이 고른 시간대의 질문 안내 푸시를 자기에게 바로 보낸다(2026-11-10). 정각 안내와 같은 문구·채널이고
+     * data에 {@code test=true}만 더한다. 선점 기록({@code companion_prompt_log})은 남기지 않는다 - 응답률은 정각 안내 기준
+     * 그대로고, 같은 시간대를 반복해 보낼 수 있다(사용자 결정).
+     */
+    public void sendTestPrompt(String wardId, String slotCode) {
+        requireUsable();
+        requireTestWard(wardId);
+        CompanionSlot slot = parseSlot(slotCode);
+        rateLimitService.check(TEST_PROMPT_RATE_LIMIT_ENDPOINT, wardId, TEST_PROMPT_PER_MINUTE, TEST_PROMPT_PER_HOUR);
+        promptScheduler.sendTestPrompt(wardId, slot);
+    }
+
+    private void requireTestWard(String wardId) {
+        if (!properties.isTestWard(wardId)) {
+            throw new CustomException(ErrorCode.COMPANION_TEST_NOT_ALLOWED);
+        }
+    }
+
+    private static CompanionSlot parseSlot(String slotCode) {
+        return CompanionSlot.fromCode(slotCode == null ? null : slotCode.strip())
+                .orElseThrow(() -> new CustomException(ErrorCode.COMPANION_SLOT_INVALID));
+    }
+
+    private SessionResponse openWithAi(String wardId, CompanionSession claimed, CompanionSlot slot,
+                                       CompanionQuestion question) {
         long sessionId = claimed.getId();
         try (CompanionTurnSlots.Slot ignored = slots.acquire(sessionId)) {
             JsonNode data = aiClient.openDialogue(wardId, sessionId, slot.code(), question.getText(), question.getId());
@@ -253,7 +327,55 @@ public class CompanionService {
             endReason = finalizeQuietly(session);
         }
         log.info("[COMPANION] 턴 처리: sessionId={}, turnNo={}, ended={}, audio={}", sessionId, turnNo, ended, audio);
-        return new TurnResponse(turnNo, reply, ended, endReason, transcript);
+        TurnAnalysis analysis = properties.isTestWard(session.getWardId()) ? turnAnalysis(data, riskSeen) : null;
+        return new TurnResponse(turnNo, reply, ended, endReason, transcript, analysis);
+    }
+
+    /**
+     * 테스트 계정용 턴 판정 - AI 응답 값을 그대로 옮긴다(만들어 내지 않음). 응답으로만 나가고 DB·로그·알림에 남기지 않는다.
+     * 응답에 Jackson 2 타입을 싣지 않으려고 일반 Map으로 바꾼다(2026-10-08 규칙).
+     */
+    static TurnAnalysis turnAnalysis(JsonNode data, boolean riskSeen) {
+        JsonNode turnResult = data.path("turnResult");
+        return new TurnAnalysis(textOrNull(turnResult.path("label")), textOrNull(turnResult.path("source")),
+                plainObject(data.path("face")), riskSeen, plainObject(data.path("signals")));
+    }
+
+    private static String textOrNull(JsonNode node) {
+        return node.isTextual() ? node.asText() : null;
+    }
+
+    private static Map<String, Object> plainObject(JsonNode node) {
+        if (node == null || !node.isObject()) {
+            return null;
+        }
+        Map<String, Object> out = new LinkedHashMap<>();
+        node.properties().forEach(entry -> out.put(entry.getKey(), plainValue(entry.getValue())));
+        return out;
+    }
+
+    private static Object plainValue(JsonNode node) {
+        if (node == null || node.isNull() || node.isMissingNode()) {
+            return null;
+        }
+        if (node.isTextual()) {
+            return node.asText();
+        }
+        if (node.isBoolean()) {
+            return node.asBoolean();
+        }
+        if (node.isNumber()) {
+            return node.numberValue();
+        }
+        if (node.isObject()) {
+            return plainObject(node);
+        }
+        if (node.isArray()) {
+            List<Object> list = new ArrayList<>();
+            node.forEach(item -> list.add(plainValue(item)));
+            return list;
+        }
+        return node.asText();
     }
 
     /** 대화가 끝난 턴의 결과 저장. 실패해도 턴 응답은 그대로 내보낸다 - 마감 스케줄러가 다시 받는다. */
@@ -420,11 +542,16 @@ public class CompanionService {
         return new SlotStatus(slot.code(), "MISSED", null);
     }
 
-    private static ResultResponse toResult(CompanionSession session) {
+    private ResultResponse toResult(CompanionSession session) {
+        String mood = session.getMood() == null ? null : session.getMood().name();
+        // 테스트 계정에만 대화 판정을 싣는다 - 저장된 결과 값이라 이미 마친 대화를 다시 불러도 같다
+        ResultAnalysis analysis = properties.isTestWard(session.getWardId())
+                ? new ResultAnalysis(mood, session.getTurnCount(), session.getAnsweredCount(),
+                        session.getNoResponseCount(), session.isRiskFlag(), session.getAlertLevel(), session.isTest())
+                : null;
         return new ResultResponse(session.getId(), session.getSlot().code(),
                 session.getEndReason() == null ? null : session.getEndReason().name(),
-                session.getMood() == null ? null : session.getMood().name(),
-                session.getTurnCount());
+                mood, session.getTurnCount(), analysis);
     }
 
     @FunctionalInterface

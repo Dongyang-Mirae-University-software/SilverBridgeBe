@@ -111,6 +111,8 @@ import static org.mockito.Mockito.when;
         "companion.enabled=true",
         "companion.ai-base-url=http://companion.invalid",
         "companion.api-key=it-companion-key",
+        // 최종 QA 테스트 계정(2026-11-10) - CompanionFullIntegrationTest 의 테스트 대화 시나리오 전용 ID
+        "companion.test-ward-ids=WCMT01",
         // JavaMailSender가 목이라 메일 헬스 체크(JavaMailSenderImpl 필요)가 뜨지 못한다
         "management.health.mail.enabled=false",
         "spring.data.redis.timeout=500ms",

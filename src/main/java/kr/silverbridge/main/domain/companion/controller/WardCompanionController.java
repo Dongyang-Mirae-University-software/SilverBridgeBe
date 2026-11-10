@@ -6,6 +6,7 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import kr.silverbridge.main.domain.companion.dto.CompanionDtos.ReplyRequest;
 import kr.silverbridge.main.domain.companion.dto.CompanionDtos.ResultResponse;
 import kr.silverbridge.main.domain.companion.dto.CompanionDtos.SessionResponse;
+import kr.silverbridge.main.domain.companion.dto.CompanionDtos.TestSlotRequest;
 import kr.silverbridge.main.domain.companion.dto.CompanionDtos.TodayResponse;
 import kr.silverbridge.main.domain.companion.dto.CompanionDtos.TurnResponse;
 import kr.silverbridge.main.domain.companion.service.CompanionService;
@@ -69,6 +70,39 @@ public class WardCompanionController {
     public ResponseEntity<ApiResponse<SessionResponse>> open(@AuthenticationPrincipal String wardId) {
         return ResponseEntity.ok().cacheControl(CacheControl.noStore())
                 .body(ApiResponse.ok(companionService.open(wardId)));
+    }
+
+    @Operation(summary = "[테스트 계정] 시간대를 골라 안부 대화 열기",
+            description = """
+                    최종 QA 테스트 계정(서버 설정 COMPANION_TEST_WARD_IDS)만 씁니다. 지금 시각과 상관없이 고른 시간대의
+                    오늘 질문으로 대화를 엽니다(60분 창 없음, 몇 번이든 다시). 같은 시간대에 진행 중인 테스트 대화가 있으면
+                    그 대화를 이어 갑니다(resumed=true). 테스트 대화도 일반 대화와 똑같이 저장·집계됩니다.
+                    테스트 계정의 턴·마치기 응답에는 analysis(AI 판정 결과, 저장 안 함)가 함께 옵니다.
+
+                    [오류 code]
+                    COMPANION_TEST_NOT_ALLOWED(403, 테스트 계정 아님) / COMPANION_SLOT_INVALID(400, 시간대 형식 오류) /
+                    COMPANION_TURN_IN_PROGRESS(409, 같은 대화를 여는 중)
+                    """ + COMMON_ERRORS)
+    @PostMapping("/test/sessions")
+    public ResponseEntity<ApiResponse<SessionResponse>> openTest(
+            @AuthenticationPrincipal String wardId, @RequestBody(required = false) TestSlotRequest request) {
+        return ResponseEntity.ok().cacheControl(CacheControl.noStore())
+                .body(ApiResponse.ok(companionService.openTest(wardId, request == null ? null : request.slot())));
+    }
+
+    @Operation(summary = "[테스트 계정] 안부 말벗 안내 푸시 보내기",
+            description = """
+                    고른 시간대의 질문 안내(COMPANION_PROMPT)를 내 기기로 바로 보냅니다. 정각 안내와 같은 문구·채널(FCM)이고
+                    data에 test=true가 더해집니다(slot 포함). 응답률 집계에는 잡히지 않습니다. 분당 3회·시간당 30회.
+
+                    [오류 code]
+                    COMPANION_TEST_NOT_ALLOWED(403) / COMPANION_SLOT_INVALID(400) / COMPANION_DISABLED(503) / TOO_MANY_REQUESTS(429)
+                    """)
+    @PostMapping("/test/prompt")
+    public ResponseEntity<Void> sendTestPrompt(
+            @AuthenticationPrincipal String wardId, @RequestBody(required = false) TestSlotRequest request) {
+        companionService.sendTestPrompt(wardId, request == null ? null : request.slot());
+        return ResponseEntity.noContent().build();
     }
 
     @Operation(summary = "글로 대답하기",

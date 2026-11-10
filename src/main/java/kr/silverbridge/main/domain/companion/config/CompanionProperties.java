@@ -56,6 +56,34 @@ public class CompanionProperties {
      */
     private List<String> promptWardIds = new ArrayList<>();
 
+    /**
+     * 최종 QA 테스트 계정(2026-11-10, {@code COMPANION_TEST_WARD_IDS}). 이 피보호자는 지금 시각과 상관없이 시간대를 골라
+     * 대화를 몇 번이든 다시 하고, 안내 푸시를 자기에게 보내고, 턴·마치기 응답에 AI 판정 결과를 받는다. 비면 꺼짐.
+     * 모든 계정을 뜻하는 {@code *}는 받지 않는다(기동 실패) - 운영 서버에는 넣지 않는다.
+     */
+    private List<String> testWardIds = new ArrayList<>();
+
+    public void setTestWardIds(List<String> testWardIds) {
+        List<String> cleaned = new ArrayList<>();
+        if (testWardIds != null) {
+            for (String id : testWardIds) {
+                if (id == null || id.isBlank()) {
+                    continue;
+                }
+                if (id.strip().contains("*")) {
+                    throw new IllegalArgumentException("companion.test-ward-ids 에 '*' 는 쓸 수 없습니다 - 계정 ID를 적으세요.");
+                }
+                cleaned.add(id.strip());
+            }
+        }
+        this.testWardIds = cleaned;
+    }
+
+    /** 말벗이 켜져 있고 테스트 목록에 있는 계정인가. */
+    public boolean isTestWard(String wardId) {
+        return isUsable() && wardId != null && testWardIds.contains(wardId);
+    }
+
     public boolean isConfigured() {
         return StringUtils.hasText(aiBaseUrl) && StringUtils.hasText(apiKey);
     }

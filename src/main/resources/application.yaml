@@ -215,6 +215,8 @@ companion:
   abandon-after: ${COMPANION_ABANDON_AFTER:10m}           # 활동 없는 대화를 스케줄러(5분 주기)가 마감
   # 질문 안내 알림을 받을 피보호자 ID(쉼표 구분). 비면 아무에게도 보내지 않는다 - PR-B(화면·알림 설정) 전까지의 허용 목록
   prompt-ward-ids: ${COMPANION_PROMPT_WARD_IDS:}
+  # 최종 QA 테스트 계정(쉼표 목록, 기본 빈 값 = 꺼짐, '*' 불가). 시간대를 골라 반복 대화·테스트 안내 푸시·판정 결과 응답. 운영 서버에는 넣지 않는다
+  test-ward-ids: ${COMPANION_TEST_WARD_IDS:}
 
 # 관리자 제휴 병원 관리 - 예약 서비스(SilverBridgeReservation) 관리자 API 중계 (2026-10-26).
 # 주소·자격은 코드 기본값 없음: 비면 이 API들만 503(기동은 막지 않음). vkcs-linux는 예약 서비스가 없어 비어 있는 것이 정상.

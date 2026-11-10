@@ -53,7 +53,7 @@ class CompanionStatsServiceTest {
         CompanionProperties properties = new CompanionProperties();
         CompanionService companionService = new CompanionService(mock(AiCompanionClient.class), properties,
                 mock(CompanionQuestionRepository.class), sessionRepository, mock(CompanionSessionWriter.class),
-                new CompanionTurnSlots(properties), mock(RateLimitService.class));
+                new CompanionTurnSlots(properties), mock(RateLimitService.class), mock(CompanionPromptScheduler.class));
         companionService.setClock(Clock.fixed(AT_2200.toInstant(), CompanionService.KST));
         service = new CompanionStatsService(companionService, sessionRepository, promptLogRepository,
                 noticeLogRepository, userRepository);

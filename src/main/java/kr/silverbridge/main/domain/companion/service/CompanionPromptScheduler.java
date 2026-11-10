@@ -90,11 +90,34 @@ public class CompanionPromptScheduler {
         } catch (DataIntegrityViolationException e) {
             return; // 이미 보냈다
         }
+        notificationDispatcher.dispatch(wardId, wardId, NotificationType.COMPANION_PROMPT, promptContent(slot, false));
+    }
+
+    /**
+     * 테스트 계정의 테스트 안내(2026-11-10, 최종 QA). 정각 안내와 같은 문구·종류(FCM만·설정 기반)이고 data에
+     * {@code test=true}만 더한다(기기가 눌렀을 때 테스트 시작으로 잇는다). 선점 기록을 남기지 않는다 - 응답률은 정각 안내
+     * 기준 그대로이고 같은 시간대를 반복해 보낼 수 있다. 호출 전 테스트 계정 확인은 {@link CompanionService}가 한다.
+     */
+    public void sendTestPrompt(String wardId, CompanionSlot slot) {
+        boolean eligible = userRepository.findById(wardId)
+                .filter(user -> user.getRole() == Role.WARD && user.getStatus() == Status.ACTIVE)
+                .isPresent();
+        if (!eligible) {
+            log.info("[COMPANION-PROMPT] 테스트 안내 대상 아님(피보호자 아님·정지·없음): wardId={}", wardId);
+            return;
+        }
+        notificationDispatcher.dispatch(wardId, wardId, NotificationType.COMPANION_PROMPT, promptContent(slot, true));
+        log.info("[COMPANION-PROMPT] 테스트 안내 발송: wardId={}, slot={}", wardId, slot.code());
+    }
+
+    /** 질문 안내 문구 - 정각 안내와 테스트 안내가 같이 쓴다. 정각 안내의 data는 {@code type}·{@code slot}뿐이다. */
+    static NotificationContent promptContent(CompanionSlot slot, boolean test) {
         int hour = slot.start().getHour();
         String body = (hour < 12 ? "오전 " + hour : "오후 " + (hour == 12 ? 12 : hour - 12))
                 + "시 안부 인사 시간이에요. 오늘 이야기를 들려주세요.";
-        notificationDispatcher.dispatch(wardId, wardId, NotificationType.COMPANION_PROMPT,
-                NotificationContent.of("안부 말벗", body,
-                        Map.of("type", "COMPANION_PROMPT", "slot", slot.code())));
+        Map<String, String> data = test
+                ? Map.of("type", "COMPANION_PROMPT", "slot", slot.code(), "test", "true")
+                : Map.of("type", "COMPANION_PROMPT", "slot", slot.code());
+        return NotificationContent.of("안부 말벗", body, data);
     }
 }

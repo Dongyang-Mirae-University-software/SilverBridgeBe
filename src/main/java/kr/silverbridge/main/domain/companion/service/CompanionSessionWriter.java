@@ -36,6 +36,13 @@ public class CompanionSessionWriter {
         return sessionRepository.saveAndFlush(CompanionSession.claim(wardId, date, slot, questionId, now));
     }
 
+    /** 테스트 대화 자리(2026-11-10). 시간대당 1회 UNIQUE는 일반 대화에만 걸려 같은 시간대에 여러 번 만들 수 있다. */
+    @Transactional
+    public CompanionSession claimTest(String wardId, LocalDate date, CompanionSlot slot, Long questionId,
+                                      OffsetDateTime now) {
+        return sessionRepository.saveAndFlush(CompanionSession.claimTest(wardId, date, slot, questionId, now));
+    }
+
     @Transactional
     public CompanionSession attachDialogue(long sessionId, String dialogueId, Integer maxTurns, OffsetDateTime now) {
         CompanionSession session = load(sessionId);
