@@ -24,7 +24,12 @@ public class TokenCleanupScheduler {
     @Scheduled(cron = "0 0 3 * * *", zone = "Asia/Seoul")
     @Transactional
     public void deleteExpiredTokens() {
-        refreshTokenRepository.deleteByExpiresAtBefore(OffsetDateTime.now());
-        log.info("만료된 Refresh Token 정리 완료");
+        try {
+            int deleted = refreshTokenRepository.deleteExpiredBefore(OffsetDateTime.now());
+            log.info("만료된 Refresh Token 정리 완료 count={}", deleted);
+        } catch (RuntimeException e) {
+            // 예외 객체·메시지는 남기지 않는다(클래스명만) - 다음 주기에 다시 시도
+            log.error("만료된 Refresh Token 정리 실패, 다음 주기에 재시도 cause={}", e.getClass().getSimpleName());
+        }
     }
 }
