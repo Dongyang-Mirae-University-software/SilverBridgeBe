@@ -76,7 +76,8 @@ public class CompanionPromptScheduler {
         return properties.getPromptWardIds();
     }
 
-    private void sendOne(String wardId, CompanionSlot slot, ZonedDateTime now) {
+    /** 한 사람 정각 안내(선점 후 발송). 테스트에서 data를 고정하려고 패키지 공개(점검 M-3). */
+    void sendOne(String wardId, CompanionSlot slot, ZonedDateTime now) {
         boolean eligible = userRepository.findById(wardId)
                 .filter(user -> user.getRole() == Role.WARD && user.getStatus() == Status.ACTIVE)
                 .isPresent();
@@ -107,7 +108,8 @@ public class CompanionPromptScheduler {
             return;
         }
         notificationDispatcher.dispatch(wardId, wardId, NotificationType.COMPANION_PROMPT, promptContent(slot, true));
-        log.info("[COMPANION-PROMPT] 테스트 안내 발송: wardId={}, slot={}", wardId, slot.code());
+        // 디스패처가 알림 설정(끔)·FCM 토큰 없음에 따라 보내지 않을 수 있다 - 결과는 알림 이력에서 본다(점검 L-1)
+        log.info("[COMPANION-PROMPT] 테스트 안내 발송 요청: wardId={}, slot={}", wardId, slot.code());
     }
 
     /** 질문 안내 문구 - 정각 안내와 테스트 안내가 같이 쓴다. 정각 안내의 data는 {@code type}·{@code slot}뿐이다. */

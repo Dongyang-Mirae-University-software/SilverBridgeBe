@@ -145,6 +145,42 @@ class CompanionTestModeTest {
     }
 
     @Test
+    @DisplayName("테스트 시작 동시 요청(더블탭): 선점에 진 쪽은 UNIQUE 위반 뒤 이긴 쪽 대화를 이어 가고 AI 대화를 더 열지 않는다(점검 M-1)")
+    void openTestLosesClaimRaceResumesWinner() {
+        CompanionSession winner = session(104L, "d-104", TESTER, CompanionSlot.S15, true);
+        when(sessionRepository.findFirstByWardIdAndSessionDateAndSlotAndTestTrueAndStatusOrderByIdDesc(
+                TESTER, TODAY, CompanionSlot.S15, CompanionSessionStatus.OPEN))
+                .thenReturn(Optional.empty(), Optional.of(winner));
+        CompanionQuestion q = question(31L, "오후 질문");
+        when(questionRepository.findBySlotAndActiveTrueOrderByIdAsc(CompanionSlot.S15)).thenReturn(List.of(q));
+        when(questionRepository.findById(1L)).thenReturn(Optional.of(q));
+        when(writer.claimTest(eq(TESTER), eq(TODAY), eq(CompanionSlot.S15), eq(31L), any()))
+                .thenThrow(new org.springframework.dao.DataIntegrityViolationException("uq_companion_session_test_open"));
+
+        SessionResponse response = service.openTest(TESTER, "15:00");
+
+        assertThat(response.sessionId()).isEqualTo(104L);
+        assertThat(response.resumed()).isTrue();
+        verify(aiClient, never()).openDialogue(anyString(), anyLong(), anyString(), anyString(), anyLong());
+    }
+
+    @Test
+    @DisplayName("테스트 시작 동시 요청: 이긴 쪽이 아직 AI 대화를 여는 중이면 409 TURN_IN_PROGRESS")
+    void openTestLosesClaimRaceWhileWinnerOpening() {
+        CompanionSession opening = session(105L, null, TESTER, CompanionSlot.S15, true);
+        when(sessionRepository.findFirstByWardIdAndSessionDateAndSlotAndTestTrueAndStatusOrderByIdDesc(
+                TESTER, TODAY, CompanionSlot.S15, CompanionSessionStatus.OPEN))
+                .thenReturn(Optional.empty(), Optional.of(opening));
+        CompanionQuestion q = question(31L, "오후 질문");
+        when(questionRepository.findBySlotAndActiveTrueOrderByIdAsc(CompanionSlot.S15)).thenReturn(List.of(q));
+        when(writer.claimTest(eq(TESTER), eq(TODAY), eq(CompanionSlot.S15), eq(31L), any()))
+                .thenThrow(new org.springframework.dao.DataIntegrityViolationException("uq_companion_session_test_open"));
+
+        assertThatThrownBy(() -> service.openTest(TESTER, "15:00"))
+                .extracting(e -> ((CustomException) e).getErrorCode()).isEqualTo(ErrorCode.COMPANION_TURN_IN_PROGRESS);
+    }
+
+    @Test
     @DisplayName("일반 계정: 테스트 시작·테스트 안내는 403 COMPANION_TEST_NOT_ALLOWED이고 아무것도 하지 않는다")
     void normalWardRejected() {
         assertThatThrownBy(() -> service.openTest(NORMAL, "15:00"))

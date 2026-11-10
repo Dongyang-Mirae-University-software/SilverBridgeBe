@@ -4,6 +4,10 @@
 
 ---
 
+### [2026-11-10] 안부 말벗 테스트 계정 기능 점검·조치 (#461 점검, `fix/companion-test-mode-audit`)
+- 점검(템플릿 B, Sonnet 하위 에이전트): 조건부 PASS · 🟡 3 · 🟢 5, 결함 주입 5종 중 c2(정각 안내 test 키) 미검출. 상세 `docs/(2026-11-10) audit-companion-test-mode.md`.
+- 조치(사용자 "전부 반영해줘"): V69 진행 중 테스트 대화 시간대당 1개·동시 시작 진 쪽 이어 감 / 정각 안내 data 테스트(c2 검출) / 보호자 지금 기분·대답 수는 그 날 모든 대화 / 통합 테스트 확장 / Swagger·정책 문서.
+
 ### [2026-11-10] 안부 말벗 테스트 계정 - 최종 QA 지원 (`feature/companion-test-mode`)
 - 테스트 계정(`COMPANION_TEST_WARD_IDS`)만 시간대를 골라 대화 시작(반복, 진행 중이면 이어 감)·안내 푸시 직접 보내기(data `test=true`, `companion_prompt_log` 없음)·턴/마치기 `analysis`(AI 값 그대로, 저장·로그 없음)·`today.testMode`. 일반 계정 동작 무변경.
 - V68(가역): `companion_session.is_test` + 시간대당 1회 UNIQUE를 일반 대화 전용 부분 인덱스로. 테스트 대화도 모든 집계에 포함, 화면은 시간대별 최근 대화.

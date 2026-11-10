@@ -61,6 +61,23 @@ class CompanionPromptSchedulerTest {
     }
 
     @Test
+    @DisplayName("정각 안내: 선점 기록 후 data는 type·slot뿐이다 - test 키가 없다(점검 M-3)")
+    void regularPromptHasNoTestKey() {
+        User active = user(Role.WARD, Status.ACTIVE);
+        when(userRepository.findById(TESTER)).thenReturn(Optional.of(active));
+
+        scheduler.sendOne(TESTER, CompanionSlot.S18,
+                java.time.ZonedDateTime.of(2026, 11, 10, 18, 0, 0, 0, CompanionService.KST));
+
+        ArgumentCaptor<NotificationContent> content = ArgumentCaptor.forClass(NotificationContent.class);
+        verify(dispatcher).dispatch(org.mockito.ArgumentMatchers.eq(TESTER), org.mockito.ArgumentMatchers.eq(TESTER),
+                org.mockito.ArgumentMatchers.eq(NotificationType.COMPANION_PROMPT), content.capture());
+        assertThat(content.getValue().data())
+                .isEqualTo(java.util.Map.of("type", "COMPANION_PROMPT", "slot", "18:00"));
+        verify(promptLogRepository).saveAndFlush(any());
+    }
+
+    @Test
     @DisplayName("테스트 안내: 정지 계정이면 보내지 않는다")
     void skipsRestricted() {
         User restricted = user(Role.WARD, Status.RESTRICTED);

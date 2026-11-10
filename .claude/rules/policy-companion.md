@@ -51,9 +51,11 @@ paths:
 
 - **전용 목록 `COMPANION_TEST_WARD_IDS`**(기본 빈 값 = 꺼짐, `*` 불가 - 기동 실패). **운영 서버 `.env`에 넣지 말 것** - gosky dev `.env.dev`에만. 판정은 `CompanionProperties.isTestWard`(말벗 켜짐 + 목록 포함) 한 곳.
 - 테스트 계정만: `POST /api/ward/companion/test/sessions {slot}`(창 없이 고른 시간대의 오늘 질문, 반복 가능, 같은 시간대에 진행 중인 테스트 대화는 이어 감) / `POST .../test/prompt {slot}`(204) / `today.testMode` / 턴·마치기 `analysis`. 나머지는 403 `COMPANION_TEST_NOT_ALLOWED`. 테스트 계정도 일반 `POST /sessions`는 창 규칙을 따른다.
-- **테스트 대화는 일반 대화와 똑같이 저장·집계한다**(보호자 화면·하루 기분·연속 일수·주의 알림·관리자 집계·위험 알림). `companion_session.is_test`는 표시만 한다 - 집계에서 빼는 필터를 함부로 넣지 말 것(사용자 결정, 실제 흐름 확인이 목적). 시간대당 1회 UNIQUE는 일반 대화 전용 부분 인덱스(V68)라, 일반 대화 조회는 `...AndTestFalse`로 해야 한다. 화면은 시간대별 가장 최근 대화(`CompanionService.latestBySlot`).
-- **테스트 안내 푸시**: 정각 안내와 같은 문구·`COMPANION_PROMPT`(FCM만·설정 기반)이고 data에 `test=true`만 더한다. **`companion_prompt_log`를 남기지 않는다**(응답률은 정각 안내 기준, 사용자 결정). 정각 안내 data에 `test`를 넣지 말 것. 분당 3·시간당 30.
+- **테스트 대화는 일반 대화와 똑같이 저장·집계한다**(보호자 화면·하루 기분·연속 일수·주의 알림·관리자 집계·위험 알림). `companion_session.is_test`는 표시만 한다 - 집계에서 빼는 필터를 함부로 넣지 말 것(사용자 결정, 실제 흐름 확인이 목적). 시간대당 1회 UNIQUE는 일반 대화 전용 부분 인덱스(V68)라, 일반 대화 조회는 `...AndTestFalse`로 해야 한다. **진행 중(OPEN) 테스트 대화는 시간대당 1개**(V69 부분 UNIQUE, 점검 M-1) - 동시 시작(더블탭)에 진 쪽은 위반을 받아 이긴 쪽 대화를 이어 간다. 시간대 칸은 시간대별 가장 최근에 시작한 대화(`CompanionService.latestBySlot`)이고, **보호자 지금 기분·대답한 시간대 수는 그 날 모든 대화로 본다**(점검 L-2 - 대답한 일반 대화 뒤에 대답 없는 테스트 대화가 와도 대답한 시간대로 센다).
+- **테스트 안내 푸시**: 정각 안내와 같은 문구·`COMPANION_PROMPT`(FCM만·설정 기반)이고 data에 `test=true`만 더한다. **`companion_prompt_log`를 남기지 않는다**(응답률은 정각 안내 기준, 사용자 결정). 정각 안내 data에 `test`를 넣지 말 것(`CompanionPromptSchedulerTest.regularPromptHasNoTestKey`가 고정). 분당 3·시간당 30. **204는 발송 요청 뜻이다**(점검 L-1) - 정지 계정·알림 설정 끔·FCM 토큰 없음이면 정각 안내처럼 보내지 않고 응답은 그대로 204다(결과는 알림 이력).
 - **`analysis`는 응답에만**: AI 턴 값(`turnResult`·`face`·`signals`·위험) 그대로, 만들어 내지 않는다(AI가 안 주는 글 기분 코드는 없음). DB 칸·로그·알림에 남기지 말 것 - 원문 미저장(결정 B)과 같은 기준. 일반 계정 응답에는 필드 자체가 없다(`@JsonInclude(NON_NULL)`). 상세 `docs/(2026-11-10) feature-companion-test-mode.md`.
+- **역할은 `isTestWard`가 아니라 컨트롤러가 막는다**(점검 L-3, 현상 유지): 목록에 남은 ID가 보호자로 바뀌어도 `WardCompanionController`의 `hasRole('WARD')`·역할 변경 토큰 무효화·말벗 기록 삭제가 막는다. 테스트 API를 다른 컨트롤러로 옮기면 역할 검사를 함께 옮길 것.
+- **목록은 ID 기준이다**(점검 L-4): 탈퇴(hard delete) 뒤 같은 ID로 다시 가입하면 테스트 권한을 물려받는다. QA가 끝나면 `.env.dev`에서 ID를 빼고 `up -d api`. 점검 `docs/(2026-11-10) audit-companion-test-mode.md`.
 
 ## 수용한 한계 (2026-11-04)
 
