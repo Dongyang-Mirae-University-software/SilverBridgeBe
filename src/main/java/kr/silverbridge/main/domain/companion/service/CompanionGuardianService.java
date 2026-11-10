@@ -14,6 +14,7 @@ import kr.silverbridge.main.domain.companion.repository.CompanionSessionReposito
 import kr.silverbridge.main.domain.connection.service.ConnectionService;
 import kr.silverbridge.main.global.exception.CustomException;
 import kr.silverbridge.main.global.exception.ErrorCode;
+import kr.silverbridge.main.global.util.UserIdFormat;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -26,7 +27,6 @@ import java.util.Arrays;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
-import java.util.regex.Pattern;
 
 /**
  * 보호자 "AI 기분 체크" 조회(2026-11-04, PR-B, 노션 카드 "AI 기분 체크 조회 API").
@@ -41,7 +41,6 @@ import java.util.regex.Pattern;
 @RequiredArgsConstructor
 public class CompanionGuardianService {
 
-    private static final Pattern WARD_ID = Pattern.compile("^[A-Za-z0-9]{1,6}$");
 
     private final CompanionService companionService;
     private final CompanionSessionRepository sessionRepository;
@@ -106,7 +105,7 @@ public class CompanionGuardianService {
 
     /** ACTIVE 연결이 아니면 403 + 흔적(2026-07-14 정책). 형식이 틀린 ID는 DB를 보지 않고 길이만 남긴다. */
     private OffsetDateTime requireConnectedAt(String guardianId, String wardId) {
-        if (wardId == null || !WARD_ID.matcher(wardId).matches()) {
+        if (!UserIdFormat.isWellFormed(wardId)) {
             log.warn("[IDOR-ATTEMPT] 형식이 맞지 않는 피보호자 ID로 안부 대화 조회 시도: guardianId={}, wardIdLength={}",
                     guardianId, wardId == null ? 0 : wardId.length());
             throw new CustomException(ErrorCode.COMPANION_NOT_AUTHORIZED);

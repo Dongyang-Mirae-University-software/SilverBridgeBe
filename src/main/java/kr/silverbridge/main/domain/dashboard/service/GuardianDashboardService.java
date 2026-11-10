@@ -19,6 +19,7 @@ import kr.silverbridge.main.domain.user.entity.User;
 import kr.silverbridge.main.domain.user.repository.UserRepository;
 import kr.silverbridge.main.global.exception.CustomException;
 import kr.silverbridge.main.global.exception.ErrorCode;
+import kr.silverbridge.main.global.util.UserIdFormat;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -35,7 +36,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.function.Supplier;
-import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
 /**
@@ -56,7 +56,6 @@ import java.util.stream.Collectors;
 public class GuardianDashboardService {
 
     // 사용자 ID 형식(UserIdGenerator - 영숫자 6자). 형식 오류는 DB를 거치지 않고 403(SOS 이력과 같은 기준).
-    private static final Pattern WARD_ID_FORMAT = Pattern.compile("[A-Za-z0-9]{1,6}");
 
     static final String SECTION_ANOMALY = "anomalyDetection";
     static final String SECTION_SOS = "sos";
@@ -186,7 +185,7 @@ public class GuardianDashboardService {
             return connectionService.getActiveWardIds(guardianId);
         }
         // 형식이 틀린 값은 원문 대신 길이만 남긴다 - 줄바꿈을 넣어 가짜 로그 줄을 만들 수 있다(SOS 이력과 같은 기준, 2026-10 점검 M-1)
-        if (!WARD_ID_FORMAT.matcher(wardId).matches()) {
+        if (!UserIdFormat.isWellFormed(wardId)) {
             log.warn("[IDOR-ATTEMPT] 형식이 맞지 않는 피보호자 대시보드 조회 시도: guardianId={}, wardIdLength={}",
                     guardianId, wardId.length());
             throw new CustomException(ErrorCode.DASHBOARD_NOT_AUTHORIZED);

@@ -21,6 +21,7 @@ import kr.silverbridge.main.global.exception.CustomException;
 import kr.silverbridge.main.global.exception.ErrorCode;
 import kr.silverbridge.main.global.response.PageResponse;
 import kr.silverbridge.main.global.response.PageOffsets;
+import kr.silverbridge.main.global.util.UserIdFormat;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
@@ -35,7 +36,6 @@ import java.util.Collection;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
 /**
@@ -63,7 +63,6 @@ public class GuardianAnomalyService {
     private static final int MAX_PAGE_SIZE = 50;
 
     // 사용자 ID 형식(영숫자 1~6자) - SOS 이력·대시보드와 같은 기준
-    private static final Pattern WARD_ID_FORMAT = Pattern.compile("[A-Za-z0-9]{1,6}");
 
     /** 빈 IN 절을 피하는 매칭 불가능한 값(관리자 로그 검색과 같다). 세션 ID는 'ward_' + 영숫자라 빈 문자열과 겹치지 않는다. */
     private static final List<String> NO_MATCH = List.of("");
@@ -340,7 +339,7 @@ public class GuardianAnomalyService {
         }
         // 형식이 틀린 값은 DB 조회 없이 거절하고 로그에는 원문 대신 길이만 남긴다 - 줄바꿈 삽입으로 로그 줄 위조 방지
         // (2026-11-10 전체 점검 M-1, SOS 이력·대시보드·복약·챗 대리 상담과 같은 방식)
-        if (!WARD_ID_FORMAT.matcher(wardId).matches()) {
+        if (!UserIdFormat.isWellFormed(wardId)) {
             log.warn("[IDOR-ATTEMPT] 형식이 맞지 않는 피보호자 이상감지 이력 조회 시도: guardianId={}, wardIdLength={}",
                     guardianId, wardId.length());
             throw new CustomException(ErrorCode.ANOMALY_NOT_AUTHORIZED);

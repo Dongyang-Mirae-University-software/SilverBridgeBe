@@ -12,6 +12,7 @@ import kr.silverbridge.main.domain.medication.repository.MedicationMissedAlertLo
 import kr.silverbridge.main.domain.medication.repository.MedicationRepository;
 import kr.silverbridge.main.domain.user.entity.User;
 import kr.silverbridge.main.domain.user.repository.UserRepository;
+import kr.silverbridge.main.global.enums.Status;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -142,6 +143,13 @@ public class MedicationMissedAlertPlanner {
                 if (pending.isEmpty()) {
                     continue;
                 }
+            }
+            // 계정이 이용 제한(RESTRICTED)·탈퇴 진행인 보호자는 발송이 디스패처에서 막히는데, 선점하면 하루 한 줄씩
+            // 차단 이력만 쌓인다(2026-11-10 2차 점검 L-1). 이상감지 재촉과 같게 ACTIVE 계정만 남긴다.
+            Set<String> usable = new java.util.HashSet<>(userRepository.findIdsByIdInAndStatus(pending, Status.ACTIVE));
+            pending = pending.stream().filter(usable::contains).toList();
+            if (pending.isEmpty()) {
+                continue;
             }
             Map<String, GuardianMissedAlertSetting> settings =
                     guardianSettingService.findSettings(wardId, pending);

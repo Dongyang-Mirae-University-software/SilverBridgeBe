@@ -1,6 +1,6 @@
 package kr.silverbridge.main.domain.medication.service;
 
-import java.util.regex.Pattern;
+import kr.silverbridge.main.global.util.UserIdFormat;
 
 /**
  * 경로로 받은 피보호자 ID의 형식 확인(2026-10-22 점검 L-6). 사용자 ID는 영숫자 1~6자다.
@@ -10,13 +10,11 @@ import java.util.regex.Pattern;
  */
 final class MedicationWardIds {
 
-    private static final Pattern USER_ID_FORMAT = Pattern.compile("\\A[A-Za-z0-9]{1,6}\\z");
-
     private MedicationWardIds() {
     }
 
     static boolean isWellFormed(String wardId) {
-        return wardId != null && USER_ID_FORMAT.matcher(wardId).matches();
+        return UserIdFormat.isWellFormed(wardId);
     }
 
     static int lengthOf(String wardId) {

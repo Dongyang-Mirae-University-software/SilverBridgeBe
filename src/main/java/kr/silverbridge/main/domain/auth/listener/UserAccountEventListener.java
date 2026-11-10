@@ -6,6 +6,7 @@ import kr.silverbridge.main.domain.user.event.PasswordChangedEvent;
 import kr.silverbridge.main.domain.user.event.UserRestrictedEvent;
 import kr.silverbridge.main.domain.user.event.UserRoleChangedEvent;
 import kr.silverbridge.main.domain.user.event.UserWithdrawnEvent;
+import kr.silverbridge.main.domain.user.event.WithdrawnUserSweptEvent;
 import kr.silverbridge.main.global.enums.AccessAction;
 import kr.silverbridge.main.global.jwt.JwtProperties;
 import kr.silverbridge.main.global.jwt.TokenInvalidation;
@@ -13,6 +14,7 @@ import kr.silverbridge.main.global.util.RedisKeys;
 import kr.silverbridge.main.global.websocket.WebSocketSessionCloser;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.context.event.EventListener;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Propagation;
@@ -62,6 +64,20 @@ public class UserAccountEventListener {
             log.error("[WITHDRAW] 토큰·접속로그 정리 실패 — purge/스윕이 회수 예정 userId={}", event.userId(), e);
         }
         // 탈퇴한 계정의 열린 세션도 닫는다 - 남겨 두면 purge 뒤에도 그 브라우저가 연결된 채로 남는다
+        webSocketSessionCloser.closeAll(event.userId());
+    }
+
+    // 탈퇴 스윕 경로 (L-4) - 탈퇴 리스너가 한 번도 돌지 않은 계정도 access 토큰 무효화 + 열린 WS 종료를 한다.
+    // 스윕은 트랜잭션 밖이라 AFTER_COMMIT이 아닌 일반 이벤트로 받는다. 쓰기는 Redis뿐(DB 쓰기 없음)이라 REQUIRES_NEW 불필요.
+    // best-effort - 실패해도 purge를 막지 않는다(예외를 밖으로 내지 않는다). 기존 handleWithdrawn은 바꾸지 않았다.
+    @EventListener
+    public void handleSwept(WithdrawnUserSweptEvent event) {
+        try {
+            invalidatePreviousAccessTokens(event.userId());
+        } catch (RuntimeException e) {
+            log.error("[WITHDRAW-SWEEP] access 토큰 무효화 실패 - 옛 토큰이 만료까지 유효할 수 있음 userId={} error={}",
+                    event.userId(), e.getClass().getSimpleName());
+        }
         webSocketSessionCloser.closeAll(event.userId());
     }
 

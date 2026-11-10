@@ -12,6 +12,7 @@ import kr.silverbridge.main.domain.user.repository.UserRepository;
 import kr.silverbridge.main.global.exception.CustomException;
 import kr.silverbridge.main.global.exception.ErrorCode;
 import kr.silverbridge.main.global.response.PageOffsets;
+import kr.silverbridge.main.global.util.UserIdFormat;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
@@ -30,7 +31,6 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import java.util.function.Function;
-import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
@@ -56,7 +56,6 @@ public class GuardianSosService {
     private static final int MAX_PAGE_SIZE = 50;
 
     /** 사용자 ID 형식(영숫자 1~6자). 요청 wardId가 어긋나면 로그에 원문을 남기지 않는다. */
-    private static final Pattern WARD_ID_FORMAT = Pattern.compile("[A-Za-z0-9]{1,6}");
 
     private final SosEventRepository sosEventRepository;
     private final ConnectionService connectionService;
@@ -213,7 +212,7 @@ public class GuardianSosService {
         }
         // 형식이 틀린 값은 DB 조회 없이 거절하고 로그에는 원문 대신 길이만 남긴다 - 줄바꿈 삽입으로 로그 줄 위조 방지(점검 L-1,
         // 복약 MedicationWardIds·챗 대리 상담과 같은 방식)
-        if (!WARD_ID_FORMAT.matcher(wardId).matches()) {
+        if (!UserIdFormat.isWellFormed(wardId)) {
             log.warn("[IDOR-ATTEMPT] 형식이 맞지 않는 피보호자 SOS 이력 조회 시도: guardianId={}, wardIdLength={}",
                     guardianId, wardId.length());
             throw new CustomException(ErrorCode.SOS_NOT_AUTHORIZED);
