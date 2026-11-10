@@ -4,6 +4,11 @@
 
 ---
 
+### [2026-11-10] 안부 말벗 테스트 계정 - 최종 QA 지원 (`feature/companion-test-mode`)
+- 테스트 계정(`COMPANION_TEST_WARD_IDS`)만 시간대를 골라 대화 시작(반복, 진행 중이면 이어 감)·안내 푸시 직접 보내기(data `test=true`, `companion_prompt_log` 없음)·턴/마치기 `analysis`(AI 값 그대로, 저장·로그 없음)·`today.testMode`. 일반 계정 동작 무변경.
+- V68(가역): `companion_session.is_test` + 시간대당 1회 UNIQUE를 일반 대화 전용 부분 인덱스로. 테스트 대화도 모든 집계에 포함, 화면은 시간대별 최근 대화.
+- AI가 주지 않아 못 싣는 값: `textMood`(글 기분 코드 - `turnResult`에 합쳐져서만 옴). 상세 `docs/(2026-11-10) feature-companion-test-mode.md`.
+
 ### [2026-11-10] 외부 주소 평문 경고 오탐 보정 (#460)
 - gosky 기동 로그의 `[EXTERNAL-URL-PLAINTEXT] chat.stt.ai-base-url`은 오탐이었다 - 주소가 도커 브리지 게이트웨이 `10.0.22.1:6017`(같은 서버 AI)라 서버 밖을 지나지 않는다. 루프백·사설 대역·점 없는 이름을 경고에서 제외(#460 `f46f8d7`), 두 서버 배포·gosky 경고 0건 확인. 남은 확인: gosky AI 6017 포트가 `0.0.0.0`으로 열려 있음(AI 점검 세션 항목).
 
