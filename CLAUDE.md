@@ -10,7 +10,7 @@
 - **인프라**: PostgreSQL + Flyway / Redis(캐시·세션) / WebSocket(실시간)
 - **보안·연동**: Spring Security, OAuth2(카카오), JWT(jjwt) / Firebase(FCM), Solapi(SMS), SMTP / springdoc-openapi(Swagger) / OWASP DependencyCheck
 - **메인 브랜치**: `dev` — push 시 CD 자동 배포 (§3 참조)
-- **도메인**: `kr.silverbridge.main.domain/<bounded-context>` = `admin`·`announcement`·`anomaly`·`auth`·`camera`·`chat`·`companion`·`connection`·`inquiry`·`medication`·`notification`·`sos`·`user`. 공통 코드는 `global/`(aop·audit·client·config·jwt·security·websocket 등) - **`global`은 `domain`을 import하지 않는다**(2026-09-30 F-1~F-3 정리 후 0건).
+- **도메인**: `kr.silverbridge.main.domain/<bounded-context>` = `admin`·`announcement`·`anomaly`·`auth`·`camera`·`chat`·`companion`·`connection`·`dashboard`·`hospital`·`inquiry`·`medication`·`notification`·`sos`·`user`. 공통 코드는 `global/`(aop·audit·client·config·jwt·security·websocket 등) - **`global`은 `domain`을 import하지 않는다**(2026-09-30 F-1~F-3 정리 후 0건).
   - ⚠️ **도메인 로직을 `global`에 넣지 말 것** — 도메인 코드는 `domain/<context>/`.
 - **기능별 요약·정책**(2026-10-30 이동): 도메인 기능 설명은 `.claude/rules/policy-<도메인>.md`의 "기능 요약" 절에 있다 (auth·connection·sos·anomaly·camera·medication·notification·chat·companion·admin·dashboard). 해당 코드를 다루면 자동 로드되고, 코드를 열지 않고 설계·답변할 때는 직접 Read 한다.
 
@@ -67,7 +67,7 @@
 
 ## 4. 스킬
 
-`.claude/skills/`에 20개 설치. 트리거가 명확하면 자동 로드, 호출 전 해당 `SKILL.md`를 읽는다. 전체 목록·분류: **`.claude/skills/README.md`**.
+`.claude/skills/`에 19개 설치. 트리거가 명확하면 자동 로드, 호출 전 해당 `SKILL.md`를 읽는다. 전체 목록·분류: **`.claude/skills/README.md`**.
 
 - **`work-prompt`** — 구현·점검 요청 시 **가장 먼저** (§2-5의 프롬프트 설계 템플릿, §2-6 점검 제안 템플릿)
 - 자주 쓰는: `git-commit` · `test-quality` · `security-audit` · `jpa-patterns` · `spring-boot-patterns` · `architecture-review` · `issue-triage`
