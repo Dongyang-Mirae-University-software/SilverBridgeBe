@@ -80,6 +80,7 @@ public class GuardianChatController {
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "CHAT_INVALID_REQUEST", content = @Content),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "인증 토큰 없음 또는 만료", content = @Content),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "보호자 권한 필요", content = @Content),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "413", description = "CHAT_REQUEST_TOO_LARGE(요청 본문 512KB 초과)", content = @Content),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "429", description = "CHAT_LIMIT_EXCEEDED / TOO_MANY_REQUESTS", content = @Content),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "503", description = "CHAT_UNAVAILABLE", content = @Content),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "504", description = "CHAT_TIMEOUT", content = @Content)
