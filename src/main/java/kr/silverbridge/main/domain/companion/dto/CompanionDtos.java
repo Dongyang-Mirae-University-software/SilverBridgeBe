@@ -71,7 +71,10 @@ public final class CompanionDtos {
             @Schema(description = "AI face 값 그대로(usable·label·confidence·frameCount·totalFrames·facesFound)")
             Map<String, Object> face,
             @Schema(description = "턴 위험 = AI 최상위 riskFlag 또는 signals.riskFlag") boolean riskFlag,
-            @Schema(description = "AI signals 그대로. 신호가 없는 턴(무응답·되묻기)은 null") Map<String, Object> signals) {
+            @Schema(description = "AI signals 그대로. 신호가 없는 턴(무응답·되묻기)은 null") Map<String, Object> signals,
+            @Schema(description = "AI textMood 그대로(글 기분 분류: label·turnLabel·confidence·usable·reason). "
+                    + "무응답·되묻기 턴, AI가 주지 않으면 null")
+            Map<String, Object> textMood) {
     }
 
     @Schema(description = "마친 대화 결과")
