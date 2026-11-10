@@ -4,6 +4,9 @@
 
 ---
 
+### [2026-11-10] BE 전체 점검 1차 반영 - 로그 원문 식별자·리다이렉트·평문 주소 경고
+- M-1(이상감지 이력 `wardId` 형식 검사)·L-1(STOMP)·L-2(카메라 `sessionId`)·L-3(debug URL·FCM 원인 예외)·L-4(카카오·파일서버 리다이렉트 끔, `[EXTERNAL-URL-PLAINTEXT]` 경고) 반영. 공용 `LogSafe`·`NoRedirectRequestFactory`·`ExternalUrlSchemeChecker` 추가, 응답·인가 불변, 마이그레이션 없음. D-1(refresh `body-compat`)은 결정 대기.
+
 ### [2026-11-10] BE 전체 점검 1차 - 기준선·10/31 이후 변경분·보안 인가 (말벗 제외)
 - **PASS** · 🔴0 🟠0 🟡1 🟢5 · 결정 1. 빌드·단위 2437건·통합(vkcs)·OWASP(CVSS 7.0 이상 0건) 통과, gosky·vkcs `d88107f` 일치. 엔드포인트 141개 역할 어긋남 0·IDOR FAIL 0·토큰·정지 차단 규칙대로. 🟡 M-1 이상감지 이력 `wardId` 원문 로그(`GuardianAnomalyService:338`) 수정 승인 대기, D-1 refresh `body-compat` 끄기 결정 대기. 상세 `docs/(2026-11-10) audit-full-2026-11-be.md`.
 

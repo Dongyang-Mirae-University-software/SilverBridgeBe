@@ -3,6 +3,7 @@ package kr.silverbridge.main.domain.camera.service;
 import kr.silverbridge.main.domain.camera.config.CameraStreamProperties;
 import kr.silverbridge.main.global.exception.CustomException;
 import kr.silverbridge.main.global.exception.ErrorCode;
+import kr.silverbridge.main.global.util.LogSafe;
 import kr.silverbridge.main.global.util.RedisKeys;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -79,7 +80,7 @@ public class CameraStreamTicketService {
         String ticketSessionId = value.substring(first + 1, last);
         if (!ticketSessionId.equals(sessionId)) {
             // 다른 카메라용 티켓으로 이 카메라를 열려 함 - 티켓은 이미 소비됐다(재사용 불가)
-            log.warn("[IDOR-ATTEMPT] 다른 카메라용 스트림 티켓 사용: userId={}, sessionId={}", userId, sessionId);
+            log.warn("[IDOR-ATTEMPT] 다른 카메라용 스트림 티켓 사용: userId={}, sessionId={}", userId, LogSafe.id(sessionId));
             throw new CustomException(ErrorCode.CAMERA_STREAM_TICKET_INVALID);
         }
         try {

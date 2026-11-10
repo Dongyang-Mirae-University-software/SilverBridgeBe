@@ -164,6 +164,21 @@ class GuardianAnomalyServiceTest {
         }
 
         @Test
+        @DisplayName("형식이 틀린 wardId(줄바꿈·긴 값)는 연결 조회 없이 403이다 - 로그 줄 위조 방지(2026-11-10 전체 점검 M-1)")
+        void malformedWardIdIsRejectedBeforeConnectionLookup() {
+            for (String malformed : List.of("x\n2026-11-10 WARN [IDOR-ATTEMPT] fake", "A".repeat(8000), "WD-001", "WD00012")) {
+                assertThatThrownBy(() -> service.getHistory(GUARDIAN_ID, malformed, null, null, 0, 20))
+                        .isInstanceOf(CustomException.class)
+                        .hasFieldOrPropertyWithValue("errorCode", ErrorCode.ANOMALY_NOT_AUTHORIZED);
+                assertThatThrownBy(() -> service.getHistorySummary(GUARDIAN_ID, malformed))
+                        .isInstanceOf(CustomException.class)
+                        .hasFieldOrPropertyWithValue("errorCode", ErrorCode.ANOMALY_NOT_AUTHORIZED);
+            }
+
+            verify(connectionService, never()).isActiveConnection(anyString(), anyString());
+        }
+
+        @Test
         @DisplayName("연결되지 않은 피보호자의 상황에 응답하면 403이고, 응답은 저장되지 않는다")
         void feedbackOnUnconnectedWardIsForbidden() {
             when(incidentRepository.findByIdForUpdate(INCIDENT_ID)).thenReturn(Optional.of(incident()));

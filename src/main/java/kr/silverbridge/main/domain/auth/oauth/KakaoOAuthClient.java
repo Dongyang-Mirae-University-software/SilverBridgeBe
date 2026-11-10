@@ -7,6 +7,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.MediaType;
 import org.springframework.http.client.ClientHttpRequestFactory;
+import kr.silverbridge.main.global.client.NoRedirectRequestFactory;
 import org.springframework.http.client.SimpleClientHttpRequestFactory;
 import org.springframework.stereotype.Component;
 import org.springframework.util.LinkedMultiValueMap;
@@ -48,7 +49,8 @@ public class KakaoOAuthClient {
     }
 
     private static ClientHttpRequestFactory buildRequestFactory() {
-        SimpleClientHttpRequestFactory factory = new SimpleClientHttpRequestFactory();
+        // 리다이렉트는 따라가지 않는다 - 카카오 토큰을 실은 요청이 다른 주소로 다시 나가지 않게(2026-11-10 전체 점검 L-4)
+        SimpleClientHttpRequestFactory factory = new NoRedirectRequestFactory();
         factory.setConnectTimeout((int) CONNECT_TIMEOUT.toMillis());
         factory.setReadTimeout((int) READ_TIMEOUT.toMillis());
         return factory;

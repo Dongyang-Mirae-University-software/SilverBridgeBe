@@ -34,7 +34,8 @@ public class FileServerClient {
         this.fileServerHost = hostOf(baseUrl);
         // 파일 서버가 응답을 늦추면 프로필 이미지 업로드·삭제가 요청 스레드를 붙든다 - 카카오 클라이언트와 같은
         // 이유로 타임아웃을 둔다(2026-09-11 기술 점검 C-2). 업로드는 5MB 상한이라 read 10초면 충분하다.
-        SimpleClientHttpRequestFactory factory = new SimpleClientHttpRequestFactory();
+        // 리다이렉트는 따라가지 않는다(2026-11-10 전체 점검 L-4)
+        SimpleClientHttpRequestFactory factory = new NoRedirectRequestFactory();
         factory.setConnectTimeout(Duration.ofSeconds(3));
         factory.setReadTimeout(Duration.ofSeconds(10));
         this.restClient = RestClient.builder()
@@ -54,7 +55,7 @@ public class FileServerClient {
         }
         String filename = ownedFilename(fileUrl);
         if (filename == null) {
-            log.debug("파일서버 주소가 아니라 삭제를 건너뜀 (url={})", fileUrl);
+            log.debug("파일서버 주소가 아니라 삭제를 건너뜀");
             return;
         }
         try {
