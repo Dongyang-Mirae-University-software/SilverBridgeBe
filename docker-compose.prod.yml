@@ -9,6 +9,8 @@ services:
     container_name: dmu-prod-api
     image: dmu-api:prod
     restart: unless-stopped
+    # server.shutdown graceful + executor 종료 대기 20초 + 여유. 기본 10초면 SIGKILL로 진행 중 알림·요청이 잘린다.
+    stop_grace_period: 40s
     env_file:
       - .env.prod
     # 호스트 루프백에만 publish. nginx(api.dmu.gosky.kr)가 127.0.0.1:6011로 프록시.

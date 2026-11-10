@@ -6,6 +6,8 @@ services:
     container_name: dmu-dev-api
     image: dmu-api:dev
     restart: unless-stopped
+    # server.shutdown graceful + executor 종료 대기 20초 + 여유. 기본 10초면 SIGKILL로 진행 중 알림·요청이 잘린다.
+    stop_grace_period: 40s
     env_file:
       - .env.dev
     # 호스트 루프백에만 publish (A-M2): 외부에서 6511 직접 접근을 차단해 X-Forwarded-For 위조로
