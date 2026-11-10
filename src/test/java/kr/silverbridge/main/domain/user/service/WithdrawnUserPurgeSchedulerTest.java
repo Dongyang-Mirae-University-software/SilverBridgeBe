@@ -3,12 +3,14 @@ package kr.silverbridge.main.domain.user.service;
 import kr.silverbridge.main.domain.user.entity.User;
 import kr.silverbridge.main.domain.user.repository.UserRepository;
 import kr.silverbridge.main.global.enums.Status;
+import kr.silverbridge.main.domain.user.event.WithdrawnUserSweptEvent;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.context.ApplicationEventPublisher;
 
 import java.time.OffsetDateTime;
 import java.util.List;
@@ -27,6 +29,7 @@ class WithdrawnUserPurgeSchedulerTest {
 
     @Mock private UserRepository userRepository;
     @Mock private UserService userService;
+    @Mock private ApplicationEventPublisher eventPublisher;
 
     @InjectMocks private WithdrawnUserPurgeScheduler scheduler;
 
@@ -71,5 +74,32 @@ class WithdrawnUserPurgeSchedulerTest {
         assertThatCode(() -> scheduler.purgeStuckWithdrawnUsers()).doesNotThrowAnyException();
 
         verify(userService).purgeWithdrawnUser("zombie-2");
+    }
+
+    @Test
+    @DisplayName("스윕 purge 전에 토큰 무효화·WS 종료 이벤트를 발행한다 (L-4)")
+    void purge_전에_정리_이벤트_발행() {
+        List<User> zombies = List.of(stuckUser("zombie-1"));
+        when(userRepository.findAllByStatusAndUpdatedAtBefore(eq(Status.INACTIVE), any(OffsetDateTime.class)))
+                .thenReturn(zombies);
+
+        scheduler.purgeStuckWithdrawnUsers();
+
+        var order = org.mockito.Mockito.inOrder(eventPublisher, userService);
+        order.verify(eventPublisher).publishEvent(new WithdrawnUserSweptEvent("zombie-1"));
+        order.verify(userService).purgeWithdrawnUser("zombie-1");
+    }
+
+    @Test
+    @DisplayName("이벤트 발행이 실패해도 purge는 진행한다")
+    void 발행_실패해도_purge_진행() {
+        List<User> zombies = List.of(stuckUser("zombie-1"));
+        when(userRepository.findAllByStatusAndUpdatedAtBefore(eq(Status.INACTIVE), any(OffsetDateTime.class)))
+                .thenReturn(zombies);
+        doThrow(new RuntimeException("x")).when(eventPublisher).publishEvent(any(WithdrawnUserSweptEvent.class));
+
+        scheduler.purgeStuckWithdrawnUsers();
+
+        verify(userService).purgeWithdrawnUser("zombie-1");
     }
 }

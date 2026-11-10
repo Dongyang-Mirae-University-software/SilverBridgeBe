@@ -24,6 +24,7 @@ import org.springframework.data.redis.core.ValueOperations;
 import java.util.concurrent.TimeUnit;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
@@ -258,5 +259,34 @@ class UserAccountEventListenerTest {
                         listener.handleWithdrawn(new UserWithdrawnEvent("user-14", "127.0.0.1", "test-agent")))
                 .doesNotThrowAnyException();
         verify(webSocketSessionCloser).closeAll("user-14");
+    }
+
+    // ===== 탈퇴 스윕 경로 (2026-11-10 2차 점검 L-4) =====
+
+    @Test
+    @DisplayName("스윕 이벤트 - 무효화 도장을 찍은 뒤 열린 WS를 닫는다(순서 고정), refresh·접속로그는 건드리지 않는다")
+    void handleSwept_무효화_후_세션종료() {
+        when(jwtProperties.getAccessTokenExpiration()).thenReturn(1_800_000L);
+        when(redisTemplate.opsForValue()).thenReturn(valueOperations);
+
+        listener.handleSwept(new kr.silverbridge.main.domain.user.event.WithdrawnUserSweptEvent("user-20"));
+
+        var order = inOrder(valueOperations, webSocketSessionCloser);
+        order.verify(valueOperations).set(eq(RedisKeys.PASSWORD_INVALIDATE + "user-20"), anyString(),
+                eq(1_800_000L), eq(TimeUnit.MILLISECONDS));
+        order.verify(webSocketSessionCloser).closeAll("user-20");
+        verify(refreshTokenRepository, never()).deleteByUserId(anyString());
+        verify(accessLogService, never()).log(anyString(), any(), any(), any());
+    }
+
+    @Test
+    @DisplayName("스윕 이벤트 - Redis 실패해도 예외 미전파, WS 종료는 시도한다")
+    void handleSwept_실패_격리() {
+        when(redisTemplate.opsForValue()).thenThrow(new RuntimeException("Redis 장애"));
+
+        org.assertj.core.api.Assertions.assertThatCode(() -> listener.handleSwept(
+                new kr.silverbridge.main.domain.user.event.WithdrawnUserSweptEvent("user-21")))
+                .doesNotThrowAnyException();
+        verify(webSocketSessionCloser).closeAll("user-21");
     }
 }

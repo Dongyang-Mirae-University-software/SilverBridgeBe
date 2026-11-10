@@ -1,10 +1,12 @@
 package kr.silverbridge.main.domain.user.service;
 
 import kr.silverbridge.main.domain.user.entity.User;
+import kr.silverbridge.main.domain.user.event.WithdrawnUserSweptEvent;
 import kr.silverbridge.main.domain.user.repository.UserRepository;
 import kr.silverbridge.main.global.enums.Status;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
@@ -33,6 +35,7 @@ public class WithdrawnUserPurgeScheduler {
 
     private final UserRepository userRepository;
     private final UserService userService;
+    private final ApplicationEventPublisher eventPublisher;
 
     // 10분 주기 — 좀비 발생 시 최대 grace+주기(~20분) 내 재가입 가능 상태로 회복
     @Scheduled(fixedDelay = 600_000)
@@ -41,6 +44,12 @@ public class WithdrawnUserPurgeScheduler {
                 Status.INACTIVE, OffsetDateTime.now().minus(PURGE_GRACE));
         for (User user : stuck) {
             try {
+                // 리스너를 못 탄 계정의 토큰 무효화·WS 종료(L-4). 핸들러는 예외를 내지 않지만 발행 실패도 purge를 막지 않게 따로 감싼다.
+                try {
+                    eventPublisher.publishEvent(new WithdrawnUserSweptEvent(user.getId()));
+                } catch (RuntimeException e) {
+                    log.error("[WITHDRAW-SWEEP] 토큰·WS 정리 실패 userId={} error={}", user.getId(), e.getClass().getSimpleName());
+                }
                 userService.purgeWithdrawnUser(user.getId());
                 // 스윕 경유 purge는 탈퇴 리스너(상대 알림·WITHDRAW 접속로그)를 거치지 않으므로 WARN으로 흔적을 남긴다
                 log.warn("[WITHDRAW-SWEEP] 탈퇴 잔여 계정 회수 userId={}", user.getId());
