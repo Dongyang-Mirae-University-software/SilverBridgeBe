@@ -303,20 +303,39 @@ class CompanionFullIntegrationTest extends FullContextIntegrationTest {
     }
 
     @Test
-    @DisplayName("부분 UNIQUE(V68): 일반 대화는 시간대당 1행 그대로, 테스트 대화는 같은 시간대에 여러 행")
+    @DisplayName("부분 UNIQUE(V68·V69): 일반 대화는 시간대당 1행, 테스트 대화는 끝난 것은 여러 행·진행 중은 1행. "
+            + "테스트 행이 섞여도 일반 대화 조회는 일반 행 1개만 본다(점검 M-1·M-2)")
     void 일반_대화는_시간대당_한_번_그대로() {
         saveUser(WARD, Role.WARD, Status.ACTIVE);
         Long questionId = jdbc.queryForObject(
                 "INSERT INTO companion_question (slot, text) VALUES ('09:00', '시험 질문') RETURNING id", Long.class);
         String insert = "INSERT INTO companion_session (ward_id, session_date, slot, question_id, status, is_test, "
-                + "started_at, last_activity_at) VALUES (?, CURRENT_DATE, '09:00', ?, 'OPEN', ?, now(), now())";
-        jdbc.update(insert, WARD, questionId, true);
-        jdbc.update(insert, WARD, questionId, true);
-        jdbc.update(insert, WARD, questionId, false);
+                + "started_at, last_activity_at) VALUES (?, CURRENT_DATE, '09:00', ?, ?, ?, now(), now())";
+        LocalDate today = jdbc.queryForObject("SELECT CURRENT_DATE", LocalDate.class);
 
-        org.assertj.core.api.Assertions.assertThatThrownBy(() -> jdbc.update(insert, WARD, questionId, false))
+        // 테스트 행만 있으면 일반 대화 조회는 비어 있다 - 일반 열기가 SLOT_DONE으로 막히지 않는다
+        jdbc.update(insert, WARD, questionId, "FINISHED", true);
+        jdbc.update(insert, WARD, questionId, "FINISHED", true);
+        assertThat(sessionRepository.findByWardIdAndSessionDateAndSlotAndTestFalse(WARD, today, CompanionSlot.S09))
+                .isEmpty();
+
+        // 진행 중 테스트 대화는 시간대당 1개(V69) - 두 번째는 거부, 끝난 테스트 행은 몇 개든 된다
+        jdbc.update(insert, WARD, questionId, "OPEN", true);
+        org.assertj.core.api.Assertions.assertThatThrownBy(() -> jdbc.update(insert, WARD, questionId, "OPEN", true))
                 .isInstanceOf(org.springframework.dao.DataIntegrityViolationException.class);
-        assertThat(count("SELECT count(*) FROM companion_session WHERE ward_id = ?", WARD)).isEqualTo(3);
+
+        // 일반 대화는 테스트 행과 상관없이 1행(V68) - 두 번째는 거부
+        jdbc.update(insert, WARD, questionId, "OPEN", false);
+        org.assertj.core.api.Assertions.assertThatThrownBy(() -> jdbc.update(insert, WARD, questionId, "FINISHED", false))
+                .isInstanceOf(org.springframework.dao.DataIntegrityViolationException.class);
+
+        // 테스트 행 3개가 섞여도 일반 조회는 단건(IncorrectResultSize 없음)이고 그 행은 일반 대화다
+        assertThat(sessionRepository.findByWardIdAndSessionDateAndSlotAndTestFalse(WARD, today, CompanionSlot.S09))
+                .hasValueSatisfying(s -> assertThat(s.isTest()).isFalse());
+        assertThat(sessionRepository.findFirstByWardIdAndSessionDateAndSlotAndTestTrueAndStatusOrderByIdDesc(
+                WARD, today, CompanionSlot.S09, kr.silverbridge.main.domain.companion.entity.CompanionSessionStatus.OPEN))
+                .hasValueSatisfying(s -> assertThat(s.isTest()).isTrue());
+        assertThat(count("SELECT count(*) FROM companion_session WHERE ward_id = ?", WARD)).isEqualTo(4);
     }
 
     /** 지난날 마친 대화(연속 일수 준비). 연결 이후로 보이게 시작 시각을 지금으로 둔다. */

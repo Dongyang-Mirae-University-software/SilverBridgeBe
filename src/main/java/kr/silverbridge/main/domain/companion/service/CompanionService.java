@@ -137,6 +137,7 @@ public class CompanionService {
     /**
      * 테스트 계정의 시간대 선택 시작(2026-11-10, 최종 QA). 60분 창을 보지 않고 고른 시간대의 오늘 질문으로 연다.
      * 같은 시간대에 진행 중인 테스트 대화가 있으면 그 대화를 이어 가고, 끝났거나 끊겼으면 새 테스트 대화를 연다(몇 번이든).
+     * 진행 중 테스트 대화는 시간대당 1개다(V69 부분 UNIQUE) - 동시 요청은 한쪽만 선점하고 다른 쪽은 그 대화를 이어 간다.
      * 테스트 대화도 일반 대화와 똑같이 저장·집계한다({@code is_test}는 표시만).
      */
     public SessionResponse openTest(String wardId, String slotCode) {
@@ -153,7 +154,16 @@ public class CompanionService {
             return resumeOrReject(open.get());
         }
         CompanionQuestion question = pickQuestion(slot, date);
-        CompanionSession claimed = writer.claimTest(wardId, date, slot, question.getId(), now.toOffsetDateTime());
+        CompanionSession claimed;
+        try {
+            claimed = writer.claimTest(wardId, date, slot, question.getId(), now.toOffsetDateTime());
+        } catch (DataIntegrityViolationException e) {
+            // 같은 순간 다른 요청(더블탭)이 먼저 선점했다 - 진행 중 테스트 대화는 시간대당 1개(V69, 점검 M-1)
+            return sessionRepository.findFirstByWardIdAndSessionDateAndSlotAndTestTrueAndStatusOrderByIdDesc(
+                            wardId, date, slot, CompanionSessionStatus.OPEN)
+                    .map(this::resumeOrReject)
+                    .orElseThrow(() -> new CustomException(ErrorCode.COMPANION_TURN_IN_PROGRESS));
+        }
         log.info("[COMPANION] 테스트 대화 선점: wardId={}, sessionId={}, slot={}", wardId, claimed.getId(), slot.code());
         return openWithAi(wardId, claimed, slot, question);
     }

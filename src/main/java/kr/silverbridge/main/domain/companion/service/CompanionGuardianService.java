@@ -54,9 +54,9 @@ public class CompanionGuardianService {
         LocalDate date = now.toLocalDate();
 
         // 시간대마다 가장 최근 대화 - 테스트 계정은 같은 시간대에 테스트 대화가 여러 행일 수 있다(2026-11-10, 집계에 포함)
-        Map<CompanionSlot, CompanionSession> sessions = CompanionService.latestBySlot(
-                sessionRepository.findByWardIdAndSessionDate(wardId, date)
-                        .stream().filter(s -> !s.getStartedAt().isBefore(connectedAt)).toList());
+        List<CompanionSession> todaySessions = sessionRepository.findByWardIdAndSessionDate(wardId, date)
+                .stream().filter(s -> !s.getStartedAt().isBefore(connectedAt)).toList();
+        Map<CompanionSlot, CompanionSession> sessions = CompanionService.latestBySlot(todaySessions);
 
         List<Slot> slots = new ArrayList<>();
         for (CompanionSlot slot : CompanionSlot.values()) {
@@ -65,14 +65,18 @@ public class CompanionGuardianService {
             slots.add(new Slot(slot.code(), questionText(slot, session, date), status.status(), status.mood()));
         }
 
-        Current current = sessions.values().stream()
+        // 지금 기분·대답한 시간대 수는 그 날 모든 대화로 본다 - 시간대 칸만 최근 대화다(테스트 대화 점검 L-2):
+        // 같은 시간대에서 대답한 일반 대화 뒤에 대답 없는 테스트 대화가 와도 대답한 시간대로 센다
+        Current current = todaySessions.stream()
                 .filter(s -> s.getStatus() == CompanionSessionStatus.FINISHED && s.getEndedAt() != null)
                 .max(Comparator.comparing(CompanionSession::getEndedAt))
                 .map(s -> new Current(s.getSlot().code(), s.getMood() == null ? null : s.getMood().name(),
                         s.getEndedAt(), null))
                 .orElse(null);
-        int answered = (int) sessions.values().stream()
+        int answered = (int) todaySessions.stream()
                 .filter(s -> s.getAnsweredCount() != null && s.getAnsweredCount() > 0)
+                .map(CompanionSession::getSlot)
+                .distinct()
                 .count();
         String nextSlot = Arrays.stream(CompanionSlot.values())
                 .filter(slot -> now.toLocalTime().isBefore(slot.start()))

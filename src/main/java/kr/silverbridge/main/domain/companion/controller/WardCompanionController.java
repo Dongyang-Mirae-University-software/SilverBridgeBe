@@ -94,10 +94,12 @@ public class WardCompanionController {
             description = """
                     고른 시간대의 질문 안내(COMPANION_PROMPT)를 내 기기로 바로 보냅니다. 정각 안내와 같은 문구·채널(FCM)이고
                     data에 test=true가 더해집니다(slot 포함). 응답률 집계에는 잡히지 않습니다. 분당 3회·시간당 30회.
+                    204는 발송을 요청했다는 뜻입니다 - 정지 계정·알림 설정 끔·FCM 토큰 없음이면 정각 안내와 똑같이
+                    보내지지 않고 응답은 그대로 204입니다(결과는 알림 이력에서 확인).
 
                     [오류 code]
-                    COMPANION_TEST_NOT_ALLOWED(403) / COMPANION_SLOT_INVALID(400) / COMPANION_DISABLED(503) / TOO_MANY_REQUESTS(429)
-                    """)
+                    COMPANION_TEST_NOT_ALLOWED(403) / COMPANION_SLOT_INVALID(400) / TOO_MANY_REQUESTS(429, 테스트 안내 분 3·시간 30회)
+                    """ + COMMON_ERRORS)
     @PostMapping("/test/prompt")
     public ResponseEntity<Void> sendTestPrompt(
             @AuthenticationPrincipal String wardId, @RequestBody(required = false) TestSlotRequest request) {

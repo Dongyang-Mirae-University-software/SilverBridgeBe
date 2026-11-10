@@ -3,7 +3,19 @@
 > 2026-11-10 · 대상 `b235e496`(diff `7bcf9514..b235e496 -- src/`) · 점검 Sonnet 하위 에이전트(격리 worktree) + 주 세션이 M-1·M-3 근거를 코드로 다시 확인
 > 기능 설명 `docs/(2026-11-10) feature-companion-test-mode.md`
 
-## 판정: 조건부 PASS · 🔴 0 · 🟠 0 · 🟡 3 · 🟢 5
+## 판정: 조건부 PASS · 🔴 0 · 🟠 0 · 🟡 3 · 🟢 5 → 전부 조치 (2026-11-10, 사용자 "전부 반영해줘", `fix/companion-test-mode-audit`)
+
+| ID | 조치 |
+|---|---|
+| M-1 | V69(가역) `uq_companion_session_test_open` = `(ward_id, session_date, slot) WHERE is_test AND status='OPEN'`. `openTest`가 선점 위반이면 진행 중 테스트 대화를 다시 찾아 이어 간다(AI 대화를 열고 있는 중이면 409 `COMPANION_TURN_IN_PROGRESS`) - 일반 `open`과 같은 형태 |
+| M-2 | 통합 `일반_대화는_시간대당_한_번_그대로`를 넓혔다: 테스트 행만 있을 때 일반 조회 비어 있음, 테스트 행 3개가 섞여도 일반 조회 단건·일반 행, 진행 중 테스트 두 번째 거부 |
+| M-3 | `sendOne`을 패키지 공개로 하고 `regularPromptHasNoTestKey`(정각 data = `{type, slot}`·선점 기록). 결함 주입 c2 재실행 → **검출**(3건 중 1건 실패) |
+| L-1 | 응답은 그대로 204, Swagger·정책에 "발송 요청" 뜻과 미발송 경우를 적고 로그 문구를 `발송 요청`으로 |
+| L-2 | 보호자 `current`·`answeredCount`는 그 날 모든 대화로(대답한 시간대는 시간대별 중복 없이). `multipleSessionsInSlot` 테스트 |
+| L-3 | 코드 유지, 정책에 "역할은 컨트롤러가 막는다" 근거 |
+| L-4 | 정책에 "ID 기준·QA 뒤 목록에서 빼기" |
+| L-5 | `sendTestPrompt` Swagger에 `COMMON_ERRORS` |
+
 
 모두 테스트 계정에만 해당하고 일반 계정에는 영향이 없다. 말벗 단위 테스트 91건 기준선 통과.
 

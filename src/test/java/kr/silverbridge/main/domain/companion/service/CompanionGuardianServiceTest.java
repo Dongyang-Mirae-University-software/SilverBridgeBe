@@ -4,6 +4,7 @@ import kr.silverbridge.main.domain.companion.client.AiCompanionClient;
 import kr.silverbridge.main.domain.companion.config.CompanionProperties;
 import kr.silverbridge.main.domain.companion.dto.CompanionGuardianDtos.TodayResponse;
 import kr.silverbridge.main.domain.companion.entity.CompanionMood;
+import kr.silverbridge.main.domain.companion.entity.CompanionSession;
 import kr.silverbridge.main.domain.companion.entity.CompanionSessionStatus;
 import kr.silverbridge.main.domain.companion.entity.CompanionSlot;
 import kr.silverbridge.main.domain.companion.repository.CompanionQuestionRepository;
@@ -71,6 +72,34 @@ class CompanionGuardianServiceTest {
                 .isEqualTo(ErrorCode.COMPANION_NOT_AUTHORIZED);
         verify(connectionService, never()).findActiveConnectedAt(eq(G), eq("../x"));
         verify(sessionRepository, never()).findByWardIdAndSessionDate(anyString(), any());
+    }
+
+    @Test
+    @DisplayName("같은 시간대 여러 대화(테스트 계정): 칸은 최근 시작 대화, 지금 기분은 가장 늦게 마친 대화, "
+            + "대답한 시간대는 그 시간대 어느 대화든 대답이 있으면 1로 센다(점검 L-2)")
+    void multipleSessionsInSlot() {
+        when(connectionService.findActiveConnectedAt(G, W)).thenReturn(Optional.of(OffsetDateTime.MIN));
+        // 일반 대화: 09:01 시작·대답 4번·09:40 마침 / 테스트 대화: 09:20 시작·대답 없음·09:25 마침
+        CompanionSession normal = CompanionSession.claim(W, TODAY, CompanionSlot.S09, 1L, CompanionTestSessions.at(TODAY, CompanionSlot.S09, 1));
+        org.springframework.test.util.ReflectionTestUtils.setField(normal, "id", 9001L);
+        normal.attachDialogue("d-9001", 8, CompanionTestSessions.at(TODAY, CompanionSlot.S09, 1));
+        normal.finish(kr.silverbridge.main.domain.companion.entity.CompanionEndReason.USER_STOP, CompanionMood.JOY,
+                4, 4, 0, false, false, null, CompanionTestSessions.at(TODAY, CompanionSlot.S09, 40));
+        CompanionSession test = CompanionSession.claimTest(W, TODAY, CompanionSlot.S09, 1L,
+                CompanionTestSessions.at(TODAY, CompanionSlot.S09, 20));
+        org.springframework.test.util.ReflectionTestUtils.setField(test, "id", 9002L);
+        test.attachDialogue("d-9002", 8, CompanionTestSessions.at(TODAY, CompanionSlot.S09, 20));
+        test.finish(kr.silverbridge.main.domain.companion.entity.CompanionEndReason.USER_STOP, null,
+                1, 0, 1, false, false, null, CompanionTestSessions.at(TODAY, CompanionSlot.S09, 25));
+        when(sessionRepository.findByWardIdAndSessionDate(W, TODAY)).thenReturn(List.of(normal, test));
+        when(sessionRepository.findFinishedSince(eq(W), eq(CompanionSessionStatus.FINISHED), any()))
+                .thenReturn(List.of());
+
+        TodayResponse today = service.today(G, W);
+
+        assertThat(today.slots().get(0).mood()).as("칸은 최근 시작한 테스트 대화(판단 불가)").isNull();
+        assertThat(today.current().mood()).as("지금 기분은 가장 늦게 마친 일반 대화").isEqualTo("JOY");
+        assertThat(today.answeredCount()).as("09:00에 대답한 대화가 있다").isEqualTo(1);
     }
 
     @Test
