@@ -22,7 +22,9 @@
 - gosky(11/10 17:44, `504c105`): 재빌드·재기동 정상, 예약 키 7행 암호화, 옛 카메라 경로 404, BE의 AI WS 17:44:47 재연결. **6017 외부 직접 접근 차단** - iptables `-i eno1 --dport 6017 DROP` + `silverbridge-ai-6017-guard.service`(재부팅 유지). BE dev가 받아쓰기·말벗을 `http://10.0.22.1:6017`(도커 브리지)로 직접 붙어 바인딩(127.0.0.1) 대신 방화벽으로 막았다 - nginx·도커 브리지는 통과.
 - #219는 11/10 22:35 gosky `95ea2b7`로 반영(health 200, BE의 AI WS 22:35:42 재연결, 6017 방화벽 규칙 유지 확인). 자리가 없으면 읽을 수 없는·긴 음성도 먼저 503 `STT_BUSY`. 22:39 gosky `.env`에 `ADMIN_API_KEY` 적용(사용자 실행) - 관리 경로는 공용 키 401·전용 키 200.
 - AI #222(`fea4061`, gosky 22:45): 수용으로 남겼던 항목 처리 - 두 사람이 섞인 문장("아버지는 의식이 없어요. 어머니는 숨은 쉬세요")은 가슴압박 줄 유지(두 사람이 모두 적혀 있고 다를 때만), 프레임 업로드는 chunked 전송도 받는 중에 상한에서 413, 삭제 보류 시간 설정 `MEMBER_PURGE_HOLD_SEC`(기본 150). pytest 2690 통과. 시험 계정 실동작 확인: 피보호자 상담 1턴·기록 목록·받아쓰기(무음)·예약 시작(진료과 선택지 12개)·보호자 약 봉투 인식 모두 200, AI 라우터 실패 0건, 예약 키 7행 암호화 유지, 접속 로그 `userId` 가림 확인(Claude 호출 4~5회). torch 2.6.0은 올리지 않음 - cu124 휠 상한이라 CUDA 판을 바꿔야 하고 MedGemma int8·EXAONE LoRA·Whisper를 GPU에서 다시 확인해야 한다(요청 경로에 해당 취약점 없음).
-- 남음: nginx `reservation.dmu`의 `/admin/` → 6017 옛 설정은 Notion "인프라 전달 내용"에 요청. 게임 무인증 경로는 담당 밖이라 제외.
+- nginx(11/10 23시경, 사용자 실행): `reservation.dmu.gosky.kr`의 `/admin` location 두 블록(24줄)만 삭제 - `/admin/`은 이제 예약 서비스가 404로 응답, 예약 API·testai·devdmu 정상. 백업 `/etc/nginx/reservation.dmu.gosky.kr.bak-20261110`.
+- torch(AI #224, gosky `4a6b0d2` 23:10): 2.6.0·cu124 → 2.11.0·cu126(torchaudio가 cu126에서 2.11.0이 마지막이라 이 조합이 상한, high 1건 해소). 후보 이미지를 따로 빌드해 메모리 상한 일회용 컨테이너에서 CUDA·cuDNN·bitsandbytes·ctranslate2 확인(모델 적재 없음) 뒤 배포 - 상담 1턴(MedGemma 생성 11.2초)·받아쓰기·프레임 분석 200, 탐지기 3종·MedGemma int8·말벗 LoRA 적재. **말벗 Whisper turbo 실제 받아쓰기는 미확인**(말벗 한 턴 필요). 되돌리기: #224 revert, 직전 이미지 `sb-ai-rollback:20261110-torch26`. gosky 디스크 83% → 85%(빌드 캐시 35GB).
+- 남음: 말벗 음성 한 턴 확인, gosky 빌드 캐시 정리(85% - 사용자 확인 후). 게임 무인증 경로는 담당 밖이라 제외.
 
 ### [2026-11-10] 외부 주소 평문 경고 오탐 보정 (#460)
 - gosky 기동 로그의 `[EXTERNAL-URL-PLAINTEXT] chat.stt.ai-base-url`은 오탐이었다 - 주소가 도커 브리지 게이트웨이 `10.0.22.1:6017`(같은 서버 AI)라 서버 밖을 지나지 않는다. 루프백·사설 대역·점 없는 이름을 경고에서 제외(#460 `f46f8d7`), 두 서버 배포·gosky 경고 0건 확인. 남은 확인: gosky AI 6017 포트가 `0.0.0.0`으로 열려 있음(AI 점검 세션 항목).
