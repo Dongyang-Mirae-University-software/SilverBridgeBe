@@ -4,6 +4,9 @@
 
 ---
 
+### [2026-11-10] 외부 주소 평문 경고 오탐 보정 (#460)
+- gosky 기동 로그의 `[EXTERNAL-URL-PLAINTEXT] chat.stt.ai-base-url`은 오탐이었다 - 주소가 도커 브리지 게이트웨이 `10.0.22.1:6017`(같은 서버 AI)라 서버 밖을 지나지 않는다. 루프백·사설 대역·점 없는 이름을 경고에서 제외(#460 `f46f8d7`), 두 서버 배포·gosky 경고 0건 확인. 남은 확인: gosky AI 6017 포트가 `0.0.0.0`으로 열려 있음(AI 점검 세션 항목).
+
 ### [2026-11-10] BE 전체 점검 1차 반영 - 로그 원문 식별자·리다이렉트·평문 주소 경고
 - M-1(이상감지 이력 `wardId` 형식 검사)·L-1(STOMP)·L-2(카메라 `sessionId`)·L-3(debug URL·FCM 원인 예외)·L-4(카카오·파일서버 리다이렉트 끔, `[EXTERNAL-URL-PLAINTEXT]` 경고) 반영. 공용 `LogSafe`·`NoRedirectRequestFactory`·`ExternalUrlSchemeChecker` 추가, 응답·인가 불변, 마이그레이션 없음. D-1(refresh `body-compat`)은 결정 대기.
 
