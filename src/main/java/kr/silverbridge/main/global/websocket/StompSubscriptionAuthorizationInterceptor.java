@@ -1,5 +1,6 @@
 package kr.silverbridge.main.global.websocket;
 
+import kr.silverbridge.main.global.util.LogSafe;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.messaging.Message;
 import org.springframework.messaging.MessageChannel;
@@ -43,7 +44,7 @@ public class StompSubscriptionAuthorizationInterceptor implements ChannelInterce
             String destination = accessor.getDestination();
             if (destination == null || !destination.startsWith(APP_PREFIX)) {
                 log.warn("WebSocket 발행 거부(클라이언트 SEND): session={} destination={}",
-                        extractSessionUserId(accessor), destination);
+                        extractSessionUserId(accessor), LogSafe.id(destination));
                 throw new IllegalStateException("메시지를 보낼 수 없는 주소입니다.");
             }
             return message;
@@ -59,12 +60,12 @@ public class StompSubscriptionAuthorizationInterceptor implements ChannelInterce
             String targetUserId  = extractTopicUserId(destination);
 
             if (sessionUserId == null || targetUserId == null) {
-                log.warn("WebSocket 구독 거부: 세션 또는 대상 userId 파싱 실패 destination={}", destination);
+                log.warn("WebSocket 구독 거부: 세션 또는 대상 userId 파싱 실패 destination={}", LogSafe.id(destination));
                 throw new IllegalStateException("구독 권한이 없습니다.");
             }
 
             if (!sessionUserId.equals(targetUserId)) {
-                log.warn("WebSocket 구독 거부(IDOR 시도): session={} → target={}", sessionUserId, targetUserId);
+                log.warn("WebSocket 구독 거부(IDOR 시도): session={} → target={}", sessionUserId, LogSafe.id(targetUserId));
                 throw new IllegalStateException("본인의 토픽만 구독할 수 있습니다.");
             }
         }

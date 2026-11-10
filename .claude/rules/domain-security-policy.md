@@ -109,3 +109,10 @@
 - **swagger-ui 웹자르 고정 (2026-10-31 OWASP)**: springdoc이 끌어오는 swagger-ui 번들의 DOMPurify 취약점(CVE-2026-116803·116804) 때문에 `org.webjars:swagger-ui:5.34.1`과 `springdoc.swagger-ui.version: 5.34.1`을 함께 고정했다(둘이 다르면 Swagger 화면 404). springdoc을 올릴 때 그 swagger-ui가 이 버전 이상이면 둘 다 지운다. gosky는 Swagger가 무인증 공개라 이런 화면용 JS 취약점도 실제 노출이다.
 - **D-1 확정 - 보호자 이력은 지금 연결 이후 기록만 (2026-10-31 사용자 결정)**: SOS·이상감지(이력·요약·판정·클립·재촉)는 보호자의 지금 ACTIVE 연결이 맺어진 뒤의 기록만 보인다. 재연결·관리자 강제 연결은 그 이전을 보지 못한다. 상세 policy-sos ①·policy-anomaly ②.
 - **D-2 확정 - 개인정보 보관 기간 (2026-10-31, 학생 프로젝트 기준)**: 접속 로그 90일(탈퇴자 IP·UA는 매일 비움), 관리자 감사 로그 1년, 익명 SOS 이력의 위치 문구 비움. 일일 정리 04:40·04:45·04:50. 상세 policy-auth.
+
+## 2026-11-10 전체 점검 반영 - 로그에 남는 사용자 입력 식별자
+
+- **사용자가 보낸 식별자를 로그에 원문으로 남기지 말 것**: 형식이 정해진 값(사용자 ID)은 형식 검사 후 틀리면 DB 조회 없이 거절하고 길이만 남긴다(이상감지 이력 `wardId`도 SOS·대시보드·복약·챗과 같게 맞춤, M-1). 형식이 느슨한 값(카메라 `sessionId`·STOMP destination)은 `global/util/LogSafe.id`로 정리해 남긴다(영숫자와 `_ - . /`만, 64자, 나머지는 `?`). 줄바꿈 삽입으로 `[IDOR-ATTEMPT]` 줄을 위조하거나 긴 값으로 로그를 불릴 수 있다.
+- **새 RestClient는 리다이렉트를 끈다**: 카카오·파일서버는 `NoRedirectRequestFactory`를 쓴다(AI 계열은 `setInstanceFollowRedirects(false)` 그대로). 인증 헤더를 실은 요청이 다른 주소로 다시 나가지 않게 한다.
+- **외부 주소 평문 경고**: `ExternalUrlSchemeChecker`가 기동 때 http·ws로 설정된 외부 연동의 설정 이름만 `[EXTERNAL-URL-PLAINTEXT]` WARN으로 남긴다(기동은 막지 않음 - 터널·내부망 개발 환경, 예약 관리자 주소는 의도된 내부망 평문이라 제외). 새 외부 주소 설정을 만들면 `KEYS`에 더한다.
+

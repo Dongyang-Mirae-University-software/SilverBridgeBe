@@ -43,8 +43,8 @@ public class FcmConfig {
         } catch (IllegalArgumentException ex) {
             throw new IllegalStateException(
                     "FIREBASE_SERVICE_ACCOUNT_BASE64 값이 유효한 base64가 아닙니다. "
-                            + "`base64 -w0 firebase-service-account.json` 출력을 그대로 붙였는지 확인하세요.",
-                    ex);
+                            + "`base64 -w0 firebase-service-account.json` 출력을 그대로 붙였는지 확인하세요.");
+            // 원인 예외는 붙이지 않는다 - 메시지에 값의 글자가 섞인다(2026-11-10 전체 점검 L-3)
         }
         if (FirebaseApp.getApps().isEmpty()) {
             try (InputStream in = new ByteArrayInputStream(decoded)) {

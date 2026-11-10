@@ -16,6 +16,7 @@ import kr.silverbridge.main.domain.user.entity.User;
 import kr.silverbridge.main.domain.user.repository.UserRepository;
 import kr.silverbridge.main.global.exception.CustomException;
 import kr.silverbridge.main.global.exception.ErrorCode;
+import kr.silverbridge.main.global.util.LogSafe;
 import kr.silverbridge.main.global.validation.TextSanitizer;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -320,12 +321,12 @@ public class CameraService {
                 .filter(Camera::isActive)
                 .orElseThrow(() -> {
                     log.info("[CAMERA-UNKNOWN-SESSION] 등록되지 않았거나 꺼진 카메라 영상 요청: guardianId={}, sessionId={}",
-                            guardianId, sessionId);
+                            guardianId, LogSafe.id(sessionId));
                     return new CustomException(ErrorCode.CAMERA_NOT_FOUND);
                 });
         if (!connectionService.isActiveConnection(guardianId, camera.getWardId())) {
             log.warn("[IDOR-ATTEMPT] 연결되지 않은 피보호자 카메라 접근 시도: guardianId={}, sessionId={}",
-                    guardianId, sessionId);
+                    guardianId, LogSafe.id(sessionId));
             throw new CustomException(ErrorCode.CAMERA_NOT_CONNECTED);
         }
         return new CameraOwner(camera.getWardId(), camera.getLabel());
