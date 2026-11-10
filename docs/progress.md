@@ -9,6 +9,12 @@
 - V68(가역): `companion_session.is_test` + 시간대당 1회 UNIQUE를 일반 대화 전용 부분 인덱스로. 테스트 대화도 모든 집계에 포함, 화면은 시간대별 최근 대화.
 - AI가 주지 않아 못 싣는 값: `textMood`(글 기분 코드 - `turnResult`에 합쳐져서만 옴). 상세 `docs/(2026-11-10) feature-companion-test-mode.md`.
 
+### [2026-11-10] AI 전체 점검 1차 - 기준선·10/31 이후 변경분·보안 + 조치·gosky 반영
+- 점검(AI #210): **조건부 PASS** · 🔴0 🟠5 🟡9 🟢6. pytest 2534 통과, 10/31 이후 PR 67건 중 미점검분 응답 형식·오류 코드 BE와 일치, 상담 본문·받아쓴 글자·키 로그 없음, 삭제 API 범위·BE 인자 일치. 높음: pillow 12.3.0 알려진 취약점(약 봉투 사진 디코더)·6017 포트 인터넷 직접 노출·깼다가 다시 꼴 가슴압박 줄 누락·라우터 실패 자해 말끝 변형·되묻기 부정 답 오판. API 키 사용 없음(합성 문장 함수 호출).
+- 조치(AI #212~#215·#217·#219, main `cca5f2f`): 판정 경계 3건(두 경로 테스트), pillow 13.0.0 + `formats=` 제한, 프레임 4MB·JPEG 매직·한 변 4096(413 `STREAM_FRAME_TOO_LARGE`), 받아쓰기 본문 상한 중단·디코딩 동시 상한 안으로, `hmac.compare_digest`, 스위치 3종 기본값 닫힘, `APP_HOST`·`DOCS_ENABLED`·`ADMIN_API_KEY`·`LEGACY_CAMERA_API_ENABLED`, 접속 로그 `userId` 가림, 예약 키 `enc:v1:` Fernet 암호화(키는 `RESERVATION_ACCOUNT_SECRET`에서 갈라 만듦, 비밀값 없으면 저장 안 함, 기동 때 평문 행 일괄 암호화). 최종 pytest 2680 통과.
+- gosky(11/10 17:44, `504c105`): 재빌드·재기동 정상, 예약 키 7행 암호화, 옛 카메라 경로 404, BE의 AI WS 17:44:47 재연결. **6017 외부 직접 접근 차단** - iptables `-i eno1 --dport 6017 DROP` + `silverbridge-ai-6017-guard.service`(재부팅 유지). BE dev가 받아쓰기·말벗을 `http://10.0.22.1:6017`(도커 브리지)로 직접 붙어 바인딩(127.0.0.1) 대신 방화벽으로 막았다 - nginx·도커 브리지는 통과.
+- 남음: #219는 gosky 미배포(다음 AI 배포 때 함께, 자리가 없으면 읽을 수 없는·긴 음성도 먼저 503 `STT_BUSY`). nginx `reservation.dmu`의 `/admin/` → 6017 옛 설정은 Notion "인프라 전달 내용"에 요청. 게임 무인증 경로는 담당 밖이라 제외.
+
 ### [2026-11-10] 외부 주소 평문 경고 오탐 보정 (#460)
 - gosky 기동 로그의 `[EXTERNAL-URL-PLAINTEXT] chat.stt.ai-base-url`은 오탐이었다 - 주소가 도커 브리지 게이트웨이 `10.0.22.1:6017`(같은 서버 AI)라 서버 밖을 지나지 않는다. 루프백·사설 대역·점 없는 이름을 경고에서 제외(#460 `f46f8d7`), 두 서버 배포·gosky 경고 0건 확인. 남은 확인: gosky AI 6017 포트가 `0.0.0.0`으로 열려 있음(AI 점검 세션 항목).
 
