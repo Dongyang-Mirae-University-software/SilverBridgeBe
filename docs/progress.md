@@ -4,6 +4,11 @@
 
 ---
 
+### [2026-11-10] 안부 말벗 테스트 계정 - 최종 QA 지원 (`feature/companion-test-mode`)
+- 테스트 계정(`COMPANION_TEST_WARD_IDS`)만 시간대를 골라 대화 시작(반복, 진행 중이면 이어 감)·안내 푸시 직접 보내기(data `test=true`, `companion_prompt_log` 없음)·턴/마치기 `analysis`(AI 값 그대로, 저장·로그 없음)·`today.testMode`. 일반 계정 동작 무변경.
+- V68(가역): `companion_session.is_test` + 시간대당 1회 UNIQUE를 일반 대화 전용 부분 인덱스로. 테스트 대화도 모든 집계에 포함, 화면은 시간대별 최근 대화.
+- AI가 주지 않아 못 싣는 값: `textMood`(글 기분 코드 - `turnResult`에 합쳐져서만 옴). 상세 `docs/(2026-11-10) feature-companion-test-mode.md`.
+
 ### [2026-11-10] AI 전체 점검 1차 - 기준선·10/31 이후 변경분·보안 + 조치·gosky 반영
 - 점검(AI #210): **조건부 PASS** · 🔴0 🟠5 🟡9 🟢6. pytest 2534 통과, 10/31 이후 PR 67건 중 미점검분 응답 형식·오류 코드 BE와 일치, 상담 본문·받아쓴 글자·키 로그 없음, 삭제 API 범위·BE 인자 일치. 높음: pillow 12.3.0 알려진 취약점(약 봉투 사진 디코더)·6017 포트 인터넷 직접 노출·깼다가 다시 꼴 가슴압박 줄 누락·라우터 실패 자해 말끝 변형·되묻기 부정 답 오판. API 키 사용 없음(합성 문장 함수 호출).
 - 조치(AI #212~#215·#217·#219, main `cca5f2f`): 판정 경계 3건(두 경로 테스트), pillow 13.0.0 + `formats=` 제한, 프레임 4MB·JPEG 매직·한 변 4096(413 `STREAM_FRAME_TOO_LARGE`), 받아쓰기 본문 상한 중단·디코딩 동시 상한 안으로, `hmac.compare_digest`, 스위치 3종 기본값 닫힘, `APP_HOST`·`DOCS_ENABLED`·`ADMIN_API_KEY`·`LEGACY_CAMERA_API_ENABLED`, 접속 로그 `userId` 가림, 예약 키 `enc:v1:` Fernet 암호화(키는 `RESERVATION_ACCOUNT_SECRET`에서 갈라 만듦, 비밀값 없으면 저장 안 함, 기동 때 평문 행 일괄 암호화). 최종 pytest 2680 통과.

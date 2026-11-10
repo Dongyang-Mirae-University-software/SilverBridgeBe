@@ -73,7 +73,7 @@ class CompanionServiceTest {
         writer = mock(CompanionSessionWriter.class);
         rateLimitService = mock(RateLimitService.class);
         service = new CompanionService(aiClient, properties, questionRepository, sessionRepository, writer,
-                new CompanionTurnSlots(properties), rateLimitService);
+                new CompanionTurnSlots(properties), rateLimitService, mock(CompanionPromptScheduler.class));
         service.setClock(Clock.fixed(AT_0910.toInstant(), CompanionService.KST));
     }
 
@@ -82,7 +82,7 @@ class CompanionServiceTest {
     void openPicksQuestionByDate() throws Exception {
         List<CompanionQuestion> questions = List.of(question(1L, "질문1"), question(2L, "질문2"), question(3L, "질문3"));
         when(questionRepository.findBySlotAndActiveTrueOrderByIdAsc(CompanionSlot.S09)).thenReturn(questions);
-        when(sessionRepository.findByWardIdAndSessionDateAndSlot(WARD, TODAY, CompanionSlot.S09)).thenReturn(Optional.empty());
+        when(sessionRepository.findByWardIdAndSessionDateAndSlotAndTestFalse(WARD, TODAY, CompanionSlot.S09)).thenReturn(Optional.empty());
         CompanionQuestion expected = questions.get((int) Math.floorMod(TODAY.toEpochDay(), 3L));
         when(writer.claim(eq(WARD), eq(TODAY), eq(CompanionSlot.S09), eq(expected.getId()), any()))
                 .thenReturn(sessionWithId(10L, null));
@@ -115,12 +115,12 @@ class CompanionServiceTest {
         CompanionSession done = sessionWithId(5L, "d-5");
         done.finish(CompanionEndReason.MAX_TURNS, CompanionMood.CALM, 8, 8, 0, false, false, null,
                 AT_0910.toOffsetDateTime());
-        when(sessionRepository.findByWardIdAndSessionDateAndSlot(WARD, TODAY, CompanionSlot.S09))
+        when(sessionRepository.findByWardIdAndSessionDateAndSlotAndTestFalse(WARD, TODAY, CompanionSlot.S09))
                 .thenReturn(Optional.of(done));
         assertThatThrownBy(() -> service.open(WARD)).extracting(e -> ((CustomException) e).getErrorCode())
                 .isEqualTo(ErrorCode.COMPANION_SLOT_DONE);
 
-        when(sessionRepository.findByWardIdAndSessionDateAndSlot(WARD, TODAY, CompanionSlot.S09)).thenReturn(Optional.empty());
+        when(sessionRepository.findByWardIdAndSessionDateAndSlotAndTestFalse(WARD, TODAY, CompanionSlot.S09)).thenReturn(Optional.empty());
         when(questionRepository.findBySlotAndActiveTrueOrderByIdAsc(CompanionSlot.S09)).thenReturn(List.of(question(1L, "질문")));
         when(writer.claim(any(), any(), any(), any(), any())).thenReturn(sessionWithId(11L, null));
         when(aiClient.openDialogue(anyString(), anyLong(), anyString(), anyString(), anyLong()))

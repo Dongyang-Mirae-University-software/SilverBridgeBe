@@ -206,6 +206,8 @@ public enum ErrorCode {
     COMPANION_TURN_IN_PROGRESS(HttpStatus.CONFLICT, "앞의 대답을 듣고 있어요. 잠시만 기다려주세요."),
     COMPANION_NOT_IN_WINDOW(HttpStatus.CONFLICT, "지금은 안부 대화 시간이 아닙니다."),
     COMPANION_SLOT_DONE(HttpStatus.CONFLICT, "이 시간의 안부 대화는 이미 마쳤습니다."),
+    COMPANION_SLOT_INVALID(HttpStatus.BAD_REQUEST, "시간대는 09:00, 12:00, 15:00, 18:00, 21:00 중 하나여야 합니다."),
+    COMPANION_TEST_NOT_ALLOWED(HttpStatus.FORBIDDEN, "테스트 계정만 쓸 수 있습니다."),
     COMPANION_SESSION_NOT_FOUND(HttpStatus.NOT_FOUND, "안부 대화를 찾을 수 없습니다."),
     // 없는 대화는 404, 남의 대화는 403으로 그대로 안내한다(2026-07-14 정책). 피보호자 경로라 문구는 본인 기준이다
     COMPANION_SESSION_NOT_OWNED(HttpStatus.FORBIDDEN, "본인의 안부 대화만 이어갈 수 있습니다."),

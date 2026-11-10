@@ -47,6 +47,14 @@ paths:
 - **남의 대화는 403 `COMPANION_SESSION_NOT_OWNED` + `[IDOR-ATTEMPT]`**(2026-07-14 정책).
 - **업로드**: 음성 WAV·WebM·MP3 5MB, 사진 JPEG·PNG 장당 1MB·5장, 앞부분 바이트로만 판별, 원래 파일 이름은 AI로 넘기지 않는다. 오디오 경로는 SecurityConfig에서 본문 파싱 전에 WARD만 통과. 합계가 서블릿 상한(10MB)을 넘으면 `COMPANION_UPLOAD_TOO_LARGE`(413, 2026-11-04 점검 L-1).
 
+## 테스트 계정 (2026-11-10, 최종 QA 지원)
+
+- **전용 목록 `COMPANION_TEST_WARD_IDS`**(기본 빈 값 = 꺼짐, `*` 불가 - 기동 실패). **운영 서버 `.env`에 넣지 말 것** - gosky dev `.env.dev`에만. 판정은 `CompanionProperties.isTestWard`(말벗 켜짐 + 목록 포함) 한 곳.
+- 테스트 계정만: `POST /api/ward/companion/test/sessions {slot}`(창 없이 고른 시간대의 오늘 질문, 반복 가능, 같은 시간대에 진행 중인 테스트 대화는 이어 감) / `POST .../test/prompt {slot}`(204) / `today.testMode` / 턴·마치기 `analysis`. 나머지는 403 `COMPANION_TEST_NOT_ALLOWED`. 테스트 계정도 일반 `POST /sessions`는 창 규칙을 따른다.
+- **테스트 대화는 일반 대화와 똑같이 저장·집계한다**(보호자 화면·하루 기분·연속 일수·주의 알림·관리자 집계·위험 알림). `companion_session.is_test`는 표시만 한다 - 집계에서 빼는 필터를 함부로 넣지 말 것(사용자 결정, 실제 흐름 확인이 목적). 시간대당 1회 UNIQUE는 일반 대화 전용 부분 인덱스(V68)라, 일반 대화 조회는 `...AndTestFalse`로 해야 한다. 화면은 시간대별 가장 최근 대화(`CompanionService.latestBySlot`).
+- **테스트 안내 푸시**: 정각 안내와 같은 문구·`COMPANION_PROMPT`(FCM만·설정 기반)이고 data에 `test=true`만 더한다. **`companion_prompt_log`를 남기지 않는다**(응답률은 정각 안내 기준, 사용자 결정). 정각 안내 data에 `test`를 넣지 말 것. 분당 3·시간당 30.
+- **`analysis`는 응답에만**: AI 턴 값(`turnResult`·`face`·`signals`·위험) 그대로, 만들어 내지 않는다(AI가 안 주는 글 기분 코드는 없음). DB 칸·로그·알림에 남기지 말 것 - 원문 미저장(결정 B)과 같은 기준. 일반 계정 응답에는 필드 자체가 없다(`@JsonInclude(NON_NULL)`). 상세 `docs/(2026-11-10) feature-companion-test-mode.md`.
+
 ## 수용한 한계 (2026-11-04)
 
 - AI 대화는 메모리에만 있어 AI 재시작 시 진행 중 대화는 LOST(결과 없음).

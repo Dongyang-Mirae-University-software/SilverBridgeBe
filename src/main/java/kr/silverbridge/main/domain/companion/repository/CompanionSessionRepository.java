@@ -18,8 +18,13 @@ public interface CompanionSessionRepository extends JpaRepository<CompanionSessi
 
     List<CompanionSession> findByWardIdAndSessionDate(String wardId, LocalDate sessionDate);
 
-    Optional<CompanionSession> findByWardIdAndSessionDateAndSlot(String wardId, LocalDate sessionDate,
-                                                                 CompanionSlot slot);
+    /** 일반 대화(시간대당 1행). 테스트 대화는 같은 시간대에 여러 행일 수 있어 빼고 찾는다(2026-11-10). */
+    Optional<CompanionSession> findByWardIdAndSessionDateAndSlotAndTestFalse(String wardId, LocalDate sessionDate,
+                                                                             CompanionSlot slot);
+
+    /** 같은 시간대의 진행 중인 테스트 대화 중 가장 최근 것(테스트 시작 때 이어 가기용). */
+    Optional<CompanionSession> findFirstByWardIdAndSessionDateAndSlotAndTestTrueAndStatusOrderByIdDesc(
+            String wardId, LocalDate sessionDate, CompanionSlot slot, CompanionSessionStatus status);
 
     List<CompanionSession> findBySessionDate(LocalDate sessionDate);
 

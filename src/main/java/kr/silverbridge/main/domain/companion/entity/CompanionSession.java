@@ -92,6 +92,10 @@ public class CompanionSession {
     @Column(name = "ended_at")
     private OffsetDateTime endedAt;
 
+    /** 테스트 계정의 테스트 대화(2026-11-10). 집계에서 빼지 않는다 - 나중에 걸러 볼 수 있게 표시만 한다. */
+    @Column(name = "is_test", nullable = false)
+    private boolean test;
+
     @Version
     private long version;
 
@@ -110,6 +114,14 @@ public class CompanionSession {
     public static CompanionSession claim(String wardId, LocalDate sessionDate, CompanionSlot slot, Long questionId,
                                          OffsetDateTime now) {
         return new CompanionSession(wardId, sessionDate, slot, questionId, now);
+    }
+
+    /** 테스트 대화 자리. 시간대당 1회 UNIQUE(일반 대화 전용 부분 인덱스)에 걸리지 않는다. */
+    public static CompanionSession claimTest(String wardId, LocalDate sessionDate, CompanionSlot slot, Long questionId,
+                                             OffsetDateTime now) {
+        CompanionSession session = new CompanionSession(wardId, sessionDate, slot, questionId, now);
+        session.test = true;
+        return session;
     }
 
     public void attachDialogue(String dialogueId, Integer maxTurns, OffsetDateTime now) {

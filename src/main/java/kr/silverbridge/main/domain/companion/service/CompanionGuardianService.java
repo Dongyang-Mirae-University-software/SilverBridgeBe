@@ -26,9 +26,7 @@ import java.util.Arrays;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
-import java.util.function.Function;
 import java.util.regex.Pattern;
-import java.util.stream.Collectors;
 
 /**
  * 보호자 "AI 기분 체크" 조회(2026-11-04, PR-B, 노션 카드 "AI 기분 체크 조회 API").
@@ -55,9 +53,10 @@ public class CompanionGuardianService {
         ZonedDateTime now = companionService.now();
         LocalDate date = now.toLocalDate();
 
-        Map<CompanionSlot, CompanionSession> sessions = sessionRepository.findByWardIdAndSessionDate(wardId, date)
-                .stream().filter(s -> !s.getStartedAt().isBefore(connectedAt))
-                .collect(Collectors.toMap(CompanionSession::getSlot, Function.identity(), (a, b) -> a));
+        // 시간대마다 가장 최근 대화 - 테스트 계정은 같은 시간대에 테스트 대화가 여러 행일 수 있다(2026-11-10, 집계에 포함)
+        Map<CompanionSlot, CompanionSession> sessions = CompanionService.latestBySlot(
+                sessionRepository.findByWardIdAndSessionDate(wardId, date)
+                        .stream().filter(s -> !s.getStartedAt().isBefore(connectedAt)).toList());
 
         List<Slot> slots = new ArrayList<>();
         for (CompanionSlot slot : CompanionSlot.values()) {

@@ -15,6 +15,9 @@ import kr.silverbridge.main.global.enums.Status;
 import kr.silverbridge.main.support.FullContextIntegrationTest;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.springframework.boot.test.system.CapturedOutput;
+import org.springframework.boot.test.system.OutputCaptureExtension;
 import org.springframework.beans.factory.annotation.Autowired;
 
 import java.time.LocalDate;
@@ -22,6 +25,7 @@ import java.time.OffsetDateTime;
 import java.time.ZoneId;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.verify;
@@ -222,6 +226,97 @@ class CompanionFullIntegrationTest extends FullContextIntegrationTest {
         assertThat(companionGuardianService.today(GUARDIAN, WARD).current().mood()).isEqualTo("CALM");
         org.assertj.core.api.Assertions.assertThatThrownBy(() -> companionGuardianService.today("GCM002", WARD))
                 .isInstanceOf(kr.silverbridge.main.global.exception.CustomException.class);
+    }
+
+    @Test
+    @ExtendWith(OutputCaptureExtension.class)
+    @DisplayName("테스트 계정(2026-11-10): 같은 시간대 테스트 대화 2번이 모두 저장·집계되고, 위험 알림은 대화당 1번, "
+            + "analysis는 DB·로그에 없다. 테스트 안내는 디스패처 1건이고 선점 기록이 없다")
+    void 테스트_대화는_일반_대화처럼_저장_집계된다(CapturedOutput output) throws Exception {
+        String tester = "WCMT01";
+        saveUser(GUARDIAN, Role.GUARDIAN, Status.ACTIVE);
+        saveUser(tester, Role.WARD, Status.ACTIVE);
+        saveActiveConnection(GUARDIAN, tester);
+        signedIn(GUARDIAN);
+        signedIn(tester);
+        jdbc.update("INSERT INTO companion_question (slot, text) VALUES ('21:00', '저녁 시험 질문')");
+        when(aiCompanionClient.openDialogue(eq(tester), anyLong(), eq("21:00"), eq("저녁 시험 질문"), anyLong()))
+                .thenReturn(json("{\"dialogueId\":\"d-test-1\",\"maxTurns\":8}"),
+                        json("{\"dialogueId\":\"d-test-2\",\"maxTurns\":8}"));
+        // 첫 대화: 위험 턴 2번 + URGENT 마감 → 위험 알림 1번
+        when(aiCompanionClient.replyText(eq("d-test-1"), anyString())).thenReturn(json(
+                "{\"turnNo\":1,\"turnResult\":{\"label\":\"우울\",\"source\":\"TEXT\"},\"reply\":{\"text\":\"힘드셨군요.\"},"
+                        + "\"face\":{\"label\":\"SecretFaceLabel\",\"usable\":true,\"totalFrames\":0,\"facesFound\":0},"
+                        + "\"signals\":{\"emotion\":\"SecretSignalValue\",\"riskFlag\":true},\"riskFlag\":true,\"ended\":false}"));
+        when(aiCompanionClient.finish("d-test-1")).thenReturn(json(
+                "{\"dialogueId\":\"d-test-1\",\"endReason\":\"USER_STOP\",\"turnCount\":2,\"mood\":\"DEPRESSED\","
+                        + "\"riskFlag\":true,\"alertLevel\":\"URGENT\"}"));
+        when(aiCompanionClient.finish("d-test-2")).thenReturn(json(
+                "{\"dialogueId\":\"d-test-2\",\"endReason\":\"USER_STOP\",\"turnCount\":0,\"mood\":\"JOY\","
+                        + "\"riskFlag\":false,\"alertLevel\":\"INFO\"}"));
+
+        var first = companionService.openTest(tester, "21:00");
+        var turn = companionService.replyText(tester, first.sessionId(), "요즘 너무 힘들어요");
+        assertThat(turn.analysis()).isNotNull();
+        assertThat(turn.analysis().turnLabel()).isEqualTo("우울");
+        assertThat(turn.analysis().riskFlag()).isTrue();
+        companionService.replyText(tester, first.sessionId(), "그냥 다 힘들어요");
+        var firstResult = companionService.finish(tester, first.sessionId());
+        assertThat(firstResult.analysis().alertLevel()).isEqualTo("URGENT");
+        assertThat(firstResult.analysis().test()).isTrue();
+        eventually().untilAsserted(() -> assertThat(notificationLogs(GUARDIAN, NotificationType.COMPANION_RISK))
+                .as("테스트 대화도 위험 알림 1번").isEqualTo(1));
+
+        // 같은 시간대 다시 - 일반 대화였다면 COMPANION_SLOT_DONE
+        var second = companionService.openTest(tester, "21:00");
+        assertThat(second.sessionId()).isNotEqualTo(first.sessionId());
+        assertThat(second.resumed()).isFalse();
+        companionService.finish(tester, second.sessionId());
+        awaitAsyncIdle();
+
+        assertThat(count("SELECT count(*) FROM companion_session WHERE ward_id = ? AND slot = '21:00' AND is_test = true",
+                tester)).as("같은 시간대 테스트 대화 2행").isEqualTo(2);
+        assertThat(notificationLogs(GUARDIAN, NotificationType.COMPANION_RISK)).as("대화당 1번").isEqualTo(1);
+
+        // 집계: 보호자 화면·관리자 기분 분포 모두 마지막 테스트 대화(JOY)로 잡힌다
+        var guardianToday = companionGuardianService.today(GUARDIAN, tester);
+        assertThat(guardianToday.current().mood()).isEqualTo("JOY");
+        assertThat(guardianToday.slots()).filteredOn(s -> s.slot().equals("21:00"))
+                .singleElement().satisfies(s -> assertThat(s.status()).isEqualTo("DONE"));
+        var stats = companionStatsService.today();
+        assertThat(stats.moodDistribution().joy()).isEqualTo(1);
+        assertThat(stats.alertSentCount()).as("위험 알림이 관리자 알림 수에 잡힌다").isEqualTo(1);
+
+        // 테스트 안내: 디스패처 1건(data에 test=true), companion_prompt_log 없음 → 응답률 집계(askedCount) 그대로
+        companionService.sendTestPrompt(tester, "21:00");
+        companionService.sendTestPrompt(tester, "21:00");
+        verify(notificationDispatcher, org.mockito.Mockito.times(2)).dispatch(eq(tester), eq(tester),
+                eq(NotificationType.COMPANION_PROMPT), org.mockito.ArgumentMatchers.argThat(c ->
+                        "true".equals(c.data().get("test")) && "21:00".equals(c.data().get("slot"))));
+        assertThat(count("SELECT count(*) FROM companion_prompt_log WHERE ward_id = ?", tester)).isZero();
+        assertThat(companionStatsService.today().askedCount()).isZero();
+
+        // analysis는 응답으로만 - 저장 칸도 로그도 없다
+        assertThat(count("SELECT count(*) FROM information_schema.columns WHERE table_name = 'companion_session'"
+                + " AND (column_name LIKE '%analysis%' OR column_name LIKE '%signal%' OR column_name LIKE '%face%')")).isZero();
+        assertThat(output.getAll()).doesNotContain("SecretFaceLabel").doesNotContain("SecretSignalValue");
+    }
+
+    @Test
+    @DisplayName("부분 UNIQUE(V68): 일반 대화는 시간대당 1행 그대로, 테스트 대화는 같은 시간대에 여러 행")
+    void 일반_대화는_시간대당_한_번_그대로() {
+        saveUser(WARD, Role.WARD, Status.ACTIVE);
+        Long questionId = jdbc.queryForObject(
+                "INSERT INTO companion_question (slot, text) VALUES ('09:00', '시험 질문') RETURNING id", Long.class);
+        String insert = "INSERT INTO companion_session (ward_id, session_date, slot, question_id, status, is_test, "
+                + "started_at, last_activity_at) VALUES (?, CURRENT_DATE, '09:00', ?, 'OPEN', ?, now(), now())";
+        jdbc.update(insert, WARD, questionId, true);
+        jdbc.update(insert, WARD, questionId, true);
+        jdbc.update(insert, WARD, questionId, false);
+
+        org.assertj.core.api.Assertions.assertThatThrownBy(() -> jdbc.update(insert, WARD, questionId, false))
+                .isInstanceOf(org.springframework.dao.DataIntegrityViolationException.class);
+        assertThat(count("SELECT count(*) FROM companion_session WHERE ward_id = ?", WARD)).isEqualTo(3);
     }
 
     /** 지난날 마친 대화(연속 일수 준비). 연결 이후로 보이게 시작 시각을 지금으로 둔다. */
