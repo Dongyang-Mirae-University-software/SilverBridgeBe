@@ -262,6 +262,7 @@ class CompanionTestModeTest {
                  "reply":{"text":"좋으셨겠어요."},
                  "face":{"label":"Happiness","confidence":0.82,"frameCount":3,"usable":true,"totalFrames":3,"facesFound":3},
                  "signals":{"emotion":"positive","socialContact":"mentioned","responseEvasion":false,"riskFlag":false},
+                 "textMood":{"label":"JOY","turnLabel":"기쁨","confidence":0.91,"usable":true,"reason":null},
                  "riskFlag":false,"ended":false,"transcript":"손주가 왔어요"}
                 """));
         MockMultipartFile wav = new MockMultipartFile("audio", "a.wav", "audio/wav", "RIFF0000WAVEdata".getBytes());
@@ -282,6 +283,9 @@ class CompanionTestModeTest {
                 .containsEntry("usable", true).containsEntry("label", "Happiness")
                 .containsEntry("totalFrames", 3).containsEntry("facesFound", 3);
         assertThat(response.analysis().signals()).containsEntry("emotion", "positive").containsEntry("riskFlag", false);
+        assertThat(response.analysis().textMood())
+                .containsEntry("label", "JOY").containsEntry("turnLabel", "기쁨").containsEntry("usable", true)
+                .containsEntry("confidence", 0.91).containsKey("reason");
         assertThat(response.analysis().riskFlag()).isFalse();
     }
 
@@ -297,6 +301,7 @@ class CompanionTestModeTest {
 
         assertThat(response.analysis().signals()).isNull();
         assertThat(response.analysis().face()).isNull();
+        assertThat(response.analysis().textMood()).as("되묻기 턴·AI가 주지 않으면 null").isNull();
         assertThat(response.analysis().riskFlag()).isTrue();
         verify(writer).recordTurn(eq(121L), eq(2), eq(true), any());
     }

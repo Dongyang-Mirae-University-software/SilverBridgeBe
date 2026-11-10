@@ -15,12 +15,19 @@ import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.TransactionDefinition;
 import org.springframework.transaction.TransactionStatus;
 import org.springframework.transaction.TransactionSystemException;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
+
+import java.util.List;
+import java.util.concurrent.atomic.AtomicReference;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatNoException;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.lenient;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.timeout;
 import static org.mockito.Mockito.verify;
 
 @ExtendWith(MockitoExtension.class)
@@ -80,6 +87,51 @@ class AccessLogServiceTest {
 
         assertThatNoException().isThrownBy(() -> service.log("u1", AccessAction.LOGIN, "1.1.1.1", "ua"));
         verify(transactionManager).rollback(transactionStatus);
+    }
+
+    @Test
+    @DisplayName("트랜잭션 안에서는 그 자리에서 쓰지 않고, 트랜잭션이 끝난 뒤 다른 스레드에서 쓴다 (전체 점검 2026-11 2차 H-1)")
+    void defersUntilTransactionCompletes() {
+        TransactionSynchronizationManager.initSynchronization();
+        TransactionSynchronizationManager.setActualTransactionActive(true);
+        try {
+            service.log("u1", AccessAction.LOGIN, "1.1.1.1", "ua");
+
+            // 호출 스레드는 두 번째 커넥션을 요구하지 않는다
+            verify(transactionManager, never()).getTransaction(any(TransactionDefinition.class));
+            verify(accessLogRepository, never()).save(any());
+
+            // 롤백으로 끝나도 기록은 남는다(재사용 감지처럼 예외로 끝나는 경로)
+            List<TransactionSynchronization> synchronizations = TransactionSynchronizationManager.getSynchronizations();
+            assertThat(synchronizations).hasSize(1);
+            String caller = Thread.currentThread().getName();
+            AtomicReference<String> writerThread = new AtomicReference<>();
+            lenient().when(accessLogRepository.save(any())).thenAnswer(invocation -> {
+                writerThread.set(Thread.currentThread().getName());
+                return invocation.getArgument(0);
+            });
+            synchronizations.get(0).afterCompletion(TransactionSynchronization.STATUS_ROLLED_BACK);
+
+            verify(accessLogRepository, timeout(2000)).save(any());
+            assertThat(writerThread.get()).startsWith("access-log-").isNotEqualTo(caller);
+        } finally {
+            TransactionSynchronizationManager.clear();
+        }
+    }
+
+    @Test
+    @DisplayName("logNow는 트랜잭션 안에서도 바로 쓴다 - 탈퇴처럼 뒤따르는 삭제보다 먼저 남아야 하는 기록")
+    void logNowWritesImmediately() {
+        TransactionSynchronizationManager.initSynchronization();
+        TransactionSynchronizationManager.setActualTransactionActive(true);
+        try {
+            service.logNow("u1", AccessAction.WITHDRAW, "1.1.1.1", "ua");
+
+            verify(accessLogRepository).save(any());
+            assertThat(TransactionSynchronizationManager.getSynchronizations()).isEmpty();
+        } finally {
+            TransactionSynchronizationManager.clear();
+        }
     }
 
     @Test

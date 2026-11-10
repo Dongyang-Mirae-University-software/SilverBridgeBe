@@ -70,7 +70,7 @@ paths:
 
 - **의도**: 탈퇴는 `withdraw()`(INACTIVE 전환, 커밋) → AFTER_COMMIT 리스너 3종 → `purgeWithdrawnUser()`(영구 삭제)의 2단계라, 사이에 배포 재시작·인프라 순단이 끼면 INACTIVE 행이 잔존(M-S1-1). 이 상태는 재로그인(INACTIVE)·탈퇴 재시도(토큰 무효화로 401)·재가입(이메일/전화 잔존) 모두 불가한 자가 복구 불능 좀비.
 - **변경(3중 방어)**: ① 탈퇴 리스너 3종(auth 토큰정리·connection 해제·notification FCM)을 try/catch로 best-effort화 — 한 리스너 실패가 나머지·purge를 막지 않음(행 정리는 purge FK CASCADE가 최종 담당, 유실 가능한 건 상대 알림·WITHDRAW 접속로그뿐). ② 컨트롤러 purge 실패 시 1회 재시도 + `[WITHDRAW-PURGE-FAILED]` ERROR. ③ `WithdrawnUserPurgeScheduler`(10분 주기)가 `INACTIVE && updated_at < now-10분` 행을 스윕 purge — 좀비는 최대 ~20분 내 자동 회수.
-- **불변 규칙 (INACTIVE 불변식)**: `Status.INACTIVE`를 만드는 경로는 **탈퇴(`User.deactivate()`) 단 하나**여야 한다. 스윕이 "오래된 INACTIVE = 좀비"로 판정해 **영구 삭제**하므로, 관리자 계정 제한·휴면 등 다른 용도로 INACTIVE를 재사용하면 **해당 계정이 스윕에 삭제된다**. 그런 기능 도입 시 반드시 별도 상태값(예: RESTRICTED)을 추가할 것. (`user.activate()`는 현재 미사용 — 복구 기능 추가 시에도 동일 주의)
+- **불변 규칙 (INACTIVE 불변식)**: `Status.INACTIVE`를 만드는 경로는 **탈퇴(`User.deactivate()`) 단 하나**여야 한다. 스윕이 "오래된 INACTIVE = 좀비"로 판정해 **영구 삭제**하므로, 관리자 계정 제한·휴면 등 다른 용도로 INACTIVE를 재사용하면 **해당 계정이 스윕에 삭제된다**. 그런 기능 도입 시 반드시 별도 상태값(예: RESTRICTED)을 추가할 것. (`user.activate()`는 관리자 정지 해제(`AdminUserService`, RESTRICTED → ACTIVE)에만 쓴다 - INACTIVE를 되살리는 용도로 쓰지 말 것, 2026-11-10 정정)
 - **수용한 한계**: 스윕 경유 purge는 리스너를 거치지 않아 실패 경로에 한해 상대방 알림·WITHDRAW 감사로그가 유실될 수 있음(`[WITHDRAW-SWEEP]` WARN으로 흔적 보존). 리스너 내부 REQUIRES_NEW 커밋 실패는 try/catch 밖이라 전파되지만 이 경우도 스윕이 회수.
 - **스윕도 토큰·WS를 정리한다 (2026-11-10 2차 점검 L-4)**: 스윕은 purge 직전 `WithdrawnUserSweptEvent`를 발행하고 `UserAccountEventListener.handleSwept`가 access 무효화 키 + 열린 WS 종료를 한다(best-effort, 기존 `handleWithdrawn` 불변). 위 "수용한 한계" 중 토큰·WS 부분은 해소, 상대 알림·접속로그 유실은 그대로.
 - 상세: `docs/(2026-06-11) audit-full-api-session1.md` M-S1-1.
@@ -121,6 +121,15 @@ paths:
 - **불변 규칙 ④(보안 규칙은 전달 방식과 무관)**: 회전·재사용 감지(H-3)·단일 기기 정책·AUTH-G03 단순 401은 `AuthService.refresh(String)` 한 곳에 있다. 쿠키 경로에서 따로 우회하거나 grace(유예)를 끼우지 말 것(XCUT-G06 유예는 여전히 보류).
 - **전환 기간**: `auth.refresh-cookie.body-compat`(기본 true)이면 본문 `refreshToken`을 내리고 받는다(본문 우선). FE 전환 배포 확인 후 7일 뒤 false로 바꾸면 응답 본문 값은 null(키 유지), 요청 본문은 무시된다. 그 뒤 본문 경로 코드를 삭제한다. 롤백은 `AUTH_REFRESH_COOKIE_ENABLED=false`.
 - **FE 프록시 주의**: FE `api/[...path]/route.ts`는 요청의 `cookie`·`origin` 헤더를 지운다 - `/auth/refresh`에 한해 `careai_rt`를 BE로 넘겨야 쿠키가 동작한다.
+
+## 2026-11-10 전체 점검 2차 반영 (H-1·M-2) - 요청 하나가 커넥션 2개를 겹쳐 쥐지 않는다
+
+- **경위**: 로그인·갱신·로그아웃·카카오 로그인·비밀번호 재설정이 트랜잭션으로 커넥션 1개를 쥔 채 접속 로그(`REQUIRES_NEW`)용 두 번째를 요구했다. 풀이 10개라 동시 요청 10건이면 전원이 두 번째를 기다려 풀 대기 시간 동안 SOS를 포함한 모든 DB 요청이 멈춘다(로그인은 트랜잭션 안에서 BCrypt까지 돈다). `ConcurrentLoginConnectionPoolFullIntegrationTest`가 실 DB로 고정한다.
+- **접속 로그는 트랜잭션 뒤 전용 풀에서**: `AccessLogService.log`는 트랜잭션 안에서 불리면 끝난 뒤(커밋·롤백 모두) 전용 스레드 2개(큐 500, 포화 시 `[ACCESS-LOG-REJECTED]` WARN 후 폐기)에서 쓴다. **호출 스레드에서 바로 쓰게 되돌리지 말 것. 알림 executor에 태우지 말 것**(`[NOTIFY-REJECTED]`는 알림 유실 전용). "동기 AFTER_COMMIT으로 옮기면 된다"도 틀리다 - 커밋 직후 요청 스레드는 바깥 커넥션을 아직 쥐고 있을 수 있다.
+  - 예외는 탈퇴 기록(`logNow`)뿐이다 - 탈퇴 직후 purge가 회원 행을 지워 늦게 쓰면 FK 위반으로 사라진다. 요청이 몰리는 경로에 `logNow`를 쓰지 말 것.
+  - 가입 트랜잭션 안에서 직접 부르지 말라는 2026-05-30 규칙은 그대로다(롤백되면 회원 행이 없어 기록도 실패한다).
+- **카카오 API는 트랜잭션 밖에서**: `KakaoAuthService.kakaoLogin`은 카카오 호출 2번을 먼저 하고 DB 구간만 `TransactionTemplate`으로 묶는다. 외부 HTTP를 `@Transactional` 안으로 되돌리지 말 것(카카오가 느리면 커넥션을 최대 20초 쥔다). 새 외부 호출도 같은 원칙(챗·OCR·STT·영상과 같다).
+- **풀 설정을 명시했다**: `spring.datasource.hikari.maximum-pool-size`(`DB_POOL_MAX_SIZE`, 기본 10)·`connection-timeout`(`DB_POOL_CONNECTION_TIMEOUT_MS`, 기본 10초 - HikariCP 기본 30초에서 줄임). **수용한 한계**: 정지 계정의 카카오 로그인·갱신 거절 때 도는 `RefreshTokenRevocationService.revokeAll`(REQUIRES_NEW)과 탈퇴 리스너는 여전히 순간 2개를 쓴다(드물고 순차).
 
 ## 2026-10-31 전체 점검 반영 (H-2)
 

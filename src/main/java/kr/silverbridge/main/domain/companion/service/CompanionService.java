@@ -348,7 +348,8 @@ public class CompanionService {
     static TurnAnalysis turnAnalysis(JsonNode data, boolean riskSeen) {
         JsonNode turnResult = data.path("turnResult");
         return new TurnAnalysis(textOrNull(turnResult.path("label")), textOrNull(turnResult.path("source")),
-                plainObject(data.path("face")), riskSeen, plainObject(data.path("signals")));
+                plainObject(data.path("face")), riskSeen, plainObject(data.path("signals")),
+                plainObject(data.path("textMood")));
     }
 
     private static String textOrNull(JsonNode node) {

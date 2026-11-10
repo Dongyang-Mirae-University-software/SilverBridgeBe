@@ -58,7 +58,8 @@ public class UserAccountEventListener {
             // refresh 삭제만으로는 status=INACTIVE 계정의 기존 access token이 만료(30분)까지 유효하므로,
             // 비밀번호 변경과 동일한 무효화 키를 설정해 탈퇴 직후 401 처리되게 한다.
             invalidatePreviousAccessTokens(event.userId());
-            accessLogService.log(event.userId(), AccessAction.WITHDRAW, event.ipAddress(), event.userAgent());
+            // 즉시 기록 - 곧바로 purge가 회원 행을 지우므로 트랜잭션 뒤로 미루면 FK 위반으로 기록이 사라진다
+            accessLogService.logNow(event.userId(), AccessAction.WITHDRAW, event.ipAddress(), event.userAgent());
         } catch (RuntimeException e) {
             log.error("[WITHDRAW] 토큰·접속로그 정리 실패 — purge/스윕이 회수 예정 userId={}", event.userId(), e);
         }

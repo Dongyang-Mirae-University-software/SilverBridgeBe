@@ -63,7 +63,7 @@ class UserAccountEventListenerTest {
                 eq(1_800_000L),
                 eq(TimeUnit.MILLISECONDS)
         );
-        verify(accessLogService).log("user-1", AccessAction.WITHDRAW, "127.0.0.1", "test-agent");
+        verify(accessLogService).logNow("user-1", AccessAction.WITHDRAW, "127.0.0.1", "test-agent");
     }
 
     @Test
