@@ -17,6 +17,7 @@ import org.junit.jupiter.api.Assumptions;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import kr.silverbridge.main.global.enums.Status;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
@@ -32,6 +33,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 
+import static org.mockito.ArgumentMatchers.eq;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.*;
@@ -80,6 +82,9 @@ class MedicationMissedAlertPlannerTest {
         properties = new MedicationProperties();
         // 지금이 기본 발송 시각이 되도록 맞춘다 → 발송 창 안(마감 120분)
         setDefaultAlertTime(MedicationClock.now().toLocalTime());
+        // 기본: 받은 보호자 전원이 ACTIVE 계정 (개별 테스트가 정지 계정을 따로 지정한다)
+        lenient().when(userRepository.findIdsByIdInAndStatus(any(), eq(Status.ACTIVE)))
+                .thenAnswer(invocation -> List.copyOf(invocation.<java.util.Collection<String>>getArgument(0)));
         planner = new MedicationMissedAlertPlanner(
                 medicationRepository, intakeRepository, missedAlertLogRepository,
                 guardianSettingRepository, guardianSettingService, preferenceService,
@@ -99,6 +104,32 @@ class MedicationMissedAlertPlannerTest {
         ArgumentCaptor<List<MedicationMissedAlertLog>> captor = ArgumentCaptor.forClass(List.class);
         verify(missedAlertLogRepository).saveAll(captor.capture());
         assertThat(captor.getValue()).extracting(MedicationMissedAlertLog::getGuardianId).containsExactly(GUARDIAN_B);
+    }
+
+    @Test
+    @DisplayName("이용 제한·탈퇴 진행(ACTIVE 아님) 보호자는 선점하지 않고, ACTIVE 보호자만 받는다 (2차 점검 L-1)")
+    void 정지_보호자는_선점없음() {
+        stubOneMissed();
+        when(connectionService.getActiveGuardianIds(WARD_ID)).thenReturn(List.of(GUARDIAN_A, GUARDIAN_B));
+        when(userRepository.findIdsByIdInAndStatus(any(), eq(Status.ACTIVE))).thenReturn(List.of(GUARDIAN_B));
+
+        List<MedicationMissedAlertTarget> claimed = planner.claimMissedAlerts();
+
+        assertThat(claimed).extracting(MedicationMissedAlertTarget::guardianId).containsExactly(GUARDIAN_B);
+        ArgumentCaptor<List<MedicationMissedAlertLog>> captor = ArgumentCaptor.forClass(List.class);
+        verify(missedAlertLogRepository).saveAll(captor.capture());
+        assertThat(captor.getValue()).extracting(MedicationMissedAlertLog::getGuardianId).containsExactly(GUARDIAN_B);
+    }
+
+    @Test
+    @DisplayName("보호자 전원이 ACTIVE가 아니면 선점도 발송도 없다 (2차 점검 L-1)")
+    void 전원_정지면_선점없음() {
+        stubOneMissed();
+        when(connectionService.getActiveGuardianIds(WARD_ID)).thenReturn(List.of(GUARDIAN_A));
+        when(userRepository.findIdsByIdInAndStatus(any(), eq(Status.ACTIVE))).thenReturn(List.of());
+
+        assertThat(planner.claimMissedAlerts()).isEmpty();
+        verify(missedAlertLogRepository, never()).saveAll(any());
     }
 
     @Test
