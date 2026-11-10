@@ -47,17 +47,17 @@ description: 기능 구현·기존 기능 점검 요청을 받았을 때, 실행
 
 스킬은 **세션당 한 번만 로드**한다(CLAUDE.md §4).
 
-## 모델 배치 규칙 (2026-09-30)
+## 모델 배치 규칙 (2026-09-30, 2026-11-10 Opus → Fable 5.2)
 
-프롬프트에 **어느 PHASE를 어떤 모델로 할지 `[모델: ...]`로 명시**한다. 원칙은 "기존 패턴을 따라가는 일은 Sonnet, 판단이 어려운 일만 Opus, 판단이 없는 기계적 일은 Haiku"다.
+프롬프트에 **어느 PHASE를 어떤 모델로 할지 `[모델: ...]`로 명시**한다. 원칙은 "기존 패턴을 따라가는 일은 Sonnet, 판단이 어려운 일만 Fable, 판단이 없는 기계적 일은 Haiku"다.
 
 | 작업 | 기본 모델 배치 |
 |---|---|
-| 생성(A) | PHASE 0·1 설계 = **Opus** · PHASE 2·3 구현·테스트 = **Sonnet** (컨트롤러·DTO·서비스·리포지토리·Flyway·테스트처럼 기존 패턴을 따르는 구현) |
-| 기능 점검(B) | 전 PHASE **Sonnet** (검증 누락·ErrorCode·권한 체크·N+1처럼 항목이 정해진 확인). Sonnet이 제기했지만 애매한 건만 **Opus**로 재확인 |
-| 영향 범위(C)·전체(D) 점검 | 영역별 사용처 수집·대량 조사 = **Sonnet** · 영역 교차 비평·동시성/순서 분석·High 후보 최종 검증·최종 우선순위 = **Opus** · 파일 목록 뽑기·단순 grep 정리·포맷 변환 = **Haiku** |
+| 생성(A) | PHASE 0·1 설계 = **Fable** · PHASE 2·3 구현·테스트 = **Sonnet** (컨트롤러·DTO·서비스·리포지토리·Flyway·테스트처럼 기존 패턴을 따르는 구현) |
+| 기능 점검(B) | 전 PHASE **Sonnet** (검증 누락·ErrorCode·권한 체크·N+1처럼 항목이 정해진 확인). Sonnet이 제기했지만 애매한 건만 **Fable**로 재확인 |
+| 영향 범위(C)·전체(D) 점검 | 영역별 사용처 수집·대량 조사 = **Sonnet** · 영역 교차 비평·동시성/순서 분석·High 후보 최종 검증·최종 우선순위 = **Fable** · 파일 목록 뽑기·단순 grep 정리·포맷 변환 = **Haiku** |
 
-**Opus로 올리는 조건 (이 프로젝트 기준)** - 아래를 건드리면 생성의 구현 단계도 Opus로 한다. 2026-09-30의 H-1(탈퇴 리스너 커밋 누락)·E-2(판정 동시 쓰기)가 모두 이 영역이었고, 패턴만 따라가면 놓치기 쉬운 종류다.
+**Fable로 올리는 조건 (이 프로젝트 기준)** - 아래를 건드리면 생성의 구현 단계도 Fable로 한다. 2026-09-30의 H-1(탈퇴 리스너 커밋 누락)·E-2(판정 동시 쓰기)가 모두 이 영역이었고, 패턴만 따라가면 놓치기 쉬운 종류다.
 - 새 도메인 설계
 - 상태 전이가 복잡한 기능 - 연결, SOS, 탈퇴(2단계 purge), 계정 상태, 이상감지 판정
 - 트랜잭션·이벤트·비동기 알림이 얽힌 부분 - AFTER_COMMIT 리스너, `NotificationDispatcher`, 선점 후 발송, 잠금
@@ -78,23 +78,23 @@ description: 기능 구현·기존 기능 점검 요청을 받았을 때, 실행
 PHASE -1. 사전 환경 확인
   - 오늘 날짜 / git 상태·최근 커밋 / 빌드 통과 / 마이그레이션 최신 버전
 
-PHASE 0. 전제 검증  ★ 문서를 사실로 믿지 않는다  [모델: opus]
+PHASE 0. 전제 검증  ★ 문서를 사실로 믿지 않는다  [모델: fable]
   - 문서·요청이 "있다/없다"고 가정한 것을 코드에서 직접 확인
     (클래스·메서드·enum 값 실재 여부, 재사용 대상 패턴, 설정 키, 테이블)
   - 보고: 전제 vs 실제 차이(drift) 표
 
-PHASE 1. 구현 계획 + 승인  [모델: opus]
+PHASE 1. 구현 계획 + 승인  [모델: fable]
   - drift를 반영한 작업 범위 / 변경·신규 파일 목록
   - 기존 동작 보존 확인 (어떤 기존 경로가 안 바뀌는지 명시)
   - 결정이 필요한 항목 → 질문
   → 승인 대기
 
-PHASE 2. 구현  [스킬: spring-boot-patterns, jpa-patterns]  [모델: sonnet - Opus 조건이면 opus]
+PHASE 2. 구현  [스킬: spring-boot-patterns, jpa-patterns]  [모델: sonnet - Fable 조건이면 fable]
   - 승인 범위만. 도메인 로직은 domain/<context>/ (global 금지)
   - 알림/이벤트는 AFTER_COMMIT + @Async
   - 기존 마이그레이션 수정 금지, 신규만
 
-PHASE 3. 테스트·검증  [스킬: test-quality]  [모델: sonnet - Opus 조건이면 opus]
+PHASE 3. 테스트·검증  [스킬: test-quality]  [모델: sonnet - Fable 조건이면 fable]
   - JUnit 5 + AssertJ, 핵심 비즈니스·정책 로직 위주
   - ./gradlew build 통과 확인 (결과를 그대로 보고)
 
@@ -130,7 +130,7 @@ PHASE -1. 사전 환경 확인
 PHASE 0. 점검 대상 식별
   - 대상 도메인 파일 트리 + 엔드포인트별 역할 제한 표
 
-PHASE A. 보안·인가 (최우선) ★  [스킬: security-audit]  [모델: sonnet, 애매한 건만 opus 재확인]
+PHASE A. 보안·인가 (최우선) ★  [스킬: security-audit]  [모델: sonnet, 애매한 건만 fable 재확인]
   - IDOR(본인 자원만 접근) / 역할 인가(@PreAuthorize 누락) / 입력 검증 / PII·로그 노출
 
 PHASE B. 기능 정합성
@@ -176,7 +176,7 @@ PHASE A. 사용처 전수 수집  [모델: sonnet, 파일 목록 추출은 haiku
   - 그 enum·메서드·이벤트를 쓰는 곳을 전 도메인에서 grep (domain/** + global/**)
   - 등호 비교(== X)·switch 누락·하드코딩된 허용 목록(DB CHECK 포함) 별도 표시
 
-PHASE B. 사용처별 판정  [모델: opus - 상태 "사이" 경로·순서 판단]
+PHASE B. 사용처별 판정  [모델: fable - 상태 "사이" 경로·순서 판단]
   - 표: 도메인 / 위치(file:line) / 새 불변식을 지키는가 (PASS·FAIL·해당없음) / 근거
   - 특히 상태 "사이"의 경로 (요청 시점엔 검사하지만 수락·실행 시점엔 안 하는 곳)
 
@@ -200,7 +200,7 @@ PHASE 0. 범위 확정
   - 미점검(❌) 기능은 템플릿 B 수준으로 먼저 점검
   - 잔여 이슈(⚠️)가 닫혔는지 확인
 
-PHASE A. 기능 간 상호작용 ★  [모델: 영역별 조사 sonnet → 교차 비평 opus]
+PHASE A. 기능 간 상호작용 ★  [모델: 영역별 조사 sonnet → 교차 비평 fable]
   - 계정 생명주기(가입·정지·역할 변경·탈퇴) × 각 도메인 데이터(연결·카메라·SOS·복약·이상감지·문의) 매트릭스
   - 알림 정책 × 수신자 상태 (강제 채널이 줄어들지 않는가, 정지 수신자 차단)
 
@@ -210,7 +210,7 @@ PHASE B. 일관성  [스킬: api-contract-review]
 PHASE C. 정책 문서 ↔ 코드 drift
   - .claude/rules/domain-security-policy.md·policy-<도메인>.md 전부·CLAUDE.md 의 불변 규칙을 코드에서 하나씩 확인 (문서를 사실로 믿지 않는다)
 
-PHASE D. 운영·기술  [스킬: security-audit, concurrency-review]  [모델: sonnet, 동시성·순서 분석은 opus]
+PHASE D. 운영·기술  [스킬: security-audit, concurrency-review]  [모델: sonnet, 동시성·순서 분석은 fable]
   - 스케줄러·executor 설정 / 외부 HTTP 타임아웃 / 로그 PII / 의존성 스캔
 
 보고 형식 / 규칙 / 산출물은 템플릿 B와 같다 (문서명: audit-full-<YYYY-MM>.md)
