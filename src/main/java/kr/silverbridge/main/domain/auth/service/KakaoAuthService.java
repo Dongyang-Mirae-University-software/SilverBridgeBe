@@ -27,7 +27,9 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionTemplate;
 
 import java.net.URI;
 import java.net.URISyntaxException;
@@ -54,6 +56,7 @@ public class KakaoAuthService {
     private final SmsService smsService;
     private final ApplicationEventPublisher eventPublisher;
     private final LoginSupersedeMarker loginSupersedeMarker;
+    private final PlatformTransactionManager transactionManager;
 
     @Value("${kakao.redirect-uri}")
     private String redirectUri;
@@ -82,11 +85,17 @@ public class KakaoAuthService {
     // 카카오 로그인
     // 기존 사용자 → 바로 로그인
     // 신규 사용자 → DB 저장 없이 카카오 정보만 반환 (Redis에 임시 저장)
-    @Transactional
+    // 카카오 API 2번(각 최대 10초)은 트랜잭션 밖에서 부른다 - 안에서 부르면 카카오가 느릴 때 로그인 1건이 DB 커넥션을
+    // 최대 20초 쥐어, 몇 건만 겹쳐도 풀이 비고 다른 요청이 멈춘다(2026-11-10 전체 점검 2차 M-2). DB 작업만 트랜잭션으로 묶는다.
     public KakaoLoginResponse kakaoLogin(KakaoLoginRequest request, String ipAddress, String userAgent) {
         KakaoTokenResponse kakaoToken = kakaoOAuthClient.getToken(request.getCode(), redirectUri);
         KakaoUserInfoResponse kakaoUser = kakaoOAuthClient.getUserInfo(kakaoToken.getAccessToken());
 
+        return new TransactionTemplate(transactionManager)
+                .execute(status -> loginOrPrepareSignup(kakaoUser, ipAddress, userAgent));
+    }
+
+    private KakaoLoginResponse loginOrPrepareSignup(KakaoUserInfoResponse kakaoUser, String ipAddress, String userAgent) {
         String kakaoId = String.valueOf(kakaoUser.getId());
 
         // 기존 카카오 사용자 → 바로 로그인

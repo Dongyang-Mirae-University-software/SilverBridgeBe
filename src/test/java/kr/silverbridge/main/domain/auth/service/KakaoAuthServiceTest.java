@@ -62,6 +62,8 @@ class KakaoAuthServiceTest {
     @Mock private SmsService smsService;
     @Mock private ApplicationEventPublisher eventPublisher;
     @Mock private LoginSupersedeMarker loginSupersedeMarker;
+    // 카카오 로그인의 DB 구간은 TransactionTemplate으로 묶는다(카카오 API는 트랜잭션 밖 - 전체 점검 2026-11 2차 M-2)
+    @Mock private org.springframework.transaction.PlatformTransactionManager transactionManager;
 
     @Mock private KakaoTokenResponse tokenResponse;
     @Mock private KakaoUserInfoResponse userInfo;

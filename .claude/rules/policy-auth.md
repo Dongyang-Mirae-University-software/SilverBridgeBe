@@ -121,6 +121,15 @@ paths:
 - **전환 기간**: `auth.refresh-cookie.body-compat`(기본 true)이면 본문 `refreshToken`을 내리고 받는다(본문 우선). FE 전환 배포 확인 후 7일 뒤 false로 바꾸면 응답 본문 값은 null(키 유지), 요청 본문은 무시된다. 그 뒤 본문 경로 코드를 삭제한다. 롤백은 `AUTH_REFRESH_COOKIE_ENABLED=false`.
 - **FE 프록시 주의**: FE `api/[...path]/route.ts`는 요청의 `cookie`·`origin` 헤더를 지운다 - `/auth/refresh`에 한해 `careai_rt`를 BE로 넘겨야 쿠키가 동작한다.
 
+## 2026-11-10 전체 점검 2차 반영 (H-1·M-2) - 요청 하나가 커넥션 2개를 겹쳐 쥐지 않는다
+
+- **경위**: 로그인·갱신·로그아웃·카카오 로그인·비밀번호 재설정이 트랜잭션으로 커넥션 1개를 쥔 채 접속 로그(`REQUIRES_NEW`)용 두 번째를 요구했다. 풀이 10개라 동시 요청 10건이면 전원이 두 번째를 기다려 풀 대기 시간 동안 SOS를 포함한 모든 DB 요청이 멈춘다(로그인은 트랜잭션 안에서 BCrypt까지 돈다). `ConcurrentLoginConnectionPoolFullIntegrationTest`가 실 DB로 고정한다.
+- **접속 로그는 트랜잭션 뒤 전용 풀에서**: `AccessLogService.log`는 트랜잭션 안에서 불리면 끝난 뒤(커밋·롤백 모두) 전용 스레드 2개(큐 500, 포화 시 `[ACCESS-LOG-REJECTED]` WARN 후 폐기)에서 쓴다. **호출 스레드에서 바로 쓰게 되돌리지 말 것. 알림 executor에 태우지 말 것**(`[NOTIFY-REJECTED]`는 알림 유실 전용). "동기 AFTER_COMMIT으로 옮기면 된다"도 틀리다 - 커밋 직후 요청 스레드는 바깥 커넥션을 아직 쥐고 있을 수 있다.
+  - 예외는 탈퇴 기록(`logNow`)뿐이다 - 탈퇴 직후 purge가 회원 행을 지워 늦게 쓰면 FK 위반으로 사라진다. 요청이 몰리는 경로에 `logNow`를 쓰지 말 것.
+  - 가입 트랜잭션 안에서 직접 부르지 말라는 2026-05-30 규칙은 그대로다(롤백되면 회원 행이 없어 기록도 실패한다).
+- **카카오 API는 트랜잭션 밖에서**: `KakaoAuthService.kakaoLogin`은 카카오 호출 2번을 먼저 하고 DB 구간만 `TransactionTemplate`으로 묶는다. 외부 HTTP를 `@Transactional` 안으로 되돌리지 말 것(카카오가 느리면 커넥션을 최대 20초 쥔다). 새 외부 호출도 같은 원칙(챗·OCR·STT·영상과 같다).
+- **풀 설정을 명시했다**: `spring.datasource.hikari.maximum-pool-size`(`DB_POOL_MAX_SIZE`, 기본 10)·`connection-timeout`(`DB_POOL_CONNECTION_TIMEOUT_MS`, 기본 10초 - HikariCP 기본 30초에서 줄임). **수용한 한계**: 정지 계정의 카카오 로그인·갱신 거절 때 도는 `RefreshTokenRevocationService.revokeAll`(REQUIRES_NEW)과 탈퇴 리스너는 여전히 순간 2개를 쓴다(드물고 순차).
+
 ## 2026-10-31 전체 점검 반영 (H-2)
 
 - **비밀번호 변경·재설정 뒤 정리는 단계별 best-effort**: `UserAccountEventListener.handlePasswordChanged`는 refresh 삭제와 access 무효화(Redis)를 각각 감싼다. 예외 하나가 메서드 밖으로 새면 REQUIRES_NEW가 롤백돼 **이미 지운 refresh 토큰이 되살아난다**(탈취를 의심해 재설정했는데 옛 세션이 7일 유지). 정지·역할 변경·탈퇴 핸들러와 같은 형태이며, 감싼 블록을 하나로 합치거나 풀지 말 것.
