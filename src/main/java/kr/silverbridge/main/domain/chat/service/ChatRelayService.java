@@ -14,6 +14,7 @@ import kr.silverbridge.main.global.exception.CustomException;
 import kr.silverbridge.main.global.enums.Role;
 import kr.silverbridge.main.global.exception.ErrorCode;
 import kr.silverbridge.main.global.security.RateLimitService;
+import kr.silverbridge.main.global.util.UserIdFormat;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -69,7 +70,6 @@ public class ChatRelayService {
     private static final java.util.regex.Pattern SEJONG = java.util.regex.Pattern.compile("세종(특별자치시|시)?");
     private static final java.util.regex.Pattern SIGUNGU = java.util.regex.Pattern.compile("\\S+[시군구]");
     /** 사용자 ID 형식(UserIdGenerator: 영숫자, users.id VARCHAR(6)). */
-    private static final java.util.regex.Pattern USER_ID_FORMAT = java.util.regex.Pattern.compile("\\A[A-Za-z0-9]{1,6}\\z");
 
     private final AiChatClient aiChatClient;
     private final ChatSlots slots;
@@ -250,7 +250,7 @@ public class ChatRelayService {
             return null;
         }
         // 형식이 틀리면 DB 조회·원문 로그 없이 거절한다(클라이언트 문자열을 로그에 남기면 줄바꿈 삽입·8KB 폭주가 가능하다)
-        if (!USER_ID_FORMAT.matcher(wardId).matches()) {
+        if (!UserIdFormat.isWellFormed(wardId)) {
             log.warn("[IDOR-ATTEMPT] 형식이 맞지 않는 피보호자 ID로 대리 상담 시도: guardianId={}, wardIdLength={}",
                     guardianId, wardId.length());
             throw new CustomException(ErrorCode.CHAT_WARD_NOT_CONNECTED);

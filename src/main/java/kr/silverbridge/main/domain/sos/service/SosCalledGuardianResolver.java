@@ -2,11 +2,11 @@ package kr.silverbridge.main.domain.sos.service;
 
 import kr.silverbridge.main.domain.connection.service.ConnectionService;
 import kr.silverbridge.main.domain.sos.entity.SosTriggerType;
+import kr.silverbridge.main.global.util.UserIdFormat;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 
-import java.util.regex.Pattern;
 
 /**
  * SOS "보호자에게 직접 전화"의 전화받은 보호자를 확인한다(2026-10-30).
@@ -26,7 +26,6 @@ import java.util.regex.Pattern;
 public class SosCalledGuardianResolver {
 
     /** 사용자 ID 형식(영숫자 1~6자). 어긋난 값은 DB 조회 없이 버린다. */
-    private static final Pattern USER_ID_FORMAT = Pattern.compile("[A-Za-z0-9]{1,6}");
 
     private final ConnectionService connectionService;
 
@@ -46,7 +45,7 @@ public class SosCalledGuardianResolver {
             log.warn("[SOS-CALLED-GUARDIAN-IGNORED] wardId={}, reason=NOT_GUARDIAN_CALL", wardId);
             return null;
         }
-        if (!USER_ID_FORMAT.matcher(calledGuardianId).matches()) {
+        if (!UserIdFormat.isWellFormed(calledGuardianId)) {
             log.warn("[SOS-CALLED-GUARDIAN-IGNORED] wardId={}, reason=FORMAT, length={}",
                     wardId, calledGuardianId.length());
             return null;
