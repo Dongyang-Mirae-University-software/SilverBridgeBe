@@ -13,6 +13,7 @@ paths:
 
 - **관리자 제휴 병원 관리**(admin·hospital, 2026-10-26, V63 감사 로그 CHECK만): `GET /api/admin/hospital?q=&region=&department=`·`/summary`·`POST`·`PUT /{id}`·`DELETE /{id}`(소프트)·`PUT /{id}/status`·진료과 추가·이름 변경·삭제(ADMIN). 병원 칸에 운영시간 `openTime`·`closeTime`·휴게 `breakStart`·`breakEnd`·휴무 `closedWeekdays`·요일별 `weekdayHours`(2026-10-29 #394·#396)와 읽기 전용 `status.todayReservationCount`(#392, 입력 제거)를 중계한다. 데이터는 예약 서비스에 있고 BE는 **전용 ADMIN 계정으로 8개 경로만 중계**(공용 `ADMIN_PANEL_PASSWORD` 금지, 주소·자격 기본값 없음 → 비면 503, vkcs는 503 정상), 메모리 필터·페이지, 쓰기 전 삭제·소유·중복 확인, 감사 로그는 호출 전, 병원 이메일·우리 사용자 예약 수 없음. gosky는 `docker-compose.gosky.yml`(sb-internal). 상세 rules 파일·`docs/(2026-10-26) feature-admin-partner-hospital.md`.
 
+- **관리자 대시보드 AI 서비스 상태**(2026-10-27, 말벗 칸 2026-11-11 #473): `GET /api/admin/dashboard/ai-status` = `anomalyDetection`·`chatbot`·`companion` 각 `{status, checkedAt}` + `generatedAt`. 꺼 둔 서비스는 DISABLED(AI 미호출), 확인 실패는 DISCONNECTED로 단정하지 않고 null, 서버 캐시·트랜잭션 없음. 챗봇·말벗은 병렬 확인(최대 약 5초). 말벗 OK는 AI 프로세스 응답 + 말벗 키 일치까지만(AI `enabled` = 키 설정 여부). 확인 클라이언트는 AI HTTP 공통 규칙(헤더 키·리다이렉트 미추종·3초/5초·빈 아닌 마감 스레드·동시 요청 공유·결과 변화 때만 로그). 상세 `docs/(2026-11-11) audit-admin-ai-status-companion.md`.
 
 ## 관리자 회원관리 - 정지는 별도 상태, 삭제는 탈퇴 경로 (2026-09-09)
 

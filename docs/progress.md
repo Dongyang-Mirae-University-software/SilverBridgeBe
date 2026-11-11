@@ -4,6 +4,11 @@
 
 ---
 
+### [2026-11-11] 관리자 대시보드 AI 서비스 상태에 안부 말벗 칸 + 기능 점검 (BE #473)
+- `GET /api/admin/dashboard/ai-status`에 `companion{status, checkedAt}`: 스위치 꺼짐 DISABLED(AI 미호출)·주소/키 없음 null·AI `GET /companion/status`(말벗 키) 200+`data.enabled` true면 OK, 그 밖 null. `CompanionAiStatusClient`(companion 도메인), 챗봇·말벗 병렬 확인(가상 스레드, 최대 약 5초), `generatedAt` = 모든 확인 뒤.
+- gosky·vkcs 배포, gosky 관리자 실측 세 칸 OK(AI 재배포 뒤에도 OK). FE는 Notion "[관리자] 대시보드 AI 서비스 - 안부 말벗 상태 표시 (2026-11-11)"대로 후속.
+- 기능 점검(템플릿 B) PASS · 🟢 4 - 바꿔 보기 시험 8/8 검출. 상세 `docs/(2026-11-11) audit-admin-ai-status-companion.md`.
+
 ### [2026-11-11] 보호자 챗봇 예약 대상 선택 - guardianWards 전달·reservation_patient 검증 (BE #472)
 - 사용자 결정: 보호자 챗 위쪽 피보호자 선택 칸을 없애고 예약을 시작할 때만 AI가 "누구 예약인가요?"를 묻는다(BE·AI·FE 계약).
 - BE: 보호자 경로 `context.guardianWards`를 ACTIVE 연결로 만든다(이름·관계만, 최대 20명, 클라이언트 값 폐기, 피보호자 경로 미탑재). `uiSelection` `reservation_patient`로 고른 wardId는 AI 호출 전에 형식·ACTIVE 검증(403 + `[IDOR-ATTEMPT]`, 형식 오류는 길이만), `context.wardId`와 다르면 400, 응답 뒤 연결 재확인. 테스트 15건 추가. 상세 `docs/(2026-11-11) feature-guardian-chat-patient-choice.md`.
