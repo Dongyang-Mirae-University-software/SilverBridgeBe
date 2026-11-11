@@ -66,7 +66,7 @@ public final class CompanionDtos {
      */
     @Schema(description = "테스트 계정용 턴 판정(AI 값 그대로)")
     public record TurnAnalysis(
-            @Schema(description = "AI turnResult.label(기쁨·평온·걱정·우울·판단 보류 등, 무응답이면 null)") String turnLabel,
+            @Schema(description = "AI turnResult.label(기쁨·평온·슬픔·우울·판단 보류 등 - WORRY는 슬픔, 무응답이면 null)") String turnLabel,
             @Schema(description = "AI turnResult.source(TEXT·FACE·NO_RESPONSE 등)") String turnSource,
             @Schema(description = "AI face 값 그대로(usable·label·confidence·frameCount·totalFrames·facesFound)")
             Map<String, Object> face,
