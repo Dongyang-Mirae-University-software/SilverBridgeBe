@@ -12,7 +12,7 @@
 | # | 주체 | 내용 |
 |---|---|---|
 | ① | BE → AI | 보호자 경로 요청 `context.guardianWards = [{wardId, name, relation}]` - ACTIVE 연결만, 이름·관계만(전화·주소·생년월일 제외). `context.wardId`는 지금처럼 ACTIVE 연결 검증 뒤에만 통과(아니면 403) |
-| ② | AI | 보호자 경로에서 예약이 시작될 때 `context.wardId`가 없고 `guardianWards`가 1명 이상이면 먼저 선택지를 준다. **`field = "reservation_patient"`**, 값 `"__self__"`(나) + 각 wardId, 표시 "나" + "이름(관계)". 목록이 비면 묻지 않고 본인 예약 |
+| ② | AI | 보호자 경로에서 예약이 시작될 때 `context.wardId`가 없으면 먼저 선택지를 준다. **`field = "reservation_patient"`**, 값 = 각 wardId, 표시 "이름(관계)". **정정(사용자 결정, AI #255)**: 챗봇 예약은 피보호자만 대상이라 처음 계약의 `"__self__"`(나)·"목록이 비면 본인 예약"은 쓰지 않는다 - 목록이 비면 AI가 안내 문장. BE는 옛 값 `__self__`를 검증 없이 통과(해 없음) |
 | ③ | FE | 선택지를 누르면 `uiSelection`을 보내고, 값이 wardId면 **그 턴부터** 예약이 끝날 때까지 `context.wardId`에 같은 값을 싣는다(`__self__`면 싣지 않음) |
 | ④ | AI | wardId가 실린 턴부터 그 피보호자를 환자로 예약 초안을 묶는다(토큰·세션·wardId가 같을 때만 실행 규칙 유지) |
 | 추가 | AI | **상담 기록(`userContext`)에 `guardianWards`를 저장하지 않는다**(사용자 결정 B, 아래 "기록") |
@@ -49,6 +49,12 @@
 ## 기록 (사용자 결정 B)
 
 AI는 요청 context 사본(`userContext`)을 보호자 **본인 상담 기록**에도 저장한다. 피보호자 탈퇴(#129)·연결 해제(L-13) 정리는 대리 상담 기록만 지우므로, `guardianWards`가 저장되면 떠난 피보호자의 이름·관계가 보호자 기록에 남는다. AI가 기록 저장 때 이 키를 빼도록 AI 세션에 요청했다. BE는 기록 응답 허용 목록을 바꾸지 않아 FE로는 어떤 경우에도 나가지 않는다(`기록_응답에_없음`).
+
+## 영향 범위 점검 후속 (2026-11-11, `audit-impact-guardian-chat-patient-choice.md`)
+
+- L-1: 칸 이름에 `reservation_patient`가 들어 있기만 하면 검증한다(AI는 NBSP까지 지운 뒤 비교 - 같음 비교는 앞뒤 글자로 건너뛸 수 있었다). 테스트 5건(공백·탭·NBSP·전각 공백).
+- L-2: 위 계약 ② 정정, Swagger·정책 문서 문구.
+- M-1(AI): 대상 질문 답 기록의 선택지 표시 글자를 저장하지 않고 `reservationTargetAsk.wardIds`를 정리 대상 ID로 본다.
 
 ## FE 영향 (FE 세션 전달용)
 

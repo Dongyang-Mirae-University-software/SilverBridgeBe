@@ -20,6 +20,8 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -156,6 +158,19 @@ class ChatRelayGuardianWardsTest {
                         e -> assertThat(e.getErrorCode()).isEqualTo(ErrorCode.CHAT_WARD_NOT_CONNECTED));
         verifyNoInteractions(aiChatClient);
         assertThat(warnLogs()).contains("[IDOR-ATTEMPT]");
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"reservation_patient ", " reservation_patient", "reservation_patient\t", "reservation_patient ", "　reservation_patient"})
+    @DisplayName("칸 이름 앞뒤에 공백·NBSP 를 붙여도 검증을 건너뛰지 못한다 - AI 는 strip 후 같은 칸으로 본다(점검 L-1)")
+    void 공백_붙인_칸도_검증(String field) {
+        when(connectionService.isActiveConnection(GUARDIAN, "VICTIM")).thenReturn(false);
+
+        assertThatThrownBy(() -> service.sendAsGuardian(GUARDIAN,
+                request(null, new ChatRelayRequest.UiSelection(field, "VICTIM"))))
+                .isInstanceOfSatisfying(CustomException.class,
+                        e -> assertThat(e.getErrorCode()).isEqualTo(ErrorCode.CHAT_WARD_NOT_CONNECTED));
+        verifyNoInteractions(aiChatClient);
     }
 
     @Test
