@@ -2969,3 +2969,11 @@ AI 챗 집계 점검 L-1에서 남겨 둔 공용 `GlobalExceptionHandler`의 `e.
 - 검증: BE 로컬 `./gradlew test` 전체 통과, vkcs 브랜치 통합 테스트 161건 통과(`352e64f2`). FE vitest 푸시 102건·eslint·tsc 통과.
 - 배포: BE 머지 `1ac99321` - vkcs CD 성공(13:18 기동), gosky 수동 배포(13:17 기동), 두 서버 AI WS 연결·ERROR 0. FE 머지 `c5099a8` - gosky FE dev `git pull`, `push-sw-logic.js`가 새 종류를 담아 서빙됨 확인. 스위치는 꺼짐 그대로.
 
+
+### [2026-11-11] 보호자 챗봇 예약 대상 묻기 - AI #255·#256 (BE #472 짝)
+- 사용자 결정: 보호자 챗봇 예약은 **피보호자만** 대상(보호자 웹 예약 화면과 같게) - 원래 계약의 `"__self__"`(나)·"빈 목록이면 본인 예약"은 AI에서 쓰지 않는다. 피보호자 1명이어도 묻는다.
+- AI: 보호자 경로에서 wardId 없이 예약(새 예약·취소·변경·목록)이 시작되면 `reservation_patient` 선택지("이름(관계)")를 먼저 주고 예약 서비스를 부르지 않는다. `guardianWards: []`는 예약 불가 안내, 칸 없음(옛 BE)은 이전 동작. 선택 턴은 직전 질문(같은 세션·30분)과 맞고 **이 턴 wardId(BE 검증)가 고른 값**일 때만 시작 문장·버튼으로 그 피보호자 예약 시작, 아니면 다시 묻기/지남 안내(`__self__`도 지남). wardId 없이 가족 주어 상담은 MedGemma에 나이·성별을 넘기지 않는다. 응급·자해 판정 순서 불변. 상세 AI `docs/design/2026-11-11-guardian-reservation-target.md`.
+- #256: #255가 칸 이름을 `reservation_target`으로 냈는데 BE #472가 `reservation_patient`로 구현·검증해 맞췄다(원래 계약에 칸 이름이 없었다).
+- 검증: 새 테스트 27건, 결함 주입 3종 검출, 전체 pytest(gosky .venv 사본) 3305 passed / 14 skipped, replay_offline stub eval_set_v7·holdout_set_v5 main과 동일(Claude 0회). DGX 실제 MedGemma 재생은 생략(프롬프트 무변경, 프로필 빈 입력은 기존 경로).
+- 배포: gosky AI 17:36(#255) → 17:46 `4445c00`(#256), `/health` 200·MedGemma int8·GPU 9,558MiB, 롤백 `sb-ai-rollback:20261111-pre-patient-field` 1개.
+- **남은 일 FE**: 선택지를 누르면 그 턴부터 `context.wardId`를 싣는다(버튼 = 그 응답을 받은 요청의 wardId, 글 = 직전 응답 `intent=="hospital_reservation"`이고 `tool`이 `make_appointment`·`cancel_reservation`이 아닐 때만, 새 대화 초기화). FE 반영 전에는 선택 칸 없이 예약을 말하면 질문이 되풀이된다(예약은 되지 않음). BE 문서(`feature-guardian-chat-patient-choice.md`)의 `__self__`·빈 목록 본인 예약 문구는 AI 동작과 다르다(BE가 `__self__`를 통과시켜도 해 없음).
