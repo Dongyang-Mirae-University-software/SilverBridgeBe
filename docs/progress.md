@@ -2941,3 +2941,8 @@ AI 챗 집계 점검 L-1에서 남겨 둔 공용 `GlobalExceptionHandler`의 `e.
 ### [2026-11-11] COMPANION_RISK_PATTERN 영향 범위 점검 (템플릿 C, BE #469)
 - 결과 ⚠️: 공용 알림 경로(디스패처 정책·이메일·알림톡 제외·대체 문자 상한·정지 수신자 차단·웹푸시 high·사용자 묶음·관리자 탭·설정·집계·정리·원문 로그)는 PASS. M-1 누적 리스너가 이용 제한·탈퇴 진행 보호자도 대상으로 세어 7일 선점을 소진(주의 알림도 같은 틈 - 하루 단위), L-1 같은 턴 위험+누적 동시 발송(결정 필요), L-2 executor 배정 테스트 누락, L-3 실패해도 재발송 없음(수용 권장), L-4 FE 이동 경로 기본값(FE 몫), L-5 켤 때 시험 계정 문자 주의. 스위치가 꺼져 있어 지금 운영 영향 없음. 상세 `docs/(2026-11-11) audit-impact-companion-risk-pattern.md`.
 
+### [2026-11-11] COMPANION_RISK_PATTERN 영향 범위 점검 조치 (BE #470·FE #245)
+- 사용자 "이슈 전부 반영해줘". M-1 누적·주의 알림 리스너가 선점 전 ACTIVE 계정 보호자만 남김 / L-1 턴이 방금 위험 알림 선점에 이겼으면 누적 판정 생략(제안안 채택) / L-2 executor 배정 테스트 / C-3 `CompanionRiskTypeParityTest` / L-3 수용·L-5 운영 메모는 정책 문서 / L-4 FE #245(누르면 `/guardian/emotion`, 다시 울림).
+- 검증: BE 로컬 `./gradlew test` 전체 통과, vkcs 브랜치 통합 테스트 161건 통과(`352e64f2`). FE vitest 푸시 102건·eslint·tsc 통과.
+- 배포: BE 머지 `1ac99321` - vkcs CD 성공(13:18 기동), gosky 수동 배포(13:17 기동), 두 서버 AI WS 연결·ERROR 0. FE 머지 `c5099a8` - gosky FE dev `git pull`, `push-sw-logic.js`가 새 종류를 담아 서빙됨 확인. 스위치는 꺼짐 그대로.
+
