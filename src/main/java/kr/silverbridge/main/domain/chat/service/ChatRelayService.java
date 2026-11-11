@@ -62,8 +62,12 @@ public class ChatRelayService {
     static final String GUARDIAN_WARDS_KEY = "guardianWards";
     /** 한 요청에 싣는 피보호자 수 상한(최신 연결순). context 8KB 안에 넉넉히 들어가는 값. */
     static final int MAX_GUARDIAN_WARDS = 20;
-    /** AI 의 예약 대상 선택지 칸(AI·FE 계약, 2026-11-11). 값은 {@link #SELF_CHOICE} 또는 피보호자 ID. */
+    /**
+     * AI 의 예약 대상 선택지 칸(AI·FE 계약, 2026-11-11, AI reservation_target.TARGET_FIELD). 값은 연결된 피보호자 ID다 -
+     * 챗봇 예약은 피보호자만 대상이라(사용자 결정) AI 는 "나" 선택지를 주지 않는다.
+     */
     static final String PATIENT_CHOICE_FIELD = "reservation_patient";
+    /** 처음 계약의 "나" 값. AI 는 만들지 않지만 옛 FE 가 보내도 해가 없어(AI 가 대상 질문 없음으로 처리) 검증 없이 통과시킨다. */
     static final String SELF_CHOICE = "__self__";
     /**
      * 환자 프로필 키. 클라이언트 값은 항상 버리고, 이 중 name·phone·birthDate·age·gender·address 만 BE가 환자(대리 상담이면 피보호자,
@@ -304,7 +308,9 @@ public class ChatRelayService {
      */
     private static String patientChoice(ChatRelayRequest request) {
         ChatRelayRequest.UiSelection selection = request.uiSelection();
-        if (selection == null || !PATIENT_CHOICE_FIELD.equals(selection.field())) {
+        // AI 는 칸 이름의 앞뒤 공백(Python strip - NBSP 등 Java strip 이 지우지 않는 문자 포함)을 지우고 비교한다.
+        // 공백 규칙을 맞추는 대신 이 이름이 들어 있기만 하면 검증한다 - 앞뒤에 무엇을 붙여도 건너뛰지 못한다(2026-11-11 점검 L-1).
+        if (selection == null || selection.field() == null || !selection.field().contains(PATIENT_CHOICE_FIELD)) {
             return null;
         }
         String value = selection.value() == null ? "" : selection.value().trim();
