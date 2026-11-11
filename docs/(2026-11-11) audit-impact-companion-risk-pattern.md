@@ -72,6 +72,18 @@
 2. L-2: `NotificationExecutorAssignmentTest`에 한 줄.
 3. 종류 짝 맞춤 가드: `COMPANION_RISK_PATTERN`이 `COMPANION_RISK`와 정책·허용 채널·사용자 묶음·웹푸시 high·알림톡 템플릿 없음이 같은지 한 테스트에서 비교한다(지금은 가드 4곳에 흩어져 있다).
 
+## 조치 (2026-11-11, 사용자 "이슈 전부 반영해줘")
+
+| 이슈 | 조치 |
+|---|---|
+| M-1 | `CompanionRiskPatternListener`·`CompanionNoticeListener`가 선점 전에 계정 ACTIVE 보호자만 남긴다. 테스트: 정지 보호자만이면 선점 없음, 섞이면 이용 중 보호자만(두 리스너) |
+| L-1 | 제안안 채택 - `CompanionSessionWriter.recordTurn`이 그 턴의 위험 알림 선점에 이겼으면 누적 판정 이벤트를 내지 않는다. 테스트: 이긴 턴은 건너뜀, 진 턴(이미 보낸 대화)은 판정 |
+| L-2 | `NotificationExecutorAssignmentTest`에 긴급 풀 고정 |
+| C-3 | `CompanionRiskTypeParityTest` 추가 |
+| L-3 | 현행 유지(수용), 리스너 주석·정책 문서에 기록 |
+| L-4 | FE PR로 이동 경로 `/guardian/emotion`·다시 알림 대상 추가 |
+| L-5 | 정책 문서에 운영 메모 기록 |
+
 ## 종합
 
 ⚠️ - 공용 알림 경로(디스패처·채널·이력·묶음·우선순위)는 모두 불변식을 지킨다. 남은 것은 리스너의 선점 대상 계산(M-1)과 테스트 고정(L-2)이다. 스위치가 꺼져 있어 지금 운영 영향은 없다. **켜기 전에 M-1을 고칠 것을 권한다.**

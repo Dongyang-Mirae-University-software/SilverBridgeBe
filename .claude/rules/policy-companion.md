@@ -34,6 +34,12 @@ paths:
 - **시점**: 턴 기록 트랜잭션에서 그 턴 확률이 기준 이상이면 이벤트 → AFTER_COMMIT `@Async("urgentNotificationExecutor")`. 위험 알림 선점을 먼저 해 같은 커밋에 들어간다. `riskProbability`는 v9 척도만 나오고(AI가 v4·실패·무응답 턴은 null), 마치기 응답에는 없다.
 - **7일에 1번**: `companion_risk_pattern_notice`(피보호자당 1행) 조건부 UPSERT 한 문장(`last_notified_date <= 오늘-7`일 때만 이김). 받을 보호자가 없으면 선점하지 않는다. (ward, date) UNIQUE + 조회로 바꾸지 말 것 - 자정 경계 경합이 생긴다. 역할 변경 정리에 포함, 탈퇴는 FK CASCADE.
 - **채널**: `COMPANION_RISK`와 같은 `FORCED_PUSH_PLUS_SETTINGS`·FCM·문자, 웹푸시 high, 사용자 묶음 URGENT. 보호자 설정 항목은 따로 없고 `companionRisk`(필수)에 포함. 문구·로그·data에 확률·원문 금지(일수만). 관리자 "알림 보냄" 수에 포함.
+- **영향 범위 점검 반영 (2026-11-11, `docs/(2026-11-11) audit-impact-companion-risk-pattern.md`)**:
+  - **M-1 계정 이용 중인 보호자만 대상**: 누적·주의 알림 리스너는 선점 전에 `findIdsByIdInAndStatus(..., ACTIVE)`로 거른다(이상감지 재촉 L-12와 같음). 이용 제한·탈퇴 진행 보호자만 남으면 선점하지 않는다. 디스패처 차단은 그대로 둔다(2중 방어).
+  - **L-1 같은 순간 두 건 방지**: 판정을 부른 턴이 방금 위험 알림 선점에 이겼으면 누적 판정 이벤트를 내지 않는다(다음 높은 턴에서 다시 판정). 같은 대화에서 이미 위험 알림을 보낸 뒤의 높은 턴은 판정한다.
+  - **L-3 수용**: 선점 후 발송이라 발송이 모두 실패해도 7일간 다시 보내지 않는다(위험 알림·주의 알림과 같은 방식, 이력에 `FAILED`).
+  - **L-5 켤 때 주의**: 테스트 대화도 집계되므로 시험 피보호자가 높은 대답을 반복하면 연결된 시험 보호자에게 대체 문자(과금)가 갈 수 있다.
+  - 고정: `CompanionRiskTypeParityTest`(위험 알림과 정책·채널·묶음·탭·이름·high 같음), `NotificationExecutorAssignmentTest`(긴급 풀).
 - **스위치** `COMPANION_RISK_PATTERN_ENABLED`(기본 false) + `_THRESHOLD`·`_MIN_DAYS`·`_WINDOW_DAYS`(0.97·2·7). **수용한 한계**: 개발용 자료에서 안전한 주 알림 +3.6%p(목표 +2%p 미달), 실제 어르신 대화로는 검증 전(11/08 DGX 연구). 상세 `docs/(2026-11-11) feature-companion-risk-pattern.md`.
 
 ## 불변 규칙

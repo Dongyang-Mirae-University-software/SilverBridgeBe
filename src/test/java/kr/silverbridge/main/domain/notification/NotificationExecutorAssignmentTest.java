@@ -44,6 +44,9 @@ class NotificationExecutorAssignmentTest {
         assertThat(asyncQualifiers(AnomalyNotificationListener.class)).containsExactly(URGENT);
         // 안부 말벗 위험 신호(2026-11-04) - 자해·극단 선택 신호일 수 있어 같은 긴급 풀이다
         assertThat(asyncQualifiers(CompanionRiskNotificationListener.class)).containsExactly(URGENT);
+        // 여러 날 위험 누적(2026-11-11) - 같은 종류의 위험이라 같은 긴급 풀(영향 범위 점검 L-2)
+        assertThat(asyncQualifiers(kr.silverbridge.main.domain.companion.listener.CompanionRiskPatternListener.class))
+                .containsExactly(URGENT);
     }
 
     @Test
