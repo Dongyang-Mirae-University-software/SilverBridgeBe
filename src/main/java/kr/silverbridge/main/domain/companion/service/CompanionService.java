@@ -27,6 +27,8 @@ import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.io.IOException;
+import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.time.Clock;
 import java.time.LocalDate;
 import java.time.OffsetDateTime;
@@ -331,7 +333,7 @@ public class CompanionService {
         JsonNode transcriptNode = data.path("transcript");
         String transcript = audio && transcriptNode.isTextual() ? transcriptNode.asText() : null;
 
-        writer.recordTurn(sessionId, turnNo, riskSeen, OffsetDateTime.now(clock));
+        writer.recordTurn(sessionId, turnNo, riskSeen, riskProbability(data), OffsetDateTime.now(clock));
         String endReason = null;
         if (ended) {
             endReason = finalizeQuietly(session);
@@ -339,6 +341,22 @@ public class CompanionService {
         log.info("[COMPANION] 턴 처리: sessionId={}, turnNo={}, ended={}, audio={}", sessionId, turnNo, ended, audio);
         TurnAnalysis analysis = properties.isTestWard(session.getWardId()) ? turnAnalysis(data, riskSeen) : null;
         return new TurnResponse(turnNo, reply, ended, endReason, transcript, analysis);
+    }
+
+    /**
+     * 턴 위험 확률(AI v9 척도, 2026-11-11). 숫자가 아니거나 0~1 밖이면 null - 여러 날 누적 판정에만 쓰고 로그에 남기지 않는다.
+     * 소수 넷째 자리에서 내림한다(기준값을 반올림으로 넘지 않게).
+     */
+    static BigDecimal riskProbability(JsonNode data) {
+        JsonNode node = data.get("riskProbability");
+        if (node == null || !node.isNumber()) {
+            return null;
+        }
+        double value = node.asDouble();
+        if (!(value >= 0.0 && value <= 1.0)) {
+            return null;
+        }
+        return BigDecimal.valueOf(value).setScale(4, RoundingMode.DOWN);
     }
 
     /**

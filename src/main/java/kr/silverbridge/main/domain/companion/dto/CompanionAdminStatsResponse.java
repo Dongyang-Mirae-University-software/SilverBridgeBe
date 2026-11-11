@@ -16,7 +16,7 @@ public record CompanionAdminStatsResponse(
         @Schema(description = "어르신 응답률(%) = 대답한 질문 수 ÷ 보낸 질문 수. 보낸 질문이 없으면 null", example = "82")
         Integer responseRate,
         @Schema(description = "오늘 질문을 받았지만 대답한 대화가 없는 어르신 수", example = "4") int noDialogueWardCount,
-        @Schema(description = "오늘 보낸 기분 변화 알림 수(주의 알림 + 위험 신호 알림)", example = "3") long alertSentCount,
+        @Schema(description = "오늘 보낸 기분 변화 알림 수(주의 알림 + 위험 신호 알림 + 여러 날 위험 누적 알림)", example = "3") long alertSentCount,
         @Schema(description = "오늘 기분 분포 - 어르신별 오늘 마지막으로 마친 대화 기준") MoodDistribution moodDistribution,
         @Schema(description = "걱정·우울이 3일 이상 이어지는 어르신(며칠째 많은 순)") List<ContinuingWard> continuingWards,
         @Schema(description = "오늘 대화가 없는 어르신(질문은 받았으나 대답 없음)") List<NoDialogueWard> noDialogueWards,

@@ -225,6 +225,13 @@ companion:
   prompt-ward-ids: ${COMPANION_PROMPT_WARD_IDS:}
   # 최종 QA 테스트 계정(쉼표 목록, 기본 빈 값 = 꺼짐, '*' 불가). 시간대를 골라 반복 대화·테스트 안내 푸시·판정 결과 응답. 운영 서버에는 넣지 않는다
   test-ward-ids: ${COMPANION_TEST_WARD_IDS:}
+  # 여러 날 위험 누적 알림(2026-11-11): 최근 window-days일 중 턴 위험 확률 threshold 이상인 서로 다른 날이 min-days일 이상이면
+  # 보호자에게 COMPANION_RISK_PATTERN(강제 푸시·문자, 피보호자당 window-days일에 1번). 기본 꺼짐 - 실제 어르신 대화로 검증 전
+  risk-pattern:
+    enabled: ${COMPANION_RISK_PATTERN_ENABLED:false}
+    threshold: ${COMPANION_RISK_PATTERN_THRESHOLD:0.97}
+    min-days: ${COMPANION_RISK_PATTERN_MIN_DAYS:2}
+    window-days: ${COMPANION_RISK_PATTERN_WINDOW_DAYS:7}
 
 # 관리자 제휴 병원 관리 - 예약 서비스(SilverBridgeReservation) 관리자 API 중계 (2026-10-26).
 # 주소·자격은 코드 기본값 없음: 비면 이 API들만 503(기동은 막지 않음). vkcs-linux는 예약 서비스가 없어 비어 있는 것이 정상.
@@ -312,7 +319,7 @@ notification:
     # true = 웹 토큰에 notification 블록 없이 data만(알림 두 번 표시 해결). ⚠️ FE SW가 data.title·body로 그리게 배포된 뒤에 켤 것
     webpush-data-only: ${NOTIFICATION_FCM_WEBPUSH_DATA_ONLY:false}
     # 웹푸시 Urgency: high 종류(쉼표 구분, 2026-10-30 사용자 선택). 비우면 전부 normal
-    high-urgency-types: ${NOTIFICATION_FCM_HIGH_URGENCY_TYPES:WARD_SOS,ANOMALY_DETECTED,ANOMALY_DETECTED_SELF,MEDICATION_REMINDER,ANOMALY_REVIEW_REQUIRED,CAMERA_LINK_LOST,CONNECTION_REQUEST,CONNECTION_ACCEPTED,CONNECTION_REFUSED,INQUIRY_ANSWERED,COMPANION_RISK}
+    high-urgency-types: ${NOTIFICATION_FCM_HIGH_URGENCY_TYPES:WARD_SOS,ANOMALY_DETECTED,ANOMALY_DETECTED_SELF,MEDICATION_REMINDER,ANOMALY_REVIEW_REQUIRED,CAMERA_LINK_LOST,CONNECTION_REQUEST,CONNECTION_ACCEPTED,CONNECTION_REFUSED,INQUIRY_ANSWERED,COMPANION_RISK,COMPANION_RISK_PATTERN}
   # 필수 알림(SOS)의 문자 폴백 상한. 푸시를 못 받는 수신자에게 문자가 유일한 수단이라 높게 잡는다(10초 간격 연타 시 5분이면 도달).
   # 넘으면 그 문자만 생략되고 푸시·WS·이력은 그대로다. 0이면 상한을 끈다. Redis 장애 시 막지 않는다.
   sms-fallback:

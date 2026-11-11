@@ -134,6 +134,16 @@ public enum NotificationType {
             EnumSet.of(NotificationChannelType.FCM, NotificationChannelType.SMS)),
 
     /**
+     * 안부 말벗 <b>여러 날 위험 누적</b> → 피보호자의 ACTIVE 보호자에게(2026-11-11). 한 번의 대답으로는 {@link #COMPANION_RISK}에
+     * 못 미치지만 위험 확률 높은 대답이 최근 7일 중 서로 다른 두 날 이상 나왔을 때, 피보호자당 7일에 1번.
+     *
+     * <p>{@link #COMPANION_RISK}와 같은 채널(FCM 강제 + 설정, 대체 문자, 알림톡·이메일 없음)이다 - 같은 종류의 위험이라
+     * 놓치면 안 된다. 보호자 설정 항목은 따로 두지 않고 {@code companionRisk}(필수)에 포함된다. 문구에 원문·질병명·확률을 넣지 않는다.</p>
+     */
+    COMPANION_RISK_PATTERN(Policy.FORCED_PUSH_PLUS_SETTINGS,
+            EnumSet.of(NotificationChannelType.FCM, NotificationChannelType.SMS)),
+
+    /**
      * 안부 질문 시간 안내 → <b>피보호자 본인</b>에게(2026-11-04). 하루 5번 반복되는 다발성 알림이다.
      *
      * <p><b>FCM만</b>, 설정 기반이다 - 문자는 하루 5건 과금이고 알림톡은 다발성이라 승인 없이 금지다. 놓쳐도 다음

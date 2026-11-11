@@ -28,6 +28,9 @@ public interface CompanionSessionRepository extends JpaRepository<CompanionSessi
 
     List<CompanionSession> findBySessionDate(LocalDate sessionDate);
 
+    /** 여러 날 위험 누적 판정용 - 한 피보호자의 기간 안 모든 대화(상태 무관, 2026-11-11). */
+    List<CompanionSession> findByWardIdAndSessionDateBetween(String wardId, LocalDate from, LocalDate to);
+
     /** 연속 일수 계산용 - 한 피보호자의 {@code from} 이후 마친 대화. */
     @Query("SELECT s FROM CompanionSession s WHERE s.wardId = :wardId AND s.status = :status "
             + "AND s.sessionDate >= :from")

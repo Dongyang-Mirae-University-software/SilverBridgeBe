@@ -48,7 +48,8 @@ class UserNotificationCategoryTest {
     void 묶음_내용() {
         assertThat(UserNotificationCategory.URGENT.types()).containsExactlyInAnyOrder(
                 NotificationType.WARD_SOS, NotificationType.ANOMALY_DETECTED,
-                NotificationType.ANOMALY_DETECTED_SELF, NotificationType.COMPANION_RISK);
+                NotificationType.ANOMALY_DETECTED_SELF, NotificationType.COMPANION_RISK,
+                NotificationType.COMPANION_RISK_PATTERN);
         assertThat(UserNotificationCategory.MEDICATION.types()).containsExactlyInAnyOrder(
                 NotificationType.MEDICATION_REMINDER, NotificationType.MEDICATION_MISSED,
                 NotificationType.MEDICATION_STOPPED);

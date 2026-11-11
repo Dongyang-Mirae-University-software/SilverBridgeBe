@@ -10,6 +10,7 @@ import kr.silverbridge.main.domain.companion.entity.CompanionSession;
 import kr.silverbridge.main.domain.companion.entity.CompanionSessionStatus;
 import kr.silverbridge.main.domain.companion.entity.CompanionSlot;
 import kr.silverbridge.main.domain.companion.repository.CompanionNoticeLogRepository;
+import kr.silverbridge.main.domain.companion.repository.CompanionRiskPatternNoticeRepository;
 import kr.silverbridge.main.domain.companion.repository.CompanionPromptLogRepository;
 import kr.silverbridge.main.domain.companion.repository.CompanionSessionRepository;
 import kr.silverbridge.main.domain.user.entity.User;
@@ -51,6 +52,7 @@ public class CompanionStatsService {
     private final CompanionSessionRepository sessionRepository;
     private final CompanionPromptLogRepository promptLogRepository;
     private final CompanionNoticeLogRepository noticeLogRepository;
+    private final CompanionRiskPatternNoticeRepository riskPatternNoticeRepository;
     private final UserRepository userRepository;
 
     @Transactional(readOnly = true)
@@ -76,8 +78,10 @@ public class CompanionStatsService {
                 .collect(Collectors.toCollection(LinkedHashSet::new));
 
         OffsetDateTime dayStart = date.atStartOfDay(CompanionService.KST).toOffsetDateTime();
+        // 주의 + 위험 + 여러 날 위험 누적(2026-11-11 사용자 결정 - 같은 "알림 보냄" 수에 넣는다)
         long alertSent = noticeLogRepository.countByNoticeDate(date)
-                + sessionRepository.countRiskNotifiedBetween(dayStart, dayStart.plusDays(1));
+                + sessionRepository.countRiskNotifiedBetween(dayStart, dayStart.plusDays(1))
+                + riskPatternNoticeRepository.countByLastNotifiedDate(date);
 
         MoodDistribution distribution = distribution(todaySessions);
 

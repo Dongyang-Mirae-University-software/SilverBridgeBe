@@ -155,7 +155,7 @@ class CompanionServiceTest {
         assertThat(response.reply()).isEqualTo("많이 힘드셨군요.");
         assertThat(response.ended()).isFalse();
         assertThat(response.transcript()).isNull();
-        verify(writer).recordTurn(eq(30L), eq(2), eq(true), any());
+        verify(writer).recordTurn(eq(30L), eq(2), eq(true), any(), any());
         verify(aiClient, never()).finish(anyString());
     }
 
@@ -178,7 +178,7 @@ class CompanionServiceTest {
 
         service.replyText(WARD, 32L, "그냥 그래요");
 
-        verify(writer).recordTurn(eq(32L), eq(3), eq(expectedRisk), any());
+        verify(writer).recordTurn(eq(32L), eq(3), eq(expectedRisk), any(), any());
     }
 
     @Test

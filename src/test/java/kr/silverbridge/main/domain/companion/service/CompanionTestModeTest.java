@@ -303,7 +303,7 @@ class CompanionTestModeTest {
         assertThat(response.analysis().face()).isNull();
         assertThat(response.analysis().textMood()).as("되묻기 턴·AI가 주지 않으면 null").isNull();
         assertThat(response.analysis().riskFlag()).isTrue();
-        verify(writer).recordTurn(eq(121L), eq(2), eq(true), any());
+        verify(writer).recordTurn(eq(121L), eq(2), eq(true), any(), any());
     }
 
     @Test

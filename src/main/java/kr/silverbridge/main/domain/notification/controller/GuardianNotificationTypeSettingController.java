@@ -35,7 +35,7 @@ public class GuardianNotificationTypeSettingController {
                       - medication        : 복약 알림. 기본 true - 내가 받는 미복용 요약과,
                                             피보호자 기기로 가는 "약 드실 시간" 알림을 함께 켜고 끕니다
                       - cameraLinkLost    : 카메라 연결 끊김 안내(AI 서버 연결이 끊긴 뒤 돌아오지 않은 카메라). 기본 true
-                      - companionRisk     : 안부 말벗 대화의 위험 신호 알림. 필수(required=true), 항상 켜짐. 변경 불가
+                      - companionRisk     : 안부 말벗 대화의 위험 신호 알림(여러 날 누적 알림 COMPANION_RISK_PATTERN 포함). 필수(required=true), 항상 켜짐. 변경 불가
                       - companionNotice   : 안부 말벗 주의 알림(걱정·우울이 3일 이상 이어지면 하루 1번). 기본 true
                     required=true 항목은 FE가 잠금 표시만 하면 됩니다.
 

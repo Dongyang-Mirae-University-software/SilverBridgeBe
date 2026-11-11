@@ -655,11 +655,14 @@ class NotificationDispatcherTest {
                 .filter(type -> type.policy() != NotificationType.Policy.SETTINGS_ONLY)
                 .collect(java.util.stream.Collectors.toSet());
         // 안부 말벗 위험 신호(2026-11-04)는 자해·극단 선택 신호일 수 있어 이상감지와 같은 강제 푸시+설정 병행이다
+        // 여러 날 위험 누적(2026-11-11 사용자 결정)도 같은 종류의 위험이라 같은 정책이다
         assertThat(forced).containsExactlyInAnyOrder(
                 NotificationType.WARD_SOS,
                 NotificationType.ANOMALY_DETECTED,
                 NotificationType.ANOMALY_DETECTED_SELF,
-                NotificationType.COMPANION_RISK);
+                NotificationType.COMPANION_RISK,
+                NotificationType.COMPANION_RISK_PATTERN);
+        assertThat(NotificationType.COMPANION_RISK_PATTERN.policy()).isEqualTo(NotificationType.COMPANION_RISK.policy());
 
         // 본인 수신분은 알림톡 템플릿만 없을 뿐 채널 정책은 보호자분과 동일해야 한다
         // (FCM 고정 유지 — 화재 시 본인 대피 안내가 설정으로 꺼지면 안 된다, D-1)
