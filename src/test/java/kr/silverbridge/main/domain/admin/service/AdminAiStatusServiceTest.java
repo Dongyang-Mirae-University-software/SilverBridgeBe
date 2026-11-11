@@ -210,4 +210,31 @@ class AdminAiStatusServiceTest {
                 .isAfterOrEqualTo(response.chatbot().checkedAt())
                 .isAfterOrEqualTo(response.companion().checkedAt());
     }
+
+    @Test
+    @DisplayName("말벗 확인 작업이 예외로 끝나도 응답은 실패하지 않고 말벗 칸만 null(2026-11-11 점검 L-3)")
+    void companionCheckThrowsIsUnknown() {
+        when(companionAiStatusClient.isAvailable()).thenThrow(new IllegalStateException("boom"));
+
+        AdminAiStatusResponse response = service.getAiStatus();
+
+        assertThat(response.companion().status()).isNull();
+        assertThat(response.companion().checkedAt()).isNotNull();
+        assertThat(response.chatbot().status()).isEqualTo(AiServiceState.OK);
+        assertThat(response.anomalyDetection().status()).isEqualTo(AiServiceState.OK);
+    }
+
+    @Test
+    @DisplayName("종료 중(실행기가 닫힌 뒤) 들어온 요청은 말벗 AI를 부르지 않고 null(2026-11-11 점검 L-3)")
+    void afterShutdownCompanionIsUnknown() {
+        service.shutdown();
+
+        AdminAiStatusResponse response = service.getAiStatus();
+
+        assertThat(response.companion().status()).isNull();
+        assertThat(response.companion().checkedAt()).isNotNull();
+        verify(companionAiStatusClient, never()).isAvailable();
+        // 다른 칸은 그대로 확인한다
+        assertThat(response.chatbot().status()).isEqualTo(AiServiceState.OK);
+    }
 }

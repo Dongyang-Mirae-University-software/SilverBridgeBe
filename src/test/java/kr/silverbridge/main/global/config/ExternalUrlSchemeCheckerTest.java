@@ -67,6 +67,15 @@ class ExternalUrlSchemeCheckerTest {
     }
 
     @Test
+    @DisplayName("말벗 AI 주소도 검사 대상이다 - 말벗 키가 평문으로 나가면 경고한다(2026-11-11 점검 L-1)")
+    void companionUrlIsChecked() {
+        MockEnvironment env = new MockEnvironment()
+                .withProperty("companion.ai-base-url", "http://companion.example.test");
+
+        assertThat(new ExternalUrlSchemeChecker(env).plaintextKeys()).containsExactly("companion.ai-base-url");
+    }
+
+    @Test
     @DisplayName("검사 대상 키는 application.yaml에 실제로 있는 설정이다")
     void keysExistInApplicationYaml() throws Exception {
         String yaml = new String(getClass().getResourceAsStream("/application.yaml").readAllBytes(),

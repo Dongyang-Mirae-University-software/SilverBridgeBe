@@ -28,7 +28,9 @@ public class ExternalUrlSchemeChecker {
             "medication.ocr.ai-base-url",
             "chat.relay.ai-base-url",
             "chat.stt.ai-base-url",
-            "anomaly.ws-url");
+            "anomaly.ws-url",
+            // 안부 말벗(2026-11-04) - 대화·상태 확인·탈퇴 삭제가 모두 말벗 키를 헤더에 싣는다(2026-11-11 점검 L-1)
+            "companion.ai-base-url");
 
     private final Environment environment;
 
