@@ -248,6 +248,7 @@ PHASE 5. 마무리
 9. 세션 정리 (이번 작업으로 생긴 것만, 지우기 전 대상 확인):
    - 로컬: 임시 스크립트·조사 결과 파일(~/, /tmp), 스크린샷·테스트 리포트(build/reports·playwright-report·test-results 중 커밋 대상 아닌 것)
    - gosky: 이번에 만든 임시 파일(/tmp·홈), 이번 빌드로 생긴 dangling 이미지만 `docker image prune -f`
+   - AI 배포·시험(2026-11-11): 롤백 이미지는 `sb-ai-rollback:<날짜>-<사유>` 1개만 - 새 배포 정상 확인 후 이전 롤백 태그 `docker rmi`(`before-*` 태그 쌓기 금지), 일회용 시험 컨테이너는 `docker run --rm`(훅이 강제) + `docker ps -a`로 남은 것 확인
      (system/volume prune·image prune -a 금지, builder prune은 디스크 85% 이상 + 사용자 확인 후)
    - 정리 전·후 디스크(df -h /)를 최종 보고에 한 줄로
 10. 최종 보고(한국어): PR 링크·머지 커밋·두 서버 반영 커밋·설정 적용 여부·테스트 결과·정리 결과·PHASE 4 점검 제안
