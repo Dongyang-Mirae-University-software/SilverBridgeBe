@@ -85,6 +85,17 @@ AI가 실제로 멈춘 상황의 실측은 하지 않았다(AI 재시작 금지)
 - 🟢 **L-3 서비스의 예외 경로 테스트 없음**: `supplyAsync` 작업이 예외로 끝나는 경우(클라이언트는 예외를 던지지 않으므로 목에서만 가능)와 종료 뒤 `RejectedExecutionException` 경로. 둘 다 null로 가는 것을 코드로 확인했다. 수정안: 목이 `RuntimeException`을 던질 때 null, `shutdown()` 뒤 호출 시 null 테스트 2개.
 - 🟢 **L-4 vkcs는 관리자 실측을 못 했다**: vkcs에 시험 관리자가 없어 비로그인 401·설정(켬 없음 → DISABLED 예상)만 확인했다. 판정은 단위 테스트(`companionDisabled`)가 고정한다.
 
+## 조치 (2026-11-11, `fix/admin-ai-status-audit-followup`)
+
+| 이슈 | 조치 |
+|---|---|
+| L-1 | `ExternalUrlSchemeChecker.KEYS`에 `companion.ai-base-url` 추가 + `companionUrlIsChecked` 테스트. gosky 값은 사설 대역이라 기동 경고는 나지 않는다 |
+| L-2 | 수용 - 코드 변경 없음(Swagger에 적힌 그대로) |
+| L-3 | `companionCheckThrowsIsUnknown`·`afterShutdownCompanionIsUnknown` 테스트 추가 |
+| L-4 | 미해소 - vkcs에 관리자 계정을 만들려면 DB 직접 쓰기가 필요해 하지 않았다. 판정은 `companionDisabled`가 고정 |
+
+바꿔 보기 시험: 종료 중 거절 catch 제거·작업 예외 catch 제거·KEYS에서 말벗 제거 - 3/3 검출.
+
 ## 수정 커밋 메시지 초안 (L-1·L-3을 고칠 때)
 
 ```
