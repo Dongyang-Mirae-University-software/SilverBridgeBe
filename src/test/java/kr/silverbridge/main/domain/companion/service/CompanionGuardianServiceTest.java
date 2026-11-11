@@ -9,6 +9,8 @@ import kr.silverbridge.main.domain.companion.entity.CompanionSessionStatus;
 import kr.silverbridge.main.domain.companion.entity.CompanionSlot;
 import kr.silverbridge.main.domain.companion.repository.CompanionQuestionRepository;
 import kr.silverbridge.main.domain.companion.repository.CompanionSessionRepository;
+import kr.silverbridge.main.domain.companion.repository.CompanionTranscriptConsentRepository;
+import kr.silverbridge.main.domain.companion.repository.CompanionTurnRepository;
 import kr.silverbridge.main.domain.connection.service.ConnectionService;
 import kr.silverbridge.main.global.exception.CustomException;
 import kr.silverbridge.main.global.exception.ErrorCode;
@@ -46,11 +48,16 @@ class CompanionGuardianServiceTest {
     private CompanionSessionRepository sessionRepository;
     private ConnectionService connectionService;
     private CompanionGuardianService service;
+    private CompanionTurnRepository turnRepository;
+    private CompanionTranscriptConsentRepository consentRepository;
+    private CompanionQuestionRepository questionRepository;
 
     @BeforeEach
     void setUp() {
         sessionRepository = mock(CompanionSessionRepository.class);
-        CompanionQuestionRepository questionRepository = mock(CompanionQuestionRepository.class);
+        questionRepository = mock(CompanionQuestionRepository.class);
+        turnRepository = mock(CompanionTurnRepository.class);
+        consentRepository = mock(CompanionTranscriptConsentRepository.class);
         connectionService = mock(ConnectionService.class);
         CompanionProperties properties = new CompanionProperties();
         CompanionService companionService = new CompanionService(mock(AiCompanionClient.class), properties,
@@ -58,7 +65,7 @@ class CompanionGuardianServiceTest {
                 new CompanionTurnSlots(properties), mock(RateLimitService.class), mock(CompanionPromptScheduler.class));
         companionService.setClock(Clock.fixed(AT_1310.toInstant(), CompanionService.KST));
         service = new CompanionGuardianService(companionService, sessionRepository, questionRepository,
-                connectionService);
+                connectionService, turnRepository, consentRepository, properties);
     }
 
     @Test

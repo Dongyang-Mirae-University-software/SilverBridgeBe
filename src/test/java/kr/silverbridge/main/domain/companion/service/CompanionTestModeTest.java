@@ -303,7 +303,7 @@ class CompanionTestModeTest {
         assertThat(response.analysis().face()).isNull();
         assertThat(response.analysis().textMood()).as("되묻기 턴·AI가 주지 않으면 null").isNull();
         assertThat(response.analysis().riskFlag()).isTrue();
-        verify(writer).recordTurn(eq(121L), eq(2), eq(true), any(), any());
+        verify(writer).recordTurn(eq(121L), eq(2), eq(true), any(), any(), any());
     }
 
     @Test
@@ -368,6 +368,35 @@ class CompanionTestModeTest {
         p.setTestWardIds(List.of(" TW0001 ", ""));
         assertThat(p.getTestWardIds()).containsExactly("TW0001");
         assertThat(p.isTestWard("TW0001")).isFalse(); // 말벗이 꺼져 있으면 테스트 계정도 아니다
+    }
+
+    @Test
+    @DisplayName("테스트 전체 공개(COMPANION_TEST_ALL_WARDS): 켜면 목록 밖 계정도 테스트 계정, 끄면 목록만, 말벗이 꺼지면 아무도 아님")
+    void testAllWardsSwitch() {
+        CompanionProperties p = new CompanionProperties();
+        p.setEnabled(true);
+        p.setAiBaseUrl("http://ai.test");
+        p.setApiKey("key");
+        p.setTestWardIds(List.of("TW0001"));
+        assertThat(p.isTestAllWards()).as("기본 꺼짐").isFalse();
+        assertThat(p.isTestWard("OW0001")).isFalse();
+        assertThat(p.isTestWard("TW0001")).isTrue();
+
+        p.setTestAllWards(true);
+        assertThat(p.isTestWard("OW0001")).isTrue();
+        assertThat(p.isTestWard(null)).isFalse();
+
+        p.setEnabled(false);
+        assertThat(p.isTestWard("OW0001")).isFalse();
+    }
+
+    @Test
+    @DisplayName("테스트 전체 공개가 켜지면 목록에 없는 피보호자도 today.testMode=true, 끄면 false")
+    void testAllWardsOpensTestApi() {
+        properties.setTestAllWards(true);
+        assertThat(service.today("OW0001").testMode()).isTrue();
+        properties.setTestAllWards(false);
+        assertThat(service.today("OW0001").testMode()).isFalse();
     }
 
     @Test

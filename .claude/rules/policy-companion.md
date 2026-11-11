@@ -24,7 +24,7 @@ paths:
 - **지금 기분·관리자 기분 분포는 하루 기분과 다르다**(의도, 2026-11-09 점검): 보호자 `current`와 관리자 `moodDistribution`은 판단 불가를 **포함한** 마지막 마친 대화 기준이다("지금 기분" = 가장 최근 대화, 판단 불가면 "확인할 수 없어요"·`unknown`). 그래서 같은 어르신이 분포에서는 `unknown`이면서 이어지는 어르신(하루 기분·연속 일수 기준)에 오를 수 있다.
 - **주의 알림**: 3일째부터 날마다 하루 1번(`companion_notice_log` (ward, date) UNIQUE 선점). FCM만·설정 기반·일반 풀. 보호자가 `companionNotice`로 끌 수 있고 게이트는 `CompanionNoticeListener`가 건다(디스패처는 모른다). 받을 보호자가 없으면 선점하지 않는다. 문구에 병명·원문 금지("걱정스럽거나 가라앉은 기분이 N일째").
   - **연속 일수는 보호자마다 그 보호자의 지금 연결 이후 대화로 센다**(D-1, 2026-11-09 PR-B 점검 M-1): 피보호자 전체 기록으로 세면 새로·다시 연결한 보호자에게 연결 전 기분 일수가 푸시로 드러난다(화면 주의 칸은 이미 연결 이후만). 필터는 `CompanionMoodDays.startedSince` 한 곳 - 화면·알림이 같이 쓴다. 보호자마다 일수가 다를 수 있고(각자 화면과 같은 숫자), 선점은 피보호자·날짜 1번·기록 일수는 보낸 일수 중 최댓값. 관리자 "이어지는 어르신"은 D-1 대상이 아니다(피보호자 전체 기록).
-- **보호자 조회 권한**: ACTIVE 연결 + **지금 연결 이후 대화만**(D-1, `ConnectionService.findActiveConnectedAt`). 남의 피보호자 403 `COMPANION_NOT_AUTHORIZED` + `[IDOR-ATTEMPT]`. 대답 원문 칸을 만들지 말 것(디자인 시안에 있었지만 결정 B).
+- **보호자 조회 권한**: ACTIVE 연결 + **지금 연결 이후 대화만**(D-1, `ConnectionService.findActiveConnectedAt`). 남의 피보호자 403 `COMPANION_NOT_AUTHORIZED` + `[IDOR-ATTEMPT]`. 대화 글은 `sessions/{id}`에서만, 동의 시에만(아래 "대화 내용 저장" 절).
 - **관리자 집계**: BE DB로 계산(AI 호출 없음). 응답률 = 보낸 질문 안내 중 그 (피보호자, 시간대) 대화에 대답이 있는 비율, 안내가 없으면 null. 어르신 이름은 BE가 붙인다. 원문·요약 금지.
 - **질문 안내 대상**: `COMPANION_PROMPT_WARD_IDS`에 `*`면 이용 중인 모든 피보호자. 피보호자 끄기 설정이 생기기 전에는 기본으로 켜지 말 것.
 
@@ -42,9 +42,20 @@ paths:
   - 고정: `CompanionRiskTypeParityTest`(위험 알림과 정책·채널·묶음·탭·이름·high 같음), `NotificationExecutorAssignmentTest`(긴급 풀).
 - **스위치** `COMPANION_RISK_PATTERN_ENABLED`(기본 false) + `_THRESHOLD`·`_MIN_DAYS`·`_WINDOW_DAYS`(0.97·2·7). **수용한 한계**: 개발용 자료에서 안전한 주 알림 +3.6%p(목표 +2%p 미달), 실제 어르신 대화로는 검증 전(11/08 DGX 연구). 상세 `docs/(2026-11-11) feature-companion-risk-pattern.md`.
 
+## 대화 내용 저장·보호자 대화 보기 (2026-11-11 사용자 결정)
+
+- **근거**: 개인정보 보호법 제23조(건강 등 민감정보 별도 동의)·제21조(목적 달성·보유기간 경과 시 지체 없이 파기).
+- **턴 저장(V71 `companion_turn`)**: 턴마다 1행 - 기분(`turnResult.moodCode` 또는 한글 `label`, 판단 보류 = null)은 **항상**, `bot_text`(그 대답 뒤 말벗이 한 말, 기기에 나간 문장 그대로)·`answer_text`(글 대답, 음성이면 AI 받아 적은 글)는 **동의 시에만**. 화면 표시용 문자열 그대로(정규화 금지). 같은 턴 번호는 건너뛴다(UNIQUE 위반으로 위험 알림 선점이 롤백되지 않게). 테스트 대화도 같은 규칙. 저장은 `CompanionTurnRecorder` 한 곳(턴 기록 트랜잭션에 합류, MANDATORY).
+- **동의(V71 `companion_transcript_consent`, 피보호자당 1행)**: `GET/PUT /api/ward/companion/transcript-consent`(WARD, 말벗 스위치와 무관하게 동작 - 철회는 언제나 가능해야 한다). 기본 동의 없음. 동의 뒤 턴부터 저장(지난 턴 채우지 않음), 처음 동의 시각 유지(`ON CONFLICT DO NOTHING`).
+- **철회 = 즉시 삭제**: 같은 트랜잭션에서 동의 행 DELETE → 그 피보호자 턴 글 UPDATE NULL(기분은 남김). **경합**: 턴 저장이 동의 행을 `FOR SHARE`로 읽고, 철회의 DELETE가 그 커밋을 기다린 뒤 비우므로 철회 직전 턴의 글도 남지 않는다(`CompanionTranscriptFullIntegrationTest`). 순서(DELETE 먼저)·잠금을 바꾸지 말 것.
+- **30일 보관**: `CompanionTranscriptRetentionScheduler` 매일 **04:55**(`COMPANION_TRANSCRIPT_RETENTION_DAYS`, 기본 30)가 `created_at` 30일 지난 턴의 글만 비운다. 기분·대화 기록은 남는다. 스케줄러는 15종, 풀 3 유지(일일 작업 시각 겹침 없음).
+- **정리**: 탈퇴 = FK CASCADE(users → 동의 행, users → session → turn). 역할 변경(피보호자 → 보호자) = `clearOnRoleChange`가 동의 행 삭제 + 대화 삭제(턴 CASCADE).
+- **보호자 API**(모두 ACTIVE 연결·D-1·`[IDOR-ATTEMPT]`): `week`(오늘 포함 7일, 오래된 날부터, 하루 기분 = `CompanionMoodDays`) / `days/{date}`(today와 같은 모양, 7일 밖·형식 오류 400 `COMPANION_DATE_OUT_OF_RANGE`, 지난 날은 그날 끝 시각 기준) / `sessions/{id}`(7일 안, 다른 피보호자·연결 전·없음 = 404 `COMPANION_SESSION_NOT_FOUND` - 다른 피보호자는 `[IDOR-ATTEMPT]` WARN). `transcript`: 동의 없음 → `NO_CONSENT`(남은 글이 있어도 싣지 않음), 글 있음 → `AVAILABLE`, 30일 지남 → `EXPIRED`, 동의 전 시작 → `NO_CONSENT`. today·days 칸에 `sessionId`(nullable)만 더했다(사용자 결정 - 기존 필드 불변).
+- 상세 `docs/(2026-11-11) feature-companion-transcript.md`.
+
 ## 불변 규칙
 
-- **원문을 저장하지 않는다**(결정 B, 2026-11-02): 대답 글·음성·사진·받아 적은 글·말벗 응답 문장은 기기로 넘기기만 한다. DB 컬럼·로그·알림 문구·감사 로그 어디에도 넣지 말 것. AI 계약 문서(D:90 "턴 기록은 백엔드 DB")는 이 결정과 다르다 - 계약 문서가 틀렸다.
+- **원문은 피보호자 동의 시에만 저장한다**(결정 B 2026-11-02를 2026-11-11 사용자 결정으로 변경 - 위 "대화 내용 저장" 절): 말벗 문장·대답 글·받아 적은 글은 `companion_turn.bot_text`·`answer_text`에만, 동의했을 때만 담는다. 음성·사진은 여전히 저장하지 않는다. **로그·알림 문구·감사 로그에는 동의와 무관하게 절대 넣지 말 것**(`CompanionTranscriptLogGuardTest`가 말벗 도메인 로그 인자를 본다).
 - **질문 문장은 행을 고치지 않는다**: 바꿀 때는 `active=false` + 새 행(같은 문장 = 같은 번호, 응답률 집계 기준). 새 마이그레이션으로.
 - **기분 판단 불가 = null**: `UNKNOWN`·0·"정상"으로 바꾸지 말 것(화면 "확인할 수 없어요"). AI 한글 값은 영문 코드로만 저장(결정 D). AI는 2026-11-09부터 `mood`·`moodCode`를 영문 코드(`JOY`·`CALM`·`WORRY`·`DEPRESSED`·`UNKNOWN`)로 준다 - `CompanionMood.fromAi`는 영문(대문자)·한글을 모두 받고 `UNKNOWN`·모르는 값은 null, `mood`가 비면 `moodCode`를 본다(`moodKo`는 읽지 않음).
 - **AI 판단 중 믿는 것은 `riskFlag`·`alertLevel`뿐**(결정 E). 주의(NOTICE, 걱정·우울 3일)는 PR-B에서 BE가 계산한다.
@@ -69,6 +80,7 @@ paths:
 - **테스트 안내 푸시**: 정각 안내와 같은 문구·`COMPANION_PROMPT`(FCM만·설정 기반)이고 data에 `test=true`만 더한다. **`companion_prompt_log`를 남기지 않는다**(응답률은 정각 안내 기준, 사용자 결정). 정각 안내 data에 `test`를 넣지 말 것(`CompanionPromptSchedulerTest.regularPromptHasNoTestKey`가 고정). 분당 3·시간당 30. **204는 발송 요청 뜻이다**(점검 L-1) - 정지 계정·알림 설정 끔·FCM 토큰 없음이면 정각 안내처럼 보내지 않고 응답은 그대로 204다(결과는 알림 이력).
 - **`analysis`는 응답에만**: AI 턴 값(`turnResult`·`face`·`signals`·위험) 그대로, 만들어 내지 않는다(AI가 안 주는 글 기분 코드는 없음). DB 칸·로그·알림에 남기지 말 것 - 원문 미저장(결정 B)과 같은 기준. 일반 계정 응답에는 필드 자체가 없다(`@JsonInclude(NON_NULL)`). 상세 `docs/(2026-11-10) feature-companion-test-mode.md`.
 - **역할은 `isTestWard`가 아니라 컨트롤러가 막는다**(점검 L-3, 현상 유지): 목록에 남은 ID가 보호자로 바뀌어도 `WardCompanionController`의 `hasRole('WARD')`·역할 변경 토큰 무효화·말벗 기록 삭제가 막는다. 테스트 API를 다른 컨트롤러로 옮기면 역할 검사를 함께 옮길 것.
+- **테스트 전체 공개 `COMPANION_TEST_ALL_WARDS`**(2026-11-11, 기본 false): 켜면 모든 피보호자가 테스트 계정(`isTestWard` 한 곳). 목록 방식은 그대로. 보호자·관리자는 해당 없음(컨트롤러 `hasRole('WARD')`). **gosky dev `.env.dev`에만 - 운영 서버 `.env`에 넣지 말 것.** 켜진 동안 모든 피보호자 응답에 `analysis`가 실리고, 테스트 대화도 위험·누적 알림 집계에 들어가 연결된 보호자 대체 문자(과금)가 늘 수 있다(L-5와 같음). QA가 끝나면 끄고 `up -d api`.
 - **목록은 ID 기준이다**(점검 L-4): 탈퇴(hard delete) 뒤 같은 ID로 다시 가입하면 테스트 권한을 물려받는다. QA가 끝나면 `.env.dev`에서 ID를 빼고 `up -d api`. 점검 `docs/(2026-11-10) audit-companion-test-mode.md`.
 
 ## 수용한 한계 (2026-11-04)

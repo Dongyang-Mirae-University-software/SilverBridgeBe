@@ -144,7 +144,7 @@ class CompanionServiceTest {
     }
 
     @Test
-    @DisplayName("턴: 응답 문장을 기기로 돌려주고, 위험 신호가 있으면 기록에 위험 표시를 넘긴다(원문은 넘기지 않는다)")
+    @DisplayName("턴: 응답 문장을 기기로 돌려주고, 위험 표시·턴 내용(기분·말벗 문장·대답)을 기록에 넘긴다 - 글 저장 여부는 동의로 recorder가 정한다")
     void turnWithRisk() throws Exception {
         when(sessionRepository.findById(30L)).thenReturn(Optional.of(sessionWithId(30L, "d-30")));
         when(aiClient.replyText("d-30", "요즘 너무 힘들어요")).thenReturn(json(
@@ -155,7 +155,8 @@ class CompanionServiceTest {
         assertThat(response.reply()).isEqualTo("많이 힘드셨군요.");
         assertThat(response.ended()).isFalse();
         assertThat(response.transcript()).isNull();
-        verify(writer).recordTurn(eq(30L), eq(2), eq(true), any(), any());
+        verify(writer).recordTurn(eq(30L), eq(2), eq(true), any(),
+                eq(new CompanionTurnRecorder.TurnContent(null, "많이 힘드셨군요.", "요즘 너무 힘들어요")), any());
         verify(aiClient, never()).finish(anyString());
     }
 
@@ -178,7 +179,7 @@ class CompanionServiceTest {
 
         service.replyText(WARD, 32L, "그냥 그래요");
 
-        verify(writer).recordTurn(eq(32L), eq(3), eq(expectedRisk), any(), any());
+        verify(writer).recordTurn(eq(32L), eq(3), eq(expectedRisk), any(), any(), any());
     }
 
     @Test

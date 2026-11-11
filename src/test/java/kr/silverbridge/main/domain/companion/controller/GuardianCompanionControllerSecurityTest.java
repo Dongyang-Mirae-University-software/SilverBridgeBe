@@ -70,6 +70,24 @@ class GuardianCompanionControllerSecurityTest {
     }
 
     @Test
+    @WithMockUser(roles = "GUARDIAN")
+    @DisplayName("보호자 → 7일·날짜별·대화 보기 허용 (2026-11-11)")
+    void guardian_새_조회_허용() {
+        assertThatNoException().isThrownBy(() -> controller.week("G00001", "W00001"));
+        assertThatNoException().isThrownBy(() -> controller.day("G00001", "W00001", "2026-11-11"));
+        assertThatNoException().isThrownBy(() -> controller.session("G00001", "W00001", 1L));
+    }
+
+    @Test
+    @WithMockUser(roles = "WARD")
+    @DisplayName("피보호자 → 7일·날짜별·대화 보기 403 (2026-11-11)")
+    void ward_새_조회_거부() {
+        assertThatThrownBy(() -> controller.week("W00001", "W00001")).isInstanceOf(AccessDeniedException.class);
+        assertThatThrownBy(() -> controller.day("W00001", "W00001", "2026-11-11")).isInstanceOf(AccessDeniedException.class);
+        assertThatThrownBy(() -> controller.session("W00001", "W00001", 1L)).isInstanceOf(AccessDeniedException.class);
+    }
+
+    @Test
     @DisplayName("보호자 말벗 API는 조회 전용 - 쓰기 매핑이 없다")
     void 쓰기_매핑_없음() {
         List<String> writeMappings = Arrays.stream(GuardianCompanionController.class.getDeclaredMethods())

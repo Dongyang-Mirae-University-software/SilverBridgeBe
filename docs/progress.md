@@ -3009,3 +3009,8 @@ AI 챗 집계 점검 L-1에서 남겨 둔 공용 `GlobalExceptionHandler`의 `e.
 - 검증: 새 테스트 27건, 결함 주입 3종 검출, 전체 pytest(gosky .venv 사본) 3305 passed / 14 skipped, replay_offline stub eval_set_v7·holdout_set_v5 main과 동일(Claude 0회). DGX 실제 MedGemma 재생은 생략(프롬프트 무변경, 프로필 빈 입력은 기존 경로).
 - 배포: gosky AI 17:36(#255) → 17:46 `4445c00`(#256), `/health` 200·MedGemma int8·GPU 9,558MiB, 롤백 `sb-ai-rollback:20261111-pre-patient-field` 1개.
 - **남은 일 FE**: 선택지를 누르면 그 턴부터 `context.wardId`를 싣는다(버튼 = 그 응답을 받은 요청의 wardId, 글 = 직전 응답 `intent=="hospital_reservation"`이고 `tool`이 `make_appointment`·`cancel_reservation`이 아닐 때만, 새 대화 초기화). FE 반영 전에는 선택 칸 없이 예약을 말하면 질문이 되풀이된다(예약은 되지 않음). BE 문서(`feature-guardian-chat-patient-choice.md`)의 `__self__`·빈 목록 본인 예약 문구는 AI 동작과 다르다(BE가 `__self__`를 통과시켜도 해 없음).
+
+### [2026-11-11] 말벗 대화 내용 저장(동의·30일) + 보호자 7일·날짜별·대화 보기 + 테스트 전체 공개 (BE `feature/companion-transcript`)
+- 결정(사용자): 원문 미저장(결정 B)을 피보호자 별도 동의 조건부로 변경(개인정보 보호법 제21조·제23조), 30일 보관, 턴 기분은 항상 저장, 말벗 테스트를 모든 피보호자에 공개(gosky dev). PHASE 1: 동의 API 말벗 아래, today·days 칸 `sessionId`, 대화 보기 7일.
+- V71(가역): `companion_transcript_consent`·`companion_turn`. 정리 04:55(스케줄러 15종, 풀 3 유지). 상세 `docs/(2026-11-11) feature-companion-transcript.md`.
+- 점검: 템플릿 C(영향 범위) 제안 - audit-index ❌.

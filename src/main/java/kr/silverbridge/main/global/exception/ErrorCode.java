@@ -209,6 +209,7 @@ public enum ErrorCode {
     COMPANION_SLOT_INVALID(HttpStatus.BAD_REQUEST, "시간대는 09:00, 12:00, 15:00, 18:00, 21:00 중 하나여야 합니다."),
     COMPANION_TEST_NOT_ALLOWED(HttpStatus.FORBIDDEN, "테스트 계정만 쓸 수 있습니다."),
     COMPANION_SESSION_NOT_FOUND(HttpStatus.NOT_FOUND, "안부 대화를 찾을 수 없습니다."),
+    COMPANION_DATE_OUT_OF_RANGE(HttpStatus.BAD_REQUEST, "최근 7일 안의 날짜(예: 2026-11-11)만 볼 수 있습니다."),
     // 없는 대화는 404, 남의 대화는 403으로 그대로 안내한다(2026-07-14 정책). 피보호자 경로라 문구는 본인 기준이다
     COMPANION_SESSION_NOT_OWNED(HttpStatus.FORBIDDEN, "본인의 안부 대화만 이어갈 수 있습니다."),
     // 보호자 경로용(2026-11-04 PR-B) - 문구는 수신자(보호자) 기준(2026-08-06 정책)
