@@ -75,6 +75,10 @@ class LogRawExceptionGuardTest {
             // 안부 말벗 PR-B(2026-11-04)
             "domain/companion/listener/CompanionNoticeListener.java",
             "domain/companion/listener/CompanionRiskPatternListener.java",
+            "domain/companion/service/CompanionTranscriptService.java",
+            "domain/companion/service/CompanionTranscriptRetentionScheduler.java",
+            "domain/companion/service/CompanionTurnRecorder.java",
+            "domain/companion/service/CompanionGuardianService.java",
             "domain/companion/service/CompanionGuardianService.java",
             "domain/companion/service/CompanionStatsService.java");
 

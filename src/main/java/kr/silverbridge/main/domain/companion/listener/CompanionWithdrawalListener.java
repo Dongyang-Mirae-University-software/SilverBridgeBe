@@ -3,6 +3,7 @@ package kr.silverbridge.main.domain.companion.listener;
 import kr.silverbridge.main.domain.companion.entity.CompanionPurgeRequest;
 import kr.silverbridge.main.domain.companion.repository.CompanionNoticeLogRepository;
 import kr.silverbridge.main.domain.companion.repository.CompanionRiskPatternNoticeRepository;
+import kr.silverbridge.main.domain.companion.repository.CompanionTranscriptConsentRepository;
 import kr.silverbridge.main.domain.companion.repository.CompanionPromptLogRepository;
 import kr.silverbridge.main.domain.companion.repository.CompanionPurgeRequestRepository;
 import kr.silverbridge.main.domain.companion.repository.CompanionSessionRepository;
@@ -42,6 +43,7 @@ public class CompanionWithdrawalListener {
     private final CompanionPromptLogRepository promptLogRepository;
     private final CompanionNoticeLogRepository noticeLogRepository;
     private final CompanionRiskPatternNoticeRepository riskPatternNoticeRepository;
+    private final CompanionTranscriptConsentRepository transcriptConsentRepository;
     private final CompanionPurgeRequestRepository purgeRequestRepository;
     private final CompanionPurgeService purgeService;
 
@@ -78,6 +80,8 @@ public class CompanionWithdrawalListener {
             promptLogRepository.deleteAllByWardId(event.userId());
             noticeLogRepository.deleteAllByWardId(event.userId());
             riskPatternNoticeRepository.deleteAllByWardId(event.userId());
+            // 대화 내용 저장 동의도 지운다(2026-11-11). 턴(글 포함)은 아래 대화 삭제의 FK CASCADE로 함께 지워진다
+            transcriptConsentRepository.deleteByWardId(event.userId());
             if (!sessionRepository.existsByWardId(event.userId())) {
                 return;
             }

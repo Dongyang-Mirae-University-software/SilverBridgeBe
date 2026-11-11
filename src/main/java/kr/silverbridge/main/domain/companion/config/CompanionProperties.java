@@ -64,6 +64,16 @@ public class CompanionProperties {
      */
     private List<String> testWardIds = new ArrayList<>();
 
+    /**
+     * 모든 피보호자를 테스트 계정으로 본다(2026-11-11, {@code COMPANION_TEST_ALL_WARDS}, 기본 false). gosky dev 최종 QA용 -
+     * <b>운영 서버 {@code .env}에 넣지 말 것</b>. 보호자·관리자는 해당 없음(역할은 {@code WardCompanionController}의
+     * {@code hasRole('WARD')}가 막는다). 목록 방식({@code testWardIds})은 그대로 둔다.
+     */
+    private boolean testAllWards = false;
+
+    /** 대화 내용(동의 시에만 저장) 보관 일수. 지나면 매일 04:55에 글 칸을 비운다(기분은 남김). */
+    private int transcriptRetentionDays = 30;
+
     /** 여러 날 위험 누적 알림(2026-11-11, {@code COMPANION_RISK_PATTERN_*}). 기본 꺼짐. */
     private RiskPattern riskPattern = new RiskPattern();
 
@@ -97,9 +107,9 @@ public class CompanionProperties {
         this.testWardIds = cleaned;
     }
 
-    /** 말벗이 켜져 있고 테스트 목록에 있는 계정인가. */
+    /** 말벗이 켜져 있고 테스트 계정인가(전체 공개 스위치가 켜졌거나 목록에 있음). 역할은 보지 않는다 - 컨트롤러가 막는다. */
     public boolean isTestWard(String wardId) {
-        return isUsable() && wardId != null && testWardIds.contains(wardId);
+        return isUsable() && wardId != null && (testAllWards || testWardIds.contains(wardId));
     }
 
     public boolean isConfigured() {

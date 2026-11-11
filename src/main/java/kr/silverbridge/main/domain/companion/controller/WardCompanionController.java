@@ -8,8 +8,13 @@ import kr.silverbridge.main.domain.companion.dto.CompanionDtos.ResultResponse;
 import kr.silverbridge.main.domain.companion.dto.CompanionDtos.SessionResponse;
 import kr.silverbridge.main.domain.companion.dto.CompanionDtos.TestSlotRequest;
 import kr.silverbridge.main.domain.companion.dto.CompanionDtos.TodayResponse;
+import kr.silverbridge.main.domain.companion.dto.CompanionDtos.TranscriptConsentRequest;
+import kr.silverbridge.main.domain.companion.dto.CompanionDtos.TranscriptConsentResponse;
 import kr.silverbridge.main.domain.companion.dto.CompanionDtos.TurnResponse;
 import kr.silverbridge.main.domain.companion.service.CompanionService;
+import kr.silverbridge.main.domain.companion.service.CompanionTranscriptService;
+import kr.silverbridge.main.global.exception.CustomException;
+import kr.silverbridge.main.global.exception.ErrorCode;
 import kr.silverbridge.main.global.response.ApiResponse;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.CacheControl;
@@ -20,6 +25,7 @@ import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestPart;
@@ -47,6 +53,7 @@ public class WardCompanionController {
             """;
 
     private final CompanionService companionService;
+    private final CompanionTranscriptService transcriptService;
 
     @Operation(summary = "오늘 안부 대화 현황",
             description = "5개 시간대(09·12·15·18·21시)의 상태와 지금 열 수 있는 시간대를 돌려줍니다. "
@@ -55,6 +62,37 @@ public class WardCompanionController {
     public ResponseEntity<ApiResponse<TodayResponse>> today(@AuthenticationPrincipal String wardId) {
         return ResponseEntity.ok().cacheControl(CacheControl.noStore())
                 .body(ApiResponse.ok(companionService.today(wardId)));
+    }
+
+    private static final String CONSENT_DESC = """
+            안부 대화 내용(말벗이 한 말·어르신 대답, 음성이면 받아 적은 글)을 저장해 연결된 보호자에게 보여 줄지 정합니다.
+            - 기본은 동의 안 함입니다. 동의하지 않으면 대화 내용은 저장하지 않고, 보호자에게는 기분만 보입니다.
+            - 동의한 뒤의 대화부터 저장합니다(지난 대화는 채우지 않음). 저장한 내용은 30일(retentionDays) 뒤 지웁니다.
+            - 철회(consent=false)하면 이미 저장한 대화 내용을 바로 지웁니다. 기분 기록은 남습니다.
+            - 말벗이 꺼져 있어도 쓸 수 있습니다(철회는 언제나 가능해야 함).
+            근거: 개인정보 보호법 제23조(건강 등 민감정보 별도 동의)·제21조(보유기간이 지나면 파기).
+            """;
+
+    @Operation(summary = "대화 내용 저장 동의 조회", description = CONSENT_DESC)
+    @GetMapping("/transcript-consent")
+    public ResponseEntity<ApiResponse<TranscriptConsentResponse>> getTranscriptConsent(
+            @AuthenticationPrincipal String wardId) {
+        return ResponseEntity.ok().cacheControl(CacheControl.noStore())
+                .body(ApiResponse.ok(transcriptService.getConsent(wardId)));
+    }
+
+    @Operation(summary = "대화 내용 저장 동의·철회", description = CONSENT_DESC + """
+
+            [오류 code] INVALID_INPUT(400, consent 없음)
+            """)
+    @PutMapping("/transcript-consent")
+    public ResponseEntity<ApiResponse<TranscriptConsentResponse>> setTranscriptConsent(
+            @AuthenticationPrincipal String wardId, @RequestBody TranscriptConsentRequest request) {
+        if (request == null || request.consent() == null) {
+            throw new CustomException(ErrorCode.INVALID_INPUT);
+        }
+        return ResponseEntity.ok().cacheControl(CacheControl.noStore())
+                .body(ApiResponse.ok(transcriptService.setConsent(wardId, request.consent())));
     }
 
     @Operation(summary = "안부 대화 열기",

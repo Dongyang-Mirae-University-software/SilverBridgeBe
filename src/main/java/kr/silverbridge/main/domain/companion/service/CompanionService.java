@@ -11,6 +11,7 @@ import kr.silverbridge.main.domain.companion.dto.CompanionDtos.SlotStatus;
 import kr.silverbridge.main.domain.companion.dto.CompanionDtos.TodayResponse;
 import kr.silverbridge.main.domain.companion.dto.CompanionDtos.TurnAnalysis;
 import kr.silverbridge.main.domain.companion.dto.CompanionDtos.TurnResponse;
+import kr.silverbridge.main.domain.companion.entity.CompanionMood;
 import kr.silverbridge.main.domain.companion.entity.CompanionQuestion;
 import kr.silverbridge.main.domain.companion.entity.CompanionSession;
 import kr.silverbridge.main.domain.companion.entity.CompanionSessionStatus;
@@ -233,7 +234,7 @@ public class CompanionService {
         try (CompanionTurnSlots.Slot ignored = slots.acquire(sessionId)) {
             // 자리를 잡은 뒤 다시 읽는다 - 앞 요청이 그사이 대화를 끝냈을 수 있다(2026-11-04 점검 M-3)
             CompanionSession current = requireOpenOwned(wardId, sessionId);
-            return handleTurn(current, () -> aiClient.replyText(current.getDialogueId(), answer), false);
+            return handleTurn(current, () -> aiClient.replyText(current.getDialogueId(), answer), false, answer);
         }
     }
 
@@ -252,7 +253,7 @@ public class CompanionService {
         try (CompanionTurnSlots.Slot ignored = slots.acquire(sessionId)) {
             CompanionSession current = requireOpenOwned(wardId, sessionId);
             return handleTurn(current, () -> aiClient.replyAudio(current.getDialogueId(), audioBytes, audioFormat,
-                    frameBytes, frameFormats), true);
+                    frameBytes, frameFormats), true, null);
         }
     }
 
@@ -306,7 +307,7 @@ public class CompanionService {
         }
     }
 
-    private TurnResponse handleTurn(CompanionSession session, AiCall call, boolean audio) {
+    private TurnResponse handleTurn(CompanionSession session, AiCall call, boolean audio, String answerText) {
         long sessionId = session.getId();
         JsonNode data;
         try {
@@ -337,7 +338,10 @@ public class CompanionService {
         JsonNode transcriptNode = data.path("transcript");
         String transcript = audio && transcriptNode.isTextual() ? transcriptNode.asText() : null;
 
-        writer.recordTurn(sessionId, turnNo, riskSeen, riskProbability(data), OffsetDateTime.now(clock));
+        // 턴 기분(항상)과 글(동의 시에만 - 저장 여부는 CompanionTurnRecorder가 정한다, 2026-11-11). 글은 로그에 남기지 않는다
+        CompanionTurnRecorder.TurnContent content = new CompanionTurnRecorder.TurnContent(turnMood(data), reply,
+                audio ? transcript : answerText);
+        writer.recordTurn(sessionId, turnNo, riskSeen, riskProbability(data), content, OffsetDateTime.now(clock));
         String endReason = null;
         if (ended) {
             endReason = finalizeQuietly(session);
@@ -345,6 +349,14 @@ public class CompanionService {
         log.info("[COMPANION] 턴 처리: sessionId={}, turnNo={}, ended={}, audio={}", sessionId, turnNo, ended, audio);
         TurnAnalysis analysis = properties.isTestWard(session.getWardId()) ? turnAnalysis(data, riskSeen) : null;
         return new TurnResponse(turnNo, reply, ended, endReason, transcript, analysis);
+    }
+
+    /** 턴 기분 - {@code turnResult.moodCode}가 있으면 그것, 없으면 {@code turnResult.label}(한글). 판단 보류·모르는 값은 null. */
+    static CompanionMood turnMood(JsonNode data) {
+        JsonNode turnResult = data.path("turnResult");
+        String code = textOrNull(turnResult.path("moodCode"));
+        CompanionMood mood = code == null ? null : CompanionMood.fromAi(code).orElse(null);
+        return mood != null ? mood : CompanionMood.fromAi(textOrNull(turnResult.path("label"))).orElse(null);
     }
 
     /**

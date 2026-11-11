@@ -3,6 +3,7 @@ package kr.silverbridge.main.domain.companion.dto;
 import com.fasterxml.jackson.annotation.JsonInclude;
 import io.swagger.v3.oas.annotations.media.Schema;
 
+import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.Map;
 
@@ -102,5 +103,17 @@ public final class CompanionDtos {
             @Schema(description = "대화 중 위험 신호가 있었는가") boolean riskFlag,
             @Schema(description = "URGENT·INFO(AI 값), 없으면 null") String alertLevel,
             @Schema(description = "테스트 대화면 true") boolean test) {
+    }
+
+    @Schema(description = "대화 내용 저장 동의 바꾸기")
+    public record TranscriptConsentRequest(
+            @Schema(description = "true = 동의, false = 철회(저장된 대화 내용을 바로 지움)") Boolean consent) {
+    }
+
+    @Schema(description = "대화 내용 저장 동의 상태")
+    public record TranscriptConsentResponse(
+            @Schema(description = "동의했으면 true. 기본 false") boolean consented,
+            @Schema(description = "처음 동의한 시각. 동의하지 않았으면 null") OffsetDateTime consentedAt,
+            @Schema(description = "대화 내용 보관 일수(지나면 지움)", example = "30") int retentionDays) {
     }
 }

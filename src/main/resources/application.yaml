@@ -225,6 +225,10 @@ companion:
   prompt-ward-ids: ${COMPANION_PROMPT_WARD_IDS:}
   # 최종 QA 테스트 계정(쉼표 목록, 기본 빈 값 = 꺼짐, '*' 불가). 시간대를 골라 반복 대화·테스트 안내 푸시·판정 결과 응답. 운영 서버에는 넣지 않는다
   test-ward-ids: ${COMPANION_TEST_WARD_IDS:}
+  # 모든 피보호자를 테스트 계정으로(2026-11-11, 기본 false). gosky dev 최종 QA용 - 운영 서버 .env에는 넣지 않는다. 보호자·관리자는 해당 없음
+  test-all-wards: ${COMPANION_TEST_ALL_WARDS:false}
+  # 대화 내용(말벗 문장·어르신 대답) 보관 일수 - 피보호자 동의 시에만 저장, 지나면 매일 04:55에 비운다(개인정보 보호법 제21조)
+  transcript-retention-days: ${COMPANION_TRANSCRIPT_RETENTION_DAYS:30}
   # 여러 날 위험 누적 알림(2026-11-11): 최근 window-days일 중 턴 위험 확률 threshold 이상인 서로 다른 날이 min-days일 이상이면
   # 보호자에게 COMPANION_RISK_PATTERN(강제 푸시·문자, 피보호자당 window-days일에 1번). 기본 꺼짐 - 실제 어르신 대화로 검증 전
   risk-pattern:

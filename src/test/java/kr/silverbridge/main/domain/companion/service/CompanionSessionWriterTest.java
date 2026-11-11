@@ -41,13 +41,15 @@ class CompanionSessionWriterTest {
     private ApplicationEventPublisher publisher;
     private CompanionSessionWriter writer;
     private CompanionProperties properties;
+    private CompanionTurnRecorder turnRecorder;
 
     @BeforeEach
     void setUp() {
         repository = mock(CompanionSessionRepository.class);
         publisher = mock(ApplicationEventPublisher.class);
         properties = new CompanionProperties();
-        writer = new CompanionSessionWriter(repository, publisher, properties);
+        turnRecorder = mock(CompanionTurnRecorder.class);
+        writer = new CompanionSessionWriter(repository, publisher, properties, turnRecorder);
     }
 
     @Test

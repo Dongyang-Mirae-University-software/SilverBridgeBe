@@ -36,6 +36,7 @@ public class CompanionSessionWriter {
     private final CompanionSessionRepository sessionRepository;
     private final ApplicationEventPublisher eventPublisher;
     private final CompanionProperties properties;
+    private final CompanionTurnRecorder turnRecorder;
 
     /** 자리 선점. 같은 (피보호자, 날짜, 시간대)가 이미 있으면 UNIQUE 위반 예외가 그대로 나간다. */
     @Transactional
@@ -69,12 +70,20 @@ public class CompanionSessionWriter {
     @Transactional
     public CompanionSession recordTurn(long sessionId, int turnNo, boolean riskSeen, BigDecimal riskProbability,
                                        OffsetDateTime now) {
+        return recordTurn(sessionId, turnNo, riskSeen, riskProbability, CompanionTurnRecorder.TurnContent.NONE, now);
+    }
+
+    /** 턴 기록 + 턴 1행(기분 항상, 글은 동의 시에만 - 2026-11-11). */
+    @Transactional
+    public CompanionSession recordTurn(long sessionId, int turnNo, boolean riskSeen, BigDecimal riskProbability,
+                                       CompanionTurnRecorder.TurnContent content, OffsetDateTime now) {
         CompanionSession session = load(sessionId);
         // 진행 중(OPEN)인 대화만 고친다 - 이미 끝난 대화는 그대로 돌려준다(2026-11-04 점검 M-3)
         if (!session.isOpen()) {
             return session;
         }
         session.recordTurn(turnNo, riskSeen, riskProbability, now);
+        turnRecorder.record(session, turnNo, content, now);
         boolean riskAlertSent = riskSeen && claimRiskAlert(session, now);
         // 이 턴이 방금 위험 알림을 받았으면 누적 판정은 건너뛴다 - 같은 순간 두 건이 겹치지 않게(2026-11-11 점검 L-1).
         // 다음 높은 턴에서 다시 판정한다.
