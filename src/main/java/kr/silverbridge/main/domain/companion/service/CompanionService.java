@@ -89,12 +89,16 @@ public class CompanionService {
         this.clock = clock;
     }
 
+    /**
+     * 피보호자 오늘 현황. 말벗이 꺼져 있으면(스위치·주소·키) 열 수 있는 시간대를 null로 준다 - 대화 열기가 503
+     * {@code COMPANION_DISABLED}인데 시작 안내(FE 홈 카드)가 뜨지 않게(2026-11-11 FE 기능 점검 F-2). 조회 자체는 막지 않는다.
+     */
     public TodayResponse today(String wardId) {
         ZonedDateTime now = ZonedDateTime.now(clock).withZoneSameInstant(KST);
         LocalDate date = now.toLocalDate();
         Map<CompanionSlot, CompanionSession> sessions =
                 latestBySlot(sessionRepository.findByWardIdAndSessionDate(wardId, date));
-        CompanionSlot current = currentSlot(now).orElse(null);
+        CompanionSlot current = properties.isUsable() ? currentSlot(now).orElse(null) : null;
         List<SlotStatus> statuses = new ArrayList<>();
         for (CompanionSlot slot : CompanionSlot.values()) {
             statuses.add(slotStatus(slot, sessions.get(slot), now));
