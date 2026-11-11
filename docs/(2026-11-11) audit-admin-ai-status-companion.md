@@ -92,7 +92,7 @@ AI가 실제로 멈춘 상황의 실측은 하지 않았다(AI 재시작 금지)
 | L-1 | `ExternalUrlSchemeChecker.KEYS`에 `companion.ai-base-url` 추가 + `companionUrlIsChecked` 테스트. gosky 값은 사설 대역이라 기동 경고는 나지 않는다 |
 | L-2 | 수용 - 코드 변경 없음(Swagger에 적힌 그대로) |
 | L-3 | `companionCheckThrowsIsUnknown`·`afterShutdownCompanionIsUnknown` 테스트 추가 |
-| L-4 | 미해소 - vkcs에 관리자 계정을 만들려면 DB 직접 쓰기가 필요해 하지 않았다. 판정은 `companionDisabled`가 고정 |
+| L-4 | 해소(2026-11-11 18:2x) - 사용자 승인으로 vkcs에 시험 관리자 `sbtadv`를 DB에 직접 넣고(가드: 같은 ID·이메일 있으면 중단, 1건이 아니면 롤백) 로그인 200 → `ai-status` 200: 이상감지 OK·챗봇 OK·**말벗 DISABLED**(vkcs는 스위치 꺼짐), 세 칸 `checkedAt` 있음 |
 
 바꿔 보기 시험: 종료 중 거절 catch 제거·작업 예외 catch 제거·KEYS에서 말벗 제거 - 3/3 검출.
 
