@@ -4,6 +4,11 @@
 
 ---
 
+### [2026-11-11] 보호자 챗봇 예약 대상 선택 - guardianWards 전달·reservation_patient 검증 (BE #PR)
+- 사용자 결정: 보호자 챗 위쪽 피보호자 선택 칸을 없애고 예약을 시작할 때만 AI가 "누구 예약인가요?"를 묻는다(BE·AI·FE 계약).
+- BE: 보호자 경로 `context.guardianWards`를 ACTIVE 연결로 만든다(이름·관계만, 최대 20명, 클라이언트 값 폐기, 피보호자 경로 미탑재). `uiSelection` `reservation_patient`로 고른 wardId는 AI 호출 전에 형식·ACTIVE 검증(403 + `[IDOR-ATTEMPT]`, 형식 오류는 길이만), `context.wardId`와 다르면 400, 응답 뒤 연결 재확인. 테스트 15건 추가. 상세 `docs/(2026-11-11) feature-guardian-chat-patient-choice.md`.
+- 사용자 결정 B: AI는 상담 기록에 `guardianWards`를 저장하지 않는다(AI 세션 요청). audit-index ❌ - 영향 범위 점검(C) 대기.
+
 ### [2026-11-10] BE 전체 점검 2차 반영 ① - 로그인 경로 커넥션 2개 점유 해소 (#463)
 - 🟠 H-1·🟡 M-2: 접속 로그를 트랜잭션 뒤 전용 스레드 2개에서 기록(탈퇴만 즉시), 카카오 API를 트랜잭션 밖으로, HikariCP 풀 10·대기 10초 명시. 테스트만 올린 커밋에서 vkcs 통합 테스트 실패(동시 로그인 16건 TimeoutException) → 수정 후 전부 통과. 낡은 문서 서술 9건 정정·현행 유지 결정 5건 기록. M-1(compose 종료 유예)·작은 정리는 "[BE] 말벗 최종 QA 지원" 세션이 PR·배포 진행.
 
