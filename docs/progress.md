@@ -4,7 +4,7 @@
 
 ---
 
-### [2026-11-11] 보호자 챗봇 예약 대상 선택 - guardianWards 전달·reservation_patient 검증 (BE #PR)
+### [2026-11-11] 보호자 챗봇 예약 대상 선택 - guardianWards 전달·reservation_patient 검증 (BE #472)
 - 사용자 결정: 보호자 챗 위쪽 피보호자 선택 칸을 없애고 예약을 시작할 때만 AI가 "누구 예약인가요?"를 묻는다(BE·AI·FE 계약).
 - BE: 보호자 경로 `context.guardianWards`를 ACTIVE 연결로 만든다(이름·관계만, 최대 20명, 클라이언트 값 폐기, 피보호자 경로 미탑재). `uiSelection` `reservation_patient`로 고른 wardId는 AI 호출 전에 형식·ACTIVE 검증(403 + `[IDOR-ATTEMPT]`, 형식 오류는 길이만), `context.wardId`와 다르면 400, 응답 뒤 연결 재확인. 테스트 15건 추가. 상세 `docs/(2026-11-11) feature-guardian-chat-patient-choice.md`.
 - 사용자 결정 B: AI는 상담 기록에 `guardianWards`를 저장하지 않는다(AI 세션 요청). audit-index ❌ - 영향 범위 점검(C) 대기.
