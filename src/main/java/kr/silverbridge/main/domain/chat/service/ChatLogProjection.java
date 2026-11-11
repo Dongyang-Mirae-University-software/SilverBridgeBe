@@ -5,6 +5,8 @@ import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.JsonNodeFactory;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 
+import kr.silverbridge.main.global.util.UserIdFormat;
+
 import java.util.List;
 
 /**
@@ -19,11 +21,14 @@ final class ChatLogProjection {
     /** FE가 기록 복원·표시에 쓰는 필드. 새 필드가 필요하면 여기에 더한다.
      *  emergencyWarning: 응급·위기 응답의 빨간 경고 박스 문구(2026-10-24) - 기록을 다시 열어도 119·109 안내가 보이게.
      *  layout: 답 모양(핵심 한 줄·본문·질문·카드, AI 2026-11-01) - 기록을 다시 열어도 같은 모양으로. 옛 기록은 null(FE는 reply로 그림).
-     *  답 문장만 담고 내부 정보는 없다(reply 를 칸으로 나눈 것). */
+     *  답 문장만 담고 내부 정보는 없다(reply 를 칸으로 나눈 것).
+     *  wardId: 보호자가 어느 피보호자를 대신한 상담인가(2026-11-11, AI #236) - FE 상담 기록을 피보호자별로 나눈다.
+     *  보호자 본인 기록에 이미 있는 값이고 연결이 끝나면 그 기록은 지워진다(AiProxyChatLogPurgeListener). 본인 상담은 null.
+     *  사용자 ID 형식인 문자열만 내리고 그 밖의 값은 null 로 바꾼다. */
     static final List<String> ALLOWED_FIELDS = List.of(
             "id", "chatNo", "sessionId", "message", "reply", "engine", "modelName", "intent", "type",
             "tool", "toolData", "ui", "riskLevel", "recommendedAction", "reservationRequired", "emergencyWarning",
-            "layout", "createdAt");
+            "layout", "wardId", "createdAt");
 
     /** layout 안에서 내리는 칸(2026-11-01 점검 L-5). headline 은 문자열, 나머지는 문자열 목록. 그 밖의 하위 칸은 뺀다
      *  - 위 허용 목록이 맨 위 칸만 거르므로, AI가 layout 안에 새 칸을 더해도 자동으로 빠지게 한 단계 더 거른다. */
@@ -41,7 +46,11 @@ final class ChatLogProjection {
         for (String field : ALLOWED_FIELDS) {
             JsonNode value = log.get(field);
             if (value != null) {
-                out.set(field, "layout".equals(field) ? projectLayout(value) : value.deepCopy());
+                out.set(field, switch (field) {
+                    case "layout" -> projectLayout(value);
+                    case "wardId" -> projectWardId(value);
+                    default -> value.deepCopy();
+                });
             }
         }
         return out;
@@ -92,5 +101,13 @@ final class ChatLogProjection {
             out.add(projected);
         }
         return out;
+    }
+
+    /** 사용자 ID 형식인 문자열만 그대로, 빈 값·형식이 틀린 값·문자열이 아닌 값은 null. */
+    private static JsonNode projectWardId(JsonNode value) {
+        if (value.isTextual() && UserIdFormat.isWellFormed(value.asText())) {
+            return value.deepCopy();
+        }
+        return JsonNodeFactory.instance.nullNode();
     }
 }

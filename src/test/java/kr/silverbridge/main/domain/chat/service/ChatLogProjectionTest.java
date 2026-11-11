@@ -108,6 +108,18 @@ class ChatLogProjectionTest {
     }
 
     @Test
+    @DisplayName("대리 상담 기록의 wardId 는 사용자 ID 형식일 때만 내리고, 본인 상담·형식이 틀린 값은 null (2026-11-11)")
+    void 대리상담_wardId() throws Exception {
+        assertThat(ChatLogProjection.project(mapper.readTree("{\"id\":1,\"wardId\":\"aB3x9Z\"}")).get("wardId").asText())
+                .isEqualTo("aB3x9Z");
+        for (String raw : new String[] {"null", "\"\"", "\"a\\nb\"", "\"" + "x".repeat(65) + "\"", "123", "{\"id\":1}"}) {
+            JsonNode out = ChatLogProjection.project(mapper.readTree("{\"id\":1,\"wardId\":" + raw + "}"));
+            assertThat(out.get("wardId").isNull()).as(raw).isTrue();
+        }
+        assertThat(ChatLogProjection.project(mapper.readTree("{\"id\":1}")).has("wardId")).isFalse();
+    }
+
+    @Test
     @DisplayName("허용 필드 목록에 내부 정보 필드가 들어 있지 않다")
     void 허용목록에_내부정보_없음() {
         assertThat(ChatLogProjection.ALLOWED_FIELDS)
