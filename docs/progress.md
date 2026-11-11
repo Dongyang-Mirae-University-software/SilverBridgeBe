@@ -3022,3 +3022,4 @@ AI 챗 집계 점검 L-1에서 남겨 둔 공용 `GlobalExceptionHandler`의 `e.
 - 칩 시험지 `tests/eval/chip_set_v1.json` 163문항(단계 칩·보호자 옛 칩·FE 빠른 질문·꼬리 질문 꼴): stub 경로 판정 main 2건 실패(꼬리 칩 "~ 피해야 할 자세가 있나요?"가 결과 뒤 단계 되묻기를 다시 시작) → 0건(관리 질문 꼴 추가). DGX MedGemma 27문항 내용 줄: before 15 / after 13 실패 - 남은 것은 생성 품질(찜질 온·냉, 배 아플 때 피할 음식, 손 저릴 때 집에서, 기침할 때 피할 것, 보호자 혈압약 언제)이라 생성 프롬프트 세션 몫.
 - 검증: 새 테스트 64개 + 칩 164개, 결함 주입 3종 검출(14·17·4개 실패), replay_offline stub 기존 시험지 1060문항 응급·자해 판정 main과 차이 0(Claude 0회), 전체 pytest(gosky .venv 사본) 3533 passed / 14 skipped.
 - 배포: gosky AI 23:37 `0b16224`(#260 말벗 함께), `/health` 200·MedGemma int8·GPU 9,563MiB·BE AI WS 재연결, 롤백 `sb-ai-rollback:20261111-pre-new-symptom` 1개.
+- 기능 점검(B) 조치 AI #261 `6e9f7f8`: F-1 지속 표현 위험 신호 즉시 119 · F-2 보호자 전환 다음 턴 이어 붙이기 · F-3 출혈 낱말 즉시 119 제외(사용자 결정 A) - 결함 주입 3종, pytest 3578, stub 재생 1148문항 main과 차이 0. gosky 배포는 사용자 확인 대기.
