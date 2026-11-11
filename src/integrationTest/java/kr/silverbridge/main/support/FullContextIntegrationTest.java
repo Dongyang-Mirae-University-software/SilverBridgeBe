@@ -10,6 +10,7 @@ import kr.silverbridge.main.domain.auth.oauth.KakaoOAuthClient;
 import kr.silverbridge.main.domain.camera.client.AiStreamClient;
 import kr.silverbridge.main.domain.chat.client.AiChatClient;
 import kr.silverbridge.main.domain.companion.client.AiCompanionClient;
+import kr.silverbridge.main.domain.companion.client.CompanionAiStatusClient;
 import kr.silverbridge.main.domain.hospital.client.ReservationAdminClient;
 import kr.silverbridge.main.domain.medication.client.AiMedicationOcrClient;
 import kr.silverbridge.main.domain.notification.service.AlimtalkSender;
@@ -192,6 +193,7 @@ public abstract class FullContextIntegrationTest {
     @MockitoBean protected AiServerHealthClient aiServerHealthClient;
     @MockitoBean protected ReservationAdminClient reservationAdminClient;
     @MockitoBean protected AiCompanionClient aiCompanionClient;
+    @MockitoBean protected CompanionAiStatusClient companionAiStatusClient;
 
     // ─── 실제 동작 그대로 + 호출 기록(2026-11-01, 강제 연결 순서 시나리오) ─────────────
     // WS 신호와 알림 발송의 순서(InOrder)를 보고, 설정 조회 실패를 주입하려고 둔다. 스텁하지 않으면 실제 빈과 같다.

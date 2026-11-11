@@ -102,6 +102,7 @@ class AdminDashboardControllerSecurityTest {
         when(adminAiStatusService.getAiStatus()).thenReturn(new AdminAiStatusResponse(
                 new AdminAiStatusResponse.Item(null, OffsetDateTime.now()),
                 new AdminAiStatusResponse.Item(null, OffsetDateTime.now()),
+                new AdminAiStatusResponse.Item(null, OffsetDateTime.now()),
                 OffsetDateTime.now()));
 
         assertThatNoException().isThrownBy(() -> controller.getAiStatus());
