@@ -4,6 +4,10 @@
 
 ---
 
+### [2026-11-11] 보호자 챗봇 예약 대상 선택 영향 범위 점검 (#472·AI #255·#256, 템플릿 C)
+- 조건부 PASS · 🟡1 🟢2. 남의 피보호자로 예약이 묶이는 경로 없음 - BE 검증 + AI는 이번 턴 BE 검증 wardId == 고른 값일 때만 예약 시작. 탈퇴 진행 피보호자는 연결 정리로 목록 제외.
+- 🟡 M-1(AI): 대상 질문 답 기록의 `ui` 선택지(이름·관계)·`reservationTargetAsk.wardIds`가 탈퇴(#129)·연결 해제(L-13) 정리 조건에 안 걸려 떠난 피보호자 이름이 남고 BE 기록 응답(`ui` 허용)으로 보인다. 🟢 L-1(BE) 칸 이름 `strip` 비교, 🟢 L-2 문서·Swagger의 옛 `__self__` 문구(사용자 결정: 예약은 피보호자만). 상세 `docs/(2026-11-11) audit-impact-guardian-chat-patient-choice.md`.
+
 ### [2026-11-11] 관리자 대시보드 AI 서비스 상태에 안부 말벗 칸 + 기능 점검 (BE #473)
 - `GET /api/admin/dashboard/ai-status`에 `companion{status, checkedAt}`: 스위치 꺼짐 DISABLED(AI 미호출)·주소/키 없음 null·AI `GET /companion/status`(말벗 키) 200+`data.enabled` true면 OK, 그 밖 null. `CompanionAiStatusClient`(companion 도메인), 챗봇·말벗 병렬 확인(가상 스레드, 최대 약 5초), `generatedAt` = 모든 확인 뒤.
 - gosky·vkcs 배포, gosky 관리자 실측 세 칸 OK(AI 재배포 뒤에도 OK). FE는 Notion "[관리자] 대시보드 AI 서비스 - 안부 말벗 상태 표시 (2026-11-11)"대로 후속.
