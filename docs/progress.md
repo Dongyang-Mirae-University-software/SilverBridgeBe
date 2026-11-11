@@ -4,6 +4,10 @@
 
 ---
 
+### [2026-11-11] 보호자 챗봇 예약 대상 선택 점검 조치 (BE #474 · AI #259, 사용자 "전부 반영해줘")
+- M-1(AI #259 `ba9b4eb`): 대상 질문 기록의 선택지 표시 글자를 "피보호자"로 저장, `reservationTargetAsk.wardIds`를 탈퇴·연결 해제 정리 대상으로. gosky AI 18:18 재시작(사용자 "재시작해"), 롤백 태그 `pre-target-ask-purge` 1개.
+- L-1·L-2(BE #474 `e5aab03d`): 칸 이름 포함 검증(NBSP 등 AI strip 차이), 옛 `__self__` 문구 정정. 두 서버 반영. audit-index ✅.
+
 ### [2026-11-11] 보호자 챗봇 상담할 피보호자 선택 칸 제거 - 예약 대상 전달 (FE #249, gosky dev `da2102c7`)
 - 계약 ③ FE 반영: 선택 칸을 없애고 본인 상담으로 시작(wardId 없음). AI 대상 질문(`reservation_patient`)을 고르면 그 턴부터 `context.wardId` - 버튼은 그 답을 받은 요청의 wardId(답마다 `requestWardId`), 글은 직전 답이 wardId 요청의 예약 답이고 `make_appointment`·`cancel_reservation`이 아닐 때만, 새 대화면 풀림.
 - 사용자 결정: 예약 칩은 화면 이동 대신 챗봇 안 예약 시작 / 상담 기록은 본인 턴과 섞인 대화창을 "○○ 님 예약"으로. 대화 유지는 보호자 하나로, 피보호자 목록 대기·실패 잠금 제거, 대리 예약 답의 [예약 목록 보기]는 그 피보호자로 전역 선택을 맞춘 뒤 이동.
