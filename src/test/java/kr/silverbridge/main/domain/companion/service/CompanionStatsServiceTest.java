@@ -8,6 +8,7 @@ import kr.silverbridge.main.domain.companion.entity.CompanionPromptLog;
 import kr.silverbridge.main.domain.companion.entity.CompanionSessionStatus;
 import kr.silverbridge.main.domain.companion.entity.CompanionSlot;
 import kr.silverbridge.main.domain.companion.repository.CompanionNoticeLogRepository;
+import kr.silverbridge.main.domain.companion.repository.CompanionRiskPatternNoticeRepository;
 import kr.silverbridge.main.domain.companion.repository.CompanionPromptLogRepository;
 import kr.silverbridge.main.domain.companion.repository.CompanionQuestionRepository;
 import kr.silverbridge.main.domain.companion.repository.CompanionSessionRepository;
@@ -42,6 +43,7 @@ class CompanionStatsServiceTest {
     private CompanionPromptLogRepository promptLogRepository;
     private CompanionNoticeLogRepository noticeLogRepository;
     private UserRepository userRepository;
+    private CompanionRiskPatternNoticeRepository riskPatternNoticeRepository;
     private CompanionStatsService service;
 
     @BeforeEach
@@ -49,6 +51,7 @@ class CompanionStatsServiceTest {
         sessionRepository = mock(CompanionSessionRepository.class);
         promptLogRepository = mock(CompanionPromptLogRepository.class);
         noticeLogRepository = mock(CompanionNoticeLogRepository.class);
+        riskPatternNoticeRepository = mock(CompanionRiskPatternNoticeRepository.class);
         userRepository = mock(UserRepository.class);
         CompanionProperties properties = new CompanionProperties();
         CompanionService companionService = new CompanionService(mock(AiCompanionClient.class), properties,
@@ -56,7 +59,7 @@ class CompanionStatsServiceTest {
                 new CompanionTurnSlots(properties), mock(RateLimitService.class), mock(CompanionPromptScheduler.class));
         companionService.setClock(Clock.fixed(AT_2200.toInstant(), CompanionService.KST));
         service = new CompanionStatsService(companionService, sessionRepository, promptLogRepository,
-                noticeLogRepository, userRepository);
+                noticeLogRepository, riskPatternNoticeRepository, userRepository);
     }
 
     @Test
@@ -95,6 +98,7 @@ class CompanionStatsServiceTest {
                 .thenReturn(List.of());
         when(noticeLogRepository.countByNoticeDate(TODAY)).thenReturn(2L);
         when(sessionRepository.countRiskNotifiedBetween(any(), any())).thenReturn(1L);
+        when(riskPatternNoticeRepository.countByLastNotifiedDate(TODAY)).thenReturn(1L);
         List<User> users = List.of(user("WC0001", "다어르신"), user("WD0001", "라어르신"), user("WE0001", "마어르신"));
         when(userRepository.findAllById(any())).thenReturn(users);
 
@@ -110,7 +114,7 @@ class CompanionStatsServiceTest {
         assertThat(stats.continuingWards()).extracting("wardId", "days")
                 .containsExactly(org.assertj.core.groups.Tuple.tuple("WD0001", 3),
                         org.assertj.core.groups.Tuple.tuple("WE0001", 3));
-        assertThat(stats.alertSentCount()).isEqualTo(3);
+        assertThat(stats.alertSentCount()).as("주의 2 + 위험 1 + 여러 날 누적 1").isEqualTo(4);
         assertThat(stats.generatedAt().getOffset().getTotalSeconds()).isEqualTo(9 * 3600);
     }
 

@@ -28,6 +28,14 @@ paths:
 - **관리자 집계**: BE DB로 계산(AI 호출 없음). 응답률 = 보낸 질문 안내 중 그 (피보호자, 시간대) 대화에 대답이 있는 비율, 안내가 없으면 null. 어르신 이름은 BE가 붙인다. 원문·요약 금지.
 - **질문 안내 대상**: `COMPANION_PROMPT_WARD_IDS`에 `*`면 이용 중인 모든 피보호자. 피보호자 끄기 설정이 생기기 전에는 기본으로 켜지 말 것.
 
+## 여러 날 위험 누적 알림 (2026-11-11 사용자 결정)
+
+- **규칙**: 최근 7일(오늘 포함, `session_date`) 중 `companion_session.max_risk_prob`(턴 `riskProbability` 최댓값, V70) ≥ 0.97인 **서로 다른 날이 2일 이상**이고, 그중 **위험 알림(`risk_notified_at`)이 나가지 않은 날이 1일 이상**이면 `COMPANION_RISK_PATTERN`. 판정은 `CompanionRiskPattern` 한 곳. 대화 상태·테스트 대화를 가리지 않는다. 보호자마다 지금 연결 이후 대화만(D-1, `startedSince`).
+- **시점**: 턴 기록 트랜잭션에서 그 턴 확률이 기준 이상이면 이벤트 → AFTER_COMMIT `@Async("urgentNotificationExecutor")`. 위험 알림 선점을 먼저 해 같은 커밋에 들어간다. `riskProbability`는 v9 척도만 나오고(AI가 v4·실패·무응답 턴은 null), 마치기 응답에는 없다.
+- **7일에 1번**: `companion_risk_pattern_notice`(피보호자당 1행) 조건부 UPSERT 한 문장(`last_notified_date <= 오늘-7`일 때만 이김). 받을 보호자가 없으면 선점하지 않는다. (ward, date) UNIQUE + 조회로 바꾸지 말 것 - 자정 경계 경합이 생긴다. 역할 변경 정리에 포함, 탈퇴는 FK CASCADE.
+- **채널**: `COMPANION_RISK`와 같은 `FORCED_PUSH_PLUS_SETTINGS`·FCM·문자, 웹푸시 high, 사용자 묶음 URGENT. 보호자 설정 항목은 따로 없고 `companionRisk`(필수)에 포함. 문구·로그·data에 확률·원문 금지(일수만). 관리자 "알림 보냄" 수에 포함.
+- **스위치** `COMPANION_RISK_PATTERN_ENABLED`(기본 false) + `_THRESHOLD`·`_MIN_DAYS`·`_WINDOW_DAYS`(0.97·2·7). **수용한 한계**: 개발용 자료에서 안전한 주 알림 +3.6%p(목표 +2%p 미달), 실제 어르신 대화로는 검증 전(11/08 DGX 연구). 상세 `docs/(2026-11-11) feature-companion-risk-pattern.md`.
+
 ## 불변 규칙
 
 - **원문을 저장하지 않는다**(결정 B, 2026-11-02): 대답 글·음성·사진·받아 적은 글·말벗 응답 문장은 기기로 넘기기만 한다. DB 컬럼·로그·알림 문구·감사 로그 어디에도 넣지 말 것. AI 계약 문서(D:90 "턴 기록은 백엔드 DB")는 이 결정과 다르다 - 계약 문서가 틀렸다.

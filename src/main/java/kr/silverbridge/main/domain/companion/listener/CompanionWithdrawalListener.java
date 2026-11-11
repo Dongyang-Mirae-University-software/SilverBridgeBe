@@ -2,6 +2,7 @@ package kr.silverbridge.main.domain.companion.listener;
 
 import kr.silverbridge.main.domain.companion.entity.CompanionPurgeRequest;
 import kr.silverbridge.main.domain.companion.repository.CompanionNoticeLogRepository;
+import kr.silverbridge.main.domain.companion.repository.CompanionRiskPatternNoticeRepository;
 import kr.silverbridge.main.domain.companion.repository.CompanionPromptLogRepository;
 import kr.silverbridge.main.domain.companion.repository.CompanionPurgeRequestRepository;
 import kr.silverbridge.main.domain.companion.repository.CompanionSessionRepository;
@@ -40,6 +41,7 @@ public class CompanionWithdrawalListener {
     private final CompanionSessionRepository sessionRepository;
     private final CompanionPromptLogRepository promptLogRepository;
     private final CompanionNoticeLogRepository noticeLogRepository;
+    private final CompanionRiskPatternNoticeRepository riskPatternNoticeRepository;
     private final CompanionPurgeRequestRepository purgeRequestRepository;
     private final CompanionPurgeService purgeService;
 
@@ -72,9 +74,10 @@ public class CompanionWithdrawalListener {
             if (stillWard) {
                 return;
             }
-            // 질문 안내·주의 알림 기록은 대화가 없어도 남을 수 있다(PR-B)
+            // 질문 안내·주의 알림·누적 알림 기록은 대화가 없어도 남을 수 있다(PR-B, 2026-11-11)
             promptLogRepository.deleteAllByWardId(event.userId());
             noticeLogRepository.deleteAllByWardId(event.userId());
+            riskPatternNoticeRepository.deleteAllByWardId(event.userId());
             if (!sessionRepository.existsByWardId(event.userId())) {
                 return;
             }

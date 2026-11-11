@@ -5,6 +5,7 @@ import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 
+import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.OffsetDateTime;
 
@@ -80,6 +81,13 @@ public class CompanionSession {
     @Column(name = "risk_notified_at")
     private OffsetDateTime riskNotifiedAt;
 
+    /**
+     * 대화 중 가장 높았던 턴 위험 확률(AI v9 척도, 2026-11-11). null = 확률을 받은 턴이 없음. 여러 날 누적 알림
+     * ({@code CompanionRiskPattern})만 쓴다 - 대답 원문이 아니라 숫자 하나다. 로그·알림 문구에 싣지 않는다.
+     */
+    @Column(name = "max_risk_prob", precision = 5, scale = 4)
+    private BigDecimal maxRiskProb;
+
     @Column(name = "prompt_version", length = 100)
     private String promptVersion;
 
@@ -130,10 +138,14 @@ public class CompanionSession {
         this.lastActivityAt = now;
     }
 
-    public void recordTurn(int turnNo, boolean riskSeen, OffsetDateTime now) {
+    /** 턴 기록. {@code riskProbability}는 null이면 무시하고, 있으면 지금까지의 최댓값만 남긴다. */
+    public void recordTurn(int turnNo, boolean riskSeen, BigDecimal riskProbability, OffsetDateTime now) {
         this.turnCount = Math.max(this.turnCount, turnNo);
         if (riskSeen) {
             this.riskFlag = true;
+        }
+        if (riskProbability != null && (maxRiskProb == null || riskProbability.compareTo(maxRiskProb) > 0)) {
+            this.maxRiskProb = riskProbability;
         }
         this.lastActivityAt = now;
     }

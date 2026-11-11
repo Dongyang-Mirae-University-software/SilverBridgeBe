@@ -5,6 +5,7 @@ import lombok.Setter;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.util.StringUtils;
 
+import java.math.BigDecimal;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
@@ -62,6 +63,23 @@ public class CompanionProperties {
      * 모든 계정을 뜻하는 {@code *}는 받지 않는다(기동 실패) - 운영 서버에는 넣지 않는다.
      */
     private List<String> testWardIds = new ArrayList<>();
+
+    /** 여러 날 위험 누적 알림(2026-11-11, {@code COMPANION_RISK_PATTERN_*}). 기본 꺼짐. */
+    private RiskPattern riskPattern = new RiskPattern();
+
+    /**
+     * 최근 {@code windowDays}일(오늘 포함) 중 턴 위험 확률 {@code threshold} 이상인 서로 다른 날이 {@code minDays}일
+     * 이상이면 보호자에게 알린다. 같은 피보호자에게 {@code windowDays}일에 1번. 기준값은 AI v9 척도 기준이다
+     * (11/08 DGX 연구 - 실제 어르신 대화로는 검증 전이라 기본 꺼짐).
+     */
+    @Getter
+    @Setter
+    public static class RiskPattern {
+        private boolean enabled = false;
+        private BigDecimal threshold = new BigDecimal("0.97");
+        private int minDays = 2;
+        private int windowDays = 7;
+    }
 
     public void setTestWardIds(List<String> testWardIds) {
         List<String> cleaned = new ArrayList<>();

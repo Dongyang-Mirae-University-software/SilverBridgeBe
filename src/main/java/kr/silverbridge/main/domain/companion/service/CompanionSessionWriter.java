@@ -1,9 +1,11 @@
 package kr.silverbridge.main.domain.companion.service;
 
+import kr.silverbridge.main.domain.companion.config.CompanionProperties;
 import kr.silverbridge.main.domain.companion.entity.CompanionSession;
 import kr.silverbridge.main.domain.companion.entity.CompanionSlot;
 import kr.silverbridge.main.domain.companion.event.CompanionMoodRecordedEvent;
 import kr.silverbridge.main.domain.companion.event.CompanionRiskDetectedEvent;
+import kr.silverbridge.main.domain.companion.event.CompanionRiskPatternCheckEvent;
 import kr.silverbridge.main.domain.companion.repository.CompanionSessionRepository;
 import kr.silverbridge.main.global.exception.CustomException;
 import kr.silverbridge.main.global.exception.ErrorCode;
@@ -12,6 +14,7 @@ import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.OffsetDateTime;
 
@@ -21,6 +24,9 @@ import java.time.OffsetDateTime;
  *
  * <p>위험 알림은 {@code risk_notified_at} 조건부 UPDATE에 이긴 쪽만 이벤트를 낸다(대화당 1번). 이벤트는 커밋 뒤
  * 비동기 리스너가 보낸다 - 롤백되면 나가지 않는다.</p>
+ *
+ * <p>턴 위험 확률이 누적 기준 이상이면(스위치 켜짐) 여러 날 누적 판정 이벤트를 낸다(2026-11-11). 위험 알림 선점을 먼저 해
+ * 같은 커밋에 {@code risk_notified_at}이 들어가므로, 리스너는 이 턴이 이미 위험 알림을 받았는지 볼 수 있다.</p>
  */
 @Component
 @RequiredArgsConstructor
@@ -28,6 +34,7 @@ public class CompanionSessionWriter {
 
     private final CompanionSessionRepository sessionRepository;
     private final ApplicationEventPublisher eventPublisher;
+    private final CompanionProperties properties;
 
     /** 자리 선점. 같은 (피보호자, 날짜, 시간대)가 이미 있으면 UNIQUE 위반 예외가 그대로 나간다. */
     @Transactional
@@ -59,15 +66,20 @@ public class CompanionSessionWriter {
     }
 
     @Transactional
-    public CompanionSession recordTurn(long sessionId, int turnNo, boolean riskSeen, OffsetDateTime now) {
+    public CompanionSession recordTurn(long sessionId, int turnNo, boolean riskSeen, BigDecimal riskProbability,
+                                       OffsetDateTime now) {
         CompanionSession session = load(sessionId);
         // 진행 중(OPEN)인 대화만 고친다 - 이미 끝난 대화는 그대로 돌려준다(2026-11-04 점검 M-3)
         if (!session.isOpen()) {
             return session;
         }
-        session.recordTurn(turnNo, riskSeen, now);
+        session.recordTurn(turnNo, riskSeen, riskProbability, now);
         if (riskSeen) {
             claimRiskAlert(session, now);
+        }
+        CompanionProperties.RiskPattern pattern = properties.getRiskPattern();
+        if (pattern.isEnabled() && riskProbability != null && riskProbability.compareTo(pattern.getThreshold()) >= 0) {
+            eventPublisher.publishEvent(new CompanionRiskPatternCheckEvent(session.getWardId(), session.getSessionDate()));
         }
         return session;
     }
