@@ -7,8 +7,8 @@ import java.time.OffsetDateTime;
 /**
  * 관리자 대시보드 - AI 서비스 상태(2026-10-27).
  *
- * <p>BE가 실제로 확인할 수 있는 서비스만 담는다. 디자인의 "AI 안부 말벗 · 정서 상태 분석"은 BE에 없는 서비스라
- * 칸을 만들지 않았다 - 확인하지 않은 서비스를 "정상"으로 보이면 거짓이 된다.</p>
+ * <p>BE가 실제로 확인할 수 있는 서비스만 담는다 - 확인하지 않은 서비스를 "정상"으로 보이면 거짓이 된다.
+ * 안부 말벗({@code companion})은 말벗 중계가 생긴 뒤(2026-11-04) 말벗 AI 상태 경로로 확인해 2026-11-11에 칸을 더했다.</p>
  */
 @Schema(description = "관리자 대시보드 - AI 서비스 상태")
 public record AdminAiStatusResponse(
@@ -31,7 +31,17 @@ public record AdminAiStatusResponse(
                 """)
         Item chatbot,
 
-        @Schema(description = "이 응답을 만든 시각(KST, 오프셋 포함)", example = "2026-10-27T14:05:00+09:00")
+        @Schema(description = """
+                AI 안부 말벗 - 말벗을 서빙하는 AI의 응답(말벗 키가 필요한 상태 조회로 확인, 연결 3초·전체 5초 제한).
+
+                OK = 말벗 AI가 정상 응답하고 키를 받아들임, DISABLED = 운영자가 말벗을 꺼 둠(companion.enabled=false, AI는 부르지 않음),
+                null = 확인 불가(시간 초과·통신 오류·서버 오류·형식 이상·설정 없음).
+                **AI 프로세스 응답과 키 일치까지만** 확인합니다(대화의 음성 인식·언어 모델 성공은 보장하지 않음).
+                확인에 실패해도 "중단"으로 단정하지 않으므로 DISCONNECTED는 내려가지 않습니다.
+                """)
+        Item companion,
+
+        @Schema(description = "이 응답을 만든 시각(KST, 오프셋 포함) - 모든 칸의 확인이 끝난 뒤의 시각", example = "2026-10-27T14:05:00+09:00")
         OffsetDateTime generatedAt
 ) {
 

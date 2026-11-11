@@ -115,11 +115,12 @@ class AdminDashboardControllerHttpTest {
     }
 
     @Test
-    @DisplayName("AI 상태: 확인 불가는 status 칸이 빠지지 않고 null로 간다, 끊김은 DISCONNECTED")
+    @DisplayName("AI 상태: 확인 불가는 status 칸이 빠지지 않고 null로 간다, 끊김은 DISCONNECTED, 말벗 칸도 같은 형식")
     void aiStatus() throws Exception {
         when(adminAiStatusService.getAiStatus()).thenReturn(new AdminAiStatusResponse(
                 new AdminAiStatusResponse.Item(AiServiceState.DISCONNECTED, AT),
                 new AdminAiStatusResponse.Item(null, AT),
+                new AdminAiStatusResponse.Item(AiServiceState.OK, AT),
                 AT));
 
         mvc().perform(get("/api/admin/dashboard/ai-status"))
@@ -129,6 +130,8 @@ class AdminDashboardControllerHttpTest {
                 .andExpect(jsonPath("$.data.chatbot", hasKey("status")))
                 .andExpect(jsonPath("$.data.chatbot.status").value(nullValue()))
                 .andExpect(jsonPath("$.data.chatbot.checkedAt").value("2026-10-27T14:05:00+09:00"))
+                .andExpect(jsonPath("$.data.companion.status").value("OK"))
+                .andExpect(jsonPath("$.data.companion.checkedAt").value("2026-10-27T14:05:00+09:00"))
                 .andExpect(jsonPath("$.data.generatedAt").value("2026-10-27T14:05:00+09:00"));
     }
 }

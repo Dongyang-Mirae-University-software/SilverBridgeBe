@@ -5,6 +5,9 @@ import kr.silverbridge.main.domain.admin.dto.AdminAiStatusResponse;
 import kr.silverbridge.main.domain.admin.dto.AiServiceState;
 import kr.silverbridge.main.domain.anomaly.client.AiLiveStreamSubscriber;
 import kr.silverbridge.main.domain.chat.config.ChatRelayProperties;
+import kr.silverbridge.main.domain.companion.client.CompanionAiStatusClient;
+import kr.silverbridge.main.domain.companion.config.CompanionProperties;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -14,6 +17,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.mockito.junit.jupiter.MockitoSettings;
 import org.mockito.quality.Strictness;
 
+import java.time.Duration;
 import java.time.ZoneOffset;
 import java.util.Optional;
 import java.util.Set;
@@ -33,27 +37,44 @@ class AdminAiStatusServiceTest {
 
     @Mock private AiLiveStreamSubscriber aiLiveStreamSubscriber;
     @Mock private AiServerHealthClient aiServerHealthClient;
+    @Mock private CompanionAiStatusClient companionAiStatusClient;
     private ChatRelayProperties chatRelayProperties;
+    private CompanionProperties companionProperties;
     private AdminAiStatusService service;
 
     @BeforeEach
     void setUp() {
         chatRelayProperties = new ChatRelayProperties();
-        service = new AdminAiStatusService(aiLiveStreamSubscriber, aiServerHealthClient, chatRelayProperties);
+        companionProperties = new CompanionProperties();
+        companionProperties.setEnabled(true);
+        companionProperties.setAiBaseUrl("http://companion-ai.test");
+        companionProperties.setApiKey("companion-key");
+        service = new AdminAiStatusService(aiLiveStreamSubscriber, aiServerHealthClient, chatRelayProperties,
+                companionAiStatusClient, companionProperties);
+        // 기본: 말벗 AI 정상
+        when(companionAiStatusClient.isAvailable()).thenReturn(true);
+        when(companionAiStatusClient.maxWait()).thenReturn(Duration.ofSeconds(2));
         // 기본: 연결됨 + 첫 목록 받음 + AI 정상
         when(aiLiveStreamSubscriber.isConnected()).thenReturn(true);
         when(aiLiveStreamSubscriber.liveSessionSnapshot()).thenReturn(Optional.of(Set.of("ward_a1B2c3D4e5F6g7H8")));
         when(aiServerHealthClient.isHealthy()).thenReturn(true);
     }
 
+    @AfterEach
+    void tearDown() {
+        service.shutdown();
+    }
+
     @Test
-    @DisplayName("둘 다 정상이면 OK, 확인 시각은 KST")
+    @DisplayName("셋 다 정상이면 OK, 확인 시각은 KST")
     void allOk() {
         AdminAiStatusResponse response = service.getAiStatus();
 
         assertThat(response.anomalyDetection().status()).isEqualTo(AiServiceState.OK);
         assertThat(response.chatbot().status()).isEqualTo(AiServiceState.OK);
+        assertThat(response.companion().status()).isEqualTo(AiServiceState.OK);
         assertThat(response.anomalyDetection().checkedAt().getOffset()).isEqualTo(ZoneOffset.ofHours(9));
+        assertThat(response.companion().checkedAt().getOffset()).isEqualTo(ZoneOffset.ofHours(9));
         assertThat(response.chatbot().checkedAt()).isNotNull();
         assertThat(response.generatedAt()).isNotNull();
     }
@@ -101,5 +122,92 @@ class AdminAiStatusServiceTest {
 
         assertThat(service.getAiStatus().chatbot().status()).isEqualTo(AiServiceState.DISABLED);
         verify(aiServerHealthClient, never()).isHealthy();
+    }
+
+    @Test
+    @DisplayName("말벗 스위치를 끄면 AI가 살아 있어도 DISABLED이고 AI를 부르지 않는다")
+    void companionDisabled() {
+        companionProperties.setEnabled(false);
+
+        AdminAiStatusResponse response = service.getAiStatus();
+
+        assertThat(response.companion().status()).isEqualTo(AiServiceState.DISABLED);
+        assertThat(response.companion().checkedAt()).isNotNull();
+        verify(companionAiStatusClient, never()).isAvailable();
+    }
+
+    @Test
+    @DisplayName("말벗이 켜져 있어도 주소·키가 비면 AI를 부르지 않고 null(확인 불가)")
+    void companionNotConfigured() {
+        companionProperties.setApiKey("");
+
+        AdminAiStatusResponse response = service.getAiStatus();
+
+        assertThat(response.companion().status()).isNull();
+        assertThat(response.companion().checkedAt()).isNotNull();
+        verify(companionAiStatusClient, never()).isAvailable();
+    }
+
+    @Test
+    @DisplayName("말벗 확인 실패(통신 오류·5xx·형식 이상·enabled false - 클라이언트가 false)는 DISCONNECTED로 단정하지 않고 null")
+    void companionUnknown() {
+        when(companionAiStatusClient.isAvailable()).thenReturn(false);
+
+        AdminAiStatusResponse response = service.getAiStatus();
+
+        assertThat(response.companion().status()).isNull();
+        assertThat(response.companion().checkedAt()).isNotNull();
+        // 다른 칸은 영향받지 않는다
+        assertThat(response.chatbot().status()).isEqualTo(AiServiceState.OK);
+        assertThat(response.anomalyDetection().status()).isEqualTo(AiServiceState.OK);
+    }
+
+    @Test
+    @DisplayName("말벗 확인이 기다림 상한을 넘으면 기다리지 않고 null")
+    void companionTimeout() {
+        when(companionAiStatusClient.maxWait()).thenReturn(Duration.ofMillis(100));
+        when(companionAiStatusClient.isAvailable()).thenAnswer(invocation -> {
+            Thread.sleep(3_000);
+            return true;
+        });
+
+        long started = System.nanoTime();
+        AdminAiStatusResponse response = service.getAiStatus();
+        long elapsedMillis = Duration.ofNanos(System.nanoTime() - started).toMillis();
+
+        assertThat(response.companion().status()).isNull();
+        assertThat(elapsedMillis).isLessThan(2_000);
+    }
+
+    @Test
+    @DisplayName("챗봇·말벗 확인은 동시에 한다 - 각각 0.8초면 합쳐 1.6초가 아니라 약 0.8초")
+    void chatbotAndCompanionRunInParallel() {
+        when(aiServerHealthClient.isHealthy()).thenAnswer(invocation -> {
+            Thread.sleep(800);
+            return true;
+        });
+        when(companionAiStatusClient.isAvailable()).thenAnswer(invocation -> {
+            Thread.sleep(800);
+            return true;
+        });
+
+        long started = System.nanoTime();
+        AdminAiStatusResponse response = service.getAiStatus();
+        long elapsedMillis = Duration.ofNanos(System.nanoTime() - started).toMillis();
+
+        assertThat(response.chatbot().status()).isEqualTo(AiServiceState.OK);
+        assertThat(response.companion().status()).isEqualTo(AiServiceState.OK);
+        assertThat(elapsedMillis).isLessThan(1_400);
+    }
+
+    @Test
+    @DisplayName("generatedAt은 모든 칸의 확인이 끝난 뒤의 시각이다")
+    void generatedAtAfterAllChecks() {
+        AdminAiStatusResponse response = service.getAiStatus();
+
+        assertThat(response.generatedAt())
+                .isAfterOrEqualTo(response.anomalyDetection().checkedAt())
+                .isAfterOrEqualTo(response.chatbot().checkedAt())
+                .isAfterOrEqualTo(response.companion().checkedAt());
     }
 }
