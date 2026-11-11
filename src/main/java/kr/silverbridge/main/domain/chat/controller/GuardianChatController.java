@@ -68,6 +68,12 @@ public class GuardianChatController {
                     피보호자를 대신해 상담·예약하려면 context.wardId에 ACTIVE 연결된 피보호자 ID를 넣습니다. 연결이 아니면 403 CHAT_WARD_NOT_CONNECTED이며
                     wardName·wardPhone은 서버가 DB 값으로 채웁니다(보낸 값은 무시).
 
+                    예약 대상 선택(2026-11-11): 서버가 context.guardianWards에 ACTIVE 연결된 피보호자의 [{wardId, name, relation}]을 채워 AI로 보냅니다
+                    (이름·관계만, relation이 없으면 null, 없으면 빈 배열, 최신 연결순 최대 20명 - 보낸 값은 무시). AI가 예약을 시작할 때 "누구 예약인가요?"
+                    선택지(field reservation_patient, value "__self__" 또는 wardId)를 주면, 고른 값을 uiSelection으로 보내고 wardId면 그 턴부터
+                    예약이 끝날 때까지 context.wardId에도 같은 값을 넣습니다. 연결되지 않은 wardId를 고르면 403 CHAT_WARD_NOT_CONNECTED,
+                    같은 턴의 context.wardId와 다르면 400 CHAT_INVALID_REQUEST입니다. guardianWards는 응답·상담 기록에 나오지 않습니다.
+
                     message 또는 uiSelection 중 하나는 필수이고 message는 2000자 이하, history는 24개 이하입니다(보내도 AI로 넘기지 않습니다 - 대화 맥락은 AI가 같은 sessionId의 서버 기록으로 만듭니다).
                     모델이 답을 만드는 데 시간이 걸립니다. 서버는 최대 130초까지 기다리므로 FE 타임아웃은 그보다 길게(권장 140초) 잡으세요.
 

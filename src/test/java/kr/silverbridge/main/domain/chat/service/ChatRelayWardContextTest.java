@@ -164,7 +164,7 @@ class ChatRelayWardContextTest {
         assertThat(context.has("wardPhone")).isFalse();
         assertThat(context.path("name").asText()).isEqualTo("박보호");
         assertThat(context.path("phone").asText()).isEqualTo("010-2222-3333");
-        verifyNoInteractions(connectionService);
+        verify(connectionService, never()).isActiveConnection(any(), any());
     }
 
     @Test
@@ -182,7 +182,7 @@ class ChatRelayWardContextTest {
         assertThat(sent.path("name").asText()).isEqualTo("박보호");
         assertThat(sent.path("phone").asText()).isEqualTo("010-2222-3333");
         assertThat(sent.toString()).doesNotContain("위조이름").doesNotContain("9999");
-        verifyNoInteractions(connectionService);
+        verify(connectionService, never()).isActiveConnection(any(), any());
     }
 
     @Test

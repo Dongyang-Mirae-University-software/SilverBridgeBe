@@ -7,6 +7,7 @@ import com.fasterxml.jackson.databind.node.ObjectNode;
 import kr.silverbridge.main.domain.chat.client.AiChatClient;
 import kr.silverbridge.main.domain.chat.config.ChatRelayProperties;
 import kr.silverbridge.main.domain.chat.dto.ChatRelayRequest;
+import kr.silverbridge.main.domain.connection.dto.ActiveWardSummary;
 import kr.silverbridge.main.domain.connection.service.ConnectionService;
 import kr.silverbridge.main.domain.user.entity.User;
 import kr.silverbridge.main.domain.user.repository.UserRepository;
@@ -22,6 +23,7 @@ import org.springframework.util.StringUtils;
 
 import java.nio.charset.StandardCharsets;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 
 /**
@@ -54,6 +56,16 @@ public class ChatRelayService {
     private static final int LOGS_PER_HOUR = 600;
     private static final java.util.Set<String> WARD_KEYS = java.util.Set.of("wardId", "wardName", "wardPhone");
     /**
+     * 보호자의 ACTIVE 피보호자 이름·관계 목록(2026-11-11). AI 가 예약을 시작할 때 "누구 예약인가요?"를 묻는 데 쓴다.
+     * 항상 BE 가 DB 로 만든다 - 클라이언트 값은 모든 경로에서 버리고, 피보호자 경로에는 싣지 않는다. 전화·주소·생년월일 금지.
+     */
+    static final String GUARDIAN_WARDS_KEY = "guardianWards";
+    /** 한 요청에 싣는 피보호자 수 상한(최신 연결순). context 8KB 안에 넉넉히 들어가는 값. */
+    static final int MAX_GUARDIAN_WARDS = 20;
+    /** AI 의 예약 대상 선택지 칸(AI·FE 계약, 2026-11-11). 값은 {@link #SELF_CHOICE} 또는 피보호자 ID. */
+    static final String PATIENT_CHOICE_FIELD = "reservation_patient";
+    static final String SELF_CHOICE = "__self__";
+    /**
      * 환자 프로필 키. 클라이언트 값은 항상 버리고, 이 중 name·phone·birthDate·age·gender·address 만 BE가 환자(대리 상담이면 피보호자,
      * 아니면 본인)의 DB 값으로 다시 채운다(2026-11-04). AI 는 이 값을 예약 초안·예약 계정(이름·전화·생년월일), MedGemma(나이·성별),
      * 병원 검색 지역(address - location 이 없을 때, 시·구까지)에 쓴다. email·addressDetail·postcode·relation·patient* 는 AI 가 쓰지 않아 보내지 않는다.
@@ -82,7 +94,13 @@ public class ChatRelayService {
     /** 본인 상담(피보호자 경로). context 의 대리 상담 키는 버리고, name·phone 은 로그인한 본인의 DB 값으로 채운다. */
     public Object send(String userId, ChatRelayRequest request) {
         admit(userId, request);
-        return relay(userId, request, null, findSelf(userId), Role.WARD);
+        // 피보호자는 대신 예약할 사람이 없다 - 예약 대상 선택지로 남의 ID 를 고르면 거절한다(보호자 경로와 같은 403)
+        String chosen = patientChoice(request);
+        if (chosen != null) {
+            log.warn("[IDOR-ATTEMPT] 피보호자 경로에서 예약 대상 선택 시도: userId={}, valueLength={}", userId, chosen.length());
+            throw new CustomException(ErrorCode.CHAT_WARD_NOT_CONNECTED);
+        }
+        return relay(userId, request, null, findSelf(userId), Role.WARD, null);
     }
 
     /**
@@ -92,12 +110,15 @@ public class ChatRelayService {
     public Object sendAsGuardian(String guardianId, ChatRelayRequest request) {
         admit(guardianId, request);
         User ward = resolveWard(guardianId, request.context());
+        String chosenWardId = verifyPatientChoice(guardianId, request, ward);
         // 피보호자를 고르지 않은 본인 상담이면 보호자 본인의 DB 이름·전화를 쓴다(2026-11-04 사용자 결정 A)
         User self = ward == null ? findSelf(guardianId) : null;
-        Object reply = relay(guardianId, request, ward, self, Role.GUARDIAN);
+        List<ActiveWardSummary> guardianWards = connectionService.getActiveWardSummaries(guardianId, MAX_GUARDIAN_WARDS);
+        Object reply = relay(guardianId, request, ward, self, Role.GUARDIAN, guardianWards);
         // AI 호출은 최대 130초라 그 사이 연결이 끊길 수 있다. 끊겼다면 응답(피보호자의 예약 내용이 담길 수 있음)을 보호자에게 주지 않는다.
-        if (ward != null && !connectionService.isActiveConnection(guardianId, ward.getId())) {
-            log.warn("[IDOR-ATTEMPT] 대리 상담 중 연결 해제 감지, 응답 폐기: guardianId={}, wardId={}", guardianId, ward.getId());
+        String proxyWardId = ward != null ? ward.getId() : chosenWardId;
+        if (proxyWardId != null && !connectionService.isActiveConnection(guardianId, proxyWardId)) {
+            log.warn("[IDOR-ATTEMPT] 대리 상담 중 연결 해제 감지, 응답 폐기: guardianId={}, wardId={}", guardianId, proxyWardId);
             throw new CustomException(ErrorCode.CHAT_WARD_NOT_CONNECTED);
         }
         return reply;
@@ -112,8 +133,9 @@ public class ChatRelayService {
         rateLimitService.check(SEND_ENDPOINT, userId, properties.getPerMinute(), properties.getPerHour());
     }
 
-    private Object relay(String userId, ChatRelayRequest request, User ward, User self, Role role) {
-        byte[] body = buildBody(userId, request, ward, self, role);
+    private Object relay(String userId, ChatRelayRequest request, User ward, User self, Role role,
+                         List<ActiveWardSummary> guardianWards) {
+        byte[] body = buildBody(userId, request, ward, self, role, guardianWards);
         long startedAt = System.nanoTime();
         try (ChatSlots.Slot ignored = slots.acquire(userId)) {
             JsonNode reply = aiChatClient.send(body);
@@ -172,14 +194,28 @@ public class ChatRelayService {
      * 대리 상담이면 검증된 피보호자, 본인 상담이면 로그인한 본인(self)의 값이다. DB 에 값이 없는 칸은 키를 두지 않는다.
      * role 은 호출 경로의 역할로 덮어쓴다(AI 챗 집계의 역할별 수 근거).
      */
-    private static Map<String, Object> sanitizedContext(Map<String, Object> raw, User ward, User self, Role role) {
+    private static Map<String, Object> sanitizedContext(Map<String, Object> raw, User ward, User self, Role role,
+                                                        List<ActiveWardSummary> guardianWards) {
         Map<String, Object> context = new LinkedHashMap<>();
         if (raw != null) {
             context.putAll(raw);
         }
         context.keySet().removeAll(WARD_KEYS);
         context.keySet().removeAll(PROFILE_KEYS);
+        context.remove(GUARDIAN_WARDS_KEY);
         context.put("role", role.name());
+        if (guardianWards != null) {
+            // 이름·관계만. 관계가 없으면(관리자 강제 연결 등) null - 키는 항상 세 개다(AI·FE 계약)
+            List<Map<String, Object>> wards = new java.util.ArrayList<>();
+            for (ActiveWardSummary summary : guardianWards) {
+                Map<String, Object> item = new LinkedHashMap<>();
+                item.put("wardId", summary.wardId());
+                item.put("name", summary.name());
+                item.put("relation", summary.relation());
+                wards.add(item);
+            }
+            context.put(GUARDIAN_WARDS_KEY, wards);
+        }
         if (ward != null) {
             context.put("wardId", ward.getId());
             context.put("wardName", ward.getName());
@@ -263,8 +299,50 @@ public class ChatRelayService {
                 .orElseThrow(() -> new CustomException(ErrorCode.CHAT_WARD_NOT_CONNECTED));
     }
 
+    /**
+     * 예약 대상 선택지({@link #PATIENT_CHOICE_FIELD})로 고른 피보호자 ID. "나"({@link #SELF_CHOICE})·다른 칸·선택 없음이면 null.
+     */
+    private static String patientChoice(ChatRelayRequest request) {
+        ChatRelayRequest.UiSelection selection = request.uiSelection();
+        if (selection == null || !PATIENT_CHOICE_FIELD.equals(selection.field())) {
+            return null;
+        }
+        String value = selection.value() == null ? "" : selection.value().trim();
+        return SELF_CHOICE.equals(value) ? null : value;
+    }
+
+    /**
+     * 예약 대상 선택지로 고른 피보호자를 context.wardId 와 같은 기준(형식 -> ACTIVE 연결)으로 검증한다(2026-11-11).
+     * AI 가 선택 값을 그대로 환자로 묶을 수 있으므로, 남의 ID 를 고르면 AI 를 부르기 전에 403 이다.
+     * 같은 턴에 검증된 context.wardId 가 있으면 두 값이 같아야 한다(다르면 어느 쪽이 환자인지 모호하다 - 400).
+     *
+     * @return 검증된 피보호자 ID, 선택이 없거나 "나"면 null
+     */
+    private String verifyPatientChoice(String guardianId, ChatRelayRequest request, User ward) {
+        String chosen = patientChoice(request);
+        if (chosen == null) {
+            return null;
+        }
+        if (!UserIdFormat.isWellFormed(chosen)) {
+            log.warn("[IDOR-ATTEMPT] 형식이 맞지 않는 예약 대상 선택: guardianId={}, valueLength={}", guardianId, chosen.length());
+            throw new CustomException(ErrorCode.CHAT_WARD_NOT_CONNECTED);
+        }
+        if (ward != null) {
+            if (!ward.getId().equals(chosen)) {
+                throw new CustomException(ErrorCode.CHAT_INVALID_REQUEST);
+            }
+            return chosen; // resolveWard 가 이미 ACTIVE 를 확인했다
+        }
+        if (!connectionService.isActiveConnection(guardianId, chosen)) {
+            log.warn("[IDOR-ATTEMPT] 연결되지 않은 피보호자를 예약 대상으로 선택: guardianId={}, wardId={}", guardianId, chosen);
+            throw new CustomException(ErrorCode.CHAT_WARD_NOT_CONNECTED);
+        }
+        return chosen;
+    }
+
     /** AI 요청 본문. {@code userId}는 인자로 받은 토큰 ID로 <b>마지막에 덮어쓴다</b>. */
-    private byte[] buildBody(String userId, ChatRelayRequest request, User ward, User self, Role role) {
+    private byte[] buildBody(String userId, ChatRelayRequest request, User ward, User self, Role role,
+                             List<ActiveWardSummary> guardianWards) {
         ObjectNode body = objectMapper.createObjectNode();
         body.put("message", request.message() == null ? "" : request.message());
         if (StringUtils.hasText(request.sessionId())) {
@@ -272,7 +350,7 @@ public class ChatRelayService {
         }
         // history 는 AI로 보내지 않는다(2026-10-29) - AI가 대화 이력을 서버 기록으로 만들고 요청의 history 를 무시한다(AI #91 S-7).
         // 요청 DTO 는 옛 FE 호환으로 history 를 계속 받아 검사만 한다.
-        Map<String, Object> contextMap = sanitizedContext(request.context(), ward, self, role);
+        Map<String, Object> contextMap = sanitizedContext(request.context(), ward, self, role, guardianWards);
         if (!contextMap.isEmpty()) {
             JsonNode context = objectMapper.valueToTree(contextMap);
             if (context.toString().getBytes(StandardCharsets.UTF_8).length > MAX_CONTEXT_BYTES) {

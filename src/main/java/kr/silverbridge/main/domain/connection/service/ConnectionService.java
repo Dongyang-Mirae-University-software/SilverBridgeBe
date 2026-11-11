@@ -1,5 +1,6 @@
 package kr.silverbridge.main.domain.connection.service;
 
+import kr.silverbridge.main.domain.connection.dto.ActiveWardSummary;
 import kr.silverbridge.main.domain.connection.dto.ConnectionRequestDto;
 import kr.silverbridge.main.domain.connection.dto.ConnectionResponse;
 import kr.silverbridge.main.domain.connection.dto.ConnectionTargetPreviewResponse;
@@ -68,6 +69,34 @@ public class ConnectionService {
                 .stream()
                 .map(Connection::getWardId)
                 .distinct()
+                .toList();
+    }
+
+    // 보호자: 내 ACTIVE 피보호자의 이름·관계 (최신 연결순, 최대 limit명) - 챗봇 예약 대상 선택지용(2026-11-11).
+    // ACTIVE 만 본다(getMyWards 금지 - PENDING 피보호자를 대신 예약할 수 있게 되면 안 된다). 회원 행이 없는 연결은 뺀다.
+    // 전화·주소·생년월일은 싣지 않는다(AI 요청 context 로 나간다).
+    @Transactional(readOnly = true)
+    public List<ActiveWardSummary> getActiveWardSummaries(String guardianId, int limit) {
+        List<Connection> connections = connectionRepository
+                .findByGuardianIdAndStatusInOrderByCreatedAtDesc(guardianId, List.of(ConnectionStatus.ACTIVE));
+        Map<String, String> relationByWard = new java.util.LinkedHashMap<>();
+        for (Connection connection : connections) {
+            if (relationByWard.size() >= limit) {
+                break;
+            }
+            relationByWard.putIfAbsent(connection.getWardId(), connection.getRelation());
+        }
+        if (relationByWard.isEmpty()) {
+            return List.of();
+        }
+        Map<String, String> nameById = new java.util.HashMap<>();
+        for (User ward : userRepository.findAllById(relationByWard.keySet())) {
+            nameById.put(ward.getId(), ward.getName());
+        }
+        return relationByWard.entrySet().stream()
+                .filter(e -> nameById.containsKey(e.getKey()))
+                .map(e -> new ActiveWardSummary(e.getKey(), nameById.get(e.getKey()),
+                        e.getValue() == null || e.getValue().isBlank() ? null : e.getValue()))
                 .toList();
     }
 
