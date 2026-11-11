@@ -3023,3 +3023,8 @@ AI 챗 집계 점검 L-1에서 남겨 둔 공용 `GlobalExceptionHandler`의 `e.
 - 검증: 새 테스트 64개 + 칩 164개, 결함 주입 3종 검출(14·17·4개 실패), replay_offline stub 기존 시험지 1060문항 응급·자해 판정 main과 차이 0(Claude 0회), 전체 pytest(gosky .venv 사본) 3533 passed / 14 skipped.
 - 배포: gosky AI 23:37 `0b16224`(#260 말벗 함께), `/health` 200·MedGemma int8·GPU 9,563MiB·BE AI WS 재연결, 롤백 `sb-ai-rollback:20261111-pre-new-symptom` 1개.
 - 기능 점검(B) 조치 AI #261 `6e9f7f8`: F-1 지속 표현 위험 신호 즉시 119 · F-2 보호자 전환 다음 턴 이어 붙이기 · F-3 출혈 낱말 즉시 119 제외(사용자 결정 A) - 결함 주입 3종, pytest 3578, stub 재생 1148문항 main과 차이 0. gosky 배포는 사용자 확인 대기.
+
+### [2026-11-12] 말벗 대화 내용 저장 영향 범위 점검 (템플릿 C, BE #476)
+- 조건부 PASS · 🔴 0 · 🟠 0 · 🟡 1 · 🟢 3. 글이 `companion_turn` 밖으로 나가는 경로(로그·SQL 바인딩·알림·관리자·감사·WS) 0, 탈퇴·스윕·강제 탈퇴·역할 변경·철회·30일 정리 누락 0.
+- M-1 공개 Swagger·API 설명·DTO의 "저장하지 않습니다" 문구 잔존 / L-1 잠금 순서 역전(Hibernate 7.2 native 쿼리 전 전체 flush로 턴 저장이 대화 행 → 동의 행) / L-2 전체 공개 중 위험 알림 반복(수용) / L-3 동의 고지 4항목은 FE.
+- 문서 정정: policy-auth D-2에 말벗 대화 내용 30일 추가. 상세 `docs/(2026-11-12) audit-impact-companion-transcript.md`.
