@@ -19,7 +19,7 @@ public final class CompanionDtos {
     @Schema(description = "오늘 안부 대화 현황")
     public record TodayResponse(
             @Schema(description = "KST 날짜", example = "2026-11-04") String date,
-            @Schema(description = "지금 열 수 있는 시간대(09:00 형식). 없으면 null") String currentSlot,
+            @Schema(description = "지금 열 수 있는 시간대(09:00 형식). 없거나 말벗이 꺼져 있으면 null") String currentSlot,
             List<SlotStatus> slots,
             @Schema(description = "최종 QA 테스트 계정이면 true - 시간대 선택 시작·테스트 안내 푸시를 쓸 수 있다") boolean testMode) {
     }

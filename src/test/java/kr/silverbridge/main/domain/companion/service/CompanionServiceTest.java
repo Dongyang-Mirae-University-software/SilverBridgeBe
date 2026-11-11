@@ -296,6 +296,28 @@ class CompanionServiceTest {
     }
 
     @Test
+    void today_말벗이_꺼져_있으면_열_수_있는_시간대를_주지_않는다() {
+        service.setClock(Clock.fixed(AT_0910.withHour(15).withMinute(5).toInstant(), CompanionService.KST));
+        when(sessionRepository.findByWardIdAndSessionDate(WARD, TODAY)).thenReturn(List.of());
+        properties.setEnabled(false);
+
+        TodayResponse today = service.today(WARD);
+
+        assertThat(today.currentSlot()).isNull();
+        assertThat(today.slots()).hasSize(5);
+        assertThat(today.testMode()).isFalse();
+    }
+
+    @Test
+    void today_주소나_키가_비어도_열_수_있는_시간대를_주지_않는다() {
+        service.setClock(Clock.fixed(AT_0910.withHour(15).withMinute(5).toInstant(), CompanionService.KST));
+        when(sessionRepository.findByWardIdAndSessionDate(WARD, TODAY)).thenReturn(List.of());
+        properties.setApiKey("");
+
+        assertThat(service.today(WARD).currentSlot()).isNull();
+    }
+
+    @Test
     @DisplayName("오늘 현황: 지난 시간대는 MISSED, 마친 시간대는 기분 코드, 지금 시간대는 AVAILABLE")
     void today() {
         service.setClock(Clock.fixed(AT_0910.withHour(15).withMinute(5).toInstant(), CompanionService.KST));
