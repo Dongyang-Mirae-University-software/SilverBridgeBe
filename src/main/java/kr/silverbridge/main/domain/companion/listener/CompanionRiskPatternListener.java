@@ -13,6 +13,7 @@ import kr.silverbridge.main.domain.notification.dispatch.NotificationDispatcher;
 import kr.silverbridge.main.domain.notification.dispatch.NotificationType;
 import kr.silverbridge.main.domain.user.entity.User;
 import kr.silverbridge.main.domain.user.repository.UserRepository;
+import kr.silverbridge.main.global.enums.Status;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.scheduling.annotation.Async;
@@ -23,10 +24,12 @@ import org.springframework.transaction.event.TransactionalEventListener;
 import java.time.LocalDate;
 import java.time.OffsetDateTime;
 import java.time.ZoneId;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.OptionalInt;
+import java.util.Set;
 
 /**
  * 안부 말벗 여러 날 위험 누적 알림(2026-11-11 사용자 결정).
@@ -34,7 +37,7 @@ import java.util.OptionalInt;
  * <p>턴 위험 확률이 누적 기준 이상으로 커밋된 뒤 최근 며칠({@link CompanionRiskPattern})을 다시 본다. 보호자마다 그
  * 보호자의 지금 연결 이후 대화만 센다(D-1, {@link CompanionMoodDays#startedSince}). 피보호자당 {@code windowDays}일에
  * 1번은 {@code companion_risk_pattern_notice} 조건부 UPSERT 선점이 보장한다(선점 후 발송 - 발송이 실패해도 다시 보내지
- * 않는다). 받을 보호자가 없으면 선점하지 않는다.</p>
+ * 않는다, 위험 알림과 같은 방식 - 점검 L-3 수용). 받을 보호자(계정 이용 중 + 조건 충족)가 없으면 선점하지 않는다.</p>
  *
  * <p>{@code COMPANION_RISK_PATTERN}은 위험 알림과 같은 강제 채널이고 긴급 풀({@code urgentNotificationExecutor})에서
  * 보낸다. 정지 계정 수신 차단은 디스패처가 한다. 문구·로그에 대답 원문·질병명·확률 값을 넣지 않는다(일수만).</p>
@@ -70,7 +73,15 @@ public class CompanionRiskPatternListener {
             return;
         }
         Map<String, Integer> targets = new LinkedHashMap<>();
-        for (String guardianId : connectionService.getActiveGuardianIds(wardId)) {
+        List<String> guardians = connectionService.getActiveGuardianIds(wardId);
+        // 계정이 이용 중이 아닌(이용 제한·탈퇴 진행) 보호자는 디스패처가 막는다 - 대상으로 세면 받을 사람 없이 7일 선점만
+        // 소진된다(이상감지 재촉 L-12와 같은 기준, 2026-11-11 영향 범위 점검 M-1)
+        Set<String> usable = guardians.isEmpty() ? Set.of()
+                : new HashSet<>(userRepository.findIdsByIdInAndStatus(guardians, Status.ACTIVE));
+        for (String guardianId : guardians) {
+            if (!usable.contains(guardianId)) {
+                continue;
+            }
             connectionService.findActiveConnectedAt(guardianId, wardId).ifPresent(connectedAt -> {
                 OptionalInt days = CompanionRiskPattern.qualifyingDays(
                         CompanionMoodDays.startedSince(sessions, connectedAt), today, config);

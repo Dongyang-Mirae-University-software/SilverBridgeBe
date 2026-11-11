@@ -14,6 +14,7 @@ import kr.silverbridge.main.domain.notification.dispatch.NotificationType;
 import kr.silverbridge.main.domain.notification.service.GuardianNotificationPreferenceService;
 import kr.silverbridge.main.domain.user.entity.User;
 import kr.silverbridge.main.domain.user.repository.UserRepository;
+import kr.silverbridge.main.global.enums.Status;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.dao.DataIntegrityViolationException;
@@ -25,6 +26,7 @@ import org.springframework.transaction.event.TransactionalEventListener;
 import java.time.OffsetDateTime;
 import java.time.ZoneId;
 import java.util.Comparator;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -73,8 +75,13 @@ public class CompanionNoticeListener {
         }
         Set<String> disabled = preferenceService.companionNoticeDisabledGuardians();
         Map<String, CompanionMoodDays.Streak> targets = new LinkedHashMap<>();
-        for (String guardianId : connectionService.getActiveGuardianIds(event.wardId())) {
-            if (disabled.contains(guardianId)) {
+        List<String> guardians = connectionService.getActiveGuardianIds(event.wardId());
+        // 계정이 이용 중이 아닌(이용 제한·탈퇴 진행) 보호자는 디스패처가 막는다 - 대상으로 세면 받을 사람 없이 선점만 된다
+        // (이상감지 재촉 L-12와 같은 기준, 2026-11-11 영향 범위 점검 M-1)
+        Set<String> usable = guardians.isEmpty() ? Set.of()
+                : new HashSet<>(userRepository.findIdsByIdInAndStatus(guardians, Status.ACTIVE));
+        for (String guardianId : guardians) {
+            if (!usable.contains(guardianId) || disabled.contains(guardianId)) {
                 continue;
             }
             connectionService.findActiveConnectedAt(guardianId, event.wardId())

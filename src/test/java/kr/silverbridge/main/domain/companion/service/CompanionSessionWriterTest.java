@@ -141,6 +141,20 @@ class CompanionSessionWriterTest {
     }
 
     @Test
+    @DisplayName("이 턴이 방금 위험 알림을 받았으면 누적 판정은 건너뛰고, 이미 보낸 대화(선점 짐)면 판정한다(점검 L-1)")
+    void riskAlertTurnSkipsPatternCheck() {
+        properties.getRiskPattern().setEnabled(true);
+        when(repository.findById(9L)).thenReturn(Optional.of(open(9L)));
+        when(repository.claimRiskNotification(eq(9L), any())).thenReturn(1, 0);
+
+        writer.recordTurn(9L, 1, true, new BigDecimal("0.9950"), NOW);
+        verify(publisher, never()).publishEvent(any(CompanionRiskPatternCheckEvent.class));
+
+        writer.recordTurn(9L, 2, true, new BigDecimal("0.9950"), NOW);
+        verify(publisher).publishEvent(new CompanionRiskPatternCheckEvent("CW0001", NOW.toLocalDate()));
+    }
+
+    @Test
     @DisplayName("끝난 대화의 턴은 확률도 기록하지 않고 이벤트도 내지 않는다")
     void finishedSessionIgnoresProbability() {
         properties.getRiskPattern().setEnabled(true);

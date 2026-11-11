@@ -26,6 +26,8 @@ import java.util.List;
 import java.util.Optional;
 import java.util.Set;
 
+import kr.silverbridge.main.global.enums.Status;
+
 import static kr.silverbridge.main.domain.companion.service.CompanionTestSessions.finished;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
@@ -48,6 +50,7 @@ class CompanionNoticeListenerTest {
     private GuardianNotificationPreferenceService preferenceService;
     private NotificationDispatcher dispatcher;
     private CompanionNoticeListener listener;
+    private UserRepository userRepository;
 
     @BeforeEach
     void setUp() {
@@ -56,8 +59,11 @@ class CompanionNoticeListenerTest {
         connectionService = mock(ConnectionService.class);
         preferenceService = mock(GuardianNotificationPreferenceService.class);
         dispatcher = mock(NotificationDispatcher.class);
-        UserRepository userRepository = mock(UserRepository.class);
+        userRepository = mock(UserRepository.class);
         when(userRepository.findById(W)).thenReturn(Optional.empty());
+        // 기본: 연결된 보호자 계정은 모두 이용 중
+        when(userRepository.findIdsByIdInAndStatus(any(), eq(Status.ACTIVE)))
+                .thenAnswer(invocation -> List.copyOf((java.util.Collection<String>) invocation.getArgument(0)));
         listener = new CompanionNoticeListener(sessionRepository, noticeLogRepository, connectionService,
                 preferenceService, dispatcher, userRepository);
         when(connectionService.getActiveGuardianIds(W)).thenReturn(List.of("GD0001", "GD0002"));
@@ -165,6 +171,18 @@ class CompanionNoticeListenerTest {
 
     private static OffsetDateTime kstMidnight(LocalDate date) {
         return date.atStartOfDay().atOffset(java.time.ZoneOffset.ofHours(9));
+    }
+
+    @Test
+    @DisplayName("이용 제한·탈퇴 진행 보호자만 남으면 선점하지 않는다(영향 범위 점검 M-1)")
+    void noClaimWhenOnlyRestrictedGuardian() {
+        concerningDays(3);
+        when(userRepository.findIdsByIdInAndStatus(any(), eq(Status.ACTIVE))).thenReturn(List.of());
+
+        listener.handleMoodRecorded(new CompanionMoodRecordedEvent(W, TODAY));
+
+        verify(noticeLogRepository, never()).saveAndFlush(any());
+        verify(dispatcher, never()).dispatch(anyString(), any(), any(), any());
     }
 
     private void concerningDays(int days) {

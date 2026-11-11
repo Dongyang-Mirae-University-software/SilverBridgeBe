@@ -25,8 +25,9 @@ import java.time.OffsetDateTime;
  * <p>위험 알림은 {@code risk_notified_at} 조건부 UPDATE에 이긴 쪽만 이벤트를 낸다(대화당 1번). 이벤트는 커밋 뒤
  * 비동기 리스너가 보낸다 - 롤백되면 나가지 않는다.</p>
  *
- * <p>턴 위험 확률이 누적 기준 이상이면(스위치 켜짐) 여러 날 누적 판정 이벤트를 낸다(2026-11-11). 위험 알림 선점을 먼저 해
- * 같은 커밋에 {@code risk_notified_at}이 들어가므로, 리스너는 이 턴이 이미 위험 알림을 받았는지 볼 수 있다.</p>
+ * <p>턴 위험 확률이 누적 기준 이상이면(스위치 켜짐) 여러 날 누적 판정 이벤트를 낸다(2026-11-11). 이 턴이 방금 위험
+ * 알림 선점에 이겼으면 내지 않는다(같은 순간 두 건 방지, 점검 L-1). 위험 알림 선점을 먼저 해 같은 커밋에
+ * {@code risk_notified_at}이 들어가므로, 리스너는 그날 위험 알림이 나갔는지 볼 수 있다.</p>
  */
 @Component
 @RequiredArgsConstructor
@@ -74,11 +75,12 @@ public class CompanionSessionWriter {
             return session;
         }
         session.recordTurn(turnNo, riskSeen, riskProbability, now);
-        if (riskSeen) {
-            claimRiskAlert(session, now);
-        }
+        boolean riskAlertSent = riskSeen && claimRiskAlert(session, now);
+        // 이 턴이 방금 위험 알림을 받았으면 누적 판정은 건너뛴다 - 같은 순간 두 건이 겹치지 않게(2026-11-11 점검 L-1).
+        // 다음 높은 턴에서 다시 판정한다.
         CompanionProperties.RiskPattern pattern = properties.getRiskPattern();
-        if (pattern.isEnabled() && riskProbability != null && riskProbability.compareTo(pattern.getThreshold()) >= 0) {
+        if (pattern.isEnabled() && !riskAlertSent && riskProbability != null
+                && riskProbability.compareTo(pattern.getThreshold()) >= 0) {
             eventPublisher.publishEvent(new CompanionRiskPatternCheckEvent(session.getWardId(), session.getSessionDate()));
         }
         return session;
@@ -113,12 +115,15 @@ public class CompanionSessionWriter {
                 .ifPresent(session -> session.markLost(now));
     }
 
-    private void claimRiskAlert(CompanionSession session, OffsetDateTime now) {
+    /** 위험 알림 선점. 이겨서 이벤트를 냈으면 true. */
+    private boolean claimRiskAlert(CompanionSession session, OffsetDateTime now) {
         String wardId = session.getWardId();
         long id = session.getId();
         if (sessionRepository.claimRiskNotification(id, now) == 1) {
             eventPublisher.publishEvent(new CompanionRiskDetectedEvent(wardId, id));
+            return true;
         }
+        return false;
     }
 
     private CompanionSession load(long sessionId) {

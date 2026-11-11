@@ -12,6 +12,7 @@ import kr.silverbridge.main.domain.notification.channel.NotificationContent;
 import kr.silverbridge.main.domain.notification.dispatch.NotificationDispatcher;
 import kr.silverbridge.main.domain.notification.dispatch.NotificationType;
 import kr.silverbridge.main.domain.user.repository.UserRepository;
+import kr.silverbridge.main.global.enums.Status;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -49,6 +50,7 @@ class CompanionRiskPatternListenerTest {
     private ConnectionService connectionService;
     private NotificationDispatcher dispatcher;
     private CompanionRiskPatternListener listener;
+    private UserRepository userRepository;
 
     @BeforeEach
     void setUp() {
@@ -58,8 +60,11 @@ class CompanionRiskPatternListenerTest {
         noticeRepository = mock(CompanionRiskPatternNoticeRepository.class);
         connectionService = mock(ConnectionService.class);
         dispatcher = mock(NotificationDispatcher.class);
-        UserRepository userRepository = mock(UserRepository.class);
+        userRepository = mock(UserRepository.class);
         when(userRepository.findById(W)).thenReturn(Optional.empty());
+        // 기본: 연결된 보호자 계정은 모두 이용 중
+        when(userRepository.findIdsByIdInAndStatus(any(), eq(Status.ACTIVE)))
+                .thenAnswer(invocation -> List.copyOf((java.util.Collection<String>) invocation.getArgument(0)));
         listener = new CompanionRiskPatternListener(properties, sessionRepository, noticeRepository, connectionService,
                 dispatcher, userRepository);
         when(connectionService.getActiveGuardianIds(W)).thenReturn(List.of("GD0001", "GD0002"));
@@ -113,6 +118,22 @@ class CompanionRiskPatternListenerTest {
         verify(dispatcher).dispatch(eq("GD0002"), eq(W), eq(NotificationType.COMPANION_RISK_PATTERN), any());
 
         when(connectionService.findActiveConnectedAt("GD0002", W)).thenReturn(Optional.of(connectedYesterday));
+        listener.handleCheck(EVENT);
+        verify(noticeRepository, org.mockito.Mockito.times(1)).claim(any(), any(), anyInt(), any(), any());
+    }
+
+    @Test
+    @DisplayName("이용 제한·탈퇴 진행 보호자는 대상에서 빼고, 그런 보호자만 남으면 7일 선점을 소진하지 않는다(점검 M-1)")
+    void restrictedGuardiansExcludedBeforeClaim() {
+        sessions(turn(TODAY.minusDays(2), CompanionSlot.S09, "0.98"), turn(TODAY, CompanionSlot.S12, "0.98"));
+        when(userRepository.findIdsByIdInAndStatus(any(), eq(Status.ACTIVE))).thenReturn(List.of("GD0002"));
+
+        listener.handleCheck(EVENT);
+
+        verify(dispatcher, never()).dispatch(eq("GD0001"), any(), any(), any());
+        verify(dispatcher).dispatch(eq("GD0002"), eq(W), eq(NotificationType.COMPANION_RISK_PATTERN), any());
+
+        when(userRepository.findIdsByIdInAndStatus(any(), eq(Status.ACTIVE))).thenReturn(List.of());
         listener.handleCheck(EVENT);
         verify(noticeRepository, org.mockito.Mockito.times(1)).claim(any(), any(), anyInt(), any(), any());
     }
