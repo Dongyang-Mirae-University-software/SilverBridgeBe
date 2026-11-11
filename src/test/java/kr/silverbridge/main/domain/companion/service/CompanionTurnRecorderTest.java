@@ -99,7 +99,6 @@ class CompanionTurnRecorderTest {
         recorder.record(session, 0, CompanionTurnRecorder.TurnContent.NONE, NOW);
 
         verify(turnRepository, never()).save(any());
-        verify(consentRepository, never()).lockIfConsented(any());
     }
 
     @ParameterizedTest(name = "moodCode={0}, label={1} → {2}")

@@ -81,6 +81,42 @@ class CompanionFullIntegrationTest extends FullContextIntegrationTest {
     }
 
     @Test
+    @DisplayName("점검 L-2: 테스트 대화의 위험 알림은 피보호자당 하루 1번 - 같은 날 두 번째 테스트 대화의 위험 턴은 보내지 않고, "
+            + "일반 대화는 그대로 보낸다")
+    void 테스트_대화_위험_알림은_하루_한_번() throws Exception {
+        saveUser(GUARDIAN, Role.GUARDIAN, Status.ACTIVE);
+        saveUser(WARD, Role.WARD, Status.ACTIVE);
+        saveActiveConnection(GUARDIAN, WARD);
+        signedIn(GUARDIAN);
+        long first = openTestSession("d-trisk-1", CompanionSlot.S09);
+        long second = openTestSession("d-trisk-2", CompanionSlot.S12);
+        long regular = openSession("d-trisk-r", CompanionSlot.S15);
+        when(aiCompanionClient.replyText(anyString(), anyString())).thenReturn(json(
+                "{\"turnNo\":1,\"reply\":{\"text\":\"많이 힘드셨군요.\"},\"riskFlag\":true,\"ended\":false}"));
+
+        companionService.replyText(WARD, first, "힘들어요");
+        companionService.replyText(WARD, second, "힘들어요");
+        eventually().untilAsserted(() -> assertThat(notificationLogs(GUARDIAN, NotificationType.COMPANION_RISK))
+                .as("테스트 대화 두 건 → 1번").isEqualTo(1));
+        assertThat(count("SELECT count(*) FROM companion_session WHERE id = ? AND risk_notified_at IS NULL"
+                + " AND risk_flag = true", second)).as("두 번째 테스트 대화는 선점하지 않음").isEqualTo(1);
+
+        companionService.replyText(WARD, regular, "힘들어요");
+        eventually().untilAsserted(() -> assertThat(notificationLogs(GUARDIAN, NotificationType.COMPANION_RISK))
+                .as("일반 대화는 대화당 1번 그대로").isEqualTo(2));
+    }
+
+    private long openTestSession(String dialogueId, CompanionSlot slot) {
+        OffsetDateTime now = OffsetDateTime.now(ZoneId.of("Asia/Seoul"));
+        Long questionId = jdbc.queryForObject(
+                "INSERT INTO companion_question (slot, text) VALUES (?, '시험 질문') RETURNING id", Long.class, slot.code());
+        CompanionSession session = CompanionSession.claimTest(WARD, LocalDate.now(ZoneId.of("Asia/Seoul")),
+                slot, questionId, now);
+        session.attachDialogue(dialogueId, 8, now);
+        return sessionRepository.save(session).getId();
+    }
+
+    @Test
     @DisplayName("확인(되묻기) 턴은 signals가 null이고 최상위 riskFlag에만 위험을 싣는다 - 그 턴에 COMPANION_RISK 1번")
     void 확인_턴_위험도_그_턴에_보낸다() throws Exception {
         saveUser(GUARDIAN, Role.GUARDIAN, Status.ACTIVE);

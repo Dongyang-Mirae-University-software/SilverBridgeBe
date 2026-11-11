@@ -96,3 +96,12 @@ fix: 말벗 저장 고지 문구를 동의 조건부로 정정하고 턴 저장 
 - recordTurn이 동의 행을 먼저 FOR SHARE로 잠가 역할 변경·purge와 잠금 순서를 맞춤 (L-1)
 - 문구 고정 테스트·경합 통합 테스트 추가
 ```
+
+## 조치 (2026-11-12, `fix/companion-transcript-audit`)
+
+| ID | 조치 | 고정 |
+|---|---|---|
+| M-1 | Swagger 말벗 태그·피보호자 턴 API 설명 2곳·`TurnResponse` 2칸·DTO/서비스/엔티티 주석을 "동의한 경우에만 저장, 30일 뒤 삭제, 철회 시 즉시 삭제(음성·사진은 저장 안 함)"로 정정 | `CompanionTranscriptApiDocTest`(문구 2건) |
+| L-1 | `recordTurn`이 대화 행을 바꾸기 전에 `lockConsent`로 동의 행을 먼저 잠금 - 순서 동의 → 대화(역할 변경 정리와 같음) | `CompanionSessionWriterTest.consentLockedBeforeSessionChange`(잠글 때 대화 미변경 + 호출 순서) |
+| L-2 | 테스트 대화 위험 알림 피보호자당 하루 1번(`claimTestRiskNotification` 조건부 UPDATE), 일반 대화 불변 | 단위 2건 + `CompanionFullIntegrationTest.테스트_대화_위험_알림은_하루_한_번`(실 DB) |
+| L-3 | 동의 응답에 고지 4항목 `notice` 추가(FE가 그대로 표시) | `CompanionTranscriptServiceTest.noticeItems` |

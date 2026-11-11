@@ -147,7 +147,7 @@ public class WardCompanionController {
 
     @Operation(summary = "글로 대답하기",
             description = """
-                    대답 글(1~500자)을 보내고 말벗 응답 문장을 받습니다. 대답·응답 문장은 저장하지 않습니다.
+                    대답 글(1~500자)을 보내고 말벗 응답 문장을 받습니다. 대답·응답 문장은 대화 내용 저장에 동의한 경우에만 저장하고 30일 뒤 지웁니다.
                     ended=true면 대화가 끝난 것이며 결과는 서버가 이미 저장했습니다. 처리에 최대 90초가 걸릴 수 있습니다.
 
                     [오류 code]
@@ -167,7 +167,7 @@ public class WardCompanionController {
     @Operation(summary = "음성으로 대답하기",
             description = """
                     multipart: audio 1개(WAV·WebM·MP3, 5MB 이하) + frame 0~5장(JPG·PNG, 장당 1MB 이하, 표정 분석용).
-                    응답의 transcript는 받아 적은 글이며 저장하지 않습니다. 음성·사진도 저장하지 않습니다.
+                    응답의 transcript는 받아 적은 글이며 대화 내용 저장에 동의한 경우에만 저장합니다(30일 뒤 삭제). 음성·사진은 저장하지 않습니다.
 
                     [오류 code]
                     COMPANION_AUDIO_INVALID(400) / COMPANION_AUDIO_TOO_LARGE(413) / COMPANION_FRAME_INVALID(400) /

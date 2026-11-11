@@ -7,7 +7,7 @@ import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.Map;
 
-/** 안부 말벗 기기(피보호자) API 요청·응답. 대답 원문·받아 적은 글은 응답으로만 나가고 저장하지 않는다. */
+/** 안부 말벗 기기(피보호자) API 요청·응답. 대답 글·받아 적은 글·말벗 응답 문장은 피보호자가 동의했을 때만 저장한다(30일, 2026-11-11). */
 public final class CompanionDtos {
 
     private CompanionDtos() {
@@ -49,10 +49,10 @@ public final class CompanionDtos {
     @Schema(description = "한 턴 결과")
     public record TurnResponse(
             int turnNo,
-            @Schema(description = "말벗 응답 문장(기기가 읽어 준다). 저장하지 않는다") String reply,
+            @Schema(description = "말벗 응답 문장(기기가 읽어 준다). 대화 내용 저장에 동의한 경우에만 저장(30일 뒤 삭제)") String reply,
             @Schema(description = "true면 대화가 끝났다(결과는 서버가 이미 저장했다)") boolean ended,
             @Schema(description = "MAX_TURNS·NO_RESPONSE·USER_STOP. 진행 중이면 null") String endReason,
-            @Schema(description = "음성 대답을 받아 적은 글(음성 턴만). 저장하지 않는다") String transcript,
+            @Schema(description = "음성 대답을 받아 적은 글(음성 턴만). 대화 내용 저장에 동의한 경우에만 저장(30일 뒤 삭제)") String transcript,
             @Schema(description = "AI 턴 판정 결과 - 테스트 계정에만 실린다(일반 계정은 필드 없음). 저장·로그 없음")
             @JsonInclude(JsonInclude.Include.NON_NULL) TurnAnalysis analysis) {
 
@@ -114,6 +114,8 @@ public final class CompanionDtos {
     public record TranscriptConsentResponse(
             @Schema(description = "동의했으면 true. 기본 false") boolean consented,
             @Schema(description = "처음 동의한 시각. 동의하지 않았으면 null") OffsetDateTime consentedAt,
-            @Schema(description = "대화 내용 보관 일수(지나면 지움)", example = "30") int retentionDays) {
+            @Schema(description = "대화 내용 보관 일수(지나면 지움)", example = "30") int retentionDays,
+            @Schema(description = "동의 받을 때 화면에 그대로 보여 줄 고지 4항목(목적·항목·보유 기간·거부 권리와 불이익, "
+                    + "개인정보 보호법 제22조·제23조). 순서대로 표시") List<String> notice) {
     }
 }

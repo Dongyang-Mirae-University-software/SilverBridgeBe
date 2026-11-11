@@ -6,7 +6,7 @@ import java.time.OffsetDateTime;
 import java.util.List;
 
 /**
- * 보호자 "AI 기분 체크" 응답(2026-11-04, PR-B). 대답 원문·받아 적은 글은 없다(결정 B) - 질문 문장·기분 코드·횟수만.
+ * 보호자 "AI 기분 체크" 응답(2026-11-04, PR-B). today·days·week에는 대화 글이 없다 - 질문 문장·기분 코드·횟수만. 글은 대화 보기(SessionDetailResponse)에서 동의 시에만(2026-11-11).
  * 모르는 값은 null이다(0·정상으로 바꾸지 않는다, 화면 "확인할 수 없어요").
  */
 public final class CompanionGuardianDtos {
