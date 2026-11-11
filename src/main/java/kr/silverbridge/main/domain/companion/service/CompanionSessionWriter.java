@@ -82,8 +82,10 @@ public class CompanionSessionWriter {
         if (!session.isOpen()) {
             return session;
         }
+        // 동의 행을 대화 행보다 먼저 잠근다 - 역할 변경 정리·탈퇴 purge와 잠금 순서를 맞춘다(2026-11-12 점검 L-1)
+        boolean consented = turnRecorder.lockConsent(session.getWardId());
         session.recordTurn(turnNo, riskSeen, riskProbability, now);
-        turnRecorder.record(session, turnNo, content, now);
+        turnRecorder.record(session, turnNo, content, consented, now);
         boolean riskAlertSent = riskSeen && claimRiskAlert(session, now);
         // 이 턴이 방금 위험 알림을 받았으면 누적 판정은 건너뛴다 - 같은 순간 두 건이 겹치지 않게(2026-11-11 점검 L-1).
         // 다음 높은 턴에서 다시 판정한다.
@@ -128,7 +130,11 @@ public class CompanionSessionWriter {
     private boolean claimRiskAlert(CompanionSession session, OffsetDateTime now) {
         String wardId = session.getWardId();
         long id = session.getId();
-        if (sessionRepository.claimRiskNotification(id, now) == 1) {
+        // 테스트 대화는 피보호자당 하루 1번만(2026-11-12 점검 L-2) - 일반 대화는 대화당 1번 그대로
+        int claimed = session.isTest()
+                ? sessionRepository.claimTestRiskNotification(id, wardId, session.getSessionDate(), now)
+                : sessionRepository.claimRiskNotification(id, now);
+        if (claimed == 1) {
             eventPublisher.publishEvent(new CompanionRiskDetectedEvent(wardId, id));
             return true;
         }

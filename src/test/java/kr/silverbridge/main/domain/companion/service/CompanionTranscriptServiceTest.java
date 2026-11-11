@@ -13,6 +13,7 @@ import org.mockito.InOrder;
 import java.time.Clock;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
+import java.util.List;
 import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -53,6 +54,21 @@ class CompanionTranscriptServiceTest {
         assertThat(response.consented()).isFalse();
         assertThat(response.consentedAt()).isNull();
         assertThat(response.retentionDays()).isEqualTo(30);
+    }
+
+    @Test
+    @DisplayName("점검 L-3: 응답에 고지 4항목(목적·항목·보유 기간·거부 권리)이 순서대로, 보관 일수는 설정값으로 실린다")
+    void noticeItems() {
+        when(consentRepository.findById(W)).thenReturn(Optional.empty());
+        properties.setTranscriptRetentionDays(14);
+
+        List<String> notice = service.getConsent(W).notice();
+
+        assertThat(notice).hasSize(4);
+        assertThat(notice.get(0)).startsWith("이용 목적");
+        assertThat(notice.get(1)).startsWith("저장 항목").contains("음성과 사진은 저장하지 않습니다", "민감한 내용");
+        assertThat(notice.get(2)).startsWith("보관 기간").contains("14일 뒤 지웁니다", "바로 지웁니다");
+        assertThat(notice.get(3)).startsWith("동의하지 않을 권리").contains("그대로 쓸 수 있습니다");
     }
 
     @Test

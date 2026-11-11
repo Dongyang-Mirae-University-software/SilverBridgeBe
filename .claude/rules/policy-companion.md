@@ -51,6 +51,11 @@ paths:
 - **30일 보관**: `CompanionTranscriptRetentionScheduler` 매일 **04:55**(`COMPANION_TRANSCRIPT_RETENTION_DAYS`, 기본 30)가 `created_at` 30일 지난 턴의 글만 비운다. 기분·대화 기록은 남는다. 스케줄러는 15종, 풀 3 유지(일일 작업 시각 겹침 없음).
 - **정리**: 탈퇴 = FK CASCADE(users → 동의 행, users → session → turn). 역할 변경(피보호자 → 보호자) = `clearOnRoleChange`가 동의 행 삭제 + 대화 삭제(턴 CASCADE).
 - **보호자 API**(모두 ACTIVE 연결·D-1·`[IDOR-ATTEMPT]`): `week`(오늘 포함 7일, 오래된 날부터, 하루 기분 = `CompanionMoodDays`) / `days/{date}`(today와 같은 모양, 7일 밖·형식 오류 400 `COMPANION_DATE_OUT_OF_RANGE`, 지난 날은 그날 끝 시각 기준) / `sessions/{id}`(7일 안, 다른 피보호자·연결 전·없음 = 404 `COMPANION_SESSION_NOT_FOUND` - 다른 피보호자는 `[IDOR-ATTEMPT]` WARN). `transcript`: 동의 없음 → `NO_CONSENT`(남은 글이 있어도 싣지 않음), 글 있음 → `AVAILABLE`, 30일 지남 → `EXPIRED`, 동의 전 시작 → `NO_CONSENT`. today·days 칸에 `sessionId`(nullable)만 더했다(사용자 결정 - 기존 필드 불변).
+- **영향 범위 점검 반영 (2026-11-12, `docs/(2026-11-12) audit-impact-companion-transcript.md`)**:
+  - **M-1 고지 문구**: Swagger·API 설명·DTO·주석에 "대답·응답 문장·받아 적은 글은 저장하지 않는다"를 쓰지 말 것 - "동의한 경우에만 저장, 30일 뒤 삭제, 철회 시 즉시 삭제"(음성·사진은 저장하지 않음). `CompanionTranscriptApiDocTest`가 고정.
+  - **L-1 잠금 순서 = 동의 행 → 대화 행**: `recordTurn`은 대화 행을 바꾸기 전에 `CompanionTurnRecorder.lockConsent`를 부른다. native 쿼리는 실행 전에 전체 flush하므로(Hibernate 7, JPA 부트스트랩) 대화 행을 먼저 바꾸면 역할 변경 정리·탈퇴 purge와 교착이 생긴다. `CompanionSessionWriterTest.consentLockedBeforeSessionChange`가 고정. 탈퇴 purge의 CASCADE 순서는 DB가 정해 완전히 맞추지는 못한다(수용).
+  - **L-2 테스트 대화 위험 알림 = 피보호자당 하루 1번**: 테스트 대화는 `claimTestRiskNotification`(같은 날 테스트 대화 중 이미 보낸 것이 없을 때만 이김), 일반 대화는 대화당 1번 그대로. 동시에 진행 중인 서로 다른 시간대 테스트 대화는 드물게 2건(수용). 숫자 1은 점검 조치 때 정한 값이다.
+  - **L-3 고지 4항목**: 동의 GET/PUT 응답 `notice`(목적·저장 항목·보관 기간·동의하지 않을 권리, 보관 일수는 설정값). FE는 이 문구를 그대로 보여 준다 - 항목을 줄이지 말 것.
 - 상세 `docs/(2026-11-11) feature-companion-transcript.md`.
 
 ## 불변 규칙
@@ -76,7 +81,7 @@ paths:
 
 - **전용 목록 `COMPANION_TEST_WARD_IDS`**(기본 빈 값 = 꺼짐, `*` 불가 - 기동 실패). **운영 서버 `.env`에 넣지 말 것** - gosky dev `.env.dev`에만. 판정은 `CompanionProperties.isTestWard`(말벗 켜짐 + 목록 포함) 한 곳.
 - 테스트 계정만: `POST /api/ward/companion/test/sessions {slot}`(창 없이 고른 시간대의 오늘 질문, 반복 가능, 같은 시간대에 진행 중인 테스트 대화는 이어 감) / `POST .../test/prompt {slot}`(204) / `today.testMode` / 턴·마치기 `analysis`. 나머지는 403 `COMPANION_TEST_NOT_ALLOWED`. 테스트 계정도 일반 `POST /sessions`는 창 규칙을 따른다.
-- **테스트 대화는 일반 대화와 똑같이 저장·집계한다**(보호자 화면·하루 기분·연속 일수·주의 알림·관리자 집계·위험 알림). `companion_session.is_test`는 표시만 한다 - 집계에서 빼는 필터를 함부로 넣지 말 것(사용자 결정, 실제 흐름 확인이 목적). 시간대당 1회 UNIQUE는 일반 대화 전용 부분 인덱스(V68)라, 일반 대화 조회는 `...AndTestFalse`로 해야 한다. **진행 중(OPEN) 테스트 대화는 시간대당 1개**(V69 부분 UNIQUE, 점검 M-1) - 동시 시작(더블탭)에 진 쪽은 위반을 받아 이긴 쪽 대화를 이어 간다. 시간대 칸은 시간대별 가장 최근에 시작한 대화(`CompanionService.latestBySlot`)이고, **보호자 지금 기분·대답한 시간대 수는 그 날 모든 대화로 본다**(점검 L-2 - 대답한 일반 대화 뒤에 대답 없는 테스트 대화가 와도 대답한 시간대로 센다).
+- **테스트 대화는 일반 대화와 똑같이 저장·집계한다**(보호자 화면·하루 기분·연속 일수·주의 알림·관리자 집계·위험 알림). 단 위험 알림 발송은 피보호자당 하루 1번(2026-11-12 점검 L-2 - 위 "대화 내용 저장" 절). `companion_session.is_test`는 표시만 한다 - 집계에서 빼는 필터를 함부로 넣지 말 것(사용자 결정, 실제 흐름 확인이 목적). 시간대당 1회 UNIQUE는 일반 대화 전용 부분 인덱스(V68)라, 일반 대화 조회는 `...AndTestFalse`로 해야 한다. **진행 중(OPEN) 테스트 대화는 시간대당 1개**(V69 부분 UNIQUE, 점검 M-1) - 동시 시작(더블탭)에 진 쪽은 위반을 받아 이긴 쪽 대화를 이어 간다. 시간대 칸은 시간대별 가장 최근에 시작한 대화(`CompanionService.latestBySlot`)이고, **보호자 지금 기분·대답한 시간대 수는 그 날 모든 대화로 본다**(점검 L-2 - 대답한 일반 대화 뒤에 대답 없는 테스트 대화가 와도 대답한 시간대로 센다).
 - **테스트 안내 푸시**: 정각 안내와 같은 문구·`COMPANION_PROMPT`(FCM만·설정 기반)이고 data에 `test=true`만 더한다. **`companion_prompt_log`를 남기지 않는다**(응답률은 정각 안내 기준, 사용자 결정). 정각 안내 data에 `test`를 넣지 말 것(`CompanionPromptSchedulerTest.regularPromptHasNoTestKey`가 고정). 분당 3·시간당 30. **204는 발송 요청 뜻이다**(점검 L-1) - 정지 계정·알림 설정 끔·FCM 토큰 없음이면 정각 안내처럼 보내지 않고 응답은 그대로 204다(결과는 알림 이력).
 - **`analysis`는 응답에만**: AI 턴 값(`turnResult`·`face`·`signals`·위험) 그대로, 만들어 내지 않는다(AI가 안 주는 글 기분 코드는 없음). DB 칸·로그·알림에 남기지 말 것 - 원문 미저장(결정 B)과 같은 기준. 일반 계정 응답에는 필드 자체가 없다(`@JsonInclude(NON_NULL)`). 상세 `docs/(2026-11-10) feature-companion-test-mode.md`.
 - **역할은 `isTestWard`가 아니라 컨트롤러가 막는다**(점검 L-3, 현상 유지): 목록에 남은 ID가 보호자로 바뀌어도 `WardCompanionController`의 `hasRole('WARD')`·역할 변경 토큰 무효화·말벗 기록 삭제가 막는다. 테스트 API를 다른 컨트롤러로 옮기면 역할 검사를 함께 옮길 것.

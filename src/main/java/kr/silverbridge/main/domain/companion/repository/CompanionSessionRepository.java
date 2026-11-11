@@ -76,4 +76,19 @@ public interface CompanionSessionRepository extends JpaRepository<CompanionSessi
     @Modifying(flushAutomatically = true, clearAutomatically = true)
     @Query("UPDATE CompanionSession s SET s.riskNotifiedAt = :now WHERE s.id = :id AND s.riskNotifiedAt IS NULL")
     int claimRiskNotification(@Param("id") Long id, @Param("now") OffsetDateTime now);
+
+    /**
+     * 테스트 대화의 위험 알림 선점 - 같은 피보호자의 같은 날 테스트 대화 중 이미 위험 알림이 나간 것이 없을 때만 이긴다
+     * (피보호자당 하루 1번, 2026-11-12 점검 L-2). 테스트 대화는 몇 번이든 다시 열 수 있어, 전체 공개 중 강제 푸시·대체 문자가
+     * 반복되지 않게 한다. 같은 피보호자가 서로 다른 시간대 테스트 대화를 동시에 진행하면 드물게 2건이 나갈 수 있다(수용).
+     */
+    @Modifying(flushAutomatically = true, clearAutomatically = true)
+    @Query("""
+            UPDATE CompanionSession s SET s.riskNotifiedAt = :now
+            WHERE s.id = :id AND s.riskNotifiedAt IS NULL
+              AND NOT EXISTS (SELECT 1 FROM CompanionSession o WHERE o.wardId = :wardId AND o.sessionDate = :date
+                              AND o.test = true AND o.riskNotifiedAt IS NOT NULL)
+            """)
+    int claimTestRiskNotification(@Param("id") Long id, @Param("wardId") String wardId,
+                                  @Param("date") java.time.LocalDate date, @Param("now") OffsetDateTime now);
 }

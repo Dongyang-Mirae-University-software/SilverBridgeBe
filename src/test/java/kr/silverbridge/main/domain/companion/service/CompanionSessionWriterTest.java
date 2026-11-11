@@ -170,6 +170,56 @@ class CompanionSessionWriterTest {
         verify(publisher, never()).publishEvent(any());
     }
 
+    @Test
+    @DisplayName("점검 L-1: 동의 행 잠금은 대화 행을 바꾸기 전에 - 잠글 때 대화는 아직 이 턴을 반영하지 않았다(잠금 순서 동의 → 대화)")
+    void consentLockedBeforeSessionChange() {
+        CompanionSession session = open(11L);
+        when(repository.findById(11L)).thenReturn(Optional.of(session));
+        int[] turnCountAtLock = {-1};
+        when(turnRecorder.lockConsent("CW0001")).thenAnswer(inv -> {
+            turnCountAtLock[0] = session.getTurnCount();
+            return true;
+        });
+        when(repository.claimRiskNotification(eq(11L), any())).thenReturn(1);
+
+        writer.recordTurn(11L, 3, true, null, CompanionTurnRecorder.TurnContent.NONE, NOW);
+
+        assertThat(turnCountAtLock[0]).as("잠글 때는 이 턴(3) 반영 전").isZero();
+        assertThat(session.getTurnCount()).isEqualTo(3);
+        org.mockito.InOrder order = org.mockito.Mockito.inOrder(turnRecorder, repository);
+        order.verify(turnRecorder).lockConsent("CW0001");
+        order.verify(turnRecorder).record(session, 3, CompanionTurnRecorder.TurnContent.NONE, true, NOW);
+        order.verify(repository).claimRiskNotification(eq(11L), any());
+    }
+
+    @Test
+    @DisplayName("점검 L-2: 테스트 대화의 위험 알림은 피보호자·날짜 기준 선점(하루 1번)을 쓰고, 지면 이벤트를 내지 않는다")
+    void testSessionRiskUsesDailyClaim() {
+        CompanionSession test = CompanionSession.claimTest("CW0001", LocalDate.of(2026, 11, 4), CompanionSlot.S12, 1L, NOW);
+        ReflectionTestUtils.setField(test, "id", 12L);
+        test.attachDialogue("d-12", 8, NOW);
+        when(repository.findById(12L)).thenReturn(Optional.of(test));
+        when(repository.claimTestRiskNotification(eq(12L), eq("CW0001"), eq(LocalDate.of(2026, 11, 4)), any()))
+                .thenReturn(0);
+
+        writer.recordTurn(12L, 1, true, null, NOW);
+
+        verify(repository, never()).claimRiskNotification(anyLong(), any());
+        verify(publisher, never()).publishEvent(any(CompanionRiskDetectedEvent.class));
+    }
+
+    @Test
+    @DisplayName("점검 L-2: 일반 대화는 대화당 1번 선점 그대로 - 하루 1번 선점을 쓰지 않는다")
+    void regularSessionKeepsPerSessionClaim() {
+        when(repository.findById(13L)).thenReturn(Optional.of(open(13L)));
+        when(repository.claimRiskNotification(eq(13L), any())).thenReturn(1);
+
+        writer.recordTurn(13L, 1, true, null, NOW);
+
+        verify(repository, never()).claimTestRiskNotification(anyLong(), any(), any(), any());
+        verify(publisher).publishEvent(new CompanionRiskDetectedEvent("CW0001", 13L));
+    }
+
     private static CompanionSession open(long id) {
         CompanionSession session = CompanionSession.claim("CW0001", LocalDate.of(2026, 11, 4), CompanionSlot.S09, 1L, NOW);
         ReflectionTestUtils.setField(session, "id", id);

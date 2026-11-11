@@ -16,7 +16,7 @@
 |---|---|
 | V71 (가역) | `companion_transcript_consent(ward_id PK → users CASCADE, consented_at)`, `companion_turn(session_id → companion_session CASCADE, turn_no, mood, bot_text, answer_text, created_at, UNIQUE(session_id, turn_no))` |
 | 턴 저장 | `CompanionService.handleTurn` → `CompanionSessionWriter.recordTurn(..., TurnContent)` → `CompanionTurnRecorder`(같은 트랜잭션). 기분 = `turnResult.moodCode` 또는 한글 `label`. 글 = 대답(음성이면 받아 적은 글)·그 뒤 말벗 문장. 동의 행 `FOR SHARE` |
-| 동의 | `GET/PUT /api/ward/companion/transcript-consent` `{consent}` → `{consented, consentedAt, retentionDays}`. 철회 = 행 삭제 + 글 즉시 비움 |
+| 동의 | `GET/PUT /api/ward/companion/transcript-consent` `{consent}` → `{consented, consentedAt, retentionDays, notice[4]}`(고지 4항목은 2026-11-12 점검 L-3에서 추가). 철회 = 행 삭제 + 글 즉시 비움 |
 | 보관 | `CompanionTranscriptRetentionScheduler` 04:55, `COMPANION_TRANSCRIPT_RETENTION_DAYS`(30) |
 | 정리 | 탈퇴 FK CASCADE, 역할 변경 `clearOnRoleChange`에 동의 행 삭제 추가 |
 | 보호자 | `GET .../companion/week`, `GET .../companion/days/{date}`, `GET .../companion/sessions/{sessionId}`, today·days `slots[].sessionId` |

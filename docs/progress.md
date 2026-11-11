@@ -3037,3 +3037,8 @@ AI 챗 집계 점검 L-1에서 남겨 둔 공용 `GlobalExceptionHandler`의 `e.
 - 배포: gosky AI는 다른 세션의 #257 배포(23:36 `0b16224`)에 함께 반영, `/health` 200·컨테이너 코드 확인. 이 작업에서 따로 재시작하지 않음.
 - 기능 점검(AI `docs/audits/2026-11-12-companion-fallback-empathy-audit.md`): **조건부 PASS** · 🟠 H-1 무응답 턴(말이 비었음)도 같은 목록이라 침묵에 말을 들은 것처럼 답함 - 무응답 전용 목록 제안 / 🟡 M-1 "그때 마음은 어떠셨어요?" 시점 없는 문장으로 / 🟢 L-1 검수 버전 `fallback-v2`, L-2 공감 목록 소진 시 반복(유지), L-3 시험 보강. 수정은 별도 세션.
 - 점검 조치 AI #263 (`44d9485`, 2026-11-12): H-1 무응답 턴 전용 문장 `FALLBACK_NO_RESPONSE`(말을 들은 것처럼 받지 않고 다시 말을 건넴, 반복 방지도 이 목록 안에서) - 대답 생성 시간 초과는 `timeout_reply`로 나눠 받아 주는 문장·부정이면 공감 문장 유지 / M-1 "그때 마음은…" → "네, 잘 들었어요. 더 하고 싶으신 말씀 있으세요?" / L-1 검수 버전 `fallback-v2`(BE 미사용) / L-3 시험 34건 / L-2 유지. 전체 pytest 3602 passed(1 failed 기존 `pgrep` 환경). 턴 응답 칸·`replySource` 그대로라 BE 영향 없음. gosky AI 11/12 00:09 `44d9485` 배포(사용자 확인), `/health` 200·GPU 9,563MiB·예외 0·BE WS 재연결, 롤백 `sb-ai-rollback:20261112-pre-no-response-fallback` 1개.
+
+### [2026-11-12] 말벗 대화 내용 저장 영향 범위 점검 조치 (BE `fix/companion-transcript-audit`)
+- M-1 Swagger·API 설명·DTO·주석의 "저장하지 않습니다"를 "동의한 경우에만 저장, 30일 뒤 삭제, 철회 시 즉시 삭제"로 정정 + `CompanionTranscriptApiDocTest`.
+- L-1 `recordTurn`이 대화 행을 바꾸기 전에 동의 행을 잠금(순서 동의 → 대화, 역할 변경 정리와 같음) + 순서 고정 단위 테스트.
+- L-2 테스트 대화 위험 알림 피보호자당 하루 1번(`claimTestRiskNotification`), 일반 대화 불변 + 실 DB 통합 테스트. L-3 동의 응답 `notice` 고지 4항목.
