@@ -19,6 +19,14 @@
 - V68(가역): `companion_session.is_test` + 시간대당 1회 UNIQUE를 일반 대화 전용 부분 인덱스로. 테스트 대화도 모든 집계에 포함, 화면은 시간대별 최근 대화.
 - AI가 주지 않아 못 싣는 값: `textMood`(글 기분 코드 - `turnResult`에 합쳐져서만 옴). 상세 `docs/(2026-11-10) feature-companion-test-mode.md`.
 
+### [2026-11-11] AI 남은 취약점 해소·MedGemma 스위치 제거·Claude 불가 안내 (AI #239·#240·#242·#246, gosky `51a3c51` 13:20)
+- 운영 컨테이너 패키지의 알려진 취약점 **0건**(pip-audit 159개). accelerate 1.15.0(#239), torch 2.13.0·torchvision 0.28.0(#246), torchaudio는 cu126 2.11.0 유지(2.11.1은 CUDA 13용이라 gosky 드라이버 535에서 불가), ctranslate2 4.9.0 고정.
+- torch 2.13은 두 번 실패 뒤 성공: #235(10:33)·#243(11:08) 배포 직후 MedGemma 워밍업·생성이 `RuntimeError` - 상담이 각각 약 3~4분·2분 대체 응답(화재 감지·받아쓰기는 정상, 기동 격리 #228 덕). #239로 넣은 실패 위치 로그(`at=runtime/build.py:32 < ... < nvidia/driver.py:66`)로 원인 확인 - torch 2.13이 생성 중 triton으로 GPU 코드를 만들고 triton이 실행 중 C 컴파일러를 찾는데 `python:3.11-slim`에 없음. Dockerfile에 `gcc`·`libc6-dev` 추가(#246), 후보 이미지에서 컴파일러 유무로 재현·해소 확인 뒤 배포.
+- **실수 기록**: 11:08 배포는 `/tmp/ai-measure.lock`이 있는데 진행됐다(점검 명령이 잠금 유무와 무관하게 다음 단계로 이어짐). 그 잠금(11:01 생성)은 떠 있던 네 세션 모두 자기 것이 아니라고 답해 사용자 확인 뒤 지웠다. 모델을 올리지 않는 후보 이미지 확인만으로 #235를 배포한 것도 판단 착오.
+- MedGemma 끄기·켜기 스위치 제거(#240, 사용자 결정): `/api/admin/medgemma/*`·`set_enabled`·`unload`·`ADMIN_API_KEY` 삭제. 제거 전 실측에서 스위치로 꺼도 GPU 8,425 → 8,295MiB로 거의 줄지 않았다. 끄려면 `.env` `MEDGEMMA_ENABLED=false` 후 재시작. gosky `.env`의 `ADMIN_API_KEY` 줄은 미사용(무해).
+- Claude 불가 안내(#242, 사용자 승인 문구): 라우터 실패 턴 본문 끝에 "지금 일부 기능이 원활하지 않아 간단히 안내드려요. 잠시 뒤 다시 물어봐 주세요." 한 줄, 예약 글 입력을 읽지 못해 같은 칸을 다시 물으면 "지금은 글로 쓴 내용을 읽기 어려워요. 아래 버튼으로 골라 주세요." 응급·위기·위기 뒤 해제·되묻기 질문·고정 안내·인사에는 붙이지 않음. reply와 layout body 끝에 같은 문장, 기록 meta `degradedNotice`. 스위치 `CHAT_DEGRADED_NOTICE`(기본 true). 응답 형식 불변 - BE·FE 무변경.
+- 13:20 확인: health 200·Traceback 0건·상담 1턴 engine=medgemma·받아쓰기·예약 시작·프레임 3장 200, BE의 AI WS 13:20 재연결. 되돌리기 태그 `sb-ai-rollback:20261111-pre-torch213`.
+
 ### [2026-11-11] AI 전체 점검 2차 조치·gosky 반영 (AI #228~#231)
 - 다섯 묶음 머지(main `a0d8f30`), 합친 전체 pytest 2822 통과. gosky 11/11 09:31 반영 - health 200(15초)·Traceback 0건, 기동 로그에서 화재 탐지기 적재가 MedGemma보다 먼저. 실동작: 상담 1턴(engine=medgemma)·예약 시작·받아쓰기·프레임 3장 분석 200, BE의 AI WS 09:32 재연결.
 - 🔴 R-1 해소(#228): 탐지기 먼저 적재 + MedGemma 실패해도 기동 계속. I-1: 요청 경로가 적재 잠금을 기다리지 않음(120초 간격 재시도), 끄기는 스레드에서.
