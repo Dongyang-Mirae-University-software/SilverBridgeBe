@@ -3089,4 +3089,4 @@ AI 챗 집계 점검 L-1에서 남겨 둔 공용 `GlobalExceptionHandler`의 `e.
 - 화면 확인에서 발견: 단계 되묻기 119 규칙 답·MedGemma 응급 JSON 실패 대체 답은 본문이 경고 박스(`emergencyWarning`) 문장 그 자체라 FE 긴급 말풍선에 두 문장이 목록·본문에 두 번 보였다(정상 생성 응급 답은 중복 없음).
 - AI: `chat_layout.apply`가 `reply`를 만든 뒤 `layout.body`에서 경고 박스와 같은 문장 줄만 뺀다(표시 전용 - reply·경고 박스·핵심 줄·판정 불변, FE 무변경). 핵심 줄과 경고 목록 둘째 줄이 같은 것은 사용자 결정으로 그대로.
 - 검증: 새 테스트 5개·결함 주입, 전체 pytest 3731 passed, stub 재생 1148문항 응급·자해 판정·답 줄 수 main과 차이 0.
-- 배포: gosky AI 재시작은 사용자 확인 대기.
+- 배포: gosky AI 11/12 15:10 `d5cfa3b`, `/health` 200·MedGemma int8·GPU 9,563MiB·BE AI WS 재연결, 롤백 `sb-ai-rollback:20261112-pre-emergency-dedup` 1개. 화면 확인(칩 머리가 아파요 → 네): 긴급 말풍선의 세 문장 각 1번만, 중복 없음.
