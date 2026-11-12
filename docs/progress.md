@@ -3099,3 +3099,11 @@ AI 챗 집계 점검 L-1에서 남겨 둔 공용 `GlobalExceptionHandler`의 `e.
 - 검증: 말벗 대답 시험 254 passed, 전체 pytest 3744 passed / 14 failed(#268 전 원본과 같은 STT·음성·업로드 환경 실패).
 - 배포: gosky AI 11/12 15:00 `8ef2601` → 15:27 `c204257`(#269 포함), `/health` 200·BE AI WS 재연결, 롤백 `sb-ai-rollback:20261112-pre-advice-regex` 1개.
 - 남은 것: 실사용 관찰 - 배포 직후(15:29)에는 말벗 턴 0건. 며칠 뒤 `docker logs --since <날짜> silverbridge-ai-server 2>&1 | grep -o "COMPANION-REPLY-FALLBACK\] failures=[^ ]* relaxed=[A-Za-z]*" | sort | uniq -c`로 대체 이유를 센다(측정치 8.5%와 크게 다르면 다시 조정).
+
+### [2026-11-12] AI 안부 말벗 - 말을 피하는 대답에는 캐묻지 않고 물러나는 문장으로 (AI #272)
+- 배경: 11/11 실기기 시험에서 "말하지 않고 있어…", "너무 힘들어서 얘기를 못 하겠어"에 말벗이 질문 주제(잠)를 붙이거나 더 캐물었다. DGX 11/12(e06c15f·int8·cc7): 피하는 말 40개 중 30개가 '대답과 무관' 대체 문장("조금 더 들려주실 수 있을까요?")으로 나갔고 cc7 대답도 대부분 캐물었다.
+- AI #272 `06a88fb`: `avoidance.is_avoidance`(DGX 측정 정규식 - 피하는 말 39/40·아닌 말 0/20·CareCall 0.12% + "말하지 않고 있어" 한 줄)로 감지되면 모델 대답을 만들지 않고 `FALLBACK_AVOID` 두 문장을 번갈아 쓴다(마지막 턴은 마무리 문장). 위험 턴은 `SAFETY_REPLY` 우선·횟수 제외, 숨·가슴·아파 등 몸 불편 말은 감지하지 않는다(응급 가능). 한 대화에서 두 번 피하면 마무리 문장 + `endReason=USER_STOP`(BE가 아는 값이라 BE 무변경). 턴 응답 `avoided`(bool), 로그는 횟수·종료 여부만. 스위치 `COMPANION_AVOID_REPLY`(true)·`COMPANION_AVOID_END_COUNT`(2, 0=끔).
+- 검증: 새 시험 42개, 전체 pytest main 3564 → 3606 passed(실패 21·수집 오류 10은 전후 목록 동일, 로컬 cv2·av·transformers 없음). Anthropic API 키 측정 없음.
+- 배포: gosky AI 11/12 15:50 `06a88fb`, `/health` 200·어댑터 mood·reply 적재·GPU 9,558MiB·BE AI WS 재연결, 롤백 `sb-ai-rollback:20261112-pre-avoid-reply` 1개(옛 pre-advice-regex 삭제).
+- 실서버 확인(15:58, 시험 피보호자 시험 대화 15:00): "말하지 않고 있어…" → "네, 알겠어요. 편하실 때 말씀해 주세요. 오늘 몸은 괜찮으세요?", "할 말 없어" → 마무리 문장·`ended=true`·`USER_STOP`. BE `sessionId=198` 저장(`endReason=USER_STOP`, turnCount 2), AI 로그 `[COMPANION-AVOID] count=1 end=False` → `count=2 end=True`.
+
