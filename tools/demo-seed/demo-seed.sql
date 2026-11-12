@@ -67,6 +67,28 @@ INSERT INTO connection(guardian_id, ward_id, status, initiated_by, connected_at,
 SELECT g, w, status, g, CASE WHEN status='ACTIVE' THEN created + interval '2 hours' END, created,
        CASE WHEN status='ACTIVE' THEN created + interval '2 hours' ELSE created END, rel
 FROM dc;
+-- 보호자가 없는 피보호자(기존 테스트 계정 포함) 전원을 데모 보호자 G12, G11, … 순서로 연결한다(대시보드 "가족 없는 어르신" 0).
+-- 실행 시점 기준이라 다시 돌리면 그때 보호자 없는 사람을 다시 잇는다. 지우기(demo-cleanup.sql)를 돌리면 원래대로 끊긴다.
+INSERT INTO connection(guardian_id, ward_id, status, initiated_by, connected_at, created_at, updated_at, relation)
+SELECT g.id, w.id, 'ACTIVE', g.id, now() - interval '2 hours', now() - interval '3 hours', now() - interval '2 hours',
+       CASE WHEN w.rn % 2 = 0 THEN '딸' ELSE '아들' END
+FROM (SELECT u.id, row_number() OVER (ORDER BY u.created_at, u.id) rn
+      FROM users u
+      WHERE u.role = 'WARD' AND u.status = 'ACTIVE'
+        AND NOT EXISTS (SELECT 1 FROM connection c JOIN users gg ON gg.id = c.guardian_id
+                        WHERE c.ward_id = u.id AND c.status = 'ACTIVE' AND gg.status = 'ACTIVE')) w
+JOIN (SELECT id, row_number() OVER (ORDER BY id DESC) rn FROM du WHERE role = 'GUARDIAN') g
+  ON g.rn = (w.rn - 1) % 12 + 1
+WHERE NOT EXISTS (SELECT 1 FROM connection c WHERE c.guardian_id = g.id AND c.ward_id = w.id);
+
+-- 데모 보호자는 설정으로 끌 수 있는 알림을 모두 끈다: 위 기존 계정의 복약·말벗·카메라 안내가 와도
+-- 토큰 없는 발송 실패(FAILED)가 아니라 "발송 안 함"으로 남아 대시보드 "전달 실패"가 늘지 않는다.
+-- (SOS·이상감지 같은 강제 푸시는 끌 수 없다 - 그 계정들은 카메라·약이 없어 실제로 생길 일은 드물다.)
+INSERT INTO user_notification_setting(user_id, channel_type, enabled)
+SELECT du.id, ch, false FROM du, unnest(ARRAY['FCM','SMS','KAKAO_ALIMTALK','EMAIL']) ch WHERE du.role = 'GUARDIAN';
+INSERT INTO guardian_notification_preference(guardian_id, medication_enabled, camera_link_lost_enabled, companion_notice_enabled)
+SELECT id, false, false, false FROM du WHERE role = 'GUARDIAN';
+
 -- 수락 시각이 지금을 넘지 않게
 UPDATE connection SET connected_at = least(connected_at, now() - interval '1 minute'), updated_at = least(updated_at, now() - interval '1 minute')
 WHERE guardian_id LIKE 'dmo%';

@@ -11,6 +11,8 @@ DELETE FROM companion_session WHERE ward_id IN (SELECT id FROM demo_ids);
 DELETE FROM companion_prompt_log WHERE ward_id IN (SELECT id FROM demo_ids);
 DELETE FROM inquiry WHERE user_id IN (SELECT id FROM demo_ids);
 DELETE FROM connection WHERE guardian_id IN (SELECT id FROM demo_ids) OR ward_id IN (SELECT id FROM demo_ids);
+DELETE FROM user_notification_setting WHERE user_id IN (SELECT id FROM demo_ids);
+DELETE FROM guardian_notification_preference WHERE guardian_id IN (SELECT id FROM demo_ids);
 DELETE FROM guardian_anomaly_setting WHERE guardian_id IN (SELECT id FROM demo_ids);
 DELETE FROM announcement_draft WHERE title LIKE '[데모] %';
 DELETE FROM users WHERE id IN (SELECT id FROM demo_ids);
