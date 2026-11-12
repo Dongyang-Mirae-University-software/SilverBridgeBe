@@ -53,7 +53,7 @@ public final class CompanionDtos {
             int turnNo,
             @Schema(description = "말벗 응답 문장(기기가 읽어 준다). 대화 내용 저장에 동의한 경우에만 저장(30일 뒤 삭제)") String reply,
             @Schema(description = "true면 대화가 끝났다(결과는 서버가 이미 저장했다)") boolean ended,
-            @Schema(description = "MAX_TURNS·NO_RESPONSE·USER_STOP. 진행 중이면 null") String endReason,
+            @Schema(description = "MAX_TURNS·NO_RESPONSE·USER_STOP·AVOIDED(어르신이 이야기를 원하지 않아 말벗이 마무리). 진행 중이면 null") String endReason,
             @Schema(description = "음성 대답을 받아 적은 글(음성 턴만). 대화 내용 저장에 동의한 경우에만 저장(30일 뒤 삭제)") String transcript,
             @Schema(description = "AI 턴 판정 결과 - 테스트 계정에만 실린다(일반 계정은 필드 없음). 저장·로그 없음")
             @JsonInclude(JsonInclude.Include.NON_NULL) TurnAnalysis analysis) {
@@ -84,7 +84,7 @@ public final class CompanionDtos {
     public record ResultResponse(
             long sessionId,
             @Schema(example = "09:00") String slot,
-            @Schema(description = "MAX_TURNS·NO_RESPONSE·USER_STOP") String endReason,
+            @Schema(description = "MAX_TURNS·NO_RESPONSE·USER_STOP·AVOIDED(어르신이 이야기를 원하지 않아 말벗이 마무리)") String endReason,
             @Schema(description = "JOY·CALM·WORRY·DEPRESSED. 판단할 수 없으면 null") String mood,
             int turnCount,
             @Schema(description = "대화 판정 결과 - 테스트 계정에만 실린다(일반 계정은 필드 없음)")

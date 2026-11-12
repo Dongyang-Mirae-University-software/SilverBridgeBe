@@ -2,6 +2,7 @@ package kr.silverbridge.main.domain.companion.service;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import kr.silverbridge.main.domain.companion.entity.CompanionEndReason;
 import kr.silverbridge.main.domain.companion.entity.CompanionMood;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -51,5 +52,16 @@ class CompanionResultTest {
 
     private static JsonNode json(String body) throws Exception {
         return MAPPER.readTree(body);
+    }
+
+    @Test
+    @DisplayName("말 피함 마무리(AVOIDED)는 그대로 받고, 마감 변환(asAbandoned)도 USER_STOP만 바꾼다")
+    void avoidedEndReasonIsKept() throws Exception {
+        CompanionResult avoided = CompanionResult.from(json("{\"endReason\":\"AVOIDED\",\"turnCount\":2}"));
+
+        assertThat(avoided.endReason()).isEqualTo(CompanionEndReason.AVOIDED);
+        assertThat(avoided.asAbandoned().endReason()).isEqualTo(CompanionEndReason.AVOIDED);
+        assertThat(CompanionResult.from(json("{\"endReason\":\"USER_STOP\"}")).asAbandoned().endReason())
+                .isEqualTo(CompanionEndReason.NO_RESPONSE);
     }
 }

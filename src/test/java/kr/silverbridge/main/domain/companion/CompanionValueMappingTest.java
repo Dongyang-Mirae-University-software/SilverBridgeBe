@@ -20,6 +20,7 @@ class CompanionValueMappingTest {
         assertThat(CompanionEndReason.fromAi("최대 턴 수")).contains(CompanionEndReason.MAX_TURNS);
         assertThat(CompanionEndReason.fromAi("연속 무응답")).contains(CompanionEndReason.NO_RESPONSE);
         assertThat(CompanionEndReason.fromAi("USER_STOP")).contains(CompanionEndReason.USER_STOP);
+        assertThat(CompanionEndReason.fromAi("AVOIDED")).contains(CompanionEndReason.AVOIDED);
         assertThat(CompanionEndReason.fromAi("시간 초과")).isEmpty();
         assertThat(CompanionEndReason.fromAi(null)).isEmpty();
     }
