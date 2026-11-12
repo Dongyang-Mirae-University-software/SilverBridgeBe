@@ -3048,4 +3048,4 @@ AI 챗 집계 점검 L-1에서 남겨 둔 공용 `GlobalExceptionHandler`의 `e.
 - AI: `_LIFESTYLE_RULES.hot_cold_pack`(NHS 기준 온·냉)·`_DRUG_DIRECT_RULES.med_timing`(처방 시간·매일 같은 시간·바꾸려면 상의) 고정 줄 + 대리 말투, 찜질 질문은 관리 질문으로(찜질방 제외), "아플 때" 진료과 힌트, 시험지 `must_scope`. 생성 프롬프트는 건드리지 않음(다른 세션 `fix/care-line-action-period` 수정 중).
 - 검증: 새 테스트 20개·결함 주입 4종, 전체 pytest 3623 passed, stub 재생 1148문항 main과 차이 0, DGX 칩 27문항 전후 각 2회 38/54 → 40/54(퇴보 0).
 - 남은 것: 관리 질문 7문항은 전후 0/2 - 첫 줄이 질문과 무관하게 "물·부드러운 음식"(관리 질문 지시 예시 베끼기). 다른 세션 프롬프트 변경이 머지된 뒤 재측정.
-- 배포: gosky AI 재시작은 사용자 확인 대기.
+- 배포: gosky AI 11/12 13:27 `4b24819`, `/health` 200·MedGemma int8·GPU 9,563MiB·BE AI WS 재연결, 롤백 `sb-ai-rollback:20261112-pre-chip-answer` 1개.
