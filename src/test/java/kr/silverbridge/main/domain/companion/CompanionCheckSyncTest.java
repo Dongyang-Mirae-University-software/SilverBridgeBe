@@ -26,6 +26,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 class CompanionCheckSyncTest {
 
     private static final Path V65 = Path.of("src/main/resources/db/migration/V65__add_companion.sql");
+    // 종료 이유 CHECK는 V72에서 AVOIDED를 더해 재정의했다(2026-11-12) - 마지막으로 정의한 파일을 본다
+    private static final Path V72 = Path.of("src/main/resources/db/migration/V72__add_companion_end_reason_avoided.sql");
 
     @Test
     @DisplayName("상태·종료 이유·기분·시간대 CHECK 값이 enum과 같다")
@@ -33,7 +35,8 @@ class CompanionCheckSyncTest {
         String sql = Files.readString(V65, StandardCharsets.UTF_8);
 
         assertThat(checkValues(sql, "chk_companion_session_status")).isEqualTo(names(CompanionSessionStatus.values()));
-        assertThat(checkValues(sql, "chk_companion_session_end_reason")).isEqualTo(names(CompanionEndReason.values()));
+        assertThat(checkValues(Files.readString(V72, StandardCharsets.UTF_8), "chk_companion_session_end_reason"))
+                .isEqualTo(names(CompanionEndReason.values()));
         assertThat(checkValues(sql, "chk_companion_session_mood")).isEqualTo(names(CompanionMood.values()));
         Set<String> slots = Arrays.stream(CompanionSlot.values()).map(CompanionSlot::code).collect(Collectors.toSet());
         assertThat(checkValues(sql, "chk_companion_session_slot")).isEqualTo(slots);

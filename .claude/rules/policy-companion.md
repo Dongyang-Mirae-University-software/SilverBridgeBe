@@ -63,6 +63,7 @@ paths:
 - **원문은 피보호자 동의 시에만 저장한다**(결정 B 2026-11-02를 2026-11-11 사용자 결정으로 변경 - 위 "대화 내용 저장" 절): 말벗 문장·대답 글·받아 적은 글은 `companion_turn.bot_text`·`answer_text`에만, 동의했을 때만 담는다. 음성·사진은 여전히 저장하지 않는다. **로그·알림 문구·감사 로그에는 동의와 무관하게 절대 넣지 말 것**(`CompanionTranscriptLogGuardTest`가 말벗 도메인 로그 인자를 본다).
 - **질문 문장은 행을 고치지 않는다**: 바꿀 때는 `active=false` + 새 행(같은 문장 = 같은 번호, 응답률 집계 기준). 새 마이그레이션으로.
 - **기분 판단 불가 = null**: `UNKNOWN`·0·"정상"으로 바꾸지 말 것(화면 "확인할 수 없어요"). AI 한글 값은 영문 코드로만 저장(결정 D). AI는 2026-11-09부터 `mood`·`moodCode`를 영문 코드(`JOY`·`CALM`·`WORRY`·`DEPRESSED`·`UNKNOWN`)로 준다 - `CompanionMood.fromAi`는 영문(대문자)·한글을 모두 받고 `UNKNOWN`·모르는 값은 null, `mood`가 비면 `moodCode`를 본다(`moodKo`는 읽지 않음).
+- **종료 이유 `AVOIDED`**(2026-11-12 사용자 결정, V72): 어르신이 한 대화에서 두 번 말을 피해(AI #272 `COMPANION_AVOID_END_COUNT`) 말벗이 마무리한 대화. 끝내기를 누른 `USER_STOP`과 나눠 저장한다. 마감 스케줄러 변환(`asAbandoned`)은 `USER_STOP`만 바꾼다 - `AVOIDED`를 넣지 말 것. AI보다 BE를 먼저 배포한다(모르는 값은 `USER_STOP`으로 저장됨). 지금은 저장·응답에만 쓰고 화면·집계·알림에는 쓰지 않는다.
 - **AI 판단 중 믿는 것은 `riskFlag`·`alertLevel`뿐**(결정 E). 주의(NOTICE, 걱정·우울 3일)는 PR-B에서 BE가 계산한다.
 - **위험 알림은 대화당 1번**: `risk_notified_at` 조건부 UPDATE에 이긴 쪽만 이벤트를 낸다(턴에서 처음 본 때, 또는 마감 때 URGENT인데 아직 안 보낸 때). 문구에 원문·질병명·구체 내용 금지. `COMPANION_RISK`는 강제 푸시 + 설정, FCM·문자만(알림톡·이메일 금지), 긴급 풀(`urgentNotificationExecutor`).
   - **턴 위험 = 최상위 `riskFlag` 또는 `signals.riskFlag`**(2026-11-09): 확인(되묻기) 턴(`replySource="CONFIRM"`)은 `signals`가 null이고 낱말 규칙 결과를 최상위에만 싣는다. `signals`만 읽지 말 것 - 그 위험 알림이 마감 때로 늦어진다. AI 새 오류 코드 `ANSWER_TOO_LONG`·`FRAME_FORMAT_UNSUPPORTED`는 `COMPANION_ANSWER_TOO_LONG`·`COMPANION_FRAME_INVALID`(400)로 바꾼다.
