@@ -3118,3 +3118,5 @@ AI 챗 집계 점검 L-1에서 남겨 둔 공용 `GlobalExceptionHandler`의 `e.
 - AI #275 `3025382`: kw4 위험 낱말에 뇌졸중 징후 20개, 말 피함 마무리 endReason `AVOIDED`. 오탐(DGX, 낱말만): 징후 문장 10/10 · CareCall 24,248 중 0 · 웰니스 32,570 중 3("말이 어눌해졌어"). 마비됐·발음이 이상·발음이 안 돼·한쪽 팔은 넣지 않음. 시험 84 passed, 전체 3648 passed(환경 실패 동일). gosky AI 재시작은 사용자 확인 대기.
 
 - 배포: gosky AI 11/12 16:46 `3025382`(#275), `/health` 200·어댑터 mood·reply 적재·GPU 9,558MiB·BE AI WS 재연결, 롤백 `sb-ai-rollback:20261112-pre-stroke-keywords` 1개(옛 pre-avoid-audit 삭제). 실서버 확인(시험 피보호자 테스트 대화 21:00, 사용자 결정으로 위험 문장은 보내지 않음): "말하기 싫어" → 물러나는 문장, "할 말 없어" → 마무리 문장·`ended=true`·`endReason=AVOIDED`, BE `sessionId=200` `endReason=AVOIDED` 저장, AI 로그 `[COMPANION-AVOID] count=2 end=True`.
+- 영향 범위 점검(통과) `docs/(2026-11-12) audit-impact-companion-end-reason-avoided.md`: BE 종료 이유 사용처(결과 해석·마감 세 경로·writer OPEN 조건·asAbandoned·CHECK·Swagger)·FE 타입·AI 종료 이유 생성(add_turn 순서·finish 유지)과 낱말 위험 세 턴 경로(일반·낱말 확인·확신도 낮음) 모두 PASS, 보호자·관리자·알림 집계는 종료 이유를 읽지 않음. 🟡 M-1 AI `docs/companion-contract.md` 122행 등 종료 이유 목록 옛 값 · L-1 배포 전 USER_STOP 말 피함 대화(테스트 1건) 수용 · L-2 CHECK 동기화 시험 V72 고정 · L-3 시험 빈곳(뇌졸중 × 되묻기 턴, 종료 이유 집합) · L-4 남 이야기 뇌졸중 징후 강제 알림 수용 · Q-1 몸 응급용 안내 문장 여부(결정 대기).
+
