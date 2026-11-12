@@ -76,11 +76,11 @@ CREATE TEMP TABLE di(w text, type text, review text, conf float8, events int, da
 INSERT INTO di VALUES
  ('dmoW01','FIRE','REAL',0.82,4,0,0.12,ARRAY['dmoG01:REAL']),
  ('dmoW04','FIRE','CONFLICTED',0.67,3,0,0.24,ARRAY['dmoG03:REAL','dmoG04:FALSE_ALARM']),
- ('dmoW05','FIRE','FALSE_ALARM',0.51,2,0,0.36,ARRAY['dmoG05:FALSE_ALARM']),
+ ('dmoW05','FIRE','REAL',0.71,2,0,0.36,ARRAY['dmoG05:REAL']),
  ('dmoW09','FIRE','REAL',0.77,5,0,0.48,ARRAY['dmoG08:REAL']),
  ('dmoW06','FALL','REAL',0.74,2,0,0.58,ARRAY['dmoG06:REAL']),
  ('dmoW11','WEAPON','FALSE_ALARM',0.58,1,0,0.68,ARRAY['dmoG09:FALSE_ALARM','dmoG11:FALSE_ALARM']),
- ('dmoW03','FALL','FALSE_ALARM',0.55,1,0,0.78,ARRAY['dmoG02:FALSE_ALARM']),
+ ('dmoW03','FALL','REAL',0.68,1,0,0.78,ARRAY['dmoG02:REAL']),
  ('dmoW12','FIRE','PENDING',0.63,2,0,0.90,ARRAY[]::text[]),
  ('dmoW11','FIRE','REAL',0.79,3,1,0.40,ARRAY['dmoG09:REAL','dmoG11:REAL']),
  ('dmoW12','FALL','FALSE_ALARM',0.52,1,1,0.65,ARRAY['dmoG10:FALSE_ALARM']),
@@ -160,7 +160,64 @@ FROM (VALUES
  ('dmoG12','HOSPITAL','근처 제휴 병원이 있나요','고양시 덕양구 근처에 제휴 병원이 있는지 알고 싶습니다.','ANSWERED','현재 고양시에는 제휴 병원 2곳이 있습니다. 앱의 병원 찾기에서 확인하실 수 있습니다.',(SELECT n FROM t) - interval '6 days')
 ) v(u,cat,title,body,st,ans,ts);
 
--- 6) 공지 임시저장 1건
+-- 6) 안부 말벗: 오늘 지난 시간대 질문 안내 + 대화(지난 6일은 09·18시), 원문(companion_turn)은 넣지 않는다.
+--    대화 끝 이벤트가 없으므로 주의·위험 알림은 나가지 않는다. 정각 안내 스케줄러는 COMPANION_PROMPT_WARD_IDS가 비어 있으면 아무에게도 보내지 않는다.
+--    오늘 대화 없는 어르신 = W08(어제까지 대화)·W10(3일 전까지), 걱정·우울 이어짐 = W06(걱정 3일)·W12(우울 4일).
+CREATE TEMP TABLE cslot AS
+SELECT * FROM (
+  SELECT u.id AS ward, u.created_at, dd, s.slot,
+         t.d0 - dd * interval '1 day' + s.slot::time AS slot_at,
+         t.d0 - dd * interval '1 day' + s.slot::time + ((ascii(right(u.id,1)) % 15) + 3) * interval '1 minute' AS st
+  FROM users u, t, generate_series(0,6) dd, unnest(ARRAY['09:00','12:00','15:00','18:00','21:00']) s(slot)
+  WHERE u.email LIKE '%@demo.silverbridge.test' AND u.role = 'WARD'
+    AND (dd = 0 OR s.slot IN ('09:00','18:00'))
+) x
+WHERE x.slot_at > x.created_at + interval '10 minutes'
+  AND x.st + interval '5 minutes' < (SELECT n FROM t);
+
+INSERT INTO companion_prompt_log(ward_id, prompt_date, slot, sent_at)
+SELECT ward, (slot_at AT TIME ZONE 'Asia/Seoul')::date, slot, slot_at FROM cslot WHERE dd = 0;
+
+INSERT INTO companion_session(ward_id, session_date, slot, question_id, max_turns, status, end_reason, mood,
+                              turn_count, answered_count, no_response_count, risk_flag, alert_level, prompt_version,
+                              started_at, last_activity_at, ended_at, is_test, max_risk_prob)
+SELECT c.ward, (c.slot_at AT TIME ZONE 'Asia/Seoul')::date, c.slot, q.id, 8, 'FINISHED',
+       CASE WHEN (ascii(right(c.ward,1)) + c.dd) % 4 = 0 THEN 'USER_STOP' ELSE 'MAX_TURNS' END,
+       CASE
+         WHEN c.ward = 'dmoW06' AND c.dd <= 2 THEN 'WORRY'
+         WHEN c.ward = 'dmoW06' AND c.dd = 3 THEN 'CALM'
+         WHEN c.ward = 'dmoW12' AND c.dd <= 3 THEN 'DEPRESSED'
+         WHEN c.ward = 'dmoW12' AND c.dd = 4 THEN 'JOY'
+         WHEN c.dd = 0 THEN CASE WHEN ascii(right(c.ward,1)) % 2 = 0 THEN 'CALM' ELSE 'JOY' END
+         ELSE (ARRAY['JOY','CALM','CALM','JOY','WORRY','CALM'])[1 + (ascii(right(c.ward,1)) + c.dd) % 6]
+       END,
+       tc, tc, 0, false, 'INFO', '{"reply":"reply-v2","signals":"signals-v1"}',
+       c.st, c.st + tc * interval '30 seconds', c.st + tc * interval '30 seconds', false,
+       round((0.04 + ((ascii(right(c.ward,1)) * 7 + c.dd * 3) % 25) / 100.0)::numeric, 4)
+FROM cslot c
+CROSS JOIN LATERAL (SELECT CASE WHEN (ascii(right(c.ward,1)) + c.dd) % 4 = 0 THEN 5 ELSE 8 END AS tc) k
+CROSS JOIN LATERAL (
+  SELECT id FROM companion_question WHERE active AND slot = c.slot ORDER BY id
+  OFFSET ((extract(epoch FROM c.slot_at)::bigint / 86400) % greatest((SELECT count(*) FROM companion_question WHERE active AND slot = c.slot), 1))
+  LIMIT 1) q
+WHERE NOT (c.ward IN ('dmoW08','dmoW10') AND c.dd = 0)
+  AND NOT (c.ward = 'dmoW10' AND c.dd < 3);
+
+-- 주의 알림 기록(오늘 대화가 있는 경우만) + 보호자 알림 이력
+CREATE TEMP TABLE cn AS
+SELECT v.w, v.mood, v.days, min(s.ended_at) + interval '1 minute' AS sent
+FROM (VALUES ('dmoW06','WORRY',3),('dmoW12','DEPRESSED',4)) v(w,mood,days)
+JOIN companion_session s ON s.ward_id = v.w AND s.session_date = (SELECT (n AT TIME ZONE 'Asia/Seoul')::date FROM t)
+GROUP BY v.w, v.mood, v.days;
+INSERT INTO companion_notice_log(ward_id, notice_date, mood, days, sent_at)
+SELECT w, (sent AT TIME ZONE 'Asia/Seoul')::date, mood, days, least(sent, now()) FROM cn;
+INSERT INTO notification_log(created_at, type, recipient_id, ward_id, title, body, result, channel_results)
+SELECT least(cn.sent, now()), 'COMPANION_NOTICE', c.guardian_id, cn.w, '안부 말벗',
+       u.name || '님이 걱정스럽거나 가라앉은 기분이 ' || cn.days || '일째예요. 안부를 여쭤 주세요.',
+       'DELIVERED', '[{"reason": null, "status": "DELIVERED", "channel": "FCM"}]'::jsonb
+FROM cn JOIN connection c ON c.ward_id = cn.w AND c.status = 'ACTIVE' JOIN users u ON u.id = cn.w;
+
+-- 7) 공지 임시저장 1건
 INSERT INTO announcement_draft(author_id, title, content, created_at, updated_at)
 SELECT (SELECT id FROM users WHERE role='ADMIN' ORDER BY created_at LIMIT 1), '[데모] 12월 정기 점검 안내',
        '12월 3일(수) 새벽 2시~4시에 서비스 점검이 있습니다. 점검 중에도 SOS와 화재 알림은 정상 동작합니다.', now() - interval '2 hours', now() - interval '2 hours';
