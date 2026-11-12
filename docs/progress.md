@@ -3106,4 +3106,5 @@ AI 챗 집계 점검 L-1에서 남겨 둔 공용 `GlobalExceptionHandler`의 `e.
 - 검증: 새 시험 42개, 전체 pytest main 3564 → 3606 passed(실패 21·수집 오류 10은 전후 목록 동일, 로컬 cv2·av·transformers 없음). Anthropic API 키 측정 없음.
 - 배포: gosky AI 11/12 15:50 `06a88fb`, `/health` 200·어댑터 mood·reply 적재·GPU 9,558MiB·BE AI WS 재연결, 롤백 `sb-ai-rollback:20261112-pre-avoid-reply` 1개(옛 pre-advice-regex 삭제).
 - 실서버 확인(15:58, 시험 피보호자 시험 대화 15:00): "말하지 않고 있어…" → "네, 알겠어요. 편하실 때 말씀해 주세요. 오늘 몸은 괜찮으세요?", "할 말 없어" → 마무리 문장·`ended=true`·`USER_STOP`. BE `sessionId=198` 저장(`endReason=USER_STOP`, turnCount 2), AI 로그 `[COMPANION-AVOID] count=1 end=False` → `count=2 end=True`.
+- 기능 점검 AI #273 `01f3193`(조건부 통과): 위험 판정 순서·종료 규칙·반복 방지·BE 계약(턴 `ended`에서 바로 저장, `asAbandoned` 미적용, `avoided` 무시)·로그 원문 없음 PASS. 🟠 H-1 몸 불편 제외 낱말이 좁아 "혀가 굳어서·입이 안 돌아가서·쓰러질 것 같아서·기운이 없어서 말을 못 하겠어"가 감지됨(낱말 위험 규칙에도 안 걸림, v9 미측정) · 🟡 M-1 남 이야기("손주가 말하지 않고 있어서 걱정이야"·"영감이 말하기 싫다고") 오탐이 조기 종료에 세짐 · L-1 놓치는 표현("그만 물어봐"·"대답하기 싫어") · L-2 확신도 낮은 턴은 되물음(의도) · L-3 시험 빈곳 · L-4 스위치 꺼도 `avoided`·`fallback-v3`. 결정 질문 Q-1: 말 피함 종료를 사용자 중지와 구별할지(구별하면 새 종료 이유 + BE enum·CHECK). pytest 3606 passed(환경 실패 21·수집 오류 10 동일).
 
