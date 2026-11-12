@@ -94,7 +94,26 @@ class CompanionServiceTest {
         assertThat(response.sessionId()).isEqualTo(10L);
         assertThat(response.question()).isEqualTo(expected.getText());
         assertThat(response.maxTurns()).isEqualTo(8);
+        assertThat(response.resumed()).isFalse();
+        assertThat(response.turnCount()).isZero();
         verify(writer).attachDialogue(eq(10L), eq("d-10"), eq(8), any());
+    }
+
+    @Test
+    @DisplayName("대화 열기: 진행 중인 대화를 이어 가면 지금까지 기록된 턴 수(turnCount)를 함께 준다 - 기기가 1번째부터 다시 세지 않게")
+    void openResumeCarriesTurnCount() {
+        CompanionSession open = sessionWithId(11L, "d-11");
+        open.recordTurn(3, false, null, AT_0910.toOffsetDateTime());
+        when(sessionRepository.findByWardIdAndSessionDateAndSlotAndTestFalse(WARD, TODAY, CompanionSlot.S09)).thenReturn(Optional.of(open));
+        when(questionRepository.findById(1L)).thenReturn(Optional.of(question(1L, "이어 갈 질문")));
+
+        SessionResponse response = service.open(WARD);
+
+        assertThat(response.sessionId()).isEqualTo(11L);
+        assertThat(response.resumed()).isTrue();
+        assertThat(response.turnCount()).isEqualTo(3);
+        assertThat(response.maxTurns()).isEqualTo(8);
+        verify(aiClient, never()).openDialogue(anyString(), anyLong(), anyString(), anyString(), anyLong());
     }
 
     @Test

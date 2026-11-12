@@ -105,6 +105,7 @@ class CompanionTestModeTest {
         assertThat(response.slot()).isEqualTo("15:00");
         assertThat(response.question()).isEqualTo(expected.getText());
         assertThat(response.resumed()).isFalse();
+        assertThat(response.turnCount()).isZero();
         verify(writer).attachDialogue(eq(100L), eq("d-100"), eq(8), any());
         verify(writer, never()).claim(any(), any(), any(), any(), any());
     }
@@ -132,6 +133,7 @@ class CompanionTestModeTest {
     @DisplayName("테스트 시작: 같은 시간대에 진행 중인 테스트 대화가 있으면 그 대화를 이어 간다(resumed=true)")
     void openTestResumesOpenTestSession() {
         CompanionSession open = session(103L, "d-103", TESTER, CompanionSlot.S15, true);
+        open.recordTurn(2, false, null, AT_1030.toOffsetDateTime());
         when(sessionRepository.findFirstByWardIdAndSessionDateAndSlotAndTestTrueAndStatusOrderByIdDesc(
                 TESTER, TODAY, CompanionSlot.S15, CompanionSessionStatus.OPEN)).thenReturn(Optional.of(open));
         when(questionRepository.findById(1L)).thenReturn(Optional.of(question(1L, "이어 갈 질문")));
@@ -140,6 +142,7 @@ class CompanionTestModeTest {
 
         assertThat(response.sessionId()).isEqualTo(103L);
         assertThat(response.resumed()).isTrue();
+        assertThat(response.turnCount()).isEqualTo(2);
         verify(writer, never()).claimTest(any(), any(), any(), any(), any());
         verify(aiClient, never()).openDialogue(anyString(), anyLong(), anyString(), anyString(), anyLong());
     }
@@ -338,6 +341,16 @@ class CompanionTestModeTest {
         assertThat(result.analysis().test()).isTrue();
 
         assertThat(service.finish(NORMAL, 141L).analysis()).isNull();
+    }
+
+    @Test
+    @DisplayName("응답 직렬화(Jackson 3): 대화 열기 응답에 turnCount가 숫자로 나간다(새 대화 0, 이어 가기는 기록된 턴 수)")
+    void sessionResponseSerializesTurnCount() throws Exception {
+        JsonMapper mapper = JsonMapper.builder().build();
+        assertThat(mapper.writeValueAsString(new SessionResponse(1L, "15:00", "질문", 8, false, 0)))
+                .contains("\"resumed\":false").contains("\"turnCount\":0");
+        assertThat(mapper.writeValueAsString(new SessionResponse(1L, "15:00", "질문", null, true, 3)))
+                .contains("\"resumed\":true").contains("\"turnCount\":3");
     }
 
     @Test

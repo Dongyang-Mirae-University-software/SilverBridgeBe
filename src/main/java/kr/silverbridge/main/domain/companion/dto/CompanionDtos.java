@@ -43,7 +43,9 @@ public final class CompanionDtos {
             @Schema(example = "09:00") String slot,
             @Schema(description = "첫 질문 문장(기기가 읽어 준다)") String question,
             @Schema(description = "최대 턴 수. 알 수 없으면 null") Integer maxTurns,
-            @Schema(description = "이미 열려 있던 대화를 이어 가는 것이면 true") boolean resumed) {
+            @Schema(description = "이미 열려 있던 대화를 이어 가는 것이면 true") boolean resumed,
+            @Schema(description = "이미 마친 대답 수(마지막 턴 번호). 새 대화는 0, 이어 가는 대화는 지금까지 기록된 턴 수 - "
+                    + "기기는 다음 대답 번호를 turnCount + 1로 보여 준다", example = "0") int turnCount) {
     }
 
     @Schema(description = "한 턴 결과")

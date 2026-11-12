@@ -214,7 +214,7 @@ public class CompanionService {
             writer.attachDialogue(sessionId, dialogueId, maxTurns, OffsetDateTime.now(clock));
             log.info("[COMPANION] 대화 열림: wardId={}, sessionId={}, slot={}, questionId={}",
                     wardId, sessionId, slot.code(), question.getId());
-            return new SessionResponse(sessionId, slot.code(), question.getText(), maxTurns, false);
+            return new SessionResponse(sessionId, slot.code(), question.getText(), maxTurns, false, 0);
         } catch (RuntimeException e) {
             writer.releaseClaim(sessionId);
             throw e;
@@ -471,7 +471,9 @@ public class CompanionService {
         }
         String question = questionRepository.findById(session.getQuestionId())
                 .map(CompanionQuestion::getText).orElse(null);
-        return new SessionResponse(session.getId(), session.getSlot().code(), question, session.getMaxTurns(), true);
+        // 이어 가는 대화는 지금까지 기록된 턴 수를 함께 준다 - 기기의 "N번째 대답"·진행 점이 처음부터 다시 세지 않게
+        return new SessionResponse(session.getId(), session.getSlot().code(), question, session.getMaxTurns(), true,
+                session.getTurnCount());
     }
 
     /** 그 날 그 시간대에 고를 질문(보호자 화면의 아직 열리지 않은 시간대 표시에도 쓴다). */
