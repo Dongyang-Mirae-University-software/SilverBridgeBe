@@ -3117,3 +3117,4 @@ AI 챗 집계 점검 L-1에서 남겨 둔 공용 `GlobalExceptionHandler`의 `e.
 - FE #262 `7a5c133`: `CompanionEndReason` 타입에 `'AVOIDED'`(화면 분기 없음, tsc 통과). 동작 변화가 없어 gosky FE는 재배포하지 않음.
 - AI #275 `3025382`: kw4 위험 낱말에 뇌졸중 징후 20개, 말 피함 마무리 endReason `AVOIDED`. 오탐(DGX, 낱말만): 징후 문장 10/10 · CareCall 24,248 중 0 · 웰니스 32,570 중 3("말이 어눌해졌어"). 마비됐·발음이 이상·발음이 안 돼·한쪽 팔은 넣지 않음. 시험 84 passed, 전체 3648 passed(환경 실패 동일). gosky AI 재시작은 사용자 확인 대기.
 
+- 배포: gosky AI 11/12 16:46 `3025382`(#275), `/health` 200·어댑터 mood·reply 적재·GPU 9,558MiB·BE AI WS 재연결, 롤백 `sb-ai-rollback:20261112-pre-stroke-keywords` 1개(옛 pre-avoid-audit 삭제). 실서버 확인(시험 피보호자 테스트 대화 21:00, 사용자 결정으로 위험 문장은 보내지 않음): "말하기 싫어" → 물러나는 문장, "할 말 없어" → 마무리 문장·`ended=true`·`endReason=AVOIDED`, BE `sessionId=200` `endReason=AVOIDED` 저장, AI 로그 `[COMPANION-AVOID] count=2 end=True`.
