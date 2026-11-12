@@ -3090,3 +3090,12 @@ AI 챗 집계 점검 L-1에서 남겨 둔 공용 `GlobalExceptionHandler`의 `e.
 - AI: `chat_layout.apply`가 `reply`를 만든 뒤 `layout.body`에서 경고 박스와 같은 문장 줄만 뺀다(표시 전용 - reply·경고 박스·핵심 줄·판정 불변, FE 무변경). 핵심 줄과 경고 목록 둘째 줄이 같은 것은 사용자 결정으로 그대로.
 - 검증: 새 테스트 5개·결함 주입, 전체 pytest 3731 passed, stub 재생 1148문항 응급·자해 판정·답 줄 수 main과 차이 0.
 - 배포: gosky AI 11/12 15:10 `d5cfa3b`, `/health` 200·MedGemma int8·GPU 9,563MiB·BE AI WS 재연결, 롤백 `sb-ai-rollback:20261112-pre-emergency-dedup` 1개. 화면 확인(칩 머리가 아파요 → 네): 긴급 말풍선의 세 문장 각 1번만, 중복 없음.
+
+### [2026-11-12] AI 안부 말벗 - 평온·기쁨 턴은 '대답과 무관' 대신 '권유' 규칙 (AI #268, 점검 #270, 조치 #271)
+- 배경: 말벗 대답(LoRA cc5)이 '대답과 무관'(어르신 대답 낱말 2글자를 이어 받지 않으면 탈락)에 걸리면 대체 문장으로 바뀐다. DGX 11/11 측정(CareCall 200)에서 '대답과 무관'만으로 대체된 62개 중 약 50개가 멀쩡한 대답이었다. 힘든 이야기(93)는 풀면 질문 주제에 끌려간 오해가 살아나 그대로 둔다.
+- AI #268 `8ef2601`: 그 턴의 글 기분(textMood)이 평온·기쁨이고 쓸 수 있는 결과일 때만 '대답과 무관'을 빼고, 꼬리질문 턴 전체에 '권유' 규칙을 더했다. 걱정·우울·판단 불가·기분 없음 턴과 `COMPANION_RISK_FIRST=false`(생성 때 기분이 아직 없음)는 전 규칙. 스위치 `COMPANION_REPLY_RELAX_CALM`(기본 true, 끄면 전과 같음, `.env` 무변경).
+- DGX 재판정(cc5 대답 293개, 운영 글 기분 e900 int8, 생성 재실행·API 키 없음): 평범한 안부 대체 67 (33.5%) → 17 (8.5%), 힘든 이야기 15 → 14.
+- 기능 점검 #270(조건부 통과) → 조치 #271 `c204257`: 🟡 M-1 첫 권유 정규식이 "요즘 운동은 어떠세요?"·"말씀해 보세요?" 같은 이어 가는 물음도 걸러 권하는 꼴만 보게 좁힘(DGX 대조 이전 7건 → 8건, 모두 실제 권유) · L-1 측정 도구도 글 기분을 넘김 · L-2 대체 시 `[COMPANION-REPLY-FALLBACK] failures=<규칙 이름>` INFO(본문 없음) · L-3 시험 보강 · L-4 docstring 재시도 0회.
+- 검증: 말벗 대답 시험 254 passed, 전체 pytest 3744 passed / 14 failed(#268 전 원본과 같은 STT·음성·업로드 환경 실패).
+- 배포: gosky AI 11/12 15:00 `8ef2601` → 15:27 `c204257`(#269 포함), `/health` 200·BE AI WS 재연결, 롤백 `sb-ai-rollback:20261112-pre-advice-regex` 1개.
+- 남은 것: 실사용 관찰 - 배포 직후(15:29)에는 말벗 턴 0건. 며칠 뒤 `docker logs --since <날짜> silverbridge-ai-server 2>&1 | grep -o "COMPANION-REPLY-FALLBACK\] failures=[^ ]* relaxed=[A-Za-z]*" | sort | uniq -c`로 대체 이유를 센다(측정치 8.5%와 크게 다르면 다시 조정).
