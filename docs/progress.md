@@ -3192,3 +3192,9 @@ AI 챗 집계 점검 L-1에서 남겨 둔 공용 `GlobalExceptionHandler`의 `e.
 - AI #292 `7f48f6d`: M-1 `GET /companion/dialogues/{id}`(`lastQuestion` = 마지막 말벗 문장, 원문 없음, 말벗 키) · M-2 화제 판정은 말벗 물음 문장만, `(?<!힘)드셨`·`잠(?!깐|시)`·`저녁(?!노을)`·`불편하신 (곳|데)` · M-3 위험·안전 안내 턴은 짧은 대답 횟수 0 · L-1 표정까지 합친 턴 판정이 부정이면 화제 유지 · L-2 무응답·되묻기·확신도 낮은 턴은 횟수 유지 · L-3 낱말 목록 교차 주석 · L-4 다시 생성 한 대답에 한 번 · 시험 19건. 전체 pytest 4017 passed(환경 실패 1 동일). gosky는 다른 세션의 #293 배포(11/14 03:24 `7021f42`, 롤백 `sb-ai-rollback:20261114-pre-reply-check`)에 함께 반영돼 따로 재기동하지 않았다(옛 `pre-flat-topic` 태그 삭제).
 - BE #486 `cc6a00d0`: 이어 가기(`resumeOrReject`) 응답 `question` = AI `lastQuestion`(턴이 있을 때), 턴 없음·AI 실패(꺼짐·3초 초과·404)·빈 값·300자 초과면 여는 질문, 로그는 오류 코드 이름만. 새 설정 `companion.state-call-timeout`(3초). 단위 2679 통과, vkcs CD(통합 테스트 포함) 성공, gosky dev 수동 배포·AI WS 연결 확인.
 - 실서버 확인(시험 피보호자 테스트 대화 12:00 `sessionId=434`, TTS 3턴): 3번 "아니, 없어" → "네, 알겠어요. 요즘 밤에 잠은 잘 주무세요?"(여는 질문 "점심은 … 드셨나요?"로 식사는 건너뜀), 같은 대화 다시 열기 → `resumed=true`·`turnCount=3`·`question`이 마지막 말벗 문장과 일치, AI `GET /companion/dialogues/{id}` 200, BE 조회 실패 로그 0.
+
+### [2026-11-14] AI 말벗 목소리 구글 Gemini TTS(Kore) + F1 자동 전환 (AI #294)
+- 전제 차이: 3.8은 Cloud TTS가 아닌 Agent Platform `generateContent` 전용, 일반 API 키 401 → 사용자가 서비스 계정에 묶인 키로 교체(200), MP3 미지원(WAV→mp3 변환), 언어 칸 없음(`COMPANION_TTS_GOOGLE_LANG`은 읽기만)
+- 결정: 대화 단위 고정 전환 / 하루 5만 자 / 고정 문장 구글+F1 예열 / 외부 전송은 policy-companion 기록, 화면 안내는 팀 몫
+- 측정(34문장×2): 구글 p50 2,654·p95 3,661ms·실패 0/68, F1 p50 845·p95 1,693ms. pytest 4059 통과
+- gosky: main `8757181`, `.env` ENGINE=google(백업 `.env.bak-20261114-pre-google-engine`), 롤백 `sb-ai-rollback:20261114-pre-google-tts`. 기동 `engine=google key=present`, 예열 구글 14/15(기동 중 1건 시간 초과)·F1 15/15, 실제 대화 질문 소리 `engine=google result=ok` 2.25초·mp3 24kHz mono, BE AI WS 재연결 확인
