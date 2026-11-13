@@ -21,6 +21,7 @@ import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
@@ -144,6 +145,109 @@ public class AiCompanionClient {
             throw new IllegalArgumentException("ward id format");
         }
         call("DELETE", "/companion/wards/" + wardId + "/data", null, List.of(), properties.getPurgeCallTimeout());
+    }
+
+    /** 말벗 목소리로 넘겨도 되는 형식(2026-11-13). 이 밖의 형식은 AI 응답 이상으로 본다(502). */
+    static final Set<String> AUDIO_CONTENT_TYPES = Set.of("audio/mpeg", "audio/wav", "audio/ogg");
+
+    /**
+     * 말벗이 한 말의 목소리를 받는다(2026-11-13, AI {@code GET /companion/sessions/{sessionId}/utterances/{index}/audio}).
+     * {@code sessionId}는 백엔드 대화 번호다(AI가 대화를 열 때 받은 값). AI는 소리가 준비될 때까지 {@code wait}초 기다린다.
+     *
+     * <p>200 → 허용 형식·크기 안의 소리, 형식·크기 이상은 502 {@code COMPANION_AUDIO_BAD_UPSTREAM} / 404 → 404
+     * {@code COMPANION_AUDIO_NOT_FOUND} / 그 밖(503·시간 초과·연결 실패·키 불일치 등) → 503 {@code COMPANION_AUDIO_NOT_READY}.
+     * 소리는 메모리로만 넘기고 어디에도 저장하지 않는다. 로그에는 상태 코드·예외 클래스명만 남긴다.</p>
+     */
+    public CompanionAudio fetchUtteranceAudio(long sessionId, int index) {
+        if (!properties.isConfigured()) {
+            throw new CustomException(ErrorCode.COMPANION_DISABLED);
+        }
+        if (sessionId <= 0 || index < 0) {
+            throw new CustomException(ErrorCode.COMPANION_AUDIO_INDEX_INVALID);
+        }
+        URI uri = UriComponentsBuilder.fromUriString(properties.getAiBaseUrl())
+                .path("/companion/sessions/" + sessionId + "/utterances/" + index + "/audio")
+                .queryParam("wait", properties.getAudioWaitSeconds())
+                .build().toUri();
+        Duration timeout = properties.getAudioCallTimeout();
+        HttpURLConnection connection = null;
+        ScheduledFuture<?> deadline = null;
+        AtomicBoolean timedOut = new AtomicBoolean();
+        long deadlineNanos = System.nanoTime() + timeout.toNanos();
+        try {
+            connection = (HttpURLConnection) uri.toURL().openConnection();
+            connection.setRequestMethod("GET");
+            connection.setConnectTimeout((int) properties.getConnectTimeout().toMillis());
+            connection.setReadTimeout((int) timeout.toMillis());
+            connection.setUseCaches(false);
+            connection.setInstanceFollowRedirects(false);
+            connection.setRequestProperty(API_KEY_HEADER, properties.getApiKey());
+            connection.setRequestProperty("Accept", String.join(", ", AUDIO_CONTENT_TYPES));
+            HttpURLConnection target = connection;
+            deadline = deadlineExecutor.schedule(() -> {
+                timedOut.set(true);
+                target.disconnect();
+            }, timeout.toMillis(), TimeUnit.MILLISECONDS);
+
+            int status = connection.getResponseCode();
+            if (timedOut.get()) {
+                throw new IOException("call deadline reached");
+            }
+            if (status == 404) {
+                log.info("[COMPANION] 말벗 목소리 없음(AI 404)");
+                throw new CustomException(ErrorCode.COMPANION_AUDIO_NOT_FOUND);
+            }
+            if (status != 200) {
+                log.warn("[COMPANION] 말벗 목소리 준비 안 됨: status={}", status);
+                throw new CustomException(ErrorCode.COMPANION_AUDIO_NOT_READY);
+            }
+            String contentType = normalizeContentType(connection.getContentType());
+            if (contentType == null) {
+                log.warn("[COMPANION] 말벗 목소리 형식 이상(허용 밖 Content-Type)");
+                throw new CustomException(ErrorCode.COMPANION_AUDIO_BAD_UPSTREAM);
+            }
+            int maxBytes = properties.getAudioMaxBytes();
+            if (connection.getContentLengthLong() > maxBytes) {
+                log.warn("[COMPANION] 말벗 목소리가 크기 상한을 넘음: max={}", maxBytes);
+                throw new CustomException(ErrorCode.COMPANION_AUDIO_BAD_UPSTREAM);
+            }
+            byte[] body;
+            try (InputStream in = connection.getInputStream()) {
+                body = readBounded(in, maxBytes, deadlineNanos, timedOut);
+            } catch (CustomException e) {
+                // readBounded의 크기 초과(COMPANION_UNAVAILABLE)를 목소리 쪽 502로 바꾼다
+                throw new CustomException(ErrorCode.COMPANION_AUDIO_BAD_UPSTREAM);
+            }
+            if (body.length == 0) {
+                log.warn("[COMPANION] 말벗 목소리가 비어 있음");
+                throw new CustomException(ErrorCode.COMPANION_AUDIO_BAD_UPSTREAM);
+            }
+            return new CompanionAudio(body, contentType);
+        } catch (IOException e) {
+            if (timedOut.get()) {
+                log.warn("[COMPANION] 말벗 목소리 시간 초과: limit={}", timeout);
+            } else {
+                log.warn("[COMPANION] 말벗 목소리 호출 실패: error={}", e.getClass().getSimpleName());
+            }
+            throw new CustomException(ErrorCode.COMPANION_AUDIO_NOT_READY);
+        } finally {
+            if (deadline != null) {
+                deadline.cancel(false);
+            }
+            if (connection != null) {
+                connection.disconnect();
+            }
+        }
+    }
+
+    /** {@code audio/mpeg; charset=...} → {@code audio/mpeg}. 허용 목록 밖이면 null. */
+    static String normalizeContentType(String raw) {
+        if (raw == null) {
+            return null;
+        }
+        int semi = raw.indexOf(';');
+        String type = (semi >= 0 ? raw.substring(0, semi) : raw).strip().toLowerCase(Locale.ROOT);
+        return AUDIO_CONTENT_TYPES.contains(type) ? type : null;
     }
 
     private String dialoguePath(String dialogueId, String suffix) {

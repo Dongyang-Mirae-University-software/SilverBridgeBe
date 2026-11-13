@@ -1,6 +1,7 @@
 package kr.silverbridge.main.domain.companion.controller;
 
 import kr.silverbridge.main.domain.companion.dto.CompanionDtos.TranscriptConsentRequest;
+import kr.silverbridge.main.domain.companion.service.CompanionAudioService;
 import kr.silverbridge.main.domain.companion.service.CompanionService;
 import kr.silverbridge.main.domain.companion.service.CompanionTranscriptService;
 import kr.silverbridge.main.global.exception.CustomException;
@@ -43,6 +44,9 @@ class WardCompanionTranscriptConsentSecurityTest {
     @MockitoBean
     private CompanionTranscriptService transcriptService;
 
+    @MockitoBean
+    private CompanionAudioService audioService;
+
     @Autowired
     private WardCompanionController controller;
 
@@ -65,6 +69,24 @@ class WardCompanionTranscriptConsentSecurityTest {
                 .isInstanceOf(AccessDeniedException.class);
         assertThatThrownBy(() -> controller.getTranscriptConsent("G00001")).isInstanceOf(AccessDeniedException.class);
         verify(transcriptService, never()).setConsent(anyString(), anyBoolean());
+    }
+
+    @Test
+    @WithMockUser(roles = "WARD")
+    @DisplayName("말벗 목소리(2026-11-13): 피보호자 허용")
+    void audio_ward_허용() {
+        org.mockito.Mockito.when(audioService.utteranceAudio("W00001", 1L, "0"))
+                .thenReturn(new kr.silverbridge.main.domain.companion.client.CompanionAudio(new byte[]{1}, "audio/mpeg"));
+        assertThatNoException().isThrownBy(() -> controller.utteranceAudio("W00001", 1L, "0"));
+    }
+
+    @Test
+    @WithMockUser(roles = "GUARDIAN")
+    @DisplayName("말벗 목소리(2026-11-13): 보호자 토큰은 403, 서비스를 부르지 않는다")
+    void audio_guardian_거부() {
+        assertThatThrownBy(() -> controller.utteranceAudio("G00001", 1L, "0"))
+                .isInstanceOf(AccessDeniedException.class);
+        verify(audioService, never()).utteranceAudio(anyString(), org.mockito.ArgumentMatchers.anyLong(), anyString());
     }
 
     @Test

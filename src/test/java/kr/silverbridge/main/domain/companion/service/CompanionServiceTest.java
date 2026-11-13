@@ -8,6 +8,7 @@ import kr.silverbridge.main.domain.companion.dto.CompanionDtos.ResultResponse;
 import kr.silverbridge.main.domain.companion.dto.CompanionDtos.SessionResponse;
 import kr.silverbridge.main.domain.companion.dto.CompanionDtos.TodayResponse;
 import kr.silverbridge.main.domain.companion.dto.CompanionDtos.TurnResponse;
+import kr.silverbridge.main.domain.companion.dto.CompanionDtos.UtteranceAudio;
 import kr.silverbridge.main.domain.companion.entity.CompanionEndReason;
 import kr.silverbridge.main.domain.companion.entity.CompanionMood;
 import kr.silverbridge.main.domain.companion.entity.CompanionQuestion;
@@ -87,9 +88,10 @@ class CompanionServiceTest {
         when(writer.claim(eq(WARD), eq(TODAY), eq(CompanionSlot.S09), eq(expected.getId()), any()))
                 .thenReturn(sessionWithId(10L, null));
         when(aiClient.openDialogue(WARD, 10L, "09:00", expected.getText(), expected.getId()))
-                .thenReturn(json("{\"dialogueId\":\"d-10\",\"maxTurns\":8}"));
+                .thenReturn(json("{\"dialogueId\":\"d-10\",\"maxTurns\":8,\"audio\":{\"index\":0}}"));
 
         SessionResponse response = service.open(WARD);
+        assertThat(response.audio()).isEqualTo(new UtteranceAudio(0));
 
         assertThat(response.sessionId()).isEqualTo(10L);
         assertThat(response.question()).isEqualTo(expected.getText());
@@ -112,6 +114,7 @@ class CompanionServiceTest {
         assertThat(response.sessionId()).isEqualTo(11L);
         assertThat(response.resumed()).isTrue();
         assertThat(response.turnCount()).isEqualTo(3);
+        assertThat(response.audio()).as("이어 가는 대화는 AI를 부르지 않아 목소리가 없다").isNull();
         assertThat(response.maxTurns()).isEqualTo(8);
         verify(aiClient, never()).openDialogue(anyString(), anyLong(), anyString(), anyString(), anyLong());
     }
@@ -177,6 +180,32 @@ class CompanionServiceTest {
         verify(writer).recordTurn(eq(30L), eq(2), eq(true), any(),
                 eq(new CompanionTurnRecorder.TurnContent(null, "많이 힘드셨군요.", "요즘 너무 힘들어요")), any());
         verify(aiClient, never()).finish(anyString());
+    }
+
+    @Test
+    @DisplayName("턴: AI audio({index})를 그대로 넘기고, 없으면 null")
+    void turnCarriesAudio() throws Exception {
+        when(sessionRepository.findById(33L)).thenReturn(Optional.of(sessionWithId(33L, "d-33")));
+        when(aiClient.replyText("d-33", "좋아요")).thenReturn(json(
+                "{\"turnNo\":1,\"reply\":{\"text\":\"다행이에요.\"},\"ended\":false,\"audio\":{\"index\":1}}"));
+        assertThat(service.replyText(WARD, 33L, "좋아요").audio()).isEqualTo(new UtteranceAudio(1));
+
+        when(aiClient.replyText("d-33", "네")).thenReturn(json(
+                "{\"turnNo\":2,\"reply\":{\"text\":\"그렇군요.\"},\"ended\":false,\"audio\":null}"));
+        assertThat(service.replyText(WARD, 33L, "네").audio()).isNull();
+    }
+
+    @Test
+    @DisplayName("턴: AI가 응답 문장을 주지 않아 고정 문장으로 바꾸면 목소리를 싣지 않는다(문장과 소리가 어긋남)")
+    void fallbackReplyDropsAudio() throws Exception {
+        when(sessionRepository.findById(34L)).thenReturn(Optional.of(sessionWithId(34L, "d-34")));
+        when(aiClient.replyText("d-34", "좋아요")).thenReturn(json(
+                "{\"turnNo\":1,\"reply\":{\"text\":\"\"},\"ended\":false,\"audio\":{\"index\":1}}"));
+
+        TurnResponse response = service.replyText(WARD, 34L, "좋아요");
+
+        assertThat(response.reply()).isNotBlank();
+        assertThat(response.audio()).isNull();
     }
 
     @ParameterizedTest(name = "{0}")

@@ -3141,3 +3141,8 @@ AI 챗 집계 점검 L-1에서 남겨 둔 공용 `GlobalExceptionHandler`의 `e.
 - 배포: gosky AI 11/13 10:31 `98f87a6`, `/health` 200·어댑터 mood·reply 적재·GPU 9,563MiB, 롤백 `sb-ai-rollback:20261113-pre-prevq` 1개(옛 pre-care-line 삭제).
 - 실서버 확인(11/13, 시험 피보호자 테스트 대화 09:00 `sessionId=212`, TTS 음성 + 공개 초상화 얼굴 프레임 3장): 매 턴 직전 말벗 문장에 이어 답함(5번에서 아침 몸 상태로 돌아가지 않음), "아니, 없어" 되묻지 않음, `face.labelKo="슬픔"`(Sadness, 3/3 얼굴).
 - 남은 한계: 같은 화제를 말만 바꿔 다시 묻는 것은 못 막는다(212의 4·5·6번 모두 "좋아하시는 활동", 유사도 0.47 이하). 핵심 낱말이 겹치면 다시 생성하는 안을 시험했으나(DGX 실제 EXAONE+cc7, 대화 5개 30턴) "활동·취미" 질문 15 → 15(다시 생성 16번 중 화제가 바뀐 것 3번), 다시 생성 때 "이미 물어본 것" 한 줄을 더해도 15 → 11(14번 중 5번)이라 머지하지 않았다. 짧고 무심한 대답에 cc7이 "좋아하시는 활동"으로 돌아가는 것이 원인이다.
+
+### [2026-11-13] 안부 말벗 목소리 중계 (BE, AI #281 짝)
+- 배경: AI #281이 말벗 문장의 소리(mp3)를 만들어 `GET /companion/sessions/{sessionId}/utterances/{index}/audio`로 준다. 기기가 AI를 직접 부를 수 없어(키) BE가 중계한다.
+- BE: `GET /api/ward/companion/sessions/{sessionId}/audio/{index}`(WARD·본인 대화만 - 남의 것 403 + `[IDOR-ATTEMPT]`, 없으면 404, 끝난 대화 포함). index 0~50 정수(400). AI 200 + mpeg·wav·ogg·1MB 이하만 그대로(`no-store`·`nosniff`), 형식·크기 이상 502, AI 404 → 404, 그 밖·시간 초과·연결 실패 503. 연결 3초·전체 8초·리다이렉트 끔·동시 8(턴과 별도). 대화 열기·턴 응답에 `audio {index}|null`(AI 값 그대로, 고정 문장 턴은 null). 소리는 저장하지 않는다. ErrorCode 4개(`COMPANION_AUDIO_INDEX_INVALID`·`_NOT_FOUND`·`_NOT_READY`·`_BAD_UPSTREAM`). 마이그레이션 없음.
+- 검증: 새 시험 4개 클래스(서비스·실제 HTTP 클라이언트·컨트롤러 HTTP·역할), `./gradlew build` 통과. 상세 `docs/(2026-11-13) feature-companion-tts-relay.md`.
