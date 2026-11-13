@@ -287,6 +287,7 @@ public class SwaggerConfig {
                     "/api/ward/companion/sessions/{sessionId}/reply",
                     "/api/ward/companion/sessions/{sessionId}/reply/audio",
                     "/api/ward/companion/sessions/{sessionId}/finish",
+                    "/api/ward/companion/sessions/{sessionId}/audio/{index}",
                     // ── [보호자 - 연결] ──────────────────────────────
                     "/api/guardian/connection/select",
                     // ── [보호자 - SOS 이력] ──────────────────────────

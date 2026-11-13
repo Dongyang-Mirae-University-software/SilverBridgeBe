@@ -45,7 +45,19 @@ public final class CompanionDtos {
             @Schema(description = "최대 턴 수. 알 수 없으면 null") Integer maxTurns,
             @Schema(description = "이미 열려 있던 대화를 이어 가는 것이면 true") boolean resumed,
             @Schema(description = "이미 마친 대답 수(마지막 턴 번호). 새 대화는 0, 이어 가는 대화는 지금까지 기록된 턴 수 - "
-                    + "기기는 다음 대답 번호를 turnCount + 1로 보여 준다", example = "0") int turnCount) {
+                    + "기기는 다음 대답 번호를 turnCount + 1로 보여 준다", example = "0") int turnCount,
+            @Schema(description = "첫 질문의 말벗 목소리 - GET sessions/{sessionId}/audio/{index}로 받는다. "
+                    + "AI가 준비하지 않았거나 이어 가는 대화면 null(기기가 직접 읽어 준다)") UtteranceAudio audio) {
+
+        public SessionResponse(long sessionId, String slot, String question, Integer maxTurns, boolean resumed,
+                               int turnCount) {
+            this(sessionId, slot, question, maxTurns, resumed, turnCount, null);
+        }
+    }
+
+    /** 말벗 목소리 위치(2026-11-13). AI가 준 소리 번호만 옮긴다 - 소리 자체는 BE가 저장하지 않는다. */
+    @Schema(description = "말벗 목소리 위치")
+    public record UtteranceAudio(@Schema(description = "소리 번호(0 이상)", example = "1") int index) {
     }
 
     @Schema(description = "한 턴 결과")
@@ -56,10 +68,17 @@ public final class CompanionDtos {
             @Schema(description = "MAX_TURNS·NO_RESPONSE·USER_STOP·AVOIDED(어르신이 이야기를 원하지 않아 말벗이 마무리). 진행 중이면 null") String endReason,
             @Schema(description = "음성 대답을 받아 적은 글(음성 턴만). 대화 내용 저장에 동의한 경우에만 저장(30일 뒤 삭제)") String transcript,
             @Schema(description = "AI 턴 판정 결과 - 테스트 계정에만 실린다(일반 계정은 필드 없음). 저장·로그 없음")
-            @JsonInclude(JsonInclude.Include.NON_NULL) TurnAnalysis analysis) {
+            @JsonInclude(JsonInclude.Include.NON_NULL) TurnAnalysis analysis,
+            @Schema(description = "응답 문장의 말벗 목소리 - GET sessions/{sessionId}/audio/{index}로 받는다. "
+                    + "AI가 준비하지 않았으면 null(기기가 직접 읽어 준다)") UtteranceAudio audio) {
 
         public TurnResponse(int turnNo, String reply, boolean ended, String endReason, String transcript) {
-            this(turnNo, reply, ended, endReason, transcript, null);
+            this(turnNo, reply, ended, endReason, transcript, null, null);
+        }
+
+        public TurnResponse(int turnNo, String reply, boolean ended, String endReason, String transcript,
+                            TurnAnalysis analysis) {
+            this(turnNo, reply, ended, endReason, transcript, analysis, null);
         }
     }
 

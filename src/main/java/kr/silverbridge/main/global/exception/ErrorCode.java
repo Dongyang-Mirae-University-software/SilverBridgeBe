@@ -224,7 +224,12 @@ public enum ErrorCode {
     COMPANION_UPLOAD_TOO_LARGE(HttpStatus.CONTENT_TOO_LARGE, "음성과 사진을 합쳐 10MB까지 보낼 수 있습니다."),
     COMPANION_FRAME_INVALID(HttpStatus.BAD_REQUEST, "사진은 JPG, PNG만 보낼 수 있습니다."),
     COMPANION_FRAME_TOO_LARGE(HttpStatus.CONTENT_TOO_LARGE, "사진은 5장까지, 한 장에 1MB를 넘을 수 없습니다."),
-    COMPANION_STT_UNAVAILABLE(HttpStatus.SERVICE_UNAVAILABLE, "지금은 음성을 알아듣지 못해요. 글로 대답해주세요.");
+    COMPANION_STT_UNAVAILABLE(HttpStatus.SERVICE_UNAVAILABLE, "지금은 음성을 알아듣지 못해요. 글로 대답해주세요."),
+    // 말벗 목소리 중계(2026-11-13) - 404·503 모두 기기가 직접 읽어 주는 것으로 대신한다
+    COMPANION_AUDIO_INDEX_INVALID(HttpStatus.BAD_REQUEST, "목소리 번호가 올바르지 않습니다."),
+    COMPANION_AUDIO_NOT_FOUND(HttpStatus.NOT_FOUND, "말벗 목소리를 찾을 수 없습니다."),
+    COMPANION_AUDIO_NOT_READY(HttpStatus.SERVICE_UNAVAILABLE, "말벗 목소리를 아직 준비하지 못했습니다."),
+    COMPANION_AUDIO_BAD_UPSTREAM(HttpStatus.BAD_GATEWAY, "말벗 목소리를 받지 못했습니다.");
 
     private final HttpStatus status;
     private final String message;

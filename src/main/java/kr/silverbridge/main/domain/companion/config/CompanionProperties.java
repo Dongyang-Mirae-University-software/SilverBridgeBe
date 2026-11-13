@@ -44,6 +44,16 @@ public class CompanionProperties {
     private long maxFrameBytes = 1024L * 1024;
     private int maxFrames = 5;
     private int maxReplyBytes = 64 * 1024;
+    /**
+     * 말벗 목소리 중계(2026-11-13). AI가 소리가 준비될 때까지 {@code audioWaitSeconds}초 기다리므로 읽기 제한은 그보다
+     * 조금 길게 둔다. 소리는 메모리로만 넘기고 저장하지 않는다.
+     */
+    private int audioWaitSeconds = 5;
+    private Duration audioCallTimeout = Duration.ofSeconds(8);
+    private int audioMaxBytes = 1024 * 1024;
+    private int audioMaxIndex = 50;
+    /** 목소리 중계 동시 상한 - 대답 턴(maxConcurrent)과 따로 센다. 넘치면 503(기기가 직접 읽어 준다). */
+    private int audioMaxConcurrent = 8;
     /** 시간대 시작부터 대화를 열 수 있는 시간(분). */
     private long windowMinutes = 60;
     /** 이 시간 동안 활동이 없는 대화는 스케줄러가 마감한다. */

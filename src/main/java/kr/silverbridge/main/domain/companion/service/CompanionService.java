@@ -11,6 +11,7 @@ import kr.silverbridge.main.domain.companion.dto.CompanionDtos.SlotStatus;
 import kr.silverbridge.main.domain.companion.dto.CompanionDtos.TodayResponse;
 import kr.silverbridge.main.domain.companion.dto.CompanionDtos.TurnAnalysis;
 import kr.silverbridge.main.domain.companion.dto.CompanionDtos.TurnResponse;
+import kr.silverbridge.main.domain.companion.dto.CompanionDtos.UtteranceAudio;
 import kr.silverbridge.main.domain.companion.entity.CompanionMood;
 import kr.silverbridge.main.domain.companion.entity.CompanionQuestion;
 import kr.silverbridge.main.domain.companion.entity.CompanionSession;
@@ -214,7 +215,8 @@ public class CompanionService {
             writer.attachDialogue(sessionId, dialogueId, maxTurns, OffsetDateTime.now(clock));
             log.info("[COMPANION] 대화 열림: wardId={}, sessionId={}, slot={}, questionId={}",
                     wardId, sessionId, slot.code(), question.getId());
-            return new SessionResponse(sessionId, slot.code(), question.getText(), maxTurns, false, 0);
+            return new SessionResponse(sessionId, slot.code(), question.getText(), maxTurns, false, 0,
+                    audioRef(data));
         } catch (RuntimeException e) {
             writer.releaseClaim(sessionId);
             throw e;
@@ -332,6 +334,8 @@ public class CompanionService {
                 || data.path("signals").path("riskFlag").asBoolean(false);
         JsonNode replyNode = data.path("reply").path("text");
         String reply = replyNode.isTextual() && !replyNode.asText().isBlank() ? replyNode.asText() : null;
+        // 고정 문장으로 바꾼 턴은 AI 목소리와 문장이 맞지 않으므로 목소리를 싣지 않는다(기기가 직접 읽어 준다)
+        UtteranceAudio audioRef = reply == null ? null : audioRef(data);
         if (reply == null) {
             log.warn("[COMPANION] AI 턴 응답에 응답 문장 없음 - 고정 문장 사용: sessionId={}", sessionId);
             reply = FALLBACK_REPLY;
@@ -349,7 +353,7 @@ public class CompanionService {
         }
         log.info("[COMPANION] 턴 처리: sessionId={}, turnNo={}, ended={}, audio={}", sessionId, turnNo, ended, audio);
         TurnAnalysis analysis = properties.isTestWard(session.getWardId()) ? turnAnalysis(data, riskSeen) : null;
-        return new TurnResponse(turnNo, reply, ended, endReason, transcript, analysis);
+        return new TurnResponse(turnNo, reply, ended, endReason, transcript, analysis, audioRef);
     }
 
     /** 턴 기분 - {@code turnResult.moodCode}가 있으면 그것, 없으면 {@code turnResult.label}(한글). 판단 보류·모르는 값은 null. */
@@ -500,8 +504,21 @@ public class CompanionService {
         return session;
     }
 
+    /**
+     * AI 응답의 {@code audio}({@code {"index": n}} 또는 null)를 옮긴다(2026-11-13). 0 이상·상한 이하 정수만 받고 그 밖은
+     * null - 기기는 null이면 직접 읽어 준다. 소리 자체는 받지 않는다.
+     */
+    UtteranceAudio audioRef(JsonNode data) {
+        JsonNode index = data == null ? null : data.path("audio").path("index");
+        if (index == null || !index.isIntegralNumber() || !index.canConvertToInt()) {
+            return null;
+        }
+        int value = index.asInt();
+        return value >= 0 && value <= properties.getAudioMaxIndex() ? new UtteranceAudio(value) : null;
+    }
+
     /** 남의 대화는 403으로 막고 흔적을 남긴다(2026-07-14 정책 - 404로 위장하지 않는다). */
-    private CompanionSession requireOwned(String wardId, long sessionId) {
+    CompanionSession requireOwned(String wardId, long sessionId) {
         CompanionSession session = sessionRepository.findById(sessionId)
                 .orElseThrow(() -> new CustomException(ErrorCode.COMPANION_SESSION_NOT_FOUND));
         if (!session.getWardId().equals(wardId)) {
@@ -511,7 +528,7 @@ public class CompanionService {
         return session;
     }
 
-    private void requireUsable() {
+    void requireUsable() {
         if (!properties.isUsable()) {
             throw new CustomException(ErrorCode.COMPANION_DISABLED);
         }

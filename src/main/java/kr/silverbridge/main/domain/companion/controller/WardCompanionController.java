@@ -3,6 +3,7 @@ package kr.silverbridge.main.domain.companion.controller;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import kr.silverbridge.main.domain.companion.client.CompanionAudio;
 import kr.silverbridge.main.domain.companion.dto.CompanionDtos.ReplyRequest;
 import kr.silverbridge.main.domain.companion.dto.CompanionDtos.ResultResponse;
 import kr.silverbridge.main.domain.companion.dto.CompanionDtos.SessionResponse;
@@ -11,6 +12,7 @@ import kr.silverbridge.main.domain.companion.dto.CompanionDtos.TodayResponse;
 import kr.silverbridge.main.domain.companion.dto.CompanionDtos.TranscriptConsentRequest;
 import kr.silverbridge.main.domain.companion.dto.CompanionDtos.TranscriptConsentResponse;
 import kr.silverbridge.main.domain.companion.dto.CompanionDtos.TurnResponse;
+import kr.silverbridge.main.domain.companion.service.CompanionAudioService;
 import kr.silverbridge.main.domain.companion.service.CompanionService;
 import kr.silverbridge.main.domain.companion.service.CompanionTranscriptService;
 import kr.silverbridge.main.global.exception.CustomException;
@@ -54,6 +56,7 @@ public class WardCompanionController {
 
     private final CompanionService companionService;
     private final CompanionTranscriptService transcriptService;
+    private final CompanionAudioService audioService;
 
     @Operation(summary = "오늘 안부 대화 현황",
             description = "5개 시간대(09·12·15·18·21시)의 상태와 지금 열 수 있는 시간대를 돌려줍니다. "
@@ -199,5 +202,31 @@ public class WardCompanionController {
             @Parameter(description = "대화 번호") @PathVariable long sessionId) {
         return ResponseEntity.ok().cacheControl(CacheControl.noStore())
                 .body(ApiResponse.ok(companionService.finish(wardId, sessionId)));
+    }
+
+    @Operation(summary = "말벗 목소리 받기",
+            description = """
+                    대화 열기·대답 응답의 audio.index로 말벗이 한 말의 소리를 받습니다(audio/mpeg·audio/wav·audio/ogg, 1MB 이하).
+                    본인 대화만 받을 수 있고, 끝난 대화의 마지막 문장도 받을 수 있습니다. 소리는 서버에 저장하지 않습니다.
+                    준비에 최대 5초 기다립니다. 404·503이면 기기가 문장을 직접 읽어 주세요.
+
+                    [오류 code]
+                    COMPANION_AUDIO_INDEX_INVALID(400, 0~50 정수 아님) / COMPANION_SESSION_NOT_FOUND(404) /
+                    COMPANION_SESSION_NOT_OWNED(403) / COMPANION_AUDIO_NOT_FOUND(404) /
+                    COMPANION_AUDIO_NOT_READY(503, 준비 안 됨·시간 초과·동시 8건 초과) /
+                    COMPANION_AUDIO_BAD_UPSTREAM(502, AI 응답 형식·크기 이상) / COMPANION_DISABLED(503, 말벗 꺼짐)
+                    """)
+    @GetMapping("/sessions/{sessionId}/audio/{index}")
+    public ResponseEntity<byte[]> utteranceAudio(
+            @AuthenticationPrincipal String wardId,
+            @Parameter(description = "대화 번호") @PathVariable long sessionId,
+            @Parameter(description = "소리 번호(0~50)") @PathVariable String index) {
+        CompanionAudio audio = audioService.utteranceAudio(wardId, sessionId, index);
+        return ResponseEntity.ok()
+                .cacheControl(CacheControl.noStore())
+                .contentType(MediaType.parseMediaType(audio.contentType()))
+                .contentLength(audio.body().length)
+                .header("X-Content-Type-Options", "nosniff")
+                .body(audio.body());
     }
 }

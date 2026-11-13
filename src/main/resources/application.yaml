@@ -219,6 +219,10 @@ companion:
   max-concurrent: ${COMPANION_MAX_CONCURRENT:8}
   per-minute: ${COMPANION_PER_MINUTE:20}
   per-hour: ${COMPANION_PER_HOUR:200}
+  # 말벗 목소리 중계(2026-11-13): AI가 wait초까지 기다려 주므로 읽기 제한은 그보다 조금 길게. 소리는 저장하지 않는다
+  audio-wait-seconds: ${COMPANION_AUDIO_WAIT_SECONDS:5}
+  audio-call-timeout: ${COMPANION_AUDIO_CALL_TIMEOUT:8s}
+  audio-max-concurrent: ${COMPANION_AUDIO_MAX_CONCURRENT:8}
   window-minutes: ${COMPANION_WINDOW_MINUTES:60}          # 시간대 시작부터 대화를 열 수 있는 시간
   abandon-after: ${COMPANION_ABANDON_AFTER:10m}           # 활동 없는 대화를 스케줄러(5분 주기)가 마감
   # 질문 안내 알림을 받을 피보호자 ID(쉼표 구분). 비면 아무에게도 보내지 않는다 - PR-B(화면·알림 설정) 전까지의 허용 목록
