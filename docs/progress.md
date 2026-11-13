@@ -9,6 +9,7 @@
 - AI 경로 `GET /companion/sessions/{sessionId}/utterances/{index}/audio?wait=0~8` - 200 `audio/mpeg` / 503 `TTS_NOT_READY` / 404 `TTS_NOT_FOUND` / 422 `WAIT_INVALID`. `sessionId`는 BE 말벗 세션 ID, 키는 말벗 키(`X-API-Key`).
 - 동시 합성 2 + 대기 8, 넘치면 포기(사용자 결정). AI 고정 문장 15개는 기동 때 예열(19초), BE 질문은 문장 기준 보관, 모델 대답은 세션 보관만.
 - gosky 실측(3·4·6스레드): 문장당 중앙값 0.95·0.96·1.04초, 2명 동시 1.06·1.15·1.25초 → `COMPANION_TTS_THREADS=3`. 배포 후 실제 API로 열기·1턴·조회·삭제 확인(질문 0.58초·대답 0.97초), GPU 9.56GB 그대로, 컨테이너 메모리 2.4GB.
+- 기능 점검(B, 11/13): 🟡 M-1 만료 정리가 요청 때만 돎(마지막 대화 뒤 소리가 메모리에 남음) / 🟢 L-1 실행기 지연 생성 경합 / L-2 적재 실패 뒤 대기 작업마다 재적재 / L-3 예열이 대기 개수에 안 잡힘 → 사용자 "전부 반영" → AI #282 `460200f`(1분 주기 정리·실행기 처음부터 생성·실패 뒤 재적재 막기·예열 계산), gosky 14:23 재배포(롤백 태그 `sb-ai-rollback:20261113-tts-audit` 1개). 문제없음: 계약·개인정보·BE 중계(wait 5·읽기 8초·동시 8)·못 읽는 글자(21종 합성 성공). FE 참고: iOS Safari는 `<audio src>` 직접 재생 시 Range(206)를 요구할 수 있어 fetch → blob 재생 권장.
 - 모델 386MB는 볼륨 `models/companion/tts-supertonic3`(기동 중 내려받지 않음). `.env` 백업 `.env.bak-20261113-tts`, 롤백 태그 `sb-ai-rollback:20261113-tts` 1개. 배포 때 gosky 저장소가 다른 세션의 `feature/game-art-images`(원격에 없는 커밋 2개, 로컬 브랜치는 그대로 둠)에 있어 사용자 확인 후 main으로 전환. AI 재시작으로 카메라 재등록 필요.
 
 ### [2026-11-12] AI 의료 상담 #258 기능 점검 + 관리 질문 줄 수정 (AI #277 문서 → 11/13 사용자 결정으로 #278 반영, gosky `9cf51d6` 09:56)
