@@ -19,6 +19,7 @@ import kr.silverbridge.main.global.exception.CustomException;
 import kr.silverbridge.main.global.exception.ErrorCode;
 import kr.silverbridge.main.global.response.ApiResponse;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.CacheControl;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
@@ -40,6 +41,7 @@ import java.util.List;
  * 피보호자 안부 말벗 API(2026-11-04, PR-A). 기기 → 백엔드 → AI. WARD 전용.
  * 응답에 말벗 응답 문장·받아 적은 글이 담겨 캐시하지 않는다(저장도 하지 않는다).
  */
+@Slf4j
 @Tag(name = "피보호자 - 안부 말벗")
 @RestController
 @RequiredArgsConstructor
@@ -217,16 +219,37 @@ public class WardCompanionController {
                     COMPANION_AUDIO_BAD_UPSTREAM(502, AI 응답 형식·크기 이상) / COMPANION_DISABLED(503, 말벗 꺼짐)
                     """)
     @GetMapping("/sessions/{sessionId}/audio/{index}")
-    public ResponseEntity<byte[]> utteranceAudio(
+    public ResponseEntity<?> utteranceAudio(
             @AuthenticationPrincipal String wardId,
             @Parameter(description = "대화 번호") @PathVariable long sessionId,
             @Parameter(description = "소리 번호(0~50)") @PathVariable String index) {
-        CompanionAudio audio = audioService.utteranceAudio(wardId, sessionId, index);
+        CompanionAudio audio;
+        try {
+            audio = audioService.utteranceAudio(wardId, sessionId, index);
+        } catch (CustomException e) {
+            if (e.getClass() != CustomException.class) {
+                throw e; // 429(Retry-After) 등 전용 처리가 있는 하위 예외는 전역 처리기로
+            }
+            return audioError(e.getErrorCode());
+        }
         return ResponseEntity.ok()
                 .cacheControl(CacheControl.noStore())
                 .contentType(MediaType.parseMediaType(audio.contentType()))
                 .contentLength(audio.body().length)
                 .header("X-Content-Type-Options", "nosniff")
                 .body(audio.body());
+    }
+
+    /**
+     * 목소리 요청의 업무 오류(2026-11-13 점검 L-1). 상태·본문·로그는 {@code GlobalExceptionHandler}와 같고 Content-Type만
+     * JSON으로 못박는다 - 요청이 {@code Accept: audio/*}면 JSON 오류를 협상할 수 없어(406) 오류 디스패치가 401로 바뀌었다
+     * (기기가 "로그인 만료"로 오해한다). Content-Type을 정해 두면 Spring은 Accept 협상을 건너뛴다.
+     */
+    private static ResponseEntity<ApiResponse<Void>> audioError(ErrorCode errorCode) {
+        log.warn("CustomException: code={}", errorCode);
+        return ResponseEntity.status(errorCode.getStatus())
+                .cacheControl(CacheControl.noStore())
+                .contentType(MediaType.APPLICATION_JSON)
+                .body(ApiResponse.fail(errorCode));
     }
 }

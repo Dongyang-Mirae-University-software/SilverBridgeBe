@@ -99,6 +99,31 @@ class WardCompanionAudioControllerHttpTest {
                 .andExpect(jsonPath("$.code").value(code.name()));
     }
 
+    @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.ValueSource(strings = {"audio/mpeg", "audio/*", "audio/ogg, audio/wav"})
+    @DisplayName("Accept가 소리 형식뿐이어도 오류는 상태 그대로 + JSON(점검 L-1 - 전에는 406 → 401)")
+    void errorsIgnoreAudioAccept(String accept) throws Exception {
+        when(audioService.utteranceAudio(eq(WARD), eq(10L), any()))
+                .thenThrow(new CustomException(ErrorCode.COMPANION_AUDIO_NOT_FOUND));
+
+        mvc.perform(get("/api/ward/companion/sessions/10/audio/40").accept(accept))
+                .andExpect(status().isNotFound())
+                .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_JSON))
+                .andExpect(header().string("Cache-Control", "no-store"))
+                .andExpect(jsonPath("$.code").value("COMPANION_AUDIO_NOT_FOUND"));
+    }
+
+    @Test
+    @DisplayName("전용 처리가 있는 하위 예외(429)는 전역 처리기로 - Retry-After 유지")
+    void tooManyRequestsKeepsRetryAfter() throws Exception {
+        when(audioService.utteranceAudio(eq(WARD), eq(10L), any()))
+                .thenThrow(new kr.silverbridge.main.global.exception.TooManyRequestsException(30));
+
+        mvc.perform(get("/api/ward/companion/sessions/10/audio/1"))
+                .andExpect(status().isTooManyRequests())
+                .andExpect(header().string("Retry-After", "30"));
+    }
+
     @Test
     @DisplayName("턴 응답: audio는 {index} 객체로, 없으면 null로 내려간다(필드는 항상 있음)")
     void turnResponseAudioField() throws Exception {

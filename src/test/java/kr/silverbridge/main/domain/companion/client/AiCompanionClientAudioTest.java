@@ -38,6 +38,7 @@ class AiCompanionClientAudioTest {
     private CompanionProperties properties;
     private final AtomicReference<String> lastKey = new AtomicReference<>();
     private final AtomicReference<String> lastUri = new AtomicReference<>();
+    private final AtomicReference<String> lastWardHeader = new AtomicReference<>();
     private volatile int status = 200;
     private volatile String contentType = "audio/mpeg";
     private volatile byte[] body = MP3;
@@ -74,6 +75,7 @@ class AiCompanionClientAudioTest {
     private void handle(HttpExchange exchange) throws IOException {
         lastKey.set(exchange.getRequestHeaders().getFirst("X-API-Key"));
         lastUri.set(exchange.getRequestMethod() + " " + exchange.getRequestURI());
+        lastWardHeader.set(exchange.getRequestHeaders().getFirst(AiCompanionClient.WARD_ID_HEADER));
         if (delayMillis > 0) {
             try {
                 Thread.sleep(delayMillis);
@@ -102,12 +104,24 @@ class AiCompanionClientAudioTest {
     @Test
     @DisplayName("200: BE 대화 번호·소리 번호·wait=5로 부르고, 키는 헤더로, 소리 바이트와 형식을 그대로 돌려준다")
     void relaysAudio() {
-        CompanionAudio audio = client.fetchUtteranceAudio(42L, 3);
+        CompanionAudio audio = client.fetchUtteranceAudio("W00001", 42L, 3);
 
         assertThat(audio.body()).isEqualTo(MP3);
         assertThat(audio.contentType()).isEqualTo("audio/mpeg");
         assertThat(lastUri.get()).isEqualTo("GET /companion/sessions/42/utterances/3/audio?wait=5");
         assertThat(lastKey.get()).isEqualTo("test-companion-key");
+        assertThat(lastWardHeader.get()).as("대화 주인 ID는 헤더로(점검 L-2) - 경로·쿼리에 싣지 않는다").isEqualTo("W00001");
+        assertThat(lastUri.get()).doesNotContain("W00001");
+    }
+
+    @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.NullAndEmptySource
+    @ValueSource(strings = {"W0\nX", "toolongwardid12345", "a b"})
+    @DisplayName("대화 주인 ID 형식이 이상하면 AI를 부르지 않는다(헤더 삽입 방지)")
+    void rejectsBadWardId(String wardId) {
+        assertThatThrownBy(() -> client.fetchUtteranceAudio(wardId, 1L, 0))
+                .extracting(AiCompanionClientAudioTest::codeOf).isEqualTo(ErrorCode.COMPANION_AUDIO_INDEX_INVALID);
+        assertThat(lastUri.get()).isNull();
     }
 
     @ParameterizedTest
@@ -116,7 +130,7 @@ class AiCompanionClientAudioTest {
     void allowedTypes(String type) {
         contentType = type;
 
-        assertThat(client.fetchUtteranceAudio(1L, 0).contentType()).isIn("audio/mpeg", "audio/wav", "audio/ogg");
+        assertThat(client.fetchUtteranceAudio("W00001", 1L, 0).contentType()).isIn("audio/mpeg", "audio/wav", "audio/ogg");
     }
 
     @ParameterizedTest
@@ -125,7 +139,7 @@ class AiCompanionClientAudioTest {
     void rejectsOtherTypes(String type) {
         contentType = type;
 
-        assertThatThrownBy(() -> client.fetchUtteranceAudio(1L, 0))
+        assertThatThrownBy(() -> client.fetchUtteranceAudio("W00001", 1L, 0))
                 .extracting(AiCompanionClientAudioTest::codeOf).isEqualTo(ErrorCode.COMPANION_AUDIO_BAD_UPSTREAM);
     }
 
@@ -134,7 +148,7 @@ class AiCompanionClientAudioTest {
     void missingType() {
         contentType = null;
 
-        assertThatThrownBy(() -> client.fetchUtteranceAudio(1L, 0))
+        assertThatThrownBy(() -> client.fetchUtteranceAudio("W00001", 1L, 0))
                 .extracting(AiCompanionClientAudioTest::codeOf).isEqualTo(ErrorCode.COMPANION_AUDIO_BAD_UPSTREAM);
     }
 
@@ -143,7 +157,7 @@ class AiCompanionClientAudioTest {
     void tooLargeDeclared() {
         body = new byte[properties.getAudioMaxBytes() + 1];
 
-        assertThatThrownBy(() -> client.fetchUtteranceAudio(1L, 0))
+        assertThatThrownBy(() -> client.fetchUtteranceAudio("W00001", 1L, 0))
                 .extracting(AiCompanionClientAudioTest::codeOf).isEqualTo(ErrorCode.COMPANION_AUDIO_BAD_UPSTREAM);
     }
 
@@ -153,7 +167,7 @@ class AiCompanionClientAudioTest {
         body = new byte[properties.getAudioMaxBytes() + 1];
         chunked = true;
 
-        assertThatThrownBy(() -> client.fetchUtteranceAudio(1L, 0))
+        assertThatThrownBy(() -> client.fetchUtteranceAudio("W00001", 1L, 0))
                 .extracting(AiCompanionClientAudioTest::codeOf).isEqualTo(ErrorCode.COMPANION_AUDIO_BAD_UPSTREAM);
     }
 
@@ -162,7 +176,7 @@ class AiCompanionClientAudioTest {
     void exactlyMax() {
         body = new byte[properties.getAudioMaxBytes()];
 
-        assertThat(client.fetchUtteranceAudio(1L, 0).body()).hasSize(properties.getAudioMaxBytes());
+        assertThat(client.fetchUtteranceAudio("W00001", 1L, 0).body()).hasSize(properties.getAudioMaxBytes());
     }
 
     @Test
@@ -170,7 +184,7 @@ class AiCompanionClientAudioTest {
     void emptyBody() {
         body = new byte[0];
 
-        assertThatThrownBy(() -> client.fetchUtteranceAudio(1L, 0))
+        assertThatThrownBy(() -> client.fetchUtteranceAudio("W00001", 1L, 0))
                 .extracting(AiCompanionClientAudioTest::codeOf).isEqualTo(ErrorCode.COMPANION_AUDIO_BAD_UPSTREAM);
     }
 
@@ -181,7 +195,7 @@ class AiCompanionClientAudioTest {
         contentType = "application/json";
         body = "{\"code\":\"TTS_NOT_FOUND\",\"message\":\"비밀 문장\"}".getBytes(StandardCharsets.UTF_8);
 
-        assertThatThrownBy(() -> client.fetchUtteranceAudio(1L, 0))
+        assertThatThrownBy(() -> client.fetchUtteranceAudio("W00001", 1L, 0))
                 .extracting(AiCompanionClientAudioTest::codeOf).isEqualTo(ErrorCode.COMPANION_AUDIO_NOT_FOUND);
     }
 
@@ -193,7 +207,7 @@ class AiCompanionClientAudioTest {
         contentType = "application/json";
         body = "{\"code\":\"TTS_NOT_READY\"}".getBytes(StandardCharsets.UTF_8);
 
-        assertThatThrownBy(() -> client.fetchUtteranceAudio(1L, 0))
+        assertThatThrownBy(() -> client.fetchUtteranceAudio("W00001", 1L, 0))
                 .extracting(AiCompanionClientAudioTest::codeOf).isEqualTo(ErrorCode.COMPANION_AUDIO_NOT_READY);
     }
 
@@ -204,7 +218,7 @@ class AiCompanionClientAudioTest {
         location = "http://127.0.0.1:1/elsewhere";
         body = new byte[0];
 
-        assertThatThrownBy(() -> client.fetchUtteranceAudio(1L, 0))
+        assertThatThrownBy(() -> client.fetchUtteranceAudio("W00001", 1L, 0))
                 .extracting(AiCompanionClientAudioTest::codeOf).isEqualTo(ErrorCode.COMPANION_AUDIO_NOT_READY);
         assertThat(lastUri.get()).startsWith("GET /companion/sessions/1/");
     }
@@ -215,7 +229,7 @@ class AiCompanionClientAudioTest {
         delayMillis = 2000;
         long started = System.nanoTime();
 
-        assertThatThrownBy(() -> client.fetchUtteranceAudio(1L, 0))
+        assertThatThrownBy(() -> client.fetchUtteranceAudio("W00001", 1L, 0))
                 .extracting(AiCompanionClientAudioTest::codeOf).isEqualTo(ErrorCode.COMPANION_AUDIO_NOT_READY);
         assertThat(Duration.ofNanos(System.nanoTime() - started)).isLessThan(Duration.ofMillis(1900));
     }
@@ -229,7 +243,7 @@ class AiCompanionClientAudioTest {
         }
         properties.setAiBaseUrl("http://127.0.0.1:" + closedPort);
 
-        assertThatThrownBy(() -> client.fetchUtteranceAudio(1L, 0))
+        assertThatThrownBy(() -> client.fetchUtteranceAudio("W00001", 1L, 0))
                 .extracting(AiCompanionClientAudioTest::codeOf).isEqualTo(ErrorCode.COMPANION_AUDIO_NOT_READY);
     }
 
@@ -238,7 +252,7 @@ class AiCompanionClientAudioTest {
     void notConfigured() {
         properties.setApiKey("");
 
-        assertThatThrownBy(() -> client.fetchUtteranceAudio(1L, 0))
+        assertThatThrownBy(() -> client.fetchUtteranceAudio("W00001", 1L, 0))
                 .extracting(AiCompanionClientAudioTest::codeOf).isEqualTo(ErrorCode.COMPANION_DISABLED);
         assertThat(lastUri.get()).isNull();
     }
@@ -249,9 +263,9 @@ class AiCompanionClientAudioTest {
         status = 404;
         contentType = "application/json";
         body = "{\"code\":\"TTS_NOT_FOUND\",\"message\":\"비밀 문장\"}".getBytes(StandardCharsets.UTF_8);
-        assertThatThrownBy(() -> client.fetchUtteranceAudio(1L, 0)).isInstanceOf(CustomException.class);
+        assertThatThrownBy(() -> client.fetchUtteranceAudio("W00001", 1L, 0)).isInstanceOf(CustomException.class);
         status = 503;
-        assertThatThrownBy(() -> client.fetchUtteranceAudio(1L, 0)).isInstanceOf(CustomException.class);
+        assertThatThrownBy(() -> client.fetchUtteranceAudio("W00001", 1L, 0)).isInstanceOf(CustomException.class);
 
         assertThat(appender.list).isNotEmpty().allSatisfy(e -> assertThat(e.getFormattedMessage())
                 .doesNotContain("test-companion-key").doesNotContain("비밀 문장").doesNotContain("127.0.0.1"));
