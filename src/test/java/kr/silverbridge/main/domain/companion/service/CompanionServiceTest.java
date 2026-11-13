@@ -120,6 +120,67 @@ class CompanionServiceTest {
     }
 
     @Test
+    @DisplayName("이어 가기: 턴이 있으면 AI가 기억하는 마지막 말벗 문장을 질문으로 준다 - AI는 다음 대답을 그 문장의 대답으로 해석한다(점검 M-1)")
+    void resumeShowsLastBotLine() {
+        CompanionSession open = resumable(12L, 2);
+        when(aiClient.dialogueState("d-12")).thenReturn(stateJson("{\"lastQuestion\":\"요즘 밤에 잠은 잘 주무세요?\"}"));
+
+        SessionResponse response = service.open(WARD);
+
+        assertThat(response.resumed()).isTrue();
+        assertThat(response.question()).isEqualTo("요즘 밤에 잠은 잘 주무세요?");
+        assertThat(response.audio()).isNull();
+    }
+
+    @Test
+    @DisplayName("이어 가기: AI가 답하지 않으면(시간 초과·꺼짐·대화 없음) 여는 질문으로 이어 간다")
+    void resumeFallsBackToOpeningWhenAiFails() {
+        resumable(13L, 2);
+        when(aiClient.dialogueState("d-13")).thenThrow(new CustomException(ErrorCode.COMPANION_TIMEOUT));
+
+        assertThat(service.open(WARD).question()).isEqualTo("이어 갈 질문");
+    }
+
+    @Test
+    @DisplayName("이어 가기: 아직 턴이 없으면 AI를 부르지 않고 여는 질문을 준다")
+    void resumeWithoutTurnsSkipsAi() {
+        resumable(14L, 0);
+
+        assertThat(service.open(WARD).question()).isEqualTo("이어 갈 질문");
+        verify(aiClient, never()).dialogueState(anyString());
+    }
+
+    @Test
+    @DisplayName("이어 가기: AI 값이 비었거나 너무 길면 여는 질문을 준다")
+    void resumeIgnoresBlankOrTooLong() {
+        resumable(15L, 1);
+        when(aiClient.dialogueState("d-15")).thenReturn(stateJson("{\"lastQuestion\":\" \"}"));
+        assertThat(service.open(WARD).question()).isEqualTo("이어 갈 질문");
+
+        when(aiClient.dialogueState("d-15")).thenReturn(
+                stateJson("{\"lastQuestion\":\"" + "가".repeat(CompanionService.MAX_RESUME_QUESTION_CHARS + 1) + "\"}"));
+        assertThat(service.open(WARD).question()).isEqualTo("이어 갈 질문");
+    }
+
+    private CompanionSession resumable(long id, int turns) {
+        CompanionSession open = sessionWithId(id, "d-" + id);
+        if (turns > 0) {
+            open.recordTurn(turns, false, null, AT_0910.toOffsetDateTime());
+        }
+        when(sessionRepository.findByWardIdAndSessionDateAndSlotAndTestFalse(WARD, TODAY, CompanionSlot.S09)).thenReturn(Optional.of(open));
+        when(questionRepository.findById(1L)).thenReturn(Optional.of(question(1L, "이어 갈 질문")));
+        return open;
+    }
+
+    private static JsonNode stateJson(String json) {
+        try {
+            return new ObjectMapper().readTree(json);
+        } catch (Exception e) {
+            throw new IllegalStateException(e);
+        }
+    }
+
+    @Test
     @DisplayName("대화 열기: 시간대 밖이면 409, 꺼져 있으면 503이다")
     void openOutsideWindowOrDisabled() {
         service.setClock(Clock.fixed(AT_0910.withHour(10).withMinute(30).toInstant(), CompanionService.KST));
