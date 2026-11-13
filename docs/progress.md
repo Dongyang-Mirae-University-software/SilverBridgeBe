@@ -4,6 +4,13 @@
 
 ---
 
+### [2026-11-13] 말벗 목소리 - Supertonic F1 (AI #281 `0346020`, gosky 14:03 배포)
+- 말벗 문장(여는 질문 index 0·턴 응답 index = `turnNo`)을 Supertonic 3 F1 목소리 mp3(24kHz mono 48kbps)로 만든다. CPU 전용, 메모리에만 15분(최대 200개), 디스크·DB 저장 없음. 열기·턴 응답에 `audio: {"index": n}`(꺼짐·포화면 null).
+- AI 경로 `GET /companion/sessions/{sessionId}/utterances/{index}/audio?wait=0~8` - 200 `audio/mpeg` / 503 `TTS_NOT_READY` / 404 `TTS_NOT_FOUND` / 422 `WAIT_INVALID`. `sessionId`는 BE 말벗 세션 ID, 키는 말벗 키(`X-API-Key`).
+- 동시 합성 2 + 대기 8, 넘치면 포기(사용자 결정). AI 고정 문장 15개는 기동 때 예열(19초), BE 질문은 문장 기준 보관, 모델 대답은 세션 보관만.
+- gosky 실측(3·4·6스레드): 문장당 중앙값 0.95·0.96·1.04초, 2명 동시 1.06·1.15·1.25초 → `COMPANION_TTS_THREADS=3`. 배포 후 실제 API로 열기·1턴·조회·삭제 확인(질문 0.58초·대답 0.97초), GPU 9.56GB 그대로, 컨테이너 메모리 2.4GB.
+- 모델 386MB는 볼륨 `models/companion/tts-supertonic3`(기동 중 내려받지 않음). `.env` 백업 `.env.bak-20261113-tts`, 롤백 태그 `sb-ai-rollback:20261113-tts` 1개. 배포 때 gosky 저장소가 다른 세션의 `feature/game-art-images`(원격에 없는 커밋 2개, 로컬 브랜치는 그대로 둠)에 있어 사용자 확인 후 main으로 전환. AI 재시작으로 카메라 재등록 필요.
+
 ### [2026-11-12] AI 의료 상담 #258 기능 점검 + 관리 질문 줄 수정 (AI #277 문서 → 11/13 사용자 결정으로 #278 반영, gosky `9cf51d6` 09:56)
 - 점검: "어깨가 아파" 두 경로 다리·저림·다른 부위 0(#258 해소), 굶기·민간요법·JSON 깨짐 0. 🟡 F-1 피보호자 관리 질문 답의 할 일 포함 6/15(보호자 11/15, #251부터), 🟡 F-2 급성 증상에 "2주" 6/18, 🟢 F-3 혼잡한 DGX에서 90초 생성 상한에 걸려 잘린 측정(이후 측정에서만 상한 600초, 같은 입력 30/30 동일 확인).
 - 관리 질문 줄 수정(괄호 예시 → "묻는 것에 바로 답", 진료로 시작 금지, 기간 증상에 맞춤, 짧게 써도 첫 문장 유지) 2안: "2주" 6→0·칩 must 18→22지만 피보호자 할 일 6→4라 기준 미달 - 11/13 사용자 "전부 반영" 지시로 cand3 반영(AI #278 `9cf51d6`, 피보호자 하락 감수). 사용자 "배포해" 뒤 gosky 배포(/health 200·MedGemma int8·turbo 정상). 다음 후보는 피보호자 간결 줄 쪽 조정. 상세 AI `docs/eval-results/2026-11-12-care-line-audit.md`.
