@@ -1783,8 +1783,13 @@ SilverBridge는 노인(피보호자)과 그 가족(보호자)을 연결하는 �
                               AI 문제인지 모르기 때문입니다. AI 서버가 살아 있는지까지만 보고,
                               모델이 실제로 답을 잘 만드는지는 보장하지 않습니다.
                             ※ AI가 답하지 않으면 최대 5초 걸려서 안전 현황과 주소를 나눴습니다.
+      companion             : 안부 말벗 - 말벗 AI가 답하는지 (OK / DISABLED / null)  (2026-11-11 추가)
+                            ※ 말벗 중계(3-21)가 생겨 AI의 GET /companion/status 로 확인할 수 있게 됐습니다.
+                              OK = 말벗 AI가 답하고 키를 받아들임. 운영자가 말벗을 꺼 두면(companion.enabled=false)
+                              AI를 부르지 않고 DISABLED. 주소·키가 없거나 확인에 실패하면 null(확인 불가)입니다.
     만들지 않은 것
-      - "AI 안부 말벗 · 정서 상태 분석" 상태: 우리 서버에 없는 서비스라 "정상"이라고 할 근거가 없습니다.
+      - (2026-11-11 해소) "AI 안부 말벗 · 정서 상태 분석" 상태: 처음에는 우리 서버에 없는 서비스라
+        "정상"이라고 할 근거가 없어 만들지 않았습니다. 지금은 위 companion 칸으로 보여 줍니다.
       - "24시간 넘게 꺼진 카메라": 카메라가 언제 끊겼는지 저장하지 않아서 알 수 없습니다.
         지금 끊긴 대수(disconnectedCameras)만 보여 줍니다.
 
@@ -2446,6 +2451,59 @@ SilverBridge는 노인(피보호자)과 그 가족(보호자)을 연결하는 �
     - 탈퇴한 회원의 상담은 빠집니다(탈퇴 시 AI 상담 기록을 지우므로 지난 기간 숫자도 나중에 줄 수 있음).
     - 조회라 감사 로그는 없습니다. 로그 [ADMIN-AI-STATS]에는 adminId·기간·캐시 여부·소요 ms·실패 코드만.
   상세: docs/(2026-10-28) feature-admin-ai-chat-stats.md, audit-admin-ai-chat-stats.md
+
+
+  [ 3-21. 안부 말벗 - 하루 5번 말 걸기 · 기분 살피기 ]  (companion, 2026-11-04 추가 / V65~V72)
+  ─────────────────────────────
+  혼자 지내는 어르신에게 AI 말벗이 하루 5번(09·12·15·18·21시, 각 60분 안) 먼저 말을 걸고
+  짧게 대화합니다(최대 8번 주고받음). 대화에서 보이는 기분과 위험 신호를 보호자에게 알려,
+  매일 전화하지 못해도 "오늘 어머니 기분이 어땠는지"를 알 수 있게 하는 것이 목적입니다.
+  기기 → 백엔드 /api/ward/companion/* → AI /companion/* 로 중계합니다.
+  스위치 COMPANION_ENABLED(기본 꺼짐). (Swagger 태그: 안부 말벗)
+
+  ▶ 피보호자 (WARD)
+    → GET  /api/ward/companion/today                     오늘 시간대별 질문·대화 상태
+    → POST /api/ward/companion/sessions                  대화 시작 (그 시간대 창 안에서만, 시간대당 1번)
+    → POST /api/ward/companion/sessions/{id}/reply       글로 대답
+    → POST /api/ward/companion/sessions/{id}/reply/audio 말로 대답 (음성 5MB·사진 1MB×5장까지)
+    → POST /api/ward/companion/sessions/{id}/finish      대화 마치기
+    → GET/PUT /api/ward/companion/transcript-consent     대화 내용 저장 동의 보기·바꾸기
+  ▶ 보호자 (GUARDIAN, 지금 연결된 피보호자만)
+    → GET /api/guardian/ward/{wardId}/companion/today        지금 기분·시간대별 상태·확인할 일
+    → GET /api/guardian/ward/{wardId}/companion/week         최근 7일 하루 기분
+    → GET /api/guardian/ward/{wardId}/companion/days/{date}  그날 대화들 (7일 안)
+    → GET /api/guardian/ward/{wardId}/companion/sessions/{id} 대화 하나 (동의한 경우에만 대화 글 포함)
+  ▶ 관리자: GET /api/admin/ai-stats/companion (오늘 집계, 우리 DB로 계산) / AI 상태는 3-11-B companion 칸
+
+  ▶ 왜 이렇게 만들었나
+    - 질문은 백엔드가 고릅니다(companion_question). 같은 문장 = 같은 번호라야 "이 질문에 얼마나
+      대답했나"(응답률)를 셀 수 있어서, 질문을 고칠 때는 행을 바꾸지 않고 끄고 새로 넣습니다.
+    - AI 판단 중 믿는 것은 위험 표시(riskFlag·alertLevel)뿐입니다. "3일째 걱정스러운 기분" 같은 주의는
+      백엔드가 기록으로 직접 셉니다(보호자 화면·주의 알림·관리자 집계가 같은 계산 하나를 씁니다).
+    - 기분을 판단할 수 없으면 null로 둡니다. "정상"이나 0으로 채우면 보호자가 괜찮다고 오해합니다.
+    - 위험 알림(COMPANION_RISK)은 대화당 1번, 끌 수 없는 강제 푸시입니다. 반대로 질문 안내는
+      하루 5번이라 앱 푸시만 보냅니다(문자로 보내면 시끄럽고 비용이 듭니다).
+    - 보호자는 지금 연결된 뒤의 대화만 봅니다(SOS·이상감지와 같은 규칙). 새로 연결한 보호자에게
+      연결 전 기분이 드러나지 않게 하려는 것입니다.
+
+  ▶ 대화 내용 저장 - 어르신이 동의한 경우에만 (2026-11-11 사용자 결정, V71)
+    - 기분·건강 이야기는 민감한 정보라 따로 동의를 받습니다(개인정보 보호법 제23조). 기본은 "동의 안 함"입니다.
+    - 동의하면 그다음 대화부터 말벗이 한 말과 어르신이 답한 글(말로 답하면 AI가 받아 적은 글)을 저장합니다.
+      기분은 동의와 상관없이 늘 저장합니다.
+    - 동의를 거두면 저장된 글을 그 자리에서 지웁니다(기분은 남김). 30일이 지난 글은 매일 04:55에 지웁니다.
+    - 음성·사진은 저장하지 않습니다. 로그·알림 문구·감사 로그에는 동의와 상관없이 대화 내용을 넣지 않습니다.
+    - 보호자는 어르신이 동의한 경우에만 대화 글을 봅니다.
+
+  ▶ 약속
+    - AI 호출은 트랜잭션 밖에서, 한 번에 최대 90초. 서버 전체 동시 8개(넘으면 503 COMPANION_BUSY),
+      한 대화에서 동시 1개(409 COMPANION_TURN_IN_PROGRESS).
+    - 남의 대화는 403 COMPANION_SESSION_NOT_OWNED, 연결 안 된 피보호자는 403 COMPANION_NOT_AUTHORIZED
+      (+ [IDOR-ATTEMPT] WARN).
+    - 탈퇴·역할 변경(피보호자 → 보호자) 때 말벗 기록을 지우고, AI 쪽 기록도 삭제 대기열로 지웁니다
+      (AI가 잠시 죽어 있어도 매시 35분에 다시 시도합니다).
+    - 여러 날 위험 누적 알림(COMPANION_RISK_PATTERN)·테스트 계정 모드는 스위치로 켜고 끕니다(기본 꺼짐).
+  상세: .claude/rules/policy-companion.md · docs/(2026-11-04) feature-companion-relay.md ·
+        feature-companion-screens.md · docs/(2026-11-11) feature-companion-transcript.md
 
 
 --------------------------------------------------------------------------------
