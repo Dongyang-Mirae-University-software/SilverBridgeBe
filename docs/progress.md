@@ -4,6 +4,10 @@
 
 ---
 
+### [2026-11-13] AI 의료 상담 예시 1 기간 "며칠이 지나도" + 피보호자 관리 질문 간결 줄 시도 (AI #286, gosky `b62b304` 15:24)
+- ② 예시 1의 "2주 넘게"가 일반 증상 답 대부분에 옮겨짐(holdout v6 55/88, 짧은 기간 질문 10/18) → "며칠이 지나도"로: "2주" 1/88(0/18), v5 구체 기준 10/16 그대로·약 이유 9→10/11, v7 응급 37/37·위기 109 12/12, 시간 +10%. 관리 질문 보호자 할 일 13→10/15·칩 must 22→20 하락은 사용자 결정으로 감수.
+- ① 피보호자+관리 질문일 때 간결 줄을 "방법 한 가지 + 언제 진료" 두 문장으로(W1) - 피보호자 할 일 포함 5→5로 효과 없어 미반영. 규칙 8 기간 줄(P2)도 미반영. DGX 혼잡으로 품질 측정에서만 생성 상한 600초(재실행 59/60 동일). 상세 AI `docs/eval-results/2026-11-13-ward-care-period.md`.
+
 ### [2026-11-13] 말벗 목소리 - Supertonic F1 (AI #281 `0346020`, gosky 14:03 배포)
 - 말벗 문장(여는 질문 index 0·턴 응답 index = `turnNo`)을 Supertonic 3 F1 목소리 mp3(24kHz mono 48kbps)로 만든다. CPU 전용, 메모리에만 15분(최대 200개), 디스크·DB 저장 없음. 열기·턴 응답에 `audio: {"index": n}`(꺼짐·포화면 null).
 - AI 경로 `GET /companion/sessions/{sessionId}/utterances/{index}/audio?wait=0~8` - 200 `audio/mpeg` / 503 `TTS_NOT_READY` / 404 `TTS_NOT_FOUND` / 422 `WAIT_INVALID`. `sessionId`는 BE 말벗 세션 ID, 키는 말벗 키(`X-API-Key`).
