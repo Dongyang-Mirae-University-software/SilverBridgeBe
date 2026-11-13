@@ -86,7 +86,7 @@
 
 | 이슈 | 조치 | 시험 |
 |---|---|---|
-| 🟡 M-1 | `CompanionAudioService` 피보호자당 동시 2(`COMPANION_AUDIO_MAX_PER_WARD`, 기본 2) - 넘치면 AI를 부르지 않고 503 `COMPANION_AUDIO_NOT_READY` + `[COMPANION-LIMIT]` WARN. 피보호자 칸은 0이 되면 지운다. 순서: 피보호자 자리 → 전체 자리 → AI, 실패해도 둘 다 반환 | `perWardLimit`(3번째 거절·다른 피보호자 통과·자리 반환)·`perWardReleasedOnFailure` |
+| 🟡 M-1 | `CompanionAudioService` 피보호자당 동시 2(`COMPANION_AUDIO_MAX_PER_WARD`, 기본 2) - 넘치면 AI를 부르지 않고 503 `COMPANION_AUDIO_NOT_READY` + `[COMPANION-LIMIT]` WARN. 피보호자 칸은 0이 되면 지운다. 순서: 피보호자 자리 → 전체 자리 → AI, 실패해도 둘 다 반환 | `perWardLimit`(3번째 거절·다른 피보호자 통과·자리 반환)·`perWardReleasedOnFailure` + **실서버(시험 대화 253)**: 대답 직후 합성 중인 소리를 동시 4건 → 200 2건(1.1초 대기)·503 2건(0.16초, AI 미호출), `[COMPANION-LIMIT] … 피보호자당` WARN 4건(두 턴) |
 | 🟢 L-1 | 목소리 엔드포인트 안에서 `CustomException`(정확히 그 클래스)만 잡아 같은 상태·본문·로그로 내되 `Content-Type: application/json`·`no-store`를 못박는다(협상 건너뜀). 429 등 전용 처리가 있는 하위 예외는 전역 처리기 그대로. 컨트롤러 전체 `@ExceptionHandler`는 쓰지 않았다 - 다른 말벗 API의 429 `Retry-After`를 가로챈다 | `errorsIgnoreAudioAccept`(audio/mpeg·audio/*·목록 → 404 JSON, **수정 한 줄을 빼면 3건 실패 확인**)·`tooManyRequestsKeepsRetryAfter` |
 | 🟢 L-2 | BE는 AI 목소리 요청에 대화 주인 `X-Companion-Ward-Id` 헤더를 싣는다(형식 `^[A-Za-z0-9]{1,16}$`, 틀리면 AI 미호출). AI 대조는 아래 AI 프롬프트(AI 재시작이 필요해 확인 지점). 정책 "BE 두 곳 공유 금지"는 그대로 | `relaysAudio`(헤더 값·URL 미포함)·`rejectsBadWardId` 6종 |
 | 🟢 L-3 | **바꾸지 않음** - FE 점검 `audit-companion-voice.md`(FE #270)이 같은 점을 보고 PASS로 정했다: `apiClient`를 쓰지 않는 것은 소리 하나의 401로 세션 정리(로그아웃)를 타지 않게 하려는 의도이고, 소리 요청 직전 대답 요청이 토큰을 갱신하며 실패해도 기기 음성으로 읽는다. `refreshAccessToken`은 갱신 거절 시 `clearSession()`을 불러 그 의도와 어긋난다 | - |
