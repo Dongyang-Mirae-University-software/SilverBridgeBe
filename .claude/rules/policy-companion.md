@@ -70,6 +70,7 @@ paths:
   - **턴 위험 = 최상위 `riskFlag` 또는 `signals.riskFlag`**(2026-11-09): 확인(되묻기) 턴(`replySource="CONFIRM"`)은 `signals`가 null이고 낱말 규칙 결과를 최상위에만 싣는다. `signals`만 읽지 말 것 - 그 위험 알림이 마감 때로 늦어진다. AI 새 오류 코드 `ANSWER_TOO_LONG`·`FRAME_FORMAT_UNSUPPORTED`는 `COMPANION_ANSWER_TOO_LONG`·`COMPANION_FRAME_INVALID`(400)로 바꾼다.
 - **질문 안내 `COMPANION_PROMPT`는 FCM만·설정 기반**: 하루 5건 다발성이라 문자·알림톡·강제 승격 금지. PR-B 전까지 `COMPANION_PROMPT_WARD_IDS` 허용 목록에만.
 - **이어 가는 대화의 턴 수**(2026-11-12): 대화 열기 응답 `SessionResponse.turnCount` = `companion_session.turn_count`(기록된 마지막 턴 번호). 새 대화 0, 이어 가기(일반·테스트 모두 `resumeOrReject`)는 저장값. 기기는 다음 대답을 `turnCount + 1`번째로 보여 준다. 응답에 필드만 더했다(기존 필드 불변).
+- **이어 가는 대화의 질문**(2026-11-14, AI 점검 M-1): 이어 가기 응답 `question`은 턴이 있으면 AI `GET /companion/dialogues/{id}`의 `lastQuestion`(마지막 말벗 문장 - AI가 다음 대답을 이 문장의 대답으로 해석한다), 턴 없음·AI 실패(3초 `state-call-timeout`)·빈 값·300자 초과면 여는 질문. 여는 질문으로 되돌리지 말 것(어르신 답과 AI 해석이 어긋난다). 로그에는 오류 코드 이름만.
 - **AI 호출은 트랜잭션 밖**(최대 90초): 쓰기는 `CompanionSessionWriter`의 짧은 트랜잭션. 동시 상한 서버 8(503 `COMPANION_BUSY`)·대화 1(409 `COMPANION_TURN_IN_PROGRESS`), 단일 인스턴스 전제.
 - **중계 제한 90초**(사용자 결정 2026-11-04): AI에 한 턴 60초를 요청했다. 300초(AI 단계별 제한 합)로 늘리지 말 것 - 요청 스레드를 5분 붙든다.
 - **탈퇴 삭제는 대기열**: 탈퇴 트랜잭션 BEFORE_COMMIT에 `companion_purge_request`(FK 없음, ID만), 직후 1회 + 매시 35분 재시도(시도 안 한 것·오래 전 시도한 것부터, 첫 실패에서 중단, 24회마다 `[COMPANION-PURGE-STUCK]` ERROR). 스윕 purge·AI 장애에도 빠지지 않게 하려는 것이라 AFTER_COMMIT으로 옮기지 말 것. 스위치와 무관하게 주소·키만 있으면 지운다.
