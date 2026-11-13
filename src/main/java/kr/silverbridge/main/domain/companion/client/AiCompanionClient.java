@@ -49,6 +49,11 @@ import java.util.regex.Pattern;
 public class AiCompanionClient {
 
     private static final String API_KEY_HEADER = "X-API-Key";
+    /**
+     * 목소리 요청의 대화 주인(2026-11-13 점검 L-2). AI는 소리를 BE 대화 번호로만 찾으므로, AI가 이 값을 대화의 wardId와
+     * 대조하면 BE 두 곳이 같은 AI를 써도 남의 소리가 나가지 않는다. 경로·쿼리가 아니라 헤더라 접근 로그에 남지 않는다.
+     */
+    static final String WARD_ID_HEADER = "X-Companion-Ward-Id";
     private static final int MAX_ERROR_BODY_BYTES = 8 * 1024;
     /** AI 대화 번호를 경로에 넣기 전 형식 확인(경로 조작 방지). */
     private static final Pattern DIALOGUE_ID = Pattern.compile("^[A-Za-z0-9_-]{1,64}$");
@@ -158,11 +163,11 @@ public class AiCompanionClient {
      * {@code COMPANION_AUDIO_NOT_FOUND} / 그 밖(503·시간 초과·연결 실패·키 불일치 등) → 503 {@code COMPANION_AUDIO_NOT_READY}.
      * 소리는 메모리로만 넘기고 어디에도 저장하지 않는다. 로그에는 상태 코드·예외 클래스명만 남긴다.</p>
      */
-    public CompanionAudio fetchUtteranceAudio(long sessionId, int index) {
+    public CompanionAudio fetchUtteranceAudio(String wardId, long sessionId, int index) {
         if (!properties.isConfigured()) {
             throw new CustomException(ErrorCode.COMPANION_DISABLED);
         }
-        if (sessionId <= 0 || index < 0) {
+        if (wardId == null || !WARD_ID.matcher(wardId).matches() || sessionId <= 0 || index < 0) {
             throw new CustomException(ErrorCode.COMPANION_AUDIO_INDEX_INVALID);
         }
         URI uri = UriComponentsBuilder.fromUriString(properties.getAiBaseUrl())
@@ -183,6 +188,7 @@ public class AiCompanionClient {
             connection.setInstanceFollowRedirects(false);
             connection.setRequestProperty(API_KEY_HEADER, properties.getApiKey());
             connection.setRequestProperty("Accept", String.join(", ", AUDIO_CONTENT_TYPES));
+            connection.setRequestProperty(WARD_ID_HEADER, wardId);
             HttpURLConnection target = connection;
             deadline = deadlineExecutor.schedule(() -> {
                 timedOut.set(true);

@@ -8,6 +8,7 @@ import kr.silverbridge.main.global.exception.ErrorCode;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.Semaphore;
 import java.util.regex.Pattern;
 
@@ -19,8 +20,10 @@ import java.util.regex.Pattern;
  * 본인 대화만(남의 대화 403 {@code COMPANION_SESSION_NOT_OWNED} + {@code [IDOR-ATTEMPT]}, 없으면 404), 말벗 스위치는
  * 다른 말벗 API와 같은 기준이다. 대화가 끝났어도 받는다 - 마지막 대답의 마무리 문장도 읽어 줘야 한다.</p>
  *
- * <p>요청 하나가 스레드를 최대 {@code audio-call-timeout}(8초) 붙들므로 대답 턴과 따로 동시 상한을 둔다. 넘치면 503
- * {@code COMPANION_AUDIO_NOT_READY} - 기기는 404·503 모두 직접 읽어 주는 것으로 대신한다.</p>
+ * <p>요청 하나가 스레드를 최대 {@code audio-call-timeout}(8초) 붙들므로 대답 턴과 따로 동시 상한을 둔다 - 서버 전체
+ * {@code audio-max-concurrent}(8)와 피보호자당 {@code audio-max-per-ward}(2, 점검 M-1 - 한 사람이 전체 자리를 다 쓰면
+ * 다른 피보호자의 목소리가 모두 밀린다). 넘치면 AI를 부르지 않고 503 {@code COMPANION_AUDIO_NOT_READY} - 기기는
+ * 404·503 모두 직접 읽어 주는 것으로 대신한다. 상한은 이 인스턴스 기준이다(단일 서버 전제).</p>
  */
 @Slf4j
 @Service
@@ -33,6 +36,8 @@ public class CompanionAudioService {
     private final CompanionProperties properties;
     private final CompanionService companionService;
     private final Semaphore inFlight;
+    /** 피보호자별 진행 중인 요청 수. 0이 되면 지운다(키가 쌓이지 않게). */
+    private final ConcurrentHashMap<String, Integer> perWard = new ConcurrentHashMap<>();
 
     public CompanionAudioService(AiCompanionClient aiClient, CompanionProperties properties,
                                  CompanionService companionService) {
@@ -46,15 +51,45 @@ public class CompanionAudioService {
         companionService.requireUsable();
         int index = parseIndex(rawIndex);
         companionService.requireOwned(wardId, sessionId);
-        if (!inFlight.tryAcquire()) {
-            log.warn("[COMPANION-LIMIT] 목소리 중계 동시 상한 - 요청 거부: sessionId={}", sessionId);
+        if (!enterWard(wardId)) {
+            log.warn("[COMPANION-LIMIT] 목소리 중계 피보호자당 동시 상한 - 요청 거부: wardId={}, sessionId={}", wardId, sessionId);
             throw new CustomException(ErrorCode.COMPANION_AUDIO_NOT_READY);
         }
         try {
-            return aiClient.fetchUtteranceAudio(sessionId, index);
+            if (!inFlight.tryAcquire()) {
+                log.warn("[COMPANION-LIMIT] 목소리 중계 동시 상한 - 요청 거부: sessionId={}", sessionId);
+                throw new CustomException(ErrorCode.COMPANION_AUDIO_NOT_READY);
+            }
+            try {
+                return aiClient.fetchUtteranceAudio(wardId, sessionId, index);
+            } finally {
+                inFlight.release();
+            }
         } finally {
-            inFlight.release();
+            leaveWard(wardId);
         }
+    }
+
+    private boolean enterWard(String wardId) {
+        int max = Math.max(1, properties.getAudioMaxPerWard());
+        boolean[] entered = {false};
+        perWard.compute(wardId, (key, count) -> {
+            int current = count == null ? 0 : count;
+            if (current >= max) {
+                return count;
+            }
+            entered[0] = true;
+            return current + 1;
+        });
+        return entered[0];
+    }
+
+    private void leaveWard(String wardId) {
+        perWard.computeIfPresent(wardId, (key, count) -> count <= 1 ? null : count - 1);
+    }
+
+    int inFlightOf(String wardId) {
+        return perWard.getOrDefault(wardId, 0);
     }
 
     /** 형식·범위가 틀리면 400. 로그에는 원문 대신 길이만 남긴다. */

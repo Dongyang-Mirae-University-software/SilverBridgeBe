@@ -351,7 +351,7 @@ public class CompanionService {
         if (ended) {
             endReason = finalizeQuietly(session);
         }
-        log.info("[COMPANION] 턴 처리: sessionId={}, turnNo={}, ended={}, audio={}", sessionId, turnNo, ended, audio);
+        log.info("[COMPANION] 턴 처리: sessionId={}, turnNo={}, ended={}, voiceAnswer={}", sessionId, turnNo, ended, audio);
         TurnAnalysis analysis = properties.isTestWard(session.getWardId()) ? turnAnalysis(data, riskSeen) : null;
         return new TurnResponse(turnNo, reply, ended, endReason, transcript, analysis, audioRef);
     }

@@ -82,7 +82,36 @@
 ### 🟢 L-4 턴 로그 `audio=`는 "음성 대답"이라는 뜻이다 - 새 목소리 칸과 이름이 겹친다
 - `CompanionService.handleTurn`의 `[COMPANION] 턴 처리: ... audio={}`는 대답이 음성이었는지다(실측 `audio=false` 턴에 목소리 index 1이 나감). 로그를 읽는 사람이 목소리 유무로 오해할 수 있다. 제안: `voiceAnswer=`로 이름만 바꾸기(동작 무변경).
 
-## 수정 커밋 메시지 초안 (승인 시)
+## 조치 (2026-11-13, 사용자 "전부 반영", `fix/companion-tts-audit`)
 
-- `fix: 말벗 목소리 중계에 피보호자당 동시 상한 2 추가` (M-1)
-- `refactor: 말벗 턴 로그의 음성 대답 표시 이름을 voiceAnswer로` (L-4)
+| 이슈 | 조치 | 시험 |
+|---|---|---|
+| 🟡 M-1 | `CompanionAudioService` 피보호자당 동시 2(`COMPANION_AUDIO_MAX_PER_WARD`, 기본 2) - 넘치면 AI를 부르지 않고 503 `COMPANION_AUDIO_NOT_READY` + `[COMPANION-LIMIT]` WARN. 피보호자 칸은 0이 되면 지운다. 순서: 피보호자 자리 → 전체 자리 → AI, 실패해도 둘 다 반환 | `perWardLimit`(3번째 거절·다른 피보호자 통과·자리 반환)·`perWardReleasedOnFailure` |
+| 🟢 L-1 | 목소리 엔드포인트 안에서 `CustomException`(정확히 그 클래스)만 잡아 같은 상태·본문·로그로 내되 `Content-Type: application/json`·`no-store`를 못박는다(협상 건너뜀). 429 등 전용 처리가 있는 하위 예외는 전역 처리기 그대로. 컨트롤러 전체 `@ExceptionHandler`는 쓰지 않았다 - 다른 말벗 API의 429 `Retry-After`를 가로챈다 | `errorsIgnoreAudioAccept`(audio/mpeg·audio/*·목록 → 404 JSON, **수정 한 줄을 빼면 3건 실패 확인**)·`tooManyRequestsKeepsRetryAfter` |
+| 🟢 L-2 | BE는 AI 목소리 요청에 대화 주인 `X-Companion-Ward-Id` 헤더를 싣는다(형식 `^[A-Za-z0-9]{1,16}$`, 틀리면 AI 미호출). AI 대조는 아래 AI 프롬프트(AI 재시작이 필요해 확인 지점). 정책 "BE 두 곳 공유 금지"는 그대로 | `relaysAudio`(헤더 값·URL 미포함)·`rejectsBadWardId` 6종 |
+| 🟢 L-3 | FE 범위 - 아래 FE 프롬프트 | - |
+| 🟢 L-4 | 턴 로그 `audio=` → `voiceAnswer=`(동작 무변경) | `CompanionTranscriptLogGuardTest` 통과 |
+
+`./gradlew build` 통과.
+
+### AI 전달 프롬프트 (L-2)
+
+```
+[AI] 말벗 목소리 - 대화 주인 대조. 보고 언어: 모든 PHASE 보고와 최종 보고는 한국어로.
+배경: BE(#485)가 GET /companion/sessions/{sessionId}/utterances/{index}/audio 에 X-Companion-Ward-Id 헤더(대화 주인 wardId)를 싣는다.
+AI는 소리를 session_id만으로 찾아, BE 두 곳이 같은 AI를 쓰면 같은 번호의 남의 소리가 나갈 수 있다.
+할 일: tts_service에 소리를 만들 때 wardId를 함께 두고(start에 이미 d.wardId가 들어온다), get에서 헤더 값이 있으면 다르면 404 TTS_NOT_FOUND
+(존재를 드러내지 않게 없는 것과 같게). 헤더가 없으면 지금처럼 동작(옛 BE 호환). 로그에 wardId·문장 원문 금지.
+시험: 같은 wardId 200 / 다른 wardId 404 / 헤더 없음 200. 배포는 AI 재시작이 필요하니 사용자 확인 후.
+```
+
+### FE 전달 프롬프트 (L-3)
+
+```
+[FE] 말벗 목소리 요청의 토큰 갱신. 보고 언어: 모든 PHASE 보고와 최종 보고는 한국어로.
+배경: fetchWardCompanionAudio(src/service/api/ward/companion.ts)는 apiClient가 아닌 맨 fetch라 access token이 만료되면 401 →
+브라우저 읽기로 조용히 대체되고, 다른 apiClient 호출이 갱신할 때까지 서버 목소리가 나오지 않는다.
+할 일: 401이면 apiClient와 같은 갱신 함수(진행 중인 갱신 공유)로 한 번 갱신하고 한 번만 다시 요청, 그래도 실패하면 지금처럼 브라우저 읽기.
+Accept는 지정하지 않는다(기본 */* - 소리 형식으로만 좁히지 말 것, BE 점검 L-1). cache: 'no-store' 유지. 소리를 저장하지 않는다.
+시험: 401 → 갱신 → 200 재생 / 갱신 실패 → 브라우저 읽기 / 404·502·503 → 갱신 없이 브라우저 읽기.
+```

@@ -54,6 +54,8 @@ public class CompanionProperties {
     private int audioMaxIndex = 50;
     /** 목소리 중계 동시 상한 - 대답 턴(maxConcurrent)과 따로 센다. 넘치면 503(기기가 직접 읽어 준다). */
     private int audioMaxConcurrent = 8;
+    /** 피보호자 1명의 목소리 동시 요청 상한(2026-11-13 점검 M-1) - 지금 줄 + 다음 줄 미리 받기. 넘치면 503. */
+    private int audioMaxPerWard = 2;
     /** 시간대 시작부터 대화를 열 수 있는 시간(분). */
     private long windowMinutes = 60;
     /** 이 시간 동안 활동이 없는 대화는 스케줄러가 마감한다. */

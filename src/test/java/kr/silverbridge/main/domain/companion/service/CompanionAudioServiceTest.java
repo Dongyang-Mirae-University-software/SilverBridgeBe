@@ -36,6 +36,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -96,7 +97,7 @@ class CompanionAudioServiceTest {
     void ownSessionRelays() {
         when(sessionRepository.findById(10L)).thenReturn(Optional.of(session(10L, WARD)));
         CompanionAudio audio = new CompanionAudio(new byte[]{1, 2, 3}, "audio/mpeg");
-        when(aiClient.fetchUtteranceAudio(10L, 2)).thenReturn(audio);
+        when(aiClient.fetchUtteranceAudio(WARD, 10L, 2)).thenReturn(audio);
 
         assertThat(service.utteranceAudio(WARD, 10L, "2")).isSameAs(audio);
         assertThat(service.availablePermits()).isEqualTo(properties.getAudioMaxConcurrent());
@@ -109,7 +110,7 @@ class CompanionAudioServiceTest {
         ReflectionTestUtils.setField(finished, "status",
                 kr.silverbridge.main.domain.companion.entity.CompanionSessionStatus.FINISHED);
         when(sessionRepository.findById(11L)).thenReturn(Optional.of(finished));
-        when(aiClient.fetchUtteranceAudio(11L, 0)).thenReturn(new CompanionAudio(new byte[]{1}, "audio/ogg"));
+        when(aiClient.fetchUtteranceAudio(WARD, 11L, 0)).thenReturn(new CompanionAudio(new byte[]{1}, "audio/ogg"));
 
         assertThat(service.utteranceAudio(WARD, 11L, "0").contentType()).isEqualTo("audio/ogg");
     }
@@ -122,7 +123,7 @@ class CompanionAudioServiceTest {
         assertThatThrownBy(() -> service.utteranceAudio(WARD, 12L, "1"))
                 .extracting(e -> ((CustomException) e).getErrorCode()).isEqualTo(ErrorCode.COMPANION_SESSION_NOT_OWNED);
         assertThat(appender.list).anyMatch(e -> e.getFormattedMessage().startsWith("[IDOR-ATTEMPT]"));
-        verify(aiClient, never()).fetchUtteranceAudio(anyLong(), anyInt());
+        verify(aiClient, never()).fetchUtteranceAudio(anyString(), anyLong(), anyInt());
     }
 
     @Test
@@ -132,7 +133,7 @@ class CompanionAudioServiceTest {
 
         assertThatThrownBy(() -> service.utteranceAudio(WARD, 13L, "1"))
                 .extracting(e -> ((CustomException) e).getErrorCode()).isEqualTo(ErrorCode.COMPANION_SESSION_NOT_FOUND);
-        verify(aiClient, never()).fetchUtteranceAudio(anyLong(), anyInt());
+        verify(aiClient, never()).fetchUtteranceAudio(anyString(), anyLong(), anyInt());
     }
 
     @ParameterizedTest
@@ -142,7 +143,7 @@ class CompanionAudioServiceTest {
         assertThatThrownBy(() -> service.utteranceAudio(WARD, 10L, raw))
                 .extracting(e -> ((CustomException) e).getErrorCode()).isEqualTo(ErrorCode.COMPANION_AUDIO_INDEX_INVALID);
         verify(sessionRepository, never()).findById(anyLong());
-        verify(aiClient, never()).fetchUtteranceAudio(anyLong(), anyInt());
+        verify(aiClient, never()).fetchUtteranceAudio(anyString(), anyLong(), anyInt());
         if (!raw.isEmpty()) {
             assertThat(appender.list).noneMatch(e -> e.getFormattedMessage().contains(raw));
         }
@@ -152,7 +153,7 @@ class CompanionAudioServiceTest {
     @DisplayName("상한 50까지는 받는다")
     void maxIndexAccepted() {
         when(sessionRepository.findById(10L)).thenReturn(Optional.of(session(10L, WARD)));
-        when(aiClient.fetchUtteranceAudio(10L, 50)).thenReturn(new CompanionAudio(new byte[]{1}, "audio/wav"));
+        when(aiClient.fetchUtteranceAudio(WARD, 10L, 50)).thenReturn(new CompanionAudio(new byte[]{1}, "audio/wav"));
 
         assertThat(service.utteranceAudio(WARD, 10L, "50").contentType()).isEqualTo("audio/wav");
     }
@@ -171,7 +172,7 @@ class CompanionAudioServiceTest {
     @DisplayName("AI 오류는 그대로 올리고 자리를 돌려준다")
     void aiErrorReleasesPermit() {
         when(sessionRepository.findById(10L)).thenReturn(Optional.of(session(10L, WARD)));
-        when(aiClient.fetchUtteranceAudio(10L, 1)).thenThrow(new CustomException(ErrorCode.COMPANION_AUDIO_NOT_FOUND));
+        when(aiClient.fetchUtteranceAudio(WARD, 10L, 1)).thenThrow(new CustomException(ErrorCode.COMPANION_AUDIO_NOT_FOUND));
 
         assertThatThrownBy(() -> service.utteranceAudio(WARD, 10L, "1"))
                 .extracting(e -> ((CustomException) e).getErrorCode()).isEqualTo(ErrorCode.COMPANION_AUDIO_NOT_FOUND);
@@ -186,7 +187,7 @@ class CompanionAudioServiceTest {
         when(sessionRepository.findById(10L)).thenReturn(Optional.of(session(10L, WARD)));
         CountDownLatch entered = new CountDownLatch(1);
         CountDownLatch release = new CountDownLatch(1);
-        when(aiClient.fetchUtteranceAudio(10L, 1)).thenAnswer(inv -> {
+        when(aiClient.fetchUtteranceAudio(WARD, 10L, 1)).thenAnswer(inv -> {
             entered.countDown();
             release.await(5, TimeUnit.SECONDS);
             return new CompanionAudio(new byte[]{1}, "audio/mpeg");
@@ -198,13 +199,65 @@ class CompanionAudioServiceTest {
 
             assertThatThrownBy(() -> service.utteranceAudio(WARD, 10L, "2"))
                     .extracting(e -> ((CustomException) e).getErrorCode()).isEqualTo(ErrorCode.COMPANION_AUDIO_NOT_READY);
-            verify(aiClient, never()).fetchUtteranceAudio(10L, 2);
+            verify(aiClient, never()).fetchUtteranceAudio(WARD, 10L, 2);
         } finally {
             release.countDown();
             pool.shutdown();
             assertThat(pool.awaitTermination(5, TimeUnit.SECONDS)).isTrue();
         }
         assertThat(service.availablePermits()).isEqualTo(1);
+    }
+
+    @Test
+    @DisplayName("피보호자당 동시 2(점검 M-1): 같은 피보호자 3번째는 AI를 부르지 않고 503, 다른 피보호자는 통과, 끝나면 자리 반환")
+    void perWardLimit() throws Exception {
+        when(sessionRepository.findById(10L)).thenReturn(Optional.of(session(10L, WARD)));
+        when(sessionRepository.findById(20L)).thenReturn(Optional.of(session(20L, OTHER)));
+        CountDownLatch entered = new CountDownLatch(2);
+        CountDownLatch release = new CountDownLatch(1);
+        when(aiClient.fetchUtteranceAudio(WARD, 10L, 1)).thenAnswer(inv -> {
+            entered.countDown();
+            release.await(5, TimeUnit.SECONDS);
+            return new CompanionAudio(new byte[]{1}, "audio/mpeg");
+        });
+        when(aiClient.fetchUtteranceAudio(OTHER, 20L, 1)).thenReturn(new CompanionAudio(new byte[]{2}, "audio/mpeg"));
+        ExecutorService pool = Executors.newFixedThreadPool(2);
+        try {
+            pool.submit(() -> service.utteranceAudio(WARD, 10L, "1"));
+            pool.submit(() -> service.utteranceAudio(WARD, 10L, "1"));
+            assertThat(entered.await(5, TimeUnit.SECONDS)).isTrue();
+            assertThat(service.inFlightOf(WARD)).isEqualTo(2);
+
+            assertThatThrownBy(() -> service.utteranceAudio(WARD, 10L, "2"))
+                    .extracting(e -> ((CustomException) e).getErrorCode()).isEqualTo(ErrorCode.COMPANION_AUDIO_NOT_READY);
+            verify(aiClient, never()).fetchUtteranceAudio(WARD, 10L, 2);
+            assertThat(appender.list).anyMatch(e -> e.getFormattedMessage().contains("피보호자당 동시 상한"));
+
+            assertThat(service.utteranceAudio(OTHER, 20L, "1").body()).containsExactly(2);
+        } finally {
+            release.countDown();
+            pool.shutdown();
+            assertThat(pool.awaitTermination(5, TimeUnit.SECONDS)).isTrue();
+        }
+        assertThat(service.inFlightOf(WARD)).isZero();
+        assertThat(service.availablePermits()).isEqualTo(properties.getAudioMaxConcurrent());
+    }
+
+    @Test
+    @DisplayName("피보호자당 자리는 AI 오류·전체 상한 거절 뒤에도 돌려준다")
+    void perWardReleasedOnFailure() {
+        when(sessionRepository.findById(10L)).thenReturn(Optional.of(session(10L, WARD)));
+        when(aiClient.fetchUtteranceAudio(WARD, 10L, 1)).thenThrow(new CustomException(ErrorCode.COMPANION_AUDIO_NOT_READY));
+        assertThatThrownBy(() -> service.utteranceAudio(WARD, 10L, "1")).isInstanceOf(CustomException.class);
+        assertThat(service.inFlightOf(WARD)).isZero();
+
+        properties.setAudioMaxConcurrent(1);
+        CompanionAudioService tight = new CompanionAudioService(aiClient, properties, companionService);
+        java.util.concurrent.Semaphore global = (java.util.concurrent.Semaphore) ReflectionTestUtils.getField(tight, "inFlight");
+        global.acquireUninterruptibly();
+        assertThatThrownBy(() -> tight.utteranceAudio(WARD, 10L, "1"))
+                .extracting(e -> ((CustomException) e).getErrorCode()).isEqualTo(ErrorCode.COMPANION_AUDIO_NOT_READY);
+        assertThat(tight.inFlightOf(WARD)).isZero();
     }
 
     @Test
