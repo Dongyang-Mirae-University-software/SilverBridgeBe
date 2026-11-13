@@ -3171,3 +3171,10 @@ AI 챗 집계 점검 L-1에서 남겨 둔 공용 `GlobalExceptionHandler`의 `e.
 - 검증: 새 시험 37개, 전체 pytest 3998 passed(실패 1 `test_clip_encoder`는 기존 환경). API 키 측정 없음.
 - 배포: gosky AI 11/13 23:50 `03c3bfd`, `/health` 200·어댑터 mood·reply 적재·GPU 9,671MiB, 롤백 `sb-ai-rollback:20261113-pre-flat-topic` 1개(옛 pre-text-reply 삭제).
 - 실서버 확인(시험 피보호자 테스트 대화 09:00 `sessionId=385`, TTS 음성 6턴): 3번 "아니, 없어" → "그러셨군요. 오늘 식사는 잘 챙겨 드셨어요?", 5번 "계획 없어" → "네, 알겠어요. 요즘 밤에 잠은 잘 주무세요?", "활동·취미" 질문 0번, AI 로그 `[COMPANION-TOPIC-SWITCH] streak=2` 두 번.
+
+## 2026-11-14 AI #287 말벗 글 대답·check_reply 기능 점검
+
+- 점검 `docs/(2026-11-14) audit-companion-text-reply.md` - 조건부 PASS · 🔴 0 · 🟠 1 · 🟡 1 · 🟢 4. 보안·개인정보 PASS(이유 코드 로그 원문 없음, `input_kind`는 엔드포인트가 정함), BE 영향 없음(`CONFIRM`·`needsCheck`를 읽는 BE 코드 없음).
+- DGX: 11/12 cc7 원본 대답 293개(평범 CareCall 200·힘든 93)에 #287 전·후 `check_reply` 적용 - 엄격 기준 통과 216 → 228, 새로 통과 12(적절 10·경계 1·오통과 1, 8%), 새로 탈락 0. GPU 생성·API 키 없음.
+- gosky(11/13 23:50 이후 47턴): 모델 35·안전 안내 6·대체 6(되풀이 4·모델 실패 2), 시간 초과·'대답과 무관'·'과거 가정' 대체 0.
+- 남음: H-1(표의 걸러야 할 권유 대답이 실제 어르신 말로는 통과)·M-1('예전처럼') 수정 PR, L-1~L-4 묶을지 결정.
