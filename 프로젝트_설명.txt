@@ -2948,6 +2948,7 @@ SilverBridge는 노인(피보호자)과 그 가족(보호자)을 연결하는 �
   result          : DELIVERED / SMS_FALLBACK / FAILED / NOT_SENT
   not_sent_reason : NOT_SENT일 때 이유 (RESTRICTED_ACCOUNT / WITHDRAWING_ACCOUNT / NO_ENABLED_CHANNEL)
   channel_results : 방법별 결과 목록(JSON) - 채널·결과·정해진 실패 코드
+  read_at         : 받은 사람이 읽은 시각 (V67, 2026-11-04 추가, 받은 알림 목록·안 읽은 수용). 안 읽었으면 NULL
 
   ※ 받는 사람 1명당 1줄. 보낸 뒤 별도 트랜잭션(REQUIRES_NEW)으로 남기며, 실패해도 발송을 막지 않습니다.
   ※ 보관 90일 (notification.log.retention-days), 매일 04:30 KST 정리.
@@ -2963,11 +2964,14 @@ SilverBridge는 노인(피보호자)과 그 가족(보호자)을 연결하는 �
   guardian_id              : 보호자 (users FK, CASCADE, UNIQUE - 보호자당 1행)
   medication_enabled       : 복약 미복용 요약을 받을지 (기본 true)
   camera_link_lost_enabled : 카메라 연결 끊김 안내를 받을지 (V61, 2026-10-16, NOT NULL DEFAULT TRUE)
+  companion_notice_enabled : 안부 말벗 주의 알림(걱정·우울 3일째부터)을 받을지 (V66, 2026-11-04, NOT NULL DEFAULT TRUE)
+                             말벗 위험 알림(COMPANION_RISK)은 필수라 칸이 없습니다(3-21)
   created_at / updated_at
   ※ 행이 없으면 전부 ON → 백필 불필요. 추가만 하는 마이그레이션이라 비가역 DDL 없음.
   ※ SOS·이상감지 발생은 필수라 칸이 없습니다. 판정 재촉은 기존 guardian_anomaly_setting을 씁니다(복제 금지).
   ※ 최초 저장 경합은 ON CONFLICT DO NOTHING(insertIfAbsent) 후 다시 읽습니다.
-  ※ 정서 변화·병원 예약 칸은 만들지 마세요 - 백엔드가 보내지 않는 알림입니다.
+  ※ 병원 예약 칸은 만들지 마세요 - 백엔드가 보내지 않는 알림입니다.
+    (정서 변화는 2026-11-04에 안부 말벗 주의 알림으로 생겨 위 companion_notice_enabled로 넣었습니다.)
 
 
   [ camera — 이상감지 카메라 소유권 ] (2026-07-13 추가, V29)
@@ -3037,7 +3041,85 @@ SilverBridge는 노인(피보호자)과 그 가족(보호자)을 연결하는 �
   ※ V60(2026-10-13, 비가역): 이메일 채널 구현 전에 저장돼 있던 EMAIL=true 행을 모두 false로 되돌렸습니다
     (명시적으로 다시 켠 사용자만 메일을 받게).
 
-  ※ 마이그레이션 현황(2026-10-27): 최신 V63. 2026-10-05 이후 추가분 = V58 카메라 방 유니크 /
+  ─── 안부 말벗 (3-21, 2026-11-04 추가, V65~V72) ───
+  ※ 피보호자를 가리키는 칸(ward_id)은 모두 users FK CASCADE - 탈퇴하면 함께 지워집니다.
+    역할 변경(피보호자 → 보호자) 때도 말벗 기록을 지웁니다. AI 쪽 기록은 companion_purge_request로 따로 지웁니다.
+
+  [ companion_question — 시간대별 질문 문장 ] (V65)
+  ─────────────────────────────
+  id         : 고유 번호 (같은 문장 = 같은 번호 - 응답률 집계 기준)
+  slot       : 09:00 / 12:00 / 15:00 / 18:00 / 21:00 (CHECK)
+  text       : 질문 문장 (최대 200자, 처음 19문장)
+  active     : 지금 쓰는 질문인지. 하루 질문 = 그 시간대 사용 중 질문 중 (날짜 번호 mod 개수)번째
+  created_at
+  ※ 문장을 고칠 때는 행을 바꾸지 말고 active=false + 새 행(새 마이그레이션). 고치면 지난 응답률의 뜻이 바뀝니다.
+
+  [ companion_session — 대화 1회 = 1행 ] (V65 / V68 is_test / V70 max_risk_prob / V72 AVOIDED)
+  ─────────────────────────────
+  id                : 고유 번호 (보호자 대화 보기 sessions/{id}의 id)
+  ward_id           : 피보호자 (CASCADE)
+  session_date      : 대화 날짜 (KST)       slot : 시간대 (CHECK)
+  question_id       : 그날 질문 (companion_question FK)
+  dialogue_id       : AI 대화 번호 (UNIQUE). AI를 부르기 전 자리를 잡는 동안은 NULL
+  max_turns         : 최대 주고받는 수 (대화를 열 때 AI가 알려 준 값, 지금 8. 못 받으면 NULL)
+  status            : OPEN(진행 중) / FINISHED(마침) / LOST(멈춘 채 마감) (CHECK)
+  end_reason        : MAX_TURNS / NO_RESPONSE / USER_STOP(끝내기) / AVOIDED(두 번 말을 피해 말벗이 마무리, V72)
+  mood              : JOY / CALM / WORRY / DEPRESSED. 판단할 수 없으면 NULL ("정상"으로 채우지 않음)
+  turn_count        : 기록된 마지막 턴 번호 (이어 가는 대화는 다음 턴을 turn_count + 1로 보여 줌)
+  answered_count · no_response_count : 대답한 턴 수 · 대답하지 않은 턴 수
+  risk_flag · alert_level : AI 위험 표시 · URGENT / INFO
+  risk_notified_at  : 위험 알림을 보낸 시각. 조건부 UPDATE로 대화당 1번만 보내게 하는 자리 잡기 칸
+  max_risk_prob     : 이 대화 턴들의 위험 확률 최댓값 0~1 (V70, 여러 날 위험 누적 판정용)
+  prompt_version    : AI 프롬프트 버전
+  is_test           : 테스트 계정 대화인지 (V68, 표시만 - 집계에서 빼지 않음)
+  started_at / last_activity_at / ended_at / version(낙관적 잠금)
+  ※ 일반 대화는 (피보호자, 날짜, 시간대)당 1번 (V68 부분 UNIQUE). 진행 중 테스트 대화도 시간대당 1개 (V69).
+  ※ 대화 내용 칸은 없습니다. 대화 글은 동의한 경우에만 아래 companion_turn에 남깁니다.
+  ※ 5분마다 멈춘 대화(OPEN인데 오래 움직임 없음)를 마감합니다.
+
+  [ companion_turn — 턴 1번 = 1행 ] (V71, 2026-11-11 추가)
+  ─────────────────────────────
+  id          : 고유 번호
+  session_id  : 대화 (companion_session FK, CASCADE)    turn_no : 턴 번호 ((session_id, turn_no) UNIQUE)
+  mood        : 그 턴의 기분 - 동의와 상관없이 늘 저장 (판단 불가 NULL)
+  bot_text    : 말벗이 한 말 (기기에 나간 문장 그대로) - 동의한 경우에만
+  answer_text : 어르신이 답한 글 (말로 답하면 AI가 받아 적은 글) - 동의한 경우에만
+  created_at  : 30일 보관 기준
+  ※ 30일이 지난 글은 매일 04:55에 비웁니다(기분·행은 남김). 동의를 거두면 그 자리에서 비웁니다.
+  ※ 음성·사진은 어디에도 저장하지 않습니다. 이 글을 로그·알림 문구·감사 로그에 넣지 마세요.
+
+  [ companion_transcript_consent — 대화 내용 저장 동의 ] (V71, 2026-11-11 추가)
+  ─────────────────────────────
+  ward_id      : 피보호자 (PK, CASCADE - 피보호자당 1행)
+  consented_at : 처음 동의한 시각 (다시 동의해도 바꾸지 않음)
+  ※ 행이 있으면 동의, 없으면 동의 안 함(기본). 철회 = 행 삭제 + 그 피보호자 턴 글 비우기(같은 트랜잭션).
+  ※ 동의 뒤의 턴부터 저장합니다(지난 턴을 채우지 않음).
+
+  [ companion_prompt_log — 질문 안내 푸시 기록 ] (V65)
+  ─────────────────────────────
+  ward_id · prompt_date · slot : (피보호자, 날짜, 시간대) UNIQUE - 하루 시간대당 1번만 보냄
+  sent_at
+  ※ 응답률 = 보낸 안내 중 그 시간대 대화에 대답이 있는 비율. 테스트 안내는 남기지 않습니다.
+
+  [ companion_notice_log — 주의 알림 기록 ] (V66)
+  ─────────────────────────────
+  ward_id · notice_date : (피보호자, 날짜) UNIQUE - 하루 1번 자리 잡기
+  mood : WORRY / DEPRESSED    days : 보낸 연속 일수    sent_at
+
+  [ companion_risk_pattern_notice — 여러 날 위험 누적 알림 기록 ] (V70, 2026-11-11 추가)
+  ─────────────────────────────
+  ward_id (PK, CASCADE) · last_notified_date · days · sent_at
+  ※ 피보호자당 1행. "마지막으로 보낸 날 + 7일"이 지났을 때만 이기는 UPSERT 한 문장으로 7일에 1번 보냅니다.
+
+  [ companion_purge_request — AI 쪽 말벗 기록 삭제 대기열 ] (V65)
+  ─────────────────────────────
+  ward_id (PK, FK 없음 - 탈퇴 뒤에도 남아야 함) · requested_at · attempts · last_attempt_at
+  ※ 탈퇴·역할 변경 트랜잭션 안에서 넣고, 직후 1번 + 매시 35분에 다시 시도합니다. AI가 지우면 행을 지웁니다.
+
+  ※ 마이그레이션 현황(2026-11-13): 최신 V72. 2026-10-27 이후 추가분 = V64 SOS 이력 called_guardian / V65 말벗 4테이블 /
+    V66 주의 알림·companion_notice_enabled / V67 notification_log.read_at / V68 테스트 대화 표시 /
+    V69 진행 중 테스트 대화 UNIQUE / V70 위험 누적 / V71 대화 내용 저장·동의 / V72 종료 이유 AVOIDED.
+  ※ 이전 현황(2026-10-27): 최신 V63. 2026-10-05 이후 추가분 = V58 카메라 방 유니크 /
     V59 guardian_notification_preference / V60 이메일 설정 초기화 / V61 camera_link_lost_enabled /
     V62 dose_amount 반 알 / V63 감사 로그 HOSPITAL_* CHECK.
 
