@@ -89,12 +89,14 @@
 | 🟡 M-1 | `CompanionAudioService` 피보호자당 동시 2(`COMPANION_AUDIO_MAX_PER_WARD`, 기본 2) - 넘치면 AI를 부르지 않고 503 `COMPANION_AUDIO_NOT_READY` + `[COMPANION-LIMIT]` WARN. 피보호자 칸은 0이 되면 지운다. 순서: 피보호자 자리 → 전체 자리 → AI, 실패해도 둘 다 반환 | `perWardLimit`(3번째 거절·다른 피보호자 통과·자리 반환)·`perWardReleasedOnFailure` |
 | 🟢 L-1 | 목소리 엔드포인트 안에서 `CustomException`(정확히 그 클래스)만 잡아 같은 상태·본문·로그로 내되 `Content-Type: application/json`·`no-store`를 못박는다(협상 건너뜀). 429 등 전용 처리가 있는 하위 예외는 전역 처리기 그대로. 컨트롤러 전체 `@ExceptionHandler`는 쓰지 않았다 - 다른 말벗 API의 429 `Retry-After`를 가로챈다 | `errorsIgnoreAudioAccept`(audio/mpeg·audio/*·목록 → 404 JSON, **수정 한 줄을 빼면 3건 실패 확인**)·`tooManyRequestsKeepsRetryAfter` |
 | 🟢 L-2 | BE는 AI 목소리 요청에 대화 주인 `X-Companion-Ward-Id` 헤더를 싣는다(형식 `^[A-Za-z0-9]{1,16}$`, 틀리면 AI 미호출). AI 대조는 아래 AI 프롬프트(AI 재시작이 필요해 확인 지점). 정책 "BE 두 곳 공유 금지"는 그대로 | `relaysAudio`(헤더 값·URL 미포함)·`rejectsBadWardId` 6종 |
-| 🟢 L-3 | FE 범위 - 아래 FE 프롬프트 | - |
+| 🟢 L-3 | **바꾸지 않음** - FE 점검 `audit-companion-voice.md`(FE #270)이 같은 점을 보고 PASS로 정했다: `apiClient`를 쓰지 않는 것은 소리 하나의 401로 세션 정리(로그아웃)를 타지 않게 하려는 의도이고, 소리 요청 직전 대답 요청이 토큰을 갱신하며 실패해도 기기 음성으로 읽는다. `refreshAccessToken`은 갱신 거절 시 `clearSession()`을 불러 그 의도와 어긋난다 | - |
 | 🟢 L-4 | 턴 로그 `audio=` → `voiceAnswer=`(동작 무변경) | `CompanionTranscriptLogGuardTest` 통과 |
 
 `./gradlew build` 통과.
 
-### AI 전달 프롬프트 (L-2)
+**후속(같은 날)**: L-2 AI 대조는 AI #285 `c7721e3` 머지(헤더가 있으면 소리 주인과 대조, 다르면 기다리지 않고 404, 없으면 옛 동작 - TTS 시험 24 passed, 말벗 시험 실패 목록 수정 전과 동일). **gosky AI 배포는 재시작이 필요해 사용자 확인 대기.** L-3은 위처럼 FE 결정 유지.
+
+### AI 전달 프롬프트 (L-2) - AI #285로 반영됨
 
 ```
 [AI] 말벗 목소리 - 대화 주인 대조. 보고 언어: 모든 PHASE 보고와 최종 보고는 한국어로.
@@ -105,7 +107,7 @@ AI는 소리를 session_id만으로 찾아, BE 두 곳이 같은 AI를 쓰면 �
 시험: 같은 wardId 200 / 다른 wardId 404 / 헤더 없음 200. 배포는 AI 재시작이 필요하니 사용자 확인 후.
 ```
 
-### FE 전달 프롬프트 (L-3)
+### FE 전달 프롬프트 (L-3) - 쓰지 않음(FE #270 결정 유지)
 
 ```
 [FE] 말벗 목소리 요청의 토큰 갱신. 보고 언어: 모든 PHASE 보고와 최종 보고는 한국어로.
