@@ -138,6 +138,14 @@ public class AiCompanionClient {
                 parts, properties.getCallTimeout());
     }
 
+    /**
+     * 대화 상태를 본다(2026-11-14, AI {@code GET /companion/dialogues/{id}}): {@code lastQuestion} = 말벗이 마지막으로 한 말
+     * (어르신이 지금 대답할 문장, 턴이 없으면 여는 질문). 어르신 대답 원문은 없다. 짧은 제한({@code state-call-timeout})으로 부른다.
+     */
+    public JsonNode dialogueState(String dialogueId) {
+        return call("GET", dialoguePath(dialogueId, ""), null, List.of(), properties.getStateCallTimeout());
+    }
+
     /** 대화를 끝내고 결과를 받는다. 같은 대화에 다시 불러도 같은 결과가 온다(AI 계약). */
     public JsonNode finish(String dialogueId) {
         return call("POST", dialoguePath(dialogueId, "/finish"), "application/json", List.of(new byte[0]),

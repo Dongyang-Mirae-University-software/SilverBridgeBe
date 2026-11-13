@@ -41,7 +41,8 @@ public final class CompanionDtos {
     public record SessionResponse(
             @Schema(description = "대화 번호 - 이후 호출에 쓴다") long sessionId,
             @Schema(example = "09:00") String slot,
-            @Schema(description = "첫 질문 문장(기기가 읽어 준다)") String question,
+            @Schema(description = "기기가 읽어 줄 문장. 새 대화는 첫 질문, 이어 가는 대화는 말벗이 마지막으로 한 말"
+                    + "(AI가 답하지 않거나 아직 턴이 없으면 첫 질문)") String question,
             @Schema(description = "최대 턴 수. 알 수 없으면 null") Integer maxTurns,
             @Schema(description = "이미 열려 있던 대화를 이어 가는 것이면 true") boolean resumed,
             @Schema(description = "이미 마친 대답 수(마지막 턴 번호). 새 대화는 0, 이어 가는 대화는 지금까지 기록된 턴 수 - "

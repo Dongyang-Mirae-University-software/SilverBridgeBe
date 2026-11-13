@@ -35,6 +35,8 @@ public class CompanionProperties {
     private Duration callTimeout = Duration.ofSeconds(90);
     /** 탈퇴 삭제 호출 제한(메모리·검수 목록 삭제라 짧다). */
     private Duration purgeCallTimeout = Duration.ofSeconds(10);
+    /** 이어 가는 대화의 상태(마지막 말벗 문장) 조회 제한(2026-11-14). 넘으면 여는 질문으로 이어 간다. */
+    private Duration stateCallTimeout = Duration.ofSeconds(3);
     private int maxConcurrent = 8;
     private int perMinute = 20;
     private int perHour = 200;

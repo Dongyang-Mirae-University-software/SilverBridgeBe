@@ -76,6 +76,9 @@ public class CompanionService {
     /** AI가 응답 문장을 주지 않았을 때(계약 위반) 기기가 읽을 고정 문장. */
     private static final String FALLBACK_REPLY = "말씀해 주셔서 고맙습니다.";
 
+    /** 이어 가기 문장 상한 - AI 대답 상한(140자)보다 넉넉히. 넘으면 여는 질문을 쓴다. */
+    static final int MAX_RESUME_QUESTION_CHARS = 300;
+
     private final AiCompanionClient aiClient;
     private final CompanionProperties properties;
     private final CompanionQuestionRepository questionRepository;
@@ -473,11 +476,32 @@ public class CompanionService {
         if (!session.isDialogueAttached()) {
             throw new CustomException(ErrorCode.COMPANION_TURN_IN_PROGRESS);
         }
-        String question = questionRepository.findById(session.getQuestionId())
+        String opening = questionRepository.findById(session.getQuestionId())
                 .map(CompanionQuestion::getText).orElse(null);
         // 이어 가는 대화는 지금까지 기록된 턴 수를 함께 준다 - 기기의 "N번째 대답"·진행 점이 처음부터 다시 세지 않게
-        return new SessionResponse(session.getId(), session.getSlot().code(), question, session.getMaxTurns(), true,
-                session.getTurnCount());
+        return new SessionResponse(session.getId(), session.getSlot().code(), resumeQuestion(session, opening),
+                session.getMaxTurns(), true, session.getTurnCount());
+    }
+
+    /**
+     * 이어 가는 대화에서 기기가 다시 보여 줄 문장(2026-11-14, AI 점검 M-1): 턴이 있으면 AI가 기억하는 마지막 말벗 문장.
+     * AI는 다음 대답을 이 문장에 대한 대답으로 해석하므로(AI #279), 여는 질문을 다시 보여 주면 어긋난다.
+     * 턴이 없거나 AI가 답하지 않으면(꺼짐·시간 초과·대화 없음) 여는 질문. 로그에는 오류 코드 이름만 남긴다(문장 원문 없음).
+     */
+    private String resumeQuestion(CompanionSession session, String opening) {
+        if (session.getTurnCount() <= 0) {
+            return opening;
+        }
+        try {
+            JsonNode state = aiClient.dialogueState(session.getDialogueId());
+            String last = state == null ? null : state.path("lastQuestion").asText(null);
+            if (last != null && !last.isBlank() && last.length() <= MAX_RESUME_QUESTION_CHARS) {
+                return last;
+            }
+        } catch (CustomException e) {
+            log.warn("[COMPANION] 이어 가기 마지막 말벗 문장 조회 실패 - 여는 질문으로: code={}", e.getErrorCode().name());
+        }
+        return opening;
     }
 
     /** 그 날 그 시간대에 고를 질문(보호자 화면의 아직 열리지 않은 시간대 표시에도 쓴다). */
