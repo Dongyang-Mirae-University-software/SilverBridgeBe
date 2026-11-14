@@ -3201,3 +3201,4 @@ AI 챗 집계 점검 L-1에서 남겨 둔 공용 `GlobalExceptionHandler`의 `e.
 - 결정: 대화 단위 고정 전환 / 하루 5만 자 / 고정 문장 구글+F1 예열 / 외부 전송은 policy-companion 기록, 화면 안내는 팀 몫
 - 측정(34문장×2): 구글 p50 2,654·p95 3,661ms·실패 0/68, F1 p50 845·p95 1,693ms. pytest 4059 통과
 - gosky: main `8757181`, `.env` ENGINE=google(백업 `.env.bak-20261114-pre-google-engine`), 롤백 `sb-ai-rollback:20261114-pre-google-tts`. 기동 `engine=google key=present`, 예열 구글 14/15(기동 중 1건 시간 초과)·F1 15/15, 실제 대화 질문 소리 `engine=google result=ok` 2.25초·mp3 24kHz mono, BE AI WS 재연결 확인
+- (같은 날) 목소리 Kore → **Gacrux**(사용자 결정): 후보 6개 × 말투 2가지 샘플 비교 - 음높이 중앙값 Gacrux 143·Kore 178·Sulafat 208Hz, 속도 basic 약 3.6음절/초(문구 "천천히"는 목소리마다 효과가 달라 미채택). gosky `.env` `COMPANION_TTS_GOOGLE_VOICE=Gacrux`(백업 `.env.bak-20261114-pre-gacrux`), 재시작 후 예열 구글 15/15·실제 질문 4건 `engine=google result=ok`
