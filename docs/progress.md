@@ -4,6 +4,10 @@
 
 ---
 
+### [2026-11-15] AI 칩 "무릎에 좋은 운동" 원인 분석 + 이력 줄이기 후보 H1·H2 미반영 (AI #299 문서만)
+- 원인: [최근 대화]의 앞 턴 AI 답(진료 권유 문장)을 모델이 다시 씀 - 같은 질문을 앞 턴 없이 보내면 운동을 쓴다(DGX 사본에서 build_user_prompt 인자 계측).
+- 관리 질문일 때 프롬프트 이력 줄이기: H1 사용자 발화만(칩 24→21), H2 AI 답은 질문 줄만(칩 24→23) - 노린 문항(cp.135·140)은 풀리지만 되묻기 답 맥락을 쓰는 다른 칩이 새로 틀려 미반영. 안전 판정 차이 0. 앱 코드 변경 없음. 상세 AI `docs/eval-results/2026-11-15-chip-knee-history.md`.
+
 ### [2026-11-15] 최종 QA BE 결함 11건 수정 (`fix/final-qa-be-defects`)
 - 최종 QA(Playwright 593 테스트) BE 결함: NOTI-N15b 받은 알림 500(`Map.of().get(null)`)·CONN-A26/A31 숫자 enum 거부(Jackson 3 `fail-on-numbers-for-enums`)·NOTI-A60 로그아웃 시 그 토큰 WS 만 1008 로 닫기·ADM-A19 정지 중 사유만 변경·CHAT-A27 없는 병원 감사 로그 차단·ADM-A07 공지 작성자 고정 문구·CONN-A12 연결 시각 +09:00·ADM-A18·CONN-A55·CONN-A03 입력 검사.
 - 결정(사용자): A60 은 그 토큰 세션만(다른 기기 유지), A07 은 칸 유지 + "관리자", A12 는 BE 가 +09:00. 마이그레이션 없음. 상세 `(2026-11-15) fix-final-qa-be-defects.md`.
