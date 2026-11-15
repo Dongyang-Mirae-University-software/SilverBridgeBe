@@ -3213,3 +3213,7 @@ AI 챗 집계 점검 L-1에서 남겨 둔 공용 `GlobalExceptionHandler`의 `e.
 - AI #296(`dd9c0a2`): v9 위험 확률을 위험 판단 어댑터(EXAONE 3.5 2.4B LoRA r1, `models/companion/llm/lora-risk-r1`, git 미포함·sha256 DGX와 일치)로 계산하고 즉시 기준 0.5, 어댑터가 없거나 `COMPANION_RISK_LORA_SUBDIR=`(빈 값)이면 기본 모델 + 0.99로 돌아간다. 턴 응답에 `riskModel`(`v9`·`v9+lora-risk-r1`). gosky 01:18 배포(`fc11aaf`, 다른 세션 #297 포함), 기동 로그 `LoRA adapters loaded: mood,reply,risk`·`[COMPANION-RISK] path=v9+lora-risk-r1 threshold=0.50`, 롤백 `sb-ai-rollback:20261115-risk-lora`.
 - 측정: DGX(브랜치 코드, int8) 위험 1회 p50 280 → 353ms(×1.26), 어댑터 셋 GPU 2.94GB(위험 88MB). gosky는 GPU 여유가 약 2.5GB라 옆 컨테이너 모델 측정을 하지 않았다. 실서버(17:2x, AI 직접 호출·BE 미경유, 12문장 × 2) 위험 4문장 0.99 이상·아닌 말 8문장 0.003 이하로 판정 어긋남 0, 턴 p50 5.7초·p95 6.5초, GPU 최대 10.2GB, 오류 0. 측정 데이터는 삭제 API로 지움.
 - BE: 누적 규칙을 눈금별로 - V73 `max_risk_prob_lora`, 어댑터 기준 `COMPANION_RISK_PATTERN_LORA_THRESHOLD`(0.3, DGX 7일 흉내 시험), 스위치는 꺼 둠·섞인 데이터는 옮기지 않음(사용자 결정). 상세 `docs/(2026-11-15) feature-companion-risk-pattern-scale.md`.
+
+### [2026-11-15] 기능 점검 - 말벗 위험 판단 어댑터(AI #296·#298) + 누적 기준 눈금 분리(BE #487)
+
+- 종합 **PASS**(🔴0·🟠0·🟡0·🟢4). 실서버 끝까지 확인: gosky 시험 피보호자 테스트 대화 1턴(평범한 문장) → `max_risk_prob_lora` 0.0000·v9 칸 NULL. 최근 7일 168대화 중 섞인 기간(11/15 01:18~17:53) 3개는 모두 0.3 미만이라 스위치를 켜도 섞인 값이 판정에 끼지 않는다. Low: L-1 위험 호출이 다른 대화의 기본 모델 생성을 기다림(동시 6턴 테스트로 유실 없음, 실부하 미측정) / L-2 기준 고르기 두 곳 / L-3 어댑터 눈금 실 DB 테스트 없음 / L-4 기준값 범위 검사 없음. 상세 `docs/(2026-11-15) audit-companion-risk-lora.md`.
