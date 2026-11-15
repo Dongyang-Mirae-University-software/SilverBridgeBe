@@ -47,7 +47,8 @@ public class PendingConnectionResponse {
         this.guardianProfileImage = guardianProfileImage;
         this.guardianPhone = guardianPhone;
         this.relation = relation;
-        this.requestedAt = requestedAt;
+        // 한국 시간 표기 - 받은 요청 목록의 요청일이 하루 틀리지 않게 (최종 QA CONN-A12)
+        this.requestedAt = ConnectionTimes.toKst(requestedAt);
     }
 
     public static PendingConnectionResponse from(Connection connection, User guardian) {

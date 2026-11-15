@@ -107,6 +107,21 @@ class UserNotificationServiceTest {
     }
 
     @Test
+    @DisplayName("목록: 피보호자 칸이 빈 알림(문의 답변)만 있어도 500 이 아니다 - Map.of().get(null) NPE 회귀 (최종 QA NOTI-N15b)")
+    void 목록_피보호자없는_알림만() {
+        NotificationLog answered = log(4L, GUARDIAN_ID, null, NotificationType.INQUIRY_ANSWERED, null);
+        given(repository.searchForRecipient(eq(GUARDIAN_ID), any(), eq(false), anyCollection(), any(Pageable.class)))
+                .willReturn(new PageImpl<>(List.of(answered)));
+
+        PageResponse<UserNotificationItem> page = service.getMyNotifications(GUARDIAN_ID, null, 0, 50);
+
+        verify(userRepository, never()).findAllById(any());
+        assertThat(page.content()).hasSize(1);
+        assertThat(page.content().get(0).wardId()).isNull();
+        assertThat(page.content().get(0).wardName()).isNull();
+    }
+
+    @Test
     @DisplayName("읽음: 본인 것이면 UPDATE 한 번으로 끝난다(이미 읽은 것도 1을 돌려줘 멱등)")
     void 읽음_성공() {
         given(repository.markRead(eq(10L), eq(GUARDIAN_ID), any(), any())).willReturn(1);

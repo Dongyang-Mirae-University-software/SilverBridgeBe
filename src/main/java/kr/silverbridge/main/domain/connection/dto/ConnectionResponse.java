@@ -87,8 +87,9 @@ public class ConnectionResponse {
         this.relation = relation;
         this.status = status;
         this.isRequester = isRequester;
-        this.connectedAt = connectedAt;
-        this.createdAt = createdAt;
+        // 한국 시간 표기로 내린다 - 날짜만 잘라 쓰는 화면이 하루 틀리지 않게 (최종 QA CONN-A12)
+        this.connectedAt = ConnectionTimes.toKst(connectedAt);
+        this.createdAt = ConnectionTimes.toKst(createdAt);
     }
 
     // 미입력(기존/카카오) 사용자의 성별은 null이므로 null-safe하게 enum name을 추출한다.

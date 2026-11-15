@@ -177,6 +177,11 @@ public class AdminHospitalService {
 
             boolean needsCurrent = body.containsKey("name") || body.containsKey("address")
                     || body.containsKey("openTime") || body.containsKey("closeTime") || breakChanged;
+            if (!needsCurrent) {
+                // 전화·설명처럼 현재 값이 필요 없는 칸만 바꿔도 없는(또는 삭제된) 병원이면 감사 로그 전에 404 로 끝낸다
+                // (최종 QA CHAT-A27, 2026-11-15 - 전에는 확인 없이 HOSPITAL_UPDATE 감사 로그가 남았다)
+                findActive(hospitalId);
+            }
             if (needsCurrent) {
                 List<AdminHospitalItem> all = fetchAll();
                 AdminHospitalItem current = all.stream().filter(h -> h.id() == hospitalId).findFirst()
@@ -206,6 +211,8 @@ public class AdminHospitalService {
     public void delete(String adminId, long hospitalId) {
         timed("삭제", adminId, hospitalId, () -> {
             requireValidId(hospitalId, ErrorCode.HOSPITAL_NOT_FOUND);
+            // 없는(또는 이미 삭제된) 병원이면 감사 로그 전에 404 (최종 QA CHAT-A27, 2026-11-15)
+            findActive(hospitalId);
             client.requireConfigured();
             audit(adminId, AdminAuditAction.HOSPITAL_DELETE, hospitalTarget(hospitalId), null);
             client.deleteHospital(hospitalId);

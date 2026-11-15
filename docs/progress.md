@@ -4,6 +4,10 @@
 
 ---
 
+### [2026-11-15] 최종 QA BE 결함 11건 수정 (`fix/final-qa-be-defects`)
+- 최종 QA(Playwright 593 테스트) BE 결함: NOTI-N15b 받은 알림 500(`Map.of().get(null)`)·CONN-A26/A31 숫자 enum 거부(Jackson 3 `fail-on-numbers-for-enums`)·NOTI-A60 로그아웃 시 그 토큰 WS 만 1008 로 닫기·ADM-A19 정지 중 사유만 변경·CHAT-A27 없는 병원 감사 로그 차단·ADM-A07 공지 작성자 고정 문구·CONN-A12 연결 시각 +09:00·ADM-A18·CONN-A55·CONN-A03 입력 검사.
+- 결정(사용자): A60 은 그 토큰 세션만(다른 기기 유지), A07 은 칸 유지 + "관리자", A12 는 BE 가 +09:00. 마이그레이션 없음. 상세 `(2026-11-15) fix-final-qa-be-defects.md`.
+
 ### [2026-11-15] AI 칩 must 실패 문항 - 시험지 판정 정정 + 진료과 권유 자리 후보(M2) 미반영 (AI #297, 시험지·문서만)
 - 실패 5건 중 3건은 판정 문제(must 낱말 범위·줄 단위 제외) - 시험지를 바로잡아 기준선 22→24/27(같은 답). `must_scope=all_lines`(병원 가야 하나 칩)도 집계에서 반영해야 한다.
 - 진짜 실패는 "무릎에 좋은 운동"(앞 턴 무릎 통증 되묻기 뒤 운동 없이 진료 권유만). M2(관리 질문일 때 진료과 권유를 advice 둘째 문장으로)는 칩 24→23·보호자 13→12로 미반영. 앱 코드 변경 없음(gosky 배포 불필요). 상세 AI `docs/eval-results/2026-11-15-chip-must.md`.

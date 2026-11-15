@@ -268,7 +268,18 @@ public class AdminUserService {
      * 비밀번호 재설정으로 세션만 끊는 것이 맞다(안전망은 유지된다).</p>
      */
     private void applyStatus(User user, Status status, String reason, String adminId) {
-        if (status == null || status == user.getStatus()) {
+        if (status == null) {
+            return;
+        }
+        if (status == user.getStatus()) {
+            // 이미 정지된 계정에 새 사유만 보낸 경우: 200 인데 아무것도 안 바뀌던 문제(최종 QA ADM-A19, 2026-11-15).
+            // 사유만 바꾸고 감사 기록을 남긴다. 상태 전이가 아니므로 UserRestrictedEvent(토큰 무효화)는 다시 보내지 않는다.
+            String newReason = StringUtils.hasText(reason) ? reason.trim() : null;
+            if (status == Status.RESTRICTED && newReason != null && !newReason.equals(user.getStatusReason())) {
+                user.restrict(newReason);
+                auditLogService.log(adminId, AdminAuditAction.USER_STATUS_CHANGE, user.getId(),
+                        "정지 사유 변경 (사유: " + newReason + ")");
+            }
             return;
         }
         if (status == Status.INACTIVE) {

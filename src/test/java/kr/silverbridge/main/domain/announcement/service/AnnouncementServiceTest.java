@@ -55,7 +55,7 @@ class AnnouncementServiceTest {
         when(announcementRepository.incrementViewCount(1L)).thenReturn(1);
         when(announcementRepository.findById(1L)).thenReturn(Optional.of(target));
         when(userRepository.findById("AD0001")).thenReturn(Optional.of(
-                User.builder().id("AD0001").name("관리자").role(Role.ADMIN).build()));
+                User.builder().id("AD0001").name("김관리").role(Role.ADMIN).build()));
 
         AnnouncementResponse response = service.getAnnouncement(1L);
 
@@ -65,18 +65,19 @@ class AnnouncementServiceTest {
         // read-modify-write 경로(save)를 타지 않는다 - Auditing이 수정 일시를 바꾸고 동시 조회가 유실된다
         verify(announcementRepository, never()).save(any());
         assertThat(response.viewCount()).isEqualTo(8L);
-        assertThat(response.authorName()).isEqualTo("관리자");
+        // 관리자 실명(김관리) 대신 고정 문구 - 일반 사용자에게 관리자 이름을 내보내지 않는다 (최종 QA ADM-A07)
+        assertThat(response.authorName()).isEqualTo(AnnouncementResponse.AUTHOR_DISPLAY_NAME).isNotEqualTo("김관리");
     }
 
     @Test
-    @DisplayName("작성자가 탈퇴한 공지(author_id NULL)는 사용자 조회 없이 이름 null로 응답한다")
+    @DisplayName("작성자가 탈퇴한 공지(author_id NULL)는 사용자 조회 없이 같은 고정 문구로 응답한다")
     void 탈퇴_작성자_조회_생략() {
         when(announcementRepository.incrementViewCount(2L)).thenReturn(1);
         when(announcementRepository.findById(2L)).thenReturn(Optional.of(announcement(2L, null)));
 
         AnnouncementResponse response = service.getAnnouncement(2L);
 
-        assertThat(response.authorName()).isNull();
+        assertThat(response.authorName()).isEqualTo(AnnouncementResponse.AUTHOR_DISPLAY_NAME);
         verify(userRepository, never()).findById(anyString());
     }
 
@@ -96,12 +97,13 @@ class AnnouncementServiceTest {
         when(announcementRepository.findAll(any(Pageable.class))).thenReturn(new PageImpl<>(List.of(
                 announcement(1L, "AD0001"), announcement(2L, "AD0001"), announcement(3L, null))));
         when(userRepository.findAllById(anyCollection())).thenReturn(List.of(
-                User.builder().id("AD0001").name("관리자").role(Role.ADMIN).build()));
+                User.builder().id("AD0001").name("김관리").role(Role.ADMIN).build()));
 
         List<AnnouncementResponse> result = service.getAnnouncements(0, 20);
 
         assertThat(result).hasSize(3);
-        assertThat(result).extracting(AnnouncementResponse::authorName).containsExactly("관리자", "관리자", null);
+        // 목록도 관리자 실명 대신 고정 문구 (최종 QA ADM-A07)
+        assertThat(result).extracting(AnnouncementResponse::authorName).containsOnly(AnnouncementResponse.AUTHOR_DISPLAY_NAME);
         verify(userRepository, never()).findById(anyString());
     }
 

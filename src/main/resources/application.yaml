@@ -51,6 +51,14 @@ spring:
   mvc:
     throw-exception-if-no-handler-found: true   # 존재하지 않는 경로 → NoHandlerFoundException 발생 (Swagger UI 정적 리소스는 영향 없음)
 
+  # 웹 요청 JSON(Jackson 3)에서 enum 칸에 숫자를 보내면 순번으로 받지 않고 400 으로 거절한다.
+  # 꺼 두면 {"sosAction":0} 이 첫 값(CALL_119)으로, {"timeSlot":1} 이 LUNCH 로 저장됐다(최종 QA CONN-A26·A31, 2026-11-15).
+  # JacksonConfig 의 Jackson 2 ObjectMapper 빈에는 영향이 없다(웹 요청은 Jackson 3 가 읽는다).
+  jackson:
+    datatype:
+      enum:
+        fail-on-numbers-for-enums: true
+
   mail:
     host: ${MAIL_HOST:smtp.gmail.com}
     port: ${MAIL_PORT:587}

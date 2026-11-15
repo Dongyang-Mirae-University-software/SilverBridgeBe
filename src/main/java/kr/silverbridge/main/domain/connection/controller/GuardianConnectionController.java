@@ -11,6 +11,8 @@ import kr.silverbridge.main.domain.connection.dto.ConnectionResponse;
 import kr.silverbridge.main.domain.connection.dto.ConnectionTargetPreviewResponse;
 import kr.silverbridge.main.domain.connection.dto.WardListFilter;
 import kr.silverbridge.main.domain.connection.service.ConnectionService;
+import kr.silverbridge.main.global.exception.CustomException;
+import kr.silverbridge.main.global.exception.ErrorCode;
 import kr.silverbridge.main.global.response.ApiResponse;
 import kr.silverbridge.main.global.security.RateLimitService;
 import lombok.RequiredArgsConstructor;
@@ -26,6 +28,9 @@ import java.util.List;
 @RequiredArgsConstructor
 @PreAuthorize("hasRole('GUARDIAN')")
 public class GuardianConnectionController {
+
+    /** 사용자 ID 길이 - ConnectionRequestDto.targetId 의 @Size(min = 6, max = 6) 와 같다 */
+    private static final int TARGET_ID_LENGTH = 6;
 
     private final ConnectionService connectionService;
     private final RateLimitService rateLimitService;
@@ -102,7 +107,7 @@ public class GuardianConnectionController {
                     """)
     @ApiResponses({
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "요청 가능한 상대 - targetId, maskedName"),
-            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "역할 불일치(피보호자가 아님) 또는 자기 자신", content = @Content),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "ID 형식 오류(빈 값·6자 아님), 역할 불일치(피보호자가 아님) 또는 자기 자신", content = @Content),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "해당 ID의 이용 중인 회원 없음", content = @Content),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "409", description = "이미 연결되어 있거나 요청 중인 관계", content = @Content),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "429", description = "확인 요청이 너무 잦음 (1분 10회 / 1시간 60회)", content = @Content)
@@ -114,6 +119,11 @@ public class GuardianConnectionController {
             @RequestParam String targetId) {
         // ID를 바꿔 가며 가린 이름을 모으는 시도를 막는다 - 실제 요청 제한(connection-request)과 별도로 센다
         rateLimitService.check("connection-preview", guardianId, 10, 60);
+        // 실제 요청(ConnectionRequestDto: @NotBlank @Size(6,6))과 같은 형식 검사 - 빈 값·5자·7자는 DB 조회 전에 400
+        // (최종 QA CONN-A03, 2026-11-15 - 전에는 검사 없이 404 USER_NOT_FOUND 였다)
+        if (targetId == null || targetId.isBlank() || targetId.length() != TARGET_ID_LENGTH) {
+            throw new CustomException(ErrorCode.INVALID_INPUT);
+        }
         return ResponseEntity.ok(ApiResponse.ok(connectionService.previewConnectionTarget(guardianId, targetId)));
     }
 

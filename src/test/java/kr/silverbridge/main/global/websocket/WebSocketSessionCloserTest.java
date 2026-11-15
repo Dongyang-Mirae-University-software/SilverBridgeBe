@@ -72,4 +72,24 @@ class WebSocketSessionCloserTest {
         assertThat(closer.closeAll("nobody")).isZero();
         assertThat(closer.closeAll(null)).isZero();
     }
+
+    @Test
+    @DisplayName("로그아웃: 그 access 토큰(해시)으로 연 세션만 1008 로 닫고, 같은 사용자의 다른 토큰 세션은 남긴다 (최종 QA NOTI-A60)")
+    void closeByAccessToken_그토큰만() throws Exception {
+        WebSocketSession mine = openSession();
+        WebSocketSession otherDevice = openSession();
+        when(mine.getAttributes()).thenReturn(new java.util.HashMap<>(
+                java.util.Map.of(JwtHandshakeInterceptor.ACCESS_TOKEN_HASH_ATTRIBUTE, "hash-a")));
+        when(otherDevice.getAttributes()).thenReturn(new java.util.HashMap<>(
+                java.util.Map.of(JwtHandshakeInterceptor.ACCESS_TOKEN_HASH_ATTRIBUTE, "hash-b")));
+        registry.register("user-1", mine);
+        registry.register("user-1", otherDevice);
+
+        int attempted = closer.closeByAccessToken("user-1", "hash-a");
+
+        assertThat(attempted).isEqualTo(1);
+        verify(mine).close(WebSocketSessionCloser.CLOSE_STATUS);
+        verify(otherDevice, never()).close(any());
+        assertThat(closer.closeByAccessToken("user-1", null)).isZero();
+    }
 }

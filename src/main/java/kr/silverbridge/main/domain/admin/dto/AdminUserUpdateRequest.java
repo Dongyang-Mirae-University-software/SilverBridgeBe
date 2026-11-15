@@ -5,6 +5,7 @@ import jakarta.validation.constraints.Size;
 import kr.silverbridge.main.domain.admin.support.CodePointSize;
 import kr.silverbridge.main.global.enums.Role;
 import kr.silverbridge.main.global.enums.Status;
+import kr.silverbridge.main.global.validation.NoControlChars;
 import kr.silverbridge.main.global.validation.VisibleText;
 
 /**
@@ -26,6 +27,8 @@ public record AdminUserUpdateRequest(
 
         @Schema(description = "이름 (최대 20자, 이모지는 1자로 계산). null이면 변경하지 않음", nullable = true, example = "홍길동")
         @VisibleText(message = "이름을 입력해주세요.")
+        // 회원 본인 수정(UserUpdateRequest)과 같은 규칙 - 제어문자(NUL 등)는 조용히 지우지 않고 400 (최종 QA ADM-A18)
+        @NoControlChars
         @CodePointSize(max = 20, message = "이름은 20자 이하여야 합니다.")
         String name,
 
