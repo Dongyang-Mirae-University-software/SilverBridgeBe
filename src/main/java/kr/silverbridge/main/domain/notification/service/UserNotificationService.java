@@ -66,7 +66,10 @@ public class UserNotificationService {
                 : userRepository.findAllById(wardIds).stream()
                         .collect(Collectors.toMap(User::getId, User::getName, (a, b) -> a));
 
-        return PageResponse.of(logs.map(log -> UserNotificationItem.of(log, names.get(log.getWardId()))));
+        // 피보호자 칸이 빈 알림(문의 답변 등)은 이름 조회를 건너뛴다 - Map.of() 는 null 키 get 에 NPE 를 던져,
+        // 목록이 전부 피보호자 없는 알림일 때 500 이 났다(최종 QA NOTI-N15b, 2026-11-15)
+        return PageResponse.of(logs.map(log -> UserNotificationItem.of(log,
+                log.getWardId() == null ? null : names.get(log.getWardId()))));
     }
 
     @Transactional(readOnly = true)
