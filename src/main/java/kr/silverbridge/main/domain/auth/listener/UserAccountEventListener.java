@@ -1,5 +1,6 @@
 package kr.silverbridge.main.domain.auth.listener;
 
+import kr.silverbridge.main.domain.auth.event.UserLoggedOutEvent;
 import kr.silverbridge.main.domain.auth.repository.RefreshTokenRepository;
 import kr.silverbridge.main.domain.auth.service.AccessLogService;
 import kr.silverbridge.main.domain.user.event.PasswordChangedEvent;
@@ -65,6 +66,13 @@ public class UserAccountEventListener {
         }
         // 탈퇴한 계정의 열린 세션도 닫는다 - 남겨 두면 purge 뒤에도 그 브라우저가 연결된 채로 남는다
         webSocketSessionCloser.closeAll(event.userId());
+    }
+
+    // 로그아웃 - 그 access 토큰으로 연 WS 세션만 닫는다(다른 기기의 유효한 토큰 세션은 남김, 최종 QA NOTI-A60 2026-11-15).
+    // 블랙리스트 등록은 logout() 안에서 끝났으므로 무효화 → 닫기 순서가 지켜진다. 쓰기가 없어 REQUIRES_NEW 불필요, closeByAccessToken은 예외를 던지지 않는다.
+    @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
+    public void handleLoggedOut(UserLoggedOutEvent event) {
+        webSocketSessionCloser.closeByAccessToken(event.userId(), event.accessTokenHash());
     }
 
     // 탈퇴 스윕 경로 (L-4) - 탈퇴 리스너가 한 번도 돌지 않은 계정도 access 토큰 무효화 + 열린 WS 종료를 한다.

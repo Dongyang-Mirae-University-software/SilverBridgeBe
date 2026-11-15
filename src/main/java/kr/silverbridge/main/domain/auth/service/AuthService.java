@@ -10,6 +10,7 @@ import kr.silverbridge.main.domain.auth.dto.TokenRefreshRequest;
 import kr.silverbridge.main.domain.auth.dto.TokenRefreshResponse;
 import kr.silverbridge.main.domain.auth.config.AuthLoginProperties;
 import kr.silverbridge.main.domain.auth.entity.RefreshToken;
+import kr.silverbridge.main.domain.auth.event.UserLoggedOutEvent;
 import kr.silverbridge.main.domain.auth.repository.RefreshTokenRepository;
 import kr.silverbridge.main.domain.user.entity.User;
 import kr.silverbridge.main.domain.user.repository.UserRepository;
@@ -26,6 +27,7 @@ import kr.silverbridge.main.global.util.RedisKeys;
 import kr.silverbridge.main.domain.user.service.UserIdGenerator;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
@@ -53,6 +55,7 @@ public class AuthService {
     private final SmsService smsService;
     private final AuthLoginProperties authLoginProperties;
     private final LoginSupersedeMarker loginSupersedeMarker;
+    private final ApplicationEventPublisher eventPublisher;
 
     // 미가입 이메일 로그인에도 BCrypt 비교를 한 번 하기 위한 더미 해시 (AUTH-G25).
     // 같은 인코더(strength 12)로 만들어 가입 이메일의 오답과 응답 시간이 같아진다. 처음 쓸 때 한 번만 만든다.
@@ -214,14 +217,17 @@ public class AuthService {
     @Transactional
     public void logout(String accessToken, String userId, String ipAddress, String userAgent) {
         long remaining = jwtTokenProvider.getRemainingExpiration(accessToken);
+        // 토큰 원문 대신 SHA-256 해시를 키로 사용 (Redis 메모리 절약 + 원문 비노출)
+        String tokenHash = jwtTokenProvider.hashToken(accessToken);
         if (remaining > 0) {
-            // 토큰 원문 대신 SHA-256 해시를 키로 사용 (Redis 메모리 절약 + 원문 비노출)
             redisTemplate.opsForValue()
-                    .set(RedisKeys.LOGOUT_TOKEN + jwtTokenProvider.hashToken(accessToken),
-                            "true", remaining, TimeUnit.MILLISECONDS);
+                    .set(RedisKeys.LOGOUT_TOKEN + tokenHash, "true", remaining, TimeUnit.MILLISECONDS);
         }
         refreshTokenRepository.deleteByUserId(userId);
         accessLogService.log(userId, AccessAction.LOGOUT, ipAddress, userAgent);
+        // 블랙리스트 등록 뒤 그 토큰으로 연 WS 세션을 닫는다(AFTER_COMMIT 리스너). 순서가 반대면 닫힌 클라이언트가
+        // 같은 토큰으로 바로 재연결해 핸드셰이크를 통과할 수 있다 (최종 QA NOTI-A60)
+        eventPublisher.publishEvent(new UserLoggedOutEvent(userId, tokenHash));
     }
 
     // Access Token 재발급

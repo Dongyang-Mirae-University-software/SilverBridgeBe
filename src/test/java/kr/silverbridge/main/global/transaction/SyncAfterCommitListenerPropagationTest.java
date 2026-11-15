@@ -52,7 +52,8 @@ class SyncAfterCommitListenerPropagationTest {
 
     /** 쓰기가 없는 동기 리스너와 그 이유. */
     private static final Map<String, String> NO_WRITE = Map.of(
-            "AiLiveStreamSubscriber#onCameraRegistered", "AI WS 에 세션 목록을 요청할 뿐 DB 에 쓰지 않는다");
+            "AiLiveStreamSubscriber#onCameraRegistered", "AI WS 에 세션 목록을 요청할 뿐 DB 에 쓰지 않는다",
+            "UserAccountEventListener#handleLoggedOut", "로그아웃한 토큰의 열린 WS 세션을 닫을 뿐 DB 에 쓰지 않는다(최종 QA NOTI-A60)");
 
     @Test
     @DisplayName("@Async 없는 AFTER_COMMIT 리스너는 스스로 REQUIRES_NEW 이거나, 위임 대상이 모두 REQUIRES_NEW 이거나, 쓰기가 없다")

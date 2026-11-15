@@ -56,4 +56,39 @@ public class WebSocketSessionCloser {
         }
         return attempted;
     }
+
+    /**
+     * 그 사용자의 세션 중 이 access 토큰(해시)으로 연 것만 닫는다 - 로그아웃은 그 토큰 하나만 무효화하므로
+     * 다른 기기의 세션(아직 유효한 다른 토큰)은 남긴다 (최종 QA NOTI-A60, 2026-11-15).
+     * 해시는 핸드셰이크 때 {@link JwtHandshakeInterceptor#ACCESS_TOKEN_HASH_ATTRIBUTE} 로 세션에 적힌다.
+     *
+     * @return 닫기를 시도한 세션 수
+     */
+    public int closeByAccessToken(String userId, String accessTokenHash) {
+        if (accessTokenHash == null) {
+            return 0;
+        }
+        int attempted = 0;
+        try {
+            for (WebSocketSession session : registry.sessionsOf(userId)) {
+                if (!accessTokenHash.equals(session.getAttributes().get(JwtHandshakeInterceptor.ACCESS_TOKEN_HASH_ATTRIBUTE))) {
+                    continue;
+                }
+                attempted++;
+                try {
+                    if (session.isOpen()) {
+                        session.close(CLOSE_STATUS);
+                    }
+                } catch (Exception e) {
+                    log.warn("[WS-SESSION-CLOSE-FAILED] userId={} error={}", userId, e.getClass().getSimpleName());
+                }
+            }
+        } catch (RuntimeException e) {
+            log.warn("[WS-SESSION-CLOSE-FAILED] userId={} error={}", userId, e.getClass().getSimpleName());
+        }
+        if (attempted > 0) {
+            log.info("[WS-SESSION-CLOSE] 로그아웃으로 세션 종료 userId={} sessions={}", userId, attempted);
+        }
+        return attempted;
+    }
 }

@@ -30,6 +30,9 @@ import java.util.Map;
 @RequiredArgsConstructor
 public class JwtHandshakeInterceptor implements HandshakeInterceptor {
 
+    /** 세션 속성: 핸드셰이크에 쓴 access 토큰의 해시(JwtTokenProvider.hashToken). 로그아웃 때 그 토큰의 세션만 닫는다 */
+    public static final String ACCESS_TOKEN_HASH_ATTRIBUTE = "accessTokenHash";
+
     private final JwtTokenProvider jwtTokenProvider;
     private final StringRedisTemplate redisTemplate;
 
@@ -71,11 +74,11 @@ public class JwtHandshakeInterceptor implements HandshakeInterceptor {
             return false;
         }
 
+        String tokenHash = jwtTokenProvider.hashToken(token);
         // 로그아웃·무효화 검사는 Redis를 읽는다. 저장소 오류는 토큰 문제가 아니므로 503으로 구분한다 (D1, AUTH-G21)
         try {
             // 로그아웃된 토큰 차단 (HTTP 필터와 동일한 블랙리스트 키)
-            if (Boolean.TRUE.equals(redisTemplate.hasKey(
-                    RedisKeys.LOGOUT_TOKEN + jwtTokenProvider.hashToken(token)))) {
+            if (Boolean.TRUE.equals(redisTemplate.hasKey(RedisKeys.LOGOUT_TOKEN + tokenHash))) {
                 log.warn("WebSocket 연결 거부: 로그아웃된 토큰");
                 return false;
             }
@@ -99,6 +102,8 @@ public class JwtHandshakeInterceptor implements HandshakeInterceptor {
         }
 
         attributes.put("userId", userId);
+        // 로그아웃 때 이 토큰으로 연 세션만 골라 닫는 데 쓴다(원문이 아니라 해시) - WebSocketSessionCloser.closeByAccessToken
+        attributes.put(ACCESS_TOKEN_HASH_ATTRIBUTE, tokenHash);
         return true;
     }
 

@@ -73,6 +73,9 @@ class JwtHandshakeInterceptorTest {
 
         assertThat(allowed).isTrue();
         assertThat(attributes).containsEntry("userId", USER_ID);
+        // 로그아웃 때 이 토큰의 세션만 닫으려고 해시(원문 아님)를 같이 적는다 (최종 QA NOTI-A60)
+        assertThat(attributes).containsEntry(JwtHandshakeInterceptor.ACCESS_TOKEN_HASH_ATTRIBUTE, HASH);
+        assertThat(attributes).doesNotContainValue(TOKEN);
     }
 
     @Test
