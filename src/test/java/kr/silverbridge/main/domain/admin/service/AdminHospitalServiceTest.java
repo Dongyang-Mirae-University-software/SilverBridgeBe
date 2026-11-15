@@ -269,6 +269,22 @@ class AdminHospitalServiceTest {
             assertThatThrownBy(() -> service.delete(ADMIN, 0))
                     .extracting(e -> ((CustomException) e).getErrorCode()).isEqualTo(ErrorCode.HOSPITAL_NOT_FOUND);
         }
+
+        @Test
+        @DisplayName("없는·삭제된 병원의 삭제, 전화만 바꾸는 수정은 404 이고 감사 로그·예약 서비스 호출이 없다 (최종 QA CHAT-A27)")
+        void missing_hospital_no_audit() {
+            assertThatThrownBy(() -> service.delete(ADMIN, 999))
+                    .extracting(e -> ((CustomException) e).getErrorCode()).isEqualTo(ErrorCode.HOSPITAL_NOT_FOUND);
+            assertThatThrownBy(() -> service.delete(ADMIN, 3))   // 목록의 deleted=true 병원
+                    .extracting(e -> ((CustomException) e).getErrorCode()).isEqualTo(ErrorCode.HOSPITAL_NOT_FOUND);
+            assertThatThrownBy(() -> service.update(ADMIN, 999,
+                    new AdminHospitalUpdateRequest(null, null, null, "02-1234-5678", null, null, null, null)))
+                    .extracting(e -> ((CustomException) e).getErrorCode()).isEqualTo(ErrorCode.HOSPITAL_NOT_FOUND);
+
+            verifyNoInteractions(auditLogService);
+            verify(client, never()).deleteHospital(anyLong());
+            verify(client, never()).updateHospital(anyLong(), anyMap());
+        }
     }
 
     @Nested
