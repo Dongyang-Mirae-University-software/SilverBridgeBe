@@ -95,7 +95,8 @@ public class CompanionProperties {
      * 최근 {@code windowDays}일(오늘 포함) 중 턴 위험 확률 {@code threshold} 이상인 서로 다른 날이 {@code minDays}일
      * 이상이면 보호자에게 알린다. 같은 피보호자에게 {@code windowDays}일에 1번. {@code threshold}는 AI v9 눈금 기준이다
      * (11/08 DGX 연구 - 실제 어르신 대화로는 검증 전이라 기본 꺼짐). 위험 판단 어댑터 눈금(AI {@code riskModel} "v9+…")
-     * 확률은 {@code loraThreshold}로 본다(2026-11-15, DGX r1 7일 흉내 시험 기준 0.3).
+     * 확률은 {@code loraThreshold}로 본다(2026-11-15, DGX 7일 흉내 시험 기준 0.3 - r1·r2 모두 같은 기준으로 쟀다.
+     * 어댑터를 바꾸면 그 어댑터의 누적 기준을 확인한다).
      */
     @Getter
     @Setter
