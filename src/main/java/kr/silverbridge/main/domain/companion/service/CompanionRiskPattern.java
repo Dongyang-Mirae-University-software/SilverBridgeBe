@@ -3,6 +3,7 @@ package kr.silverbridge.main.domain.companion.service;
 import kr.silverbridge.main.domain.companion.config.CompanionProperties;
 import kr.silverbridge.main.domain.companion.entity.CompanionSession;
 
+import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.Collection;
 import java.util.HashSet;
@@ -14,7 +15,7 @@ import java.util.Set;
  * 나오는 경우를 잡는다.
  *
  * <ul>
- *   <li><b>높은 날</b> = 최근 {@code windowDays}일(기준일 포함, {@code session_date}) 중 대화의 {@code max_risk_prob}가
+ *   <li><b>높은 날</b> = 최근 {@code windowDays}일(기준일 포함, {@code session_date}) 중 대화의 {@code max_risk_prob}(v9 눈금)가
  *       {@code threshold} 이상인 날. 같은 날 여러 번은 1일이다. 대화 상태·테스트 대화 여부는 가리지 않는다(정책).</li>
  *   <li>높은 날이 {@code minDays}일 이상이고, 그중 <b>위험 알림({@code COMPANION_RISK})이 나가지 않은 날이 1일 이상</b>
  *       있어야 한다 - 이미 위험 알림을 받은 날만으로는 보내지 않는다.</li>
@@ -55,7 +56,13 @@ public final class CompanionRiskPattern {
         return today.minusDays(Math.max(1, config.getWindowDays()) - 1L);
     }
 
+    /** 높은 대화 = v9 눈금 최댓값이 {@code threshold} 이상이거나 어댑터 눈금 최댓값이 {@code loraThreshold} 이상(2026-11-15). */
     static boolean isHigh(CompanionSession session, CompanionProperties.RiskPattern config) {
-        return session.getMaxRiskProb() != null && session.getMaxRiskProb().compareTo(config.getThreshold()) >= 0;
+        return atOrAbove(session.getMaxRiskProb(), config.getThreshold())
+                || atOrAbove(session.getMaxRiskProbLora(), config.getLoraThreshold());
+    }
+
+    private static boolean atOrAbove(BigDecimal value, BigDecimal threshold) {
+        return value != null && value.compareTo(threshold) >= 0;
     }
 }

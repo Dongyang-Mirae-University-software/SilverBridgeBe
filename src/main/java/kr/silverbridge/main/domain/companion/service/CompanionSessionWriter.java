@@ -1,6 +1,7 @@
 package kr.silverbridge.main.domain.companion.service;
 
 import kr.silverbridge.main.domain.companion.config.CompanionProperties;
+import kr.silverbridge.main.domain.companion.entity.CompanionRiskProbability;
 import kr.silverbridge.main.domain.companion.entity.CompanionSession;
 import kr.silverbridge.main.domain.companion.entity.CompanionSlot;
 import kr.silverbridge.main.domain.companion.event.CompanionMoodRecordedEvent;
@@ -73,9 +74,16 @@ public class CompanionSessionWriter {
         return recordTurn(sessionId, turnNo, riskSeen, riskProbability, CompanionTurnRecorder.TurnContent.NONE, now);
     }
 
-    /** 턴 기록 + 턴 1행(기분 항상, 글은 동의 시에만 - 2026-11-11). */
+    /** 턴 기록(v9 눈금 확률) + 턴 1행. */
     @Transactional
     public CompanionSession recordTurn(long sessionId, int turnNo, boolean riskSeen, BigDecimal riskProbability,
+                                       CompanionTurnRecorder.TurnContent content, OffsetDateTime now) {
+        return recordTurn(sessionId, turnNo, riskSeen, CompanionRiskProbability.v9(riskProbability), content, now);
+    }
+
+    /** 턴 기록 + 턴 1행(기분 항상, 글은 동의 시에만 - 2026-11-11). 확률은 눈금별로 기록·판정한다(2026-11-15). */
+    @Transactional
+    public CompanionSession recordTurn(long sessionId, int turnNo, boolean riskSeen, CompanionRiskProbability riskProbability,
                                        CompanionTurnRecorder.TurnContent content, OffsetDateTime now) {
         CompanionSession session = load(sessionId);
         // 진행 중(OPEN)인 대화만 고친다 - 이미 끝난 대화는 그대로 돌려준다(2026-11-04 점검 M-3)
@@ -91,7 +99,7 @@ public class CompanionSessionWriter {
         // 다음 높은 턴에서 다시 판정한다.
         CompanionProperties.RiskPattern pattern = properties.getRiskPattern();
         if (pattern.isEnabled() && !riskAlertSent && riskProbability != null
-                && riskProbability.compareTo(pattern.getThreshold()) >= 0) {
+                && riskProbability.atOrAbove(pattern.getThreshold(), pattern.getLoraThreshold())) {
             eventPublisher.publishEvent(new CompanionRiskPatternCheckEvent(session.getWardId(), session.getSessionDate()));
         }
         return session;

@@ -14,6 +14,7 @@ import kr.silverbridge.main.domain.companion.dto.CompanionDtos.TurnResponse;
 import kr.silverbridge.main.domain.companion.dto.CompanionDtos.UtteranceAudio;
 import kr.silverbridge.main.domain.companion.entity.CompanionMood;
 import kr.silverbridge.main.domain.companion.entity.CompanionQuestion;
+import kr.silverbridge.main.domain.companion.entity.CompanionRiskProbability;
 import kr.silverbridge.main.domain.companion.entity.CompanionSession;
 import kr.silverbridge.main.domain.companion.entity.CompanionSessionStatus;
 import kr.silverbridge.main.domain.companion.entity.CompanionSlot;
@@ -349,7 +350,7 @@ public class CompanionService {
         // 턴 기분(항상)과 글(동의 시에만 - 저장 여부는 CompanionTurnRecorder가 정한다, 2026-11-11). 글은 로그에 남기지 않는다
         CompanionTurnRecorder.TurnContent content = new CompanionTurnRecorder.TurnContent(turnMood(data), reply,
                 audio ? transcript : answerText);
-        writer.recordTurn(sessionId, turnNo, riskSeen, riskProbability(data), content, OffsetDateTime.now(clock));
+        writer.recordTurn(sessionId, turnNo, riskSeen, turnRisk(data), content, OffsetDateTime.now(clock));
         String endReason = null;
         if (ended) {
             endReason = finalizeQuietly(session);
@@ -365,6 +366,33 @@ public class CompanionService {
         String code = textOrNull(turnResult.path("moodCode"));
         CompanionMood mood = code == null ? null : CompanionMood.fromAi(code).orElse(null);
         return mood != null ? mood : CompanionMood.fromAi(textOrNull(turnResult.path("label"))).orElse(null);
+    }
+
+    static final String RISK_MODEL_V9 = "v9";
+    static final String RISK_MODEL_LORA_PREFIX = "v9+";
+
+    /**
+     * 턴 위험 확률과 눈금(2026-11-15). {@code riskModel}이 없거나 {@code "v9"}면 v9 눈금, {@code "v9+"}로 시작하면
+     * 위험 판단 어댑터 눈금이다. 그 밖의 값은 눈금을 모르므로 기록하지 않는다(값은 로그에 남기지 않고 길이만).
+     */
+    static CompanionRiskProbability turnRisk(JsonNode data) {
+        BigDecimal value = riskProbability(data);
+        if (value == null) {
+            return null;
+        }
+        JsonNode model = data.get("riskModel");
+        if (model == null || model.isNull()) {
+            return CompanionRiskProbability.v9(value);
+        }
+        String name = model.isTextual() ? model.asText() : "";
+        if (RISK_MODEL_V9.equals(name)) {
+            return CompanionRiskProbability.v9(value);
+        }
+        if (name.startsWith(RISK_MODEL_LORA_PREFIX)) {
+            return CompanionRiskProbability.lora(value);
+        }
+        log.warn("[COMPANION] 모르는 위험 눈금 - 확률 기록 안 함: riskModelLength={}", name.length());
+        return null;
     }
 
     /**

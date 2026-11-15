@@ -1,5 +1,7 @@
 package kr.silverbridge.main.domain.companion.service;
 
+import kr.silverbridge.main.domain.companion.entity.CompanionRiskProbability;
+import java.math.BigDecimal;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import kr.silverbridge.main.domain.companion.client.AiCompanionClient;
@@ -38,6 +40,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 
+import static org.mockito.ArgumentMatchers.nullable;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
@@ -133,7 +136,7 @@ class CompanionTestModeTest {
     @DisplayName("테스트 시작: 같은 시간대에 진행 중인 테스트 대화가 있으면 그 대화를 이어 간다(resumed=true)")
     void openTestResumesOpenTestSession() {
         CompanionSession open = session(103L, "d-103", TESTER, CompanionSlot.S15, true);
-        open.recordTurn(2, false, null, AT_1030.toOffsetDateTime());
+        open.recordTurn(2, false, (BigDecimal) null, AT_1030.toOffsetDateTime());
         when(sessionRepository.findFirstByWardIdAndSessionDateAndSlotAndTestTrueAndStatusOrderByIdDesc(
                 TESTER, TODAY, CompanionSlot.S15, CompanionSessionStatus.OPEN)).thenReturn(Optional.of(open));
         when(questionRepository.findById(1L)).thenReturn(Optional.of(question(1L, "이어 갈 질문")));
@@ -306,7 +309,7 @@ class CompanionTestModeTest {
         assertThat(response.analysis().face()).isNull();
         assertThat(response.analysis().textMood()).as("되묻기 턴·AI가 주지 않으면 null").isNull();
         assertThat(response.analysis().riskFlag()).isTrue();
-        verify(writer).recordTurn(eq(121L), eq(2), eq(true), any(), any(), any());
+        verify(writer).recordTurn(eq(121L), eq(2), eq(true), nullable(CompanionRiskProbability.class), any(), any());
     }
 
     @Test
