@@ -9,7 +9,8 @@ import java.time.OffsetDateTime;
 
 /**
  * 일반 사용자용 공지 응답
- * 관리자용 AnnouncementResponse와 달리 authorId는 노출하지 않는다 (관리자 계정 노출 방지).
+ * 관리자용 AnnouncementResponse와 달리 authorId도, 관리자 실명도 노출하지 않는다 (관리자 계정 노출 방지).
+ * authorName 은 응답 모양을 유지하려고 남기되 값은 항상 고정 문구다(최종 QA ADM-A07, 2026-11-15 사용자 결정).
  */
 @Schema(description = "공지 응답 (일반 사용자용)")
 public record AnnouncementResponse(
@@ -17,7 +18,7 @@ public record AnnouncementResponse(
         @Schema(description = "공지 ID", example = "1")
         Long id,
 
-        @Schema(description = "작성자 이름 (탈퇴 시 null)", example = "관리자", nullable = true)
+        @Schema(description = "작성자 표시 이름. 관리자 실명 대신 항상 고정 문구 '관리자'", example = "관리자")
         String authorName,
 
         @Schema(description = "제목", example = "서비스 점검 안내")
@@ -36,6 +37,9 @@ public record AnnouncementResponse(
         OffsetDateTime updatedAt
 ) {
 
+    /** 일반 사용자에게 보이는 작성자 표시 - 관리자 실명을 내보내지 않는다 */
+    public static final String AUTHOR_DISPLAY_NAME = "관리자";
+
     /** 목록용 - 본문을 앞 100자로 축약한다(ADMIN-G24). */
     public static AnnouncementResponse ofSummary(Announcement announcement, User author) {
         AnnouncementResponse full = of(announcement, author);
@@ -46,7 +50,7 @@ public record AnnouncementResponse(
     public static AnnouncementResponse of(Announcement announcement, User author) {
         return new AnnouncementResponse(
                 announcement.getId(),
-                author != null ? author.getName() : null,
+                AUTHOR_DISPLAY_NAME,
                 announcement.getTitle(),
                 announcement.getContent(),
                 announcement.getViewCount(),
