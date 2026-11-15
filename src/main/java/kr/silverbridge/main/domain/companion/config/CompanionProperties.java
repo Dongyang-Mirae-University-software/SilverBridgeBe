@@ -95,7 +95,8 @@ public class CompanionProperties {
      * 최근 {@code windowDays}일(오늘 포함) 중 턴 위험 확률 {@code threshold} 이상인 서로 다른 날이 {@code minDays}일
      * 이상이면 보호자에게 알린다. 같은 피보호자에게 {@code windowDays}일에 1번. {@code threshold}는 AI v9 눈금 기준이다
      * (11/08 DGX 연구 - 실제 어르신 대화로는 검증 전이라 기본 꺼짐). 위험 판단 어댑터 눈금(AI {@code riskModel} "v9+…")
-     * 확률은 {@code loraThreshold}로 본다(2026-11-15, DGX r1 7일 흉내 시험 기준 0.3).
+     * 확률은 {@code loraThreshold}로 본다(2026-11-15, DGX 7일 흉내 시험 기준 0.3 - r1·r2 모두 같은 기준으로 쟀다.
+     * 어댑터를 바꾸면 그 어댑터의 누적 기준을 확인한다).
      */
     @Getter
     @Setter
@@ -103,6 +104,23 @@ public class CompanionProperties {
         private boolean enabled = false;
         private BigDecimal threshold = new BigDecimal("0.97");
         private BigDecimal loraThreshold = new BigDecimal("0.3");
+
+        /** 0 초과 1 이하만 (2026-11-15 점검 L-4 - 오타(예: 3)면 누적 규칙이 조용히 꺼지므로 기동을 멈춘다). */
+        public void setThreshold(BigDecimal threshold) {
+            this.threshold = probabilityThreshold("companion.risk-pattern.threshold", threshold);
+        }
+
+        /** 0 초과 1 이하만 (2026-11-15 점검 L-4). */
+        public void setLoraThreshold(BigDecimal loraThreshold) {
+            this.loraThreshold = probabilityThreshold("companion.risk-pattern.lora-threshold", loraThreshold);
+        }
+
+        private static BigDecimal probabilityThreshold(String name, BigDecimal value) {
+            if (value == null || value.signum() <= 0 || value.compareTo(BigDecimal.ONE) > 0) {
+                throw new IllegalArgumentException(name + " 는 0 초과 1 이하여야 합니다.");
+            }
+            return value;
+        }
         private int minDays = 2;
         private int windowDays = 7;
     }

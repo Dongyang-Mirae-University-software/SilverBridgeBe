@@ -99,7 +99,7 @@ public class CompanionSessionWriter {
         // 다음 높은 턴에서 다시 판정한다.
         CompanionProperties.RiskPattern pattern = properties.getRiskPattern();
         if (pattern.isEnabled() && !riskAlertSent && riskProbability != null
-                && riskProbability.atOrAbove(pattern.getThreshold(), pattern.getLoraThreshold())) {
+                && CompanionRiskPattern.isHigh(riskProbability, pattern)) {
             eventPublisher.publishEvent(new CompanionRiskPatternCheckEvent(session.getWardId(), session.getSessionDate()));
         }
         return session;

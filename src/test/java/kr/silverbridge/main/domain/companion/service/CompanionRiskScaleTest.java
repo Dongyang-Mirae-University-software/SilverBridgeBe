@@ -131,6 +131,34 @@ class CompanionRiskScaleTest {
     }
 
     @Test
+    @DisplayName("확률 하나 판정(턴 이벤트·높은 날 공용): 눈금별 기준, 같으면 높음, null 은 낮음")
+    void singleProbabilityUsesItsScale() {
+        CompanionProperties.RiskPattern config = new CompanionProperties().getRiskPattern();
+        assertThat(CompanionRiskPattern.isHigh(CompanionRiskProbability.lora(new BigDecimal("0.3")), config)).isTrue();
+        assertThat(CompanionRiskPattern.isHigh(CompanionRiskProbability.v9(new BigDecimal("0.3")), config)).isFalse();
+        assertThat(CompanionRiskPattern.isHigh(CompanionRiskProbability.v9(new BigDecimal("0.97")), config)).isTrue();
+        assertThat(CompanionRiskPattern.isHigh((CompanionRiskProbability) null, config)).isFalse();
+    }
+
+    @Test
+    @DisplayName("기준값은 0 초과 1 이하만 - 0·음수·1 초과·null 은 기동 실패, 1 은 허용")
+    void thresholdRangeIsValidated() {
+        CompanionProperties.RiskPattern config = new CompanionProperties().getRiskPattern();
+        for (String bad : List.of("0", "-0.1", "3", "1.0001")) {
+            org.assertj.core.api.Assertions.assertThatThrownBy(() -> config.setLoraThreshold(new BigDecimal(bad)))
+                    .as(bad).isInstanceOf(IllegalArgumentException.class).hasMessageContaining("lora-threshold");
+            org.assertj.core.api.Assertions.assertThatThrownBy(() -> config.setThreshold(new BigDecimal(bad)))
+                    .as(bad).isInstanceOf(IllegalArgumentException.class).hasMessageContaining("risk-pattern.threshold");
+        }
+        org.assertj.core.api.Assertions.assertThatThrownBy(() -> config.setLoraThreshold(null))
+                .isInstanceOf(IllegalArgumentException.class);
+        config.setLoraThreshold(BigDecimal.ONE);
+        config.setThreshold(new BigDecimal("0.5"));
+        assertThat(config.getLoraThreshold()).isEqualByComparingTo("1");
+        assertThat(config.getThreshold()).isEqualByComparingTo("0.5");
+    }
+
+    @Test
     @DisplayName("기본 설정: 어댑터 기준 0.3, v9 기준 0.97 그대로, 스위치 꺼짐")
     void defaults() {
         CompanionProperties.RiskPattern config = new CompanionProperties().getRiskPattern();
