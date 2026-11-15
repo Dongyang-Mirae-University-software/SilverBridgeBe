@@ -1,5 +1,7 @@
 package kr.silverbridge.main.domain.companion.service;
 
+import kr.silverbridge.main.domain.companion.entity.CompanionRiskProbability;
+import java.math.BigDecimal;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import kr.silverbridge.main.domain.companion.client.AiCompanionClient;
@@ -35,6 +37,7 @@ import java.time.ZonedDateTime;
 import java.util.List;
 import java.util.Optional;
 
+import static org.mockito.ArgumentMatchers.nullable;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
@@ -105,7 +108,7 @@ class CompanionServiceTest {
     @DisplayName("대화 열기: 진행 중인 대화를 이어 가면 지금까지 기록된 턴 수(turnCount)를 함께 준다 - 기기가 1번째부터 다시 세지 않게")
     void openResumeCarriesTurnCount() {
         CompanionSession open = sessionWithId(11L, "d-11");
-        open.recordTurn(3, false, null, AT_0910.toOffsetDateTime());
+        open.recordTurn(3, false, (BigDecimal) null, AT_0910.toOffsetDateTime());
         when(sessionRepository.findByWardIdAndSessionDateAndSlotAndTestFalse(WARD, TODAY, CompanionSlot.S09)).thenReturn(Optional.of(open));
         when(questionRepository.findById(1L)).thenReturn(Optional.of(question(1L, "이어 갈 질문")));
 
@@ -165,7 +168,7 @@ class CompanionServiceTest {
     private CompanionSession resumable(long id, int turns) {
         CompanionSession open = sessionWithId(id, "d-" + id);
         if (turns > 0) {
-            open.recordTurn(turns, false, null, AT_0910.toOffsetDateTime());
+            open.recordTurn(turns, false, (BigDecimal) null, AT_0910.toOffsetDateTime());
         }
         when(sessionRepository.findByWardIdAndSessionDateAndSlotAndTestFalse(WARD, TODAY, CompanionSlot.S09)).thenReturn(Optional.of(open));
         when(questionRepository.findById(1L)).thenReturn(Optional.of(question(1L, "이어 갈 질문")));
@@ -238,7 +241,7 @@ class CompanionServiceTest {
         assertThat(response.reply()).isEqualTo("많이 힘드셨군요.");
         assertThat(response.ended()).isFalse();
         assertThat(response.transcript()).isNull();
-        verify(writer).recordTurn(eq(30L), eq(2), eq(true), any(),
+        verify(writer).recordTurn(eq(30L), eq(2), eq(true), nullable(CompanionRiskProbability.class),
                 eq(new CompanionTurnRecorder.TurnContent(null, "많이 힘드셨군요.", "요즘 너무 힘들어요")), any());
         verify(aiClient, never()).finish(anyString());
     }
@@ -288,7 +291,7 @@ class CompanionServiceTest {
 
         service.replyText(WARD, 32L, "그냥 그래요");
 
-        verify(writer).recordTurn(eq(32L), eq(3), eq(expectedRisk), any(), any(), any());
+        verify(writer).recordTurn(eq(32L), eq(3), eq(expectedRisk), nullable(CompanionRiskProbability.class), any(), any());
     }
 
     @Test

@@ -58,8 +58,8 @@ class CompanionSessionWriterTest {
         when(repository.findById(1L)).thenReturn(Optional.of(open(1L)));
         when(repository.claimRiskNotification(eq(1L), any())).thenReturn(1, 0);
 
-        writer.recordTurn(1L, 2, true, null, NOW);
-        writer.recordTurn(1L, 3, true, null, NOW);
+        writer.recordTurn(1L, 2, true, (BigDecimal) null, NOW);
+        writer.recordTurn(1L, 3, true, (BigDecimal) null, NOW);
 
         verify(publisher).publishEvent(new CompanionRiskDetectedEvent("CW0001", 1L));
         verify(repository, org.mockito.Mockito.times(2)).claimRiskNotification(eq(1L), any());
@@ -70,7 +70,7 @@ class CompanionSessionWriterTest {
     void plainTurnDoesNotClaim() {
         when(repository.findById(2L)).thenReturn(Optional.of(open(2L)));
 
-        writer.recordTurn(2L, 1, false, null, NOW);
+        writer.recordTurn(2L, 1, false, (BigDecimal) null, NOW);
 
         verify(repository, never()).claimRiskNotification(anyLong(), any());
         verify(publisher, never()).publishEvent(any());
@@ -96,7 +96,7 @@ class CompanionSessionWriterTest {
         when(repository.findById(4L)).thenReturn(Optional.of(done));
 
         writer.finish(4L, result(CompanionEndReason.NO_RESPONSE, true), NOW.plusMinutes(20));
-        writer.recordTurn(4L, 9, true, null, NOW.plusMinutes(20));
+        writer.recordTurn(4L, 9, true, (BigDecimal) null, NOW.plusMinutes(20));
 
         assertThat(done.getEndReason()).isEqualTo(CompanionEndReason.USER_STOP);
         assertThat(done.getEndedAt()).isEqualTo(NOW);
@@ -113,7 +113,7 @@ class CompanionSessionWriterTest {
         writer.recordTurn(5L, 1, false, new BigDecimal("0.4200"), NOW);
         writer.recordTurn(5L, 2, false, new BigDecimal("0.9100"), NOW);
         writer.recordTurn(5L, 3, false, new BigDecimal("0.1000"), NOW);
-        writer.recordTurn(5L, 4, false, null, NOW);
+        writer.recordTurn(5L, 4, false, (BigDecimal) null, NOW);
 
         assertThat(session.getMaxRiskProb()).isEqualByComparingTo("0.91");
     }
@@ -137,7 +137,7 @@ class CompanionSessionWriterTest {
         writer.recordTurn(7L, 1, false, new BigDecimal("0.9900"), NOW); // 스위치 꺼짐(기본)
         properties.getRiskPattern().setEnabled(true);
         writer.recordTurn(7L, 2, false, new BigDecimal("0.9699"), NOW);
-        writer.recordTurn(7L, 3, false, null, NOW);
+        writer.recordTurn(7L, 3, false, (BigDecimal) null, NOW);
 
         verify(publisher, never()).publishEvent(any(CompanionRiskPatternCheckEvent.class));
     }
@@ -182,7 +182,7 @@ class CompanionSessionWriterTest {
         });
         when(repository.claimRiskNotification(eq(11L), any())).thenReturn(1);
 
-        writer.recordTurn(11L, 3, true, null, CompanionTurnRecorder.TurnContent.NONE, NOW);
+        writer.recordTurn(11L, 3, true, (BigDecimal) null, CompanionTurnRecorder.TurnContent.NONE, NOW);
 
         assertThat(turnCountAtLock[0]).as("잠글 때는 이 턴(3) 반영 전").isZero();
         assertThat(session.getTurnCount()).isEqualTo(3);
@@ -202,7 +202,7 @@ class CompanionSessionWriterTest {
         when(repository.claimTestRiskNotification(eq(12L), eq("CW0001"), eq(LocalDate.of(2026, 11, 4)), any()))
                 .thenReturn(0);
 
-        writer.recordTurn(12L, 1, true, null, NOW);
+        writer.recordTurn(12L, 1, true, (BigDecimal) null, NOW);
 
         verify(repository, never()).claimRiskNotification(anyLong(), any());
         verify(publisher, never()).publishEvent(any(CompanionRiskDetectedEvent.class));
@@ -214,7 +214,7 @@ class CompanionSessionWriterTest {
         when(repository.findById(13L)).thenReturn(Optional.of(open(13L)));
         when(repository.claimRiskNotification(eq(13L), any())).thenReturn(1);
 
-        writer.recordTurn(13L, 1, true, null, NOW);
+        writer.recordTurn(13L, 1, true, (BigDecimal) null, NOW);
 
         verify(repository, never()).claimTestRiskNotification(anyLong(), any(), any(), any());
         verify(publisher).publishEvent(new CompanionRiskDetectedEvent("CW0001", 13L));

@@ -88,6 +88,13 @@ public class CompanionSession {
     @Column(name = "max_risk_prob", precision = 5, scale = 4)
     private BigDecimal maxRiskProb;
 
+    /**
+     * 대화 중 가장 높았던 턴 위험 확률 - 위험 판단 어댑터 눈금(AI {@code riskModel} "v9+…", 2026-11-15, V73).
+     * {@link #maxRiskProb}(v9 눈금)와 따로 둔다 - 같은 숫자라도 뜻이 달라 누적 기준이 다르다. 로그·알림 문구에 싣지 않는다.
+     */
+    @Column(name = "max_risk_prob_lora", precision = 5, scale = 4)
+    private BigDecimal maxRiskProbLora;
+
     @Column(name = "prompt_version", length = 100)
     private String promptVersion;
 
@@ -138,14 +145,26 @@ public class CompanionSession {
         this.lastActivityAt = now;
     }
 
-    /** 턴 기록. {@code riskProbability}는 null이면 무시하고, 있으면 지금까지의 최댓값만 남긴다. */
+    /** 턴 기록(v9 눈금 확률). {@code riskProbability}는 null이면 무시하고, 있으면 지금까지의 최댓값만 남긴다. */
     public void recordTurn(int turnNo, boolean riskSeen, BigDecimal riskProbability, OffsetDateTime now) {
+        recordTurn(turnNo, riskSeen, CompanionRiskProbability.v9(riskProbability), now);
+    }
+
+    /** 턴 기록. 확률은 눈금별 칸에 지금까지의 최댓값만 남긴다(2026-11-15). null이면 무시한다. */
+    public void recordTurn(int turnNo, boolean riskSeen, CompanionRiskProbability risk, OffsetDateTime now) {
         this.turnCount = Math.max(this.turnCount, turnNo);
         if (riskSeen) {
             this.riskFlag = true;
         }
-        if (riskProbability != null && (maxRiskProb == null || riskProbability.compareTo(maxRiskProb) > 0)) {
-            this.maxRiskProb = riskProbability;
+        if (risk != null) {
+            BigDecimal p = risk.value();
+            if (risk.lora()) {
+                if (maxRiskProbLora == null || p.compareTo(maxRiskProbLora) > 0) {
+                    this.maxRiskProbLora = p;
+                }
+            } else if (maxRiskProb == null || p.compareTo(maxRiskProb) > 0) {
+                this.maxRiskProb = p;
+            }
         }
         this.lastActivityAt = now;
     }
