@@ -138,6 +138,42 @@ class CompanionRiskPatternFullIntegrationTest extends FullContextIntegrationTest
         assertThat(notificationLogs(GUARDIAN, NotificationType.COMPANION_RISK_PATTERN)).isEqualTo(1);
     }
 
+    @Test
+    @DisplayName("어댑터 눈금(riskModel v9+…): 지난 어댑터 높은 날 + 오늘 0.35 턴 → 누적 알림 1건, 확률은 어댑터 칸에만 저장")
+    void 어댑터_눈금_두_날이면_누적_알림() throws Exception {
+        saveUser(GUARDIAN, Role.GUARDIAN, Status.ACTIVE);
+        saveUser(WARD, Role.WARD, Status.ACTIVE);
+        saveActiveConnection(GUARDIAN, WARD);
+        LocalDate today = LocalDate.now(KST);
+        savePastHighLora(today.minusDays(2), "0.4200");
+        long sessionId = openSession("d-pattern-lora");
+        when(aiCompanionClient.replyText(eq("d-pattern-lora"), anyString())).thenReturn(
+                JSON.readTree("{\"turnNo\":1,\"reply\":{\"text\":\"그러셨군요.\"},\"riskFlag\":false,"
+                        + "\"riskProbability\":0.2999,\"riskModel\":\"v9+lora-risk-r2\",\"ended\":false}"),
+                JSON.readTree("{\"turnNo\":2,\"reply\":{\"text\":\"그러셨군요.\"},\"riskFlag\":false,"
+                        + "\"riskProbability\":0.3500,\"riskModel\":\"v9+lora-risk-r2\",\"ended\":false}"));
+
+        companionService.replyText(WARD, sessionId, "대답");
+        awaitAsyncIdle();
+        assertThat(notificationLogs(GUARDIAN, NotificationType.COMPANION_RISK_PATTERN)).as("0.2999 는 기준 미만").isZero();
+
+        companionService.replyText(WARD, sessionId, "대답");
+        eventually().untilAsserted(() -> assertThat(notificationLogs(GUARDIAN, NotificationType.COMPANION_RISK_PATTERN))
+                .as("어댑터 기준 0.3 이상인 두 날째 턴에 1번").isEqualTo(1));
+        assertThat(jdbc.queryForObject("SELECT max_risk_prob_lora FROM companion_session WHERE id = ?", BigDecimal.class,
+                sessionId)).isEqualByComparingTo("0.3500");
+        assertThat(jdbc.queryForObject("SELECT max_risk_prob FROM companion_session WHERE id = ?", BigDecimal.class,
+                sessionId)).as("v9 칸은 비어 있다").isNull();
+        assertThat(notificationLogs(GUARDIAN, NotificationType.COMPANION_RISK)).as("riskFlag 알림은 별개").isZero();
+    }
+
+    /** 어댑터 눈금으로 높은 대화. */
+    private void savePastHighLora(LocalDate date, String probability) {
+        savePastHigh(date, "0.0100");
+        jdbc.update("UPDATE companion_session SET max_risk_prob = NULL, max_risk_prob_lora = ? WHERE dialogue_id = ?",
+                new BigDecimal(probability), "d-high-" + date);
+    }
+
     /** 높은 확률 대화(연결 이후로 보이게 시작 시각은 지금). 슬롯은 날짜마다 다르게 둔다. */
     private void savePastHigh(LocalDate date, String probability) {
         CompanionSlot slot = CompanionSlot.S21;

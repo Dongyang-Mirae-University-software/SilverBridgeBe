@@ -1,6 +1,7 @@
 package kr.silverbridge.main.domain.companion.service;
 
 import kr.silverbridge.main.domain.companion.config.CompanionProperties;
+import kr.silverbridge.main.domain.companion.entity.CompanionRiskProbability;
 import kr.silverbridge.main.domain.companion.entity.CompanionSession;
 
 import java.math.BigDecimal;
@@ -58,11 +59,19 @@ public final class CompanionRiskPattern {
 
     /** 높은 대화 = v9 눈금 최댓값이 {@code threshold} 이상이거나 어댑터 눈금 최댓값이 {@code loraThreshold} 이상(2026-11-15). */
     static boolean isHigh(CompanionSession session, CompanionProperties.RiskPattern config) {
-        return atOrAbove(session.getMaxRiskProb(), config.getThreshold())
-                || atOrAbove(session.getMaxRiskProbLora(), config.getLoraThreshold());
+        return isHigh(CompanionRiskProbability.v9(session.getMaxRiskProb()), config)
+                || isHigh(CompanionRiskProbability.lora(session.getMaxRiskProbLora()), config);
     }
 
-    private static boolean atOrAbove(BigDecimal value, BigDecimal threshold) {
-        return value != null && value.compareTo(threshold) >= 0;
+    /**
+     * 확률 하나가 그 눈금의 기준 이상인가 - 턴 이벤트(writer)와 높은 날 판정이 같이 쓰는 한 곳(2026-11-15 점검 L-2).
+     * null 이면 거짓.
+     */
+    public static boolean isHigh(CompanionRiskProbability probability, CompanionProperties.RiskPattern config) {
+        if (probability == null) {
+            return false;
+        }
+        BigDecimal threshold = probability.lora() ? config.getLoraThreshold() : config.getThreshold();
+        return probability.value().compareTo(threshold) >= 0;
     }
 }

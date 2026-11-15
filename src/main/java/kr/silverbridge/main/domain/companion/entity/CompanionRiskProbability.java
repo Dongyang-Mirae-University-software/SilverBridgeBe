@@ -26,9 +26,4 @@ public record CompanionRiskProbability(BigDecimal value, boolean lora) {
     public static CompanionRiskProbability lora(BigDecimal value) {
         return value == null ? null : new CompanionRiskProbability(value, true);
     }
-
-    /** 이 눈금의 기준 이상인가. */
-    public boolean atOrAbove(BigDecimal v9Threshold, BigDecimal loraThreshold) {
-        return value.compareTo(lora ? loraThreshold : v9Threshold) >= 0;
-    }
 }

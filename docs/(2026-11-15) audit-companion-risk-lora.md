@@ -48,6 +48,15 @@ AI 19건(경로·기준·전환·깨진 어댑터) + 기존 동시 실행 테스
 
 참고(이슈 아님): 어댑터 칸에 r1(18:07 전)·r2 값이 같은 칸에 섞인다 - 정책 파일에 기록됨(스위치 꺼진 기간). 프롬프트가 v4면 위험 어댑터는 올라가지만 쓰이지 않는다(GPU 88MB, 운영은 v9).
 
+## 조치 (2026-11-15, 사용자 "전부 반영해줘")
+
+| # | 결과 |
+|---|---|
+| L-1 | 수용 - 정책 파일에 근거와 다시 볼 조건(동시 사용 증가·`model probability unavailable` 로그) 기록, 코드 변경 없음 |
+| L-2 | `CompanionRiskPattern.isHigh(CompanionRiskProbability, config)` 한 곳으로, writer가 이것을 부르고 값 타입의 `atOrAbove` 삭제 |
+| L-3 | `CompanionRiskPatternFullIntegrationTest.어댑터_눈금_두_날이면_누적_알림` - AI 응답 `riskModel` → `max_risk_prob_lora` → 리스너 → 누적 알림 1건, 기준 미만(0.2999)은 0건 |
+| L-4 | `threshold`·`lora-threshold` setter가 0 초과 1 이하가 아니면 예외 → 기동 실패 (`CompanionRiskScaleTest.thresholdRangeIsValidated`) |
+
 ## 종합
 
 **PASS** (Low 4건). 스위치를 켜기 전 막는 것 없음. L-2·L-3·L-4는 한 PR로 묶을 수 있다.
