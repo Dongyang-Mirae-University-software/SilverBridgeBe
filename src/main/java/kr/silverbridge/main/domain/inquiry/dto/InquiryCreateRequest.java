@@ -28,6 +28,8 @@ public class InquiryCreateRequest {
 
     @Schema(description = "내용", example = "어제부터 피보호자 이상감지 알림이 전혀 오지 않습니다.")
     @NotBlank(message = "내용을 입력해주세요.")
+    // 제목과 같은 검사 - @NotBlank 는 제로폭 공백·NBSP 만 있는 내용을 빈칸으로 보지 않는다 (최종 QA CONN-A55)
+    @VisibleText(message = "내용을 입력해주세요.")
     @NoControlChars(allowLineBreaks = true)
     @Size(max = 2000, message = "내용은 최대 2000자입니다.")
     private String content;
