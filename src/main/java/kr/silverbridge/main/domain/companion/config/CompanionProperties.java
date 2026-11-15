@@ -104,6 +104,23 @@ public class CompanionProperties {
         private boolean enabled = false;
         private BigDecimal threshold = new BigDecimal("0.97");
         private BigDecimal loraThreshold = new BigDecimal("0.3");
+
+        /** 0 초과 1 이하만 (2026-11-15 점검 L-4 - 오타(예: 3)면 누적 규칙이 조용히 꺼지므로 기동을 멈춘다). */
+        public void setThreshold(BigDecimal threshold) {
+            this.threshold = probabilityThreshold("companion.risk-pattern.threshold", threshold);
+        }
+
+        /** 0 초과 1 이하만 (2026-11-15 점검 L-4). */
+        public void setLoraThreshold(BigDecimal loraThreshold) {
+            this.loraThreshold = probabilityThreshold("companion.risk-pattern.lora-threshold", loraThreshold);
+        }
+
+        private static BigDecimal probabilityThreshold(String name, BigDecimal value) {
+            if (value == null || value.signum() <= 0 || value.compareTo(BigDecimal.ONE) > 0) {
+                throw new IllegalArgumentException(name + " 는 0 초과 1 이하여야 합니다.");
+            }
+            return value;
+        }
         private int minDays = 2;
         private int windowDays = 7;
     }
