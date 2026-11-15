@@ -472,6 +472,39 @@ class AdminUserServiceTest {
         }
 
         @Test
+        @DisplayName("이미 정지된 계정에 새 사유를 보내면 사유만 바뀌고 감사 로그가 남는다, 토큰 무효화 이벤트는 다시 보내지 않는다 (최종 QA ADM-A19)")
+        void 정지중_사유만_변경() {
+            User user = user(USER_ID, "홍길동", Role.GUARDIAN, Status.RESTRICTED);
+            user.restrict("처음 사유");
+            givenUser(user);
+
+            service().updateUser(USER_ID,
+                    new AdminUserUpdateRequest(null, null, Status.RESTRICTED, "  새 사유  "), ADMIN_ID);
+
+            assertThat(user.getStatus()).isEqualTo(Status.RESTRICTED);
+            assertThat(user.getStatusReason()).isEqualTo("새 사유");
+            verify(auditLogService).log(eq(ADMIN_ID), eq(AdminAuditAction.USER_STATUS_CHANGE), eq(USER_ID),
+                    eq("정지 사유 변경 (사유: 새 사유)"));
+            verify(eventPublisher, never()).publishEvent(any(UserRestrictedEvent.class));
+        }
+
+        @Test
+        @DisplayName("이미 정지된 계정에 같은 사유나 빈 사유를 보내면 아무것도 바꾸지 않는다")
+        void 정지중_같은사유_빈사유는_변경없음() {
+            User user = user(USER_ID, "홍길동", Role.GUARDIAN, Status.RESTRICTED);
+            user.restrict("처음 사유");
+            givenUser(user);
+
+            service().updateUser(USER_ID,
+                    new AdminUserUpdateRequest(null, null, Status.RESTRICTED, "처음 사유"), ADMIN_ID);
+            service().updateUser(USER_ID,
+                    new AdminUserUpdateRequest(null, null, Status.RESTRICTED, "  "), ADMIN_ID);
+
+            assertThat(user.getStatusReason()).isEqualTo("처음 사유");
+            verify(auditLogService, never()).log(anyString(), any(), anyString(), anyString());
+        }
+
+        @Test
         @DisplayName("피보호자는 이용 제한할 수 없다 - 로그인이 막히면 SOS를 보낼 수 없게 된다")
         void 피보호자는_정지할_수_없다() {
             User ward = givenUser(user(WARD_ID, "박민수", Role.WARD, Status.ACTIVE));
