@@ -42,6 +42,14 @@ AFTER_COMMIT·디스패처 경로 변화 없음, 알림 종류·채널·수신�
 | L-1 | 정책 문서의 옛 10MB 표기 - `policy-medication.md` "multipart 전역 상한 10MB", `policy-companion.md` "서블릿 상한(10MB)" | 두 파일 | 요청 전체 12MB·파일 하나 10MB로 정정 |
 | L-2 | 12MB 경계를 설정 문자열로만 고정 | `MultipartLimitConfigTest` | 선택 - 요청 경계 테스트(12MB 이하 통과·초과 413 JSON) |
 
+## 조치 (2026-11-16, 사용자 "전부 반영해줘")
+
+| # | 결과 |
+|---|---|
+| M-1 | gosky `/etc/nginx/sites-enabled/devdmu.gosky.kr` `client_max_body_size 10m → 13m`(백업 `/etc/nginx/devdmu.gosky.kr.bak-20261116-maxbody` - sites-enabled 밖), `nginx -t` 통과 후 reload. 실측: FE 도메인으로 11MB 업로드 → BE JSON 401 `LOGIN_REQUIRED`(nginx 통과), 14MB → nginx 413(상한 동작), 로그인 페이지 200 |
+| L-1 | `policy-medication.md` 전역 상한을 "파일 하나 10MB·요청 전체 12MB" + 앞단 nginx 두 도메인 13m 규칙으로, `policy-companion.md` 업로드 합계 상한 12MB로 정정 |
+| L-2 | `MultipartLimitConfigTest.max_payload_fits_request_limit` - 실제 application.yaml 바이트로 말벗 최대치 + 머리글 여유 1MB ≤ 요청 상한, 파일 상한 ≤ 요청 상한, nginx 13m > 요청 상한 |
+
 ## 종합
 
 **PASS (Medium 1건)**. 해제 문구는 모든 경로에서 사실과 맞다. 12MB 상한은 API 도메인 직접 호출에만 적용되고 FE 경로는 nginx 10m에 묶인다.
