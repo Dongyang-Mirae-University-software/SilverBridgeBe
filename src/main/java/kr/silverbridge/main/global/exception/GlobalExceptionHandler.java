@@ -269,7 +269,8 @@ public class GlobalExceptionHandler {
             return ResponseEntity.status(ErrorCode.MEDICATION_OCR_IMAGE_TOO_LARGE.getStatus())
                     .body(ApiResponse.fail(ErrorCode.MEDICATION_OCR_IMAGE_TOO_LARGE));
         }
-        // 안부 말벗 음성 대답(음성 + 사진 합계 10MB 초과) - 합계 문구로 답한다(2026-11-04 점검 L-1)
+        // 안부 말벗 음성 대답(요청 전체 12MB 초과, 2026-11-16) - 합계 문구로 답한다(2026-11-04 점검 L-1).
+        // 정상 한도(음성 5MB + 사진 1MB x 5) 안의 요청은 여기 오지 않고, 한도를 넘는 파일은 서비스 검사가 먼저 잡는다.
         if (COMPANION_AUDIO_PATH.matcher(request.getRequestURI()).matches()) {
             return ResponseEntity.status(ErrorCode.COMPANION_UPLOAD_TOO_LARGE.getStatus())
                     .body(ApiResponse.fail(ErrorCode.COMPANION_UPLOAD_TOO_LARGE));

@@ -27,6 +27,10 @@ public interface UserRepository extends JpaRepository<User, String> {
     // 전화번호 존재 여부 (회원가입·정보 수정 중복 검사)
     boolean existsByPhone(String phone);
 
+    // 프로필 사진 주소가 이 글자로 끝나는 회원이 있는가 - 파일 서버 삭제 전 "다른 회원이 아직 쓰는 파일인가" 확인
+    // (최종 QA AUTH-A44, 2026-11-16). 인자는 "/파일명". LIKE 의 %·_ 는 Spring Data 가 이스케이프한다.
+    boolean existsByProfileImageEndingWith(String suffix);
+
     // 이름 + 전화번호로 사용자 전체 조회 (아이디 찾기 — LOCAL/KAKAO 복수 계정 지원)
     List<User> findAllByNameAndPhone(String name, String phone);
 

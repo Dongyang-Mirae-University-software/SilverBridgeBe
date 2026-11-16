@@ -68,8 +68,9 @@ public class FileServerClient {
         }
     }
 
-    // 설정된 파일서버 호스트의 주소면 경로의 마지막 조각(파일명)을, 아니면 null
-    String ownedFilename(String fileUrl) {
+    // 설정된 파일서버 호스트의 주소면 경로의 마지막 조각(파일명)을, 아니면 null.
+    // 삭제 전 "다른 회원이 아직 쓰는 파일인가" 확인에도 쓴다(UserService, 최종 QA AUTH-A44)
+    public String ownedFilename(String fileUrl) {
         URI uri;
         try {
             uri = new URI(fileUrl.trim());
