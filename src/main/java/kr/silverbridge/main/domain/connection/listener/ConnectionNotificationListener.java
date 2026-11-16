@@ -59,6 +59,9 @@ public class ConnectionNotificationListener {
     static final String REQUEST_BODY_FALLBACK = "가족이 연결을 요청했어요. 앱에서 확인해 주세요.";
     static final String FORCED_WARD_BODY = "가족과 연결됐어요. 앱에서 확인해 주세요.";
     static final String DISCONNECTED_WARD_BODY = "가족 연결이 해제됐어요.";
+    /** 피보호자 수신 - 누가 끊었는지 보이게(최종 QA CONN-N06, 2026-11-16). 탈퇴는 M-2 에 따라 위 단문을 그대로 쓴다. */
+    static final String DISCONNECTED_BY_GUARDIAN_WARD_BODY = "보호자가 가족 연결을 해제했어요.";
+    static final String DISCONNECTED_BY_ADMIN_WARD_BODY = "관리자가 가족 연결을 해제했어요.";
 
     /**
      * 연결 요청 본문. 이름이 비었거나(제로폭 문자만 등, CONN-G14와 같은 기준) 넣으면 단문 한도를 넘는 긴 이름이면
@@ -162,9 +165,10 @@ public class ConnectionNotificationListener {
     @Async("notificationExecutor")
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
     public void handleDisconnected(ConnectionDisconnectedEvent event) {
-        // 받는 사람이 피보호자면 누가 끊었든 단문 한 줄(2026-10-27), 보호자 문구는 그대로다.
+        // 받는 사람이 피보호자면 단문 한 줄(2026-10-27)에 해제한 쪽을 붙인다(CONN-N06, 2026-11-16).
+        // 보호자 탈퇴는 "나를 끊었다"로 읽히지 않게 주체를 말하지 않는다(M-2). 보호자 문구는 그대로다.
         boolean toWard = event.notifyTargetId().equals(event.wardId());
-        String body = toWard ? DISCONNECTED_WARD_BODY : switch (event.disconnectedBy()) {
+        String body = toWard ? wardDisconnectedBody(event.disconnectedBy()) : switch (event.disconnectedBy()) {
             case GUARDIAN -> "보호자가 연결을 해제했습니다.";
             case WARD -> "피보호자가 연결을 해제했습니다.";
             // 관리자가 끊은 것을 "보호자가 해제했습니다"로 내보내면 사실과 다르다
@@ -188,5 +192,14 @@ public class ConnectionNotificationListener {
                 NotificationContent.of(toWard ? WardNotificationText.TITLE : "연결 해제", body,
                         Map.of("type", "CONNECTION_CANCELLED",
                                 "connectionId", String.valueOf(event.connectionId()))));
+    }
+
+    static String wardDisconnectedBody(ConnectionDisconnectedEvent.DisconnectedBy by) {
+        return switch (by) {
+            case GUARDIAN -> DISCONNECTED_BY_GUARDIAN_WARD_BODY;
+            case ADMIN -> DISCONNECTED_BY_ADMIN_WARD_BODY;
+            // WITHDRAWN: 보호자 탈퇴(M-2). WARD: 피보호자 본인이 끊으면 알림은 보호자에게만 가므로 여기 오지 않는다.
+            case WITHDRAWN, WARD -> DISCONNECTED_WARD_BODY;
+        };
     }
 }

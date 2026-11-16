@@ -45,8 +45,10 @@ spring:
     multipart:
       # 전역 상한은 가장 큰 업로드(약 봉투 OCR 8MB, 2026-10-22)보다 약간 크게 둔다.
       # 경로별 실제 상한은 서비스가 따로 검사한다(프로필 사진 5MB = UserService, 약 봉투 8MB = MedicationOcrService).
+      # 요청 전체는 12MB - 챗봇 음성 답변 최대치(음성 5MB + 사진 1MB x 5장)에 멀티파트 머리글이 더해지면
+      # 10MB 를 넘는다(최종 QA CHAT-N33, 2026-11-16). 파일 하나 상한(10MB)은 그대로. 앞단 nginx 는 13m 요청.
       max-file-size: 10MB
-      max-request-size: 10MB
+      max-request-size: 12MB
 
   mvc:
     throw-exception-if-no-handler-found: true   # 존재하지 않는 경로 → NoHandlerFoundException 발생 (Swagger UI 정적 리소스는 영향 없음)

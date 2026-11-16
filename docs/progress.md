@@ -4,6 +4,11 @@
 
 ---
 
+### [2026-11-16] 최종 QA 남은 BE 항목 정리 (`fix/final-qa-remaining`)
+- CONN-N06: 피보호자가 받는 해제 알림에 해제한 쪽 표시 - 보호자 "보호자가 가족 연결을 해제했어요.", 관리자 "관리자가 가족 연결을 해제했어요.", 보호자 탈퇴는 M-2 에 따라 단문 유지. 보호자 수신 문구·알림 종류·채널·WS 키는 그대로.
+- CHAT-N33: `spring.servlet.multipart.max-request-size` 10MB → 12MB(파일 하나 10MB 그대로). nginx `api.devdmu` 13m 은 인프라 전달 페이지로 요청.
+- 문서 정정(사용자 결정): AUTH-A24 refresh 토큰 없음 400 / 있는데 무효·만료 401, AUTH-A12 카카오 가입 요청의 밖 이미지 주소는 400(로그인 응답만 비움), AUTH-A44 사진 삭제는 우리 파일 서버 주소만 - 주인 확인은 백로그. 탈퇴 알림 문서 줄도 실제 문구로 정정. 상세 `(2026-11-16) fix-final-qa-remaining.md`.
+
 ### [2026-11-16] 영향 범위 점검(C) - 웹 JSON 숫자 enum 거부 (BE #490) - PASS
 - 웹 요청 enum 13개 DTO·16칸 모두 전역 설정 적용(커스텀 생성자 0). AI·예약·Kakao·파일 서버 응답과 채팅 중계는 Jackson 2·기본 변환기라 설정 밖이고 enum 으로 바꾸지도 않음. STOMP `@MessageMapping`·JSON Redis 0개.
 - FE 는 enum 칸을 문자열로만 보내고, AI 서버의 BE 호출은 본문 없는 GET 뿐. dev 로그의 형식 오류 400 은 QA 재실행 시간대 밖 0건. Low 2건(숫자 문자열 테스트 없음·Jackson 2 에는 규칙 없음)은 제안만. 상세 `(2026-11-16) audit-impact-enum-number-reject.md`.
