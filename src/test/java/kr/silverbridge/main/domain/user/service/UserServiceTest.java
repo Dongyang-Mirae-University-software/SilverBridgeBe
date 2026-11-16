@@ -38,6 +38,7 @@ import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatCode;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
@@ -484,7 +485,7 @@ class UserServiceTest {
         user.updateProfileImage(IMAGE_URL);
         when(userRepository.findById(USER_ID)).thenReturn(Optional.of(user));
         when(fileServerClient.ownedFilename(IMAGE_URL)).thenReturn("shared.png");
-        when(userRepository.existsByProfileImageEndingWith("/shared.png")).thenReturn(true);
+        when(userRepository.existsByProfileImageContaining("/shared.png")).thenReturn(true);
 
         assertThat(userService.deleteProfileImage(USER_ID)).isTrue();
 
@@ -499,7 +500,7 @@ class UserServiceTest {
         user.updateProfileImage(IMAGE_URL);
         when(userRepository.findById(USER_ID)).thenReturn(Optional.of(user));
         when(fileServerClient.ownedFilename(IMAGE_URL)).thenReturn("mine.png");
-        when(userRepository.existsByProfileImageEndingWith("/mine.png")).thenReturn(false);
+        when(userRepository.existsByProfileImageContaining("/mine.png")).thenReturn(false);
 
         userService.deleteProfileImage(USER_ID);
 
@@ -516,7 +517,7 @@ class UserServiceTest {
 
         userService.deleteProfileImage(USER_ID);
 
-        verify(userRepository, never()).existsByProfileImageEndingWith(any());
+        verify(userRepository, never()).existsByProfileImageContaining(any());
         verify(fileServerClient).delete("https://k.kakaocdn.net/dn/x.png");
     }
 
@@ -527,7 +528,7 @@ class UserServiceTest {
         user.updateProfileImage(IMAGE_URL);
         when(userRepository.findById(USER_ID)).thenReturn(Optional.of(user));
         when(fileServerClient.ownedFilename(IMAGE_URL)).thenReturn("x.png");
-        when(userRepository.existsByProfileImageEndingWith("/x.png")).thenThrow(new RuntimeException("db down"));
+        when(userRepository.existsByProfileImageContaining("/x.png")).thenThrow(new RuntimeException("db down"));
 
         assertThatCode(() -> userService.deleteProfileImage(USER_ID)).doesNotThrowAnyException();
 
@@ -550,7 +551,7 @@ class UserServiceTest {
         when(profileImagePersister.replace(USER_ID, newUrl))
                 .thenReturn(new ProfileImagePersister.Result(oldUrl, UserProfileResponse.from(persisted)));
         when(fileServerClient.ownedFilename(oldUrl)).thenReturn("old.png");
-        when(userRepository.existsByProfileImageEndingWith("/old.png")).thenReturn(true);
+        when(userRepository.existsByProfileImageContaining("/old.png")).thenReturn(true);
 
         userService.updateProfileImage(USER_ID, file);
 
@@ -572,12 +573,61 @@ class UserServiceTest {
                 .build();
         when(userRepository.findById(USER_ID)).thenReturn(Optional.of(user));
         when(fileServerClient.ownedFilename(IMAGE_URL)).thenReturn("shared.png");
-        when(userRepository.existsByProfileImageEndingWith("/shared.png")).thenReturn(true);
+        when(userRepository.existsByProfileImageContaining("/shared.png")).thenReturn(true);
 
         userService.purgeWithdrawnUser(USER_ID);
 
         verify(userRepository).delete(user);
         verify(fileServerClient, never()).delete(any());
+    }
+
+    @Test
+    @DisplayName("#495 점검 L-2: 저장 주소의 파일명이 인코딩돼 있으면(공백 → %20) 인코딩한 이름으로도 확인해 건너뜀")
+    void deleteProfileImage_인코딩된파일명_다른회원이씀_삭제안함() {
+        User user = localUser();
+        user.updateProfileImage(IMAGE_URL);
+        when(userRepository.findById(USER_ID)).thenReturn(Optional.of(user));
+        when(fileServerClient.ownedFilename(IMAGE_URL)).thenReturn("a b.png");           // ownedFilename 은 디코딩된 이름
+        when(userRepository.existsByProfileImageContaining("/a b.png")).thenReturn(false);
+        when(userRepository.existsByProfileImageContaining("/a%20b.png")).thenReturn(true); // 남은 회원 주소는 인코딩돼 있음
+
+        userService.deleteProfileImage(USER_ID);
+
+        verify(fileServerClient, never()).delete(any());
+    }
+
+    @Test
+    @DisplayName("#495 점검 L-2: 인코딩해도 같은 이름이면 조회는 1번만")
+    void deleteProfileImage_인코딩같으면_조회1번() {
+        User user = localUser();
+        user.updateProfileImage(IMAGE_URL);
+        when(userRepository.findById(USER_ID)).thenReturn(Optional.of(user));
+        when(fileServerClient.ownedFilename(IMAGE_URL)).thenReturn("abc-123.png");
+        when(userRepository.existsByProfileImageContaining("/abc-123.png")).thenReturn(false);
+
+        userService.deleteProfileImage(USER_ID);
+
+        verify(userRepository, org.mockito.Mockito.times(1)).existsByProfileImageContaining(any());
+        verify(fileServerClient).delete(IMAGE_URL);
+    }
+
+    @Test
+    @DisplayName("#495 점검 L-3: 업로드 뒤 영속화가 실패하면 방금 올린 새 파일을 지우고 원래 예외를 그대로 던진다")
+    void updateProfileImage_영속화실패_새파일삭제_예외전파() throws Exception {
+        String newUrl = "https://files.example.com/file/new.png";
+        MultipartFile file = mock(MultipartFile.class);
+        when(file.getSize()).thenReturn(2048L);
+        when(file.getContentType()).thenReturn("image/png");
+        when(file.getInputStream()).thenReturn(new ByteArrayInputStream(PNG_HEADER));
+        when(fileServerClient.upload(file)).thenReturn(newUrl);
+        RuntimeException boom = new IllegalStateException("persist failed");
+        when(profileImagePersister.replace(USER_ID, newUrl)).thenThrow(boom);
+        when(fileServerClient.ownedFilename(newUrl)).thenReturn("new.png");
+        when(userRepository.existsByProfileImageContaining("/new.png")).thenReturn(false);
+
+        assertThatThrownBy(() -> userService.updateProfileImage(USER_ID, file)).isSameAs(boom);
+
+        verify(fileServerClient).delete(newUrl);
     }
 
     // ─── 헬퍼 메서드 ────────────────────────────────────────────────────────
