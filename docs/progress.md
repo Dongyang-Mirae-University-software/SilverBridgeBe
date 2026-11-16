@@ -3242,3 +3242,7 @@ AI 챗 집계 점검 L-1에서 남겨 둔 공용 `GlobalExceptionHandler`의 `e.
 ### [2026-11-16] BE #490 보완 점검 Low 반영 (L-1~L-3)
 
 - 숫자 문자열 enum 거절 테스트 고정, 관리자 연결 목록 `connectedAt` +09:00(`ConnectionTimes` 공용), 일반 공지 응답의 쓰지 않는 작성자 조회 제거. 상세 `docs/(2026-11-16) audit-impact-final-qa-be-defects.md` "조치" 절.
+
+### [2026-11-16] FE 피보호자·예약 화면 점검 Low 반영 (FE #272)
+
+- 피보호자 복약 칸에서 용량만 다른 같은 약은 원래 이름으로(`wardMedicationDisplayNames`), 마이크 시작 실패 때 AudioContext 닫기. tsc·eslint 0, vitest 661·브라우저 669 통과, gosky FE dev 반영(받은 스크립트로 새 코드 확인). BE Low 3건은 #492 `bd6c2fce`(vkcs·gosky 반영).

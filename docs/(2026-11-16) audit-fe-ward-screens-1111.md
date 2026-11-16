@@ -43,6 +43,15 @@ tsc 0 · eslint 0 · vitest 656 통과 · **브라우저 테스트(Chromium) 669
 | L-1 | 용량만 다른 같은 약 두 개(예: "아스피린 100mg"·"아스피린 500mg")는 피보호자 복약 칸에 둘 다 "아스피린"으로 보인다 - 어느 것을 먹었는지 헷갈릴 수 있다 | `utils/medication/displayName.ts`(항목마다 따로 줄임, `WardMedicationContent.tsx:225`) | 목록 안에서 줄인 이름이 겹치면 그 둘은 원래 이름 유지 |
 | L-2 | 마이크 시작 중 `createMediaStreamSource` 등이 드물게 실패하면 만든 `AudioContext`를 닫지 않고, 그 catch는 화면 이탈 여부를 보지 않고 안내를 띄운다 | `components/chatbot/useVoiceInput.ts:183` | catch에서 context 닫기 + `mountedRef` 확인 |
 
+## 조치 (2026-11-16, 사용자 "전부 반영해줘")
+
+FE #272 `603de3d`(gosky FE dev 반영, 받은 스크립트에서 새 코드 확인·재시작 불필요).
+
+| # | 결과 |
+|---|---|
+| L-1 | `wardMedicationDisplayNames` - 같은 칸에서 줄인 이름이 겹치면 그 약들은 원래 이름(원래 이름까지 같으면 줄인 이름), 칸마다 한 번 계산. vitest 5건 추가 |
+| L-2 | `useVoiceInput.start` 실패 시 만든 AudioContext 닫기 + 화면을 떠났으면 안내 생략 |
+
 ## 종합
 
 **PASS** (Low 2건). FE 수정은 FE 저장소 PR로 진행한다.
