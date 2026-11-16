@@ -3251,3 +3251,7 @@ AI 챗 집계 점검 L-1에서 남겨 둔 공용 `GlobalExceptionHandler`의 `e.
 ### [2026-11-16] FE 피보호자·예약 화면 점검 Low 반영 (FE #272)
 
 - 피보호자 복약 칸에서 용량만 다른 같은 약은 원래 이름으로(`wardMedicationDisplayNames`), 마이크 시작 실패 때 AudioContext 닫기. tsc·eslint 0, vitest 661·브라우저 669 통과, gosky FE dev 반영(받은 스크립트로 새 코드 확인). BE Low 3건은 #492 `bd6c2fce`(vkcs·gosky 반영).
+
+### [2026-11-16] 기능 점검 - 최종 QA 남은 BE 항목(#493) + gosky 누적 위험 알림 켠 뒤
+
+- **PASS(🟡1·🟢2)**: 해제 문구는 5개 해제 경로 모두 사실과 맞음(역할 변경 정리도 관리자 조작). M-1 gosky FE 도메인 nginx `client_max_body_size 10m` - FE는 `/api` 상대 경로(Next 중계)라 #493의 12MB가 브라우저 경로에 안 닿고 최대치는 nginx HTML 413(실사용 크기는 10MB 미만). 누적 위험 알림 켠 뒤 알림·오류 0. 상세 `docs/(2026-11-16) audit-final-qa-remaining.md`.
