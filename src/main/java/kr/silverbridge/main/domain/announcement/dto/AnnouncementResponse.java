@@ -3,7 +3,6 @@ package kr.silverbridge.main.domain.announcement.dto;
 import io.swagger.v3.oas.annotations.media.Schema;
 import kr.silverbridge.main.domain.admin.support.TextSummary;
 import kr.silverbridge.main.domain.announcement.entity.Announcement;
-import kr.silverbridge.main.domain.user.entity.User;
 
 import java.time.OffsetDateTime;
 
@@ -41,13 +40,13 @@ public record AnnouncementResponse(
     public static final String AUTHOR_DISPLAY_NAME = "관리자";
 
     /** 목록용 - 본문을 앞 100자로 축약한다(ADMIN-G24). */
-    public static AnnouncementResponse ofSummary(Announcement announcement, User author) {
-        AnnouncementResponse full = of(announcement, author);
+    public static AnnouncementResponse ofSummary(Announcement announcement) {
+        AnnouncementResponse full = of(announcement);
         return new AnnouncementResponse(full.id, full.authorName, full.title,
                 TextSummary.forList(full.content), full.viewCount, full.createdAt, full.updatedAt);
     }
 
-    public static AnnouncementResponse of(Announcement announcement, User author) {
+    public static AnnouncementResponse of(Announcement announcement) {
         return new AnnouncementResponse(
                 announcement.getId(),
                 AUTHOR_DISPLAY_NAME,

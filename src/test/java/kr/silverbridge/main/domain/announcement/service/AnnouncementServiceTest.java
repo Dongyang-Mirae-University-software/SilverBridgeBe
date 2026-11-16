@@ -3,9 +3,6 @@ package kr.silverbridge.main.domain.announcement.service;
 import kr.silverbridge.main.domain.announcement.dto.AnnouncementResponse;
 import kr.silverbridge.main.domain.announcement.entity.Announcement;
 import kr.silverbridge.main.domain.announcement.repository.AnnouncementRepository;
-import kr.silverbridge.main.domain.user.entity.User;
-import kr.silverbridge.main.domain.user.repository.UserRepository;
-import kr.silverbridge.main.global.enums.Role;
 import kr.silverbridge.main.global.exception.CustomException;
 import kr.silverbridge.main.global.exception.ErrorCode;
 import org.junit.jupiter.api.DisplayName;
@@ -26,8 +23,6 @@ import java.util.Optional;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyCollection;
-import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -38,7 +33,6 @@ import static org.mockito.Mockito.when;
 class AnnouncementServiceTest {
 
     @Mock private AnnouncementRepository announcementRepository;
-    @Mock private UserRepository userRepository;
     @InjectMocks private AnnouncementService service;
 
     private Announcement announcement(Long id, String authorId) {
@@ -54,8 +48,6 @@ class AnnouncementServiceTest {
         ReflectionTestUtils.setField(target, "viewCount", 8L); // 증가 후 값을 DB에서 다시 읽은 상태
         when(announcementRepository.incrementViewCount(1L)).thenReturn(1);
         when(announcementRepository.findById(1L)).thenReturn(Optional.of(target));
-        when(userRepository.findById("AD0001")).thenReturn(Optional.of(
-                User.builder().id("AD0001").name("김관리").role(Role.ADMIN).build()));
 
         AnnouncementResponse response = service.getAnnouncement(1L);
 
@@ -66,11 +58,11 @@ class AnnouncementServiceTest {
         verify(announcementRepository, never()).save(any());
         assertThat(response.viewCount()).isEqualTo(8L);
         // 관리자 실명(김관리) 대신 고정 문구 - 일반 사용자에게 관리자 이름을 내보내지 않는다 (최종 QA ADM-A07)
-        assertThat(response.authorName()).isEqualTo(AnnouncementResponse.AUTHOR_DISPLAY_NAME).isNotEqualTo("김관리");
+        assertThat(response.authorName()).isEqualTo(AnnouncementResponse.AUTHOR_DISPLAY_NAME);
     }
 
     @Test
-    @DisplayName("작성자가 탈퇴한 공지(author_id NULL)는 사용자 조회 없이 같은 고정 문구로 응답한다")
+    @DisplayName("작성자가 탈퇴한 공지(author_id NULL)도 같은 고정 문구로 응답한다")
     void 탈퇴_작성자_조회_생략() {
         when(announcementRepository.incrementViewCount(2L)).thenReturn(1);
         when(announcementRepository.findById(2L)).thenReturn(Optional.of(announcement(2L, null)));
@@ -78,7 +70,6 @@ class AnnouncementServiceTest {
         AnnouncementResponse response = service.getAnnouncement(2L);
 
         assertThat(response.authorName()).isEqualTo(AnnouncementResponse.AUTHOR_DISPLAY_NAME);
-        verify(userRepository, never()).findById(anyString());
     }
 
     @Test
@@ -92,19 +83,16 @@ class AnnouncementServiceTest {
     }
 
     @Test
-    @DisplayName("목록은 작성자를 배치 조회한다 - 공지마다 findById를 부르지 않는다")
-    void 목록_배치조회() {
+    @DisplayName("목록은 작성자를 조회하지 않고 고정 문구로 응답한다 (2026-11-16 점검 L-3)")
+    void 목록_작성자_고정() {
         when(announcementRepository.findAll(any(Pageable.class))).thenReturn(new PageImpl<>(List.of(
                 announcement(1L, "AD0001"), announcement(2L, "AD0001"), announcement(3L, null))));
-        when(userRepository.findAllById(anyCollection())).thenReturn(List.of(
-                User.builder().id("AD0001").name("김관리").role(Role.ADMIN).build()));
 
         List<AnnouncementResponse> result = service.getAnnouncements(0, 20);
 
         assertThat(result).hasSize(3);
         // 목록도 관리자 실명 대신 고정 문구 (최종 QA ADM-A07)
         assertThat(result).extracting(AnnouncementResponse::authorName).containsOnly(AnnouncementResponse.AUTHOR_DISPLAY_NAME);
-        verify(userRepository, never()).findById(anyString());
     }
 
     @Test
@@ -134,7 +122,6 @@ class AnnouncementServiceTest {
         Announcement a = announcement(1L, "AD0001");
         ReflectionTestUtils.setField(a, "content", longContent);
         when(announcementRepository.findAll(any(Pageable.class))).thenReturn(new PageImpl<>(List.of(a)));
-        when(userRepository.findAllById(anyCollection())).thenReturn(List.of());
         when(announcementRepository.incrementViewCount(1L)).thenReturn(1);
         when(announcementRepository.findById(1L)).thenReturn(Optional.of(a));
 

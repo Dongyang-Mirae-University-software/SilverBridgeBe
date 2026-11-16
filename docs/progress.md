@@ -3238,3 +3238,7 @@ AI 챗 집계 점검 L-1에서 남겨 둔 공용 `GlobalExceptionHandler`의 `e.
 
 - BE #490 보완 **PASS**(🟢3, ①은 다른 세션 `audit-impact-enum-number-reject.md`가 먼저 점검 - 결과 일치): 전역 숫자 enum 거부는 웹 요청 본문 enum 16칸/13엔드포인트에만 걸리고 FE는 모두 문자열 유니온(숫자 전송 0) - 막히는 정상 요청 없음, 숫자 문자열 `"0"`도 거절(탐침). 로그아웃 WS 닫기·연결 시각 +09:00·공지 작성자 고정 문구 PASS. 상세 `docs/(2026-11-16) audit-impact-final-qa-be-defects.md`.
 - FE #239~#248 **PASS**(🟢2): 무음은 말소리 뒤에만 세고, 녹음 중 칩·예약 선택지 잠금, 119 판정은 말풍선과 공용, 말벗 시간대 BE 상태값 일치. tsc·eslint 0, vitest 656·브라우저 669 통과, gosky 360·390px 가로 넘침 0. 상세 `docs/(2026-11-16) audit-fe-ward-screens-1111.md`.
+
+### [2026-11-16] BE #490 보완 점검 Low 반영 (L-1~L-3)
+
+- 숫자 문자열 enum 거절 테스트 고정, 관리자 연결 목록 `connectedAt` +09:00(`ConnectionTimes` 공용), 일반 공지 응답의 쓰지 않는 작성자 조회 제거. 상세 `docs/(2026-11-16) audit-impact-final-qa-be-defects.md` "조치" 절.
