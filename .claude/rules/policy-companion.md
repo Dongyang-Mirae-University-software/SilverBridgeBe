@@ -45,7 +45,7 @@ paths:
   - **L-3 수용**: 선점 후 발송이라 발송이 모두 실패해도 7일간 다시 보내지 않는다(위험 알림·주의 알림과 같은 방식, 이력에 `FAILED`).
   - **L-5 켤 때 주의**: 테스트 대화도 집계되므로 시험 피보호자가 높은 대답을 반복하면 연결된 시험 보호자에게 대체 문자(과금)가 갈 수 있다.
   - 고정: `CompanionRiskTypeParityTest`(위험 알림과 정책·채널·묶음·탭·이름·high 같음), `NotificationExecutorAssignmentTest`(긴급 풀).
-- **스위치** `COMPANION_RISK_PATTERN_ENABLED`(기본 false, 11/15에도 꺼 둠 - 사용자 결정) + `_THRESHOLD`·`_LORA_THRESHOLD`·`_MIN_DAYS`·`_WINDOW_DAYS`(0.97·0.3·2·7). **수용한 한계**: 개발용 자료에서 안전한 주 알림 +3.6%p(목표 +2%p 미달), 실제 어르신 대화로는 검증 전(11/08 DGX 연구). 상세 `docs/(2026-11-11) feature-companion-risk-pattern.md`.
+- **스위치** `COMPANION_RISK_PATTERN_ENABLED`(코드 기본 false. **gosky dev는 2026-11-16 09:51부터 켬** - 사용자 결정, 기준값 범위 검사(점검 L-4, #489) 반영 뒤. `.env.dev` 한 줄만 추가, 백업 `.env.dev.bak-20261116-0950`. 끄기 = 그 줄 삭제 + `up -d api`. 이때 `COMPANION_TEST_ALL_WARDS=true`라 테스트 대화도 집계된다 - 위 L-5. vkcs는 말벗이 꺼져 있어 해당 없음) + `_THRESHOLD`·`_LORA_THRESHOLD`·`_MIN_DAYS`·`_WINDOW_DAYS`(0.97·0.3·2·7). **수용한 한계**: 개발용 자료에서 안전한 주 알림 +3.6%p(목표 +2%p 미달), 실제 어르신 대화로는 검증 전(11/08 DGX 연구). 상세 `docs/(2026-11-11) feature-companion-risk-pattern.md`.
 
 ## 대화 내용 저장·보호자 대화 보기 (2026-11-11 사용자 결정)
 
