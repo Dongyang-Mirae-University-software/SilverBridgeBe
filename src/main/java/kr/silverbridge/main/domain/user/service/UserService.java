@@ -349,13 +349,16 @@ public class UserService {
     // 남의 파일을 지우던 구멍을 막는다. 호출 시점에는 내 행이 이미 바뀌었거나(교체·삭제 커밋 뒤) 지워져 있으므로(탈퇴)
     // 남은 행만 본다. 우리 파일 서버 주소가 아니면 FileServerClient.delete 가 원래대로 건너뛴다.
     // 실패해도 주 기능에 영향을 주지 않도록 예외를 삼킨다(파일 정리는 best-effort).
+    // 확인은 "남은 회원 주소에 '/파일명'이 들어 있는가"다 - 주소 끝 쿼리·조각에도 맞고(#495 점검 L-1), ownedFilename 은
+    // 디코딩된 이름이라 저장 주소가 인코딩돼 있을 때를 위해 경로용으로 인코딩한 이름으로도 본다(L-2). 넓게 맞으면
+    // "안 지움"으로 기울어 안전하다('/abc.png' 가 '/abc.png2' 에도 맞으면 그 파일이 남을 뿐).
     private void deleteIfUnreferenced(String fileUrl) {
         if (fileUrl == null || fileUrl.isBlank()) {
             return;
         }
         try {
             String filename = fileServerClient.ownedFilename(fileUrl);
-            if (filename != null && userRepository.existsByProfileImageEndingWith("/" + filename)) {
+            if (filename != null && isReferencedByAnyUser(filename)) {
                 log.warn("[PROFILE-IMAGE] 다른 회원이 아직 쓰는 파일이라 파일 서버 삭제를 건너뜀 file=...{}",
                         filename.length() <= 6 ? filename : filename.substring(filename.length() - 6));
                 return;
@@ -366,5 +369,14 @@ public class UserService {
             return;
         }
         fileServerClient.delete(fileUrl);
+    }
+
+    private boolean isReferencedByAnyUser(String filename) {
+        if (userRepository.existsByProfileImageContaining("/" + filename)) {
+            return true;
+        }
+        String encoded = org.springframework.web.util.UriUtils.encodePathSegment(
+                filename, java.nio.charset.StandardCharsets.UTF_8);
+        return !encoded.equals(filename) && userRepository.existsByProfileImageContaining("/" + encoded);
     }
 }
