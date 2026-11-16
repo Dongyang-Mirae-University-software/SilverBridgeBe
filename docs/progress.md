@@ -3233,3 +3233,8 @@ AI 챗 집계 점검 L-1에서 남겨 둔 공용 `GlobalExceptionHandler`의 `e.
 ### [2026-11-15] 말벗 위험 어댑터 점검 반영 (L-1~L-4)
 
 - L-2 기준 고르기를 `CompanionRiskPattern.isHigh(CompanionRiskProbability, config)` 한 곳으로 / L-3 어댑터 눈금 실 DB 통합 테스트 추가 / L-4 누적 기준값 0 초과 1 이하가 아니면 기동 실패 / L-1(AI 게이트 대기) 수용·다시 볼 조건 기록. 상세 `docs/(2026-11-15) audit-companion-risk-lora.md` "조치" 절.
+
+### [2026-11-16] 영향 범위 점검 BE #490 + 기능 점검 FE 피보호자·예약 화면(11/11 묶음)
+
+- BE #490 보완 **PASS**(🟢3, ①은 다른 세션 `audit-impact-enum-number-reject.md`가 먼저 점검 - 결과 일치): 전역 숫자 enum 거부는 웹 요청 본문 enum 16칸/13엔드포인트에만 걸리고 FE는 모두 문자열 유니온(숫자 전송 0) - 막히는 정상 요청 없음, 숫자 문자열 `"0"`도 거절(탐침). 로그아웃 WS 닫기·연결 시각 +09:00·공지 작성자 고정 문구 PASS. 상세 `docs/(2026-11-16) audit-impact-final-qa-be-defects.md`.
+- FE #239~#248 **PASS**(🟢2): 무음은 말소리 뒤에만 세고, 녹음 중 칩·예약 선택지 잠금, 119 판정은 말풍선과 공용, 말벗 시간대 BE 상태값 일치. tsc·eslint 0, vitest 656·브라우저 669 통과, gosky 360·390px 가로 넘침 0. 상세 `docs/(2026-11-16) audit-fe-ward-screens-1111.md`.
