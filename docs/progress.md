@@ -4,6 +4,10 @@
 
 ---
 
+### [2026-11-16] 기능 점검(B) - BE #495 프로필 사진 삭제 전 "다른 회원이 쓰는 파일" 확인 - PASS
+- 4개 삭제 경로(교체·실패 되돌리기·삭제·탈퇴 purge) 모두 확인을 거치고, 확인 시점엔 자기 행이 이미 바뀌었/지워져 있다. 주소 변형(다른 경로·쿼리·호스트 대소문자·퍼센트 인코딩·끝 슬래시) 우회 시도 모두 막힘 - 확인이 C 의 주소가 아니라 남은 회원 행을 보기 때문. 동시 삭제에도 고아·이중 손실 없음.
+- gosky dev 실측: 건너뜀 3건(QA AUTH-A44 삭제·교체·탈퇴), 확인 실패 0, ERROR 0 - afterCommit 안 읽기 조회가 Postgres 에서 동작함을 확인. Low 3건(파일 서버가 주소 끝에 쿼리를 붙이면 보호가 꺼짐, 인코딩 파일명, 업로드 실패 되돌리기 테스트 없음)은 제안만. 상세 `(2026-11-16) audit-profile-image-owner-check.md`.
+
 ### [2026-11-16] 프로필 사진 삭제 전 "다른 회원이 쓰는 파일" 확인 (`feature/profile-image-owner-check`, AUTH-A44)
 - 사진 삭제·교체·탈퇴 purge·업로드 실패 되돌리기 모두 `UserService.deleteIfUnreferenced` 를 거친다 - 우리 파일 서버 주소면 `users.profile_image` 가 "/파일명"으로 끝나는 회원이 남아 있는지 1번 조회, 있으면 WARN 만 남기고 건너뜀. 조회 실패도 지우지 않음. 사용자 응답·DB NULL 처리는 그대로. 마이그레이션 없음.
 - #493 기능 점검은 #494(`audit-final-qa-remaining.md`)가 먼저 했다. 이 PR 의 같은 점검 결과(업로드 5개 경로 서비스 크기 검사·속도 제한, 인증 전 multipart 읽기 0)는 그 문서와 같고, 그 문서가 다루지 않은 말벗 업로드 코드 주석·Swagger(`ErrorCode`·`GlobalExceptionHandler`·`WardCompanionController`)의 옛 10MB 만 이 PR 에서 정정. 상세 `(2026-11-16) feature-profile-image-owner-check.md`.
