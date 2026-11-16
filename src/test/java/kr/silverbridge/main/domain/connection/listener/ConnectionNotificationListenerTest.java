@@ -119,7 +119,7 @@ class ConnectionNotificationListenerTest {
     }
 
     @Test
-    @DisplayName("보호자가 해제 → 피보호자에게 '가족 연결이 해제됐어요' 단문 디스패치")
+    @DisplayName("보호자가 해제 → 피보호자에게 '보호자가 가족 연결을 해제했어요' 단문 디스패치 (CONN-N06)")
     void handleDisconnected_보호자해제_문구() {
         ConnectionDisconnectedEvent event = new ConnectionDisconnectedEvent(
                 CONNECTION_ID, WARD_ID, ConnectionDisconnectedEvent.DisconnectedBy.GUARDIAN, GUARDIAN_ID, WARD_ID);
@@ -130,7 +130,7 @@ class ConnectionNotificationListenerTest {
         ArgumentCaptor<NotificationContent> captor = ArgumentCaptor.forClass(NotificationContent.class);
         verify(notificationDispatcher).dispatch(eq(WARD_ID), eq(WARD_ID), eq(NotificationType.CONNECTION_DISCONNECTED), captor.capture());
         assertThat(captor.getValue().title()).isEqualTo("실버브릿지");
-        assertThat(captor.getValue().body()).isEqualTo("가족 연결이 해제됐어요.");
+        assertThat(captor.getValue().body()).isEqualTo("보호자가 가족 연결을 해제했어요.");
         // 해제 와이어 식별자는 CONNECTION_CANCELLED(레거시 호환). 거절(CONNECTION_REFUSED)과 섞이지 않음을 고정.
         assertThat(captor.getValue().data()).containsEntry("type", "CONNECTION_CANCELLED");
     }
@@ -267,10 +267,10 @@ class ConnectionNotificationListenerTest {
 
     @org.junit.jupiter.params.ParameterizedTest
     @org.junit.jupiter.params.provider.CsvSource({
-            "GUARDIAN, WD0001, 실버브릿지, 가족 연결이 해제됐어요.",
+            "GUARDIAN, WD0001, 실버브릿지, 보호자가 가족 연결을 해제했어요.",
             "WARD, GD0001, 연결 해제, 피보호자가 연결을 해제했습니다.",
             "ADMIN, GD0001, 연결 해제, 관리자가 연결을 해제했습니다.",
-            "ADMIN, WD0001, 실버브릿지, 가족 연결이 해제됐어요.",
+            "ADMIN, WD0001, 실버브릿지, 관리자가 가족 연결을 해제했어요.",
             "WITHDRAWN, WD0001, 실버브릿지, 가족 연결이 해제됐어요.",
             "WITHDRAWN, GD0001, 연결 해제, 피보호자가 탈퇴해 연결이 종료되었습니다."
     })
@@ -305,5 +305,7 @@ class ConnectionNotificationListenerTest {
         WardSmsAssertions.assertPlainWardSms(ConnectionNotificationListener.REQUEST_BODY_FALLBACK);
         WardSmsAssertions.assertPlainWardSms(ConnectionNotificationListener.FORCED_WARD_BODY);
         WardSmsAssertions.assertPlainWardSms(ConnectionNotificationListener.DISCONNECTED_WARD_BODY);
+        WardSmsAssertions.assertPlainWardSms(ConnectionNotificationListener.DISCONNECTED_BY_GUARDIAN_WARD_BODY);
+        WardSmsAssertions.assertPlainWardSms(ConnectionNotificationListener.DISCONNECTED_BY_ADMIN_WARD_BODY);
     }
 }
