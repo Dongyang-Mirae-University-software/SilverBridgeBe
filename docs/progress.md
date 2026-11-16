@@ -6,7 +6,7 @@
 
 ### [2026-11-16] 프로필 사진 삭제 전 "다른 회원이 쓰는 파일" 확인 (`feature/profile-image-owner-check`, AUTH-A44)
 - 사진 삭제·교체·탈퇴 purge·업로드 실패 되돌리기 모두 `UserService.deleteIfUnreferenced` 를 거친다 - 우리 파일 서버 주소면 `users.profile_image` 가 "/파일명"으로 끝나는 회원이 남아 있는지 1번 조회, 있으면 WARN 만 남기고 건너뜀. 조회 실패도 지우지 않음. 사용자 응답·DB NULL 처리는 그대로. 마이그레이션 없음.
-- #493 기능 점검(B) PASS - 업로드 5개 경로 모두 서비스 크기 검사·속도 제한, 인증 전 multipart 읽기 0, 해제 주체 × 수신자 문구가 코드·문서·FE·QA 에서 같음. L-1(말벗 업로드 주석·Swagger 의 옛 10MB) 이 PR 에서 정정. 상세 `(2026-11-16) audit-final-qa-remaining.md`, `(2026-11-16) feature-profile-image-owner-check.md`.
+- #493 기능 점검은 #494(`audit-final-qa-remaining.md`)가 먼저 했다. 이 PR 의 같은 점검 결과(업로드 5개 경로 서비스 크기 검사·속도 제한, 인증 전 multipart 읽기 0)는 그 문서와 같고, 그 문서가 다루지 않은 말벗 업로드 코드 주석·Swagger(`ErrorCode`·`GlobalExceptionHandler`·`WardCompanionController`)의 옛 10MB 만 이 PR 에서 정정. 상세 `(2026-11-16) feature-profile-image-owner-check.md`.
 
 ### [2026-11-16] 최종 QA 남은 BE 항목 정리 (`fix/final-qa-remaining`)
 - CONN-N06: 피보호자가 받는 해제 알림에 해제한 쪽 표시 - 보호자 "보호자가 가족 연결을 해제했어요.", 관리자 "관리자가 가족 연결을 해제했어요.", 보호자 탈퇴는 M-2 에 따라 단문 유지. 보호자 수신 문구·알림 종류·채널·WS 키는 그대로.
@@ -3255,3 +3255,15 @@ AI 챗 집계 점검 L-1에서 남겨 둔 공용 `GlobalExceptionHandler`의 `e.
 ### [2026-11-16] FE 피보호자·예약 화면 점검 Low 반영 (FE #272)
 
 - 피보호자 복약 칸에서 용량만 다른 같은 약은 원래 이름으로(`wardMedicationDisplayNames`), 마이크 시작 실패 때 AudioContext 닫기. tsc·eslint 0, vitest 661·브라우저 669 통과, gosky FE dev 반영(받은 스크립트로 새 코드 확인). BE Low 3건은 #492 `bd6c2fce`(vkcs·gosky 반영).
+
+### [2026-11-16] 기능 점검 - 최종 QA 남은 BE 항목(#493) + gosky 누적 위험 알림 켠 뒤
+
+- **PASS(🟡1·🟢2)**: 해제 문구는 5개 해제 경로 모두 사실과 맞음(역할 변경 정리도 관리자 조작). M-1 gosky FE 도메인 nginx `client_max_body_size 10m` - FE는 `/api` 상대 경로(Next 중계)라 #493의 12MB가 브라우저 경로에 안 닿고 최대치는 nginx HTML 413(실사용 크기는 10MB 미만). 누적 위험 알림 켠 뒤 알림·오류 0. 상세 `docs/(2026-11-16) audit-final-qa-remaining.md`.
+
+### [2026-11-16] #493 점검 반영 - gosky FE 도메인 nginx 13m·정책 문서·경계 테스트
+
+- gosky `devdmu.gosky.kr` nginx `client_max_body_size 10m → 13m`(백업 `/etc/nginx/devdmu.gosky.kr.bak-20261116-maxbody`, `nginx -t` 후 reload) - FE 도메인 11MB 업로드가 BE까지(JSON 401), 14MB는 nginx 413. 정책 문서 multipart 상한 정정(파일 10MB·요청 12MB·nginx 두 도메인 13m), `MultipartLimitConfigTest` 최대 페이로드 경계 고정.
+
+### [2026-11-16] 정정 - gosky FE 도메인 nginx 변경 원복 (인프라 담당 이관)
+
+- 위 항목의 nginx `10m → 13m` 변경은 제외 대상이었다(사용자). 같은 날 원본으로 되돌렸다(원본과 같음 확인·`nginx -t` 후 reload·11MB 다시 413·백업 삭제). M-1은 인프라 담당이 진행한다 - FE 도메인은 지금 10m라 12MB 상한은 API 도메인 직접 호출에만 적용된다.

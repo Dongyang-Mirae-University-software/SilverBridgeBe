@@ -20,7 +20,7 @@
 | `domain/user/service/UserService.java` | 새 `deleteIfUnreferenced(url)` - 우리 파일 서버 주소면 `existsByProfileImageEndingWith("/" + 파일명)` 로 남은 회원 확인, 있으면 WARN(파일명 끝 6자만) 후 건너뜀, 조회 실패도 건너뜀. 위 4곳이 모두 이 메서드를 거친다 |
 | `domain/user/repository/UserRepository.java` | `existsByProfileImageEndingWith(String)` (LIKE 이스케이프는 Spring Data 기본) |
 | `global/client/FileServerClient.java` | `ownedFilename` public 으로 (동작 그대로) |
-| `global/exception/ErrorCode.java`, `GlobalExceptionHandler.java`, `companion/controller/WardCompanionController.java` | #493 점검 L-1 - 말벗 업로드의 "서블릿 상한 10MB" 주석·Swagger 를 12MB 로 정정(사용자 문구는 그대로) |
+| `global/exception/ErrorCode.java`, `GlobalExceptionHandler.java`, `companion/controller/WardCompanionController.java` | 말벗 업로드의 "서블릿 상한 10MB" 코드 주석·Swagger 를 12MB 로 정정(사용자 문구는 그대로). #494 점검 L-1 은 정책 문서 2개만 고쳐서 남은 코드 쪽 |
 | `프로젝트_설명.txt` | 사진 삭제 문단을 새 동작으로 |
 | 테스트 | `UserServiceTest` 6개 추가 - 삭제/교체/purge 에서 다른 회원이 쓰면 건너뜀, 아무도 안 쓰면 삭제, 외부 주소는 조회 없음, 조회 실패면 건너뜀 |
 
