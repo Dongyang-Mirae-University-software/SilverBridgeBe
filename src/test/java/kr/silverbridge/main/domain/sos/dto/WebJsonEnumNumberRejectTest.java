@@ -47,6 +47,12 @@ class WebJsonEnumNumberRejectTest {
                     .isInstanceOf(DatabindException.class);
             assertThatThrownBy(() -> mapper.readValue("1", MedicationTimeSlot.class))
                     .isInstanceOf(DatabindException.class);
+            // 숫자를 글자로 보낸 것("0")·음수·범위 밖도 순번으로 받지 않는다(2026-11-16 점검 L-1)
+            for (String json : List.of("{\"sosAction\":\"0\"}", "{\"sosAction\":\"1\"}", "{\"sosAction\":-1}",
+                    "{\"sosAction\":99}")) {
+                assertThatThrownBy(() -> mapper.readValue(json, SosSettingUpdateRequest.class)).as(json)
+                        .isInstanceOf(DatabindException.class);
+            }
 
             assertThat(mapper.readValue("{\"sosAction\":\"CALL_119\"}", SosSettingUpdateRequest.class).sosAction())
                     .isEqualTo(SosAction.CALL_119);

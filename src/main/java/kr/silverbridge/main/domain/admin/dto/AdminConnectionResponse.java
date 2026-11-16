@@ -5,6 +5,8 @@ import kr.silverbridge.main.domain.connection.entity.Connection;
 import kr.silverbridge.main.domain.user.entity.User;
 import kr.silverbridge.main.global.enums.ConnectionStatus;
 
+import kr.silverbridge.main.domain.connection.dto.ConnectionTimes;
+
 import java.time.OffsetDateTime;
 
 /** 강제 연결 결과. 화면이 목록을 다시 부르지 않고 그 자리에 행을 추가할 수 있도록 돌려준다. */
@@ -38,6 +40,6 @@ public record AdminConnectionResponse(
                 guardian.getId(), guardian.getName(),
                 ward.getId(), ward.getName(),
                 connection.getStatus(),
-                connection.getConnectedAt());
+                ConnectionTimes.toKst(connection.getConnectedAt())); // 연결 응답과 같은 +09:00 표기(2026-11-16 점검 L-2)
     }
 }

@@ -32,6 +32,14 @@
 | L-2 | 관리자 연결 목록 `AdminConnectionResponse.connectedAt`은 UTC(`Z`) 그대로 - 같은 연결 시각이 응답마다 표기가 다르다. 지금 관리자 FE는 이 값을 쓰지 않아 영향 없음 | `admin/dto/AdminConnectionResponse.java:33` | 표기를 맞추려면 `ConnectionTimes`를 공용으로(관리자 FE는 FE 담당자 몫 - 화면 변경 제안 아님) |
 | L-3 | 일반 공지 응답은 작성자를 고정 문구로 내보내는데 `AnnouncementService`가 여전히 작성자 이름을 조회한다(쓰지 않는 쿼리) | `announcement/service/AnnouncementService.java:45` 부근 | 조회 제거 |
 
+## 조치 (2026-11-16, 사용자 "전부 반영해줘")
+
+| # | 결과 |
+|---|---|
+| L-1 | `WebJsonEnumNumberRejectTest`에 `"0"`·`"1"`·`-1`·`99` 거절 고정 |
+| L-2 | `ConnectionTimes`를 공용(public)으로 열고 `AdminConnectionResponse.connectedAt`도 +09:00 (`AdminConnectionResponseTest`) - 같은 순간이라 `new Date(value)` 결과는 그대로 |
+| L-3 | `AnnouncementService`에서 작성자 조회·`UserRepository` 의존 제거, `AnnouncementResponse.of/ofSummary`는 공지만 받는다 |
+
 ## 종합
 
 **PASS** (Low 3건). 숫자 enum 거부로 막히는 정상 요청 경로는 없다.
