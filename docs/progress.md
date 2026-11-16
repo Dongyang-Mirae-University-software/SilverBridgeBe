@@ -3255,3 +3255,7 @@ AI 챗 집계 점검 L-1에서 남겨 둔 공용 `GlobalExceptionHandler`의 `e.
 ### [2026-11-16] 기능 점검 - 최종 QA 남은 BE 항목(#493) + gosky 누적 위험 알림 켠 뒤
 
 - **PASS(🟡1·🟢2)**: 해제 문구는 5개 해제 경로 모두 사실과 맞음(역할 변경 정리도 관리자 조작). M-1 gosky FE 도메인 nginx `client_max_body_size 10m` - FE는 `/api` 상대 경로(Next 중계)라 #493의 12MB가 브라우저 경로에 안 닿고 최대치는 nginx HTML 413(실사용 크기는 10MB 미만). 누적 위험 알림 켠 뒤 알림·오류 0. 상세 `docs/(2026-11-16) audit-final-qa-remaining.md`.
+
+### [2026-11-16] #493 점검 반영 - gosky FE 도메인 nginx 13m·정책 문서·경계 테스트
+
+- gosky `devdmu.gosky.kr` nginx `client_max_body_size 10m → 13m`(백업 `/etc/nginx/devdmu.gosky.kr.bak-20261116-maxbody`, `nginx -t` 후 reload) - FE 도메인 11MB 업로드가 BE까지(JSON 401), 14MB는 nginx 413. 정책 문서 multipart 상한 정정(파일 10MB·요청 12MB·nginx 두 도메인 13m), `MultipartLimitConfigTest` 최대 페이로드 경계 고정.

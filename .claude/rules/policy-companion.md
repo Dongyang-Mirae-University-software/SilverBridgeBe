@@ -83,7 +83,7 @@ paths:
 - **위험 알림 1회 보장은 테스트가 지킨다**: `CompanionSessionWriterTest`(선점 이김·짐·끝난 대화) + `CompanionFullIntegrationTest`(턴 → 커밋 → 긴급 리스너 → 이력 1건, 마감 URGENT, 역할 변경·탈퇴 삭제). writer를 고치면 둘 다 돌릴 것.
 - **보호자 알림 종류 설정**: `companionRisk`는 `required: true`로만 내린다(끌 수 없다, 2026-11-04 점검 L-3).
 - **남의 대화는 403 `COMPANION_SESSION_NOT_OWNED` + `[IDOR-ATTEMPT]`**(2026-07-14 정책).
-- **업로드**: 음성 WAV·WebM·MP3 5MB, 사진 JPEG·PNG 장당 1MB·5장, 앞부분 바이트로만 판별, 원래 파일 이름은 AI로 넘기지 않는다. 오디오 경로는 SecurityConfig에서 본문 파싱 전에 WARD만 통과. 합계가 서블릿 상한(10MB)을 넘으면 `COMPANION_UPLOAD_TOO_LARGE`(413, 2026-11-04 점검 L-1).
+- **업로드**: 음성 WAV·WebM·MP3 5MB, 사진 JPEG·PNG 장당 1MB·5장, 앞부분 바이트로만 판별, 원래 파일 이름은 AI로 넘기지 않는다. 오디오 경로는 SecurityConfig에서 본문 파싱 전에 WARD만 통과. 합계가 서블릿 요청 상한(12MB - 2026-11-16 #493, 파일 하나는 10MB)을 넘으면 `COMPANION_UPLOAD_TOO_LARGE`(413, 2026-11-04 점검 L-1).
 
 ## 테스트 계정 (2026-11-10, 최종 QA 지원)
 
