@@ -475,6 +475,111 @@ class UserServiceTest {
         verifyNoInteractions(fileServerClient);
     }
 
+    // ─── 다른 회원이 쓰는 파일은 지우지 않는다 (최종 QA AUTH-A44, 2026-11-16) ─────────────
+
+    @Test
+    @DisplayName("AUTH-A44: 사진 삭제 - 다른 회원이 같은 파일을 쓰면 DB 만 NULL, 파일 서버 삭제는 건너뜀")
+    void deleteProfileImage_다른회원이쓰는파일_삭제안함() {
+        User user = localUser();
+        user.updateProfileImage(IMAGE_URL);
+        when(userRepository.findById(USER_ID)).thenReturn(Optional.of(user));
+        when(fileServerClient.ownedFilename(IMAGE_URL)).thenReturn("shared.png");
+        when(userRepository.existsByProfileImageEndingWith("/shared.png")).thenReturn(true);
+
+        assertThat(userService.deleteProfileImage(USER_ID)).isTrue();
+
+        assertThat(user.getProfileImage()).isNull();
+        verify(fileServerClient, never()).delete(any());
+    }
+
+    @Test
+    @DisplayName("AUTH-A44: 사진 삭제 - 아무도 안 쓰는 우리 파일이면 지금처럼 파일 서버 삭제")
+    void deleteProfileImage_아무도안쓰는파일_삭제() {
+        User user = localUser();
+        user.updateProfileImage(IMAGE_URL);
+        when(userRepository.findById(USER_ID)).thenReturn(Optional.of(user));
+        when(fileServerClient.ownedFilename(IMAGE_URL)).thenReturn("mine.png");
+        when(userRepository.existsByProfileImageEndingWith("/mine.png")).thenReturn(false);
+
+        userService.deleteProfileImage(USER_ID);
+
+        verify(fileServerClient).delete(IMAGE_URL);
+    }
+
+    @Test
+    @DisplayName("AUTH-A44: 외부 주소(우리 파일 서버 아님)는 사용 여부 조회 없이 FileServerClient 에 맡긴다(원래대로 건너뜀)")
+    void deleteProfileImage_외부주소_조회없음() {
+        User user = localUser();
+        user.updateProfileImage("https://k.kakaocdn.net/dn/x.png");
+        when(userRepository.findById(USER_ID)).thenReturn(Optional.of(user));
+        when(fileServerClient.ownedFilename("https://k.kakaocdn.net/dn/x.png")).thenReturn(null);
+
+        userService.deleteProfileImage(USER_ID);
+
+        verify(userRepository, never()).existsByProfileImageEndingWith(any());
+        verify(fileServerClient).delete("https://k.kakaocdn.net/dn/x.png");
+    }
+
+    @Test
+    @DisplayName("AUTH-A44: 사용 여부 조회가 실패하면 지우지 않는다(고아 파일이 남는 쪽이 안전), 예외도 안 낸다")
+    void deleteProfileImage_조회실패_삭제안함() {
+        User user = localUser();
+        user.updateProfileImage(IMAGE_URL);
+        when(userRepository.findById(USER_ID)).thenReturn(Optional.of(user));
+        when(fileServerClient.ownedFilename(IMAGE_URL)).thenReturn("x.png");
+        when(userRepository.existsByProfileImageEndingWith("/x.png")).thenThrow(new RuntimeException("db down"));
+
+        assertThatCode(() -> userService.deleteProfileImage(USER_ID)).doesNotThrowAnyException();
+
+        assertThat(user.getProfileImage()).isNull();
+        verify(fileServerClient, never()).delete(any());
+    }
+
+    @Test
+    @DisplayName("AUTH-A44: 사진 교체 - 옛 파일을 다른 회원이 쓰면 옛 파일 삭제를 건너뜀")
+    void updateProfileImage_옛파일을다른회원이씀_삭제안함() throws Exception {
+        String oldUrl = "https://files.example.com/file/old.png";
+        String newUrl = "https://files.example.com/file/new.png";
+        MultipartFile file = mock(MultipartFile.class);
+        when(file.getSize()).thenReturn(2048L);
+        when(file.getContentType()).thenReturn("image/png");
+        when(file.getInputStream()).thenReturn(new ByteArrayInputStream(PNG_HEADER));
+        when(fileServerClient.upload(file)).thenReturn(newUrl);
+        User persisted = localUser();
+        persisted.updateProfileImage(newUrl);
+        when(profileImagePersister.replace(USER_ID, newUrl))
+                .thenReturn(new ProfileImagePersister.Result(oldUrl, UserProfileResponse.from(persisted)));
+        when(fileServerClient.ownedFilename(oldUrl)).thenReturn("old.png");
+        when(userRepository.existsByProfileImageEndingWith("/old.png")).thenReturn(true);
+
+        userService.updateProfileImage(USER_ID, file);
+
+        verify(fileServerClient, never()).delete(any());
+    }
+
+    @Test
+    @DisplayName("AUTH-A44: 탈퇴 purge - 사진 파일을 다른 회원이 쓰면 행만 지우고 파일은 남긴다")
+    void purgeWithdrawnUser_다른회원이쓰는파일_삭제안함() {
+        User user = User.builder()
+                .id(USER_ID)
+                .email("local@example.com")
+                .password("encodedPassword")
+                .name("일반사용자")
+                .role(Role.WARD)
+                .status(Status.INACTIVE)
+                .provider(Provider.LOCAL)
+                .profileImage(IMAGE_URL)
+                .build();
+        when(userRepository.findById(USER_ID)).thenReturn(Optional.of(user));
+        when(fileServerClient.ownedFilename(IMAGE_URL)).thenReturn("shared.png");
+        when(userRepository.existsByProfileImageEndingWith("/shared.png")).thenReturn(true);
+
+        userService.purgeWithdrawnUser(USER_ID);
+
+        verify(userRepository).delete(user);
+        verify(fileServerClient, never()).delete(any());
+    }
+
     // ─── 헬퍼 메서드 ────────────────────────────────────────────────────────
 
     @Test

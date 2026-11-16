@@ -4,6 +4,10 @@
 
 ---
 
+### [2026-11-16] 프로필 사진 삭제 전 "다른 회원이 쓰는 파일" 확인 (`feature/profile-image-owner-check`, AUTH-A44)
+- 사진 삭제·교체·탈퇴 purge·업로드 실패 되돌리기 모두 `UserService.deleteIfUnreferenced` 를 거친다 - 우리 파일 서버 주소면 `users.profile_image` 가 "/파일명"으로 끝나는 회원이 남아 있는지 1번 조회, 있으면 WARN 만 남기고 건너뜀. 조회 실패도 지우지 않음. 사용자 응답·DB NULL 처리는 그대로. 마이그레이션 없음.
+- #493 기능 점검은 #494(`audit-final-qa-remaining.md`)가 먼저 했다. 이 PR 의 같은 점검 결과(업로드 5개 경로 서비스 크기 검사·속도 제한, 인증 전 multipart 읽기 0)는 그 문서와 같고, 그 문서가 다루지 않은 말벗 업로드 코드 주석·Swagger(`ErrorCode`·`GlobalExceptionHandler`·`WardCompanionController`)의 옛 10MB 만 이 PR 에서 정정. 상세 `(2026-11-16) feature-profile-image-owner-check.md`.
+
 ### [2026-11-16] 최종 QA 남은 BE 항목 정리 (`fix/final-qa-remaining`)
 - CONN-N06: 피보호자가 받는 해제 알림에 해제한 쪽 표시 - 보호자 "보호자가 가족 연결을 해제했어요.", 관리자 "관리자가 가족 연결을 해제했어요.", 보호자 탈퇴는 M-2 에 따라 단문 유지. 보호자 수신 문구·알림 종류·채널·WS 키는 그대로.
 - CHAT-N33: `spring.servlet.multipart.max-request-size` 10MB → 12MB(파일 하나 10MB 그대로). nginx `api.devdmu` 13m 은 인프라 전달 페이지로 요청.

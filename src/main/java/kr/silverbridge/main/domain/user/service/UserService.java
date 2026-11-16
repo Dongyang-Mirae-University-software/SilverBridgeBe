@@ -145,12 +145,12 @@ public class UserService {
         try {
             result = profileImagePersister.replace(userId, newImageUrl);
         } catch (RuntimeException e) {
-            fileServerClient.delete(newImageUrl);
+            deleteIfUnreferenced(newImageUrl);
             throw e;
         }
 
         // 영속화 커밋 이후 기존 파일 삭제 — 롤백 시 깨진 이미지 방지 (D-USER-2). 실패해도 주 기능 영향 없음.
-        fileServerClient.delete(result.oldImageUrl());
+        deleteIfUnreferenced(result.oldImageUrl());
 
         log.info("[PROFILE-IMAGE] 변경 완료 userId={}", userId);
         return result.response();
@@ -336,11 +336,35 @@ public class UserService {
             TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
                 @Override
                 public void afterCommit() {
-                    fileServerClient.delete(fileUrl);
+                    deleteIfUnreferenced(fileUrl);
                 }
             });
         } else {
-            fileServerClient.delete(fileUrl);
+            deleteIfUnreferenced(fileUrl);
         }
+    }
+
+    // 파일 서버에서 지우기 직전에, 다른 회원 프로필이 아직 같은 파일을 가리키면 지우지 않는다(최종 QA AUTH-A44, 2026-11-16).
+    // 앱으로는 남의 사진 주소를 내 프로필에 넣을 수 없지만, 그런 상태(DB 직접 수정 등)에서 내 사진 삭제·교체·탈퇴가
+    // 남의 파일을 지우던 구멍을 막는다. 호출 시점에는 내 행이 이미 바뀌었거나(교체·삭제 커밋 뒤) 지워져 있으므로(탈퇴)
+    // 남은 행만 본다. 우리 파일 서버 주소가 아니면 FileServerClient.delete 가 원래대로 건너뛴다.
+    // 실패해도 주 기능에 영향을 주지 않도록 예외를 삼킨다(파일 정리는 best-effort).
+    private void deleteIfUnreferenced(String fileUrl) {
+        if (fileUrl == null || fileUrl.isBlank()) {
+            return;
+        }
+        try {
+            String filename = fileServerClient.ownedFilename(fileUrl);
+            if (filename != null && userRepository.existsByProfileImageEndingWith("/" + filename)) {
+                log.warn("[PROFILE-IMAGE] 다른 회원이 아직 쓰는 파일이라 파일 서버 삭제를 건너뜀 file=...{}",
+                        filename.length() <= 6 ? filename : filename.substring(filename.length() - 6));
+                return;
+            }
+        } catch (RuntimeException e) {
+            // 확인 조회가 실패하면 지우지 않는다 - 남의 파일을 지우는 쪽보다 고아 파일이 남는 쪽이 안전하다
+            log.warn("[PROFILE-IMAGE] 사용 여부 확인 실패로 파일 서버 삭제를 건너뜀: exception={}", e.getClass().getSimpleName());
+            return;
+        }
+        fileServerClient.delete(fileUrl);
     }
 }

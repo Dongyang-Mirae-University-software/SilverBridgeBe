@@ -9,6 +9,7 @@
 
 | 머지 | 기능 | 상태 | 점검 문서 | 잔여 이슈 |
 |---|---|---|---|---|
+| BE (2026-11-16, `feature/profile-image-owner-check`) | 프로필 사진 파일 서버 삭제 전 "다른 회원이 아직 쓰는 파일이면 지우지 않음"(AUTH-A44 백로그 해소, 마이그레이션 없음) + 말벗 업로드 주석·Swagger(ErrorCode·GlobalExceptionHandler·WardCompanionController)의 옛 10MB 정정(#493 점검 #494 보완) | ❌ | `(2026-11-16) feature-profile-image-owner-check.md` | 보안 정책(사진 삭제 경로만) - 기능 점검(B) 제안 |
 | BE (2026-11-16, `fix/final-qa-remaining`) | 최종 QA 남은 BE 항목 - 피보호자 해제 알림에 해제한 쪽 표시(보호자·관리자, 탈퇴는 단문 유지)·multipart 요청 전체 12MB·문서 정정 3건(refresh 400/401·카카오 가입 이미지 주소 400·사진 삭제 범위) | ⚠️ (L-1·L-2 반영, 🟡 M-1 FE 도메인 nginx 10m는 인프라 담당) | `(2026-11-16) fix-final-qa-remaining.md` · `(2026-11-16) audit-final-qa-remaining.md` | 알림 문구만 바뀜(종류·채널·수신자 그대로) - 기능 점검(B) 제안. 백로그: 프로필 사진 삭제 전 파일 주인 확인(AUTH-A44, `FileServerClient.ownedFilename`) |
 | BE #490 (2026-11-15) | 최종 QA BE 결함 11건 - 받은 알림 500·숫자 enum 거부(전역 Jackson 3 설정)·로그아웃 그 토큰 WS 닫기·정지 사유 변경·없는 병원 감사 로그·공지 작성자 고정 문구·연결 시각 +09:00·입력 검사 3건 | ✅ | `(2026-11-15) fix-final-qa-be-defects.md`, `(2026-11-16) audit-impact-enum-number-reject.md`, `(2026-11-16) audit-impact-final-qa-be-defects.md`(②③④ 보완 PASS - Low 3건 반영 `fix/audit-490-lows`) | 영향 범위 점검(C) PASS - Low 2건(숫자 문자열 테스트·Jackson 2 규칙 없음) 제안만 |
 | BE #487 (2026-11-15, `996aa54c`) | 말벗 여러 날 위험 누적 기준을 확률 눈금(`riskModel`)별로 - V73 `max_risk_prob_lora`, 어댑터 기준 0.3(v9 0.97 그대로), 스위치 꺼 둠 | ✅ (L-2·L-3·L-4 반영 `fix/companion-risk-scale-audit`) | `(2026-11-15) audit-companion-risk-lora.md` · `(2026-11-15) feature-companion-risk-pattern-scale.md` | - |
