@@ -3259,3 +3259,7 @@ AI 챗 집계 점검 L-1에서 남겨 둔 공용 `GlobalExceptionHandler`의 `e.
 ### [2026-11-16] #493 점검 반영 - gosky FE 도메인 nginx 13m·정책 문서·경계 테스트
 
 - gosky `devdmu.gosky.kr` nginx `client_max_body_size 10m → 13m`(백업 `/etc/nginx/devdmu.gosky.kr.bak-20261116-maxbody`, `nginx -t` 후 reload) - FE 도메인 11MB 업로드가 BE까지(JSON 401), 14MB는 nginx 413. 정책 문서 multipart 상한 정정(파일 10MB·요청 12MB·nginx 두 도메인 13m), `MultipartLimitConfigTest` 최대 페이로드 경계 고정.
+
+### [2026-11-16] 정정 - gosky FE 도메인 nginx 변경 원복 (인프라 담당 이관)
+
+- 위 항목의 nginx `10m → 13m` 변경은 제외 대상이었다(사용자). 같은 날 원본으로 되돌렸다(원본과 같음 확인·`nginx -t` 후 reload·11MB 다시 413·백업 삭제). M-1은 인프라 담당이 진행한다 - FE 도메인은 지금 10m라 12MB 상한은 API 도메인 직접 호출에만 적용된다.
