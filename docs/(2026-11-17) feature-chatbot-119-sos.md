@@ -25,7 +25,7 @@
 - 모르는 `triggerType` 값은 기존처럼 400 `INVALID_INPUT`.
 
 ## FE 계약
-- 요청: 챗봇 119 버튼을 눌러 119 키패드를 띄울 때 `POST /api/ward/sos` 본문 `{"triggerType":"CHATBOT_119"}` (선택 `location` 그대로 가능, `calledGuardianId`는 보내지 않음).
+- 요청: 챗봇 119 버튼으로 연 119 키패드에서 **통화 버튼을 누를 때** `POST /api/ward/sos`(키패드를 여는 것만으로는 보내지 않는다 - 잘못 눌러도 알림이 가지 않게, FE #277에서 확정) 본문 `{"triggerType":"CHATBOT_119"}` (선택 `location` 그대로 가능, `calledGuardianId`는 보내지 않음).
 - 응답(보호자 이력): `content[].triggerType`에 `CHATBOT_119`가 올 수 있다. `counts.chatbot119` 추가(`all`에 포함). 필터 `?triggerType=CHATBOT_119`, 묶음 모드도 같은 값으로 나뉜다.
 - 보호자 대시보드 최근 SOS(`latest.triggerType`)에도 같은 값이 올 수 있다 - 표시 문구는 FE 몫(예: "챗봇 119").
 
@@ -34,3 +34,8 @@
 - `SosServiceTest`: 챗봇 119 저장 + SOS 버튼과 같은 `SosTriggeredEvent` 발행
 - `GuardianSosServiceTest`: 필터·counts / 묶음 모드 counts·`totalElements` / 묶음 필터 이름
 - `SosHistoryTriggerTypeIntegrationTest`(실 DB): 저장·건수·필터·묶음 파티션
+
+## FE 반영 (2026-11-17, FE #277 `a438a9f`, gosky dev 반영)
+- 피보호자 챗봇의 `tel:119`를 없애고 앱 안 키패드(`src/components/emergency/Emergency119Dialpad`)를 연다. 통화 버튼을 누르면 `CHATBOT_119`를 보낸다(전송 중 잠금, 성공 뒤 같은 키패드에서 재전송 없음, 실패하면 다시 누를 수 있음).
+- 경고 문장이 없는 응급 답(자해 고정 답·위기 해제 턴)은 키패드 아래에 109 안내 한 줄(글자만). 보호자 챗봇에는 버튼이 없다.
+- 영향 점검 H-1·M-1: 보호자 이력에 "챗봇 119" 필터·항목 배지·`counts.chatbot119` 반영. 모르는 경로 값 대체 표시는 FE 후속 PR.
