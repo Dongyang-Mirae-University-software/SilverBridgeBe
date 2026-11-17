@@ -28,8 +28,10 @@
 - 🟠 **H-1 (FE) 모르는 경로 값에 이력 화면이 깨진다**: `TRIGGER_TYPE_META[item.triggerType].tone`(목록 렌더)에서 `CHATBOT_119`면 `undefined.tone` TypeError. 해당 피보호자의 '전체' 탭에 한 건만 있어도 화면이 그려지지 않는다. 지금은 아무도 이 값을 보내지 않아 잠재 결함. 수정: 맵에 `CHATBOT_119`(예: 라벨 "챗봇 119") 추가 + 모르는 값의 대체 표시(`?.tone ?? 'sos'`), 타입 3곳 갱신. **FE ②가 보내기 전에 반영할 것.**
 - 🟡 **M-1 (FE) 탭 숫자가 맞지 않는다**: '전체' = `counts.all`(챗봇 119 포함)인데 탭은 SOS 버튼·보호자 연락 둘뿐 - 전체 ≠ 두 탭의 합. `chatbot119` 탭 추가(H-1과 함께).
 - 🟢 **L-1 실제 발생 → 푸시·WS·이력 실측 보류**: H-1 반영 뒤 FE ② 검증 때 시험 피보호자로 1건 확인(쿨다운 10초·문자 상한 주의).
+  - **반영 (2026-11-17, `test/chatbot-119-sos-full-it`)**: 실서버 대신 앱 전체 통합 테스트 `SosChatbot119FullIntegrationTest`로 서비스 → 커밋 → 긴급 리스너 → 디스패처 → 채널 → 발송 이력을 확인한다(`trigger_type` CHATBOT_119 저장·FCM 1회·WS `sos-triggered`·`notification_log` WARD_SOS DELIVERED·문자 없음). gosky 실측은 H-1 반영 뒤 FE ② 검증 때.
 - 🟢 **L-2 정책 문서**: "경로 추가 시 FE 표시 맵이 먼저"를 policy-sos에 적었다(이번 반영).
 
 ## 조치
 - 문서: policy-sos "챗봇 119" 절에 FE 선반영 규칙 추가, audit-index ⚠️, progress.
+- L-1: 앱 전체 통합 테스트로 대체 반영(위).
 - H-1·M-1은 FE 몫 - FE ② 세션에 넘긴다(아래 보고).
