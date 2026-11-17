@@ -65,6 +65,38 @@ class SosHistoryTriggerTypeIntegrationTest extends PostgresIntegrationTest {
                 .containsOnly(SosTriggerType.SOS_BUTTON);
     }
 
+    @Test
+    @DisplayName("챗봇 119(CHATBOT_119)는 VARCHAR(20)·CHECK 없음 컬럼에 저장되고, 건수·필터·묶음 쿼리에 경로로 잡힌다 (2026-11-17)")
+    void 챗봇119_저장과_조회() {
+        userRepository.save(TestData.user(WARD_ID, "피보호자", Role.WARD));
+        userRepository.save(TestData.user(VIEWER, "보는보호자", Role.GUARDIAN));
+        connectionRepository.save(TestData.activeConnection(VIEWER, WARD_ID, java.time.OffsetDateTime.parse("2000-01-01T00:00:00Z")));
+
+        save(WARD_ID, SosTriggerType.CHATBOT_119);
+        save(WARD_ID, SosTriggerType.CHATBOT_119); // 곧바로 다시 누름 - 묶음 1개
+        save(WARD_ID, SosTriggerType.SOS_BUTTON);
+
+        Map<SosTriggerType, Long> counts = sosEventRepository.countVisibleByTriggerType(VIEWER, List.of(WARD_ID)).stream()
+                .collect(Collectors.toMap(SosEventRepository.TriggerTypeCount::getTriggerType,
+                        SosEventRepository.TriggerTypeCount::getTotal));
+        assertThat(counts).containsOnly(
+                Map.entry(SosTriggerType.CHATBOT_119, 2L),
+                Map.entry(SosTriggerType.SOS_BUTTON, 1L));
+
+        var page = sosEventRepository.findVisibleHistoryByTriggerType(VIEWER,
+                List.of(WARD_ID), SosTriggerType.CHATBOT_119, PageRequest.of(0, 20));
+        assertThat(page.getContent()).extracting(SosEvent::getTriggerType)
+                .containsExactly(SosTriggerType.CHATBOT_119, SosTriggerType.CHATBOT_119);
+
+        // 묶음: 경로로 파티션을 나누므로 챗봇 119 두 건은 한 묶음, SOS 버튼과는 섞이지 않는다
+        assertThat(sosEventRepository.countPressGroups(VIEWER, List.of(WARD_ID), SosTriggerType.CHATBOT_119.name(), 60))
+                .isEqualTo(1);
+        Map<String, Long> groups = sosEventRepository.countPressGroupsByTriggerType(VIEWER, List.of(WARD_ID), "", 60).stream()
+                .collect(Collectors.toMap(SosEventRepository.PressGroupCount::getTriggerType,
+                        SosEventRepository.PressGroupCount::getTotal));
+        assertThat(groups).containsOnly(Map.entry("CHATBOT_119", 1L), Map.entry("SOS_BUTTON", 1L));
+    }
+
     private void save(String wardId, SosTriggerType triggerType) {
         sosEventRepository.saveAndFlush(SosEvent.builder()
                 .wardId(wardId)

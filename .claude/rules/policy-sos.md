@@ -28,7 +28,7 @@ paths:
   - 연결 없는 대상 접근은 404 위장 대신 **403 `SOS_NOT_AUTHORIZED` + `[IDOR-ATTEMPT]` WARN**(2026-07-14 정책과 동일 형태).
   - **연결 이후 기록만 (2026-10-31 전체 점검 D-1, 사용자 결정)**: 보호자에게는 **그 보호자의 지금 ACTIVE 연결이 맺어진 뒤**의 기록만 보인다 - 끊었다 다시 맺거나 관리자가 강제 연결하면 그 이전 기록은 보이지 않는다. 목록·건수·묶음은 저장소 쿼리 안의 연결 EXISTS 조건(`VISIBLE_SINCE_CONNECTED`, 보호자 ID 필수)이, 단건은 `ConnectionService.isVisibleSinceConnection`이 맡고 연결 이전이면 없는 것과 같은 404다. `connected_at`이 없는 옛 ACTIVE 행은 전부 보인다. 이 조건을 빼거나 `wardIds`만으로 되돌리지 말 것(`HistorySinceConnectedIntegrationTest`). SOS 기준은 `created_at >= connected_at`.
   - 피보호자 탈퇴로 `ward_id`가 NULL이 된 익명 이력은 이름 없이 목록에만 실린다(익명 보존은 감사 목적). ⚠️ 익명 이력만 조회될 때 이름 맵으로 `Map.of()`를 반환하면 `get(null)`이 **NPE(500)**를 던진다 - `Collections.emptyMap()`을 쓸 것(2026-08-26 수정).
-- **불변 규칙 ②(발생 경로는 알림을 가르지 않는다)**: `sos_event.trigger_type`(`SOS_BUTTON`/`GUARDIAN_CALL`, V39)은 **이력 표시 전용**이다. 보호자에게 직접 전화한 경우에도 **ACTIVE 보호자 전원에게 동일하게 알림이 나간다** - 전화받은 보호자 외 나머지도 상황을 알아야 하기 때문이다. `SosNotificationListener`·`NotificationDispatcher`가 이 값을 읽게 만들지 말 것("직접 전화했으니 알림 생략" 같은 최적화 금지 - 필수 알림 보장에 구멍). 2026-07-23 규칙([SOS 동작 설정])의 연장이다.
+- **불변 규칙 ②(발생 경로는 알림을 가르지 않는다)**: `sos_event.trigger_type`(`SOS_BUTTON`/`GUARDIAN_CALL`, V39 / `CHATBOT_119` 2026-11-17)은 **이력 표시 전용**이다. 보호자에게 직접 전화한 경우에도 **ACTIVE 보호자 전원에게 동일하게 알림이 나간다** - 전화받은 보호자 외 나머지도 상황을 알아야 하기 때문이다. `SosNotificationListener`·`NotificationDispatcher`가 이 값을 읽게 만들지 말 것("직접 전화했으니 알림 생략" 같은 최적화 금지 - 필수 알림 보장에 구멍). 2026-07-23 규칙([SOS 동작 설정])의 연장이다.
 - **처리 결과(ACK) 철회 (2026-08-26, V39)**: 보호자가 "안전 확인 / 응급 출동"을 남기던 기능을 **제거했다**. `PATCH /api/guardian/sos/{id}/ack`, WebSocket `sos-acknowledged`, `ack_status`·`ack_by`·`ack_at`·`ack_note` 컬럼, `SosAckStatus`가 모두 사라졌다. SOS 이력은 **"언제·어떤 경로로 발생했는가"까지만** 답한다.
   - 이유: 보호자 화면이 붙은 적이 없어 `ack_status`가 전건 NULL이었다. 그 상태로 관리자 화면에 "미처리 SOS" 지표를 만들면 발생한 SOS 100%를 "보호자 전원 무응답"으로 표시하는 **거짓 경보**가 된다.
   - 되살리려면 **보호자 앱의 처리 결과 입력 화면 연동이 선행**되어야 한다. 화면 없이 컬럼만 다시 넣지 말 것.
@@ -56,6 +56,13 @@ paths:
   - `tel:119` 링크를 쓰면 다이얼러가 119가 입력된 채 열려 사용자가 통화 버튼을 누르면 **실제로 걸린다**. 그래서 `tel:`이 아니라 **자체 키패드 UI**로 그린다(2026-08-26 결정).
 - **어떤 값에서도 보호자 알림은 항상 발송된다** - 2026-07-23 규칙 그대로다. 이 설정으로 SOS 알림을 끌 수 없다.
 - **보호자 직접 전화는 이력에 남긴다**: 피보호자가 SOS 화면에서 보호자 카드를 눌러 전화할 때, 프론트가 `POST /api/ward/sos`를 `triggerType: GUARDIAN_CALL`로 함께 호출한다. 호출하지 않으면 그 전화는 이력에 남지 않는다(백엔드가 감지할 방법이 없다).
+
+## 챗봇 119 - SOS 발생 경로 하나 더 (2026-11-17)
+
+- 챗봇이 응급·마음 위기 답과 함께 띄운 119 버튼을 누르면 FE가 SOS와 같은 119 키패드를 띄우고 `POST /api/ward/sos`를 `triggerType: CHATBOT_119`로 호출한다. 알림은 `WARD_SOS` 그대로다(규칙 ② - 경로로 알림을 가르지 않는다).
+- **응급과 마음 위기를 값으로 나누지 않는다**: 보호자 이력·알림에 "마음 위기"가 드러나지 않게 하기 위해서다. 위기 종류를 이력에 더하려면 피보호자 동의·표시 문구를 먼저 정할 것.
+- 경로를 추가할 때는 `SosHistoryPage.Counts`에 칸을 더해야 한다 - `all`과 묶음 모드 `totalElements`가 경로 합이라, 빠지면 수가 조용히 줄어든다(`GuardianSosService.toCounts`의 default 없는 switch가 컴파일로 막는다). `trigger_type`에는 CHECK가 없어 마이그레이션은 필요 없다(VARCHAR(20)).
+- `calledGuardianId`는 `GUARDIAN_CALL`에서만 저장한다 - 챗봇 119와 함께 와도 버린다(SOS는 거절하지 않음). 상세 `docs/(2026-11-17) feature-chatbot-119-sos.md`.
 
 ## 2026-10-02 QA(BE) 반영 · 
 ### SOS·알림 결과·설정 최초 저장 (h)

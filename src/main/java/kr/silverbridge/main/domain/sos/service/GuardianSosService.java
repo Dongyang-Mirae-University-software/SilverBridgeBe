@@ -26,6 +26,7 @@ import org.springframework.util.StringUtils;
 import java.time.OffsetDateTime;
 import java.util.Collection;
 import java.util.Collections;
+import java.util.EnumMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -176,31 +177,46 @@ public class GuardianSosService {
 
     /** 인가된 피보호자 범위의 경로별 전체 건수. 집계에 없는 경로는 0건이다(범위 안에서 실제로 센 값). */
     private SosHistoryPage.Counts countByTriggerType(String guardianId, List<String> wardIds) {
-        long sosButton = 0;
-        long guardianCall = 0;
+        Map<SosTriggerType, Long> totals = new EnumMap<>(SosTriggerType.class);
         for (SosEventRepository.TriggerTypeCount row : sosEventRepository.countVisibleByTriggerType(guardianId, wardIds)) {
-            if (row.getTriggerType() == SosTriggerType.GUARDIAN_CALL) {
-                guardianCall += row.getTotal();
-            } else if (row.getTriggerType() == SosTriggerType.SOS_BUTTON) {
-                sosButton += row.getTotal();
+            if (row.getTriggerType() != null) {
+                totals.merge(row.getTriggerType(), row.getTotal(), Long::sum);
             }
         }
-        return SosHistoryPage.Counts.of(sosButton, guardianCall);
+        return toCounts(totals);
     }
 
     /** 인가된 피보호자 범위의 경로별 묶음 수(필터·페이지와 무관). 집계에 없는 경로는 0이다. */
     private SosHistoryPage.Counts countGroupsByTriggerType(String guardianId, List<String> wardIds, int gap) {
-        long sosButton = 0;
-        long guardianCall = 0;
+        Map<SosTriggerType, Long> totals = new EnumMap<>(SosTriggerType.class);
         for (SosEventRepository.PressGroupCount row
                 : sosEventRepository.countPressGroupsByTriggerType(guardianId, wardIds, "", gap)) {
-            if (SosTriggerType.GUARDIAN_CALL.name().equals(row.getTriggerType())) {
-                guardianCall += row.getTotal();
-            } else if (SosTriggerType.SOS_BUTTON.name().equals(row.getTriggerType())) {
-                sosButton += row.getTotal();
+            for (SosTriggerType type : SosTriggerType.values()) {
+                if (type.name().equals(row.getTriggerType())) {
+                    totals.merge(type, row.getTotal(), Long::sum);
+                }
             }
         }
-        return SosHistoryPage.Counts.of(sosButton, guardianCall);
+        return toCounts(totals);
+    }
+
+    /**
+     * 경로별 합계를 응답 형태로 옮긴다. switch에 default가 없어 경로를 추가하면 컴파일이 실패한다 -
+     * 새 경로가 {@code counts.all}과 묶음 모드 {@code totalElements}에서 조용히 빠지지 않게 하기 위해서다(2026-11-17).
+     */
+    private static SosHistoryPage.Counts toCounts(Map<SosTriggerType, Long> totals) {
+        long sosButton = 0;
+        long guardianCall = 0;
+        long chatbot119 = 0;
+        for (SosTriggerType type : SosTriggerType.values()) {
+            long total = totals.getOrDefault(type, 0L);
+            switch (type) {
+                case SOS_BUTTON -> sosButton = total;
+                case GUARDIAN_CALL -> guardianCall = total;
+                case CHATBOT_119 -> chatbot119 = total;
+            }
+        }
+        return SosHistoryPage.Counts.of(sosButton, guardianCall, chatbot119);
     }
 
     /**
