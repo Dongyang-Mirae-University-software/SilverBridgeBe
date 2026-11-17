@@ -84,6 +84,11 @@ final class ChatLogProjection {
         if (urgent != null && urgent.isBoolean() && urgent.booleanValue()) {
             out.put("urgent", true);
         }
+        // 자해·위기(109) 표시(AI 2026-11-17 #317, FE #277 점검 H-1) - FE 가 119 키패드 아래 109 안내를 붙이는 근거. urgent 와 같은 기준.
+        JsonNode crisis = layout.get("crisis");
+        if (crisis != null && crisis.isBoolean() && crisis.booleanValue()) {
+            out.put("crisis", true);
+        }
         return out;
     }
 
