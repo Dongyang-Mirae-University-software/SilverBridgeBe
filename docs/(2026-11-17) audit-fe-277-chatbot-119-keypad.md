@@ -57,3 +57,17 @@
 - AI: `feat: 자해·위기 답에 layout.crisis 표시 칸 (FE 109 안내 근거, 표시 전용)`
 - BE: `feat: 챗봇 기록 layout.crisis 통과 (urgent와 같이 불리언 true만, FE #277 점검 H-1)`
 - FE: `fix: 챗봇 109 안내를 layout.crisis로 판정 + 보호자 없는 피보호자 안내 문구 (FE #277 점검 H-1·M-1·L-2)`
+
+## 반영 (2026-11-17, 사용자 "전부 반영")
+
+| 이슈 | 반영 | 배포 |
+|---|---|---|
+| H-1 | AI #317 `layout.crisis`(자해 `meta.selfHarm`·위기 해제 턴에만, 의료 응급 없음) → BE #500 기록 다시 열기 `ChatLogProjection`이 `crisis`를 `urgent`와 같은 기준(불리언 true만)으로 통과 → FE #279 `isCrisisAnswer` = `layout.crisis === true`, 테스트를 AI 실제 모양(경고 박스 + high + crisis)으로 교체 | AI gosky `b9cb172`(롤백 `sb-ai-rollback:20261117-layout-crisis`, 같은 pull에 다른 세션의 #318 챗 기록 90일 정리 포함) · BE `2bac5b0e` vkcs CD 성공·gosky 수동 · FE `050d6829` gosky dev |
+| M-1 | 연결된 보호자가 없으면 패널 "연결된 보호자가 없어 알림은 가지 않아요"·통화 뒤 "…알림은 가지 않았어요. 시연 화면이라 119에도 걸리지 않아요"(SOS 이력은 그대로 보냄, 목록 로딩·실패면 옛 문구). 키패드 `successNotice` prop, `useWardActiveGuardians(enabled)` | FE #279 |
+| L-1 | 보내는 중 키패드를 닫은 뒤 실패하면 "SOS 전송 실패" 창 + [119 화면 열기](열린 채 실패는 키패드 안 안내만) | FE #279 |
+| L-2 | `chatUrgency` 주석 "자해 고정 응답은 경고와 high가 함께 온다"로 정정 | FE #279 |
+| L-3 | **남음** - 실기기에서 통화 버튼 1회 → 보호자 푸시·이력 "챗봇 119"(실제 푸시가 나가 사용자 확인 때) | - |
+
+- 확인: gosky 운영 AI 컨테이너 모듈 재생(API 호출 없음)으로 자해 고정 답 `layout.urgent=True·crisis=True`·경고 박스 있음. AI 로컬 venv 레이아웃 테스트 111건·관련 2093건 통과(torch 없는 환경 1건 제외), BE chat 테스트 실패 0, FE tsc 0·eslint 오류 0·vitest 714·브라우저 전체 732 통과.
+- 수정 중 발견: `ChatbotReservation`·`ChatbotVoiceInput` 브라우저 테스트가 `useActiveConnections`를 목으로 바꾸고 있어 새 훅 호출로 32건이 깨졌다 - 목에 `useWardActiveGuardians`(보호자 1명)를 더했다.
+
