@@ -33,7 +33,7 @@
 | 후보 1개 → 카드 1장 + [다른 지역으로 찾기], [예약하기] 뒤 날짜 | PASS |
 | 후보 여러 개 → 문구·선택지 기존과 같음 | PASS |
 | 이력에서만 나온 병원 → 진료과 확인 → 카드 1장 → [예약하기] 뒤 날짜 | PASS |
-| [다른 과 고르기] + 병원이 정해진 경우 → 그 병원 진료과 목록 | PASS (코드: 진료과만 비움 → `department_selection_needed`) |
+| [다른 과 고르기] + 병원이 정해진 경우 → 그 병원 진료과 목록 | ~~PASS~~ → **FAIL (조치 시 발견, 정정)** - 진료과를 비우면 `_clear_stale_links`가 '진료과 변경'으로 보고 병원까지 지워 전체 진료과 목록이 나왔다. 점검 때는 코드 읽기만으로 PASS 처리했다 → AI #315에서 수정 |
 | 배포 전 저장 초안(출처 없음) | PASS - 바뀐 값이 없으면 출처를 정하지 않아 묻지 않음(30분 TTL) |
 | 라우터 실패 턴의 글 답 | PASS - `flow-continues-fallback`이 `{직전 상태} / 답`으로 잇고, 판정은 원문(rawMessage)으로 |
 | 라우터 정상 턴에 글로 "네"만 보냄 | 미확인 - 라우터(Claude)가 예약으로 분류해야 이어진다. API 키 시험 금지라 수용 |
@@ -65,3 +65,15 @@
 ```
 fix: 짐작한 진료과 확인의 '네' 판정을 낱말 단위로 좁히기 (#312 점검 M-1·L-1·L-3)
 ```
+
+## 7. 조치 (2026-11-17, AI #315 `0c0710c`, gosky 반영)
+
+| ID | 조치 | 고정 테스트 |
+|---|---|---|
+| M-1 | `_is_plain_yes` - '네·예·응·좋아(요)·맞아(요)·그래(요)·그럼요'가 낱말로 끝날 때만, `말고·아니·다른·싫·바꿔·바꾸`가 있으면 수락 아님 | `test_typed_non_yes_is_not_taken_as_yes`(4문장)·`test_is_plain_yes`(14개) |
+| L-1 | 지역을 모르면 병원 카드에 [다른 병원 찾기](`location_confirm __other__`) → 지역을 묻고 그 지역에서 다시 찾음 | `test_history_hospital_card_without_region_offers_other_hospital` |
+| L-2 | 이력 출처 병원은 id가 있어도 이름으로 다시 조회, 없으면 버리고 검색 | `test_history_hospital_with_extracted_id_is_resolved_by_name`·`..._unknown_to_service_falls_back_to_search` |
+| L-3 | 보호자 대리·옛 저장 초안·병원 고정 [다른 과] 테스트 추가 | `test_guardian_proxy_same_rules`·`test_legacy_stored_draft_without_source_is_not_asked`·`test_pick_other_department_with_hospital_fixed_lists_that_hospital` |
+| (추가) | 위 정정 항목: `_clear_stale_links`가 진료과를 *비우기만* 한 경우는 변경으로 보지 않음(새 값으로 바뀔 때만 병원을 비움) | `test_pick_other_department_with_hospital_fixed_lists_that_hospital` |
+
+테스트: gosky 사본 stub, 4218 passed · 16 skipped. 남은 것: 라우터 정상 턴의 글 '네'(API 키 시험 금지로 미확인, 수용).
