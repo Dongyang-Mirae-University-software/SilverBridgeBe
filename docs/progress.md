@@ -3301,3 +3301,7 @@ AI 챗 집계 점검 L-1에서 남겨 둔 공용 `GlobalExceptionHandler`의 `e.
 
 ### [2026-11-17] 챗봇 119 점검 BE 몫 반영 (L-1)
 - 실서버 발생 실측 대신 `SosChatbot119FullIntegrationTest`(앱 전체, 실 DB·Redis)로 CHATBOT_119 → WARD_SOS 강제 푸시·WS·발송 이력 DELIVERED·문자 없음 확인. FE H-1·M-1은 FE 몫으로 남김.
+
+### [2026-11-17] AI #312 예약 짐작 진료과·후보 1개 확인 - 구현·배포·기능 점검
+- AI #312(`1d0da47`) 머지·gosky 배포: 이전 대화로만 정한 진료과는 [네, ○○]/[다른 과 고르기]로 먼저 확인, 이력 속 병원·후보 1개도 카드로 선택. 테스트 4189 통과(신규 13).
+- 점검 조건부 PASS (🔴 0 · 🟠 0 · 🟡 1 · 🟢 3). M-1 글 답 '네' 판정이 "예약 말고…"·"그래도…"까지 수락으로 처리(stub 실측). 문서 `docs/(2026-11-17) audit-ai-312-reservation-confirm-inferred.md`.
