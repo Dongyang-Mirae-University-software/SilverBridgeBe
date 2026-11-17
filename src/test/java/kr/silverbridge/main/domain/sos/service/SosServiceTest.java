@@ -46,6 +46,25 @@ class SosServiceTest {
     private static final String WARD_NAME = "김순자";
 
     @Test
+    @DisplayName("챗봇 119 → 그 경로로 저장하고, SOS 버튼과 같은 SosTriggeredEvent를 발행한다(경로는 이벤트에 없어 알림을 가르지 못한다) (2026-11-17)")
+    void trigger_챗봇119_같은알림이벤트() {
+        User ward = User.builder().id(WARD_ID).name(WARD_NAME).role(Role.WARD).build();
+        when(userRepository.findById(WARD_ID)).thenReturn(Optional.of(ward));
+        SosEvent saved = mock(SosEvent.class);
+        when(saved.getId()).thenReturn(43L);
+        when(saved.getCreatedAt()).thenReturn(OffsetDateTime.now());
+        when(sosEventRepository.save(any(SosEvent.class))).thenReturn(saved);
+
+        sosService.trigger(WARD_ID, null, SosTriggerType.CHATBOT_119);
+
+        ArgumentCaptor<SosEvent> saveCaptor = ArgumentCaptor.forClass(SosEvent.class);
+        verify(sosEventRepository).save(saveCaptor.capture());
+        assertThat(saveCaptor.getValue().getTriggerType()).isEqualTo(SosTriggerType.CHATBOT_119);
+        assertThat(saveCaptor.getValue().getCalledGuardianId()).isNull();
+        verify(eventPublisher).publishEvent(new SosTriggeredEvent(WARD_ID, 43L, WARD_NAME));
+    }
+
+    @Test
     @DisplayName("SOS 발생 → 이력(wardId) 저장 + SosTriggeredEvent(이름·이력ID 포함) 발행 + 응답 반환")
     void trigger_저장_이벤트발행_응답() {
         User ward = User.builder().id(WARD_ID).name(WARD_NAME).role(Role.WARD).build();

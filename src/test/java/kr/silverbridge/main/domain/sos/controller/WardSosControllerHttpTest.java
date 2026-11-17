@@ -5,6 +5,7 @@ import kr.silverbridge.main.domain.sos.dto.SosResponse;
 import kr.silverbridge.main.domain.sos.entity.SosTriggerType;
 import kr.silverbridge.main.domain.sos.service.SosCalledGuardianResolver;
 import kr.silverbridge.main.domain.sos.service.SosService;
+import kr.silverbridge.main.global.exception.GlobalExceptionHandler;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -27,6 +28,8 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.inOrder;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -61,6 +64,7 @@ class WardSosControllerHttpTest {
         return MockMvcBuilders.standaloneSetup(
                         new WardSosController(sosService, new SosCalledGuardianResolver(connectionService)))
                 .setCustomArgumentResolvers(new AuthenticationPrincipalArgumentResolver())
+                .setControllerAdvice(new GlobalExceptionHandler())
                 .build();
     }
 
@@ -106,5 +110,42 @@ class WardSosControllerHttpTest {
                 .andExpect(status().isCreated());
 
         verify(sosService).trigger(WARD_ID, null, null, null);
+    }
+
+    @Test
+    @DisplayName("챗봇 119(CHATBOT_119) → 201, 그 경로로 저장을 요청한다 (2026-11-17)")
+    void 챗봇119() throws Exception {
+        stubTrigger();
+
+        mvc().perform(post("/api/ward/sos").contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"triggerType\":\"CHATBOT_119\"}"))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.data.sosEventId").value(42));
+
+        verify(sosService).trigger(WARD_ID, null, SosTriggerType.CHATBOT_119, null);
+    }
+
+    @Test
+    @DisplayName("챗봇 119와 함께 온 calledGuardianId는 연결 확인 없이 버린다 - SOS는 그대로 201")
+    void 챗봇119_전화받은보호자_무시() throws Exception {
+        stubTrigger();
+
+        mvc().perform(post("/api/ward/sos").contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"triggerType\":\"CHATBOT_119\",\"calledGuardianId\":\"GD0001\"}"))
+                .andExpect(status().isCreated());
+
+        verifyNoInteractions(connectionService);
+        verify(sosService).trigger(WARD_ID, null, SosTriggerType.CHATBOT_119, null);
+    }
+
+    @Test
+    @DisplayName("모르는 triggerType → 기존과 같은 400 INVALID_INPUT, 저장하지 않는다")
+    void 모르는_경로값() throws Exception {
+        mvc().perform(post("/api/ward/sos").contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"triggerType\":\"CHATBOT\"}"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("INVALID_INPUT"));
+
+        verify(sosService, never()).trigger(any(), any(), any(), any());
     }
 }

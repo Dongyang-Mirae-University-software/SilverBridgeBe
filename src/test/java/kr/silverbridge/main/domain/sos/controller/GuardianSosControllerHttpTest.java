@@ -63,7 +63,7 @@ class GuardianSosControllerHttpTest {
     }
 
     private static SosHistoryPage page(SosHistoryItem item) {
-        return new SosHistoryPage(List.of(item), 0, 20, 1, 1, true, SosHistoryPage.Counts.of(1, 0));
+        return new SosHistoryPage(List.of(item), 0, 20, 1, 1, true, SosHistoryPage.Counts.of(1, 0, 0));
     }
 
     @Test
