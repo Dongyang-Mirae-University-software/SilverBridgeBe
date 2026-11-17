@@ -76,4 +76,10 @@ fix: 짐작한 진료과 확인의 '네' 판정을 낱말 단위로 좁히기 (#
 | L-3 | 보호자 대리·옛 저장 초안·병원 고정 [다른 과] 테스트 추가 | `test_guardian_proxy_same_rules`·`test_legacy_stored_draft_without_source_is_not_asked`·`test_pick_other_department_with_hospital_fixed_lists_that_hospital` |
 | (추가) | 위 정정 항목: `_clear_stale_links`가 진료과를 *비우기만* 한 경우는 변경으로 보지 않음(새 값으로 바뀔 때만 병원을 비움) | `test_pick_other_department_with_hospital_fixed_lists_that_hospital` |
 
-테스트: gosky 사본 stub, 4218 passed · 16 skipped. 남은 것: 라우터 정상 턴의 글 '네'(API 키 시험 금지로 미확인, 수용).
+테스트: gosky 사본 stub, 4218 passed · 16 skipped.
+
+### 남은 것 조치 (AI #316 `9e48b9e`)
+
+- 라우터 정상 턴의 글 '네': 라우터 프롬프트가 "직전이 예약 흐름이어도 예약 정보가 전혀 없는 문장은 general"이라 빠질 수 있었다. API 키로 재지 않고 코드로 보장했다 - 직전 턴이 진료과(`department`)를 묻던 유효한 예약 흐름 + 답이 순수한 '네'(`_is_plain_yes`)면 라우터 판단과 상관없이 I-2 폴백과 같은 방식으로 예약에 잇는다(reason `department-confirm-yes`).
+- 범위는 좁게 둔다: 응급·자해·단계 되묻기 턴, 다른 칸, '네'가 아닌 답, 유효 시간이 지난 흐름은 원칙("라우터 정상 턴은 라우터 판단 그대로")대로.
+- 테스트 `tests/test_audit2_chat_flows.py` 11개 추가, 전체 4229 passed · 16 skipped. 미확인 항목 없음.
