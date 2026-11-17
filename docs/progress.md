@@ -3290,3 +3290,7 @@ AI 챗 집계 점검 L-1에서 남겨 둔 공용 `GlobalExceptionHandler`의 `e.
 ### [2026-11-17] 챗봇 119 버튼 → SOS 발생 경로 `CHATBOT_119` (BE)
 - `POST /api/ward/sos`가 `triggerType: CHATBOT_119`를 받는다(응급·마음 위기 구분 없이 하나). 알림은 `WARD_SOS` 그대로, 마이그레이션 없음(CHECK 없음·VARCHAR(20)).
 - 보호자 이력 `counts.chatbot119` 추가 - 기존 `all`·묶음 `totalElements`가 두 경로 합이라 그대로 두면 챗봇 119 건이 수에서 빠졌다. 문서 `docs/(2026-11-17) feature-chatbot-119-sos.md`.
+
+### [2026-11-17] 영향 범위 점검(C) - 챗봇 119 SOS 경로 (BE #498)
+- 조건부 PASS (🔴 0 · 🟠 1 · 🟡 1 · 🟢 2). BE 사용처(알림·WS·확인기·쿼리·대시보드·AI) 결함 없음, gosky 읽기 실측 `counts.chatbot119` 0.
+- 🟠 H-1(FE): 보호자 SOS 이력 `TRIGGER_TYPE_META[item.triggerType].tone`이 `CHATBOT_119`에서 TypeError - FE ②가 값을 보내기 전에 표시 맵·탭(M-1)·타입 반영 필요. 실제 발생 실측은 그 뒤로 보류. 문서 `docs/(2026-11-17) audit-impact-chatbot-119-sos.md`.

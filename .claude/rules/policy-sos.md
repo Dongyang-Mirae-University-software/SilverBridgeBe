@@ -62,6 +62,7 @@ paths:
 - 챗봇이 응급·마음 위기 답과 함께 띄운 119 버튼을 누르면 FE가 SOS와 같은 119 키패드를 띄우고 `POST /api/ward/sos`를 `triggerType: CHATBOT_119`로 호출한다. 알림은 `WARD_SOS` 그대로다(규칙 ② - 경로로 알림을 가르지 않는다).
 - **응급과 마음 위기를 값으로 나누지 않는다**: 보호자 이력·알림에 "마음 위기"가 드러나지 않게 하기 위해서다. 위기 종류를 이력에 더하려면 피보호자 동의·표시 문구를 먼저 정할 것.
 - 경로를 추가할 때는 `SosHistoryPage.Counts`에 칸을 더해야 한다 - `all`과 묶음 모드 `totalElements`가 경로 합이라, 빠지면 수가 조용히 줄어든다(`GuardianSosService.toCounts`의 default 없는 switch가 컴파일로 막는다). `trigger_type`에는 CHECK가 없어 마이그레이션은 필요 없다(VARCHAR(20)).
+- **경로를 추가하면 FE 보호자 이력 화면(`TRIGGER_TYPE_META`)이 먼저 그 값을 알아야 한다** (2026-11-17 영향 범위 점검 H-1): 모르는 값이 한 건만 있어도 이력 목록이 TypeError로 깨진다. 새 값을 보내는 FE 변경은 표시 맵·탭·타입 반영과 같이 또는 그 뒤에 나간다. 상세 `docs/(2026-11-17) audit-impact-chatbot-119-sos.md`.
 - `calledGuardianId`는 `GUARDIAN_CALL`에서만 저장한다 - 챗봇 119와 함께 와도 버린다(SOS는 거절하지 않음). 상세 `docs/(2026-11-17) feature-chatbot-119-sos.md`.
 
 ## 2026-10-02 QA(BE) 반영 · 
