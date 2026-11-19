@@ -64,6 +64,8 @@ class LogRawExceptionGuardTest {
             "domain/anomaly/service/AnomalyEventCooldown.java",
             "domain/anomaly/service/AnomalyReviewReminderService.java",
             // 안부 말벗(2026-11-04) - 대답 글·음성·받아 적은 글이 오가는 경로
+            "domain/game/client/AiGameClient.java",
+            "domain/game/service/GuardianGameService.java",
             "domain/companion/client/AiCompanionClient.java",
             "domain/companion/client/CompanionAiStatusClient.java",
             "domain/companion/service/CompanionService.java",

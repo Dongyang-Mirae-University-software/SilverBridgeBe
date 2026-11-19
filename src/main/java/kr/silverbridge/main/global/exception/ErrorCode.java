@@ -230,7 +230,12 @@ public enum ErrorCode {
     COMPANION_AUDIO_INDEX_INVALID(HttpStatus.BAD_REQUEST, "목소리 번호가 올바르지 않습니다."),
     COMPANION_AUDIO_NOT_FOUND(HttpStatus.NOT_FOUND, "말벗 목소리를 찾을 수 없습니다."),
     COMPANION_AUDIO_NOT_READY(HttpStatus.SERVICE_UNAVAILABLE, "말벗 목소리를 아직 준비하지 못했습니다."),
-    COMPANION_AUDIO_BAD_UPSTREAM(HttpStatus.BAD_GATEWAY, "말벗 목소리를 받지 못했습니다.");
+    COMPANION_AUDIO_BAD_UPSTREAM(HttpStatus.BAD_GATEWAY, "말벗 목소리를 받지 못했습니다."),
+
+    // ========== 보호자 게임 기록 중계 (2026-11-19) ==========
+    GAME_NOT_AUTHORIZED(HttpStatus.FORBIDDEN, "연결된 피보호자의 게임 기록만 볼 수 있습니다."),
+    GAME_INVALID_DAYS(HttpStatus.BAD_REQUEST, "조회 기간은 1일부터 366일까지입니다."),
+    GAME_UNAVAILABLE(HttpStatus.SERVICE_UNAVAILABLE, "게임 기록을 지금 불러올 수 없습니다. 잠시 후 다시 시도해주세요.");
 
     private final HttpStatus status;
     private final String message;
