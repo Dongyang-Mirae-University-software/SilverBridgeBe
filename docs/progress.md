@@ -4,6 +4,10 @@
 
 ---
 
+### [2026-11-19] 보호자 게임 기록 중계 API - 게임 관리 405 수정 (BE)
+- FE `/api/streams` 프록시가 송출 POST 3경로만 받아 보호자 게임 화면 GET이 405였다. 프록시를 열지 않고 `GET /api/guardian/game/progress`·`/activity`(GUARDIAN, ACTIVE 연결만, `GAME_NOT_AUTHORIZED` 403 + `[IDOR-ATTEMPT]`)로 BE가 중계한다. 게임 번호는 BE가 wardId로 계산(FE `toGameUserId`와 같은 값, `long`).
+- 새 도메인 `domain/game`, 새 env 없음(`AI_API_KEY` 공유), D-1 미적용(사용자 결정). 테스트 2759 통과. FE 전환은 프롬프트 ②. 상세 `(2026-11-19) feature-guardian-game-relay.md`·`policy-game.md`.
+
 ### [2026-11-19] FE #291 보호자 이상감지 필터 탭·스위치 정리 + 기능 점검(B) PASS
 - FE #291(`a5337ff`, 머지 `c6d1643`): 분류 탭 + "확인 필요" 글자 표시 + "삭제된 카메라 기록" 스위치. gosky FE dev 반영(#290 함께), 375px 실측 정상.
 - 점검(B) PASS · 🟢 3(실서버 스위치 실측 못 함·공용 탭 화살표 키 없음·테스트 캐시 메모). 상세 `(2026-11-19) audit-fe-291-anomaly-filter-tabs.md`.

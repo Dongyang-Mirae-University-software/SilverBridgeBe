@@ -20,6 +20,7 @@
 - `policy-admin.md` - 관리자 회원·병원·대시보드
 - `policy-dashboard.md` - 보호자 대시보드 통합 API
 - `policy-companion.md` - 안부 말벗 (2026-11-04)
+- `policy-game.md` - 보호자 게임 기록 중계 (2026-11-19)
 
 ## IDOR 응답 — 404 위장 → 403 명시 안내 전환 (2026-07-14)
 
