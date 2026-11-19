@@ -181,6 +181,16 @@ camera:
     max-concurrent-streams: ${CAMERA_STREAM_MAX_CONCURRENT:20}  # 영상 1건 = 요청 스레드 1개 + AI 연결 1개
     max-streams-per-user: ${CAMERA_STREAM_MAX_PER_USER:2}
 
+# 보호자 게임 관리 - AI 게임 기록을 백엔드가 인가 후 중계(2026-11-19). FE /api/streams 프록시로 부르지 않는다.
+# 주소·키는 영상·챗 중계와 같은 AI_HTTP_BASE_URL·AI_API_KEY를 쓴다(새 env 없음).
+game:
+  relay:
+    ai-base-url: ${AI_HTTP_BASE_URL:https://testai.gosky.kr}
+    api-key: ${AI_API_KEY:}                                 # 서버 안에서만 X-API-Key 헤더로 사용(평문 커밋 금지)
+    connect-timeout: ${GAME_RELAY_CONNECT_TIMEOUT:3s}
+    read-timeout: ${GAME_RELAY_READ_TIMEOUT:5s}
+    call-timeout: ${GAME_RELAY_CALL_TIMEOUT:8s}             # 호출 전체(마감 시 연결을 끊는다)
+
 # AI 이상감지 수신 (1단계 — 수신·판정·이력. 보호자 알림 발송은 2단계).
 # 백엔드가 AI WS에 클라이언트로 붙어 latest_analysis를 받는다(AI 서버 무변경 — 웹훅 없음).
 # 연결 실패·키 미설정은 기동을 막지 않는다(구독만 비활성/재접속).
