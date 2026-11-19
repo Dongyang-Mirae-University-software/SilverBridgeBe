@@ -4,6 +4,10 @@
 
 ---
 
+### [2026-11-19] 기능 점검(B) - BE #501 보호자 게임 기록 중계 - PASS (🟡 1·🟢 4)
+- IDOR·역할·입력·AI 키·시간 제한·로그·응답 허용 목록 PASS. vkcs `7ddfdddc` 경로 확인(관리자 403·토큰 없음 401), gosky는 SSH 호스트 키 불일치로 미배포.
+- 🟡 M-1: 탈퇴 피보호자의 AI 게임 기록이 영구히 남는다(AI에 삭제 경로 없음, BE 탈퇴 삭제는 챗 기록만) - AI 삭제 API 선행 후 BE 탈퇴 리스너에 추가 제안. 상세 `(2026-11-19) audit-guardian-game-relay.md`.
+
 ### [2026-11-19] 보호자 게임 기록 중계 API - 게임 관리 405 수정 (BE)
 - FE `/api/streams` 프록시가 송출 POST 3경로만 받아 보호자 게임 화면 GET이 405였다. 프록시를 열지 않고 `GET /api/guardian/game/progress`·`/activity`(GUARDIAN, ACTIVE 연결만, `GAME_NOT_AUTHORIZED` 403 + `[IDOR-ATTEMPT]`)로 BE가 중계한다. 게임 번호는 BE가 wardId로 계산(FE `toGameUserId`와 같은 값, `long`).
 - 새 도메인 `domain/game`, 새 env 없음(`AI_API_KEY` 공유), D-1 미적용(사용자 결정). 테스트 2759 통과. FE 전환은 프롬프트 ②. 상세 `(2026-11-19) feature-guardian-game-relay.md`·`policy-game.md`.
