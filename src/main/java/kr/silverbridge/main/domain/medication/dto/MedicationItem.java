@@ -2,6 +2,7 @@ package kr.silverbridge.main.domain.medication.dto;
 
 import io.swagger.v3.oas.annotations.media.Schema;
 import kr.silverbridge.main.domain.medication.entity.Medication;
+import kr.silverbridge.main.domain.medication.entity.MedicationDisplayName;
 import kr.silverbridge.main.domain.medication.entity.MedicationIntake;
 import kr.silverbridge.main.domain.medication.entity.MedicationTimeSlot;
 
@@ -28,8 +29,11 @@ public record MedicationItem(
         @Schema(description = "약 ID", example = "12")
         Long medicationId,
 
-        @Schema(description = "약 이름", example = "혈압약 (암로디핀 5mg)")
+        @Schema(description = "약 이름(저장된 원본 - 허가 품목명이면 용량·성분 괄호 포함). 화면 표시는 displayName", example = "다이아벡스정500밀리그램(메트포르민염산염)")
         String name,
+
+        @Schema(description = "화면에 보일 약 이름(2026-11-19). 끝쪽 용량과 성분 괄호를 뗀 이름 - 직접 입력한 설명 괄호는 남는다", example = "다이아벡스정")
+        String displayName,
 
         @Schema(description = "복용 시간대", example = "MORNING",
                 allowableValues = {"MORNING", "LUNCH", "DINNER", "BEDTIME"})
@@ -59,6 +63,7 @@ public record MedicationItem(
         return new MedicationItem(
                 medication.getId(),
                 medication.getName(),
+                MedicationDisplayName.of(medication.getName()),
                 medication.getTimeSlot(),
                 medication.getDoseTime(),
                 DoseAmounts.normalize(medication.getDoseAmount()),

@@ -1,6 +1,7 @@
 package kr.silverbridge.main.domain.medication.listener;
 
 import kr.silverbridge.main.domain.connection.service.ConnectionService;
+import kr.silverbridge.main.domain.medication.entity.MedicationDisplayName;
 import kr.silverbridge.main.domain.medication.event.MedicationIntakeChangedEvent;
 import kr.silverbridge.main.global.websocket.WebSocketEventPublisher;
 import lombok.RequiredArgsConstructor;
@@ -49,6 +50,7 @@ public class MedicationIntakeNotificationListener {
         payload.put("medicationId", String.valueOf(event.medicationId()));
         payload.put("wardId", event.wardId());
         payload.put("medicationName", event.medicationName());
+        payload.put("medicationDisplayName", MedicationDisplayName.of(event.medicationName()));
         payload.put("doseDate", event.doseDate().toString());
         payload.put("taken", String.valueOf(event.taken()));
         payload.put("takenAt", event.takenAt() != null ? event.takenAt().toString() : null);

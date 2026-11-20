@@ -141,7 +141,7 @@ public class GuardianDashboardService {
                 .filter(item -> !MedicationClock.registeredAfterDose(item.createdAt(), item.doseTime(), summary.doseDate()))
                 .sorted(Comparator.comparing(MedicationItem::doseTime))
                 .map(item -> new UncheckedMedication(summary.wardId(), summary.wardName(),
-                        item.medicationId(), item.name(), item.timeSlot(), item.doseTime()))
+                        item.medicationId(), item.name(), item.displayName(), item.timeSlot(), item.doseTime()))
                 .toList();
     }
 

@@ -52,7 +52,8 @@ class GuardianDashboardServiceTest {
     }
 
     private static MedicationItem item(long id, LocalTime time, boolean taken) {
-        return new MedicationItem(id, "약" + id, MedicationTimeSlot.MORNING, time, BigDecimal.ONE, null, taken, null, null);
+        return new MedicationItem(id, "약" + id + "정500밀리그램", "약" + id + "정", MedicationTimeSlot.MORNING, time,
+                BigDecimal.ONE, null, taken, null, null);
     }
 
     @Test
@@ -186,6 +187,11 @@ class GuardianDashboardServiceTest {
 
         assertThat(result).extracting(GuardianDashboardResponse.UncheckedMedication::medicationId)
                 .containsExactly(2L, 1L);
+        // 원본 이름과 화면용 짧은 이름을 함께 넘긴다 (2026-11-19)
+        assertThat(result).extracting(GuardianDashboardResponse.UncheckedMedication::name,
+                        GuardianDashboardResponse.UncheckedMedication::displayName)
+                .containsExactly(org.assertj.core.groups.Tuple.tuple("약2정500밀리그램", "약2정"),
+                        org.assertj.core.groups.Tuple.tuple("약1정500밀리그램", "약1정"));
     }
 
     @Test
@@ -213,7 +219,7 @@ class GuardianDashboardServiceTest {
     }
 
     private static MedicationItem registered(long id, LocalTime time, OffsetDateTime createdAt) {
-        return new MedicationItem(id, "약" + id, MedicationTimeSlot.MORNING, time, BigDecimal.ONE, null, false, null,
+        return new MedicationItem(id, "약" + id, "약" + id, MedicationTimeSlot.MORNING, time, BigDecimal.ONE, null, false, null,
                 createdAt);
     }
 

@@ -4,6 +4,10 @@
 
 ---
 
+### [2026-11-20] 약 표시 이름 - 용량·성분 괄호를 뗀 `displayName` (BE)
+- 허가 품목명(`다이아벡스정500밀리그램(메트포르민염산염)`)이 화면에 그대로 나와 `MedicationDisplayName.of` 한 곳에서 끝쪽 용량·성분 괄호를 뗀 이름을 응답에 더했다(`MedicationItem.displayName`·대시보드 `UncheckedMedication.displayName`·WS `medicationDisplayName`). 저장 값·OCR 응답·알림 문구(이미 약 이름 없음)·마이그레이션 무변경.
+- 결정: 용량이 겹쳐도 늘 짧은 이름 / OCR은 원본 / 직접 입력도 같은 규칙이되 괄호는 앞이 용량·제형어로 끝날 때만 뗌("혈압약 (암로디핀 5mg)" 유지). 표본은 AI `drug_names.txt` 42,744건 패턴(vkcs DB 0건, gosky SSH 키 불일치로 미조회). 상세 `(2026-11-19) feature-medication-display-name.md`.
+
 ### [2026-11-20] 게임 중계 점검 조치 - 탈퇴 시 AI 게임 기록 삭제(M-1)·오류 본문 테스트(L-3)
 - AI #323(`bac824bc`): `DELETE /api/v1/games/records?userId=`(항상 키 필요). BE: `GameRecordPurgeListener`가 탈퇴 AFTER_COMMIT에 게임 번호로 삭제 요청(best-effort, `aiPurgeExecutor`). 보관 기간 정리는 두지 않음(D-2).
 - L-3: HTTP 테스트에 공용 처리기 연결(403·503·400 본문), Swagger 400 기재. BE 2767건·AI 38건 통과. gosky AI·BE는 SSH 호스트 키 문제로 배포 대기.
