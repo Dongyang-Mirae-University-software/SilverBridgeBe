@@ -177,7 +177,7 @@ public class AnomalyNotificationListener {
 
     /**
      * 피보호자 본인 알림 본문(푸시·문자 공통, 2026-10-27 단순화). 제목은 {@link WardNotificationText#TITLE}이라 문자는
-     * {@code [실버브릿지] 본문} 단문 한 줄이 되고, 문자 대체도 같은 문구로 나간다(별도 대체 문구 없음).
+     * {@code [CareAI] 본문} 단문 한 줄이 되고, 문자 대체도 같은 문구로 나간다(별도 대체 문구 없음).
      * 종류마다 행동 하나 - 화재는 대피, 흉기는 피신·112 연락, 낙상은 가족 연락이다(넘어진 사람에게 "대피"는 맞지 않는다).
      * "불이 났어요"처럼 단정하지 않고 "감지"로 말한다. 신고는 안내 문구일 뿐 서버가 발신하지 않는다.
      */
@@ -211,10 +211,10 @@ public class AnomalyNotificationListener {
         String home = hasText(event.wardName()) ? event.wardName() + "님 댁 " : "";
         String guidance = guardianGuidance(event.detectedType());
         if (guidance.isEmpty()) {
-            return "[실버브릿지] " + home + place + " " + what + " 감지. 앱에서 확인해 주세요.";
+            return "[CareAI] " + home + place + " " + what + " 감지. 앱에서 확인해 주세요.";
         }
         // 흉기·낙상은 푸시 본문과 같은 문구(앱 이름만 앞에 붙인다)
-        return "[실버브릿지] " + home + place + " " + DetectedTypeLabel.withSubjectParticle(event.detectedType())
+        return "[CareAI] " + home + place + " " + DetectedTypeLabel.withSubjectParticle(event.detectedType())
                 + " 감지되었습니다." + guidance;
     }
 

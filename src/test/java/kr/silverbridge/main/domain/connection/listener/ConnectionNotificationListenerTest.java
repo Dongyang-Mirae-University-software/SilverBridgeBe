@@ -66,7 +66,7 @@ class ConnectionNotificationListenerTest {
         ArgumentCaptor<NotificationContent> captor = ArgumentCaptor.forClass(NotificationContent.class);
         // 두 번째 인자 = 관련 피보호자(관리자 알림 이력). 연결 요청은 수신자가 곧 피보호자다
         verify(notificationDispatcher).dispatch(eq(WARD_ID), eq(WARD_ID), eq(NotificationType.CONNECTION_REQUEST), captor.capture());
-        assertThat(captor.getValue().title()).isEqualTo("실버브릿지");
+        assertThat(captor.getValue().title()).isEqualTo("CareAI");
         assertThat(captor.getValue().body()).isEqualTo("박보호님이 가족 연결을 요청했어요. 앱에서 확인해 주세요.")
                 .doesNotContain("아들");
         assertThat(captor.getValue().data()).containsEntry("type", "CONNECTION_REQUEST");
@@ -129,7 +129,7 @@ class ConnectionNotificationListenerTest {
         verify(webSocketEventPublisher).sendToUser(eq(WARD_ID), eq("connection-cancelled"), anyMap());
         ArgumentCaptor<NotificationContent> captor = ArgumentCaptor.forClass(NotificationContent.class);
         verify(notificationDispatcher).dispatch(eq(WARD_ID), eq(WARD_ID), eq(NotificationType.CONNECTION_DISCONNECTED), captor.capture());
-        assertThat(captor.getValue().title()).isEqualTo("실버브릿지");
+        assertThat(captor.getValue().title()).isEqualTo("CareAI");
         assertThat(captor.getValue().body()).isEqualTo("보호자가 가족 연결을 해제했어요.");
         // 해제 와이어 식별자는 CONNECTION_CANCELLED(레거시 호환). 거절(CONNECTION_REFUSED)과 섞이지 않음을 고정.
         assertThat(captor.getValue().data()).containsEntry("type", "CONNECTION_CANCELLED");
@@ -193,11 +193,11 @@ class ConnectionNotificationListenerTest {
     @Test
     @DisplayName("연결 요청: 보호자 이름이 길어 단문(90바이트)을 넘거나 보이는 글자가 없으면 '가족이'로 대신한다")
     void requestBody_긴이름_빈이름은_가족이() {
-        String longName = "가".repeat(14);   // 28바이트 - 이름 칸 한도(27바이트)를 1 넘는다
+        String longName = "가".repeat(16);   // 32바이트 - 이름 칸 한도(31바이트, 접두어 "[CareAI] ")를 1 넘는다
         assertThat(ConnectionNotificationListener.requestBody(longName))
                 .isEqualTo("가족이 연결을 요청했어요. 앱에서 확인해 주세요.");
-        assertThat(ConnectionNotificationListener.requestBody("가".repeat(13)))
-                .isEqualTo("가".repeat(13) + "님이 가족 연결을 요청했어요. 앱에서 확인해 주세요.");
+        assertThat(ConnectionNotificationListener.requestBody("가".repeat(15)))
+                .isEqualTo("가".repeat(15) + "님이 가족 연결을 요청했어요. 앱에서 확인해 주세요.");
         assertThat(ConnectionNotificationListener.requestBody("\u200B")).startsWith("가족이");
         assertThat(ConnectionNotificationListener.requestBody(null)).startsWith("가족이");
     }
@@ -231,7 +231,7 @@ class ConnectionNotificationListenerTest {
         assertThat(guardianFcm.getValue().data()).containsEntry("type", "CONNECTION_FORCED");
         ArgumentCaptor<NotificationContent> wardFcm = ArgumentCaptor.forClass(NotificationContent.class);
         verify(notificationDispatcher).dispatch(eq(WARD_ID), eq(WARD_ID), eq(NotificationType.CONNECTION_FORCED), wardFcm.capture());
-        assertThat(wardFcm.getValue().title()).isEqualTo("실버브릿지");
+        assertThat(wardFcm.getValue().title()).isEqualTo("CareAI");
         assertThat(wardFcm.getValue().body()).isEqualTo("가족과 연결됐어요. 앱에서 확인해 주세요.");
     }
 
@@ -267,11 +267,11 @@ class ConnectionNotificationListenerTest {
 
     @org.junit.jupiter.params.ParameterizedTest
     @org.junit.jupiter.params.provider.CsvSource({
-            "GUARDIAN, WD0001, 실버브릿지, 보호자가 가족 연결을 해제했어요.",
+            "GUARDIAN, WD0001, CareAI, 보호자가 가족 연결을 해제했어요.",
             "WARD, GD0001, 연결 해제, 피보호자가 연결을 해제했습니다.",
             "ADMIN, GD0001, 연결 해제, 관리자가 연결을 해제했습니다.",
-            "ADMIN, WD0001, 실버브릿지, 관리자가 가족 연결을 해제했어요.",
-            "WITHDRAWN, WD0001, 실버브릿지, 가족 연결이 해제됐어요.",
+            "ADMIN, WD0001, CareAI, 관리자가 가족 연결을 해제했어요.",
+            "WITHDRAWN, WD0001, CareAI, 가족 연결이 해제됐어요.",
             "WITHDRAWN, GD0001, 연결 해제, 피보호자가 탈퇴해 연결이 종료되었습니다."
     })
     @DisplayName("연결 해제 WS(connection-cancelled)에 해제 주체와 FCM과 같은 제목·본문을 싣는다, connectionId 유지 (CONN-G12)")

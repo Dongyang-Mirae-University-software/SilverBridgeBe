@@ -173,7 +173,7 @@ class AnomalyNotificationListenerTest {
 
         ArgumentCaptor<NotificationContent> self = ArgumentCaptor.forClass(NotificationContent.class);
         verify(notificationDispatcher).dispatch(eq(WARD_ID), any(), any(), self.capture());
-        assertThat(self.getValue().title()).isEqualTo("실버브릿지");
+        assertThat(self.getValue().title()).isEqualTo("CareAI");
         assertThat(self.getValue().body()).isEqualTo("거실에서 불이 감지됐어요. 지금 밖으로 나가세요.");
         // 본인은 별도 대체 문구 없이 같은 제목·본문이 문자로 나간다
         assertThat(self.getValue().smsFallbackText()).isNull();
@@ -259,7 +259,7 @@ class AnomalyNotificationListenerTest {
     @DisplayName("문자 대체 문구: 보호자분은 이름·위치·유형과 앱 확인 안내(피보호자 본인은 대체 문구 없이 푸시 문구 그대로)")
     void 문자_대체_문구() {
         assertThat(AnomalyNotificationListener.smsFallbackText(event))
-                .isEqualTo("[실버브릿지] 김순자님 댁 거실에서 화재 감지. 앱에서 확인해 주세요.");
+                .isEqualTo("[CareAI] 김순자님 댁 거실에서 화재 감지. 앱에서 확인해 주세요.");
     }
 
     private AnomalyDetectedEvent eventOf(DetectedType type) {
@@ -285,7 +285,7 @@ class AnomalyNotificationListenerTest {
 
         ArgumentCaptor<NotificationContent> self = ArgumentCaptor.forClass(NotificationContent.class);
         verify(notificationDispatcher).dispatch(eq(WARD_ID), any(), any(), self.capture());
-        assertThat(self.getValue().title()).isEqualTo("실버브릿지");
+        assertThat(self.getValue().title()).isEqualTo("CareAI");
         assertThat(self.getValue().body())
                 .isEqualTo("집에서 흉기가 감지됐어요. 안전한 곳으로 피하고 112에 연락하세요.");
     }
@@ -315,12 +315,12 @@ class AnomalyNotificationListenerTest {
     @DisplayName("문자 대체 문구: 보호자분은 종류별 안내(흉기·낙상)·앱 확인 안내(화재)")
     void 문자_대체_문구_종류별() {
         assertThat(AnomalyNotificationListener.smsFallbackText(eventOf(DetectedType.FALL)))
-                .isEqualTo("[실버브릿지] 김순자님 댁 거실에서 낙상이 감지되었습니다. 바로 연락해 안전을 확인해 주세요.");
+                .isEqualTo("[CareAI] 김순자님 댁 거실에서 낙상이 감지되었습니다. 바로 연락해 안전을 확인해 주세요.");
         assertThat(AnomalyNotificationListener.smsFallbackText(eventOf(DetectedType.WEAPON)))
-                .isEqualTo("[실버브릿지] 김순자님 댁 거실에서 흉기가 감지되었습니다. "
+                .isEqualTo("[CareAI] 김순자님 댁 거실에서 흉기가 감지되었습니다. "
                         + "바로 연락해 안전을 확인하고, 위험하면 112에 신고해 주세요.");
         assertThat(AnomalyNotificationListener.smsFallbackText(eventOf(DetectedType.FIRE)))
-                .isEqualTo("[실버브릿지] 김순자님 댁 거실에서 화재 감지. 앱에서 확인해 주세요.");
+                .isEqualTo("[CareAI] 김순자님 댁 거실에서 화재 감지. 앱에서 확인해 주세요.");
     }
 
     @Test
@@ -349,10 +349,11 @@ class AnomalyNotificationListenerTest {
         AnomalyDetectedEvent noPlace = new AnomalyDetectedEvent(7L, INCIDENT_ID, WARD_ID, "김순자", SESSION_ID, null,
                 DetectedType.FIRE, null);
         assertThat(AnomalyNotificationListener.smsFallbackText(noName))
-                .isEqualTo("[실버브릿지] 거실에서 화재 감지. 앱에서 확인해 주세요.");
+                .isEqualTo("[CareAI] 거실에서 화재 감지. 앱에서 확인해 주세요.");
         assertThat(AnomalyNotificationListener.smsFallbackText(noPlace))
-                .isEqualTo("[실버브릿지] 김순자님 댁 등록된 카메라에서 화재 감지. 앱에서 확인해 주세요.");
-        assertThat(AnomalyNotificationListener.smsFallbackText(noPlace).length()).isLessThan(45);
+                .isEqualTo("[CareAI] 김순자님 댁 등록된 카메라에서 화재 감지. 앱에서 확인해 주세요.");
+        assertThat(kr.silverbridge.main.domain.notification.channel.WardNotificationText.eucKrBytes(
+                AnomalyNotificationListener.smsFallbackText(noPlace))).as("단문 한도").isLessThanOrEqualTo(90);
     }
 
     // ─── 전달 0건이면 쿨다운을 푼다 (2026-10-07 점검 Y-1, SOS-G09와 같은 판단·수신자 단위) ───

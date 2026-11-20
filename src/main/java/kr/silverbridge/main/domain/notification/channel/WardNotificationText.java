@@ -12,8 +12,8 @@ import java.nio.charset.CharsetEncoder;
  */
 public final class WardNotificationText {
 
-    /** 피보호자 알림 제목. 문자에서는 {@code [실버브릿지]} 접두어가 된다. */
-    public static final String TITLE = "실버브릿지";
+    /** 피보호자 알림 제목. 문자에서는 {@code [CareAI]} 접두어가 된다. */
+    public static final String TITLE = "CareAI";
 
     /** 단문(SMS) 한도. 넘으면 발송사가 장문(LMS)으로 바꾼다. */
     public static final int SINGLE_SMS_MAX_BYTES = 90;

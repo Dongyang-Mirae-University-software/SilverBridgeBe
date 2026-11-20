@@ -28,9 +28,9 @@ import org.springframework.stereotype.Component;
  * <p>로그·이력에는 수신 주소·본문·예외 메시지를 남기지 않는다(예외 클래스명만).</p>
  *
  * <p><b>형식(2026-11-20)</b>: multipart/alternative로 텍스트 본문(기존 내용 그대로)과 HTML 본문
- * ({@link EmailNotificationHtml})을 함께 보낸다. 보낸 사람은 {@code "실버브릿지" <spring.mail.username>}
+ * ({@link EmailNotificationHtml})을 함께 보낸다. 보낸 사람은 {@code "CareAI" <spring.mail.username>}
  * (표시 이름 {@code notification.email.from-name}). 제목이 서비스 이름과 같으면(피보호자 알림 제목
- * {@link WardNotificationText#TITLE}) 접두어를 붙이지 않는다 - {@code [실버브릿지] 실버브릿지} 중복 방지.</p>
+ * {@link WardNotificationText#TITLE}) 접두어를 붙이지 않는다 - {@code [CareAI] CareAI} 중복 방지.</p>
  */
 @Slf4j
 @Component
@@ -41,9 +41,9 @@ public class EmailNotificationChannel implements NotificationChannel {
     private static final Pattern VIRTUAL_KAKAO_EMAIL =
             Pattern.compile("^kakao_\\d+@kakao\\.com$", Pattern.CASE_INSENSITIVE);
 
-    static final String SERVICE_NAME = "실버브릿지";
+    static final String SERVICE_NAME = "CareAI";
     static final String SUBJECT_PREFIX = "[" + SERVICE_NAME + "] ";
-    static final String FOOTER_LINE_1 = "이 메일은 실버브릿지 알림 설정에서 이메일 알림을 켜셔서 발송되었습니다.";
+    static final String FOOTER_LINE_1 = "이 메일은 CareAI 알림 설정에서 이메일 알림을 켜셔서 발송되었습니다.";
     static final String FOOTER_LINE_2 = "알림 설정에서 이메일 알림을 끌 수 있습니다.";
     static final String FOOTER = "\n\n- " + FOOTER_LINE_1 + "\n- " + FOOTER_LINE_2;
 
