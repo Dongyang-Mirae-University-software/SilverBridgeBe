@@ -88,7 +88,8 @@ public record GuardianDashboardResponse(
             @Schema(description = "피보호자 ID") String wardId,
             @Schema(description = "피보호자 이름", nullable = true) String wardName,
             @Schema(description = "약 ID") Long medicationId,
-            @Schema(description = "약 이름") String name,
+            @Schema(description = "약 이름(저장된 원본). 화면 표시는 displayName") String name,
+            @Schema(description = "화면에 보일 약 이름(끝쪽 용량·성분 괄호를 뗀 이름, 2026-11-19)") String displayName,
             @Schema(description = "시간대", allowableValues = {"MORNING", "LUNCH", "DINNER", "BEDTIME"})
             MedicationTimeSlot timeSlot,
             @Schema(description = "복용 시각(KST)", example = "12:30") LocalTime doseTime

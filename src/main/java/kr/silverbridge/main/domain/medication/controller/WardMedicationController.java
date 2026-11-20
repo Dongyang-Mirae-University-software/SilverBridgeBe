@@ -49,7 +49,7 @@ public class WardMedicationController {
                     [응답] data: TodayMedicationResponse
                     - doseDate: 조회 기준일(KST)
                     - takenCount / totalCount: "0/3회 완료"의 두 숫자
-                    - medications[]: medicationId / name / timeSlot / doseTime / doseAmount / memo
+                    - medications[]: medicationId / name(원본) / displayName(화면용 짧은 이름) / timeSlot / doseTime / doseAmount / memo
                       / taken(체크 여부) / takenAt(체크 시각)
 
                     [주의]
@@ -79,7 +79,7 @@ public class WardMedicationController {
                     1. 오늘 날짜(KST)로 복용 기록을 남깁니다.
                     2. 커밋 후 비동기로 WebSocket 발송 — ACTIVE 보호자 전원 + 본인(다른 기기 동기화):
                        /topic/{userId}/medication-taken
-                       (medicationId, wardId, medicationName, doseDate, taken, takenAt)
+                       (medicationId, wardId, medicationName, medicationDisplayName, doseDate, taken, takenAt)
                        ※ 푸시·문자는 발송하지 않습니다(하루 여러 번 일어나는 일상 동작이라 소음).
 
                     [주의]
