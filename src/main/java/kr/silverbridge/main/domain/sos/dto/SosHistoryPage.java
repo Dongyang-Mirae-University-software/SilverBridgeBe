@@ -41,7 +41,7 @@ public record SosHistoryPage(
 ) {
 
     /**
-     * 경로별 전체 건수. {@code all = sosButton + guardianCall + chatbot119}.
+     * 경로별 전체 건수. {@code all = sosButton + guardianCall + chatbot119 + chatbot109}.
      */
     @Schema(description = "경로별 SOS 이력 건수")
     public record Counts(
@@ -56,12 +56,16 @@ public record SosHistoryPage(
             long guardianCall,
 
             @Schema(description = "챗봇 119 버튼(CHATBOT_119)", example = "0")
-            long chatbot119
-    ) {
-        public static final Counts EMPTY = new Counts(0, 0, 0, 0);
+            long chatbot119,
 
-        public static Counts of(long sosButton, long guardianCall, long chatbot119) {
-            return new Counts(sosButton + guardianCall + chatbot119, sosButton, guardianCall, chatbot119);
+            @Schema(description = "챗봇 109 자살예방 상담전화 버튼(CHATBOT_109)", example = "0")
+            long chatbot109
+    ) {
+        public static final Counts EMPTY = new Counts(0, 0, 0, 0, 0);
+
+        public static Counts of(long sosButton, long guardianCall, long chatbot119, long chatbot109) {
+            return new Counts(sosButton + guardianCall + chatbot119 + chatbot109,
+                    sosButton, guardianCall, chatbot119, chatbot109);
         }
     }
 

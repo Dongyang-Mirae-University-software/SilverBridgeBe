@@ -11,7 +11,7 @@ import kr.silverbridge.main.global.validation.TextSanitizer;
  *
  * @param location    발생 위치 자유 문구(선택, 100자). 서버는 위치를 추정하지 않고 받은 값을 그대로 보관한다
  * @param triggerType 발생 경로(선택). 생략하면 {@link SosTriggerType#SOS_BUTTON}. 보호자 카드를 눌러 전화를
- *                    걸면서 호출할 때만 {@code GUARDIAN_CALL}을, 챗봇의 119 버튼을 눌렀을 때는 {@code CHATBOT_119}를 보낸다 - 어느 값이든 보호자 알림은 동일하게 나간다
+ *                    걸면서 호출할 때만 {@code GUARDIAN_CALL}을, 챗봇의 119 버튼을 눌렀을 때는 {@code CHATBOT_119}를, 챗봇 위기 답의 109 버튼을 눌렀을 때는 {@code CHATBOT_109}를 보낸다 - 어느 값이든 보호자 알림은 동일하게 나간다
  * @param calledGuardianId 전화를 건 보호자 ID(선택, 2026-10-30). {@code GUARDIAN_CALL}일 때만 의미가 있다. 형식 검사를
  *                    여기서 하지 않는다 - 잘못된 값으로 400이 나면 SOS 자체가 막히므로, 서비스가 걸러 저장하지 않을 뿐이다
  */
@@ -23,7 +23,7 @@ public record SosTriggerRequest(
         String location,
 
         @Schema(description = "발생 경로 (선택, 생략 시 SOS_BUTTON)", example = "SOS_BUTTON",
-                allowableValues = {"SOS_BUTTON", "GUARDIAN_CALL", "CHATBOT_119"})
+                allowableValues = {"SOS_BUTTON", "GUARDIAN_CALL", "CHATBOT_119", "CHATBOT_109"})
         SosTriggerType triggerType,
 
         @Schema(description = "전화를 건 보호자 ID (선택, GUARDIAN_CALL일 때만). 피보호자 보호자 목록의 partnerUserId. "
