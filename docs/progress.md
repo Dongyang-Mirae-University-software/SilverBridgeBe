@@ -3374,3 +3374,4 @@ AI 챗 집계 점검 L-1에서 남겨 둔 공용 `GlobalExceptionHandler`의 `e.
 
 ### [2026-11-20] 약 표시 이름 겹침 시 '이름(용량)' - 구현
 - 사용자 결정 번복(겹쳐도 늘 짧은 이름 → 겹칠 때만 `다이아벡스정(500mg)`, 단위 약자). `MedicationDisplayName.ofAll` 한 곳, 피보호자 오늘 약·체크 응답(FE가 응답으로 항목 교체)·보호자 목록 적용. 테스트 2836건 실패 0, 마이그레이션·FE 변경 없음. 문서 `(2026-11-20) feature-medication-display-name-dose-collision.md`.
+- PR #505(`298141bc`) vkcs·gosky 반영, gosky 실측(겹치는 시험 약 잠시 등록 → API·화면 `아모디핀정(10mg)`/`(5mg)` 확인 → 삭제). 기능 점검(B)은 제안 상태(대장 ❌).
