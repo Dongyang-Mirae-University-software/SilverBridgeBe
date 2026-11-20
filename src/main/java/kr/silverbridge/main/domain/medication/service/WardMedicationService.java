@@ -66,7 +66,9 @@ public class WardMedicationService {
                 .map(medication -> MedicationItem.of(medication, intakes.get(medication.getId())))
                 .toList();
 
-        return TodayMedicationResponse.of(today, items);
+        // 짧은 이름이 겹치는 약만 "이름(용량)" - 같은 피보호자의 약 전체 기준(2026-11-20)
+        return TodayMedicationResponse.of(today,
+                MedicationItem.withListDisplayNames(items, medications.stream().map(Medication::getName).toList()));
     }
 
     /**
@@ -77,7 +79,7 @@ public class WardMedicationService {
      */
     @Transactional
     public MedicationItem markTaken(String wardId, Long medicationId) {
-        return mark(wardId, medicationId);
+        return withListDisplayNames(wardId, List.of(mark(wardId, medicationId))).get(0);
     }
 
     /**
@@ -102,7 +104,18 @@ public class WardMedicationService {
         medicationIds.stream().sorted().forEach(medicationId ->
                 results.put(medicationId, taken ? mark(wardId, medicationId) : unmark(wardId, medicationId)));
         log.info("복약 묶음 체크: wardId={}, taken={}, 건수={}", wardId, taken, medicationIds.size());
-        return medicationIds.stream().map(results::get).toList();
+        return withListDisplayNames(wardId, medicationIds.stream().map(results::get).toList());
+    }
+
+    /**
+     * 체크 응답에도 오늘 목록과 같은 표시 이름을 붙인다(2026-11-20). FE는 체크 응답 항목으로 목록의 그 약을 통째로 바꾸므로,
+     * 여기서 약 하나 기준 이름을 내리면 체크하는 순간 "다이아벡스정(500mg)"이 "다이아벡스정"으로 바뀐다.
+     */
+    private List<MedicationItem> withListDisplayNames(String wardId, List<MedicationItem> items) {
+        List<String> names = medicationRepository.findByWardIdAndDeletedAtIsNullOrderByDoseTimeAscIdAsc(wardId).stream()
+                .map(Medication::getName)
+                .toList();
+        return MedicationItem.withListDisplayNames(items, names);
     }
 
     private MedicationItem mark(String wardId, Long medicationId) {
@@ -134,7 +147,7 @@ public class WardMedicationService {
      */
     @Transactional
     public MedicationItem unmarkTaken(String wardId, Long medicationId) {
-        return unmark(wardId, medicationId);
+        return withListDisplayNames(wardId, List.of(unmark(wardId, medicationId))).get(0);
     }
 
     private MedicationItem unmark(String wardId, Long medicationId) {

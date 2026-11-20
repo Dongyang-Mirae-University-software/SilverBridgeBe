@@ -12,6 +12,9 @@ import kr.silverbridge.main.domain.medication.service.MedicationClock;
 import java.math.BigDecimal;
 import java.time.LocalTime;
 import java.time.OffsetDateTime;
+import java.util.Collection;
+import java.util.List;
+import java.util.Map;
 
 /**
  * 복약 일정 한 건. 보호자 화면·피보호자 화면이 같은 형태를 쓴다.
@@ -32,7 +35,9 @@ public record MedicationItem(
         @Schema(description = "약 이름(저장된 원본 - 허가 품목명이면 용량·성분 괄호 포함). 화면 표시는 displayName", example = "다이아벡스정500밀리그램(메트포르민염산염)")
         String name,
 
-        @Schema(description = "화면에 보일 약 이름(2026-11-19). 끝쪽 용량과 성분 괄호를 뗀 이름 - 직접 입력한 설명 괄호는 남는다", example = "다이아벡스정")
+        @Schema(description = "화면에 보일 약 이름(2026-11-19). 끝쪽 용량과 성분 괄호를 뗀 이름 - 직접 입력한 설명 괄호는 남는다. "
+                + "같은 피보호자의 약 중 이 짧은 이름이 겹치면 그 약들만 \"이름(용량)\"(단위는 mg·mcg·mL 등 약자, 2026-11-20) - "
+                + "피보호자 오늘 약·복용 체크 응답·보호자 목록 기준", example = "다이아벡스정")
         String displayName,
 
         @Schema(description = "복용 시간대", example = "MORNING",
@@ -72,5 +77,27 @@ public record MedicationItem(
                 intake != null ? intake.getTakenAt() : null,
                 MedicationClock.atKst(medication.getCreatedAt())
         );
+    }
+
+    /** 표시 이름만 바꾼 복사본. */
+    public MedicationItem withDisplayName(String newDisplayName) {
+        return new MedicationItem(medicationId, name, newDisplayName, timeSlot, doseTime, doseAmount, memo,
+                taken, takenAt, createdAt);
+    }
+
+    /**
+     * 같은 피보호자의 약 목록 기준 표시 이름을 붙인다({@link MedicationDisplayName#ofAll}) - 짧은 이름이 겹치는 약만
+     * "이름(용량)"이 된다. 목록에 없는 항목은 그대로 둔다.
+     *
+     * @param wardMedicationNames 그 피보호자의 활성 약 이름 전부(응답에 담지 않는 약도 겹침 판단에 들어간다)
+     */
+    public static List<MedicationItem> withListDisplayNames(List<MedicationItem> items, Collection<String> wardMedicationNames) {
+        Map<String, String> displayNames = MedicationDisplayName.ofAll(wardMedicationNames);
+        return items.stream()
+                .map(item -> {
+                    String listName = item.name() == null ? null : displayNames.get(item.name().strip());
+                    return listName == null ? item : item.withDisplayName(listName);
+                })
+                .toList();
     }
 }

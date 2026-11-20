@@ -60,3 +60,5 @@
 ## 바뀌지 않은 것
 
 저장 값·등록/수정 검증·OCR 대조(`inList`·`suggestions`)·알림 문구·마이그레이션.
+
+> **2026-11-20 갱신**: "용량이 겹쳐도 늘 짧은 이름" 결정을 번복했다 - 같은 피보호자의 약 중 짧은 이름이 겹치는 약만 `이름(용량 약자)`. `docs/(2026-11-20) feature-medication-display-name-dose-collision.md`.

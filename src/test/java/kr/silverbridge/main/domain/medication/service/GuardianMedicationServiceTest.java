@@ -366,6 +366,29 @@ class GuardianMedicationServiceTest {
         verify(medicationRepository, never()).findById(1L);
     }
 
+    @Test
+    @DisplayName("보호자 목록 - 같은 피보호자 안에서 짧은 이름이 겹치는 약만 '이름(용량)', 다른 피보호자의 약과는 겹침으로 세지 않는다")
+    void getWardMedications_겹치는_약만_용량표시() {
+        String diabex500 = "다이아벡스정500밀리그램(메트포르민염산염)";
+        String diabex850 = "다이아벡스정850밀리그램(메트포르민염산염)";
+        when(connectionService.getActiveWardIds(GUARDIAN_ID)).thenReturn(List.of(WARD_ID, OTHER_WARD_ID));
+        when(medicationRepository.findByWardIdInAndDeletedAtIsNullOrderByDoseTimeAscIdAsc(any()))
+                .thenReturn(List.of(
+                        medication(1L, WARD_ID, diabex500, MedicationTimeSlot.MORNING, LocalTime.of(8, 0)),
+                        medication(2L, WARD_ID, diabex850, MedicationTimeSlot.DINNER, LocalTime.of(19, 0)),
+                        medication(3L, OTHER_WARD_ID, diabex500, MedicationTimeSlot.MORNING, LocalTime.of(8, 0)),
+                        medication(4L, OTHER_WARD_ID, "아스피린장용정100mg", MedicationTimeSlot.MORNING, LocalTime.of(8, 0))));
+        when(intakeRepository.findByMedicationIdInAndDoseDate(any(), any())).thenReturn(List.of());
+        when(userRepository.findAllById(any())).thenReturn(List.of());
+
+        List<WardMedicationSummary> summaries = guardianMedicationService.getWardMedications(GUARDIAN_ID);
+
+        assertThat(summaries.get(0).medications()).extracting(MedicationItem::displayName)
+                .containsExactly("다이아벡스정(500mg)", "다이아벡스정(850mg)");
+        assertThat(summaries.get(1).medications()).extracting(MedicationItem::displayName)
+                .containsExactly("다이아벡스정", "아스피린장용정");
+    }
+
     // ─── 헬퍼 ───────────────────────────────────────────────────────
 
     private static Medication medication(Long id, String wardId, String name,

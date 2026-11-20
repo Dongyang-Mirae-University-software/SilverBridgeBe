@@ -1,0 +1,47 @@
+# 약 표시 이름 - 짧은 이름이 겹칠 때만 "이름(용량)" (2026-11-20)
+
+## 배경
+
+BE #503의 `displayName`은 끝쪽 용량·성분 괄호를 떼어, 같은 약을 용량만 달리 둘 등록하면 두 줄이 모두 "다이아벡스정"으로 보였다
+(FE #294 점검 L-1). 같은 날 "겹쳐도 늘 짧은 이름"으로 정했던 결정을 사용자가 번복했다(2026-11-20).
+
+## 결정
+
+- 같은 피보호자의 활성 약 중 **짧은 이름이 겹치는 약만** `짧은 이름(용량)` - 예: `다이아벡스정(500mg)` / `다이아벡스정(850mg)`
+- 그때 용량 단위는 **영어 약자로 통일**: 밀리그램·밀리그람·MG·㎎→mg, 마이크로그램·마이크로그람·μg·㎍→mcg, 그램·그람→g,
+  밀리리터·ml·ML·㎖→mL, 리터→L, 국제단위→IU, 퍼센트→%("단위"는 원문). 숫자와 단위 사이 공백은 뺀다.
+- 겹치지 않는 약은 지금처럼 짧은 이름만(용량 없음).
+
+## 규칙 (`MedicationDisplayName.ofAll`, 한 곳)
+
+| 경우 | 표시 |
+|---|---|
+| 짧은 이름이 겹치지 않음 | `of()` 그대로 |
+| 겹치고 용량이 서로 다름 | `짧은 이름(용량 약자)` - 복합 용량 `(500/5mg)`·농도 `(500mg/5mL)` 포함 |
+| 용량이 괄호 안(`아모디핀정(5mg)`) | 뗀 괄호 중 용량뿐인 것을 용량으로 |
+| 용량까지 같음(표기만 다름) / 붙일 용량 없음 | 끝쪽 괄호만 뗀 이름, 그것도 같으면 짧은 이름 |
+| 원래 이름까지 같음(같은 약 두 번 등록) | 겹침으로 세지 않음 - 짧은 이름 |
+
+## 적용 범위
+
+| 응답 | 기준 | 이유 |
+|---|---|---|
+| 피보호자 오늘 약 `GET /api/ward/medication/today` | 목록 | |
+| 피보호자 복용 체크·해제·묶음 응답 | 목록(그 피보호자 활성 약 조회 1회 추가) | FE가 체크 응답 항목으로 목록의 그 약을 통째로 바꾼다(`replaceMedicationsInCache`) - 약 하나 기준이면 체크 순간 이름이 바뀐다 |
+| 보호자 목록 `GET /api/guardian/medication` | 피보호자별 목록(다른 피보호자의 약은 세지 않음) | |
+| 보호자 등록·일괄·수정 응답, 대시보드 `mostUrgent`, WS `medicationDisplayName` | 약 하나(`of()`) 그대로 | FE가 등록·수정 뒤 목록을 다시 불러오고, 대시보드·WS 이름은 화면에 쓰지 않는다(FE `c944d7c` 확인) |
+
+## 바뀌지 않은 것
+
+저장 값 `medication.name`·OCR 응답·알림 문구·등록/수정 검증·마이그레이션(없음)·FE 코드.
+
+## 변경 파일
+
+- `MedicationDisplayName` - `ofAll`·`doseOf`·단위 약자 표
+- `MedicationItem` - `withDisplayName`·`withListDisplayNames`, Swagger 설명
+- `WardMedicationService` - 오늘 약·체크 응답, `GuardianMedicationService` - 목록
+- 테스트: `MedicationDisplayNameListTest`(8), `WardMedicationServiceTest`(+2), `GuardianMedicationServiceTest`(+1)
+
+## 검증
+
+`./gradlew build` 통과, 전체 테스트 2836건 실패 0.

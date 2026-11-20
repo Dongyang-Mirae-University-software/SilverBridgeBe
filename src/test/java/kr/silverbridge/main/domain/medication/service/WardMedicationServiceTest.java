@@ -305,6 +305,45 @@ class WardMedicationServiceTest {
         verify(eventPublisher, times(1)).publishEvent(any(MedicationIntakeChangedEvent.class));
     }
 
+    // ─── 표시 이름(2026-11-20) ──────────────────────────────────────
+
+    private static final String DIABEX_500 = "다이아벡스정500밀리그램(메트포르민염산염)";
+    private static final String DIABEX_850 = "다이아벡스정850밀리그램(메트포르민염산염)";
+
+    @Test
+    @DisplayName("오늘 약 - 짧은 이름이 겹치는 약만 '이름(용량)', 나머지는 짧은 이름")
+    void getToday_겹치는_약만_용량표시() {
+        when(medicationRepository.findByWardIdAndDeletedAtIsNullOrderByDoseTimeAscIdAsc(WARD_ID))
+                .thenReturn(List.of(
+                        medication(1L, WARD_ID, DIABEX_500, LocalTime.of(8, 0)),
+                        medication(2L, WARD_ID, DIABEX_850, LocalTime.of(19, 0)),
+                        medication(3L, WARD_ID, "아스피린장용정100mg", LocalTime.of(8, 0))));
+        when(intakeRepository.findByMedicationIdInAndDoseDate(any(), any())).thenReturn(List.of());
+
+        TodayMedicationResponse response = wardMedicationService.getToday(WARD_ID);
+
+        assertThat(response.medications()).extracting(MedicationItem::displayName)
+                .containsExactly("다이아벡스정(500mg)", "다이아벡스정(850mg)", "아스피린장용정");
+        assertThat(response.medications()).extracting(MedicationItem::name)
+                .containsExactly(DIABEX_500, DIABEX_850, "아스피린장용정100mg");
+    }
+
+    @Test
+    @DisplayName("복용 체크 응답도 오늘 목록과 같은 표시 이름 - FE가 응답으로 목록 항목을 바꿔도 이름이 그대로다")
+    void markTaken_응답도_목록기준_표시이름() {
+        LocalDate today = MedicationClock.today();
+        Medication target = medication(1L, WARD_ID, DIABEX_500, LocalTime.of(8, 0));
+        when(medicationRepository.findByIdForUpdate(1L)).thenReturn(Optional.of(target));
+        when(intakeRepository.findByMedicationIdAndDoseDate(1L, today)).thenReturn(Optional.empty());
+        when(intakeRepository.save(any(MedicationIntake.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        when(medicationRepository.findByWardIdAndDeletedAtIsNullOrderByDoseTimeAscIdAsc(WARD_ID))
+                .thenReturn(List.of(target, medication(2L, WARD_ID, DIABEX_850, LocalTime.of(19, 0))));
+
+        assertThat(wardMedicationService.markTaken(WARD_ID, 1L).displayName()).isEqualTo("다이아벡스정(500mg)");
+        assertThat(wardMedicationService.markBatch(WARD_ID, List.of(1L), true))
+                .extracting(MedicationItem::displayName).containsExactly("다이아벡스정(500mg)");
+    }
+
     private static Medication medication(Long id, String wardId, String name, LocalTime doseTime) {
         Medication medication = Medication.builder()
                 .wardId(wardId)

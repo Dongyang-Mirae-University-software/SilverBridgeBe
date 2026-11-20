@@ -91,9 +91,13 @@ public class GuardianMedicationService {
 
         return wardIds.stream()
                 .map(wardId -> {
-                    List<MedicationItem> items = byWard.getOrDefault(wardId, List.of()).stream()
-                            .map(medication -> MedicationItem.of(medication, intakes.get(medication.getId())))
-                            .toList();
+                    List<Medication> wardMedications = byWard.getOrDefault(wardId, List.of());
+                    // 짧은 이름이 겹치는 약만 "이름(용량)" - 피보호자 오늘 약 화면과 같은 기준(2026-11-20)
+                    List<MedicationItem> items = MedicationItem.withListDisplayNames(
+                            wardMedications.stream()
+                                    .map(medication -> MedicationItem.of(medication, intakes.get(medication.getId())))
+                                    .toList(),
+                            wardMedications.stream().map(Medication::getName).toList());
                     User ward = wards.get(wardId);
                     return WardMedicationSummary.of(
                             wardId,
