@@ -3368,3 +3368,4 @@ AI 챗 집계 점검 L-1에서 남겨 둔 공용 `GlobalExceptionHandler`의 `e.
 - FE #294(`c944d7c`): 어르신·보호자 복약 화면이 BE `displayName`(없으면 `name`) 표시, 원본은 title, 수정 창 입력값 원본, FE 자체 축약 제거(11/16 L-1 대체). 단위 712·브라우저 770 통과·build 통과, gosky FE dev 반영·실측.
 - 기능 점검(B) PASS - 🔴 0 · 🟠 0 · 🟡 0 · 🟢 3, 바꿔 보기 9/9 검출. 문서 `(2026-11-20) audit-fe-294-medication-display-name.md`.
 - 점검 잔여 전부 반영: FE #295(null 필드 기본값·활동 실패 안내·`@stomp/stompjs` 사전 묶음·히트맵 최근 주 먼저) + #296(실측에서 찾은 요일 열 밀림 → sticky). 브라우저 773건 전체 통과, gosky FE dev `e4835463` 반영·375px 실측 정상.
+- BE #501 점검 대장 갱신: M-1(탈퇴 시 AI 게임 기록 삭제)은 AI #323·BE #502 gosky 배포 확인(실제 삭제 실측은 안 함, 상태 ⚠️ 유지), L-2는 확인으로 닫음.

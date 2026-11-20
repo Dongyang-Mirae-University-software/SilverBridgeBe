@@ -78,9 +78,9 @@ feat: 탈퇴 시 AI 게임 기록 삭제 요청 추가 (게임 중계 점검 M-1
 
 | 이슈 | 조치 |
 |---|---|
-| 🟡 M-1 | ✅ 코드 반영 - AI #323(`bac824bc`) `DELETE /api/v1/games/records`(항상 키 필요, userId 필수) + BE `GameRecordPurgeListener`(탈퇴 AFTER_COMMIT, `aiPurgeExecutor`, best-effort). 보관 기간 정리는 두지 않음(D-2에 기록). **배포 대기**: gosky AI·BE 모두 SSH 호스트 키 문제로 미반영(AI는 재시작 필요 - 배포 때 확인) |
+| 🟡 M-1 | ✅ 코드 반영 - AI #323(`bac824bc`) `DELETE /api/v1/games/records`(항상 키 필요, userId 필수) + BE `GameRecordPurgeListener`(탈퇴 AFTER_COMMIT, `aiPurgeExecutor`, best-effort). 보관 기간 정리는 두지 않음(D-2에 기록). **gosky 배포됨(11/20)**: AI `bac824b`(컨테이너 09:33 KST 재기동), BE `09fb5fee`부터 #502 포함(지금 `0761cb37`). **탈퇴 시 실제 삭제는 실측 안 함** - 시험 계정 탈퇴(데이터 변경)가 필요해 하지 않았다 |
 | 🟢 L-1 | 수용 유지 - policy-game "수용 한계"에 명시(삭제도 같은 번호를 쓰므로 함께 적음) |
-| 🟢 L-2 | 대기 - gosky 접속 해소 후 실측 |
+| 🟢 L-2 | ✅ 확인(11/20) - gosky 보호자 시험 계정 progress·activity 200(`userId` 없음)·미연결 wardId 403 `GAME_NOT_AUTHORIZED`, FE #293 점검에서 화면까지 실측 |
 | 🟢 L-3 | ✅ `GuardianGameControllerHttpTest`에 공용 처리기를 붙여 403·503·400 본문 고정, Swagger에 `wardId` 누락·`days` 숫자 아님 400 기재 |
 | 🟢 L-4 | 참고 유지(담당 밖) |
 
