@@ -23,20 +23,20 @@ import java.util.regex.Pattern;
  *   <li>끝쪽 용량은 단위(밀리그램·mg·%·IU·mL 등, {@code /5mL} 같은 농도 포함)가 있거나 앞이 제형어일 때만 뗀다.
  *       이름 가운데 숫자("타세놀8시간이알서방정")와 끝이 단위 없는 숫자인 이름("비타민D3")은 그대로다.</li>
  *   <li>같은 피보호자의 약 중 짧은 이름이 겹치면 그 약들만 "짧은 이름(용량)"이다 - {@link #ofAll}
- *       (2026-11-20 사용자 결정, 같은 날의 "겹쳐도 늘 짧은 이름"을 번복). 용량 단위는 약자로 통일한다(mg·mcg·g·mL·L·IU·%).</li>
+ *       (2026-11-20 사용자 결정, 같은 날의 "겹쳐도 늘 짧은 이름"을 번복). 용량 단위는 약자로 통일한다(mg·mcg·g·mL·L·IU·U·%).</li>
  *   <li>결과가 비면 원본을 돌려준다.</li>
  * </ul>
  */
 public final class MedicationDisplayName {
 
-    /** 용량 단위 → 약자. 겹친 약의 "(용량)"에만 쓴다. "단위"는 원문 그대로 둔다. */
+    /** 용량 단위 → 약자. 겹친 약의 "(용량)"에만 쓴다. "단위"도 U로(2026-11-20 사용자 결정 - 영어 약자 통일, 오독 위험은 알고 결정). */
     private static final Map<String, String> UNIT_ABBREVIATION = Map.ofEntries(
             Map.entry("밀리그램", "mg"), Map.entry("밀리그람", "mg"), Map.entry("mg", "mg"), Map.entry("MG", "mg"), Map.entry("㎎", "mg"),
             Map.entry("마이크로그램", "mcg"), Map.entry("마이크로그람", "mcg"), Map.entry("mcg", "mcg"), Map.entry("μg", "mcg"), Map.entry("㎍", "mcg"),
             Map.entry("그램", "g"), Map.entry("그람", "g"), Map.entry("g", "g"),
             Map.entry("밀리리터", "mL"), Map.entry("mL", "mL"), Map.entry("ml", "mL"), Map.entry("ML", "mL"), Map.entry("㎖", "mL"),
             Map.entry("리터", "L"), Map.entry("L", "L"),
-            Map.entry("국제단위", "IU"), Map.entry("IU", "IU"), Map.entry("단위", "단위"),
+            Map.entry("국제단위", "IU"), Map.entry("IU", "IU"), Map.entry("단위", "U"),
             Map.entry("퍼센트", "%"), Map.entry("%", "%"));
 
     private static final String UNIT = "(?:밀리그램|밀리그람|마이크로그램|마이크로그람|그램|그람|밀리리터|리터|국제단위|단위|퍼센트"

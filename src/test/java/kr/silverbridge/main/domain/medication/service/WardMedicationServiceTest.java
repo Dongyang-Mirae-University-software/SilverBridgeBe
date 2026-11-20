@@ -344,6 +344,23 @@ class WardMedicationServiceTest {
                 .extracting(MedicationItem::displayName).containsExactly("다이아벡스정(500mg)");
     }
 
+    @Test
+    @DisplayName("복용 체크 해제 응답도 오늘 목록과 같은 표시 이름 - FE가 해제 응답으로도 목록 항목을 바꾼다 (#505 점검 M-1)")
+    void unmarkTaken_응답도_목록기준_표시이름() {
+        LocalDate today = MedicationClock.today();
+        Medication target = medication(1L, WARD_ID, DIABEX_500, LocalTime.of(8, 0));
+        MedicationIntake intake = MedicationIntake.of(1L, today, OffsetDateTime.now());
+        when(medicationRepository.findByIdForUpdate(1L)).thenReturn(Optional.of(target));
+        when(intakeRepository.findByMedicationIdAndDoseDate(1L, today)).thenReturn(Optional.of(intake));
+        when(medicationRepository.findByWardIdAndDeletedAtIsNullOrderByDoseTimeAscIdAsc(WARD_ID))
+                .thenReturn(List.of(target, medication(2L, WARD_ID, DIABEX_850, LocalTime.of(19, 0))));
+
+        MedicationItem item = wardMedicationService.unmarkTaken(WARD_ID, 1L);
+
+        assertThat(item.taken()).isFalse();
+        assertThat(item.displayName()).isEqualTo("다이아벡스정(500mg)");
+    }
+
     private static Medication medication(Long id, String wardId, String name, LocalTime doseTime) {
         Medication medication = Medication.builder()
                 .wardId(wardId)
