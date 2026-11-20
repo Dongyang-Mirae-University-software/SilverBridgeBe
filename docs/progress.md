@@ -4,6 +4,10 @@
 
 ---
 
+### [2026-11-20] 이메일 알림 HTML 본문·보낸 사람 이름 (BE)
+- 텍스트뿐이던 이메일 알림을 텍스트 + HTML(multipart/alternative)로 바꾸고 보낸 사람을 `"실버브릿지" <계정 주소>`로(`notification.email.from-name`, `.env` 수정 없음). HTML은 띠·제목·본문·꼬리말, 인라인 스타일만, 외부 자원 없음, 동적 값 이스케이프. 피보호자 알림은 제목 `[실버브릿지] 실버브릿지` 중복을 `실버브릿지`로(사용자 결정). 비밀번호 재설정 메일은 그대로.
+- 허용 종류·긴급 제외·가상 이메일·시간 제한·사유 코드·디스패처 무변경. build 2872건 통과, 360px 렌더 확인. 상세 `(2026-11-20) feature-email-notification-html.md`.
+
 ### [2026-11-20] 영향 범위 점검(C) - BE #507·FE #312 챗봇 109 SOS 경로 `CHATBOT_109` - PASS (🟡 1·🟢 2)
 - BE·FE 사용처 27곳 FAIL 0: 이벤트에 경로가 없어 알림·쿨다운(피보호자 단위)·정지 수신자 차단이 경로와 무관, fail-open은 `/api/ward/sos` 정확 일치 그대로, `toCounts` default 없는 switch·`Counts.all`에 109 포함, FE `Record<SosTriggerType>` 표시 맵. gosky는 BE(18:34)가 FE(18:38)보다 먼저 기동.
 - 🟡 M-1 모르는 `triggerType`이면 400으로 SOS 자체가 버려짐(배포 순서에만 의존, 결정 필요) · 🟢 L-1 `allowableValues` 하드코딩 동기화 테스트 없음 · 🟢 L-2 FE 109 탭 테스트·배지 등호 나열. 정책 질문: 109 알림 문구를 일반 SOS와 같게 둘지. 상세 `(2026-11-20) audit-impact-chatbot-109.md`.

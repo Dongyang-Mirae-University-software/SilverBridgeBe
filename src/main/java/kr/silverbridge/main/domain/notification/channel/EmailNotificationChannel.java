@@ -1,13 +1,18 @@
 package kr.silverbridge.main.domain.notification.channel;
 
+import jakarta.mail.MessagingException;
+import jakarta.mail.internet.MimeMessage;
+import java.io.UnsupportedEncodingException;
+import java.nio.charset.StandardCharsets;
 import java.util.regex.Pattern;
 import kr.silverbridge.main.domain.notification.dispatch.NotificationType;
-import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.mail.MailException;
-import org.springframework.mail.SimpleMailMessage;
 import org.springframework.mail.javamail.JavaMailSender;
+import org.springframework.mail.javamail.MimeMessageHelper;
 import org.springframework.stereotype.Component;
 
 /**
@@ -21,10 +26,14 @@ import org.springframework.stereotype.Component;
  * 대상 아님으로 건너뛴다(사용자 설정값은 그대로 보존).</p>
  *
  * <p>로그·이력에는 수신 주소·본문·예외 메시지를 남기지 않는다(예외 클래스명만).</p>
+ *
+ * <p><b>형식(2026-11-20)</b>: multipart/alternative로 텍스트 본문(기존 내용 그대로)과 HTML 본문
+ * ({@link EmailNotificationHtml})을 함께 보낸다. 보낸 사람은 {@code "실버브릿지" <spring.mail.username>}
+ * (표시 이름 {@code notification.email.from-name}). 제목이 서비스 이름과 같으면(피보호자 알림 제목
+ * {@link WardNotificationText#TITLE}) 접두어를 붙이지 않는다 - {@code [실버브릿지] 실버브릿지} 중복 방지.</p>
  */
 @Slf4j
 @Component
-@RequiredArgsConstructor
 @ConditionalOnProperty(name = "notification.email.enabled", havingValue = "true")
 public class EmailNotificationChannel implements NotificationChannel {
 
@@ -32,12 +41,27 @@ public class EmailNotificationChannel implements NotificationChannel {
     private static final Pattern VIRTUAL_KAKAO_EMAIL =
             Pattern.compile("^kakao_\\d+@kakao\\.com$", Pattern.CASE_INSENSITIVE);
 
-    static final String SUBJECT_PREFIX = "[실버브릿지] ";
-    static final String FOOTER = "\n\n- 이 메일은 실버브릿지 알림 설정에서 이메일 알림을 켜셔서 발송되었습니다.\n"
-            + "- 알림 설정에서 이메일 알림을 끌 수 있습니다.";
+    static final String SERVICE_NAME = "실버브릿지";
+    static final String SUBJECT_PREFIX = "[" + SERVICE_NAME + "] ";
+    static final String FOOTER_LINE_1 = "이 메일은 실버브릿지 알림 설정에서 이메일 알림을 켜셔서 발송되었습니다.";
+    static final String FOOTER_LINE_2 = "알림 설정에서 이메일 알림을 끌 수 있습니다.";
+    static final String FOOTER = "\n\n- " + FOOTER_LINE_1 + "\n- " + FOOTER_LINE_2;
 
     private final JavaMailSender mailSender;
     private final EmailSendExecutor sendExecutor;
+    /** 보낸 사람 주소(SMTP 인증 계정). 비어 있으면 From을 지정하지 않는다(SMTP 서버가 채운다 - 기존 동작). */
+    private final String fromAddress;
+    private final String fromName;
+
+    @Autowired
+    public EmailNotificationChannel(JavaMailSender mailSender, EmailSendExecutor sendExecutor,
+                                    @Value("${spring.mail.username:}") String fromAddress,
+                                    @Value("${notification.email.from-name:" + SERVICE_NAME + "}") String fromName) {
+        this.mailSender = mailSender;
+        this.sendExecutor = sendExecutor;
+        this.fromAddress = fromAddress == null ? "" : fromAddress.strip();
+        this.fromName = fromName == null || fromName.isBlank() ? SERVICE_NAME : fromName.strip();
+    }
 
     @Override
     public NotificationChannelType getType() {
@@ -58,10 +82,14 @@ public class EmailNotificationChannel implements NotificationChannel {
             return ChannelResult.notApplicable();
         }
 
-        SimpleMailMessage message = new SimpleMailMessage();
-        message.setTo(to.trim());
-        message.setSubject(SUBJECT_PREFIX + subject(content));
-        message.setText(text(content));
+        MimeMessage message;
+        try {
+            message = buildMessage(to.trim(), content);
+        } catch (MessagingException | UnsupportedEncodingException | MailException e) {
+            // 메일 객체를 만들지 못해도 발송 흐름을 막지 않고 실패로 기록한다. 예외 메시지에 주소가 섞일 수 있어 클래스명만.
+            log.warn("이메일 알림 작성 실패: userId={}, exception={}", recipient.userId(), e.getClass().getSimpleName());
+            return ChannelResult.failed(ChannelFailureReason.PROVIDER_ERROR);
+        }
         try {
             // 호출 전체 시간 제한 안에서 실행(점검 M-1). 초과·풀 포화는 통신 오류와 같게 실패 처리.
             boolean completed = sendExecutor.run(() -> mailSender.send(message));
@@ -73,9 +101,29 @@ public class EmailNotificationChannel implements NotificationChannel {
         }
     }
 
-    private static String subject(NotificationContent content) {
+    private MimeMessage buildMessage(String to, NotificationContent content)
+            throws MessagingException, UnsupportedEncodingException {
+        MimeMessage message = mailSender.createMimeMessage();
+        MimeMessageHelper helper = new MimeMessageHelper(message, true, StandardCharsets.UTF_8.name());
+        helper.setTo(to);
+        if (!fromAddress.isEmpty()) {
+            helper.setFrom(fromAddress, fromName);
+        }
+        String title = title(content);
+        helper.setSubject(subject(title));
+        helper.setText(text(content),
+                EmailNotificationHtml.render(SERVICE_NAME, title, content.body(), FOOTER_LINE_1, FOOTER_LINE_2));
+        return message;
+    }
+
+    private static String title(NotificationContent content) {
         String title = content.title();
         return title == null || title.isBlank() ? "알림" : title.strip();
+    }
+
+    /** 제목이 서비스 이름 그대로면(피보호자 알림) 접두어를 겹치지 않는다. */
+    static String subject(String title) {
+        return SERVICE_NAME.equals(title) ? title : SUBJECT_PREFIX + title;
     }
 
     private static String text(NotificationContent content) {
