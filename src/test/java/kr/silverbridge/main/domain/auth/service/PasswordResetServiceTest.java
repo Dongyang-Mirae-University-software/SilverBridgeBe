@@ -108,7 +108,10 @@ class PasswordResetServiceTest {
 
         passwordResetService.requestReset(passwordResetRequest(), IP);
 
-        verify(mailSender).send(any(SimpleMailMessage.class));
+        org.mockito.ArgumentCaptor<SimpleMailMessage> mail = org.mockito.ArgumentCaptor.forClass(SimpleMailMessage.class);
+        verify(mailSender).send(mail.capture());
+        // 서비스 이름은 CareAI(2026-11-20) - 제목을 고정한다(점검 L-1).
+        assertThat(mail.getValue().getSubject()).isEqualTo("[CareAI] 비밀번호 재설정 인증번호");
         verify(valueOperations).set(anyString(), anyString(), anyLong(), any());
     }
 
@@ -189,7 +192,9 @@ class PasswordResetServiceTest {
 
         passwordResetService.requestResetBySms(smsSendRequest(), IP);
 
-        verify(smsVerificationService).sendCode(eq(PHONE), any(), anyString());
+        // 서비스 이름은 CareAI(2026-11-20, "실버브릿지"는 팀 이름) - 문구를 고정한다(점검 L-1).
+        verify(smsVerificationService).sendCode(eq(PHONE), any(),
+                eq("[CareAI] 비밀번호 재설정 인증번호: %s\n유효 시간: 5분"));
     }
 
     // ─── confirmReset — A-M1 enumeration 차단 (정책 변경 후에도 방어 심층 유지) ──────────

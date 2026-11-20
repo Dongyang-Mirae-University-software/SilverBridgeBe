@@ -1,7 +1,9 @@
 package kr.silverbridge.main.domain.notification.channel;
 
 import jakarta.mail.MessagingException;
+import jakarta.mail.internet.MimeBodyPart;
 import jakarta.mail.internet.MimeMessage;
+import jakarta.mail.internet.MimeMultipart;
 import java.io.UnsupportedEncodingException;
 import java.nio.charset.StandardCharsets;
 import java.util.regex.Pattern;
@@ -40,6 +42,8 @@ public class EmailNotificationChannel implements NotificationChannel {
     /** 카카오가 이메일을 주지 않을 때 서버가 부여하는 가상 이메일(KakaoAuthService). 실제 메일함이 없다. */
     private static final Pattern VIRTUAL_KAKAO_EMAIL =
             Pattern.compile("^kakao_\\d+@kakao\\.com$", Pattern.CASE_INSENSITIVE);
+
+    private static final String UTF_8 = StandardCharsets.UTF_8.name();
 
     static final String SERVICE_NAME = "CareAI";
     static final String SUBJECT_PREFIX = "[" + SERVICE_NAME + "] ";
@@ -104,15 +108,26 @@ public class EmailNotificationChannel implements NotificationChannel {
     private MimeMessage buildMessage(String to, NotificationContent content)
             throws MessagingException, UnsupportedEncodingException {
         MimeMessage message = mailSender.createMimeMessage();
-        MimeMessageHelper helper = new MimeMessageHelper(message, true, StandardCharsets.UTF_8.name());
+        // 머리글만 helper로 쓰고(multipart 아님), 본문은 최상위를 multipart/alternative로 직접 만든다(점검 L-3).
+        // helper의 multipart 모드는 mixed > related > alternative로 감싸, 일부 메일 앱이 첨부 표시를 띄운다.
+        MimeMessageHelper helper = new MimeMessageHelper(message, false, UTF_8);
         helper.setTo(to);
         if (!fromAddress.isEmpty()) {
             helper.setFrom(fromAddress, fromName);
         }
         String title = title(content);
         helper.setSubject(subject(title));
-        helper.setText(text(content),
-                EmailNotificationHtml.render(SERVICE_NAME, title, content.body(), FOOTER_LINE_1, FOOTER_LINE_2));
+
+        MimeBodyPart textPart = new MimeBodyPart();
+        textPart.setText(text(content), UTF_8, "plain");
+        MimeBodyPart htmlPart = new MimeBodyPart();
+        htmlPart.setText(EmailNotificationHtml.render(SERVICE_NAME, title, content.body(), FOOTER_LINE_1, FOOTER_LINE_2),
+                UTF_8, "html");
+        // 순서가 뜻이다: 메일 앱은 마지막(가장 풍부한) 본문을 고르고, HTML을 못 열면 앞의 텍스트를 보여 준다.
+        MimeMultipart alternative = new MimeMultipart("alternative");
+        alternative.addBodyPart(textPart);
+        alternative.addBodyPart(htmlPart);
+        message.setContent(alternative);
         return message;
     }
 
