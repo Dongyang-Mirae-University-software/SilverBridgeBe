@@ -5,7 +5,7 @@
 ---
 
 ### [2026-11-21] 이메일 알림 점검 조치 - L-1~L-3 (BE)
-- L-1 비밀번호 재설정 문자·메일 제목 `[CareAI]` 테스트 고정 · L-2 제목 CRLF 헤더 끼워 넣기 방지 테스트 · L-3 메일 최상위를 multipart/alternative로 직접 구성(mixed·related 제거, 첨부 표시 방지). M-1은 FE PR. build 2873건 통과. 상세 `(2026-11-21) audit-email-notification-html.md` "조치".
+- L-1 비밀번호 재설정 문자·메일 제목 `[CareAI]` 테스트 고정 · L-2 제목 CRLF 헤더 끼워 넣기 방지 테스트 · L-3 메일 최상위를 multipart/alternative로 직접 구성(mixed·related 제거, 첨부 표시 방지). M-1은 FE #318(manifest·공유 문구 CareAI, gosky FE dev 반영). BE #511 `023a4144` 두 서버 반영, build 2873건 통과. 상세 `(2026-11-21) audit-email-notification-html.md` "조치".
 
 ### [2026-11-21] 기능 점검(B) - BE #509·#510 이메일 알림 HTML·서비스 이름 CareAI - PASS (🟡 1·🟢 4)
 - 이스케이프·헤더 끼워 넣기(angus-mail로 직접 시험, Bcc 줄 생기지 않음)·From 인코딩·로그·외부 자원 없음·실패 처리·문자 90바이트 PASS. BE 남은 옛 이름은 Swagger 제목(의도)뿐. 실제 발송은 시험 주소 `@test.com`이라 미확인.
