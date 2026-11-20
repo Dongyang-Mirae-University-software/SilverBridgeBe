@@ -44,6 +44,7 @@ public class GuardianGameController {
                     """)
     @ApiResponses({
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "진행 요약 반환"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "wardId 누락", content = @Content),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "인증 토큰 없음 또는 만료", content = @Content),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "보호자 권한 필요 / GAME_NOT_AUTHORIZED(연결되지 않은 피보호자)", content = @Content),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "503", description = "GAME_UNAVAILABLE(게임 서버 응답 없음)", content = @Content)
@@ -66,7 +67,7 @@ public class GuardianGameController {
                     """)
     @ApiResponses({
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "활동량 반환"),
-            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "GAME_INVALID_DAYS", content = @Content),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "GAME_INVALID_DAYS(1~366 밖) / wardId 누락 / days가 숫자 아님", content = @Content),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "인증 토큰 없음 또는 만료", content = @Content),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "보호자 권한 필요 / GAME_NOT_AUTHORIZED(연결되지 않은 피보호자)", content = @Content),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "503", description = "GAME_UNAVAILABLE(게임 서버 응답 없음)", content = @Content)

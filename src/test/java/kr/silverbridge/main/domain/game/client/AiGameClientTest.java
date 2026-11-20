@@ -34,6 +34,8 @@ class AiGameClientTest {
     private final AtomicReference<String> receivedQuery = new AtomicReference<>();
     private final AtomicBoolean redirectFollowed = new AtomicBoolean();
     private volatile Handler progressHandler;
+    private volatile Handler recordsHandler;
+    private final AtomicReference<String> receivedMethod = new AtomicReference<>();
     private GameRelayProperties properties;
     private AiGameClient client;
 
@@ -52,6 +54,11 @@ class AiGameClientTest {
             record(ex);
             json(ex, 200, "{\"success\":true,\"data\":{\"userId\":1,\"days\":30,\"activity\":[]}}");
         });
+        server.createContext("/api/v1/games/records", ex -> {
+            record(ex);
+            receivedMethod.set(ex.getRequestMethod());
+            recordsHandler.handle(ex);
+        });
         server.createContext("/elsewhere", ex -> {
             redirectFollowed.set(true);
             json(ex, 200, "{\"success\":true,\"data\":{}}");
@@ -64,7 +71,7 @@ class AiGameClientTest {
         properties.setReadTimeout(Duration.ofSeconds(2));
         properties.setCallTimeout(Duration.ofSeconds(1));
         client = new AiGameClient(properties, new ObjectMapper());
-        progressHandler = ex -> json(ex, 200, "{\"success\":true,\"data\":{\"userId\":1455350745,\"games\":[]}}");
+        progressHandler = ex -> json(ex, 200, "{\"success\":true,\"data\":{\"userId\":1455350745,\"games\":[]}}");        recordsHandler = ex -> json(ex, 200, "{\"success\":true,\"data\":{\"progressDeleted\":2,\"attemptsDeleted\":5}}");
     }
 
     @AfterEach
@@ -176,5 +183,25 @@ class AiGameClientTest {
         properties.setApiKey("");
         assertUnavailable(() -> client.fetchProgress(1));
         assertThat(receivedKey.get()).isNull();
+    }
+
+    @Test
+    @DisplayName("기록 삭제: DELETE + 키 헤더 + userId 쿼리, 2xx면 성공")
+    void deleteRecords() {
+        client.deleteRecords(1455350745L);
+
+        assertThat(receivedMethod.get()).isEqualTo("DELETE");
+        assertThat(receivedKey.get()).isEqualTo(KEY);
+        assertThat(receivedQuery.get()).isEqualTo("userId=1455350745");
+    }
+
+    @Test
+    @DisplayName("기록 삭제: 옛 AI(404)·5xx 는 503 GAME_UNAVAILABLE (탈퇴 리스너가 WARN 으로 삼킨다)")
+    void deleteRecordsFailure() {
+        recordsHandler = ex -> json(ex, 404, "{\"detail\":\"Not Found\"}");
+        assertUnavailable(() -> client.deleteRecords(1));
+
+        recordsHandler = ex -> json(ex, 500, "{}");
+        assertUnavailable(() -> client.deleteRecords(1));
     }
 }

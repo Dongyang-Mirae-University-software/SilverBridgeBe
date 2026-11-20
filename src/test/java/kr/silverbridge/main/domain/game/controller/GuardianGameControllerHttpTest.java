@@ -3,6 +3,9 @@ package kr.silverbridge.main.domain.game.controller;
 import kr.silverbridge.main.domain.game.dto.GuardianGameActivityResponse;
 import kr.silverbridge.main.domain.game.dto.GuardianGameProgressResponse;
 import kr.silverbridge.main.domain.game.service.GuardianGameService;
+import kr.silverbridge.main.global.exception.CustomException;
+import kr.silverbridge.main.global.exception.ErrorCode;
+import kr.silverbridge.main.global.exception.GlobalExceptionHandler;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -18,6 +21,7 @@ import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 
 import java.util.List;
 
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
@@ -44,6 +48,7 @@ class GuardianGameControllerHttpTest {
     private MockMvc mvc() {
         return MockMvcBuilders.standaloneSetup(new GuardianGameController(service))
                 .setCustomArgumentResolvers(new AuthenticationPrincipalArgumentResolver())
+                .setControllerAdvice(new GlobalExceptionHandler())
                 .build();
     }
 
@@ -97,5 +102,42 @@ class GuardianGameControllerHttpTest {
         mvc().perform(get("/api/guardian/game/activity").param("wardId", "aB3x9Z"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.days").value(182));
+    }
+
+    @Test
+    @DisplayName("오류 본문(공용 처리기): 연결 안 된 피보호자 403 GAME_NOT_AUTHORIZED")
+    void notAuthorizedBody() throws Exception {
+        when(service.getProgress("GRD001", "zzzzzz")).thenThrow(new CustomException(ErrorCode.GAME_NOT_AUTHORIZED));
+
+        mvc().perform(get("/api/guardian/game/progress").param("wardId", "zzzzzz"))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.success").value(false))
+                .andExpect(jsonPath("$.code").value("GAME_NOT_AUTHORIZED"));
+    }
+
+    @Test
+    @DisplayName("오류 본문: AI 장애 503 GAME_UNAVAILABLE, days 범위 밖 400 GAME_INVALID_DAYS")
+    void unavailableAndInvalidDaysBody() throws Exception {
+        when(service.getProgress("GRD001", "aB3x9Z")).thenThrow(new CustomException(ErrorCode.GAME_UNAVAILABLE));
+        when(service.getActivity("GRD001", "aB3x9Z", 400)).thenThrow(new CustomException(ErrorCode.GAME_INVALID_DAYS));
+
+        mvc().perform(get("/api/guardian/game/progress").param("wardId", "aB3x9Z"))
+                .andExpect(status().isServiceUnavailable())
+                .andExpect(jsonPath("$.code").value("GAME_UNAVAILABLE"));
+        mvc().perform(get("/api/guardian/game/activity").param("wardId", "aB3x9Z").param("days", "400"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("GAME_INVALID_DAYS"));
+    }
+
+    @Test
+    @DisplayName("wardId 누락·days 숫자 아님 → 400, 서비스 미호출")
+    void badParams() throws Exception {
+        mvc().perform(get("/api/guardian/game/progress"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.success").value(false));
+        mvc().perform(get("/api/guardian/game/activity").param("wardId", "aB3x9Z").param("days", "abc"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.success").value(false));
+        verifyNoInteractions(service);
     }
 }
