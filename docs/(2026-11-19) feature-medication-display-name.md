@@ -55,6 +55,7 @@
 
 - 화면 표시는 `displayName`, 수정 창의 입력 기본값은 `name`(원본)을 쓴다 - 수정 창에 짧은 이름을 넣고 저장하면 원본이 사라진다.
 - OCR 응답(`MedicationOcrResponse`)은 바뀌지 않았다.
+- **FE 반영 (2026-11-20, FE #294 `c944d7c`, gosky FE dev 실측)**: 어르신 오늘 먹을 약·보호자 복약 카드가 `displayName`(없으면 `name`)을 표시하고 원본은 `title`, 수정 창 입력값은 원본, OCR 확인 화면 무변경. FE 자체 축약(`wardMedicationDisplayName(s)`)은 지웠다 - 줄이는 규칙은 BE 한 곳. 점검 `(2026-11-20) audit-fe-294-medication-display-name.md`(PASS).
 
 ## 바뀌지 않은 것
 

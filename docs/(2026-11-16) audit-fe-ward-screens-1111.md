@@ -55,3 +55,5 @@ FE #272 `603de3d`(gosky FE dev 반영, 받은 스크립트에서 새 코드 확�
 ## 종합
 
 **PASS** (Low 2건). FE 수정은 FE 저장소 PR로 진행한다.
+
+> **2026-11-20 대체**: L-1 조치(`wardMedicationDisplayNames` - 겹치면 원래 이름)는 FE #294에서 지웠다. 줄이는 규칙이 BE `displayName`(#503) 한 곳으로 옮겨졌고, "용량이 겹쳐도 늘 짧은 이름"이 사용자 결정이다. 점검 `(2026-11-20) audit-fe-294-medication-display-name.md` L-1.
