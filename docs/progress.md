@@ -4,6 +4,10 @@
 
 ---
 
+### [2026-11-20] 게임 중계 점검 조치 - 탈퇴 시 AI 게임 기록 삭제(M-1)·오류 본문 테스트(L-3)
+- AI #323(`bac824bc`): `DELETE /api/v1/games/records?userId=`(항상 키 필요). BE: `GameRecordPurgeListener`가 탈퇴 AFTER_COMMIT에 게임 번호로 삭제 요청(best-effort, `aiPurgeExecutor`). 보관 기간 정리는 두지 않음(D-2).
+- L-3: HTTP 테스트에 공용 처리기 연결(403·503·400 본문), Swagger 400 기재. BE 2767건·AI 38건 통과. gosky AI·BE는 SSH 호스트 키 문제로 배포 대기.
+
 ### [2026-11-19] 기능 점검(B) - BE #501 보호자 게임 기록 중계 - PASS (🟡 1·🟢 4)
 - IDOR·역할·입력·AI 키·시간 제한·로그·응답 허용 목록 PASS. vkcs `7ddfdddc` 경로 확인(관리자 403·토큰 없음 401), gosky는 SSH 호스트 키 불일치로 미배포.
 - 🟡 M-1: 탈퇴 피보호자의 AI 게임 기록이 영구히 남는다(AI에 삭제 경로 없음, BE 탈퇴 삭제는 챗 기록만) - AI 삭제 API 선행 후 BE 탈퇴 리스너에 추가 제안. 상세 `(2026-11-19) audit-guardian-game-relay.md`.

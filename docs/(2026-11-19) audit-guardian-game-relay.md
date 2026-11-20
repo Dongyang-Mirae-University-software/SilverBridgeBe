@@ -73,3 +73,15 @@
 ```
 feat: 탈퇴 시 AI 게임 기록 삭제 요청 추가 (게임 중계 점검 M-1)
 ```
+
+## 8. 조치 결과 (2026-11-20, 사용자 "전부 반영")
+
+| 이슈 | 조치 |
+|---|---|
+| 🟡 M-1 | ✅ 코드 반영 - AI #323(`bac824bc`) `DELETE /api/v1/games/records`(항상 키 필요, userId 필수) + BE `GameRecordPurgeListener`(탈퇴 AFTER_COMMIT, `aiPurgeExecutor`, best-effort). 보관 기간 정리는 두지 않음(D-2에 기록). **배포 대기**: gosky AI·BE 모두 SSH 호스트 키 문제로 미반영(AI는 재시작 필요 - 배포 때 확인) |
+| 🟢 L-1 | 수용 유지 - policy-game "수용 한계"에 명시(삭제도 같은 번호를 쓰므로 함께 적음) |
+| 🟢 L-2 | 대기 - gosky 접속 해소 후 실측 |
+| 🟢 L-3 | ✅ `GuardianGameControllerHttpTest`에 공용 처리기를 붙여 403·503·400 본문 고정, Swagger에 `wardId` 누락·`days` 숫자 아님 400 기재 |
+| 🟢 L-4 | 참고 유지(담당 밖) |
+
+테스트: BE `./gradlew build` 2767건 통과(새 테스트: 리스너 3·클라이언트 삭제 2·HTTP 오류 본문 3, executor 배정 표 추가). AI `test_game_records_purge.py` 4 + 게임 서비스 7 + QA 후속 27 통과.
