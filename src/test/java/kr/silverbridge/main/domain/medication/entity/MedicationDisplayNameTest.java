@@ -6,7 +6,10 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
 import org.junit.jupiter.params.provider.ValueSource;
 
+import java.time.Duration;
+
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.junit.jupiter.api.Assertions.assertTimeoutPreemptively;
 
 /**
  * 약 표시 이름 규칙(2026-11-19). 표본은 AI 약 대조 목록(drug_names.txt, 42,744건)의 패턴별 실제 이름과
@@ -39,6 +42,9 @@ class MedicationDisplayNameTest {
             이트라졸캡슐(이트라코나졸)(수출용)                                 | 이트라졸캡슐
             나소프라정500/20                                                   | 나소프라정
             타이레놀 500mg                                                     | 타이레놀
+            타이레놀정500MG                                                    | 타이레놀정
+            다이아벡스정 500 밀리그램                                          | 다이아벡스정
+            아스피린 정 100mg                                                  | 아스피린 정
             """)
     void stripsDoseAndIngredient(String name, String expected) {
         assertThat(MedicationDisplayName.of(name)).isEqualTo(expected);
@@ -67,10 +73,51 @@ class MedicationDisplayNameTest {
             "다이아벡스정",
             "혈압약",
             "(주)창신의료용산소",
-            "나소프라정500/20m"
+            "나소프라정500/20m",
+            // 점검 L-3: 앞이 숫자인 용량은 떼지 않는다(원본 그대로 두는 안전한 쪽)
+            "오메가3 1000mg",
+            "비타민B12 500mcg",
+            // 끝이 용량·괄호 규칙에 맞지 않는 직접 입력
+            "타이레놀정500밀리그램 아침",
+            "철분제 (빈혈)",
+            "혈압약 아침 1알",
+            // 짝 없는 괄호
+            "정(abc",
+            "정)",
+            "(정)"
     })
     void keepsNamesThatAreNotLicensedForm(String name) {
         assertThat(MedicationDisplayName.of(name)).isEqualTo(name);
+    }
+
+    @ParameterizedTest(name = "{0} → {1}")
+    @DisplayName("받아들인 동작: 앞이 용량·제형어로 끝나면 직접 입력한 괄호 메모도 화면에서 빠진다(저장 값은 그대로, 사용자 결정 ③)")
+    @CsvSource(delimiter = '|', textBlock = """
+            타이레놀정(두통)          | 타이레놀정
+            마그네슘정(자기 전)        | 마그네슘정
+            루테인 20mg (눈 영양제)   | 루테인
+            비타민D 1000IU (아침)     | 비타민D
+            """)
+    void acceptedMemoLoss(String name, String expected) {
+        assertThat(MedicationDisplayName.of(name)).isEqualTo(expected);
+    }
+
+    @Test
+    @DisplayName("100자 최악 입력도 빠르게 끝난다 - 기하급수적 되돌림 방지(점검 L-1, 수정 뒤 한 건 최대 약 0.2ms)")
+    void worstCaseInputsFinishQuickly() {
+        String[] worst = {
+                "1".repeat(100), "1/".repeat(50), "1 ".repeat(50) + "x", "가" + "1,".repeat(49) + "x",
+                "(".repeat(50) + ")".repeat(50), "정" + "()".repeat(49), "1/ ".repeat(33) + "x",
+                "가" + "1 /".repeat(33) + "q"
+        };
+
+        assertTimeoutPreemptively(Duration.ofSeconds(3), () -> {
+            for (int i = 0; i < 200; i++) {
+                for (String name : worst) {
+                    MedicationDisplayName.of(name);
+                }
+            }
+        });
     }
 
     @ParameterizedTest

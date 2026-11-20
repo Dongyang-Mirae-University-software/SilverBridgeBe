@@ -23,7 +23,8 @@ public final class MedicationDisplayName {
 
     private static final String UNIT = "(?:밀리그램|밀리그람|마이크로그램|마이크로그람|그램|그람|밀리리터|리터|국제단위|단위|퍼센트"
             + "|mg|MG|㎎|mcg|μg|㎍|mL|ml|ML|㎖|IU|g|L|%)";
-    private static final String NUMBER = "[0-9][0-9.,]*";
+    /** 소유 수량자(*+) - 숫자 덩어리를 되돌려 나눠 보지 않게 한다(점검 L-1: "가1,1,1,…x" 100자가 약 1ms 걸렸다). */
+    private static final String NUMBER = "[0-9][0-9.,]*+";
 
     /** 끝쪽 용량 덩어리: "500밀리그램", "500/5밀리그램", "125mg/5mL", "50밀리그램/밀리리터", 단위 없는 "500/20". */
     private static final Pattern TRAILING_DOSE = Pattern.compile(
