@@ -38,6 +38,7 @@ public class AiGameClient {
     private static final String API_KEY_HEADER = "X-API-Key";
     private static final String PROGRESS_PATH = "/api/v1/games/progress";
     private static final String ACTIVITY_PATH = "/api/v1/games/activity";
+    private static final String RECORDS_PATH = "/api/v1/games/records";
     /** 게임 목록·하루 단위 활동(최대 366일)이라 작다. 메모리에 올리므로 상한을 둔다. */
     static final int MAX_JSON_BYTES = 256 * 1024;
 
@@ -86,7 +87,37 @@ public class AiGameClient {
         return getData("activity", uri);
     }
 
+    /**
+     * 회원의 게임 기록 전체 삭제(회원 탈퇴 정리용, 2026-11-20 점검 M-1). AI의 {@code DELETE /api/v1/games/records?userId=}.
+     * 2xx면 성공(없는 회원도 0건 성공), 그 밖·시간 초과는 {@code GAME_UNAVAILABLE} - 호출부(탈퇴 리스너)가 삼킨다.
+     */
+    public void deleteRecords(long gameUserId) {
+        URI uri = UriComponentsBuilder.fromUriString(properties.getAiBaseUrl())
+                .path(RECORDS_PATH)
+                .queryParam("userId", gameUserId)
+                .build(true)
+                .toUri();
+        send("DELETE", "records-delete", uri);
+    }
+
     private JsonNode getData(String call, URI uri) {
+        byte[] body = send("GET", call, uri);
+        JsonNode data;
+        try {
+            data = objectMapper.readTree(body).path("data");
+        } catch (IOException e) {
+            log.warn("[GAME-RELAY] AI 응답 형식 오류: call={}, error={}", call, e.getClass().getSimpleName());
+            throw new CustomException(ErrorCode.GAME_UNAVAILABLE);
+        }
+        if (!data.isObject()) {
+            log.warn("[GAME-RELAY] AI 응답 형식 오류: call={}", call);
+            throw new CustomException(ErrorCode.GAME_UNAVAILABLE);
+        }
+        return data;
+    }
+
+    /** 요청을 보내고 2xx 본문을 크기 상한 안에서 읽는다. 실패는 모두 {@code GAME_UNAVAILABLE}. */
+    private byte[] send(String method, String call, URI uri) {
         if (!StringUtils.hasText(properties.getApiKey())) {
             log.warn("[GAME-RELAY] AI_API_KEY 미설정 - 게임 기록 중계 불가");
             throw new CustomException(ErrorCode.GAME_UNAVAILABLE);
@@ -97,6 +128,7 @@ public class AiGameClient {
         long deadlineNanos = System.nanoTime() + properties.getCallTimeout().toNanos();
         try {
             connection = open(uri);
+            connection.setRequestMethod(method);
             HttpURLConnection target = connection;
             deadline = deadlineExecutor.schedule(() -> {
                 timedOut.set(true);
@@ -110,16 +142,9 @@ public class AiGameClient {
                 log.warn("[GAME-RELAY] AI 응답 실패: call={}, status={}", call, status);
                 throw new CustomException(ErrorCode.GAME_UNAVAILABLE);
             }
-            byte[] body;
             try (InputStream in = connection.getInputStream()) {
-                body = readBounded(in, deadlineNanos, timedOut, call);
+                return readBounded(in, deadlineNanos, timedOut, call);
             }
-            JsonNode data = objectMapper.readTree(body).path("data");
-            if (!data.isObject()) {
-                log.warn("[GAME-RELAY] AI 응답 형식 오류: call={}", call);
-                throw new CustomException(ErrorCode.GAME_UNAVAILABLE);
-            }
-            return data;
         } catch (IOException e) {
             if (timedOut.get()) {
                 log.warn("[GAME-RELAY] AI 호출 시간 초과: call={}, limit={}", call, properties.getCallTimeout());
