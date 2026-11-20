@@ -42,7 +42,7 @@ class MedicationDisplayNameListTest {
     }
 
     @Test
-    @DisplayName("복합 용량·농도·마이크로그램·대문자·띄어쓴 단위도 약자로 통일하고 공백을 뺀다")
+    @DisplayName("복합 용량·농도·마이크로그램·단위(U)·대문자·띄어쓴 단위도 약자로 통일하고 공백을 뺀다")
     void unitAbbreviation() {
         assertThat(ofAll("로수탄메트정500/5밀리그램", "로수탄메트정1000/5밀리그램"))
                 .containsEntry("로수탄메트정500/5밀리그램", "로수탄메트정(500/5mg)")
@@ -53,6 +53,10 @@ class MedicationDisplayNameListTest {
         assertThat(ofAll("뉴로메틴캅셀500마이크로그람(메코발라민)", "뉴로메틴캅셀1500마이크로그람(메코발라민)"))
                 .containsEntry("뉴로메틴캅셀500마이크로그람(메코발라민)", "뉴로메틴캅셀(500mcg)")
                 .containsEntry("뉴로메틴캅셀1500마이크로그람(메코발라민)", "뉴로메틴캅셀(1500mcg)");
+        assertThat(ofAll("휴물린주200단위", "휴물린주100단위/밀리리터", "헤파린주25000국제단위"))
+                .containsEntry("휴물린주200단위", "휴물린주(200U)")
+                .containsEntry("휴물린주100단위/밀리리터", "휴물린주(100U/mL)")
+                .containsEntry("헤파린주25000국제단위", "헤파린주");
         assertThat(ofAll("가나정 500 MG", "가나정 1000 MG"))
                 .containsEntry("가나정 500 MG", "가나정(500mg)")
                 .containsEntry("가나정 1000 MG", "가나정(1000mg)");
