@@ -122,13 +122,38 @@ class EmailNotificationChannelTest {
     }
 
     @Test
-    @DisplayName("두 본문은 multipart/alternative로 묶인다(HTML을 못 여는 메일 앱은 텍스트를 보여 준다)")
+    @DisplayName("최상위가 multipart/alternative이고 텍스트 → HTML 순서다(mixed로 감싸지 않아 첨부 표시가 뜨지 않는다, 점검 L-3)")
     void send_alternative() throws Exception {
         channel.send(NotificationType.CONNECTION_REQUEST, recipient("guardian@example.com"), content);
 
         MimeMessage sent = sentMessage();
-        sent.saveChanges();
-        assertThat(containsMimeType(sent, "multipart/alternative")).isTrue();
+        assertThat(sent.isMimeType("multipart/alternative")).isTrue();
+        assertThat(containsMimeType(sent, "multipart/mixed")).isFalse();
+        assertThat(containsMimeType(sent, "multipart/related")).isFalse();
+        Multipart root = (Multipart) sent.getContent();
+        assertThat(root.getCount()).isEqualTo(2);
+        assertThat(root.getBodyPart(0).isMimeType("text/plain")).isTrue();
+        assertThat(root.getBodyPart(1).isMimeType("text/html")).isTrue();
+        assertThat(root.getBodyPart(1).getContentType()).containsIgnoringCase("charset=UTF-8");
+    }
+
+    @Test
+    @DisplayName("제목에 줄바꿈이 섞여도 별도 메일 헤더가 생기지 않는다(헤더 끼워 넣기 방지, 점검 L-2)")
+    void send_제목줄바꿈_헤더주입없음() throws Exception {
+        for (String title : new String[]{"abc\r\nBcc: evil@example.com", "오늘 복약 확인 · 홍\r\nBcc: evil@example.com님"}) {
+            org.mockito.Mockito.clearInvocations(mailSender);
+            channel.send(NotificationType.MEDICATION_MISSED, recipient("guardian@example.com"),
+                    NotificationContent.of(title, "본문", Map.of()));
+
+            MimeMessage sent = sentMessage();
+            java.io.ByteArrayOutputStream raw = new java.io.ByteArrayOutputStream();
+            sent.writeTo(raw);
+            assertThat(raw.toString(java.nio.charset.StandardCharsets.US_ASCII).split("\r\n"))
+                    .as("원문 헤더 줄: %s", title)
+                    .noneMatch(line -> line.regionMatches(true, 0, "Bcc:", 0, 4));
+            assertThat(sent.getRecipients(jakarta.mail.Message.RecipientType.BCC)).isNull();
+            assertThat(sent.getAllRecipients()).hasSize(1);
+        }
     }
 
     private static boolean containsMimeType(Part part, String type) throws MessagingException, IOException {

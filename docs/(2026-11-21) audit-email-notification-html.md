@@ -53,3 +53,15 @@
 - `test: 비밀번호 재설정 문구와 이메일 제목 헤더 끼워 넣기 방지를 테스트로 고정` (L-1·L-2)
 - `fix: 이메일 알림 최상위 MIME을 multipart/alternative로` (L-3, 실발송 확인 후 필요 시)
 - FE: `fix: 앱 이름과 가족 등록 공유 문구의 서비스 이름을 CareAI로` (M-1)
+
+## 조치 (2026-11-21, 사용자 지시 "전부 반영")
+
+| 이슈 | 조치 |
+|---|---|
+| M-1 | FE PR로 진행(앱 이름 `manifest.ts`·가족 등록 공유 문구를 CareAI로) - 결과는 아래 FE 행에 기록 |
+| L-1 | `PasswordResetServiceTest`가 문자 문구 `[CareAI] 비밀번호 재설정 인증번호: %s\n유효 시간: 5분`과 메일 제목 `[CareAI] 비밀번호 재설정 인증번호`를 고정 |
+| L-2 | `EmailNotificationChannelTest.send_제목줄바꿈_헤더주입없음` - ASCII·한글 제목에 CRLF + `Bcc:`를 넣어도 원문 헤더 줄·BCC 수신자가 생기지 않음을 고정 |
+| L-3 | `EmailNotificationChannel`이 머리글만 `MimeMessageHelper`(multipart 아님)로 쓰고 본문은 최상위 `multipart/alternative`(text/plain → text/html, UTF-8)로 직접 구성. mixed·related 없음을 `send_alternative`가 고정 |
+| L-4 | 변경 없음(사용자 결정으로 수용) |
+
+`./gradlew build` 통과(테스트 2873건, 실패 0). 실제 발송은 여전히 미확인(시험 주소 `@test.com`).
