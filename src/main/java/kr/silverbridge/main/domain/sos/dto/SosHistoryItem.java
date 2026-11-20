@@ -22,6 +22,7 @@ import java.time.OffsetDateTime;
  * @param triggeredAt SOS 발생 시각
  * @param location    발생 위치 자유 문구. 프론트가 보내지 않았으면 null(위치 미상 → 화면에서 위치 줄 생략)
  * @param triggerType 발생 경로 - 긴급 SOS 버튼(SOS_BUTTON) / 보호자에게 직접 전화(GUARDIAN_CALL) / 챗봇 119 버튼(CHATBOT_119)
+ *                    / 챗봇 109 자살예방 상담전화 버튼(CHATBOT_109)
  * @param pressCount       연타 묶음의 누름 수. 묶음 조회({@code group=true})에서만 채우고 그 밖에는 null(JSON에서 생략)
  * @param firstTriggeredAt 묶음의 첫 누름 시각. 묶음 조회에서만
  * @param lastTriggeredAt  묶음의 마지막 누름 시각({@code triggeredAt}과 같다). 묶음 조회에서만
@@ -51,7 +52,7 @@ public record SosHistoryItem(
         String location,
 
         @Schema(description = "발생 경로", example = "SOS_BUTTON",
-                allowableValues = {"SOS_BUTTON", "GUARDIAN_CALL", "CHATBOT_119"})
+                allowableValues = {"SOS_BUTTON", "GUARDIAN_CALL", "CHATBOT_119", "CHATBOT_109"})
         SosTriggerType triggerType,
 
         @JsonInclude(JsonInclude.Include.NON_NULL)

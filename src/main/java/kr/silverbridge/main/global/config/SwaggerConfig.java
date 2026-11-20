@@ -111,7 +111,7 @@ public class SwaggerConfig {
                         new Tag().name("보호자 - SOS 이력")
                                 .description("피보호자의 SOS 발생 이력 조회(최신순 페이징)\n"
                                         + "※ 요청 시점에 ACTIVE 연결인 피보호자의 이력만 보입니다(연결 해제 시 과거 이력도 비공개).\n"
-                                        + "※ 발생 경로(SOS_BUTTON·GUARDIAN_CALL·CHATBOT_119)는 이력 표시 전용이며 알림 대상을 가르지 않습니다.\n"
+                                        + "※ 발생 경로(SOS_BUTTON·GUARDIAN_CALL·CHATBOT_119·CHATBOT_109)는 이력 표시 전용이며 알림 대상을 가르지 않습니다.\n"
                                         + "※ GUARDIAN 역할 계정만 호출 가능."),
                         new Tag().name("보호자 - AI 기분 체크")
                                 .description("연결된 피보호자의 오늘 안부 대화(시간대별 질문·상태·기분)와 걱정·우울 이어짐\n"

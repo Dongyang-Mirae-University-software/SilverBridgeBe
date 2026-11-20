@@ -139,6 +139,19 @@ class WardSosControllerHttpTest {
     }
 
     @Test
+    @DisplayName("챗봇 109(CHATBOT_109) → 201, 그 경로로 저장을 요청한다 (2026-11-20)")
+    void 챗봇109() throws Exception {
+        stubTrigger();
+
+        mvc().perform(post("/api/ward/sos").contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"triggerType\":\"CHATBOT_109\"}"))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.data.sosEventId").value(42));
+
+        verify(sosService).trigger(WARD_ID, null, SosTriggerType.CHATBOT_109, null);
+    }
+
+    @Test
     @DisplayName("모르는 triggerType → 기존과 같은 400 INVALID_INPUT, 저장하지 않는다")
     void 모르는_경로값() throws Exception {
         mvc().perform(post("/api/ward/sos").contentType(MediaType.APPLICATION_JSON)

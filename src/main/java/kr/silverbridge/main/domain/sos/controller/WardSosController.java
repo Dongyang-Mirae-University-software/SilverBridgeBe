@@ -38,7 +38,7 @@ public class WardSosController {
 
                     [요청 바디 — 전체가 선택]
                     - location (선택, 100자): 발생 위치 자유 문구. 예 "자택 거실", "역삼동 인근"
-                    - triggerType (선택): SOS_BUTTON(기본) / GUARDIAN_CALL / CHATBOT_119
+                    - triggerType (선택): SOS_BUTTON(기본) / GUARDIAN_CALL / CHATBOT_119 / CHATBOT_109
                     - calledGuardianId (선택): GUARDIAN_CALL일 때 전화를 건 보호자 ID(보호자 목록의 partnerUserId).
                       보호자 SOS 이력의 보호자 연락 줄에 그 보호자 이름이 표시됩니다.
                       연결된 보호자가 아니거나 형식이 틀리거나 SOS_BUTTON과 함께 오면 저장하지 않을 뿐, SOS는 그대로 접수됩니다(오류 없음).
@@ -51,8 +51,10 @@ public class WardSosController {
                     - GUARDIAN_CALL : 피보호자가 SOS 화면에서 보호자를 골라 전화를 걸었습니다.
                                       보호자 카드를 눌러 전화를 거는 시점에 이 API도 함께 호출해 주세요 -
                                       호출하지 않으면 그 전화는 이력에 남지 않습니다.
-                    - CHATBOT_119   : 피보호자가 챗봇 답변의 119 버튼을 눌렀습니다(응급·마음 위기 구분 없이 이 값 하나).
-                                      119 키패드 화면을 띄우는 시점에 이 API를 호출해 주세요(SOS 버튼과 같은 흐름).
+                    - CHATBOT_119   : 피보호자가 챗봇 답변의 119 버튼으로 연 119 키패드에서 통화 버튼을 눌렀습니다
+                                      (응급 답·마음 위기 답 모두).
+                    - CHATBOT_109   : 피보호자가 챗봇의 자살·자해 위기 답에 나온 109(자살예방 상담전화) 버튼으로 연
+                                      109 키패드에서 통화 버튼을 눌렀습니다(2026-11-20). 실제 전화는 걸리지 않습니다.
                     모든 경로에서 보호자 알림은 동일하게 발송됩니다(전화받은 보호자 외 나머지도 상황을 알아야 하므로).
 
                     [동작]

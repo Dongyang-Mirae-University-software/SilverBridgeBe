@@ -212,7 +212,7 @@ class GuardianSosServiceTest {
         assertThat(result.content()).extracting(SosHistoryItem::triggerType)
                 .containsOnly(SosTriggerType.GUARDIAN_CALL);
         // 탭 건수는 필터·페이지와 무관한 전체 기준
-        assertThat(result.counts()).isEqualTo(new SosHistoryPage.Counts(60, 55, 5, 0));
+        assertThat(result.counts()).isEqualTo(new SosHistoryPage.Counts(60, 55, 5, 0, 0));
         verify(sosEventRepository, never()).findVisibleHistory(eq(GUARDIAN_ID), any(), any());
 
         // 목록·집계 모두 인가된(ACTIVE) 목록으로만 질의한다 (IDOR 방지)
@@ -236,7 +236,7 @@ class GuardianSosServiceTest {
 
         SosHistoryPage result = guardianSosService.getHistory(GUARDIAN_ID, WARD_ID, null, 0, 20);
 
-        assertThat(result.counts()).isEqualTo(new SosHistoryPage.Counts(3, 3, 0, 0));
+        assertThat(result.counts()).isEqualTo(new SosHistoryPage.Counts(3, 3, 0, 0, 0));
     }
 
     @Test
@@ -373,7 +373,7 @@ class GuardianSosServiceTest {
         assertThat(alone.wardName()).isEqualTo("박철수");
 
         // counts는 묶음 수, 경로 필터가 없으면 전체 묶음 수는 그 합이라 전체 묶음 수 쿼리를 따로 돌리지 않는다(점검 L-2)
-        assertThat(result.counts()).isEqualTo(new SosHistoryPage.Counts(2, 1, 1, 0));
+        assertThat(result.counts()).isEqualTo(new SosHistoryPage.Counts(2, 1, 1, 0, 0));
         verify(sosEventRepository, never()).countPressGroups(eq(GUARDIAN_ID), any(), any(), anyInt());
     }
 
@@ -391,7 +391,7 @@ class GuardianSosServiceTest {
                 GUARDIAN_ID, WARD_ID, SosTriggerType.GUARDIAN_CALL, 0, 20);
 
         assertThat(result.content()).isEmpty();
-        assertThat(result.counts()).isEqualTo(new SosHistoryPage.Counts(2, 2, 0, 0));
+        assertThat(result.counts()).isEqualTo(new SosHistoryPage.Counts(2, 2, 0, 0, 0));
     }
 
     @Test
@@ -411,7 +411,7 @@ class GuardianSosServiceTest {
         SosHistoryPage result = guardianSosService.getHistory(GUARDIAN_ID, null, SosTriggerType.CHATBOT_119, 0, 20);
 
         assertThat(result.content()).extracting(SosHistoryItem::triggerType).containsExactly(SosTriggerType.CHATBOT_119);
-        assertThat(result.counts()).isEqualTo(new SosHistoryPage.Counts(9, 4, 2, 3));
+        assertThat(result.counts()).isEqualTo(new SosHistoryPage.Counts(9, 4, 2, 3, 0));
     }
 
     @Test
@@ -425,7 +425,42 @@ class GuardianSosServiceTest {
 
         SosHistoryPage result = guardianSosService.getGroupedHistory(GUARDIAN_ID, null, null, 0, 20);
 
-        assertThat(result.counts()).isEqualTo(new SosHistoryPage.Counts(3, 1, 0, 2));
+        assertThat(result.counts()).isEqualTo(new SosHistoryPage.Counts(3, 1, 0, 2, 0));
+        assertThat(result.totalElements()).isEqualTo(3);
+    }
+
+    @Test
+    @DisplayName("챗봇 109(CHATBOT_109) 필터 → 경로 필터 쿼리로 조회하고, counts.chatbot109와 all에 그 건수가 들어간다 (2026-11-20)")
+    void getHistory_챗봇109_필터와건수() {
+        SosEvent chatbot = sosEvent(8L, WARD_ID, OffsetDateTime.now(), null, SosTriggerType.CHATBOT_109);
+        when(connectionService.getActiveWardIds(GUARDIAN_ID)).thenReturn(List.of(WARD_ID));
+        when(sosEventRepository.findVisibleHistoryByTriggerType(eq(GUARDIAN_ID),
+                any(), eq(SosTriggerType.CHATBOT_109), any(Pageable.class)))
+                .thenReturn(new PageImpl<>(List.of(chatbot), PageRequest.of(0, 20), 1));
+        when(sosEventRepository.countVisibleByTriggerType(eq(GUARDIAN_ID), any())).thenReturn(List.of(
+                count(SosTriggerType.SOS_BUTTON, 4),
+                count(SosTriggerType.CHATBOT_119, 3),
+                count(SosTriggerType.CHATBOT_109, 2)));
+        when(userRepository.findAllById(any())).thenReturn(List.of(user(WARD_ID, WARD_NAME)));
+
+        SosHistoryPage result = guardianSosService.getHistory(GUARDIAN_ID, null, SosTriggerType.CHATBOT_109, 0, 20);
+
+        assertThat(result.content()).extracting(SosHistoryItem::triggerType).containsExactly(SosTriggerType.CHATBOT_109);
+        assertThat(result.counts()).isEqualTo(new SosHistoryPage.Counts(9, 4, 0, 3, 2));
+    }
+
+    @Test
+    @DisplayName("묶음 조회(필터 없음): 챗봇 109 묶음도 counts.all과 totalElements에 들어간다 (2026-11-20)")
+    void getGroupedHistory_챗봇109_전체묶음수() {
+        when(connectionService.getActiveWardIds(GUARDIAN_ID)).thenReturn(List.of(WARD_ID));
+        when(sosEventRepository.findPressGroups(eq(GUARDIAN_ID), any(), eq(""), eq(60), eq(20), eq(0L)))
+                .thenReturn(List.of());
+        when(sosEventRepository.countPressGroupsByTriggerType(eq(GUARDIAN_ID), any(), eq(""), eq(60)))
+                .thenReturn(List.of(groupCount("CHATBOT_119", 1L), groupCount("CHATBOT_109", 2L)));
+
+        SosHistoryPage result = guardianSosService.getGroupedHistory(GUARDIAN_ID, null, null, 0, 20);
+
+        assertThat(result.counts()).isEqualTo(new SosHistoryPage.Counts(3, 0, 0, 1, 2));
         assertThat(result.totalElements()).isEqualTo(3);
     }
 
@@ -443,7 +478,7 @@ class GuardianSosServiceTest {
                 GUARDIAN_ID, WARD_ID, SosTriggerType.CHATBOT_119, 0, 20);
 
         assertThat(result.totalElements()).isEqualTo(2);
-        assertThat(result.counts()).isEqualTo(new SosHistoryPage.Counts(2, 0, 0, 2));
+        assertThat(result.counts()).isEqualTo(new SosHistoryPage.Counts(2, 0, 0, 2, 0));
     }
 
     @Test

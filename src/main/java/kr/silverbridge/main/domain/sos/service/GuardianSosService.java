@@ -208,15 +208,17 @@ public class GuardianSosService {
         long sosButton = 0;
         long guardianCall = 0;
         long chatbot119 = 0;
+        long chatbot109 = 0;
         for (SosTriggerType type : SosTriggerType.values()) {
             long total = totals.getOrDefault(type, 0L);
             switch (type) {
                 case SOS_BUTTON -> sosButton = total;
                 case GUARDIAN_CALL -> guardianCall = total;
                 case CHATBOT_119 -> chatbot119 = total;
+                case CHATBOT_109 -> chatbot109 = total;
             }
         }
-        return SosHistoryPage.Counts.of(sosButton, guardianCall, chatbot119);
+        return SosHistoryPage.Counts.of(sosButton, guardianCall, chatbot119, chatbot109);
     }
 
     /**
