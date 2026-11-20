@@ -86,6 +86,8 @@ class NotificationExecutorAssignmentTest {
         assertThat(asyncQualifiers(AiMemberDataPurgeListener.class)).containsExactly("aiPurgeExecutor");
         // 연결 종료 시 대리 상담 기록 삭제도 같은 전용 executor(2026-10 전체 점검 L-13)
         assertThat(asyncQualifiers(kr.silverbridge.main.domain.chat.listener.AiProxyChatLogPurgeListener.class))
+                .containsExactly("aiPurgeExecutor");        // 탈퇴 시 AI 게임 기록 삭제도 같은 전용 executor(2026-11-20, 게임 중계 점검 M-1)
+        assertThat(asyncQualifiers(kr.silverbridge.main.domain.game.listener.GameRecordPurgeListener.class))
                 .containsExactly("aiPurgeExecutor");
     }
 
