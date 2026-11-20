@@ -62,6 +62,7 @@ public class GuardianMedicationController {
                     - doseDate: 조회 기준일(KST)
                     - takenCount / totalCount: "오늘 2/3회 복용"의 두 숫자
                     - medications[]: 복용 시각 순. taken(체크 여부) / takenAt(체크 시각) 포함
+                    - medications[].displayName: 화면에 보일 약 이름(끝쪽 용량·성분 괄호를 뗀 이름). name은 저장된 원본이라 수정 창 기본값으로 쓴다
 
                     [주의]
                     - 연결된 피보호자가 없으면 빈 배열입니다.

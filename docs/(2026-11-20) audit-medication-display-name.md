@@ -56,3 +56,11 @@
 ```
 fix: 약 표시 이름 정규식 되돌림 줄이기·Swagger 안내·경계 테스트 (#503 점검 L-1~L-3)
 ```
+
+## 조치 (2026-11-20, `fix/medication-display-name-audit`)
+
+| ID | 조치 | 확인 |
+|---|---|---|
+| L-1 | `NUMBER`를 소유 수량자 `[0-9][0-9.,]*+`로 바꿈 | 최악 입력 `가1,1,1,…x` 998μs → 112μs, 8종 최악 입력 모두 0.23ms 이하. 기존 표 결과 그대로. 처리 시간 상한 테스트 추가(기하급수적 되돌림 방지용, 넉넉한 3초) |
+| L-2 | 보호자 `GET /api/guardian/medication` Swagger에 `medications[].displayName` 안내 한 줄(name은 원본·수정 창 기본값) | - |
+| L-3 | B 표의 경계 입력을 테스트로 고정: 줄어드는 경우 3·원본 유지 8·받아들인 메모 손실 4 | `MedicationDisplayNameTest` 40 → 56건 통과, `./gradlew build` 통과 |
