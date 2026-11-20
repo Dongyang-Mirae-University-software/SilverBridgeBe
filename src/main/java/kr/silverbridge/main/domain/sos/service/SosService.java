@@ -41,8 +41,9 @@ public class SosService {
     /**
      * 피보호자 SOS 발생: 이력을 저장하고 커밋 후 ACTIVE 보호자 전원에게 긴급 알림을 보내도록 이벤트를 발행한다.
      *
-     * <p>발생 경로({@code triggerType})는 이력 표시용일 뿐 <b>알림 발송을 가르지 않는다</b> - 보호자에게 직접
-     * 전화한 경우에도 나머지 보호자가 상황을 알아야 하므로 동일하게 발송한다(2026-08-26 결정).</p>
+     * <p>발생 경로({@code triggerType})는 <b>알림 발송을 가르지 않는다</b> - 보호자에게 직접
+     * 전화한 경우에도 나머지 보호자가 상황을 알아야 하므로 동일하게 발송한다(2026-08-26 결정).
+     * 챗봇 109({@code CHATBOT_109})만 알림 문구가 다르다(2026-11-20 사용자 결정, 대상·채널은 같다).</p>
      *
      * @param wardId      SOS를 발생시킨 피보호자 ID (인증 주체)
      * @param location    발생 위치 자유 문구. {@code null}·공백이면 위치 미상으로 기록한다 - 서버는 위치를 추정하지 않는다
@@ -69,15 +70,18 @@ public class SosService {
         User ward = userRepository.findById(wardId)
                 .orElseThrow(() -> new CustomException(ErrorCode.USER_NOT_FOUND));
 
-        SosEvent sosEvent = sosEventRepository.save(SosEvent.builder()
+        SosEvent toSave = SosEvent.builder()
                 .wardId(wardId)
                 .location(normalizeLocation(location))
                 .triggerType(triggerType)
                 .calledGuardianId(verifiedCalledGuardianId)
-                .build());
+                .build();
+        SosEvent sosEvent = sosEventRepository.save(toSave);
 
         String wardName = StringUtils.hasText(ward.getName()) ? ward.getName() : FALLBACK_WARD_NAME;
-        eventPublisher.publishEvent(new SosTriggeredEvent(wardId, sosEvent.getId(), wardName));
+        // 경로는 알림 문구 선택에만 쓰인다(CHATBOT_109만 "마음 위기" 문구, 2026-11-20) - 대상·채널은 가르지 않는다.
+        // 엔티티가 null을 SOS_BUTTON으로 바꾼 값을 싣는다.
+        eventPublisher.publishEvent(new SosTriggeredEvent(wardId, sosEvent.getId(), wardName, toSave.getTriggerType()));
         log.info("SOS 발생: sosEventId={}, wardId={}, triggerType={}",
                 sosEvent.getId(), wardId, sosEvent.getTriggerType());
 

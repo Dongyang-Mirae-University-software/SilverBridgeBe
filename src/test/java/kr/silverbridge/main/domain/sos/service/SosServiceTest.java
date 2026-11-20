@@ -61,7 +61,23 @@ class SosServiceTest {
         verify(sosEventRepository).save(saveCaptor.capture());
         assertThat(saveCaptor.getValue().getTriggerType()).isEqualTo(SosTriggerType.CHATBOT_119);
         assertThat(saveCaptor.getValue().getCalledGuardianId()).isNull();
-        verify(eventPublisher).publishEvent(new SosTriggeredEvent(WARD_ID, 43L, WARD_NAME));
+        // 경로는 문구 선택용으로만 실린다(2026-11-20) - 119는 SOS 버튼과 같은 문구다
+        verify(eventPublisher).publishEvent(new SosTriggeredEvent(WARD_ID, 43L, WARD_NAME, SosTriggerType.CHATBOT_119));
+    }
+
+    @Test
+    @DisplayName("경로를 생략하면 이벤트에도 SOS_BUTTON이 실린다(엔티티 기본값) (2026-11-20)")
+    void trigger_경로생략_이벤트_SOS버튼() {
+        User ward = User.builder().id(WARD_ID).name(WARD_NAME).role(Role.WARD).build();
+        when(userRepository.findById(WARD_ID)).thenReturn(Optional.of(ward));
+        SosEvent saved = mock(SosEvent.class);
+        when(saved.getId()).thenReturn(44L);
+        when(saved.getCreatedAt()).thenReturn(OffsetDateTime.now());
+        when(sosEventRepository.save(any(SosEvent.class))).thenReturn(saved);
+
+        sosService.trigger(WARD_ID, null, null);
+
+        verify(eventPublisher).publishEvent(new SosTriggeredEvent(WARD_ID, 44L, WARD_NAME, SosTriggerType.SOS_BUTTON));
     }
 
     @Test
@@ -216,8 +232,8 @@ class SosServiceTest {
         ArgumentCaptor<SosEvent> saveCaptor = ArgumentCaptor.forClass(SosEvent.class);
         verify(sosEventRepository).save(saveCaptor.capture());
         assertThat(saveCaptor.getValue().getCalledGuardianId()).isEqualTo("GD0001");
-        // 이벤트는 (wardId, sosEventId, wardName)뿐이다 - 리스너는 전화받은 보호자를 알 수 없다
-        verify(eventPublisher).publishEvent(new SosTriggeredEvent(WARD_ID, 42L, WARD_NAME));
+        // 이벤트는 (wardId, sosEventId, wardName, 경로)뿐이다 - 리스너는 전화받은 보호자를 알 수 없다
+        verify(eventPublisher).publishEvent(new SosTriggeredEvent(WARD_ID, 42L, WARD_NAME, SosTriggerType.GUARDIAN_CALL));
     }
 
     @Test

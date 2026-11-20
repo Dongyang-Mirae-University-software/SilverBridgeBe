@@ -38,6 +38,22 @@ class SosNotificationApiDocSyncTest {
     }
 
     @Test
+    @DisplayName("Swagger 설명의 챗봇 109 제목·1회 본문·반복 꼬리가 리스너 문구와 같다 (2026-11-20)")
+    void chatbot109MatchesListener() {
+        String description = triggerSosDescription();
+        String single = SosNotificationListener.buildMindCrisisBody(WARD, 1);
+        String repeatTail = SosNotificationListener.buildMindCrisisBody(WARD, 2)
+                .substring(single.length())
+                .replace("2번째", "N번째")
+                .replace("\n", "\\n");
+
+        assertThat(description)
+                .contains("\"" + SosNotificationListener.buildMindCrisisTitle(WARD) + "\"")
+                .contains("\"" + single.replace("\n", "\\n") + "\"")
+                .contains("\"" + repeatTail + "\"");
+    }
+
+    @Test
     @DisplayName("Swagger 설명의 반복 본문·집계 창(분)이 리스너 문구와 같다")
     void repeatBodyAndWindowMatchListener() {
         String description = triggerSosDescription();

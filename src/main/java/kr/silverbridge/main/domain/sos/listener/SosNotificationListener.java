@@ -5,6 +5,7 @@ import kr.silverbridge.main.domain.notification.channel.NotificationContent;
 import kr.silverbridge.main.domain.notification.dispatch.NotificationDispatcher;
 import kr.silverbridge.main.domain.notification.dispatch.NotificationType;
 import kr.silverbridge.main.domain.notification.entity.NotificationLogResult;
+import kr.silverbridge.main.domain.sos.entity.SosTriggerType;
 import kr.silverbridge.main.domain.sos.event.SosTriggeredEvent;
 import kr.silverbridge.main.domain.sos.repository.SosEventRepository;
 import kr.silverbridge.main.domain.sos.service.SosNotificationCooldown;
@@ -88,9 +89,11 @@ public class SosNotificationListener {
 
         // 쿨다운을 통과한 뒤에만 센다 - 생략된 연타가 DB를 건드리지 않게 하는 순서다.
         long repeatCount = countRecentOccurrences(event.wardId());
-        String title = buildTitle(event.wardName());
-        String body = buildBody(event.wardName(), repeatCount);
-        String smsText = buildSmsFallbackText(event.wardName(), repeatCount);
+        // 발생 경로는 여기 문구 세 줄에서만 쓴다(2026-11-20 사용자 결정 - CHATBOT_109만 "마음 위기" 문구).
+        // 위의 대상 조회·쿨다운과 아래 발송 반복·NotificationType(WARD_SOS)은 경로와 무관해야 한다(policy-sos 규칙 ②).
+        String title = buildTitle(event.wardName(), event.triggerType());
+        String body = buildBody(event.wardName(), repeatCount, event.triggerType());
+        String smsText = buildSmsFallbackText(event.wardName(), repeatCount, event.triggerType());
         String repeatCountValue = String.valueOf(repeatCount);
         int delivered = 0;
         for (String guardianId : guardianIds) {
@@ -159,7 +162,57 @@ public class SosNotificationListener {
         }
     }
 
-    /** 알림 제목(2026-10-30 웹푸시 디자인) - 누가·무슨 종류인지 한 줄로. 발생 경로(버튼·전화)는 싣지 않는다. */
+    /** 챗봇 109(자살예방 상담전화) 경로인가 - 문구 선택 전용 판정. */
+    private static boolean isMindCrisis(SosTriggerType triggerType) {
+        return triggerType == SosTriggerType.CHATBOT_109;
+    }
+
+    /** 경로별 제목. {@code CHATBOT_109}만 마음 위기 제목, 나머지(null 포함)는 {@link #buildTitle(String)}. */
+    static String buildTitle(String wardName, SosTriggerType triggerType) {
+        return isMindCrisis(triggerType) ? buildMindCrisisTitle(wardName) : buildTitle(wardName);
+    }
+
+    /** 경로별 본문. {@code CHATBOT_109}만 마음 위기 본문, 나머지는 {@link #buildBody(String, long)}. */
+    static String buildBody(String wardName, long repeatCount, SosTriggerType triggerType) {
+        return isMindCrisis(triggerType) ? buildMindCrisisBody(wardName, repeatCount) : buildBody(wardName, repeatCount);
+    }
+
+    /** 경로별 대체 문자. {@code CHATBOT_109}만 마음 위기 문자, 나머지는 {@link #buildSmsFallbackText(String, long)}. */
+    static String buildSmsFallbackText(String wardName, long repeatCount, SosTriggerType triggerType) {
+        return isMindCrisis(triggerType)
+                ? buildMindCrisisSmsText(wardName, repeatCount)
+                : buildSmsFallbackText(wardName, repeatCount);
+    }
+
+    /**
+     * 챗봇 109 제목(2026-11-20 사용자 결정). 응급(119)과 구분되게 "마음 위기"를 밝히되 긴급 알림임은 그대로 둔다.
+     */
+    static String buildMindCrisisTitle(String wardName) {
+        return "[긴급] " + wardName + "님 마음 위기 신호";
+    }
+
+    /**
+     * 챗봇 109 본문. 원인을 단정하지 않고 확인된 사실(챗봇에서 위기 신호 → 109 버튼)과 할 일(연락)만 말한다.
+     * 반복이면 SOS 본문과 같은 횟수 줄을 붙인다(집계 창은 경로와 무관하게 같은 피보호자 전체).
+     */
+    static String buildMindCrisisBody(String wardName, long repeatCount) {
+        String body = wardName + "님이 챗봇에서 마음이 힘들다는 신호를 보였습니다.\n바로 연락해 주세요.";
+        if (repeatCount < 2) {
+            return body;
+        }
+        return body + "\n최근 " + REPEAT_WINDOW.toMinutes() + "분 내 " + repeatCount + "번째 요청입니다.";
+    }
+
+    /** 챗봇 109 대체 문자. 형식은 SOS 대체 문자({@code [긴급 SOS] 본문})와 같다. */
+    static String buildMindCrisisSmsText(String wardName, long repeatCount) {
+        String text = "[긴급 SOS] " + wardName + "님이 챗봇에서 마음이 힘들다는 신호를 보였습니다. 바로 연락해 주세요.";
+        if (repeatCount < 2) {
+            return text;
+        }
+        return text + " (최근 " + REPEAT_WINDOW.toMinutes() + "분 내 " + repeatCount + "번째)";
+    }
+
+    /** 알림 제목(2026-10-30 웹푸시 디자인) - 누가·무슨 종류인지 한 줄로. 발생 경로(버튼·전화)는 싣지 않는다(109 제외). */
     static String buildTitle(String wardName) {
         return "[긴급] " + wardName + "님 SOS";
     }
