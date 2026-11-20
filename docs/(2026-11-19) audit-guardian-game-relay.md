@@ -78,7 +78,7 @@ feat: 탈퇴 시 AI 게임 기록 삭제 요청 추가 (게임 중계 점검 M-1
 
 | 이슈 | 조치 |
 |---|---|
-| 🟡 M-1 | ✅ 코드 반영 - AI #323(`bac824bc`) `DELETE /api/v1/games/records`(항상 키 필요, userId 필수) + BE `GameRecordPurgeListener`(탈퇴 AFTER_COMMIT, `aiPurgeExecutor`, best-effort). 보관 기간 정리는 두지 않음(D-2에 기록). **gosky 배포됨(11/20)**: AI `bac824b`(컨테이너 09:33 KST 재기동), BE `09fb5fee`부터 #502 포함(지금 `0761cb37`). **탈퇴 시 실제 삭제는 실측 안 함** - 시험 계정 탈퇴(데이터 변경)가 필요해 하지 않았다 |
+| 🟡 M-1 | ✅ 코드 반영 - AI #323(`bac824bc`) `DELETE /api/v1/games/records`(항상 키 필요, userId 필수) + BE `GameRecordPurgeListener`(탈퇴 AFTER_COMMIT, `aiPurgeExecutor`, best-effort). 보관 기간 정리는 두지 않음(D-2에 기록). **gosky 배포됨(11/20)**: AI `bac824b`(컨테이너 09:33 KST 재기동), BE `09fb5fee`부터 #502 포함(지금 `0761cb37`). **탈퇴 삭제 실측 ✅(11/20 10:3x)**: 시험 피보호자 `gP7t20`(게임 번호 1270531484)을 SQL로 만들고(사용자 `!`) AI 키 없는 경로로 진행 1·시도 1건을 남긴 뒤 탈퇴 API 200 → BE `[AI-PURGE] item=game-records` 완료(실패 로그 없음, chat-logs·reservation-credential도 완료), AI `game_progresses`·`game_attempts` 0·0건, AI `DELETE /games/records` 1회, BE 회원 행 영구 삭제. 시험 비밀번호·스크립트는 삭제 |
 | 🟢 L-1 | 수용 유지 - policy-game "수용 한계"에 명시(삭제도 같은 번호를 쓰므로 함께 적음) |
 | 🟢 L-2 | ✅ 확인(11/20) - gosky 보호자 시험 계정 progress·activity 200(`userId` 없음)·미연결 wardId 403 `GAME_NOT_AUTHORIZED`, FE #293 점검에서 화면까지 실측 |
 | 🟢 L-3 | ✅ `GuardianGameControllerHttpTest`에 공용 처리기를 붙여 403·503·400 본문 고정, Swagger에 `wardId` 누락·`days` 숫자 아님 400 기재 |
