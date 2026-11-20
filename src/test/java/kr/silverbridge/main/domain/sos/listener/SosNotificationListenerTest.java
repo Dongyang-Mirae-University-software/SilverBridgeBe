@@ -5,6 +5,7 @@ import kr.silverbridge.main.domain.notification.channel.NotificationContent;
 import kr.silverbridge.main.domain.notification.dispatch.NotificationDispatcher;
 import kr.silverbridge.main.domain.notification.dispatch.NotificationType;
 import kr.silverbridge.main.domain.notification.entity.NotificationLogResult;
+import kr.silverbridge.main.domain.sos.entity.SosTriggerType;
 import kr.silverbridge.main.domain.sos.event.SosTriggeredEvent;
 import kr.silverbridge.main.domain.sos.repository.SosEventRepository;
 import kr.silverbridge.main.domain.sos.service.SosNotificationCooldown;
@@ -45,7 +46,9 @@ class SosNotificationListenerTest {
 
     private static final String WARD_ID = "WD0001";
     private static final long SOS_EVENT_ID = 7L;
-    private final SosTriggeredEvent event = new SosTriggeredEvent(WARD_ID, SOS_EVENT_ID, "김순자");
+    private final SosTriggeredEvent event = new SosTriggeredEvent(WARD_ID, SOS_EVENT_ID, "김순자", SosTriggerType.SOS_BUTTON);
+    private final SosTriggeredEvent chatbot109Event =
+            new SosTriggeredEvent(WARD_ID, SOS_EVENT_ID, "김순자", SosTriggerType.CHATBOT_109);
 
     @Test
     @DisplayName("ACTIVE 보호자 전원에게 WS(sos-triggered) + 디스패처(WARD_SOS) 긴급 알림 발송")
@@ -285,6 +288,81 @@ class SosNotificationListenerTest {
         verify(notificationDispatcher).dispatch(eq("GD0001"), any(), eq(NotificationType.WARD_SOS), captor.capture());
         assertThat(captor.getValue().body()).isEqualTo("김순자님이 계속 도움을 요청하고 있습니다.\n최근 10분 내 2번째 요청입니다.");
         assertThat(captor.getValue().data()).containsEntry("repeatCount", "2");
+    }
+
+    // ── 챗봇 109(CHATBOT_109): 문구만 다르고 대상·채널·쿨다운은 같다 (2026-11-20 사용자 결정) ──
+
+    @Test
+    @DisplayName("챗봇 109 → ACTIVE 보호자 전원에게 같은 WARD_SOS(강제 푸시+문자 대체)로 보내고 마음 위기 문구만 다르다")
+    void handleSosTriggered_챗봇109_전원_같은종류_문구만다름() {
+        when(connectionService.getActiveGuardianIds(WARD_ID)).thenReturn(List.of("GD0001", "GD0002"));
+        when(cooldown.tryAcquire(WARD_ID)).thenReturn(true);
+        when(sosEventRepository.countByWardIdAndCreatedAtGreaterThanEqual(eq(WARD_ID), any())).thenReturn(1L);
+
+        listener.handleSosTriggered(chatbot109Event);
+
+        ArgumentCaptor<NotificationContent> captor = ArgumentCaptor.forClass(NotificationContent.class);
+        for (String guardianId : List.of("GD0001", "GD0002")) {
+            verify(webSocketEventPublisher).sendToUser(eq(guardianId), eq("sos-triggered"), anyMap());
+            verify(notificationDispatcher).dispatch(eq(guardianId), eq(WARD_ID), eq(NotificationType.WARD_SOS), captor.capture());
+        }
+        NotificationContent content = captor.getValue();
+        assertThat(content.title()).isEqualTo("[긴급] 김순자님 마음 위기 신호");
+        assertThat(content.body()).isEqualTo("김순자님이 챗봇에서 마음이 힘들다는 신호를 보였습니다.\n바로 연락해 주세요.");
+        assertThat(content.smsFallbackText())
+                .isEqualTo("[긴급 SOS] 김순자님이 챗봇에서 마음이 힘들다는 신호를 보였습니다. 바로 연락해 주세요.");
+        // data는 SOS와 같다 - 앱이 종류로 화면을 가르지 않게 type은 WARD_SOS 그대로, 경로 값은 싣지 않는다
+        assertThat(content.data()).containsOnlyKeys("type", "wardId", "sosEventId", "repeatCount")
+                .containsEntry("type", "WARD_SOS");
+    }
+
+    @Test
+    @DisplayName("챗봇 109도 같은 피보호자 쿨다운에 걸리면 알림을 생략한다(경로로 쿨다운을 가르지 않음)")
+    void handleSosTriggered_챗봇109_쿨다운_같음() {
+        when(connectionService.getActiveGuardianIds(WARD_ID)).thenReturn(List.of("GD0001"));
+        when(cooldown.tryAcquire(WARD_ID)).thenReturn(false);
+
+        listener.handleSosTriggered(chatbot109Event);
+
+        verify(cooldown).tryAcquire(WARD_ID);
+        verifyNoInteractions(webSocketEventPublisher, notificationDispatcher);
+    }
+
+    @Test
+    @DisplayName("챗봇 109 반복이면 마음 위기 본문에 횟수 줄을 붙이고, WS도 같은 제목·본문을 싣는다")
+    void handleSosTriggered_챗봇109_반복_WS동일() {
+        when(connectionService.getActiveGuardianIds(WARD_ID)).thenReturn(List.of("GD0001"));
+        when(cooldown.tryAcquire(WARD_ID)).thenReturn(true);
+        when(sosEventRepository.countByWardIdAndCreatedAtGreaterThanEqual(eq(WARD_ID), any())).thenReturn(2L);
+
+        listener.handleSosTriggered(chatbot109Event);
+
+        ArgumentCaptor<NotificationContent> captor = ArgumentCaptor.forClass(NotificationContent.class);
+        verify(notificationDispatcher).dispatch(eq("GD0001"), any(), eq(NotificationType.WARD_SOS), captor.capture());
+        assertThat(captor.getValue().body()).isEqualTo(
+                "김순자님이 챗봇에서 마음이 힘들다는 신호를 보였습니다.\n바로 연락해 주세요.\n최근 10분 내 2번째 요청입니다.");
+        assertThat(captor.getValue().smsFallbackText()).isEqualTo(
+                "[긴급 SOS] 김순자님이 챗봇에서 마음이 힘들다는 신호를 보였습니다. 바로 연락해 주세요. (최근 10분 내 2번째)");
+
+        ArgumentCaptor<Object> wsCaptor = ArgumentCaptor.forClass(Object.class);
+        verify(webSocketEventPublisher).sendToUser(eq("GD0001"), eq("sos-triggered"), wsCaptor.capture());
+        @SuppressWarnings("unchecked")
+        Map<String, String> wsPayload = (Map<String, String>) wsCaptor.getValue();
+        assertThat(wsPayload).containsOnlyKeys("wardId", "wardName", "sosEventId", "repeatCount", "title", "body")
+                .containsEntry("title", captor.getValue().title())
+                .containsEntry("body", captor.getValue().body());
+    }
+
+    @Test
+    @DisplayName("109가 아닌 경로(GUARDIAN_CALL·CHATBOT_119·null)는 SOS 문구 그대로다")
+    void 문구분기_109만() {
+        for (SosTriggerType type : new SosTriggerType[]{SosTriggerType.SOS_BUTTON, SosTriggerType.GUARDIAN_CALL,
+                SosTriggerType.CHATBOT_119, null}) {
+            assertThat(SosNotificationListener.buildTitle("김순자", type)).isEqualTo("[긴급] 김순자님 SOS");
+            assertThat(SosNotificationListener.buildBody("김순자", 1, type)).isEqualTo("김순자님이 긴급 도움을 요청했습니다.");
+            assertThat(SosNotificationListener.buildSmsFallbackText("김순자", 1, type))
+                    .isEqualTo("[긴급 SOS] 김순자님이 긴급 도움을 요청했습니다.");
+        }
     }
 
     @Test

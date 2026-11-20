@@ -11,6 +11,8 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.InOrder;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -151,11 +153,57 @@ class WardSosControllerHttpTest {
         verify(sosService).trigger(WARD_ID, null, SosTriggerType.CHATBOT_109, null);
     }
 
+    @ParameterizedTest(name = "{0}")
+    @ValueSource(strings = {
+            "{\"triggerType\":\"CHATBOT\"}",          // 서버가 모르는 이름(FE가 먼저 배포된 새 경로·오타)
+            "{\"triggerType\":\"chatbot_109\"}",      // 대소문자 다름 - 정확히 일치할 때만 그 경로
+            "{\"triggerType\":\"\"}",
+            "{\"triggerType\":1}",                    // 숫자를 순번으로 받지 않는다(GUARDIAN_CALL 아님)
+            "{\"triggerType\":\"1\"}",
+            "{\"triggerType\":true}",
+            "{\"triggerType\":{\"a\":1}}",
+            "{\"triggerType\":[\"CHATBOT_109\"]}"
+    })
+    @DisplayName("모르는·형식 오류 triggerType → 400 대신 SOS_BUTTON으로 접수한다(SOS를 잃지 않는다, 2026-11-20 M-1)")
+    void 모르는_경로값_SOS버튼으로_접수(String body) throws Exception {
+        stubTrigger();
+
+        mvc().perform(post("/api/ward/sos").contentType(MediaType.APPLICATION_JSON).content(body))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.data.sosEventId").value(42));
+
+        verify(sosService).trigger(WARD_ID, null, SosTriggerType.SOS_BUTTON, null);
+    }
+
     @Test
-    @DisplayName("모르는 triggerType → 기존과 같은 400 INVALID_INPUT, 저장하지 않는다")
-    void 모르는_경로값() throws Exception {
+    @DisplayName("모르는 경로 값 뒤의 위치도 그대로 읽는다(객체 값을 끝까지 건너뛴다)")
+    void 모르는_경로값_뒤_위치유지() throws Exception {
+        stubTrigger();
+
         mvc().perform(post("/api/ward/sos").contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"triggerType\":\"CHATBOT\"}"))
+                        .content("{\"triggerType\":{\"x\":[1,2]},\"location\":\"자택 거실\"}"))
+                .andExpect(status().isCreated());
+
+        verify(sosService).trigger(WARD_ID, "자택 거실", SosTriggerType.SOS_BUTTON, null);
+    }
+
+    @Test
+    @DisplayName("triggerType null → 기존처럼 null로 넘기고 엔티티가 SOS_BUTTON으로 기록한다")
+    void 경로_null() throws Exception {
+        stubTrigger();
+
+        mvc().perform(post("/api/ward/sos").contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"triggerType\":null}"))
+                .andExpect(status().isCreated());
+
+        verify(sosService).trigger(WARD_ID, null, null, null);
+    }
+
+    @Test
+    @DisplayName("바디 JSON 자체가 깨졌으면 400 그대로다(값 단위만 너그럽게 받는다)")
+    void 깨진_바디는_400() throws Exception {
+        mvc().perform(post("/api/ward/sos").contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"triggerType\":"))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.code").value("INVALID_INPUT"));
 
