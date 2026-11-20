@@ -4,6 +4,10 @@
 
 ---
 
+### [2026-11-20] 기능 점검(B) - BE #503 약 표시 이름 - PASS (🟢 3)
+- 인가·IDOR 변경 없음, 새 로그 없음, 필드 추가만(하위 호환), gosky 실데이터 10종 확인. 경계 입력 21건을 실제 클래스로 돌려 안전한 쪽(`오메가3 1000mg` 유지)과 받아들인 손실(직접 입력 괄호 메모 `마그네슘정(자기 전)` → `마그네슘정`)을 확인.
+- 🟢 L-1 정규식 100자 최악 입력 약 1ms(소유 수량자 제안) · L-2 보호자 `GET /api/guardian/medication` Swagger에 displayName 안내 없음 · L-3 경계 입력 테스트 미고정. 상세 `(2026-11-20) audit-medication-display-name.md`.
+
 ### [2026-11-20] 약 표시 이름 - 용량·성분 괄호를 뗀 `displayName` (BE)
 - 허가 품목명(`다이아벡스정500밀리그램(메트포르민염산염)`)이 화면에 그대로 나와 `MedicationDisplayName.of` 한 곳에서 끝쪽 용량·성분 괄호를 뗀 이름을 응답에 더했다(`MedicationItem.displayName`·대시보드 `UncheckedMedication.displayName`·WS `medicationDisplayName`). 저장 값·OCR 응답·알림 문구(이미 약 이름 없음)·마이그레이션 무변경.
 - 결정: 용량이 겹쳐도 늘 짧은 이름 / OCR은 원본 / 직접 입력도 같은 규칙이되 괄호는 앞이 용량·제형어로 끝날 때만 뗌("혈압약 (암로디핀 5mg)" 유지). 표본은 AI `drug_names.txt` 42,744건 패턴(vkcs DB 0건, gosky SSH 키 불일치로 미조회). 상세 `(2026-11-19) feature-medication-display-name.md`.
