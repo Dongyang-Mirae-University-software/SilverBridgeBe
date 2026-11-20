@@ -56,7 +56,7 @@ class SmsVerificationServiceTest {
     private SmsVerificationService smsVerificationService;
 
     private static final String PHONE = "01012345678";
-    private static final String TEMPLATE = "[SilverBridge] 인증번호: %s\n유효 시간: 5분";
+    private static final String TEMPLATE = "[CareAI] 인증번호: %s\n유효 시간: 5분";
 
     @Test
     @DisplayName("재발송 쿨다운 없음 — 호출 시 항상 SMS 발송 + 인증키 저장(TTL 5분) + 오류 카운터 삭제")
@@ -66,7 +66,7 @@ class SmsVerificationServiceTest {
         smsVerificationService.sendCode(PHONE, VerificationKeyConfig.SIGNUP, TEMPLATE);
 
         // SMS 본문에 6자리 인증코드가 치환되어 발송됨
-        verify(smsSender).send(eq(PHONE), matches("^\\[SilverBridge] 인증번호: \\d{6}\n유효 시간: 5분$"));
+        verify(smsSender).send(eq(PHONE), matches("^\\[CareAI] 인증번호: \\d{6}\n유효 시간: 5분$"));
 
         // 인증코드 저장 (TTL 5분) — 쿨다운 키는 더 이상 설정하지 않음
         verify(valueOperations).set(

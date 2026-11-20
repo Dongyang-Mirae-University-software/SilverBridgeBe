@@ -41,7 +41,7 @@ public class SmsService implements PhoneVerificationPort {
             Long.class);
 
     private static final String SIGNUP_MESSAGE_TEMPLATE =
-            "[SilverBridge] 인증번호: %s\n유효 시간: 5분";
+            "[CareAI] 인증번호: %s\n유효 시간: 5분";
 
     /** 회원가입 SMS 인증코드 발송 — 이미 가입된 번호는 차단 후 공통 발송 로직으로 위임 */
     public void sendVerificationCode(SmsSendRequest request) {

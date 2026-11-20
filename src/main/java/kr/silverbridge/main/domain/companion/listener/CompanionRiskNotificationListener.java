@@ -50,7 +50,7 @@ public class CompanionRiskNotificationListener {
         String wardName = userRepository.findById(event.wardId()).map(User::getName).orElse(FALLBACK_WARD_NAME);
         String title = "안부 말벗 확인 필요";
         String body = wardName + "님과의 안부 대화에서 살펴볼 신호가 있었어요. 연락해 보세요.";
-        String smsText = "[실버브릿지] " + body;
+        String smsText = "[CareAI] " + body;
         int delivered = 0;
         for (String guardianId : guardianIds) {
             try {

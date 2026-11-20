@@ -58,7 +58,7 @@ public class PasswordResetService {
     private static final SecureRandom RANDOM = new SecureRandom();
 
     private static final String PASSWORD_RESET_SMS_TEMPLATE =
-            "[SilverBridge] 비밀번호 재설정 인증번호: %s\n유효 시간: 5분";
+            "[CareAI] 비밀번호 재설정 인증번호: %s\n유효 시간: 5분";
 
     /** per-email 발송 상한 윈도우 (초) — 1시간 */
     private static final long EMAIL_SEND_CAP_WINDOW_SECONDS = 3600L;
@@ -247,7 +247,7 @@ public class PasswordResetService {
     private void sendResetEmail(String to, String code) {
         SimpleMailMessage message = new SimpleMailMessage();
         message.setTo(to);
-        message.setSubject("[SilverBridge] 비밀번호 재설정 인증번호");
+        message.setSubject("[CareAI] 비밀번호 재설정 인증번호");
         message.setText(
                 "비밀번호 재설정 인증번호: " + code + "\n\n" +
                 "유효 시간: 5분\n\n" +

@@ -50,7 +50,7 @@ class MedicationReminderServiceTest {
         verify(notificationDispatcher).dispatch(
                 eq(WARD_ID), any(), eq(NotificationType.MEDICATION_REMINDER), captor.capture());
         NotificationContent content = captor.getValue();
-        assertThat(content.title()).isEqualTo("실버브릿지");
+        assertThat(content.title()).isEqualTo("CareAI");
         assertThat(content.body()).isEqualTo("약 드실 시간이에요.")
                 .doesNotContain("혈압약", "아침", "08:00", "1정");
         assertThat(content.data())
@@ -92,7 +92,7 @@ class MedicationReminderServiceTest {
         verify(notificationDispatcher, times(1)).dispatch(
                 eq(WARD_ID), eq(WARD_ID), eq(NotificationType.MEDICATION_REMINDER), captor.capture());
         NotificationContent content = captor.getValue();
-        assertThat(content.title()).isEqualTo("실버브릿지");
+        assertThat(content.title()).isEqualTo("CareAI");
         assertThat(content.body()).isEqualTo("약 드실 시간이에요.").doesNotContain("6개", "외", "코싹열정");
         assertThat(content.data())
                 .containsEntry("type", "MEDICATION_REMINDER")
@@ -112,7 +112,7 @@ class MedicationReminderServiceTest {
 
         ArgumentCaptor<NotificationContent> captor = ArgumentCaptor.forClass(NotificationContent.class);
         verify(notificationDispatcher).dispatch(any(), any(), eq(NotificationType.MEDICATION_REMINDER), captor.capture());
-        assertThat(captor.getValue().title()).isEqualTo("실버브릿지");
+        assertThat(captor.getValue().title()).isEqualTo("CareAI");
         assertThat(captor.getValue().body()).isEqualTo("약 드셨으면 앱에서 '먹었어요'를 눌러 주세요.")
                 .doesNotContain("안 드셨", "혈압약", "감기약");
     }
@@ -156,7 +156,7 @@ class MedicationReminderServiceTest {
 
         ArgumentCaptor<NotificationContent> captor = ArgumentCaptor.forClass(NotificationContent.class);
         verify(notificationDispatcher).dispatch(any(), any(), eq(NotificationType.MEDICATION_REMINDER), captor.capture());
-        assertThat(captor.getValue().title()).isEqualTo("실버브릿지");
+        assertThat(captor.getValue().title()).isEqualTo("CareAI");
         assertThat(captor.getValue().body()).isEqualTo("약 드셨으면 앱에서 '먹었어요'를 눌러 주세요.")
                 .doesNotContain("안 드셨", "혈압약");
         assertThat(captor.getValue().data()).containsEntry("attempt", "2");

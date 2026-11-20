@@ -6,7 +6,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 /**
  * 피보호자 문구 규칙(2026-10-27) 공용 단언. 각 도메인 테스트가 실제 코드가 만든 본문을 넘겨 확인한다.
- * 규칙: 문자 한 줄({@code [실버브릿지] 본문})이 EUC-KR 90바이트 이하 / 숫자 시각·괄호·개수 표기 없음 / 제목이 본문에 다시 나오지 않음.
+ * 규칙: 문자 한 줄({@code [CareAI] 본문})이 EUC-KR 90바이트 이하 / 숫자 시각·괄호·개수 표기 없음 / 제목이 본문에 다시 나오지 않음.
  */
 public final class WardSmsAssertions {
 

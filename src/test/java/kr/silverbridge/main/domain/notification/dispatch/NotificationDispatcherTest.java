@@ -359,7 +359,7 @@ class NotificationDispatcherTest {
     }
 
     private final NotificationContent anomalyContent = NotificationContent.of("이상 상황 감지", "푸시 본문",
-            Map.of("type", "ANOMALY_DETECTED"), "[실버브릿지] 문자 대체 문구");
+            Map.of("type", "ANOMALY_DETECTED"), "[CareAI] 문자 대체 문구");
 
     @Test
     @DisplayName("이상감지: 푸시가 전달되지 않고 다른 채널도 없으면 문자로 대신 보낸다(대체 문구 사용)")
@@ -372,7 +372,7 @@ class NotificationDispatcherTest {
         ArgumentCaptor<NotificationContent> sent = ArgumentCaptor.forClass(NotificationContent.class);
         verify(smsChannel).send(eq(NotificationType.ANOMALY_DETECTED), any(), sent.capture());
         assertThat(sent.getValue().title()).isNull();
-        assertThat(sent.getValue().body()).isEqualTo("[실버브릿지] 문자 대체 문구");
+        assertThat(sent.getValue().body()).isEqualTo("[CareAI] 문자 대체 문구");
         assertThat(result).isEqualTo(NotificationLogResult.SMS_FALLBACK);
     }
 

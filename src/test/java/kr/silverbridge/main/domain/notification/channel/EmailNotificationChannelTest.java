@@ -46,7 +46,7 @@ class EmailNotificationChannelTest {
     @BeforeEach
     void setUp() {
         lenient().when(mailSender.createMimeMessage()).thenAnswer(inv -> new MimeMessage(SESSION));
-        channel = channel(FROM, "실버브릿지", Duration.ofSeconds(2));
+        channel = channel(FROM, "CareAI", Duration.ofSeconds(2));
     }
 
     private EmailNotificationChannel channel(String from, String fromName, Duration timeout) {
@@ -97,7 +97,7 @@ class EmailNotificationChannelTest {
     }
 
     @Test
-    @DisplayName("정상 발송: 보낸 사람 '실버브릿지 <계정 주소>', 제목 '[실버브릿지] {title}', 텍스트·HTML 두 본문")
+    @DisplayName("정상 발송: 보낸 사람 'CareAI <계정 주소>', 제목 '[CareAI] {title}', 텍스트·HTML 두 본문")
     void send_정상() throws Exception {
         ChannelResult result = channel.send(NotificationType.CONNECTION_REQUEST, recipient("guardian@example.com"), content);
 
@@ -108,16 +108,16 @@ class EmailNotificationChannelTest {
                 .containsExactly("guardian@example.com");
         InternetAddress from = (InternetAddress) sent.getFrom()[0];
         assertThat(from.getAddress()).isEqualTo(FROM);
-        assertThat(from.getPersonal()).isEqualTo("실버브릿지");
-        assertThat(sent.getSubject()).isEqualTo("[실버브릿지] 연결 요청");
+        assertThat(from.getPersonal()).isEqualTo("CareAI");
+        assertThat(sent.getSubject()).isEqualTo("[CareAI] 연결 요청");
 
         Map<String, String> bodies = bodies(sent);
         assertThat(bodies.get("text")).isEqualTo("홍길동님이 연결을 요청했습니다."
-                + "\n\n- 이 메일은 실버브릿지 알림 설정에서 이메일 알림을 켜셔서 발송되었습니다."
+                + "\n\n- 이 메일은 CareAI 알림 설정에서 이메일 알림을 켜셔서 발송되었습니다."
                 + "\n- 알림 설정에서 이메일 알림을 끌 수 있습니다.");
         assertThat(bodies.get("html"))
                 .contains("연결 요청", "홍길동님이 연결을 요청했습니다.")
-                .contains("이 메일은 실버브릿지 알림 설정에서 이메일 알림을 켜셔서 발송되었습니다.")
+                .contains("이 메일은 CareAI 알림 설정에서 이메일 알림을 켜셔서 발송되었습니다.")
                 .contains("알림 설정에서 이메일 알림을 끌 수 있습니다.");
     }
 
@@ -149,19 +149,19 @@ class EmailNotificationChannelTest {
     @Test
     @DisplayName("보낸 사람 주소 설정이 비어 있으면 From을 지정하지 않는다(SMTP 서버가 채우는 기존 동작)")
     void send_보낸사람주소없음() throws Exception {
-        channel("", "실버브릿지", Duration.ofSeconds(2))
+        channel("", "CareAI", Duration.ofSeconds(2))
                 .send(NotificationType.CONNECTION_REQUEST, recipient("guardian@example.com"), content);
 
         assertThat(sentMessage().getFrom()).isNull();
     }
 
     @Test
-    @DisplayName("표시 이름 설정이 비어 있으면 '실버브릿지'를 쓴다")
+    @DisplayName("표시 이름 설정이 비어 있으면 'CareAI'를 쓴다")
     void send_표시이름기본값() throws Exception {
         channel(FROM, " ", Duration.ofSeconds(2))
                 .send(NotificationType.CONNECTION_REQUEST, recipient("guardian@example.com"), content);
 
-        assertThat(((InternetAddress) sentMessage().getFrom()[0]).getPersonal()).isEqualTo("실버브릿지");
+        assertThat(((InternetAddress) sentMessage().getFrom()[0]).getPersonal()).isEqualTo("CareAI");
     }
 
     @Test
@@ -170,7 +170,7 @@ class EmailNotificationChannelTest {
         channel.send(NotificationType.CONNECTION_REQUEST, recipient("guardian@example.com"),
                 NotificationContent.of(null, "본문", Map.of()));
 
-        assertThat(sentMessage().getSubject()).isEqualTo("[실버브릿지] 알림");
+        assertThat(sentMessage().getSubject()).isEqualTo("[CareAI] 알림");
     }
 
     @Test
@@ -180,10 +180,10 @@ class EmailNotificationChannelTest {
                 NotificationContent.of(WardNotificationText.TITLE, "김보호님이 가족 연결을 요청했어요.", Map.of()));
 
         MimeMessage sent = sentMessage();
-        assertThat(sent.getSubject()).isEqualTo("실버브릿지");
+        assertThat(sent.getSubject()).isEqualTo("CareAI");
         // HTML에서는 띠가 이미 서비스 이름을 보여 주므로 같은 제목 줄을 다시 쓰지 않는다.
         String html = bodies(sent).get("html");
-        assertThat(html.split("실버브릿지", -1).length - 1)
+        assertThat(html.split("CareAI", -1).length - 1)
                 .as("띠 + <title> + 꼬리말 1번 = 3번, 제목 줄 없음").isEqualTo(3);
     }
 
@@ -272,7 +272,7 @@ class EmailNotificationChannelTest {
     @Test
     @DisplayName("SMTP가 제한 시간 안에 끝나지 않으면 기다리지 않고 PROVIDER_ERROR로 돌려준다 (점검 M-1)")
     void send_시간초과() {
-        EmailNotificationChannel slow = channel(FROM, "실버브릿지", Duration.ofSeconds(1));
+        EmailNotificationChannel slow = channel(FROM, "CareAI", Duration.ofSeconds(1));
         doAnswer(invocation -> {
             Thread.sleep(3000);
             return null;

@@ -33,7 +33,7 @@ class WardNotificationTextTest {
     @DisplayName("90바이트 경계: 90은 단문, 91은 넘는다")
     void fitsSingleSms_경계() {
         int room = WardNotificationText.SINGLE_SMS_MAX_BYTES
-                - WardNotificationText.eucKrBytes(WardNotificationText.smsLine(""));   // "[실버브릿지] " = 13바이트
+                - WardNotificationText.eucKrBytes(WardNotificationText.smsLine(""));   // "[CareAI] " = 9바이트
         assertThat(WardNotificationText.fitsSingleSms("a".repeat(room))).isTrue();
         assertThat(WardNotificationText.fitsSingleSms("a".repeat(room + 1))).isFalse();
     }
@@ -48,6 +48,6 @@ class WardNotificationTextTest {
         channel.send(NotificationType.MEDICATION_REMINDER, recipient,
                 NotificationContent.of(WardNotificationText.TITLE, "약 드실 시간이에요.", Map.of()));
 
-        verify(smsSender).trySend("01012345678", "[실버브릿지] 약 드실 시간이에요.");
+        verify(smsSender).trySend("01012345678", "[CareAI] 약 드실 시간이에요.");
     }
 }
