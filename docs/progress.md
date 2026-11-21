@@ -4,6 +4,9 @@
 
 ---
 
+### [2026-11-21] 메일 머리글 정체성 - EHLO·Message-ID에 컨테이너 ID 제거 (BE)
+- `mail.from: ${MAIL_USERNAME}`(Message-ID `…@gmail.com`)·`mail.smtp.localhost: ${MAIL_SMTP_LOCALHOST:api.devdmu.gosky.kr}`. 알림·비밀번호 재설정 메일 공통, `.env` 무변경. `MailHeaderIdentityConfigTest` 추가, build 2880건 통과. 스팸함 주원인(공용 계정 평판)은 그대로 - 도메인·릴레이는 결정 대기.
+
 ### [2026-11-21] 이메일 알림 실발송 확인 (gosky dev)
 - 시험 보호자 이메일을 사용자 Gmail로 잠시 바꿔 문의 답변 메일 발송 → **Gmail 스팸함 도착**(사용자 스팸 해제). 보낸 사람 `CareAI`·제목·최상위 multipart/alternative·B안 카드 표시 정상, SPF·DKIM·DMARC pass. 스팸 분류는 공용 발송 계정(`gosky.dev@gmail.com`) 평판 문제라 코드 무관 - 도메인 발신 주소·SMTP 릴레이는 운영 결정 대기. 네이버 주소 발송분은 미도착(철자 확인 필요). 상세 `(2026-11-21) design-email-notification-html-style.md` "실발송 확인".
 

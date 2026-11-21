@@ -68,7 +68,12 @@ spring:
     password: ${MAIL_PASSWORD}
     properties:
       mail:
+        # Message-ID 도메인을 보낸 사람(From) 도메인과 맞춘다(2026-11-21). 없으면 컨테이너 ID(예: a8a43e5e5201)로 만들어져
+        # 스팸 판정 신호가 된다. 봉투 발신자(MAIL FROM)도 같은 계정이라 동작은 그대로다.
+        from: ${MAIL_USERNAME}
         smtp:
+          # SMTP 서버에 밝히는 이름(EHLO). 없으면 컨테이너 ID가 나간다. gosky 발송 IP를 가리키는 이름을 기본값으로 둔다(2026-11-21).
+          localhost: ${MAIL_SMTP_LOCALHOST:api.devdmu.gosky.kr}
           auth: true
           starttls:
             enable: true
