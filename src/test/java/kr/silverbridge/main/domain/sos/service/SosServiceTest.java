@@ -112,7 +112,7 @@ class SosServiceTest {
     }
 
     @Test
-    @DisplayName("피보호자 이름이 비어 있으면 폴백('보호 대상자')으로 이벤트 발행 — \"null님이...\" 방지")
+    @DisplayName("피보호자 이름이 비어 있으면 폴백('어르신')으로 이벤트 발행 — \"null님이...\" 방지")
     void trigger_이름없음_폴백() {
         User ward = User.builder().id(WARD_ID).name(null).role(Role.WARD).build();
         when(userRepository.findById(WARD_ID)).thenReturn(Optional.of(ward));
@@ -126,7 +126,7 @@ class SosServiceTest {
 
         ArgumentCaptor<SosTriggeredEvent> pubCaptor = ArgumentCaptor.forClass(SosTriggeredEvent.class);
         verify(eventPublisher).publishEvent(pubCaptor.capture());
-        assertThat(pubCaptor.getValue().wardName()).isEqualTo("보호 대상자");
+        assertThat(pubCaptor.getValue().wardName()).isEqualTo("어르신");
     }
 
     @Test

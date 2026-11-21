@@ -1,5 +1,6 @@
 package kr.silverbridge.main.domain.anomaly.listener;
 
+import kr.silverbridge.main.global.util.ElderName;
 import kr.silverbridge.main.domain.anomaly.dto.DetectedTypeLabel;
 import kr.silverbridge.main.domain.anomaly.event.AnomalyDetectedEvent;
 import kr.silverbridge.main.domain.anomaly.service.AnomalyNotificationCooldown;
@@ -143,7 +144,7 @@ public class AnomalyNotificationListener {
     static String title(AnomalyDetectedEvent event) {
         StringBuilder where = new StringBuilder();
         if (hasText(event.wardName())) {
-            where.append(event.wardName()).append("님 댁");
+            where.append(ElderName.honorific(event.wardName())).append(" 댁");
         }
         if (hasText(event.cameraLabel())) {
             where.append(where.isEmpty() ? "" : " ").append(event.cameraLabel());
@@ -208,7 +209,7 @@ public class AnomalyNotificationListener {
     static String smsFallbackText(AnomalyDetectedEvent event) {
         String what = label(event.detectedType());
         String place = hasText(event.cameraLabel()) ? event.cameraLabel() + "에서" : "등록된 카메라에서";
-        String home = hasText(event.wardName()) ? event.wardName() + "님 댁 " : "";
+        String home = hasText(event.wardName()) ? ElderName.honorific(event.wardName()) + " 댁 " : "";
         String guidance = guardianGuidance(event.detectedType());
         if (guidance.isEmpty()) {
             return "[CareAI] " + home + place + " " + what + " 감지. 앱에서 확인해 주세요.";

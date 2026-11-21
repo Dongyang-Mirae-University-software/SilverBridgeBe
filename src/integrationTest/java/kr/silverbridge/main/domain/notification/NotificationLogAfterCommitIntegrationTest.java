@@ -103,7 +103,7 @@ class NotificationLogAfterCommitIntegrationTest extends PostgresIntegrationTest 
                 .recipientId(GUARDIAN_ID)
                 .wardId(WARD_ID)
                 .title("복약 일정 중지")
-                .body("탈퇴한 보호자가 등록한 피보호자님의 약 1건이 중지되었습니다.")
+                .body("탈퇴한 보호자가 등록한 어르신의 약 1건이 중지되었습니다.")
                 .result(NotificationLogResult.DELIVERED)
                 .channelResults(List.of())
                 .build();

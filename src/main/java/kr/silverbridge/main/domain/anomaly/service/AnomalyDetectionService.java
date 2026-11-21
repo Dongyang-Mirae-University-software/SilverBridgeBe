@@ -1,5 +1,6 @@
 package kr.silverbridge.main.domain.anomaly.service;
 
+import kr.silverbridge.main.global.util.ElderName;
 import kr.silverbridge.main.domain.anomaly.dto.AnomalySignal;
 import kr.silverbridge.main.domain.anomaly.entity.AnomalyEvent;
 import kr.silverbridge.main.domain.anomaly.entity.AnomalyIncident;
@@ -39,7 +40,7 @@ import java.util.Optional;
 public class AnomalyDetectionService {
 
     /** 피보호자 이름이 비어 있을 때 알림 문구에 쓰는 폴백 — "null님 댁…" 같은 문구를 막는다(SosService와 동일). */
-    private static final String FALLBACK_WARD_NAME = "보호 대상자";
+    private static final String FALLBACK_WARD_NAME = ElderName.FALLBACK;
 
     private final AnomalyJudge judge;
     private final AnomalyIncidentService incidentService;

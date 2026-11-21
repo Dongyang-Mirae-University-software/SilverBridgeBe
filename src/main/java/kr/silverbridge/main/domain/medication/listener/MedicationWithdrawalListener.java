@@ -1,5 +1,6 @@
 package kr.silverbridge.main.domain.medication.listener;
 
+import kr.silverbridge.main.global.util.ElderName;
 import kr.silverbridge.main.domain.connection.service.ConnectionService;
 import kr.silverbridge.main.domain.medication.service.MedicationWithdrawalService;
 import kr.silverbridge.main.domain.notification.channel.NotificationContent;
@@ -41,7 +42,7 @@ import java.util.Map;
 public class MedicationWithdrawalListener {
 
     /** 피보호자 이름을 못 찾았을 때의 표시용 폴백(알림 문구에 null이 들어가지 않게). */
-    private static final String FALLBACK_WARD_NAME = "피보호자";
+    private static final String FALLBACK_WARD_NAME = ElderName.FALLBACK;
 
     private final MedicationWithdrawalService medicationWithdrawalService;
     private final ConnectionService connectionService;
@@ -76,8 +77,8 @@ public class MedicationWithdrawalListener {
                 .orElse(FALLBACK_WARD_NAME);
         NotificationContent content = NotificationContent.of(
                 "복약 일정 중지",
-                "탈퇴한 보호자가 등록한 %s님의 약 %d건이 중지되었습니다.\n계속 복용해야 한다면 다시 등록해 주세요."
-                        .formatted(wardName, stoppedCount),
+                "탈퇴한 보호자가 등록한 %s의 약 %d건이 중지되었습니다.\n계속 복용해야 한다면 다시 등록해 주세요."
+                        .formatted(ElderName.honorific(wardName), stoppedCount),
                 Map.of("type", "MEDICATION_STOPPED",
                         "wardId", wardId,
                         "stoppedCount", String.valueOf(stoppedCount)));
