@@ -226,6 +226,33 @@ class EmailNotificationChannelTest {
         assertThat(bodies.get("text")).startsWith("톰&제리님이 <b>요청</b>했어요.");
     }
 
+    @Test
+    @DisplayName("이메일이 허용된 종류는 모두 전용 칩 문구가 있다(새 종류에 이메일을 허용하면 문구도 더해야 한다)")
+    void label_허용종류_전용문구() {
+        java.util.List<NotificationType> emailTypes = java.util.Arrays.stream(NotificationType.values())
+                .filter(t -> t.allowedChannels().contains(NotificationChannelType.EMAIL))
+                .toList();
+
+        assertThat(emailTypes).isNotEmpty();
+        assertThat(emailTypes).allSatisfy(t -> assertThat(EmailNotificationChannel.label(t))
+                .as("칩 문구: %s", t).isNotEqualTo(EmailNotificationChannel.GENERIC_LABEL));
+        assertThat(EmailNotificationChannel.label(NotificationType.CONNECTION_ACCEPTED)).isEqualTo("가족 연결");
+        assertThat(EmailNotificationChannel.label(NotificationType.INQUIRY_ANSWERED)).isEqualTo("문의 답변");
+        assertThat(EmailNotificationChannel.label(NotificationType.MEDICATION_MISSED)).isEqualTo("복약 확인");
+        assertThat(EmailNotificationChannel.label(null)).isEqualTo(EmailNotificationChannel.GENERIC_LABEL);
+    }
+
+    @Test
+    @DisplayName("보낸 메일 HTML에 알림 종류 칩이 들어가고, 텍스트 본문에는 칩이 없다(텍스트 대체 본문 그대로)")
+    void send_칩() throws Exception {
+        channel.send(NotificationType.INQUIRY_ANSWERED, recipient("guardian@example.com"),
+                NotificationContent.of("문의 답변 완료", "문의하신 내용에 답변이 등록되었습니다.", Map.of()));
+
+        Map<String, String> bodies = bodies(sentMessage());
+        assertThat(bodies.get("html")).contains(">문의 답변</span>");
+        assertThat(bodies.get("text")).doesNotContain("문의 답변</").startsWith("문의하신 내용에 답변이 등록되었습니다.");
+    }
+
     @ParameterizedTest
     @ValueSource(strings = {"", "  "})
     @DisplayName("주소가 비어 있으면 보내지 않고 NO_EMAIL 실패로 돌려준다")

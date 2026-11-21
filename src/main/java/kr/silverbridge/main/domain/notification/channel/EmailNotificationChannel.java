@@ -88,7 +88,7 @@ public class EmailNotificationChannel implements NotificationChannel {
 
         MimeMessage message;
         try {
-            message = buildMessage(to.trim(), content);
+            message = buildMessage(to.trim(), type, content);
         } catch (MessagingException | UnsupportedEncodingException | MailException e) {
             // 메일 객체를 만들지 못해도 발송 흐름을 막지 않고 실패로 기록한다. 예외 메시지에 주소가 섞일 수 있어 클래스명만.
             log.warn("이메일 알림 작성 실패: userId={}, exception={}", recipient.userId(), e.getClass().getSimpleName());
@@ -105,7 +105,7 @@ public class EmailNotificationChannel implements NotificationChannel {
         }
     }
 
-    private MimeMessage buildMessage(String to, NotificationContent content)
+    private MimeMessage buildMessage(String to, NotificationType type, NotificationContent content)
             throws MessagingException, UnsupportedEncodingException {
         MimeMessage message = mailSender.createMimeMessage();
         // 머리글만 helper로 쓰고(multipart 아님), 본문은 최상위를 multipart/alternative로 직접 만든다(점검 L-3).
@@ -121,8 +121,8 @@ public class EmailNotificationChannel implements NotificationChannel {
         MimeBodyPart textPart = new MimeBodyPart();
         textPart.setText(text(content), UTF_8, "plain");
         MimeBodyPart htmlPart = new MimeBodyPart();
-        htmlPart.setText(EmailNotificationHtml.render(SERVICE_NAME, title, content.body(), FOOTER_LINE_1, FOOTER_LINE_2),
-                UTF_8, "html");
+        htmlPart.setText(EmailNotificationHtml.render(SERVICE_NAME, label(type), title, content.body(),
+                FOOTER_LINE_1, FOOTER_LINE_2), UTF_8, "html");
         // 순서가 뜻이다: 메일 앱은 마지막(가장 풍부한) 본문을 고르고, HTML을 못 열면 앞의 텍스트를 보여 준다.
         MimeMultipart alternative = new MimeMultipart("alternative");
         alternative.addBodyPart(textPart);
@@ -130,6 +130,26 @@ public class EmailNotificationChannel implements NotificationChannel {
         message.setContent(alternative);
         return message;
     }
+
+    /**
+     * HTML 카드의 알림 종류 칩 문구(2026-11-21 디자인 B안). 이메일이 허용된 종류({@code Email.ALLOWED})만 이 채널에
+     * 오므로 그 종류마다 문구를 둔다 - 새 종류에 이메일을 허용하면 여기에도 문구를 더한다
+     * ({@code EmailNotificationChannelTest}가 허용 종류 전부에 전용 문구가 있는지 확인). 그 밖은 "알림".
+     */
+    static String label(NotificationType type) {
+        if (type == null) {
+            return GENERIC_LABEL;
+        }
+        return switch (type) {
+            case CONNECTION_REQUEST, CONNECTION_ACCEPTED, CONNECTION_REFUSED, CONNECTION_DISCONNECTED,
+                 CONNECTION_FORCED -> "가족 연결";
+            case INQUIRY_ANSWERED -> "문의 답변";
+            case MEDICATION_MISSED -> "복약 확인";
+            default -> GENERIC_LABEL;
+        };
+    }
+
+    static final String GENERIC_LABEL = "알림";
 
     private static String title(NotificationContent content) {
         String title = content.title();

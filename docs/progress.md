@@ -4,6 +4,9 @@
 
 ---
 
+### [2026-11-21] 이메일 알림 HTML 디자인 B안(카드형 다듬기) (BE)
+- 진한 초록 띠 + 카드가 앱 화면처럼 어색해 A(편지형)·B(카드형) 미리보기(360·600px) 후 사용자가 B 선택. 크림 바탕·테라코타 `CareAI` 줄(FE 앱 색)·흰 카드에 알림 종류 칩(가족 연결·문의 답변·복약 확인)·제목 22px·본문 18px·카드 밖 꼬리말 14px. 꼬리말·접두어·보낸 사람·텍스트 본문·허용 종류·디스패처 무변경. build 2877건 통과. 상세 `(2026-11-21) design-email-notification-html-style.md`.
+
 ### [2026-11-21] 이메일 알림 점검 조치 - L-1~L-3 (BE)
 - L-1 비밀번호 재설정 문자·메일 제목 `[CareAI]` 테스트 고정 · L-2 제목 CRLF 헤더 끼워 넣기 방지 테스트 · L-3 메일 최상위를 multipart/alternative로 직접 구성(mixed·related 제거, 첨부 표시 방지). M-1은 FE #318(manifest·공유 문구 CareAI, gosky FE dev 반영). BE #511 `023a4144` 두 서버 반영, build 2873건 통과. 상세 `(2026-11-21) audit-email-notification-html.md` "조치".
 
