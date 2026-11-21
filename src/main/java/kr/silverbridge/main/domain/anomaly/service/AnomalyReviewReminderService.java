@@ -1,5 +1,6 @@
 package kr.silverbridge.main.domain.anomaly.service;
 
+import kr.silverbridge.main.global.util.ElderName;
 import kr.silverbridge.main.domain.anomaly.dto.DetectedTypeLabel;
 import kr.silverbridge.main.domain.notification.channel.NotificationContent;
 import kr.silverbridge.main.domain.notification.dispatch.NotificationDispatcher;
@@ -105,8 +106,8 @@ public class AnomalyReviewReminderService {
         String label = DetectedTypeLabel.of(target.detectedType());
         String location = target.cameraLabel() != null ? target.cameraLabel() : FALLBACK_LOCATION;
         String detectedAt = target.startedAt().atZoneSameInstant(AnomalyReviewClock.KST).format(DETECTED_AT_FORMAT);
-        String body = "%s · %s님 %s에서 %s 감지가 있었습니다.\n실제 상황이었는지 확인해 주세요."
-                .formatted(detectedAt, target.wardName(), location, label);
+        String body = "%s · %s %s에서 %s 감지가 있었습니다.\n실제 상황이었는지 확인해 주세요."
+                .formatted(detectedAt, ElderName.honorific(target.wardName()), location, label);
 
         return NotificationContent.of("이상감지 확인이 필요해요", body, Map.of(
                 "type", "ANOMALY_REVIEW_REQUIRED",
@@ -138,8 +139,8 @@ public class AnomalyReviewReminderService {
         String label = DetectedTypeLabel.of(target.detectedType());
         String location = target.cameraLabel() != null ? target.cameraLabel() : FALLBACK_LOCATION;
         String detectedAt = target.startedAt().atZoneSameInstant(AnomalyReviewClock.KST).format(DETECTED_AT_FORMAT);
-        String body = "%s · %s님 %s의 %s 감지에 대해 다른 보호자와 판정이 다릅니다.\n다시 확인해 주세요."
-                .formatted(detectedAt, target.wardName(), location, label);
+        String body = "%s · %s %s의 %s 감지에 대해 다른 보호자와 판정이 다릅니다.\n다시 확인해 주세요."
+                .formatted(detectedAt, ElderName.honorific(target.wardName()), location, label);
 
         return NotificationContent.of("판정 확인 요청", body, Map.of(
                 "type", "ANOMALY_REVIEW_CONFLICTED",

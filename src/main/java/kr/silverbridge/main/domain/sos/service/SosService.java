@@ -1,6 +1,7 @@
 package kr.silverbridge.main.domain.sos.service;
 
 
+import kr.silverbridge.main.global.util.ElderName;
 import kr.silverbridge.main.domain.sos.dto.SosResponse;
 import kr.silverbridge.main.domain.sos.entity.SosEvent;
 import kr.silverbridge.main.domain.sos.entity.SosTriggerType;
@@ -32,7 +33,7 @@ import org.springframework.util.StringUtils;
 public class SosService {
 
     /** 피보호자 이름이 비어 있을 때 알림 문구에 쓰는 폴백 — "null님이..." 같은 문구를 막는다. */
-    private static final String FALLBACK_WARD_NAME = "보호 대상자";
+    private static final String FALLBACK_WARD_NAME = ElderName.FALLBACK;
 
     private final SosEventRepository sosEventRepository;
     private final UserRepository userRepository;

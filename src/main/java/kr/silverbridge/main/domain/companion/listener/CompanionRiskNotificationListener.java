@@ -1,5 +1,6 @@
 package kr.silverbridge.main.domain.companion.listener;
 
+import kr.silverbridge.main.global.util.ElderName;
 import kr.silverbridge.main.domain.companion.event.CompanionRiskDetectedEvent;
 import kr.silverbridge.main.domain.connection.service.ConnectionService;
 import kr.silverbridge.main.domain.notification.channel.NotificationContent;
@@ -33,7 +34,7 @@ import java.util.Map;
 @RequiredArgsConstructor
 public class CompanionRiskNotificationListener {
 
-    private static final String FALLBACK_WARD_NAME = "피보호자";
+    private static final String FALLBACK_WARD_NAME = ElderName.FALLBACK;
 
     private final ConnectionService connectionService;
     private final NotificationDispatcher notificationDispatcher;
@@ -49,7 +50,7 @@ public class CompanionRiskNotificationListener {
         }
         String wardName = userRepository.findById(event.wardId()).map(User::getName).orElse(FALLBACK_WARD_NAME);
         String title = "안부 말벗 확인 필요";
-        String body = wardName + "님과의 안부 대화에서 살펴볼 신호가 있었어요. 연락해 보세요.";
+        String body = ElderName.honorific(wardName) + "과의 안부 대화에서 살펴볼 신호가 있었어요. 연락해 보세요.";
         String smsText = "[CareAI] " + body;
         int delivered = 0;
         for (String guardianId : guardianIds) {

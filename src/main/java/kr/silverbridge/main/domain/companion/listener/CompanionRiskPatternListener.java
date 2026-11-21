@@ -1,5 +1,6 @@
 package kr.silverbridge.main.domain.companion.listener;
 
+import kr.silverbridge.main.global.util.ElderName;
 import kr.silverbridge.main.domain.companion.config.CompanionProperties;
 import kr.silverbridge.main.domain.companion.entity.CompanionSession;
 import kr.silverbridge.main.domain.companion.event.CompanionRiskPatternCheckEvent;
@@ -48,7 +49,7 @@ import java.util.Set;
 public class CompanionRiskPatternListener {
 
     private static final ZoneId KST = ZoneId.of("Asia/Seoul");
-    private static final String FALLBACK_WARD_NAME = "피보호자";
+    private static final String FALLBACK_WARD_NAME = ElderName.FALLBACK;
 
     private final CompanionProperties properties;
     private final CompanionSessionRepository sessionRepository;
@@ -99,7 +100,7 @@ public class CompanionRiskPatternListener {
         }
         String wardName = userRepository.findById(wardId).map(User::getName).orElse(FALLBACK_WARD_NAME);
         String title = "안부 말벗 확인 필요";
-        String body = wardName + "님과의 최근 며칠 안부 대화에서 걱정되는 말이 여러 번 있었어요. 안부를 확인해 주세요.";
+        String body = ElderName.honorific(wardName) + "과의 최근 며칠 안부 대화에서 걱정되는 말이 여러 번 있었어요. 안부를 확인해 주세요.";
         String smsText = "[CareAI] " + body;
         int sent = 0;
         for (Map.Entry<String, Integer> target : targets.entrySet()) {

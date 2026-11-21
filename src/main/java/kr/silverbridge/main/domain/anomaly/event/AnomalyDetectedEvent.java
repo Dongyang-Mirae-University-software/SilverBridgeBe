@@ -17,7 +17,7 @@ import java.time.OffsetDateTime;
  * @param incidentId     이 감지가 속한 상황 ID. 보호자가 알림에서 바로 오탐 응답을 하려면 <b>판정 단위</b>인
  *                       상황 식별자가 필요하다(이력 행 ID로는 판정할 수 없다).
  * @param wardId         카메라 소유 피보호자 ID
- * @param wardName       피보호자 이름 (비어 있으면 발행 측에서 "보호 대상자"로 폴백)
+ * @param wardName       피보호자 이름 (비어 있으면 발행 측에서 "어르신"(ElderName.FALLBACK)으로 폴백)
  * @param sessionId      감지된 카메라 SessionID
  * @param cameraLabel    카메라 설치 위치(방 이름 — 거실·안방 등)
  * @param detectedType   감지 종류(현재 FIRE - 연기도 화재로 받는다)
