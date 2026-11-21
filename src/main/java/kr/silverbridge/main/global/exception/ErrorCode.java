@@ -29,7 +29,7 @@ public enum ErrorCode {
     CANNOT_MODIFY_ADMIN(HttpStatus.FORBIDDEN, "관리자 계정은 변경하거나 삭제할 수 없습니다."),
     // 관리자 본인 탈퇴 차단(USER-G08, 결정 D4-A) - 관리자는 DB로만 만들어져 마지막 관리자가 사라지면 운영 주체가 없어진다
     ADMIN_CANNOT_WITHDRAW(HttpStatus.FORBIDDEN, "관리자 계정은 탈퇴할 수 없습니다."),
-    INVALID_ROLE(HttpStatus.BAD_REQUEST, "역할은 피보호자 또는 보호자만 선택할 수 있습니다."),
+    INVALID_ROLE(HttpStatus.BAD_REQUEST, "역할은 어르신 또는 보호자만 선택할 수 있습니다."),
     EMAIL_ALREADY_EXISTS(HttpStatus.CONFLICT, "이미 사용 중인 이메일입니다."),
     PHONE_ALREADY_EXISTS(HttpStatus.CONFLICT, "이미 사용 중인 전화번호입니다."),
     INVALID_PASSWORD(HttpStatus.UNAUTHORIZED, "비밀번호가 올바르지 않습니다."),
@@ -41,7 +41,7 @@ public enum ErrorCode {
     WITHDRAW_CONFIRMATION_MISMATCH(HttpStatus.BAD_REQUEST, "탈퇴 확인 문구가 일치하지 않습니다. \"탈퇴\"를 정확히 입력해주세요."),
     INVALID_STATUS(HttpStatus.BAD_REQUEST, "유효하지 않은 상태값입니다."),
     WARD_CANNOT_BE_RESTRICTED(HttpStatus.BAD_REQUEST,
-            "피보호자 계정은 이용 제한할 수 없습니다. 긴급 도움 요청(SOS)을 보낼 수 없게 됩니다."),
+            "어르신 계정은 이용 제한할 수 없습니다. 긴급 도움 요청(SOS)을 보낼 수 없게 됩니다."),
 
     // 인증
     INVALID_TOKEN(HttpStatus.UNAUTHORIZED, "로그인 정보가 유효하지 않습니다. 다시 로그인해주세요."),
@@ -58,7 +58,7 @@ public enum ErrorCode {
     CONNECTION_ALREADY_EXISTS(HttpStatus.CONFLICT, "이미 연결되어 있거나 요청 중인 관계입니다."),
     CONNECTION_NOT_ACTIVE(HttpStatus.CONFLICT, "활성화된 연결 관계가 아닙니다."),
     CONNECTION_NOT_PENDING(HttpStatus.CONFLICT, "수락 대기 중인 연결 관계가 아닙니다."),
-    INVALID_CONNECTION_ROLE(HttpStatus.BAD_REQUEST, "보호자와 피보호자 역할이 맞지 않습니다."),
+    INVALID_CONNECTION_ROLE(HttpStatus.BAD_REQUEST, "보호자와 어르신 역할이 맞지 않습니다."),
     CONNECTION_NOT_AUTHORIZED(HttpStatus.FORBIDDEN, "해당 연결에 대한 권한이 없습니다."),
     // 피보호자 경로용(문구는 수신자 기준 - 보호자용과 분리)
     CONNECTION_NOT_OWNED(HttpStatus.FORBIDDEN, "본인에게 온 연결 요청만 처리할 수 있습니다."),
@@ -109,7 +109,7 @@ public enum ErrorCode {
     // 타인 카메라 접근 — 무슨 일이 일어났는지 그대로 안내한다(시니어 UX 우선, 2026-07-14 정책)
     CAMERA_NOT_AUTHORIZED(HttpStatus.FORBIDDEN, "본인이 등록한 카메라만 사용할 수 있습니다."),
     // 보호자 경로용 - 문구는 수신자 기준이라 피보호자용(CAMERA_NOT_AUTHORIZED)과 나눈다(2026-08-06 정책)
-    CAMERA_NOT_CONNECTED(HttpStatus.FORBIDDEN, "연결된 피보호자의 카메라만 볼 수 있습니다."),
+    CAMERA_NOT_CONNECTED(HttpStatus.FORBIDDEN, "연결된 어르신의 카메라만 볼 수 있습니다."),
     // 방은 정해진 목록(CameraRoom)에서만 고른다, 한 방에는 카메라 1대(2026-10-05)
     CAMERA_ROOM_INVALID(HttpStatus.BAD_REQUEST, "선택할 수 없는 방입니다. 목록에서 방을 골라주세요."),
     CAMERA_LABEL_DUPLICATED(HttpStatus.CONFLICT, "같은 방에 이미 등록된 카메라가 있습니다."),
@@ -127,8 +127,8 @@ public enum ErrorCode {
 
     // SOS 이력 조회 (처리(ACK) 기능 철회로 SOS_EVENT_NOT_FOUND 제거 - 2026-08-26, V39)
     // 연결되지 않은 피보호자의 이력 접근 — 404 위장 대신 그대로 안내한다(2026-07-14 정책)
-    SOS_NOT_AUTHORIZED(HttpStatus.FORBIDDEN, "연결된 피보호자의 SOS 이력만 볼 수 있습니다."),
-    DASHBOARD_NOT_AUTHORIZED(HttpStatus.FORBIDDEN, "연결된 피보호자의 대시보드만 볼 수 있습니다."),
+    SOS_NOT_AUTHORIZED(HttpStatus.FORBIDDEN, "연결된 어르신의 SOS 이력만 볼 수 있습니다."),
+    DASHBOARD_NOT_AUTHORIZED(HttpStatus.FORBIDDEN, "연결된 어르신의 대시보드만 볼 수 있습니다."),
 
     // 내 알림 기록 (2026-11-04) - 남의 알림은 404 위장 대신 그대로 안내한다(2026-07-14 IDOR 정책)
     NOTIFICATION_NOT_FOUND(HttpStatus.NOT_FOUND, "알림을 찾을 수 없습니다."),
@@ -137,7 +137,7 @@ public enum ErrorCode {
     // 복약 알림
     MEDICATION_NOT_FOUND(HttpStatus.NOT_FOUND, "복약 정보를 찾을 수 없습니다."),
     // 연결되지 않은 피보호자의 약 접근(보호자 경로) — 404 위장 대신 그대로 안내한다(2026-07-14 정책)
-    MEDICATION_NOT_AUTHORIZED(HttpStatus.FORBIDDEN, "연결된 피보호자의 복약 정보만 볼 수 있습니다."),
+    MEDICATION_NOT_AUTHORIZED(HttpStatus.FORBIDDEN, "연결된 어르신의 복약 정보만 볼 수 있습니다."),
     // 타인의 약 체크 시도(피보호자 경로) — 위 문구는 "연결된 피보호자"를 전제해 피보호자에게는 뜻이 통하지 않는다.
     // 무슨 일이 일어났는지 그대로 안내한다는 2026-07-14 정책의 취지를 살리려면 수신자 기준의 문구가 필요하다.
     MEDICATION_NOT_OWNED(HttpStatus.FORBIDDEN, "본인의 약만 체크할 수 있습니다."),
@@ -171,7 +171,7 @@ public enum ErrorCode {
     // 이상감지 판정 (2026-08-31)
     ANOMALY_INCIDENT_NOT_FOUND(HttpStatus.NOT_FOUND, "이상감지 기록을 찾을 수 없습니다."),
     // 없는 자원은 404, 남의 자원은 403으로 그대로 안내한다(2026-07-14 정책). 문구는 수신자(보호자) 기준이다
-    ANOMALY_NOT_AUTHORIZED(HttpStatus.FORBIDDEN, "연결된 피보호자의 이상감지 기록만 볼 수 있습니다."),
+    ANOMALY_NOT_AUTHORIZED(HttpStatus.FORBIDDEN, "연결된 어르신의 이상감지 기록만 볼 수 있습니다."),
 
     // 이상감지 영상 클립 (2026-10-04). 없음·비공개(오탐 확정)·보관 기간 경과·피보호자의 연결 0건은 모두 404 -
     // 비공개 사유(오탐·연결 상태)를 응답으로 구분해 알리지 않는다
@@ -189,7 +189,7 @@ public enum ErrorCode {
     AI_STATS_TIMEOUT(HttpStatus.GATEWAY_TIMEOUT, "AI 통계 응답이 늦습니다. 잠시 후 다시 시도해주세요."),
     CHAT_LOG_NOT_FOUND(HttpStatus.NOT_FOUND, "상담 기록을 찾을 수 없습니다."),
     CHAT_LIMIT_EXCEEDED(HttpStatus.TOO_MANY_REQUESTS, "이전 상담 응답을 기다리는 중입니다. 잠시 후 다시 시도해주세요."),
-    CHAT_WARD_NOT_CONNECTED(HttpStatus.FORBIDDEN, "연결된 피보호자만 대신 상담·예약할 수 있습니다."),
+    CHAT_WARD_NOT_CONNECTED(HttpStatus.FORBIDDEN, "연결된 어르신만 대신 상담·예약할 수 있습니다."),
 
     // 챗봇 마이크 음성 인식 중계 (2026-11-04). AI 오류 문구는 그대로 내리지 않고 고정 문구만 쓴다
     CHAT_STT_DISABLED(HttpStatus.SERVICE_UNAVAILABLE, "지금은 음성 입력을 쓸 수 없어요. 글로 입력해 주세요."),
@@ -213,7 +213,7 @@ public enum ErrorCode {
     // 없는 대화는 404, 남의 대화는 403으로 그대로 안내한다(2026-07-14 정책). 피보호자 경로라 문구는 본인 기준이다
     COMPANION_SESSION_NOT_OWNED(HttpStatus.FORBIDDEN, "본인의 안부 대화만 이어갈 수 있습니다."),
     // 보호자 경로용(2026-11-04 PR-B) - 문구는 수신자(보호자) 기준(2026-08-06 정책)
-    COMPANION_NOT_AUTHORIZED(HttpStatus.FORBIDDEN, "연결된 피보호자의 안부 대화만 볼 수 있습니다."),
+    COMPANION_NOT_AUTHORIZED(HttpStatus.FORBIDDEN, "연결된 어르신의 안부 대화만 볼 수 있습니다."),
     COMPANION_SESSION_ENDED(HttpStatus.CONFLICT, "이미 끝난 안부 대화입니다."),
     COMPANION_SESSION_LOST(HttpStatus.CONFLICT, "대화가 끊겼습니다. 다음 시간에 다시 이야기해요."),
     COMPANION_ANSWER_EMPTY(HttpStatus.BAD_REQUEST, "대답이 비어 있습니다."),
@@ -233,7 +233,7 @@ public enum ErrorCode {
     COMPANION_AUDIO_BAD_UPSTREAM(HttpStatus.BAD_GATEWAY, "말벗 목소리를 받지 못했습니다."),
 
     // ========== 보호자 게임 기록 중계 (2026-11-19) ==========
-    GAME_NOT_AUTHORIZED(HttpStatus.FORBIDDEN, "연결된 피보호자의 게임 기록만 볼 수 있습니다."),
+    GAME_NOT_AUTHORIZED(HttpStatus.FORBIDDEN, "연결된 어르신의 게임 기록만 볼 수 있습니다."),
     GAME_INVALID_DAYS(HttpStatus.BAD_REQUEST, "조회 기간은 1일부터 366일까지입니다."),
     GAME_UNAVAILABLE(HttpStatus.SERVICE_UNAVAILABLE, "게임 기록을 지금 불러올 수 없습니다. 잠시 후 다시 시도해주세요.");
 

@@ -21,8 +21,8 @@ public record AdminForceConnectRequest(
         @Size(min = 6, max = 6, message = "사용자 ID는 6자리입니다.")
         String guardianId,
 
-        @Schema(description = "피보호자 회원 ID (6자리)", example = "C82D3E")
-        @NotBlank(message = "피보호자 ID를 입력해주세요.")
+        @Schema(description = "어르신 회원 ID (6자리)", example = "C82D3E")
+        @NotBlank(message = "어르신 ID를 입력해주세요.")
         @Size(min = 6, max = 6, message = "사용자 ID는 6자리입니다.")
         String wardId
 ) {}

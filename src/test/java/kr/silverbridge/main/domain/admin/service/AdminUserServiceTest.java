@@ -335,7 +335,7 @@ class AdminUserServiceTest {
             assertThat(user.getRole()).isEqualTo(Role.WARD);
             verify(connectionService).tearDownConnectionsOnRoleChange(USER_ID);
             verify(auditLogService).log(eq(ADMIN_ID), eq(AdminAuditAction.USER_ROLE_CHANGE), eq(USER_ID),
-                    eq("역할 변경: 보호자 → 피보호자 (연결 3건 해제)"));
+                    eq("역할 변경: 보호자 → 어르신 (연결 3건 해제)"));
         }
 
         @Test
@@ -373,7 +373,7 @@ class AdminUserServiceTest {
             assertThat(user.getRole()).isEqualTo(Role.GUARDIAN);
             verify(cameraService).deleteAllByWard(WARD_ID);
             verify(auditLogService).log(eq(ADMIN_ID), eq(AdminAuditAction.USER_ROLE_CHANGE), eq(WARD_ID),
-                    eq("역할 변경: 피보호자 → 보호자 (연결 1건 해제, 카메라 2대 삭제)"));
+                    eq("역할 변경: 어르신 → 보호자 (연결 1건 해제, 카메라 2대 삭제)"));
         }
 
         @Test
@@ -387,7 +387,7 @@ class AdminUserServiceTest {
 
             verify(medicationRoleChangeService).stopAllOwnedByWard(WARD_ID);
             verify(auditLogService).log(eq(ADMIN_ID), eq(AdminAuditAction.USER_ROLE_CHANGE), eq(WARD_ID),
-                    eq("역할 변경: 피보호자 → 보호자 (연결 1건 해제, 복약 3건 중지)"));
+                    eq("역할 변경: 어르신 → 보호자 (연결 1건 해제, 복약 3건 중지)"));
         }
 
         @Test
