@@ -4,6 +4,11 @@
 
 ---
 
+### [2026-11-21] 최종 전체 점검(템플릿 D) - BE·FE·AI, 11-10 이후 변경분 + 기능 간 상호작용 - 조건부 PASS (🟠 1·🟡 6·🟢 15)
+- 기준 BE `1ec48a82`·FE `f7f1a56`·AI `dcc0f99`(세 저장소 gosky 반영 일치). BE 단위 2877·FE 단위 722·브라우저 840·AI pytest 4441 전부 통과, OWASP 7.0 이상 0, npm audit 0. BE 통합 테스트는 vkcs CD 기록(최신 코드 success)으로 대신.
+- 생명주기 × 데이터·알림 × 수신자·저장소 간 계약 32건·정책 규칙 약 165개 대조: 정리 누락·정지 수신자 발송·디스패처 우회 0. gosky dev 읽기 확인: 컨테이너 정상, API ERROR 0, AI 6017 바깥 차단.
+- 🟠 H-1 말벗 턴 '슬픔·화남'이 BE에서 기분 null(AI 턴 응답에 `moodCode` 없음 - AI에서 고침, 보호자 대화 보기 턴 기분만 영향) · 🟡 종료 대기·안내 문구(결정)·라우터 실패 두통 119·게임 중계 상한·회피 문장·anthropic 핀. 코드 수정은 사용자 결정 대기. 상세 `(2026-11-21) audit-full-2026-11-final.md`.
+
 ### [2026-11-21] 메일 머리글 정체성 - EHLO·Message-ID에 컨테이너 ID 제거 (BE)
 - `mail.from: ${MAIL_USERNAME}`(Message-ID `…@gmail.com`)·`mail.smtp.localhost: ${MAIL_SMTP_LOCALHOST:api.devdmu.gosky.kr}`. 알림·비밀번호 재설정 메일 공통, `.env` 무변경. `MailHeaderIdentityConfigTest` 추가, build 2880건 통과. 스팸함 주원인(공용 계정 평판)은 그대로 - 도메인·릴레이는 결정 대기.
 
