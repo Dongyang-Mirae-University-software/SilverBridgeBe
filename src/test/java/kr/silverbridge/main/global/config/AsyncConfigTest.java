@@ -74,9 +74,33 @@ class AsyncConfigTest {
             assertThat(executor.getQueueCapacity()).isEqualTo(500);
             assertThat(executor.getThreadNamePrefix()).isEqualTo("notify-");
             assertThat(executor).extracting("waitForTasksToCompleteOnShutdown").isEqualTo(true);
-            assertThat(executor).extracting("awaitTerminationMillis").isEqualTo(20_000L);
+            // 종료 단계에서 먼저 비우고(UrgentNotificationDrainLifecycle) 파괴 때는 잔여만 기다린다(2026-11-22 I-1)
+            assertThat(executor).extracting("awaitTerminationMillis").isEqualTo(3_000L);
         } finally {
             executor.shutdown();
+        }
+    }
+
+    @Test
+    @DisplayName("풀별 파괴 잔여 대기 - 긴급 3·일반 3·클립 2·AI 삭제 2·실시간 분석 1초(차례로 더해지므로 풀마다 작게, 2026-11-22 I-1)")
+    void 풀별_잔여대기() {
+        AsyncConfig config = new AsyncConfig();
+        java.util.Map<String, ThreadPoolTaskExecutor> executors = new java.util.LinkedHashMap<>();
+        executors.put("urgent", (ThreadPoolTaskExecutor) config.urgentNotificationExecutor());
+        executors.put("notification", (ThreadPoolTaskExecutor) config.notificationExecutor());
+        executors.put("clip", (ThreadPoolTaskExecutor) config.clipExecutor());
+        executors.put("aiPurge", (ThreadPoolTaskExecutor) config.aiPurgeExecutor());
+        executors.put("liveAnalysis", (ThreadPoolTaskExecutor) config.liveAnalysisExecutor());
+        try {
+            java.util.Map<String, Object> awaits = new java.util.LinkedHashMap<>();
+            executors.forEach((name, executor) -> awaits.put(name,
+                    org.springframework.test.util.ReflectionTestUtils.getField(executor, "awaitTerminationMillis")));
+            assertThat(awaits).containsExactly(
+                    java.util.Map.entry("urgent", 3_000L), java.util.Map.entry("notification", 3_000L),
+                    java.util.Map.entry("clip", 2_000L), java.util.Map.entry("aiPurge", 2_000L),
+                    java.util.Map.entry("liveAnalysis", 1_000L));
+        } finally {
+            executors.values().forEach(ThreadPoolTaskExecutor::shutdown);
         }
     }
 
@@ -93,7 +117,7 @@ class AsyncConfigTest {
             assertThat(urgent.getQueueCapacity()).isEqualTo(200);
             assertThat(urgent.getThreadNamePrefix()).isEqualTo("notify-urgent-");
             assertThat(urgent).extracting("waitForTasksToCompleteOnShutdown").isEqualTo(true);
-            assertThat(urgent).extracting("awaitTerminationMillis").isEqualTo(20_000L);
+            assertThat(urgent).extracting("awaitTerminationMillis").isEqualTo(3_000L);
         } finally {
             urgent.shutdown();
             general.shutdown();
