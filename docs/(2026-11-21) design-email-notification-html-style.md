@@ -53,3 +53,7 @@
 - **스팸 분류는 코드가 아니라 발송 계정 평판 문제다**: `gosky.dev@gmail.com`은 공용 개발 Gmail이고 인증은 모두 통과했다. 처음 받는 사용자에게는 스팸함으로 갈 수 있다. 근본 해결은 우리 도메인 발신 주소나 메일 발송 서비스(SMTP 릴레이) - `.env.dev` 변경이 필요해 결정 대기.
 - 네이버 주소(문의 635)로도 보냈으나(EMAIL `DELIVERED`) 받은편지함에 없었다 - 주소 철자 확인 필요, 미확인으로 둔다.
 - 남은 데이터: 시험 문의 634·635와 답변(API로 지울 수 없음). 알림 설정은 원래대로(FCM만) 되돌렸다.
+
+## 후속 - 메일 머리글 정체성 (2026-11-21)
+
+실발송 원본 머리글에서 `Received: from a8a43e5e5201`(EHLO)·`Message-ID: <…@a8a43e5e5201>`처럼 컨테이너 ID가 나갔다. `application.yaml`에 `mail.from: ${MAIL_USERNAME}`(Message-ID → `…@gmail.com`, From과 같은 도메인)·`mail.smtp.localhost: ${MAIL_SMTP_LOCALHOST:api.devdmu.gosky.kr}`(gosky 발송 IP `58.75.21.151`을 가리키는 이름)를 더했다. 메일 라이브러리 시험으로 Message-ID는 `mail.smtp.localhost`가 아니라 `mail.from`·`mail.host`가 정한다는 것을 확인하고 `mail.from`을 골랐다(From 도메인과 일치). 알림·비밀번호 재설정 메일 모두 적용, `.env` 수정 없음. vkcs는 발송 IP와 이름이 맞지 않지만 인증 후 제출이라 거절 사유가 아니다(개발 서버, 수용). `MailHeaderIdentityConfigTest`(실제 yaml로 `JavaMailSenderImpl` 생성)가 고정. 효과는 보조 신호 제거뿐이며 스팸함 분류의 주원인(공용 계정 평판)은 그대로다.
