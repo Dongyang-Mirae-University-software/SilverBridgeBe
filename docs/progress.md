@@ -4,6 +4,10 @@
 
 ---
 
+### [2026-11-22] #515 영향 범위 점검(C) + 배포 종료 순서 수정 - BE #518
+- 점검: 🔴0 🟠0 🟡4 🟢6. 수신자 거르기·역할 변경 정리·AI 자리 PASS. Spring 7은 풀 종료 대기를 빈 파괴 때 차례로 합산(실측) → 예산 식 오류(I-1), 긴급 풀이 닫힌 뒤에도 AI 화재 수신(I-2). 남은 결정: I-8 역할 변경 뒤 SOS·이상감지 이력·AI 예약 계정, I-5 짧은 AI 조회 상한. 상세 `(2026-11-22) audit-impact-final-audit-be.md`.
+- 수정 #518(`b228093d`): 수신기 SmartLifecycle(웹 정지 뒤 중단) · 알림 풀 비우기 단계 25초 · 풀별 잔여 대기 3·3·2·2·1초 · `stop_grace_period` 100초 · 예산·순서 테스트. BE 2923 통과·변이 9종·CD success. gosky 실측: stop 1.9초, 순서 로그 일치, AI WS 재연결. 열린 항목: 스케줄러 `pool.size: 3` 미적용(실제 CPU 수). 상세 `(2026-11-22) fix-shutdown-order.md`.
+
 ### [2026-11-22] 기능 점검(B) - BE #512 이메일 HTML B안·#513 메일 머리글 - PASS (🟢 2 수용)
 - 칩·제목·본문 이스케이프, 외부 자원 없음, 이메일 허용 7종 전부 전용 칩 문구(테스트 전수), 텍스트 대체 본문 무변경. 실발송(문의 636): `Received: from api.devdmu.gosky.kr`·`Message-ID …@gmail.com`·SPF/DKIM/DMARC pass·받은편지함 도착. 🟢 vkcs EHLO 불일치·공용 계정 평판(근본 해결 결정 대기)은 수용. 상세 `(2026-11-22) audit-email-html-style-and-mail-headers.md`.
 

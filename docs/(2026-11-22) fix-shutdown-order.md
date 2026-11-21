@@ -109,4 +109,14 @@ SIGTERM → ContextClosedEvent        스케줄러는 새 예약을 받지 않�
 
 ## 8. gosky 실측
 
-(배포 후 메인이 채움 - `docker stop` 소요 시간, `[SHUTDOWN-DRAIN]` 로그, 종료 로그의 단계 순서, 기동 뒤 `AiLiveStreamSubscriber` 재접속)
+2026-11-22, PR #518 머지 `b228093d`. vkcs CD success(통합 테스트 포함), gosky `up -d --build api` 후 새 코드 컨테이너를 `docker stop`으로 한 번 더 멈춰 종료 로그를 봤다(부하 없음, AI WS 연결 상태).
+
+| 항목 | 결과 |
+|---|---|
+| 컨테이너 `StopTimeout` | 100 (새 `stop_grace_period` 적용) |
+| `docker stop` 소요 | 1.9초 |
+| 종료 순서(로그 시각) | `Commencing graceful shutdown` 45.350 → `Graceful shutdown complete` 45.354 → AI WS 연결 종료(code=1000) 45.357 → `[SHUTDOWN-DRAIN] 알림 풀 비움: waitedMs=50` 45.408 → `HikariPool-1 - Shutdown` 45.432 |
+| 재기동 | `Started BackendApplication` 8.8초, `AI WS 연결됨` |
+| vkcs | `b228093d`, `dmu-dev-api` healthy |
+
+계획한 순서 "웹 정지 → 화재 수신 중단 → 알림 풀 비우기 → DB 종료"가 실제 로그와 같다. 진행 중 요청·알림이 있을 때의 최악 시간은 실측하지 않았다(예산 테스트로 상한만 고정).
