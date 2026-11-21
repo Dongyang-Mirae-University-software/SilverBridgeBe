@@ -63,6 +63,7 @@ class CompanionServiceTest {
     private CompanionSessionRepository sessionRepository;
     private CompanionSessionWriter writer;
     private RateLimitService rateLimitService;
+    private CompanionTurnSlots slots;
     private CompanionService service;
 
     @BeforeEach
@@ -76,9 +77,12 @@ class CompanionServiceTest {
         sessionRepository = mock(CompanionSessionRepository.class);
         writer = mock(CompanionSessionWriter.class);
         rateLimitService = mock(RateLimitService.class);
+        slots = new CompanionTurnSlots(properties);
         service = new CompanionService(aiClient, properties, questionRepository, sessionRepository, writer,
-                new CompanionTurnSlots(properties), rateLimitService, mock(CompanionPromptScheduler.class));
+                slots, rateLimitService, mock(CompanionPromptScheduler.class));
         service.setClock(Clock.fixed(AT_0910.toInstant(), CompanionService.KST));
+        // 이어 가기의 활동 시각 갱신 - 기본은 "진행 중이라 바뀜"(끝난 대화는 테스트에서 false로 바꾼다)
+        when(writer.touchActivity(anyLong(), any())).thenReturn(true);
     }
 
     @Test
@@ -163,6 +167,53 @@ class CompanionServiceTest {
         when(aiClient.dialogueState("d-15")).thenReturn(
                 stateJson("{\"lastQuestion\":\"" + "가".repeat(CompanionService.MAX_RESUME_QUESTION_CHARS + 1) + "\"}"));
         assertThat(service.open(WARD).question()).isEqualTo("이어 갈 질문");
+    }
+
+    @Test
+    @DisplayName("L-2 이어 가기: 그 대화의 턴이 진행 중이면 409 - 활동 시각·AI를 건드리지 않고, 턴이 끝나면 이어 간다")
+    void resumeRejectedWhileTurnInProgress() {
+        resumable(16L, 2);
+        when(aiClient.dialogueState("d-16")).thenReturn(stateJson("{\"lastQuestion\":\"식사는 하셨어요?\"}"));
+
+        try (CompanionTurnSlots.Slot turnInFlight = slots.acquire(16L)) {
+            assertThatThrownBy(() -> service.open(WARD)).extracting(e -> ((CustomException) e).getErrorCode())
+                    .isEqualTo(ErrorCode.COMPANION_TURN_IN_PROGRESS);
+            verify(writer, never()).touchActivity(anyLong(), any());
+            verify(aiClient, never()).dialogueState(anyString());
+        }
+
+        assertThat(service.open(WARD).resumed()).isTrue();
+    }
+
+    @Test
+    @DisplayName("L-2: 다른 대화의 턴이 진행 중인 것은 이어 가기를 막지 않는다")
+    void resumeNotBlockedByOtherSession() {
+        resumable(17L, 0);
+
+        try (CompanionTurnSlots.Slot other = slots.acquire(999L)) {
+            assertThat(service.open(WARD).resumed()).isTrue();
+        }
+    }
+
+    @Test
+    @DisplayName("L-3 이어 가기: 마지막 활동 시각을 지금으로 민다 - 마감 스케줄러(10분 무활동)가 곧바로 닫지 않게")
+    void resumeTouchesActivity() {
+        resumable(18L, 1);
+
+        service.open(WARD);
+
+        verify(writer).touchActivity(18L, AT_0910.toOffsetDateTime());
+    }
+
+    @Test
+    @DisplayName("L-3 이어 가기: 활동 시각 갱신이 0행이면(방금 마감됨) 끝난 시간대로 답하고 AI를 부르지 않는다")
+    void resumeOfJustClosedSessionIsDone() {
+        resumable(19L, 2);
+        when(writer.touchActivity(anyLong(), any())).thenReturn(false);
+
+        assertThatThrownBy(() -> service.open(WARD)).extracting(e -> ((CustomException) e).getErrorCode())
+                .isEqualTo(ErrorCode.COMPANION_SLOT_DONE);
+        verify(aiClient, never()).dialogueState(anyString());
     }
 
     private CompanionSession resumable(long id, int turns) {
@@ -416,6 +467,22 @@ class CompanionServiceTest {
 
         TodayResponse today = service.today(WARD);
 
+        assertThat(today.currentSlot()).isNull();
+        assertThat(today.slots()).hasSize(5);
+        assertThat(today.testMode()).isFalse();
+    }
+
+    @Test
+    @DisplayName("L-6(#471): 스위치는 켜졌는데 말벗 AI 주소만 비어도 열 수 있는 시간대·테스트 모드를 주지 않는다(조회는 된다)")
+    void today_AI_주소만_비어도_열_수_있는_시간대를_주지_않는다() {
+        service.setClock(Clock.fixed(AT_0910.withHour(15).withMinute(5).toInstant(), CompanionService.KST));
+        when(sessionRepository.findByWardIdAndSessionDate(WARD, TODAY)).thenReturn(List.of());
+        properties.setTestAllWards(true);
+        properties.setAiBaseUrl(" ");
+
+        TodayResponse today = service.today(WARD);
+
+        assertThat(properties.isEnabled()).isTrue();
         assertThat(today.currentSlot()).isNull();
         assertThat(today.slots()).hasSize(5);
         assertThat(today.testMode()).isFalse();

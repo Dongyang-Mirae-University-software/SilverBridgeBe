@@ -3,6 +3,7 @@ package kr.silverbridge.main.domain.companion.service;
 import kr.silverbridge.main.domain.companion.config.CompanionProperties;
 import kr.silverbridge.main.domain.companion.entity.CompanionRiskProbability;
 import kr.silverbridge.main.domain.companion.entity.CompanionSession;
+import kr.silverbridge.main.domain.companion.entity.CompanionSessionStatus;
 import kr.silverbridge.main.domain.companion.entity.CompanionSlot;
 import kr.silverbridge.main.domain.companion.event.CompanionMoodRecordedEvent;
 import kr.silverbridge.main.domain.companion.event.CompanionRiskDetectedEvent;
@@ -126,6 +127,31 @@ public class CompanionSessionWriter {
             eventPublisher.publishEvent(new CompanionMoodRecordedEvent(session.getWardId(), session.getSessionDate()));
         }
         return session;
+    }
+
+    /**
+     * 이어 가기(대화 다시 열기) 때 마지막 활동 시각을 지금으로 민다(2026-11-21 최종 점검 L-3). 그동안은 이어 가도 시각이
+     * 그대로라, 9분 쉬다 돌아온 어르신이 대답을 고르는 사이 마감 스케줄러(10분 무활동)가 대화를 닫았다.
+     * 진행 중(OPEN)일 때만 바꾸고 바꿨으면 true - 그사이 끝났으면 아무것도 바꾸지 않는다(점검 M-3와 같은 원칙).
+     *
+     * <p><b>잠금</b>: 대화 행 하나만 잠그고 동의 행은 잠그지 않는다. 한 트랜잭션이 잠금을 하나만 쥐므로
+     * "동의 행 → 대화 행" 순서(점검 L-1)와 교착을 만들 수 없다(쥔 채로 다른 잠금을 기다리지 않는다).</p>
+     *
+     * <p><b>마감 스케줄러({@code CompanionAbandonScheduler})와의 경합</b>:</p>
+     * <ul>
+     *   <li>이 갱신이 스케줄러의 목록 조회보다 먼저 커밋 - 목록에서 빠져 10분을 새로 얻는다(고치려던 경우).</li>
+     *   <li>스케줄러가 먼저 마감을 커밋 - 조건(OPEN)에 걸려 0행. 서비스는 끝난 시간대로 답한다.</li>
+     *   <li>스케줄러가 마감 중(자리 잡고 AI 호출 중) - 서비스가 자리 확인(L-2)에서 409로 돌려보내 여기까지 오지 않는다.
+     *       확인 직후 스케줄러가 자리를 잡은 경우에도 이 문장은 시각만 바꾸고, 마감 쓰기는 OPEN을 보고 그대로 닫는다
+     *       (버전을 올리지 않아 마감이 낙관적 잠금으로 실패하지 않는다).</li>
+     *   <li>스케줄러가 목록을 읽은 뒤·자리를 잡기 전 갱신 - 스케줄러는 자리를 잡고 OPEN 여부만 다시 보므로 그 주기에
+     *       닫힐 수 있다(남는 틈, 턴 기록도 같은 틈이 있다 - 이어 간 기기의 다음 대답은 끝난 대화 응답을 받는다).</li>
+     *   <li>같은 순간의 턴 기록 - 어느 쪽이 나중이든 시각은 "방금"이다(몇 초 차이, 10분 기준에 영향 없음).</li>
+     * </ul>
+     */
+    @Transactional
+    public boolean touchActivity(long sessionId, OffsetDateTime now) {
+        return sessionRepository.touchActivity(sessionId, CompanionSessionStatus.OPEN, now) == 1;
     }
 
     @Transactional

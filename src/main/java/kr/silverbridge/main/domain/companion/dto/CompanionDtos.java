@@ -85,7 +85,8 @@ public final class CompanionDtos {
 
     /**
      * 테스트 계정 화면 확인용 턴 판정(2026-11-10). AI가 준 값을 그대로 옮기고 만들어 내지 않는다 - AI가 주지 않는 값은
-     * 없다(글 기분 코드는 AI가 따로 주지 않아 싣지 않는다). DB·로그·알림 어디에도 남기지 않는다.
+     * 없다(null). 글 기분 분류는 AI {@code textMood}를 그대로 싣는다(무응답·되묻기 턴이나 AI가 주지 않으면 null).
+     * DB·로그·알림 어디에도 남기지 않는다.
      */
     @Schema(description = "테스트 계정용 턴 판정(AI 값 그대로)")
     public record TurnAnalysis(

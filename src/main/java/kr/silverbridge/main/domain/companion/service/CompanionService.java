@@ -504,6 +504,16 @@ public class CompanionService {
         if (!session.isDialogueAttached()) {
             throw new CustomException(ErrorCode.COMPANION_TURN_IN_PROGRESS);
         }
+        // 그 대화의 턴·마치기·마감이 진행 중이면 이어 가지 않는다(2026-11-21 최종 점검 L-2) - 처리 중인 대답이 끝나기 전의
+        // 턴 수·마지막 문장을 내주면 기기가 한 턴 뒤처진 화면으로 다음 대답을 받는다. 기기는 409를 잠시 뒤 다시 시도한다.
+        if (slots.isBusy(session.getId())) {
+            throw new CustomException(ErrorCode.COMPANION_TURN_IN_PROGRESS);
+        }
+        // 이어 가기도 활동이다 - 마지막 활동 시각을 밀어 마감 스케줄러가 곧바로 닫지 않게 한다(최종 점검 L-3).
+        // 0행이면 방금 끝난 대화다(마감 스케줄러·마지막 턴) - 처음의 상태 검사와 같은 응답을 준다.
+        if (!writer.touchActivity(session.getId(), OffsetDateTime.now(clock))) {
+            throw new CustomException(ErrorCode.COMPANION_SLOT_DONE);
+        }
         String opening = questionRepository.findById(session.getQuestionId())
                 .map(CompanionQuestion::getText).orElse(null);
         // 이어 가는 대화는 지금까지 기록된 턴 수를 함께 준다 - 기기의 "N번째 대답"·진행 점이 처음부터 다시 세지 않게
