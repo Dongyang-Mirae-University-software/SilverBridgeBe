@@ -107,8 +107,12 @@ class CompanionTurnRecorderTest {
             "null, 우울, DEPRESSED",
             "null, 판단 보류, null",
             "UNKNOWN, 기쁨, JOY",
-            "null, null, null"})
-    @DisplayName("턴 기분: moodCode 우선, 없거나 판단 불가면 한글 label, 모르는 값은 null")
+            "null, null, null",
+            "WORRY, 슬픔, WORRY",
+            "WORRY, 화남, WORRY",
+            "null, 슬픔, null",
+            "UNKNOWN, 판단 보류, null"})
+    @DisplayName("턴 기분: moodCode 우선, 없거나 판단 불가면 한글 label, 모르는 값은 null. 슬픔·화남은 AI가 moodCode(WORRY)를 줄 때만 저장된다(옛 AI는 label만 → null)")
     void turnMood(String moodCode, String label, String expected) throws Exception {
         String turnResult = "{" + (moodCode == null ? "" : "\"moodCode\":\"" + moodCode + "\"")
                 + (moodCode != null && label != null ? "," : "")
