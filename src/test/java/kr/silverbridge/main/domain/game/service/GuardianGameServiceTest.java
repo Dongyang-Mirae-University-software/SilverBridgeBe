@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import kr.silverbridge.main.domain.connection.service.ConnectionService;
 import kr.silverbridge.main.domain.game.client.AiGameClient;
+import kr.silverbridge.main.domain.game.config.GameRelayProperties;
 import kr.silverbridge.main.domain.game.dto.GuardianGameActivityResponse;
 import kr.silverbridge.main.domain.game.dto.GuardianGameProgressResponse;
 import kr.silverbridge.main.global.exception.CustomException;
@@ -16,6 +17,7 @@ import org.junit.jupiter.params.provider.NullSource;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
+import org.mockito.Spy;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -38,6 +40,8 @@ class GuardianGameServiceTest {
 
     @Mock private ConnectionService connectionService;
     @Mock private AiGameClient aiGameClient;
+    /** 실제 자리 관리(기본 서버 4·보호자당 2)를 쓰고 호출 여부만 엿본다. */
+    @Spy private GameRelaySlots slots = new GameRelaySlots(new GameRelayProperties());
     @InjectMocks private GuardianGameService service;
 
     private static JsonNode json(String raw) throws Exception {
@@ -142,5 +146,67 @@ class GuardianGameServiceTest {
         when(aiGameClient.fetchProgress(WARD_GAME_ID)).thenThrow(new CustomException(ErrorCode.GAME_UNAVAILABLE));
 
         assertError(() -> service.getProgress(GUARDIAN, WARD), ErrorCode.GAME_UNAVAILABLE);
+    }
+
+    @Test
+    @DisplayName("M-4: AI 호출 동안에만 자리를 쥐고, 끝나면 돌려준다(progress·activity)")
+    void slotHeldOnlyDuringAiCall() throws Exception {
+        when(connectionService.isActiveConnection(GUARDIAN, WARD)).thenReturn(true);
+        when(aiGameClient.fetchProgress(WARD_GAME_ID)).thenAnswer(call -> {
+            assertThat(slots.available()).as("progress 호출 중 서버 전체 자리 1개 사용").isEqualTo(3);
+            return json("{\"games\":[]}");
+        });
+        when(aiGameClient.fetchActivity(WARD_GAME_ID, 7)).thenAnswer(call -> {
+            assertThat(slots.available()).as("activity 호출 중 서버 전체 자리 1개 사용").isEqualTo(3);
+            return json("{\"activity\":[]}");
+        });
+
+        service.getProgress(GUARDIAN, WARD);
+        service.getActivity(GUARDIAN, WARD, 7);
+
+        assertThat(slots.available()).isEqualTo(4);
+        assertThat(slots.activeUsers()).isZero();
+    }
+
+    @Test
+    @DisplayName("M-4: AI 호출이 예외로 끝나도 자리를 돌려준다(progress·activity)")
+    void slotReleasedOnAiFailure() {
+        when(connectionService.isActiveConnection(GUARDIAN, WARD)).thenReturn(true);
+        when(aiGameClient.fetchProgress(WARD_GAME_ID)).thenThrow(new CustomException(ErrorCode.GAME_UNAVAILABLE));
+        when(aiGameClient.fetchActivity(WARD_GAME_ID, 7)).thenThrow(new IllegalStateException("boom"));
+
+        for (int i = 0; i < 5; i++) {   // 돌려주지 않으면 보호자당 상한(2)에 걸려 AI를 부르지 못한다
+            assertError(() -> service.getProgress(GUARDIAN, WARD), ErrorCode.GAME_UNAVAILABLE);
+            assertThatThrownBy(() -> service.getActivity(GUARDIAN, WARD, 7)).isInstanceOf(IllegalStateException.class);
+        }
+
+        verify(aiGameClient, org.mockito.Mockito.times(5)).fetchProgress(WARD_GAME_ID);
+        verify(aiGameClient, org.mockito.Mockito.times(5)).fetchActivity(WARD_GAME_ID, 7);
+        assertThat(slots.available()).isEqualTo(4);
+        assertThat(slots.activeUsers()).isZero();
+    }
+
+    @Test
+    @DisplayName("M-4: 보호자 동시 상한(2)을 넘으면 503 GAME_UNAVAILABLE 이고 AI 를 부르지 않는다")
+    void overLimitIsUnavailableWithoutAiCall() {
+        when(connectionService.isActiveConnection(GUARDIAN, WARD)).thenReturn(true);
+        try (GameRelaySlots.Slot first = slots.acquire(GUARDIAN); GameRelaySlots.Slot second = slots.acquire(GUARDIAN)) {
+            assertError(() -> service.getProgress(GUARDIAN, WARD), ErrorCode.GAME_UNAVAILABLE);
+            assertError(() -> service.getActivity(GUARDIAN, WARD, null), ErrorCode.GAME_UNAVAILABLE);
+        }
+        verifyNoInteractions(aiGameClient);
+    }
+
+    @Test
+    @DisplayName("M-4: 인가 실패(미연결·형식 오류·days 범위 밖)는 자리를 쓰지 않는다 - 자리는 인가 뒤에 잡는다")
+    void unauthorizedDoesNotTakeSlot() {
+        when(connectionService.isActiveConnection(GUARDIAN, WARD)).thenReturn(false);
+
+        assertError(() -> service.getProgress(GUARDIAN, WARD), ErrorCode.GAME_NOT_AUTHORIZED);
+        assertError(() -> service.getActivity(GUARDIAN, WARD, null), ErrorCode.GAME_NOT_AUTHORIZED);
+        assertError(() -> service.getProgress(GUARDIAN, "ab-12"), ErrorCode.GAME_NOT_AUTHORIZED);
+        assertError(() -> service.getActivity(GUARDIAN, WARD, 0), ErrorCode.GAME_INVALID_DAYS);
+
+        verify(slots, never()).acquire(anyString());
     }
 }

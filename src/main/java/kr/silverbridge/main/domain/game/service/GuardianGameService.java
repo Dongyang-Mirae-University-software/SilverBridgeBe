@@ -36,10 +36,15 @@ public class GuardianGameService {
 
     private final ConnectionService connectionService;
     private final AiGameClient aiGameClient;
+    private final GameRelaySlots slots;
 
     public GuardianGameProgressResponse getProgress(String guardianId, String wardId) {
         requireConnected(guardianId, wardId);
-        JsonNode data = aiGameClient.fetchProgress(GameUserIds.of(wardId));
+        JsonNode data;
+        // 자리는 인가 뒤에 잡고 AI 호출이 끝나면(예외 포함) 돌려준다 - 인가 실패는 자리를 쓰지 않는다(최종 점검 M-4)
+        try (GameRelaySlots.Slot ignored = slots.acquire(guardianId)) {
+            data = aiGameClient.fetchProgress(GameUserIds.of(wardId));
+        }
 
         List<GuardianGameProgressResponse.GameEntry> games = new ArrayList<>();
         for (JsonNode entry : data.path("games")) {
@@ -77,7 +82,10 @@ public class GuardianGameService {
             throw new CustomException(ErrorCode.GAME_INVALID_DAYS);
         }
         requireConnected(guardianId, wardId);
-        JsonNode data = aiGameClient.fetchActivity(GameUserIds.of(wardId), range);
+        JsonNode data;
+        try (GameRelaySlots.Slot ignored = slots.acquire(guardianId)) {
+            data = aiGameClient.fetchActivity(GameUserIds.of(wardId), range);
+        }
 
         List<GuardianGameActivityResponse.Day> activity = new ArrayList<>();
         for (JsonNode day : data.path("activity")) {

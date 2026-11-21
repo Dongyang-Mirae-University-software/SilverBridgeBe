@@ -31,4 +31,10 @@ public class GameRelayProperties {
 
     /** 호출 전체 제한 - 넘으면 연결을 끊는다(요청 스레드를 오래 붙들지 않게). */
     private Duration callTimeout = Duration.ofSeconds(8);
+
+    /** 서버 전체 동시 중계 수(2026-11-21 최종 점검 M-4) - 넘으면 503. 조회 1건이 요청 스레드를 최대 {@link #callTimeout} 붙든다. */
+    private int maxConcurrent = 4;
+
+    /** 보호자 1명의 동시 중계 수 - 게임 화면이 progress·activity를 함께 불러 2다. */
+    private int maxPerUser = 2;
 }

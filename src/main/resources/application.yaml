@@ -204,6 +204,8 @@ game:
     connect-timeout: ${GAME_RELAY_CONNECT_TIMEOUT:3s}
     read-timeout: ${GAME_RELAY_READ_TIMEOUT:5s}
     call-timeout: ${GAME_RELAY_CALL_TIMEOUT:8s}             # 호출 전체(마감 시 연결을 끊는다)
+    max-concurrent: ${GAME_RELAY_MAX_CONCURRENT:4}          # 조회 1건이 요청 스레드를 최대 8초 붙든다(2026-11-21 최종 점검 M-4)
+    max-per-user: ${GAME_RELAY_MAX_PER_USER:2}              # 보호자 1명 동시 - 화면이 progress·activity 2건을 함께 부른다
 
 # AI 이상감지 수신 (1단계 — 수신·판정·이력. 보호자 알림 발송은 2단계).
 # 백엔드가 AI WS에 클라이언트로 붙어 latest_analysis를 받는다(AI 서버 무변경 — 웹훅 없음).
