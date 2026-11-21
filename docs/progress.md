@@ -4,6 +4,9 @@
 
 ---
 
+### [2026-11-22] 기능 점검(B) - BE #512 이메일 HTML B안·#513 메일 머리글 - PASS (🟢 2 수용)
+- 칩·제목·본문 이스케이프, 외부 자원 없음, 이메일 허용 7종 전부 전용 칩 문구(테스트 전수), 텍스트 대체 본문 무변경. 실발송(문의 636): `Received: from api.devdmu.gosky.kr`·`Message-ID …@gmail.com`·SPF/DKIM/DMARC pass·받은편지함 도착. 🟢 vkcs EHLO 불일치·공용 계정 평판(근본 해결 결정 대기)은 수용. 상세 `(2026-11-22) audit-email-html-style-and-mail-headers.md`.
+
 ### [2026-11-21] 최종 전체 점검 조치 - BE #514·#515 · AI #335·#336 · FE #322 + 문서
 - 🟠 H-1 AI 턴 `moodCode`(슬픔·화남 → WORRY, BE 무변경·테스트 고정) · 🟡 종료 단계 대기 15s · 안내 문구(AI 서버로 보냄) · 벼락두통 "처음·최악" 요구 · 게임 중계 동시 4·보호자당 2 · "묻지 말라고 했잖아" 회피 · `anthropic==2.8.0` · 🟢 역할 변경 게임 기록 삭제·이어 가기 409/활동 시각/마감 건너뛰기·끊김 안내 ACTIVE·말벗 푸시 종류 등 전부 + 정책 문서 정정 9건.
 - 테스트: AI 합친 main 4506 · BE 2904 · vkcs 통합 통과(`98cf23e5`)·CD `298c532f` success · FE vitest 726·browser 847. gosky dev 반영: AI `1797ad6`(#337 함께, 롤백 `sb-ai-rollback:20261121-final-audit`)·BE `298c532f`(AI WS 재연결)·FE `799e7349`. **카메라 재등록 필요.** 다음: #515 영향 범위 점검(C). 상세 `(2026-11-21) fix-audit-full-2026-11-final.md`.
