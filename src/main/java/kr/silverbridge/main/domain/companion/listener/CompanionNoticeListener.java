@@ -1,5 +1,6 @@
 package kr.silverbridge.main.domain.companion.listener;
 
+import kr.silverbridge.main.global.util.ElderName;
 import kr.silverbridge.main.domain.companion.entity.CompanionNoticeLog;
 import kr.silverbridge.main.domain.companion.entity.CompanionSession;
 import kr.silverbridge.main.domain.companion.entity.CompanionSessionStatus;
@@ -53,7 +54,7 @@ import java.util.Set;
 public class CompanionNoticeListener {
 
     private static final ZoneId KST = ZoneId.of("Asia/Seoul");
-    private static final String FALLBACK_WARD_NAME = "피보호자";
+    private static final String FALLBACK_WARD_NAME = ElderName.FALLBACK;
 
     private final CompanionSessionRepository sessionRepository;
     private final CompanionNoticeLogRepository noticeLogRepository;
@@ -107,7 +108,7 @@ public class CompanionNoticeListener {
         for (Map.Entry<String, CompanionMoodDays.Streak> target : targets.entrySet()) {
             String guardianId = target.getKey();
             int days = target.getValue().days();
-            String body = wardName + "님 안부 대화에서 걱정스럽거나 가라앉은 기분이 " + days
+            String body = ElderName.honorific(wardName) + " 안부 대화에서 걱정스럽거나 가라앉은 기분이 " + days
                     + "일째 이어지고 있어요. 안부 전화를 드려 보세요.";
             try {
                 notificationDispatcher.dispatch(guardianId, event.wardId(), NotificationType.COMPANION_NOTICE,

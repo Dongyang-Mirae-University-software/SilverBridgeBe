@@ -1,5 +1,6 @@
 package kr.silverbridge.main.domain.connection.listener;
 
+import kr.silverbridge.main.global.util.ElderName;
 import kr.silverbridge.main.domain.connection.event.ConnectionAcceptedEvent;
 import kr.silverbridge.main.domain.connection.event.ConnectionDisconnectedEvent;
 import kr.silverbridge.main.domain.connection.event.ConnectionForcedEvent;
@@ -104,7 +105,7 @@ public class ConnectionNotificationListener {
                 "connectionId", String.valueOf(event.connectionId()));
 
         String guardianTitle = "연결 완료";
-        String guardianBody = "관리자가 " + event.wardName() + "님과의 연결을 완료했습니다.";
+        String guardianBody = "관리자가 " + ElderName.honorific(event.wardName()) + "과의 연결을 완료했습니다.";
         // 피보호자 푸시·문자는 앱 이름 제목 + 단문(2026-10-27), 앱 화면(WS) 제목은 그대로 둔다.
         String wardScreenTitle = "보호자 연결";
 

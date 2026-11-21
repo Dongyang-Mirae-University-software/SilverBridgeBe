@@ -1,5 +1,6 @@
 package kr.silverbridge.main.domain.medication.service;
 
+import kr.silverbridge.main.global.util.ElderName;
 import kr.silverbridge.main.domain.notification.channel.NotificationContent;
 import kr.silverbridge.main.domain.notification.dispatch.NotificationDispatcher;
 import kr.silverbridge.main.domain.notification.dispatch.NotificationType;
@@ -60,7 +61,7 @@ public class MedicationMissedAlertService {
     private NotificationContent content(MedicationMissedAlertTarget target) {
         String alertTime = target.alertTime().format(TIME_FORMAT);
         // 누구의 요약인지는 제목에 싣는다(2026-10-30 웹푸시 디자인). "체크되지 않았습니다"는 그대로(단정 금지 ⑦).
-        String title = "오늘 복약 확인 · %s님".formatted(target.wardName());
+        String title = "오늘 복약 확인 · %s".formatted(ElderName.honorific(target.wardName()));
         String body = "%s까지 예정된 복약 %d건 중 %d건이 체크되지 않았습니다."
                 .formatted(alertTime, target.totalCount(), target.missedCount());
 

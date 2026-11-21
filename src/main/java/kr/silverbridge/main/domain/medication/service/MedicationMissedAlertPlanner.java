@@ -1,5 +1,6 @@
 package kr.silverbridge.main.domain.medication.service;
 
+import kr.silverbridge.main.global.util.ElderName;
 import kr.silverbridge.main.domain.connection.service.ConnectionService;
 import kr.silverbridge.main.domain.notification.service.GuardianNotificationPreferenceService;
 import kr.silverbridge.main.domain.medication.config.MedicationProperties;
@@ -56,7 +57,7 @@ import java.util.stream.Collectors;
 public class MedicationMissedAlertPlanner {
 
     /** 이름을 못 찾은 피보호자의 표시용 폴백(문구에 null이 들어가지 않게). */
-    private static final String FALLBACK_WARD_NAME = "피보호자";
+    private static final String FALLBACK_WARD_NAME = ElderName.FALLBACK;
 
     private final MedicationRepository medicationRepository;
     private final MedicationIntakeRepository intakeRepository;

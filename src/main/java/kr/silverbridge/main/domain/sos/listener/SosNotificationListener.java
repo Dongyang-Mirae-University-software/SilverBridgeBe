@@ -1,5 +1,6 @@
 package kr.silverbridge.main.domain.sos.listener;
 
+import kr.silverbridge.main.global.util.ElderName;
 import kr.silverbridge.main.domain.connection.service.ConnectionService;
 import kr.silverbridge.main.domain.notification.channel.NotificationContent;
 import kr.silverbridge.main.domain.notification.dispatch.NotificationDispatcher;
@@ -188,7 +189,7 @@ public class SosNotificationListener {
      * 챗봇 109 제목(2026-11-20 사용자 결정). 응급(119)과 구분되게 "마음 위기"를 밝히되 긴급 알림임은 그대로 둔다.
      */
     static String buildMindCrisisTitle(String wardName) {
-        return "[긴급] " + wardName + "님 마음 위기 신호";
+        return "[긴급] " + ElderName.honorific(wardName) + " 마음 위기 신호";
     }
 
     /**
@@ -196,7 +197,7 @@ public class SosNotificationListener {
      * 반복이면 SOS 본문과 같은 횟수 줄을 붙인다(집계 창은 경로와 무관하게 같은 피보호자 전체).
      */
     static String buildMindCrisisBody(String wardName, long repeatCount) {
-        String body = wardName + "님이 챗봇에서 마음이 힘들다는 신호를 보였습니다.\n바로 연락해 주세요.";
+        String body = ElderName.honorific(wardName) + "이 챗봇에서 마음이 힘들다는 신호를 보였습니다.\n바로 연락해 주세요.";
         if (repeatCount < 2) {
             return body;
         }
@@ -205,7 +206,7 @@ public class SosNotificationListener {
 
     /** 챗봇 109 대체 문자. 형식은 SOS 대체 문자({@code [긴급 SOS] 본문})와 같다. */
     static String buildMindCrisisSmsText(String wardName, long repeatCount) {
-        String text = "[긴급 SOS] " + wardName + "님이 챗봇에서 마음이 힘들다는 신호를 보였습니다. 바로 연락해 주세요.";
+        String text = "[긴급 SOS] " + ElderName.honorific(wardName) + "이 챗봇에서 마음이 힘들다는 신호를 보였습니다. 바로 연락해 주세요.";
         if (repeatCount < 2) {
             return text;
         }
@@ -214,7 +215,7 @@ public class SosNotificationListener {
 
     /** 알림 제목(2026-10-30 웹푸시 디자인) - 누가·무슨 종류인지 한 줄로. 발생 경로(버튼·전화)는 싣지 않는다(109 제외). */
     static String buildTitle(String wardName) {
-        return "[긴급] " + wardName + "님 SOS";
+        return "[긴급] " + ElderName.honorific(wardName) + " SOS";
     }
 
     /**
@@ -226,9 +227,9 @@ public class SosNotificationListener {
      */
     static String buildBody(String wardName, long repeatCount) {
         if (repeatCount < 2) {
-            return wardName + "님이 긴급 도움을 요청했습니다.";
+            return ElderName.honorific(wardName) + "이 긴급 도움을 요청했습니다.";
         }
-        return wardName + "님이 계속 도움을 요청하고 있습니다.\n최근 "
+        return ElderName.honorific(wardName) + "이 계속 도움을 요청하고 있습니다.\n최근 "
                 + REPEAT_WINDOW.toMinutes() + "분 내 " + repeatCount + "번째 요청입니다.";
     }
 
@@ -238,9 +239,9 @@ public class SosNotificationListener {
      */
     static String buildSmsFallbackText(String wardName, long repeatCount) {
         if (repeatCount < 2) {
-            return "[긴급 SOS] " + wardName + "님이 긴급 도움을 요청했습니다.";
+            return "[긴급 SOS] " + ElderName.honorific(wardName) + "이 긴급 도움을 요청했습니다.";
         }
-        return "[긴급 SOS] " + wardName + "님이 계속 도움을 요청하고 있습니다. (최근 "
+        return "[긴급 SOS] " + ElderName.honorific(wardName) + "이 계속 도움을 요청하고 있습니다. (최근 "
                 + REPEAT_WINDOW.toMinutes() + "분 내 " + repeatCount + "번째)";
     }
 }

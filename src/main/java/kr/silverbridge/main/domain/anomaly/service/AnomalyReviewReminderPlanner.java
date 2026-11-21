@@ -1,5 +1,6 @@
 package kr.silverbridge.main.domain.anomaly.service;
 
+import kr.silverbridge.main.global.util.ElderName;
 import kr.silverbridge.main.domain.anomaly.config.AnomalyProperties;
 import kr.silverbridge.main.domain.anomaly.entity.AnomalyIncident;
 import kr.silverbridge.main.domain.anomaly.entity.AnomalyIncidentFeedback;
@@ -62,7 +63,7 @@ import java.util.stream.Collectors;
 public class AnomalyReviewReminderPlanner {
 
     /** 이름을 못 찾은 피보호자의 표시용 폴백(문구에 null이 들어가지 않게). */
-    static final String FALLBACK_WARD_NAME = "피보호자";
+    static final String FALLBACK_WARD_NAME = ElderName.FALLBACK;
 
     /**
      * 건별 재촉과 요약 사이의 최소 간격(ANOM-G09). 요약에는 <b>오늘 요약 시각보다 이만큼 앞서</b> 건별 재촉이 나간

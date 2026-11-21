@@ -44,7 +44,8 @@ class CompanionRiskNotificationListenerTest {
         listener.handleRisk(new CompanionRiskDetectedEvent("CW0001", 7L));
 
         verify(dispatcher).dispatch(eq("G2"), eq("CW0001"), eq(NotificationType.COMPANION_RISK), content.capture());
-        assertThat(content.getValue().body()).contains("피보호자님").doesNotContain("자살").doesNotContain("우울");
+        // 이름을 못 찾으면 "어르신님"이 아니라 "어르신"(ElderName, 2026-11-22)
+        assertThat(content.getValue().body()).startsWith("어르신과의").doesNotContain("어르신님").doesNotContain("자살").doesNotContain("우울");
         assertThat(content.getValue().data()).containsEntry("type", "COMPANION_RISK").containsEntry("sessionId", "7");
     }
 
