@@ -9,6 +9,7 @@ import kr.silverbridge.main.domain.notification.dispatch.NotificationDispatcher;
 import kr.silverbridge.main.domain.notification.dispatch.NotificationType;
 import kr.silverbridge.main.domain.notification.entity.NotificationLogResult;
 import kr.silverbridge.main.domain.user.repository.UserRepository;
+import kr.silverbridge.main.global.enums.Status;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -22,6 +23,7 @@ import org.springframework.scheduling.TaskScheduler;
 
 import java.time.Duration;
 import java.time.Instant;
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
@@ -60,6 +62,9 @@ class CameraLinkLostNotifierTest {
         notifier = new CameraLinkLostNotifier(properties, taskScheduler, Runnable::run, cameraService,
                 connectionService, userRepository, dispatcher, redisTemplate, preferenceService);
         lenient().when(redisTemplate.opsForValue()).thenReturn(valueOps);
+        // 기본은 연결된 보호자 전원이 이용 중(ACTIVE) 계정 - 정지 계정은 L-5 테스트에서 따로 준다
+        lenient().when(userRepository.findIdsByIdInAndStatus(any(), eq(Status.ACTIVE)))
+                .thenAnswer(call -> List.copyOf(call.<Collection<String>>getArgument(0)));
     }
 
     private Runnable scheduledTask() {
@@ -250,5 +255,50 @@ class CameraLinkLostNotifierTest {
         scheduledTask().run();
 
         verify(dispatcher).dispatch(eq("G1"), eq("W1"), eq(NotificationType.CAMERA_LINK_LOST), any());
+    }
+
+    @Test
+    @DisplayName("L-5: 계정이 이용 중(ACTIVE)이 아닌 보호자는 대상에서 뺀다 - 이용 중인 보호자에게만 보낸다")
+    void 정지_계정_보호자_제외() {
+        givenLostWithGuardians("G1", "G2");
+        when(userRepository.findIdsByIdInAndStatus(List.of("G1", "G2"), Status.ACTIVE)).thenReturn(List.of("G1"));
+        when(dispatcher.dispatch(eq("G1"), anyString(), any(), any())).thenReturn(NotificationLogResult.DELIVERED);
+
+        notifier.onLost(Set.of(SESSION));
+        scheduledTask().run();
+
+        verify(dispatcher).dispatch(eq("G1"), eq("W1"), eq(NotificationType.CAMERA_LINK_LOST), any());
+        verify(dispatcher, never()).dispatch(eq("G2"), anyString(), any(), any());
+    }
+
+    @Test
+    @DisplayName("L-5: 연결된 보호자가 모두 이용 제한·탈퇴 진행이면 쿨다운을 쓰지 않는다 - 6시간 동안 다음 끊김 안내가 막히지 않게")
+    void 전원_정지_계정이면_쿨다운_안씀() {
+        stubSchedule();
+        when(cameraService.findOwnerBySessionId(SESSION)).thenReturn(Optional.of(new CameraOwner("W1", "거실")));
+        when(connectionService.getActiveGuardianIds("W1")).thenReturn(List.of("G1", "G2"));
+        when(userRepository.findIdsByIdInAndStatus(List.of("G1", "G2"), Status.ACTIVE)).thenReturn(List.of());
+
+        notifier.onLost(Set.of(SESSION));
+        scheduledTask().run();
+
+        verify(valueOps, never()).setIfAbsent(anyString(), anyString(), any(Duration.class));
+        verify(dispatcher, never()).dispatch(anyString(), anyString(), any(), any());
+        verify(preferenceService, never()).cameraLinkLostDisabledGuardians();
+    }
+
+    @Test
+    @DisplayName("L-5: 계정 상태 조회가 실패하면 보내지 않고 쿨다운도 쓰지 않는다(다음 끊김에서 다시 판단)")
+    void 계정_상태_조회_실패면_쿨다운_안씀() {
+        stubSchedule();
+        when(cameraService.findOwnerBySessionId(SESSION)).thenReturn(Optional.of(new CameraOwner("W1", "거실")));
+        when(connectionService.getActiveGuardianIds("W1")).thenReturn(List.of("G1"));
+        when(userRepository.findIdsByIdInAndStatus(List.of("G1"), Status.ACTIVE)).thenThrow(new IllegalStateException("db"));
+
+        notifier.onLost(Set.of(SESSION));
+        scheduledTask().run();
+
+        verify(valueOps, never()).setIfAbsent(anyString(), anyString(), any(Duration.class));
+        verify(dispatcher, never()).dispatch(anyString(), anyString(), any(), any());
     }
 }
