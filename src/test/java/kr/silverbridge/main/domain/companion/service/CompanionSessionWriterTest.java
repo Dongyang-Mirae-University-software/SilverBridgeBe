@@ -4,6 +4,7 @@ import kr.silverbridge.main.domain.companion.config.CompanionProperties;
 import kr.silverbridge.main.domain.companion.entity.CompanionEndReason;
 import kr.silverbridge.main.domain.companion.entity.CompanionMood;
 import kr.silverbridge.main.domain.companion.entity.CompanionSession;
+import kr.silverbridge.main.domain.companion.entity.CompanionSessionStatus;
 import kr.silverbridge.main.domain.companion.entity.CompanionSlot;
 import kr.silverbridge.main.domain.companion.event.CompanionRiskDetectedEvent;
 import kr.silverbridge.main.domain.companion.event.CompanionRiskPatternCheckEvent;
@@ -218,6 +219,31 @@ class CompanionSessionWriterTest {
 
         verify(repository, never()).claimTestRiskNotification(anyLong(), any(), any(), any());
         verify(publisher).publishEvent(new CompanionRiskDetectedEvent("CW0001", 13L));
+    }
+
+    @Test
+    @DisplayName("L-3 이어 가기 활동 시각: 진행 중(OPEN) 조건으로만 갱신하고, 바뀐 행이 있을 때만 true(끝난 대화는 0행 = false)")
+    void touchActivityOnlyWhenOpen() {
+        when(repository.touchActivity(20L, CompanionSessionStatus.OPEN, NOW)).thenReturn(1);
+        when(repository.touchActivity(21L, CompanionSessionStatus.OPEN, NOW)).thenReturn(0);
+
+        assertThat(writer.touchActivity(20L, NOW)).isTrue();
+        assertThat(writer.touchActivity(21L, NOW)).isFalse();
+
+        verify(repository).touchActivity(20L, CompanionSessionStatus.OPEN, NOW);
+        verify(repository).touchActivity(21L, CompanionSessionStatus.OPEN, NOW);
+    }
+
+    @Test
+    @DisplayName("L-3: 활동 시각 갱신은 대화 행 한 문장뿐이다 - 동의 행을 잠그지 않고(잠금 순서 무관) 대화를 읽어 고치지 않으며 이벤트도 없다")
+    void touchActivityTakesNoOtherLock() {
+        when(repository.touchActivity(22L, CompanionSessionStatus.OPEN, NOW)).thenReturn(1);
+
+        writer.touchActivity(22L, NOW);
+
+        org.mockito.Mockito.verifyNoInteractions(turnRecorder, publisher);
+        verify(repository).touchActivity(22L, CompanionSessionStatus.OPEN, NOW);
+        org.mockito.Mockito.verifyNoMoreInteractions(repository);
     }
 
     private static CompanionSession open(long id) {

@@ -1,6 +1,7 @@
 package kr.silverbridge.main.domain.game.listener;
 
 import kr.silverbridge.main.domain.game.client.AiGameClient;
+import kr.silverbridge.main.domain.user.event.UserRoleChangedEvent;
 import kr.silverbridge.main.domain.user.event.UserWithdrawnEvent;
 import kr.silverbridge.main.global.exception.CustomException;
 import kr.silverbridge.main.global.exception.ErrorCode;
@@ -49,6 +50,32 @@ class GameRecordPurgeListenerTest {
     @DisplayName("커밋 이후(AFTER_COMMIT)에만, 전용 aiPurgeExecutor 에서 비동기로 동작한다")
     void 커밋_후_비동기() throws Exception {
         Method method = GameRecordPurgeListener.class.getDeclaredMethod("handleWithdrawn", UserWithdrawnEvent.class);
+
+        assertThat(method.getAnnotation(TransactionalEventListener.class).phase())
+                .isEqualTo(TransactionPhase.AFTER_COMMIT);
+        assertThat(method.getAnnotation(Async.class).value()).isEqualTo("aiPurgeExecutor");
+    }
+
+    @Test
+    @DisplayName("L-1: 관리자가 역할을 바꾸면 그 회원의 게임 번호로 AI 게임 기록 삭제를 요청한다(역할을 가리지 않는다)")
+    void 역할_변경이면_게임기록_삭제_요청() {
+        listener.handleRoleChanged(new UserRoleChangedEvent("aB3x9Z"));
+
+        verify(aiGameClient).deleteRecords(1455350745L);
+    }
+
+    @Test
+    @DisplayName("L-1: 역할 변경 때 AI 삭제가 실패해도 예외를 밖으로 내보내지 않는다(best-effort)")
+    void 역할_변경_실패는_삼킨다() {
+        doThrow(new CustomException(ErrorCode.GAME_UNAVAILABLE)).when(aiGameClient).deleteRecords(1455350745L);
+
+        assertThatNoException().isThrownBy(() -> listener.handleRoleChanged(new UserRoleChangedEvent("aB3x9Z")));
+    }
+
+    @Test
+    @DisplayName("L-1: 역할 변경 처리도 커밋 이후(AFTER_COMMIT), 전용 aiPurgeExecutor 에서 비동기로 동작한다")
+    void 역할_변경_커밋_후_비동기() throws Exception {
+        Method method = GameRecordPurgeListener.class.getDeclaredMethod("handleRoleChanged", UserRoleChangedEvent.class);
 
         assertThat(method.getAnnotation(TransactionalEventListener.class).phase())
                 .isEqualTo(TransactionPhase.AFTER_COMMIT);

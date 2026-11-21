@@ -59,6 +59,16 @@ public interface CompanionSessionRepository extends JpaRepository<CompanionSessi
     List<CompanionSession> findStale(@Param("status") CompanionSessionStatus status,
                                      @Param("cutoff") OffsetDateTime cutoff, Pageable pageable);
 
+    /**
+     * 이어 가기 활동 시각 갱신(2026-11-21 최종 점검 L-3) - 진행 중({@code status})일 때만 바꾼다. 1이면 바뀌었다.
+     * 조건부 UPDATE 한 문장이라 끝난 대화의 시각을 건드리지 않고, {@code @Version}을 올리지 않아 같은 순간의
+     * 턴 기록·마감 트랜잭션을 낙관적 잠금으로 실패시키지 않는다.
+     */
+    @Modifying(flushAutomatically = true, clearAutomatically = true)
+    @Query("UPDATE CompanionSession s SET s.lastActivityAt = :now WHERE s.id = :id AND s.status = :status")
+    int touchActivity(@Param("id") Long id, @Param("status") CompanionSessionStatus status,
+                      @Param("now") OffsetDateTime now);
+
     boolean existsByWardId(String wardId);
 
     /**

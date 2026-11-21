@@ -50,6 +50,14 @@ public class CompanionTurnSlots {
         }
     }
 
+    /**
+     * 그 대화의 자리가 지금 잡혀 있는가(턴·마치기·마감 스케줄러 진행 중). 이어 가기가 진행 중인 턴과 겹치는지 볼 때만 쓴다
+     * (2026-11-21 최종 점검 L-2). 자리를 잡지 않는 순간값이라 확인 직후 바뀔 수 있다 - 쓰기의 근거로 삼지 말 것.
+     */
+    public boolean isBusy(long sessionId) {
+        return busySessions.contains(sessionId);
+    }
+
     int available() {
         return global.availablePermits();
     }

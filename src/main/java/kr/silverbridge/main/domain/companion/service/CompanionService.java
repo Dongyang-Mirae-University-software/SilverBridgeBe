@@ -305,6 +305,14 @@ public class CompanionService {
             if (current == null) {
                 return false;
             }
+            // 목록을 읽은 뒤 활동(턴 기록·이어 가기)이 있었으면 이번 주기에는 닫지 않는다(2026-11-21 최종 점검 L-3 후속).
+            // 목록 스냅샷 값과 견주지 않고 목록 조회와 같은 규칙(마지막 활동 < 지금 - abandonAfter)을 다시 적용한다 -
+            // 판단이 지금 DB 값 하나에만 달려 있어 단순하고, 틀려도 다음 주기(5분 뒤)에 닫는 쪽이다.
+            // 건너뛰기만 더하므로 "진행 중인 대화만 고친다"(점검 M-3)는 그대로다 - 쓰기는 여전히 OPEN일 때만 한다.
+            OffsetDateTime cutoff = OffsetDateTime.now(clock).minus(properties.getAbandonAfter());
+            if (!current.getLastActivityAt().isBefore(cutoff)) {
+                return false;
+            }
             if (!current.isDialogueAttached()) {
                 writer.releaseClaim(current.getId());
                 return true;
@@ -503,6 +511,16 @@ public class CompanionService {
         }
         if (!session.isDialogueAttached()) {
             throw new CustomException(ErrorCode.COMPANION_TURN_IN_PROGRESS);
+        }
+        // 그 대화의 턴·마치기·마감이 진행 중이면 이어 가지 않는다(2026-11-21 최종 점검 L-2) - 처리 중인 대답이 끝나기 전의
+        // 턴 수·마지막 문장을 내주면 기기가 한 턴 뒤처진 화면으로 다음 대답을 받는다. 기기는 409를 잠시 뒤 다시 시도한다.
+        if (slots.isBusy(session.getId())) {
+            throw new CustomException(ErrorCode.COMPANION_TURN_IN_PROGRESS);
+        }
+        // 이어 가기도 활동이다 - 마지막 활동 시각을 밀어 마감 스케줄러가 곧바로 닫지 않게 한다(최종 점검 L-3).
+        // 0행이면 방금 끝난 대화다(마감 스케줄러·마지막 턴) - 처음의 상태 검사와 같은 응답을 준다.
+        if (!writer.touchActivity(session.getId(), OffsetDateTime.now(clock))) {
+            throw new CustomException(ErrorCode.COMPANION_SLOT_DONE);
         }
         String opening = questionRepository.findById(session.getQuestionId())
                 .map(CompanionQuestion::getText).orElse(null);

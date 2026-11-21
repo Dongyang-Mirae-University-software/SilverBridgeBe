@@ -63,6 +63,7 @@ class CompanionServiceTest {
     private CompanionSessionRepository sessionRepository;
     private CompanionSessionWriter writer;
     private RateLimitService rateLimitService;
+    private CompanionTurnSlots slots;
     private CompanionService service;
 
     @BeforeEach
@@ -76,9 +77,12 @@ class CompanionServiceTest {
         sessionRepository = mock(CompanionSessionRepository.class);
         writer = mock(CompanionSessionWriter.class);
         rateLimitService = mock(RateLimitService.class);
+        slots = new CompanionTurnSlots(properties);
         service = new CompanionService(aiClient, properties, questionRepository, sessionRepository, writer,
-                new CompanionTurnSlots(properties), rateLimitService, mock(CompanionPromptScheduler.class));
+                slots, rateLimitService, mock(CompanionPromptScheduler.class));
         service.setClock(Clock.fixed(AT_0910.toInstant(), CompanionService.KST));
+        // 이어 가기의 활동 시각 갱신 - 기본은 "진행 중이라 바뀜"(끝난 대화는 테스트에서 false로 바꾼다)
+        when(writer.touchActivity(anyLong(), any())).thenReturn(true);
     }
 
     @Test
@@ -163,6 +167,53 @@ class CompanionServiceTest {
         when(aiClient.dialogueState("d-15")).thenReturn(
                 stateJson("{\"lastQuestion\":\"" + "가".repeat(CompanionService.MAX_RESUME_QUESTION_CHARS + 1) + "\"}"));
         assertThat(service.open(WARD).question()).isEqualTo("이어 갈 질문");
+    }
+
+    @Test
+    @DisplayName("L-2 이어 가기: 그 대화의 턴이 진행 중이면 409 - 활동 시각·AI를 건드리지 않고, 턴이 끝나면 이어 간다")
+    void resumeRejectedWhileTurnInProgress() {
+        resumable(16L, 2);
+        when(aiClient.dialogueState("d-16")).thenReturn(stateJson("{\"lastQuestion\":\"식사는 하셨어요?\"}"));
+
+        try (CompanionTurnSlots.Slot turnInFlight = slots.acquire(16L)) {
+            assertThatThrownBy(() -> service.open(WARD)).extracting(e -> ((CustomException) e).getErrorCode())
+                    .isEqualTo(ErrorCode.COMPANION_TURN_IN_PROGRESS);
+            verify(writer, never()).touchActivity(anyLong(), any());
+            verify(aiClient, never()).dialogueState(anyString());
+        }
+
+        assertThat(service.open(WARD).resumed()).isTrue();
+    }
+
+    @Test
+    @DisplayName("L-2: 다른 대화의 턴이 진행 중인 것은 이어 가기를 막지 않는다")
+    void resumeNotBlockedByOtherSession() {
+        resumable(17L, 0);
+
+        try (CompanionTurnSlots.Slot other = slots.acquire(999L)) {
+            assertThat(service.open(WARD).resumed()).isTrue();
+        }
+    }
+
+    @Test
+    @DisplayName("L-3 이어 가기: 마지막 활동 시각을 지금으로 민다 - 마감 스케줄러(10분 무활동)가 곧바로 닫지 않게")
+    void resumeTouchesActivity() {
+        resumable(18L, 1);
+
+        service.open(WARD);
+
+        verify(writer).touchActivity(18L, AT_0910.toOffsetDateTime());
+    }
+
+    @Test
+    @DisplayName("L-3 이어 가기: 활동 시각 갱신이 0행이면(방금 마감됨) 끝난 시간대로 답하고 AI를 부르지 않는다")
+    void resumeOfJustClosedSessionIsDone() {
+        resumable(19L, 2);
+        when(writer.touchActivity(anyLong(), any())).thenReturn(false);
+
+        assertThatThrownBy(() -> service.open(WARD)).extracting(e -> ((CustomException) e).getErrorCode())
+                .isEqualTo(ErrorCode.COMPANION_SLOT_DONE);
+        verify(aiClient, never()).dialogueState(anyString());
     }
 
     private CompanionSession resumable(long id, int turns) {
@@ -354,12 +405,47 @@ class CompanionServiceTest {
                         + "\"riskFlag\":true,\"alertLevel\":\"URGENT\"}"));
         ArgumentCaptor<CompanionResult> captor = ArgumentCaptor.forClass(CompanionResult.class);
         when(writer.finish(eq(60L), captor.capture(), any())).thenReturn(session);
+        service.setClock(Clock.fixed(AT_0910.plusMinutes(11).toInstant(), CompanionService.KST));   // 마지막 활동 11분 전
 
         assertThat(service.closeAbandoned(session)).isTrue();
 
         assertThat(captor.getValue().endReason()).isEqualTo(CompanionEndReason.NO_RESPONSE);
         assertThat(captor.getValue().mood()).isNull();
         assertThat(captor.getValue().needsRiskAlert()).isTrue();
+    }
+
+    @Test
+    @DisplayName("멈춘 대화 마감: 목록을 읽은 뒤 활동(이어 가기·턴)이 있었으면 이번 주기에 닫지 않는다 - AI·쓰기 없음, 자리는 돌려준다")
+    void abandonedSkipsRecentlyActive() {
+        CompanionSession stale = sessionWithId(62L, "d-62");
+        CompanionSession touched = sessionWithId(62L, "d-62");
+        touched.recordTurn(1, false, (BigDecimal) null, AT_0910.plusMinutes(10).toOffsetDateTime());   // 1분 전 활동
+        when(sessionRepository.findById(62L)).thenReturn(Optional.of(touched));
+        service.setClock(Clock.fixed(AT_0910.plusMinutes(11).toInstant(), CompanionService.KST));
+
+        assertThat(service.closeAbandoned(stale)).isFalse();
+
+        verify(aiClient, never()).finish(anyString());
+        verify(writer, never()).finish(anyLong(), any(), any());
+        verify(writer, never()).releaseClaim(anyLong());
+        assertThat(slots.isBusy(62L)).isFalse();
+    }
+
+    @Test
+    @DisplayName("멈춘 대화 마감: 마지막 활동이 정확히 마감 기준이면 닫지 않고(목록 조회와 같은 '<'), 그보다 이르면 닫는다")
+    void abandonedCutoffBoundary() throws Exception {
+        CompanionSession session = sessionWithId(63L, "d-63");   // 마지막 활동 09:10
+        when(sessionRepository.findById(63L)).thenReturn(Optional.of(session));
+        when(aiClient.finish("d-63")).thenReturn(json("{\"dialogueId\":\"d-63\",\"endReason\":\"USER_STOP\",\"turnCount\":0}"));
+        when(writer.finish(eq(63L), any(), any())).thenReturn(session);
+
+        service.setClock(Clock.fixed(AT_0910.plusMinutes(10).toInstant(), CompanionService.KST));
+        assertThat(service.closeAbandoned(session)).isFalse();
+        verify(aiClient, never()).finish(anyString());
+
+        service.setClock(Clock.fixed(AT_0910.plusMinutes(10).plusSeconds(1).toInstant(), CompanionService.KST));
+        assertThat(service.closeAbandoned(session)).isTrue();
+        verify(writer).finish(eq(63L), any(), any());
     }
 
     @Test
@@ -416,6 +502,22 @@ class CompanionServiceTest {
 
         TodayResponse today = service.today(WARD);
 
+        assertThat(today.currentSlot()).isNull();
+        assertThat(today.slots()).hasSize(5);
+        assertThat(today.testMode()).isFalse();
+    }
+
+    @Test
+    @DisplayName("L-6(#471): 스위치는 켜졌는데 말벗 AI 주소만 비어도 열 수 있는 시간대·테스트 모드를 주지 않는다(조회는 된다)")
+    void today_AI_주소만_비어도_열_수_있는_시간대를_주지_않는다() {
+        service.setClock(Clock.fixed(AT_0910.withHour(15).withMinute(5).toInstant(), CompanionService.KST));
+        when(sessionRepository.findByWardIdAndSessionDate(WARD, TODAY)).thenReturn(List.of());
+        properties.setTestAllWards(true);
+        properties.setAiBaseUrl(" ");
+
+        TodayResponse today = service.today(WARD);
+
+        assertThat(properties.isEnabled()).isTrue();
         assertThat(today.currentSlot()).isNull();
         assertThat(today.slots()).hasSize(5);
         assertThat(today.testMode()).isFalse();

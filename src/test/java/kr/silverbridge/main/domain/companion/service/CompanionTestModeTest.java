@@ -90,6 +90,8 @@ class CompanionTestModeTest {
         service = new CompanionService(aiClient, properties, questionRepository, sessionRepository, writer,
                 new CompanionTurnSlots(properties), rateLimitService, promptScheduler);
         service.setClock(Clock.fixed(AT_1030.toInstant(), CompanionService.KST));
+        // 이어 가기의 활동 시각 갱신(2026-11-21 L-3) - 진행 중인 대화라 바뀐 것으로 둔다
+        when(writer.touchActivity(org.mockito.ArgumentMatchers.anyLong(), org.mockito.ArgumentMatchers.any())).thenReturn(true);
     }
 
     @Test

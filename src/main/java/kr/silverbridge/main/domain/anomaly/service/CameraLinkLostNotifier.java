@@ -10,6 +10,7 @@ import kr.silverbridge.main.domain.notification.dispatch.NotificationDispatcher;
 import kr.silverbridge.main.domain.notification.dispatch.NotificationType;
 import kr.silverbridge.main.domain.notification.entity.NotificationLogResult;
 import kr.silverbridge.main.domain.user.repository.UserRepository;
+import kr.silverbridge.main.global.enums.Status;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.data.redis.core.StringRedisTemplate;
@@ -20,6 +21,7 @@ import org.springframework.util.StringUtils;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.Collection;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -170,8 +172,16 @@ public class CameraLinkLostNotifier {
     }
 
     // ACTIVE 보호자 중 이 안내를 끈 사람을 뺀다. 설정 조회가 실패하면 모두에게 보낸다(끈 사람에게 한 번 더 가는 쪽이 낫다).
+    // 계정이 이용 중이 아닌(이용 제한·탈퇴 진행) 보호자는 디스패처가 막는다 - 대상으로 세면 받을 사람 없이 쿨다운(6시간)만
+    // 잡혀, 그사이 새로 연결된 보호자가 다음 끊김을 안내받지 못한다(2026-11-21 최종 점검 L-5, 이상감지 재촉 L-12와 같은 기준).
+    // 계정 상태 조회가 실패하면 예외가 send()의 처리 실패로 올라가 쿨다운을 쓰지 않는다. 디스패처 차단은 그대로 둔다(2중 방어).
     private List<String> receivers(String wardId) {
-        List<String> guardianIds = connectionService.getActiveGuardianIds(wardId);
+        List<String> connected = connectionService.getActiveGuardianIds(wardId);
+        if (connected.isEmpty()) {
+            return connected;
+        }
+        Set<String> usable = new HashSet<>(userRepository.findIdsByIdInAndStatus(connected, Status.ACTIVE));
+        List<String> guardianIds = connected.stream().filter(usable::contains).toList();
         if (guardianIds.isEmpty()) {
             return guardianIds;
         }
