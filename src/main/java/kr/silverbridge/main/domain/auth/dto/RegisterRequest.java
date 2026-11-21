@@ -55,8 +55,8 @@ public class RegisterRequest {
     @Size(max = 36, message = "전화번호 인증 정보가 올바르지 않습니다.")
     private String verificationNonce;
 
-    @Schema(description = "역할 선택. WARD: 피보호자, GUARDIAN: 보호자", example = "WARD", allowableValues = {"WARD", "GUARDIAN"})
-    @NotNull(message = "역할을 선택해주세요. (WARD: 피보호자, GUARDIAN: 보호자)")
+    @Schema(description = "역할 선택. WARD: 어르신, GUARDIAN: 보호자", example = "WARD", allowableValues = {"WARD", "GUARDIAN"})
+    @NotNull(message = "역할을 선택해주세요. (WARD: 어르신, GUARDIAN: 보호자)")
     private Role role;
 
     @Schema(description = "도로명 주소 또는 지번 주소 (카카오 주소 API 결과값)", example = "서울특별시 강남구 테헤란로 123")

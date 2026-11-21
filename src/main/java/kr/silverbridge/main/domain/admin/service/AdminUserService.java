@@ -417,7 +417,7 @@ public class AdminUserService {
 
     private static String roleLabel(Role role) {
         return switch (role) {
-            case WARD -> "피보호자";
+            case WARD -> "어르신";
             case GUARDIAN -> "보호자";
             case ADMIN -> "관리자";
         };

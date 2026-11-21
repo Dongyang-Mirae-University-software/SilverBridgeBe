@@ -84,7 +84,7 @@ public class ConnectionNotificationListener {
                 Map.of("connectionId", event.connectionId()));
 
         notificationDispatcher.dispatch(event.guardianId(), event.wardId(), NotificationType.CONNECTION_ACCEPTED,
-                NotificationContent.of("연결 수락", "피보호자가 연결 요청을 수락했습니다.",
+                NotificationContent.of("연결 수락", "어르신이 연결 요청을 수락했습니다.",
                         Map.of("type", "CONNECTION_ACCEPTED",
                                 "connectionId", String.valueOf(event.connectionId()))));
     }
@@ -170,11 +170,11 @@ public class ConnectionNotificationListener {
         boolean toWard = event.notifyTargetId().equals(event.wardId());
         String body = toWard ? wardDisconnectedBody(event.disconnectedBy()) : switch (event.disconnectedBy()) {
             case GUARDIAN -> "보호자가 연결을 해제했습니다.";
-            case WARD -> "피보호자가 연결을 해제했습니다.";
+            case WARD -> "어르신이 연결을 해제했습니다.";
             // 관리자가 끊은 것을 "보호자가 해제했습니다"로 내보내면 사실과 다르다
             case ADMIN -> "관리자가 연결을 해제했습니다.";
             // 알림은 남은 쪽에만 간다 - 여기 오는 수신자는 보호자이므로 떠난 쪽은 피보호자다
-            case WITHDRAWN -> "피보호자가 탈퇴해 연결이 종료되었습니다.";
+            case WITHDRAWN -> "어르신이 탈퇴해 연결이 종료되었습니다.";
         };
 
         // 문구 없이 connectionId만 보내면 FE가 "연결이 해제되었습니다"만 띄우고, 뒤이은 FCM은 같은 키로 걸러져

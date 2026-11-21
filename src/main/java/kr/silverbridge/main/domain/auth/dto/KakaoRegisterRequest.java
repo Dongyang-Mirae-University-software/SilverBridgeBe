@@ -46,8 +46,8 @@ public class KakaoRegisterRequest {
     @Size(max = 36, message = "전화번호 인증 정보가 올바르지 않습니다.")
     private String verificationNonce;
 
-    @Schema(description = "역할 선택. WARD: 피보호자, GUARDIAN: 보호자", example = "WARD", allowableValues = {"WARD", "GUARDIAN"})
-    @NotNull(message = "역할을 선택해주세요. (WARD: 피보호자, GUARDIAN: 보호자)")
+    @Schema(description = "역할 선택. WARD: 어르신, GUARDIAN: 보호자", example = "WARD", allowableValues = {"WARD", "GUARDIAN"})
+    @NotNull(message = "역할을 선택해주세요. (WARD: 어르신, GUARDIAN: 보호자)")
     private Role role;
 
     @Schema(description = "프로필 이미지 URL (선택값. 카카오 응답의 profileImageUrl 전달 또는 null). 카카오 CDN(kakaocdn.net과 하위 도메인) 주소만, 최대 500자. http로 오면 서버가 https로 바꿔 저장",

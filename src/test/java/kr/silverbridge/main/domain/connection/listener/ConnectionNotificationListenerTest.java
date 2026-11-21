@@ -98,7 +98,7 @@ class ConnectionNotificationListenerTest {
         // 수신자는 보호자, 두 번째 인자는 이력 표시용 피보호자
         verify(notificationDispatcher).dispatch(
                 eq(GUARDIAN_ID), eq(WARD_ID), eq(NotificationType.CONNECTION_ACCEPTED),
-                eq(NotificationContent.of("연결 수락", "피보호자가 연결 요청을 수락했습니다.",
+                eq(NotificationContent.of("연결 수락", "어르신이 연결 요청을 수락했습니다.",
                         java.util.Map.of("type", "CONNECTION_ACCEPTED",
                                 "connectionId", String.valueOf(CONNECTION_ID)))));
     }
@@ -147,7 +147,7 @@ class ConnectionNotificationListenerTest {
         ArgumentCaptor<NotificationContent> captor = ArgumentCaptor.forClass(NotificationContent.class);
         // 알림은 보호자에게 가도 이력의 피보호자 칸은 연결의 피보호자다
         verify(notificationDispatcher).dispatch(eq(GUARDIAN_ID), eq(WARD_ID), eq(NotificationType.CONNECTION_DISCONNECTED), captor.capture());
-        assertThat(captor.getValue().body()).isEqualTo("피보호자가 연결을 해제했습니다.");
+        assertThat(captor.getValue().body()).isEqualTo("어르신이 연결을 해제했습니다.");
         assertThat(captor.getValue().data()).containsEntry("type", "CONNECTION_CANCELLED");
     }
 
@@ -176,7 +176,7 @@ class ConnectionNotificationListenerTest {
 
         ArgumentCaptor<NotificationContent> captor = ArgumentCaptor.forClass(NotificationContent.class);
         verify(notificationDispatcher).dispatch(eq(GUARDIAN_ID), eq(WARD_ID), eq(NotificationType.CONNECTION_DISCONNECTED), captor.capture());
-        assertThat(captor.getValue().body()).isEqualTo("피보호자가 탈퇴해 연결이 종료되었습니다.");
+        assertThat(captor.getValue().body()).isEqualTo("어르신이 탈퇴해 연결이 종료되었습니다.");
     }
 
     @Test
@@ -268,11 +268,11 @@ class ConnectionNotificationListenerTest {
     @org.junit.jupiter.params.ParameterizedTest
     @org.junit.jupiter.params.provider.CsvSource({
             "GUARDIAN, WD0001, CareAI, 보호자가 가족 연결을 해제했어요.",
-            "WARD, GD0001, 연결 해제, 피보호자가 연결을 해제했습니다.",
+            "WARD, GD0001, 연결 해제, 어르신이 연결을 해제했습니다.",
             "ADMIN, GD0001, 연결 해제, 관리자가 연결을 해제했습니다.",
             "ADMIN, WD0001, CareAI, 관리자가 가족 연결을 해제했어요.",
             "WITHDRAWN, WD0001, CareAI, 가족 연결이 해제됐어요.",
-            "WITHDRAWN, GD0001, 연결 해제, 피보호자가 탈퇴해 연결이 종료되었습니다."
+            "WITHDRAWN, GD0001, 연결 해제, 어르신이 탈퇴해 연결이 종료되었습니다."
     })
     @DisplayName("연결 해제 WS(connection-cancelled)에 해제 주체와 FCM과 같은 제목·본문을 싣는다, connectionId 유지 (CONN-G12)")
     @SuppressWarnings("unchecked")
