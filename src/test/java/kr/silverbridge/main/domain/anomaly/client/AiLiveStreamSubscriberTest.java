@@ -344,4 +344,55 @@ class AiLiveStreamSubscriberTest {
 
         assertThat(subscriber.liveSessionSnapshot()).isEmpty();
     }
+
+    @Test
+    @DisplayName("종료(stop) 뒤에는 수신 메시지를 처리하지 않고 재접속도 예약하지 않는다 - 알림 풀을 비운 뒤 신호가 들어오지 않게(2026-11-22 I-2)")
+    void 종료_뒤_수신_중단() throws Exception {
+        subscriber.start();
+        assertThat(subscriber.isRunning()).isTrue();
+
+        subscriber.stop();
+        subscriber.stop();   // 빈 파괴 때(@PreDestroy) 한 번 더 불려도 안전하다
+
+        assertThat(subscriber.isRunning()).isFalse();
+        verify(session, org.mockito.Mockito.atLeastOnce()).close(org.springframework.web.socket.CloseStatus.NORMAL);
+
+        subscriber.handleTextMessage(session, liveStreams(SESSION_ID));
+        subscriber.afterConnectionClosed(session, org.springframework.web.socket.CloseStatus.NORMAL);
+
+        verify(cameraService, never()).findOwnerBySessionId(any());
+        verify(taskScheduler, never()).schedule(any(Runnable.class), any(java.time.Instant.class));
+    }
+
+    @Test
+    @DisplayName("종료가 시작된 뒤 뒤늦게 성립한 연결은 받지 않고 닫는다")
+    void 종료_뒤_성립한_연결은_닫는다() throws Exception {
+        subscriber.stop();
+        WebSocketSession late = org.mockito.Mockito.mock(WebSocketSession.class);
+
+        subscriber.afterConnectionEstablished(late);
+
+        verify(late).close(org.springframework.web.socket.CloseStatus.NORMAL);
+        verify(late, never()).sendMessage(any());
+    }
+
+    @Test
+    @DisplayName("lifecycle start()는 접속하지 않는다 - 접속은 ApplicationReadyEvent 리스너(connectOnReady)만 한다(기동을 막지 않는다)")
+    void lifecycle_start는_접속하지_않는다() throws Exception {
+        AiLiveStreamSubscriber fresh = new AiLiveStreamSubscriber(new AnomalyProperties(), signalParser, detectionService,
+                cameraService, new ObjectMapper(), taskScheduler, liveAnalysisBroadcaster, linkLostNotifier);
+
+        fresh.start();
+
+        assertThat(fresh.isRunning()).isTrue();
+        org.mockito.Mockito.verifyNoInteractions(taskScheduler);
+        // start()에 리스너를 붙이면 SmartLifecycle이 refresh 중에 부르는 것과 겹쳐 두 번 접속한다.
+        assertThat(AiLiveStreamSubscriber.class.getMethod("start")
+                .isAnnotationPresent(org.springframework.context.event.EventListener.class)).isFalse();
+        org.springframework.context.event.EventListener onReady = AiLiveStreamSubscriber.class
+                .getMethod("connectOnReady").getAnnotation(org.springframework.context.event.EventListener.class);
+        assertThat(onReady).isNotNull();
+        assertThat(onReady.value())
+                .containsExactly(org.springframework.boot.context.event.ApplicationReadyEvent.class);
+    }
 }

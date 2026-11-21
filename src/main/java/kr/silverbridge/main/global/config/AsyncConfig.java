@@ -21,24 +21,37 @@ import java.util.concurrent.RejectedExecutionHandler;
  * 수신 스레드·HTTP 요청 스레드가 FCM·SMS 응답을 기다리게 되어 @Async를 둔 이유가 사라진다. 대신 큐를 500으로
  * 넓히고, 그래도 넘치면 ERROR 로그를 남기고 폐기한다(어디서 유실됐는지는 남는다).
  *
- * 종료 시 큐에 남은 작업을 최대 20초 기다린다(B-3) - 배포마다 컨테이너가 교체되는데 기다리지 않으면
- * 그 순간 큐에 있던 SOS 알림까지 사라진다. server.shutdown=graceful과 함께 동작한다.
+ * 종료 시 큐에 남은 작업을 기다린다(B-3) - 배포마다 컨테이너가 교체되는데 기다리지 않으면 그 순간 큐에 있던
+ * SOS 알림까지 사라진다. server.shutdown=graceful과 함께 동작한다. 기다리는 곳은 둘이다(2026-11-22 최종 점검 I-1):
+ *  - 긴급·일반 알림 풀은 종료 단계에서 {@link UrgentNotificationDrainLifecycle}가 먼저 비운다(공유 마감 25초,
+ *    Redis·DB·발송 수단이 모두 살아 있는 동안).
+ *  - 아래 풀별 대기는 <b>빈 파괴 때의 잔여 대기</b>다. Spring 7은 waitForTasksToCompleteOnShutdown=true인 풀을
+ *    파괴할 때 하나씩 차례로 기다리므로 이 값들은 <b>더해진다</b> - 공용 20초였을 때 5개가 최악 100초였다.
+ *    그래서 풀마다 그 풀의 작업을 잃었을 때의 손해만큼만 준다. 값을 바꾸면 ShutdownGraceBudgetTest가 본다.
  *
  * 긴급 알림(SOS·이상감지 발생)은 별도 풀을 쓴다(2026-10-02 QA SOS-G13/XCUT-G11) - 한 풀을 나눠 쓰면 연결·문의·
  * 복약 알림이 FCM·Solapi 지연으로 쌓였을 때 SOS·화재 알림이 그 뒤에 줄을 서거나 포화로 폐기된다. 포화·종료
- * 정책은 일반 풀과 같다(폐기 + ERROR 로그, CallerRuns 금지, 종료 대기 20초).
+ * 정책은 일반 풀과 같다(폐기 + ERROR 로그, CallerRuns 금지, 종료 단계에서 비운 뒤 잔여 대기 3초).
  */
 @Slf4j
 @Configuration
 @EnableAsync
 public class AsyncConfig {
 
-    private static final int AWAIT_TERMINATION_SECONDS = 20;
+    /** 종료 단계에서 이미 비운 뒤라 늦게 들어온 작업만 남는다. */
+    static final int NOTIFICATION_AWAIT_SECONDS = 3;
+    static final int URGENT_AWAIT_SECONDS = 3;
+    /** 화면 표시용 상태 - 새 컨테이너가 최신 상태를 다시 보낸다. */
+    static final int LIVE_ANALYSIS_AWAIT_SECONDS = 1;
+    /** AI 응답이 최대 25초라 기다려도 대부분 못 끝낸다 - 클립 1건을 잃는 쪽을 택한다(다음 위험 감지가 다시 만든다). */
+    static final int CLIP_AWAIT_SECONDS = 2;
+    /** AI 삭제 호출이 최대 15초 - 잘린 건은 AI 쪽에 남는다(재시도 없음 수용, 말벗만 매시 재시도). */
+    static final int AI_PURGE_AWAIT_SECONDS = 2;
 
     /** 일반 알림(연결·문의·복약 체크) + 카카오 가입 접속로그. */
     @Bean(name = "notificationExecutor")
     public Executor notificationExecutor() {
-        return newExecutor("notificationExecutor", "notify-", 2, 10, 500);
+        return newExecutor("notificationExecutor", "notify-", 2, 10, 500, NOTIFICATION_AWAIT_SECONDS);
     }
 
     /**
@@ -52,7 +65,7 @@ public class AsyncConfig {
      */
     @Bean(name = "urgentNotificationExecutor")
     public Executor urgentNotificationExecutor() {
-        return newExecutor("urgentNotificationExecutor", "notify-urgent-", 4, 8, 200);
+        return newExecutor("urgentNotificationExecutor", "notify-urgent-", 4, 8, 200, URGENT_AWAIT_SECONDS);
     }
 
     /**
@@ -65,7 +78,7 @@ public class AsyncConfig {
     public Executor liveAnalysisExecutor() {
         // 폐기는 알림 장애가 아니라 화면 상태 1건이 건너뛰어진 것이다 - [NOTIFY-REJECTED] ERROR로 남기면 SOS·화재 알림
         // 유실처럼 보여 진짜 장애가 묻힌다(2026-10-03 점검 I-1). 별도 태그의 WARN으로 남긴다.
-        return newExecutor("live-analysis-", 1, 2, 100, (task, pool) ->
+        return newExecutor("live-analysis-", 1, 2, 100, LIVE_ANALYSIS_AWAIT_SECONDS, (task, pool) ->
                 log.warn("[LIVE-ANALYSIS-REJECTED] 실시간 분석 상태 발송 폐기(화면 표시용 - 다음 상태 변화 때 최신 상태가 "
                         + "다시 나간다): active={}, queue={}", pool.getActiveCount(), pool.getQueue().size()));
     }
@@ -83,7 +96,7 @@ public class AsyncConfig {
      */
     @Bean(name = "clipExecutor")
     public Executor clipExecutor() {
-        return newExecutor("anomaly-clip-", 2, 2, 20, (task, pool) ->
+        return newExecutor("anomaly-clip-", 2, 2, 20, CLIP_AWAIT_SECONDS, (task, pool) ->
                 log.warn("[ANOMALY-CLIP-REJECTED] 클립 생성 폐기(알림·이력은 정상 - 쿨다운을 잡기 전이라 다음 위험 감지에서 다시 시도한다): "
                         + "active={}, queue={}", pool.getActiveCount(), pool.getQueue().size()));
     }
@@ -97,20 +110,21 @@ public class AsyncConfig {
      */
     @Bean(name = "aiPurgeExecutor")
     public Executor aiPurgeExecutor() {
-        return newExecutor("ai-purge-", 1, 2, 100, (task, pool) ->
+        return newExecutor("ai-purge-", 1, 2, 100, AI_PURGE_AWAIT_SECONDS, (task, pool) ->
                 log.warn("[AI-PURGE-REJECTED] 탈퇴 AI 회원 데이터 삭제 폐기 - AI 서버에 데이터가 남을 수 있다: active={}, queue={}",
                         pool.getActiveCount(), pool.getQueue().size()));
     }
 
-    private static ThreadPoolTaskExecutor newExecutor(String name, String threadNamePrefix,
-                                                      int corePoolSize, int maxPoolSize, int queueCapacity) {
-        return newExecutor(threadNamePrefix, corePoolSize, maxPoolSize, queueCapacity, (task, pool) ->
+    private static ThreadPoolTaskExecutor newExecutor(String name, String threadNamePrefix, int corePoolSize,
+                                                      int maxPoolSize, int queueCapacity, int awaitSeconds) {
+        return newExecutor(threadNamePrefix, corePoolSize, maxPoolSize, queueCapacity, awaitSeconds, (task, pool) ->
                 log.error("[NOTIFY-REJECTED] 알림 executor 포화로 작업 폐기: executor={}, active={}, queue={}, completed={}",
                         name, pool.getActiveCount(), pool.getQueue().size(), pool.getCompletedTaskCount()));
     }
 
     private static ThreadPoolTaskExecutor newExecutor(String threadNamePrefix, int corePoolSize, int maxPoolSize,
-                                                      int queueCapacity, RejectedExecutionHandler rejectedHandler) {
+                                                      int queueCapacity, int awaitSeconds,
+                                                      RejectedExecutionHandler rejectedHandler) {
         ThreadPoolTaskExecutor executor = new ThreadPoolTaskExecutor();
         executor.setCorePoolSize(corePoolSize);
         executor.setMaxPoolSize(maxPoolSize);
@@ -118,7 +132,7 @@ public class AsyncConfig {
         executor.setThreadNamePrefix(threadNamePrefix);
         executor.setRejectedExecutionHandler(rejectedHandler);
         executor.setWaitForTasksToCompleteOnShutdown(true);
-        executor.setAwaitTerminationSeconds(AWAIT_TERMINATION_SECONDS);
+        executor.setAwaitTerminationSeconds(awaitSeconds);
         executor.initialize();
         return executor;
     }

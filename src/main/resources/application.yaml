@@ -99,11 +99,14 @@ spring:
         size: 3
 
   lifecycle:
-    # 우아한 종료 단계 대기(기본 30초 → 15초, 2026-11-21 최종 점검 M-1).
-    # 컨테이너 grace 40초(docker-compose stop_grace_period) = 단계 대기 15초 + 풀 종료 대기 20초 + 여유.
-    # 근거 - Spring 7 ThreadPoolTaskExecutor는 waitForTasksToCompleteOnShutdown=true면 빈 파괴 때 풀마다 차례로
-    # 최대 20초(AsyncConfig.AWAIT_TERMINATION_SECONDS)를 기다린다. 기본 30초를 그대로 두면 30 + 20 > 40이라
-    # 진행 중 요청이 길 때 SIGKILL로 큐의 알림이 잘린다. 이 값·풀 대기·grace를 바꾸면 ShutdownGraceBudgetTest가 본다.
+    # 우아한 종료 단계 대기(기본 30초 → 15초, 2026-11-21 최종 점검 M-1). 단계마다 따로 걸린다.
+    # 컨테이너 grace 100초(docker-compose stop_grace_period) > 기다릴 수 있는 시간의 합 88초(2026-11-22 최종 점검 I-1):
+    #   단계 대기 15초 × 2(웹 우아한 종료 단계 + 0단계의 진행 중 예약 작업) + Tomcat 정지 7초
+    #   + 알림 풀 비우기 25초(UrgentNotificationDrainLifecycle) + 풀 잔여 대기 합 11초(AsyncConfig)
+    #   + 수동 풀 대기 합 15초(Solapi·Email·AccessLog의 @PreDestroy 각 5초).
+    # 예전 식 "단계 15 + 풀 20 + 여유"는 틀렸다 - Spring 7은 waitForTasksToCompleteOnShutdown=true인 풀을 빈 파괴 때
+    # 하나씩 차례로 기다려 대기가 더해진다(공용 20초 × 5). 종료 순서는 ShutdownPhases에 있고,
+    # 이 값·풀 대기·비우기 마감·grace를 바꾸면 ShutdownGraceBudgetTest가 본다.
     timeout-per-shutdown-phase: 15s
 
 server:

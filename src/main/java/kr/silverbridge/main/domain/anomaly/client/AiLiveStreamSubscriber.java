@@ -13,9 +13,11 @@ import kr.silverbridge.main.domain.anomaly.service.CameraLinkLostNotifier;
 import kr.silverbridge.main.domain.anomaly.service.LiveAnalysisBroadcaster;
 import kr.silverbridge.main.domain.camera.event.CameraRegisteredEvent;
 import kr.silverbridge.main.domain.camera.service.CameraService;
+import kr.silverbridge.main.global.config.ShutdownPhases;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.context.event.ApplicationReadyEvent;
+import org.springframework.context.SmartLifecycle;
 import org.springframework.context.event.EventListener;
 import org.springframework.scheduling.TaskScheduler;
 import org.springframework.stereotype.Component;
@@ -59,11 +61,20 @@ import java.util.concurrent.ThreadLocalRandom;
  * <p><b>기동을 막지 않는다</b>: 연결은 {@link ApplicationReadyEvent} 이후 시도하며, 실패해도 예외를 던지지 않고
  * 지수 백오프로 재시도한다(AI 서버가 죽어 있어도 백엔드는 정상 기동·서비스). API Key가 없거나
  * {@code anomaly.enabled=false}면 구독만 비활성화한다.</p>
+ *
+ * <p><b>종료</b>(2026-11-22 최종 점검 I-2): 종료 단계({@link ShutdownPhases#AI_STREAM_SUBSCRIBER})에서 수신을 멈춘다 -
+ * 웹 서버가 멈춘 뒤, 알림 풀을 비우기 직전이다. 예전에는 빈 파괴 때({@code @PreDestroy}) 멈췄는데 그 순서가 긴급 알림
+ * 풀보다 뒤라, 풀이 닫힌 뒤 들어온 화재 신호가 이력·쿨다운만 남기고 알림은 폐기됐다. Redis가 멈춘 뒤(0단계 이후)까지
+ * 받으면 쿨다운이 fail-open이라 같은 신호가 거듭 알림으로 나가기도 한다. 멈춘 뒤에는 재접속·재동기화를 예약하지 않고,
+ * 뒤늦게 온 메시지·연결도 받지 않는다.</p>
+ *
+ * <p><b>주의</b>: {@code SmartLifecycle.start()}는 컨텍스트 refresh 중에 불린다 - 여기서 접속하면 "기동을 막지 않는다"가
+ * 깨진다. 접속은 {@link #connectOnReady()}({@link ApplicationReadyEvent})만 하고 {@code start()}는 표시만 바꾼다.</p>
  */
 @Slf4j
 @Component
 @RequiredArgsConstructor
-public class AiLiveStreamSubscriber extends TextWebSocketHandler {
+public class AiLiveStreamSubscriber extends TextWebSocketHandler implements SmartLifecycle {
 
     private final AnomalyProperties properties;
     private final AnomalySignalParser signalParser;
@@ -100,6 +111,8 @@ public class AiLiveStreamSubscriber extends TextWebSocketHandler {
     private volatile WebSocketSession session;
     private volatile int reconnectAttempts;
     private volatile boolean shuttingDown;
+    /** lifecycle 표시(종료 단계에서 {@link #stop()}이 불리려면 true여야 한다). 접속 여부와는 무관하다. */
+    private volatile boolean running;
     private volatile ScheduledFuture<?> resyncTask;
 
     /**
@@ -135,8 +148,9 @@ public class AiLiveStreamSubscriber extends TextWebSocketHandler {
         return container;
     }
 
+    /** 기동이 끝난 뒤 접속한다. 이름을 {@code start}로 두지 말 것 - lifecycle {@link #start()}와 겹쳐 refresh 중에 불린다. */
     @EventListener(ApplicationReadyEvent.class)
-    public void start() {
+    public void connectOnReady() {
         if (!properties.isEnabled()) {
             log.info("[ANOMALY] 이상감지 수신 비활성(anomaly.enabled=false) — AI WS 미접속");
             return;
@@ -205,14 +219,42 @@ public class AiLiveStreamSubscriber extends TextWebSocketHandler {
         return true;
     }
 
+    /** lifecycle 시작 - 표시만 바꾼다(접속은 {@link #connectOnReady()}). */
+    @Override
+    public void start() {
+        running = true;
+    }
+
+    /**
+     * 수신을 멈춘다. 종료 단계에서 불리고, 그 단계를 타지 못한 경우(기동 실패 등)를 위해 {@code @PreDestroy}로도
+     * 남겨 둔다 - 여러 번 불려도 안전하다.
+     */
+    @Override
     @PreDestroy
     public void stop() {
+        running = false;
         shuttingDown = true;
         ScheduledFuture<?> task = this.resyncTask;
         if (task != null) {
             task.cancel(false);
         }
         closeQuietly();
+    }
+
+    @Override
+    public boolean isRunning() {
+        return running;
+    }
+
+    @Override
+    public int getPhase() {
+        return ShutdownPhases.AI_STREAM_SUBSCRIBER;
+    }
+
+    /** 멈추면 다시 붙지 않는다(종료 전용) - 컨텍스트 일시정지 대상에서 뺀다. */
+    @Override
+    public boolean isPauseable() {
+        return false;
     }
 
     private void connect() {
@@ -239,6 +281,15 @@ public class AiLiveStreamSubscriber extends TextWebSocketHandler {
 
     @Override
     public void afterConnectionEstablished(WebSocketSession session) {
+        if (shuttingDown) {
+            // 접속 시도 중에 종료가 시작됐다 - 받지 않고 닫는다(열어 두면 알림 풀을 비운 뒤에도 신호가 들어온다).
+            try {
+                session.close(CloseStatus.NORMAL);
+            } catch (IOException e) {
+                log.debug("[ANOMALY] 종료 중 성립한 AI WS 닫기 오류(무시): {}", e.getClass().getSimpleName());
+            }
+            return;
+        }
         this.session = session;
         this.reconnectAttempts = 0;
         this.lastMessageAt = Instant.now();
@@ -251,6 +302,9 @@ public class AiLiveStreamSubscriber extends TextWebSocketHandler {
 
     @Override
     protected void handleTextMessage(WebSocketSession session, TextMessage message) {
+        if (shuttingDown) {
+            return;   // 닫는 중에 도착한 프레임 - 받으면 알림 풀을 비운 뒤에 이력·알림이 생긴다
+        }
         lastMessageAt = Instant.now();
         try {
             JsonNode root = objectMapper.readTree(message.getPayload());
