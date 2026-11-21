@@ -2,7 +2,7 @@
 
 - 대상: BE #509(`184cdf84`, 이메일 HTML·보낸 사람 이름) + #510(`74372478`, 서비스 이름 CareAI)
 - 기준: dev `74372478`, `./gradlew build -x test` 통과
-- 판정: **PASS** · 🔴 0 · 🟠 0 · 🟡 1 · 🟢 4 · 실제 발송 미확인
+- 판정: **PASS** · 🔴 0 · 🟠 0 · 🟡 1 · 🟢 4 · 실제 발송 확인(Gmail 스팸함 도착 - 발송 계정 평판, `design-email-notification-html-style.md` "실발송 확인")
 
 ## 점검 파일
 
