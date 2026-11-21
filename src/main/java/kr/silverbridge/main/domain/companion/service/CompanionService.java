@@ -305,6 +305,14 @@ public class CompanionService {
             if (current == null) {
                 return false;
             }
+            // 목록을 읽은 뒤 활동(턴 기록·이어 가기)이 있었으면 이번 주기에는 닫지 않는다(2026-11-21 최종 점검 L-3 후속).
+            // 목록 스냅샷 값과 견주지 않고 목록 조회와 같은 규칙(마지막 활동 < 지금 - abandonAfter)을 다시 적용한다 -
+            // 판단이 지금 DB 값 하나에만 달려 있어 단순하고, 틀려도 다음 주기(5분 뒤)에 닫는 쪽이다.
+            // 건너뛰기만 더하므로 "진행 중인 대화만 고친다"(점검 M-3)는 그대로다 - 쓰기는 여전히 OPEN일 때만 한다.
+            OffsetDateTime cutoff = OffsetDateTime.now(clock).minus(properties.getAbandonAfter());
+            if (!current.getLastActivityAt().isBefore(cutoff)) {
+                return false;
+            }
             if (!current.isDialogueAttached()) {
                 writer.releaseClaim(current.getId());
                 return true;

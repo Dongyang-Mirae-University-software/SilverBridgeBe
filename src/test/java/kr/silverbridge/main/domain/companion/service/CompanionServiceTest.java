@@ -405,12 +405,47 @@ class CompanionServiceTest {
                         + "\"riskFlag\":true,\"alertLevel\":\"URGENT\"}"));
         ArgumentCaptor<CompanionResult> captor = ArgumentCaptor.forClass(CompanionResult.class);
         when(writer.finish(eq(60L), captor.capture(), any())).thenReturn(session);
+        service.setClock(Clock.fixed(AT_0910.plusMinutes(11).toInstant(), CompanionService.KST));   // 마지막 활동 11분 전
 
         assertThat(service.closeAbandoned(session)).isTrue();
 
         assertThat(captor.getValue().endReason()).isEqualTo(CompanionEndReason.NO_RESPONSE);
         assertThat(captor.getValue().mood()).isNull();
         assertThat(captor.getValue().needsRiskAlert()).isTrue();
+    }
+
+    @Test
+    @DisplayName("멈춘 대화 마감: 목록을 읽은 뒤 활동(이어 가기·턴)이 있었으면 이번 주기에 닫지 않는다 - AI·쓰기 없음, 자리는 돌려준다")
+    void abandonedSkipsRecentlyActive() {
+        CompanionSession stale = sessionWithId(62L, "d-62");
+        CompanionSession touched = sessionWithId(62L, "d-62");
+        touched.recordTurn(1, false, (BigDecimal) null, AT_0910.plusMinutes(10).toOffsetDateTime());   // 1분 전 활동
+        when(sessionRepository.findById(62L)).thenReturn(Optional.of(touched));
+        service.setClock(Clock.fixed(AT_0910.plusMinutes(11).toInstant(), CompanionService.KST));
+
+        assertThat(service.closeAbandoned(stale)).isFalse();
+
+        verify(aiClient, never()).finish(anyString());
+        verify(writer, never()).finish(anyLong(), any(), any());
+        verify(writer, never()).releaseClaim(anyLong());
+        assertThat(slots.isBusy(62L)).isFalse();
+    }
+
+    @Test
+    @DisplayName("멈춘 대화 마감: 마지막 활동이 정확히 마감 기준이면 닫지 않고(목록 조회와 같은 '<'), 그보다 이르면 닫는다")
+    void abandonedCutoffBoundary() throws Exception {
+        CompanionSession session = sessionWithId(63L, "d-63");   // 마지막 활동 09:10
+        when(sessionRepository.findById(63L)).thenReturn(Optional.of(session));
+        when(aiClient.finish("d-63")).thenReturn(json("{\"dialogueId\":\"d-63\",\"endReason\":\"USER_STOP\",\"turnCount\":0}"));
+        when(writer.finish(eq(63L), any(), any())).thenReturn(session);
+
+        service.setClock(Clock.fixed(AT_0910.plusMinutes(10).toInstant(), CompanionService.KST));
+        assertThat(service.closeAbandoned(session)).isFalse();
+        verify(aiClient, never()).finish(anyString());
+
+        service.setClock(Clock.fixed(AT_0910.plusMinutes(10).plusSeconds(1).toInstant(), CompanionService.KST));
+        assertThat(service.closeAbandoned(session)).isTrue();
+        verify(writer).finish(eq(63L), any(), any());
     }
 
     @Test
