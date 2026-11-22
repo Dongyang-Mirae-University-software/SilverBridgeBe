@@ -42,6 +42,10 @@ import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.ThreadLocalRandom;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 /**
  * AI 서버 이상감지 WebSocket({@code /api/v1/ws/live}) 구독자.
@@ -68,6 +72,11 @@ import java.util.concurrent.ThreadLocalRandom;
  * 받으면 쿨다운이 fail-open이라 같은 신호가 거듭 알림으로 나가기도 한다. 멈춘 뒤에는 재접속·재동기화를 예약하지 않고,
  * 뒤늦게 온 메시지·연결도 받지 않는다.</p>
  *
+ * <p><b>처리 중이던 프레임</b>(2026-11-22 점검 S-1): 멈출 때 이미 처리에 들어간 프레임이 끝나기를
+ * {@link #IN_FLIGHT_WAIT_SECONDS}초까지 기다린다. 프레임 처리가 끝났다는 것은 이력 커밋과 긴급 알림 작업 제출까지 끝났다는
+ * 뜻이라(AFTER_COMMIT 리스너가 같은 스레드에서 풀에 넣는다), 바로 다음 단계인 알림 풀 비우기가 그 작업을 기다릴 수 있다.
+ * 기다리지 않으면 비우기가 먼저 끝난 뒤 알림이 풀에 들어와 잔여 대기(3초)에만 기대게 된다.</p>
+ *
  * <p><b>주의</b>: {@code SmartLifecycle.start()}는 컨텍스트 refresh 중에 불린다 - 여기서 접속하면 "기동을 막지 않는다"가
  * 깨진다. 접속은 {@link #connectOnReady()}({@link ApplicationReadyEvent})만 하고 {@code start()}는 표시만 바꾼다.</p>
  */
@@ -88,6 +97,21 @@ public class AiLiveStreamSubscriber extends TextWebSocketHandler implements Smar
     /** AI에 세션 목록을 요청하는 페이로드(고정 문자열 — 변수 삽입 없음). */
     private static final String LIST_ACTION = "{\"action\":\"list\"}";
     private static final int MAX_TEXT_MESSAGE_BYTES = 1024 * 1024;
+
+    /**
+     * 멈출 때 처리 중이던 프레임을 기다리는 상한(초). 프레임 1건은 평소 Redis 1회 + SQL 몇 문(ms 단위)이고, Redis가 느린
+     * 순간에는 명령 제한 2초 뒤 fail-open으로 이어 저장한다 - 그 경우까지 덮는 값이다. 커넥션 풀 고갈(10초)은 덮지 못한다(수용).
+     * 종료 시간 예산에 더해진다({@code ShutdownGraceBudgetTest}).
+     */
+    static final int IN_FLIGHT_WAIT_SECONDS = 3;
+
+    private static final long IN_FLIGHT_POLL_MILLIS = 10;
+
+    /** 핸드셰이크가 HTTP 응답으로 거절됐을 때 컨테이너 메시지에 들어 있는 상태 코드 - 숫자 3자리만 뽑는다. */
+    private static final Pattern HANDSHAKE_STATUS = Pattern.compile("\\[([1-5]\\d{2})]");
+
+    /** 원인 사슬을 따라가는 한도(순환 방어). */
+    private static final int MAX_CAUSE_DEPTH = 10;
 
     /** 현재 구독 중인 세션 — 재연결 시 초기화된다(서버 측 구독 상태가 날아가므로). */
     private final Set<String> subscribedSessions = ConcurrentHashMap.newKeySet();
@@ -114,6 +138,15 @@ public class AiLiveStreamSubscriber extends TextWebSocketHandler implements Smar
     /** lifecycle 표시(종료 단계에서 {@link #stop()}이 불리려면 true여야 한다). 접속 여부와는 무관하다. */
     private volatile boolean running;
     private volatile ScheduledFuture<?> resyncTask;
+
+    /** 지금 {@link #handleTextMessage} 안에 있는 프레임 수(종료 가드에서 곧 빠져나갈 프레임도 잠깐 포함된다). */
+    private final AtomicInteger inFlightFrames = new AtomicInteger();
+
+    /** 처리 중 프레임 대기는 한 번만 한다 - {@link #stop()}은 종료 단계와 빈 파괴에서 두 번 불린다. */
+    private final AtomicBoolean inFlightWaitDone = new AtomicBoolean();
+
+    /** 처리 중 프레임 대기 상한. 테스트에서만 줄인다. */
+    volatile Duration inFlightWait = Duration.ofSeconds(IN_FLIGHT_WAIT_SECONDS);
 
     /**
      * 관리자 대시보드 조회용 - AI WS가 지금 붙어 있는가.
@@ -227,7 +260,7 @@ public class AiLiveStreamSubscriber extends TextWebSocketHandler implements Smar
 
     /**
      * 수신을 멈춘다. 종료 단계에서 불리고, 그 단계를 타지 못한 경우(기동 실패 등)를 위해 {@code @PreDestroy}로도
-     * 남겨 둔다 - 여러 번 불려도 안전하다.
+     * 남겨 둔다 - 여러 번 불려도 안전하다. 처리 중이던 프레임은 첫 호출에서만 기다린다(두 번 기다리면 예산이 두 배가 된다).
      */
     @Override
     @PreDestroy
@@ -238,7 +271,38 @@ public class AiLiveStreamSubscriber extends TextWebSocketHandler implements Smar
         if (task != null) {
             task.cancel(false);
         }
+        if (inFlightWaitDone.compareAndSet(false, true)) {
+            awaitInFlightFrames();
+        }
         closeQuietly();
+    }
+
+    /**
+     * 이미 처리에 들어간 프레임이 끝나기를 기다린다(상한 {@link #inFlightWait}). 처리 중인 것이 없으면 바로 돌아온다 -
+     * 평소 배포를 늦추지 않는다. 상한을 넘기면 그대로 닫는다: 남은 프레임의 알림은 풀 잔여 대기가 맡는다.
+     */
+    private void awaitInFlightFrames() {
+        if (inFlightFrames.get() == 0) {
+            return;
+        }
+        long started = System.nanoTime();
+        long deadline = started + inFlightWait.toNanos();
+        while (inFlightFrames.get() > 0 && System.nanoTime() - deadline < 0) {
+            try {
+                Thread.sleep(IN_FLIGHT_POLL_MILLIS);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                break;
+            }
+        }
+        long waitedMillis = (System.nanoTime() - started) / 1_000_000;
+        int remaining = inFlightFrames.get();
+        if (remaining == 0) {
+            log.info("[SHUTDOWN-AI-STREAM] 처리 중이던 AI 프레임이 끝남: waitedMs={}", waitedMillis);
+        } else {
+            log.warn("[SHUTDOWN-AI-STREAM] 처리 중이던 AI 프레임을 마감 안에 끝내지 못함: waitedMs={}, limitMs={}, 처리 중={}",
+                    waitedMillis, inFlightWait.toMillis(), remaining);
+        }
     }
 
     @Override
@@ -273,10 +337,51 @@ public class AiLiveStreamSubscriber extends TextWebSocketHandler implements Smar
         client.execute(this, headers, URI.create(properties.getWsUrl()))
                 .whenComplete((connected, error) -> {
                     if (error != null) {
-                        log.warn("[ANOMALY] AI WS 접속 실패: {}", error.getMessage());
+                        log.warn("[ANOMALY] AI WS 접속 실패: error={}, status={}",
+                                rootCauseName(error), handshakeStatus(error));
                         scheduleReconnect();
                     }
                 });
+    }
+
+    /**
+     * 가장 안쪽 원인의 클래스명. 접속 실패는 {@code CompletableFuture} 래퍼에 싸여 오므로 겉 클래스명만 남기면
+     * 원인(연결 거부·핸드셰이크 거절 등)이 구분되지 않는다. 메시지 원문은 남기지 않는다.
+     */
+    static String rootCauseName(Throwable error) {
+        Throwable current = error;
+        for (int depth = 0; depth < MAX_CAUSE_DEPTH; depth++) {
+            Throwable cause = current.getCause();
+            if (cause == null || cause == current) {
+                break;
+            }
+            current = cause;
+        }
+        return current.getClass().getSimpleName();
+    }
+
+    /**
+     * 핸드셰이크가 HTTP 응답으로 거절됐으면 그 상태 코드 3자리(예: API 키 오류 401), 아니면 {@code "-"}.
+     * 서버가 죽은 것과 키가 틀린 것을 로그에서 가르기 위한 값이다. 예외 메시지에서 <b>숫자 3자리만</b> 꺼내고 나머지는
+     * 버린다 - 메시지에는 주소 등이 섞일 수 있다.
+     */
+    static String handshakeStatus(Throwable error) {
+        Throwable current = error;
+        for (int depth = 0; depth < MAX_CAUSE_DEPTH && current != null; depth++) {
+            String text = current.getMessage();
+            if (text != null) {
+                Matcher matcher = HANDSHAKE_STATUS.matcher(text);
+                if (matcher.find()) {
+                    return matcher.group(1);
+                }
+            }
+            Throwable cause = current.getCause();
+            if (cause == current) {
+                break;
+            }
+            current = cause;
+        }
+        return "-";
     }
 
     @Override
@@ -302,22 +407,29 @@ public class AiLiveStreamSubscriber extends TextWebSocketHandler implements Smar
 
     @Override
     protected void handleTextMessage(WebSocketSession session, TextMessage message) {
-        if (shuttingDown) {
-            return;   // 닫는 중에 도착한 프레임 - 받으면 알림 풀을 비운 뒤에 이력·알림이 생긴다
-        }
-        lastMessageAt = Instant.now();
+        // 종료 확인보다 먼저 센다. 순서를 바꾸면 "확인 통과 → stop이 0을 보고 지나감 → 처리 시작"이 가능해져
+        // stop이 이 프레임을 기다리지 못한다. 이 순서면 둘 중 하나는 반드시 상대를 본다(둘 다 volatile·atomic).
+        inFlightFrames.incrementAndGet();
         try {
-            JsonNode root = objectMapper.readTree(message.getPayload());
-            switch (root.path("type").asText("")) {
-                case "live_streams" -> subscribeRegisteredSessions(root.path("data"));
-                case "latest_analysis" -> handleAnalysis(root);
-                case "session_status" -> liveAnalysisBroadcaster.onSessionStatus(
-                        root.path("sessionId").asText(null), root.path("data").path("status").asText(null));
-                default -> { /* connected·pong·subscribed 등은 처리 대상 아님 */ }
+            if (shuttingDown) {
+                return;   // 닫는 중에 도착한 프레임 - 받으면 알림 풀을 비운 뒤에 이력·알림이 생긴다
             }
-        } catch (Exception e) {
-            // 메시지 1건의 실패가 커넥션을 끊지 않도록 격리 — 다음 프레임은 계속 처리한다
-            log.error("[ANOMALY] AI WS 메시지 처리 실패 — 해당 메시지만 폐기", e);
+            lastMessageAt = Instant.now();
+            try {
+                JsonNode root = objectMapper.readTree(message.getPayload());
+                switch (root.path("type").asText("")) {
+                    case "live_streams" -> subscribeRegisteredSessions(root.path("data"));
+                    case "latest_analysis" -> handleAnalysis(root);
+                    case "session_status" -> liveAnalysisBroadcaster.onSessionStatus(
+                            root.path("sessionId").asText(null), root.path("data").path("status").asText(null));
+                    default -> { /* connected·pong·subscribed 등은 처리 대상 아님 */ }
+                }
+            } catch (Exception e) {
+                // 메시지 1건의 실패가 커넥션을 끊지 않도록 격리 — 다음 프레임은 계속 처리한다
+                log.error("[ANOMALY] AI WS 메시지 처리 실패 — 해당 메시지만 폐기", e);
+            }
+        } finally {
+            inFlightFrames.decrementAndGet();
         }
     }
 
@@ -445,7 +557,7 @@ public class AiLiveStreamSubscriber extends TextWebSocketHandler implements Smar
 
     @Override
     public void handleTransportError(WebSocketSession session, Throwable exception) {
-        log.warn("[ANOMALY] AI WS 전송 오류: {}", exception.getMessage());
+        log.warn("[ANOMALY] AI WS 전송 오류: error={}", exception.getClass().getSimpleName());
     }
 
     @Override
@@ -456,7 +568,12 @@ public class AiLiveStreamSubscriber extends TextWebSocketHandler implements Smar
         subscribedSessions.clear();
         linkLostNotifier.cancelAll();      // 연결 상태를 모르는 동안은 보내지 않는다 - 재접속 뒤 다시 판단
         liveAnalysisBroadcaster.clear();   // 끊긴 동안의 상태는 알 수 없다 - 옛 결과를 현재처럼 보여주지 않는다
-        log.warn("[ANOMALY] AI WS 연결 종료: code={}, reason={}", status.getCode(), status.getReason());
+        if (shuttingDown && status.getCode() == CloseStatus.NORMAL.getCode()) {
+            // 종료 절차에서 우리가 닫은 정상 종료 - 배포마다 WARN이 남지 않게 한다(끊김 감시는 WARN만 보면 된다)
+            log.info("[ANOMALY] AI WS 연결 종료: code={}, reason={}", status.getCode(), status.getReason());
+        } else {
+            log.warn("[ANOMALY] AI WS 연결 종료: code={}, reason={}", status.getCode(), status.getReason());
+        }
         scheduleReconnect();
     }
 
@@ -485,7 +602,9 @@ public class AiLiveStreamSubscriber extends TextWebSocketHandler implements Smar
             current.sendMessage(new TextMessage(payload));
             return true;
         } catch (IOException e) {
-            log.warn("[ANOMALY] AI WS 전송 실패: payload={}, error={}", payload, e.getMessage());
+            // 보낸 내용·예외 메시지는 남기지 않는다. 구독 실패의 세션 ID는 호출부가 따로 남긴다.
+            log.warn("[ANOMALY] AI WS 전송 실패: action={}, error={}",
+                    LIST_ACTION.equals(payload) ? "list" : "subscribe", e.getClass().getSimpleName());
             return false;
         }
     }
@@ -498,7 +617,7 @@ public class AiLiveStreamSubscriber extends TextWebSocketHandler implements Smar
         try {
             current.close(CloseStatus.NORMAL);
         } catch (IOException e) {
-            log.debug("[ANOMALY] AI WS 종료 중 오류(무시): {}", e.getMessage());
+            log.debug("[ANOMALY] AI WS 종료 중 오류(무시): {}", e.getClass().getSimpleName());
         }
     }
 }

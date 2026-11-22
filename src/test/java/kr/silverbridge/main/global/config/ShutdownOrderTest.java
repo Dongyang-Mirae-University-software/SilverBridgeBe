@@ -12,16 +12,21 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.support.DefaultListableBeanFactory;
 import org.springframework.boot.web.server.context.WebServerApplicationContext;
+import org.springframework.context.Lifecycle;
 import org.springframework.context.SmartLifecycle;
 import org.springframework.context.annotation.AnnotationConfigApplicationContext;
 import org.springframework.data.redis.connection.lettuce.LettuceConnectionFactory;
 import org.springframework.scheduling.TaskScheduler;
 import org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor;
+import org.springframework.scheduling.concurrent.ThreadPoolTaskScheduler;
 
+import java.lang.reflect.Constructor;
+import java.lang.reflect.Field;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
+import java.util.Set;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -160,6 +165,36 @@ class ShutdownOrderTest {
             assertThat(context.getBean(UrgentNotificationDrainLifecycle.class).isRunning())
                     .as("자동 시작돼 있어야 종료 단계에서 stop이 불린다").isTrue();
         }
+    }
+
+    @Test
+    @DisplayName("수신기는 Lifecycle 빈을 주입받지 않는다 - 더 먼저 멈추는 Lifecycle 빈에 의존하면 그 빈이 멈출 때 수신기도 함께(웹 종료 전에) 멈춘다")
+    void 수신기는_먼저_멈추는_Lifecycle_빈에_의존하지_않는다() {
+        // Spring은 Lifecycle 빈을 멈추기 전에 그 빈에 의존하는 빈부터 멈춘다(DefaultLifecycleProcessor.doStop).
+        // 수신기가 자기보다 높은 단계의 Lifecycle 빈(예: CameraStreamSlots = MAX)을 주입받으면 수신 중단이 그 단계로 당겨져,
+        // 웹 종료 구간에 들어온 화재 신호를 받지 못한다. 컨텍스트 없이 주입 지점의 타입만 본다(실제 배선은 생성자 주입뿐이다).
+        Set<Class<?>> reviewedFrameworkTypes = Set.of(ObjectMapper.class, TaskScheduler.class);
+        List<Class<?>> constructorTypes = new ArrayList<>();
+        for (Constructor<?> constructor : AiLiveStreamSubscriber.class.getDeclaredConstructors()) {
+            constructorTypes.addAll(List.of(constructor.getParameterTypes()));
+        }
+        List<Class<?>> injectable = new ArrayList<>(constructorTypes);
+        for (Field field : AiLiveStreamSubscriber.class.getDeclaredFields()) {
+            injectable.add(field.getType());   // 나중에 필드 주입으로 들어오는 경우까지 본다
+        }
+
+        assertThat(constructorTypes).as("수신기 생성자 파라미터").isNotEmpty();
+        assertThat(injectable)
+                .as("수신기가 주입받는 타입 가운데 Lifecycle 구현(있으면 그 빈의 단계에서 수신기가 먼저 멈춘다)")
+                .noneMatch(Lifecycle.class::isAssignableFrom);
+        // 우리 클래스가 아닌 타입은 인터페이스 뒤에 Lifecycle 구현이 숨을 수 있다 - 확인한 것만 허용한다.
+        assertThat(constructorTypes.stream().filter(type -> !type.getName().startsWith("kr.silverbridge.")))
+                .as("수신기 생성자의 프레임워크 타입 - 새로 넣으면 그 빈의 종료 단계를 확인하고 목록에 더할 것")
+                .allMatch(reviewedFrameworkTypes::contains);
+        // TaskScheduler 구현(ThreadPoolTaskScheduler)은 Lifecycle이다. 기본 단계(MAX/2)도, 지금 쓰이는 WebSocket 설정의
+        // 스케줄러(0단계)도 수신기보다 늦게 멈춘다. 스케줄러 빈을 따로 두고 단계를 올리게 되면 여기와 수신기 주입을 함께 볼 것.
+        assertThat(new ThreadPoolTaskScheduler().getPhase())
+                .as("스케줄러 구현의 기본 단계").isLessThan(ShutdownPhases.AI_STREAM_SUBSCRIBER);
     }
 
     /** 실제 수신기(의존 대상은 목). {@code stop()}이 불리면 먼저 {@code onStop}을 실행한다. */

@@ -10,7 +10,7 @@ import org.springframework.scheduling.concurrent.ExecutorConfigurationSupport;
  * MAX            영상 중계 자리(CameraStreamSlots)
  * MAX - 1024     웹 서버 우아한 종료(진행 중 요청 대기)
  * MAX - 2048     웹 서버 정지
- * MAX/2 + 1024   AI 화재 수신 중단            ← {@link #AI_STREAM_SUBSCRIBER}
+ * MAX/2 + 1024   AI 화재 수신 중단            ← {@link #AI_STREAM_SUBSCRIBER} (처리 중이던 프레임을 3초까지 기다린다)
  * MAX/2 + 512    긴급·일반 알림 풀 비우기      ← {@link #NOTIFICATION_DRAIN}
  * MAX/2          AsyncConfig 풀 5개(아무것도 하지 않음 - 실제 종료는 빈 파괴 때)
  * 0              WebSocket 브로커·스케줄러·Redis(Lettuce)
@@ -20,6 +20,10 @@ import org.springframework.scheduling.concurrent.ExecutorConfigurationSupport;
  * <p>알림 풀을 비우는 단계가 0보다 커야 하는 이유: Redis가 0단계에서 멈춘다. 그 뒤에 도는 알림 작업은 쿨다운·문자 상한을
  * 확인하지 못해 fail-open(중복 발송)으로 간다. 수신 중단이 비우기보다 먼저여야 하는 이유: 풀을 닫은 뒤 들어온 화재
  * 신호는 이력·쿨다운만 남기고 알림이 폐기된다.</p>
+ *
+ * <p>수신 중단은 이미 처리에 들어간 프레임이 끝난 뒤에 돌아온다(상한 3초, 2026-11-22 점검 S-1). 그 프레임의 긴급 알림이
+ * 비우기 전에 풀에 들어가 있어야 비우기가 기다릴 수 있다. 수신기에는 자기보다 먼저 멈추는 단계의 빈을 주입하지 말 것 -
+ * Spring은 어떤 빈을 멈추기 전에 그 빈에 의존하는 빈부터 멈추므로 수신 중단이 그 단계로 당겨진다({@code ShutdownOrderTest}).</p>
  *
  * <p>값을 바꾸면 {@code ShutdownOrderTest}가 순서를 다시 확인한다. 스케줄러 빈을 MAX/2 단계로 옮기게 되면
  * (지금은 WebSocket 설정의 스케줄러 하나뿐이라 0단계다) 비우기 단계를 그보다 낮게 내릴 것 - 진행 중이던 예약 작업이
