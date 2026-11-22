@@ -383,6 +383,8 @@ class AiLiveStreamSubscriberTest {
         subscriber.handleTextMessage(session, liveStreams(SESSION_ID));
         subscriber.afterConnectionClosed(session, org.springframework.web.socket.CloseStatus.NORMAL);
 
+        // 종료 확인보다 먼저 세고 finally에서 내린다 - 순서가 뒤집히면 가드로 빠진 프레임이 감소만 해 -1이 된다(U-2)
+        assertThat(inFlightFrames()).isZero();
         verify(cameraService, never()).findOwnerBySessionId(any());
         verify(taskScheduler, never()).schedule(any(Runnable.class), any(java.time.Instant.class));
     }
@@ -482,6 +484,7 @@ class AiLiveStreamSubscriberTest {
     void 처리_중_프레임이_없으면_기다리지_않는다() throws Exception {
         subscriber.handleTextMessage(session, new TextMessage("{\"type\":\"pong\"}"));
         subscriber.handleTextMessage(session, new TextMessage("not-json"));   // 처리에 실패한 프레임
+        assertThat(inFlightFrames()).as("끝난 프레임은 성공·실패 모두 finally에서 내린다(U-3)").isZero();
         ListAppender<ILoggingEvent> logs = attachLogs();
         try {
             long started = System.nanoTime();
@@ -492,6 +495,11 @@ class AiLiveStreamSubscriberTest {
         } finally {
             detachLogs(logs);
         }
+    }
+
+    private int inFlightFrames() {
+        Object counter = org.springframework.test.util.ReflectionTestUtils.getField(subscriber, "inFlightFrames");
+        return ((java.util.concurrent.atomic.AtomicInteger) counter).get();
     }
 
     @Test
@@ -559,6 +567,9 @@ class AiLiveStreamSubscriberTest {
         assertThat(AiLiveStreamSubscriber.rootCauseName(rejected)).isEqualTo("DeploymentException");
         assertThat(AiLiveStreamSubscriber.handshakeStatus(rejected)).isEqualTo("401");
         assertThat(AiLiveStreamSubscriber.rootCauseName(refused)).isEqualTo("ConnectException");
+        assertThat(AiLiveStreamSubscriber.rootCauseName(new RuntimeException() { }))
+                .as("익명 클래스는 단순 이름이 비어 있어 전체 이름으로 대신한다(U-8)")
+                .isNotEmpty().contains("AiLiveStreamSubscriberTest$");
         assertThat(AiLiveStreamSubscriber.handshakeStatus(refused)).isEqualTo("-");
         assertThat(AiLiveStreamSubscriber.handshakeStatus(new IllegalStateException())).as("메시지 없음").isEqualTo("-");
         assertThat(AiLiveStreamSubscriber.handshakeStatus(new IOException("port [8443], wait [999], [40]")))

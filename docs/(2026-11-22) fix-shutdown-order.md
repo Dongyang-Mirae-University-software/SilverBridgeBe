@@ -80,7 +80,9 @@ SIGTERM → ContextClosedEvent        스케줄러는 새 예약 호출을 거�
 `./gradlew build --no-daemon` → **BUILD SUCCESSFUL**: 373개 클래스 · 2,923건 · 실패 0 · 오류 0 · 건너뜀 2(기존 `@Disabled` - `BackendApplicationTests`·`EmailNotificationHtmlTest`).
 통합 테스트(`integrationTest`, Docker 필요)는 로컬에서 돌리지 못했다 - 머지 전 vkcs에서 `tools/integration-test.sh fix/shutdown-order`.
 
-| 테스트 | 고정하는 것 |
+아래 표는 #518 시점이다. #519(`fix-shutdown-order-hardening.md`)에서 늘어난 현재 건수: `ShutdownOrderTest` 6 · `UrgentNotificationDrainLifecycleTest` 9 · `ShutdownGraceBudgetTest` 3(종료 훅 18개 전수 목록·본문 검사로 바뀜) · `AiLiveStreamSubscriberTest` 33 · `AsyncConfigTest` 10.
+
+| 테스트 (#518 시점) | 고정하는 것 |
 |---|---|
 | `ShutdownOrderTest` (5) | 단계 값의 순서 / 두 빈의 단계·자동 시작·일시정지 제외 / 컨텍스트 종료 순서(웹 → 수신 중단 → 비우기 → 0단계) / 비우기가 0단계 전에 긴급 작업을 끝내고 그 뒤에도 풀이 받는 것 / 비우기 빈이 실행기에 의존하지 않는 것 |
 | `UrgentNotificationDrainLifecycleTest` (5) | 빈 풀은 바로 끝남 / 실행 중·큐 작업을 기다림 / 마감을 넘기면 돌아오되 풀은 열어 둠 / 풀이 없어도 종료를 막지 않음 / 비울 풀 이름 |

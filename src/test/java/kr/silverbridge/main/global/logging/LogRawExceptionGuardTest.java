@@ -82,7 +82,6 @@ class LogRawExceptionGuardTest {
             "domain/companion/service/CompanionTranscriptRetentionScheduler.java",
             "domain/companion/service/CompanionTurnRecorder.java",
             "domain/companion/service/CompanionGuardianService.java",
-            "domain/companion/service/CompanionGuardianService.java",
             "domain/companion/service/CompanionStatsService.java",
             // 종료 순서(2026-11-22 점검 T-4) - 수신기는 접속 실패·전송 오류·전송 실패·종료 중 오류 4곳을 걷어낸 뒤 등록.
             // 메시지 처리 실패의 스택 로그(log.error(..., e))는 의도적으로 남겼다(AI 프레임, 개인 정보 없음).
