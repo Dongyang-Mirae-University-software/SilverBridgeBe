@@ -1,6 +1,11 @@
 package kr.silverbridge.main.domain.anomaly.client;
 
+import ch.qos.logback.classic.Level;
+import ch.qos.logback.classic.Logger;
+import ch.qos.logback.classic.spi.ILoggingEvent;
+import ch.qos.logback.core.read.ListAppender;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import jakarta.websocket.DeploymentException;
 import kr.silverbridge.main.domain.anomaly.config.AnomalyProperties;
 import kr.silverbridge.main.domain.anomaly.dto.AnomalySignal;
 import kr.silverbridge.main.domain.anomaly.service.AnomalyDetectionService;
@@ -14,18 +19,36 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.slf4j.LoggerFactory;
 import org.springframework.scheduling.TaskScheduler;
 import org.springframework.transaction.event.TransactionPhase;
 import org.springframework.transaction.event.TransactionalEventListener;
+import org.springframework.web.socket.CloseStatus;
 import org.springframework.web.socket.TextMessage;
 import org.springframework.web.socket.WebSocketSession;
 
+import java.io.IOException;
+import java.net.ConnectException;
+import java.time.Duration;
+import java.util.List;
 import java.util.Optional;
 import java.util.Set;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CompletionException;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.argThat;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.atLeastOnce;
+import static org.mockito.Mockito.doAnswer;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
@@ -394,5 +417,193 @@ class AiLiveStreamSubscriberTest {
         assertThat(onReady).isNotNull();
         assertThat(onReady.value())
                 .containsExactly(org.springframework.boot.context.event.ApplicationReadyEvent.class);
+    }
+
+    // ── 종료 때 처리 중이던 프레임 대기 (2026-11-22 점검 S-1) ─────────────────────────────
+
+    @Test
+    @DisplayName("stop은 이미 처리에 들어간 프레임이 끝난 뒤에 연결을 닫고 돌아온다 - 그 프레임의 알림이 풀 비우기 전에 풀에 들어가게")
+    void 처리_중이던_프레임이_끝날_때까지_stop이_기다린다() throws Exception {
+        CountDownLatch release = new CountDownLatch(1);
+        AtomicBoolean handled = new AtomicBoolean();
+        AtomicBoolean handledWhenClosed = new AtomicBoolean();
+        Thread frame = startBlockedFrame(release, handled);
+        doAnswer(invocation -> {
+            handledWhenClosed.set(handled.get());
+            return null;
+        }).when(session).close(CloseStatus.NORMAL);
+
+        CompletableFuture<Void> stop = CompletableFuture.runAsync(subscriber::stop);
+        try {
+            assertThatThrownBy(() -> stop.get(300, TimeUnit.MILLISECONDS))
+                    .as("프레임이 끝나기 전에는 stop이 돌아오지 않는다").isInstanceOf(TimeoutException.class);
+            verify(session, never()).close(any(CloseStatus.class));
+        } finally {
+            release.countDown();
+        }
+        stop.get(5, TimeUnit.SECONDS);
+        frame.join(5_000);
+
+        assertThat(handledWhenClosed).as("연결을 닫는 시점에 프레임 처리는 끝나 있다").isTrue();
+    }
+
+    @Test
+    @DisplayName("프레임이 마감을 넘기면 기다리기를 그만두고 닫는다 - 두 번째 stop(@PreDestroy)은 다시 기다리지 않는다")
+    void 마감을_넘기면_닫고_다시_기다리지_않는다() throws Exception {
+        subscriber.inFlightWait = Duration.ofMillis(300);
+        CountDownLatch release = new CountDownLatch(1);
+        Thread frame = startBlockedFrame(release, new AtomicBoolean());
+        ListAppender<ILoggingEvent> logs = attachLogs();
+        try {
+            long started = System.nanoTime();
+            subscriber.stop();
+            Duration first = Duration.ofNanos(System.nanoTime() - started);
+            subscriber.stop();   // 빈 파괴 때 한 번 더 - 프레임은 아직 처리 중이다
+
+            assertThat(first).isBetween(Duration.ofMillis(300), Duration.ofSeconds(3));
+            verify(session, atLeastOnce()).close(CloseStatus.NORMAL);
+            assertThat(shutdownLogs(logs))
+                    .as("마감 초과 WARN은 한 번 - 두 번째 stop이 또 기다렸다면 두 번 남는다")
+                    .singleElement()
+                    .satisfies(event -> {
+                        assertThat(event.getLevel()).isEqualTo(Level.WARN);
+                        assertThat(event.getFormattedMessage())
+                                .contains("마감 안에 끝내지 못함", "limitMs=300", "처리 중=1");
+                    });
+        } finally {
+            detachLogs(logs);
+            release.countDown();
+            frame.join(5_000);
+        }
+    }
+
+    @Test
+    @DisplayName("처리 중인 프레임이 없으면 stop은 기다리지 않는다 - 끝난 프레임(실패 포함)은 세지 않는다")
+    void 처리_중_프레임이_없으면_기다리지_않는다() throws Exception {
+        subscriber.handleTextMessage(session, new TextMessage("{\"type\":\"pong\"}"));
+        subscriber.handleTextMessage(session, new TextMessage("not-json"));   // 처리에 실패한 프레임
+        ListAppender<ILoggingEvent> logs = attachLogs();
+        try {
+            long started = System.nanoTime();
+            subscriber.stop();
+
+            assertThat(Duration.ofNanos(System.nanoTime() - started)).isLessThan(Duration.ofSeconds(1));
+            assertThat(shutdownLogs(logs)).as("기다리지 않았으면 대기 로그도 없다").isEmpty();
+        } finally {
+            detachLogs(logs);
+        }
+    }
+
+    @Test
+    @DisplayName("처리 중 프레임 대기의 기본값은 예산에 들어가는 상수이고, Redis 명령 제한(2초)보다 길다")
+    void 처리_중_프레임_대기_기본값() {
+        assertThat(subscriber.inFlightWait)
+                .isEqualTo(Duration.ofSeconds(AiLiveStreamSubscriber.IN_FLIGHT_WAIT_SECONDS));
+        // Redis가 느린 순간에는 쿨다운 확인이 2초 뒤 fail-open으로 넘어가 저장한다 - 그 프레임까지 덮어야 한다.
+        assertThat(AiLiveStreamSubscriber.IN_FLIGHT_WAIT_SECONDS).isGreaterThan(2);
+    }
+
+    @Test
+    @DisplayName("종료 절차에서 우리가 닫은 정상 종료(code=1000)만 INFO다 - 운영 중 끊김과 종료 중 비정상 종료는 WARN")
+    void 연결_종료_로그_레벨() {
+        ListAppender<ILoggingEvent> logs = attachLogs();
+        try {
+            subscriber.afterConnectionClosed(session, CloseStatus.NORMAL);           // 운영 중: AI가 먼저 닫음
+            subscriber.stop();
+            subscriber.afterConnectionClosed(session, CloseStatus.NO_CLOSE_FRAME);   // 종료 중이지만 비정상
+            subscriber.afterConnectionClosed(session, CloseStatus.NORMAL);           // 종료 중 정상
+
+            assertThat(logs.list.stream()
+                    .filter(event -> event.getFormattedMessage().startsWith("[ANOMALY] AI WS 연결 종료: code="))
+                    .map(ILoggingEvent::getLevel))
+                    .containsExactly(Level.WARN, Level.WARN, Level.INFO);
+        } finally {
+            detachLogs(logs);
+        }
+    }
+
+    // ── 예외 원문을 로그에 남기지 않는다 (2026-11-22 점검 T-4) ─────────────────────────────
+
+    @Test
+    @DisplayName("전송 실패·전송 오류 로그에는 보낸 내용과 예외 메시지를 남기지 않는다 - 동작 이름과 예외 클래스명만")
+    void 전송_실패_로그에_원문을_남기지_않는다() throws Exception {
+        when(cameraService.findOwnerBySessionId(SESSION_ID))
+                .thenReturn(Optional.of(new CameraOwner("WD0001", "거실")));
+        doThrow(new IOException("peer=10.0.0.9 key=secret")).when(session).sendMessage(any());
+        ListAppender<ILoggingEvent> logs = attachLogs();
+        try {
+            subscriber.resync();                                               // 목록 재요청 실패
+            subscriber.handleTextMessage(session, liveStreams(SESSION_ID));    // 구독 요청 실패
+            subscriber.handleTransportError(session, new IOException("key=secret"));
+
+            List<String> messages = logs.list.stream().map(ILoggingEvent::getFormattedMessage).toList();
+            assertThat(messages).contains(
+                    "[ANOMALY] AI WS 전송 실패: action=list, error=IOException",
+                    "[ANOMALY] AI WS 전송 실패: action=subscribe, error=IOException",
+                    "[ANOMALY] AI WS 전송 오류: error=IOException");
+            assertThat(messages).noneMatch(text -> text.contains("secret") || text.contains("\"action\""));
+        } finally {
+            detachLogs(logs);
+        }
+    }
+
+    @Test
+    @DisplayName("접속 실패 요약: 가장 안쪽 원인의 클래스명과 핸드셰이크 거절 상태 코드 3자리만 꺼낸다 - 메시지의 나머지는 버린다")
+    void 접속_실패_요약() {
+        Throwable rejected = new CompletionException(new DeploymentException(
+                "The HTTP response from the server [401] did not permit the HTTP upgrade to WebSocket"));
+        Throwable refused = new CompletionException(new DeploymentException(
+                "The HTTP request to initiate the WebSocket connection to [wss://ai.example/ws?key=secret] failed",
+                new ExecutionException(new ConnectException("Connection refused"))));
+
+        assertThat(AiLiveStreamSubscriber.rootCauseName(rejected)).isEqualTo("DeploymentException");
+        assertThat(AiLiveStreamSubscriber.handshakeStatus(rejected)).isEqualTo("401");
+        assertThat(AiLiveStreamSubscriber.rootCauseName(refused)).isEqualTo("ConnectException");
+        assertThat(AiLiveStreamSubscriber.handshakeStatus(refused)).isEqualTo("-");
+        assertThat(AiLiveStreamSubscriber.handshakeStatus(new IllegalStateException())).as("메시지 없음").isEqualTo("-");
+        assertThat(AiLiveStreamSubscriber.handshakeStatus(new IOException("port [8443], wait [999], [40]")))
+                .as("HTTP 상태 코드 꼴(100~599, 대괄호 안 3자리)이 아니면 꺼내지 않는다").isEqualTo("-");
+    }
+
+    /** {@code latest_analysis} 1건을 다른 스레드에서 처리시키고 판정 서비스 안에서 붙잡아 둔다. 판정에 들어간 뒤 돌아온다. */
+    private Thread startBlockedFrame(CountDownLatch release, AtomicBoolean handled) throws Exception {
+        AnomalySignal signal = new AnomalySignal(SESSION_ID, DetectedType.FIRE, 0.9, true, null);
+        CountDownLatch entered = new CountDownLatch(1);
+        when(signalParser.parse(any())).thenReturn(Optional.of(signal));
+        when(signalParser.expand(any(), eq(signal))).thenReturn(List.of(signal));
+        when(detectionService.handle(signal)).thenAnswer(invocation -> {
+            entered.countDown();
+            release.await(10, TimeUnit.SECONDS);
+            handled.set(true);
+            return Optional.empty();
+        });
+        Thread frame = new Thread(
+                () -> subscriber.handleTextMessage(session, new TextMessage("{\"type\":\"latest_analysis\"}")),
+                "test-ai-frame");
+        frame.setDaemon(true);
+        frame.start();
+        assertThat(entered.await(5, TimeUnit.SECONDS)).as("프레임이 판정에 들어갔다").isTrue();
+        return frame;
+    }
+
+    private static ListAppender<ILoggingEvent> attachLogs() {
+        ListAppender<ILoggingEvent> appender = new ListAppender<>();
+        appender.start();
+        subscriberLogger().addAppender(appender);
+        return appender;
+    }
+
+    private static void detachLogs(ListAppender<ILoggingEvent> appender) {
+        subscriberLogger().detachAppender(appender);
+    }
+
+    private static Logger subscriberLogger() {
+        return (Logger) LoggerFactory.getLogger(AiLiveStreamSubscriber.class);
+    }
+
+    private static List<ILoggingEvent> shutdownLogs(ListAppender<ILoggingEvent> appender) {
+        return appender.list.stream()
+                .filter(event -> event.getFormattedMessage().startsWith("[SHUTDOWN-AI-STREAM]"))
+                .toList();
     }
 }
