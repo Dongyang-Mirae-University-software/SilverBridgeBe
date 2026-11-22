@@ -99,8 +99,9 @@ public class AiLiveStreamSubscriber extends TextWebSocketHandler implements Smar
     private static final int MAX_TEXT_MESSAGE_BYTES = 1024 * 1024;
 
     /**
-     * 멈출 때 처리 중이던 프레임을 기다리는 상한(초). 프레임 1건은 평소 Redis 1회 + SQL 몇 문(ms 단위)이고, Redis가 느린
-     * 순간에는 명령 제한 2초 뒤 fail-open으로 이어 저장한다 - 그 경우까지 덮는 값이다. 커넥션 풀 고갈(10초)은 덮지 못한다(수용).
+     * 멈출 때 처리 중이던 프레임을 기다리는 상한(초). 프레임 1건은 그 안의 위험 종류 수만큼 (Redis 1회 + 트랜잭션 1개)이고
+     * 평소 ms 단위다. Redis가 느린 순간에는 명령 제한 2초 뒤 fail-open으로 이어 저장한다 - 위험 종류 1건의 그 경우까지 덮는
+     * 값이다. 여러 종류가 모두 느리거나 커넥션 풀이 고갈(10초)되면 덮지 못한다(수용).
      * 종료 시간 예산에 더해진다({@code ShutdownGraceBudgetTest}).
      */
     static final int IN_FLIGHT_WAIT_SECONDS = 3;
@@ -279,7 +280,8 @@ public class AiLiveStreamSubscriber extends TextWebSocketHandler implements Smar
 
     /**
      * 이미 처리에 들어간 프레임이 끝나기를 기다린다(상한 {@link #inFlightWait}). 처리 중인 것이 없으면 바로 돌아온다 -
-     * 평소 배포를 늦추지 않는다. 상한을 넘기면 그대로 닫는다: 남은 프레임의 알림은 풀 잔여 대기가 맡는다.
+     * 평소 배포를 늦추지 않는다. 상한을 넘기면 그대로 닫는다: 남은 프레임의 알림은 긴급 풀이 닫히기 <b>전에</b> 제출되면
+     * 풀 잔여 대기(3초)가 덮고, 그 뒤에 커밋하면 {@code [NOTIFY-REJECTED]}로 폐기된다 - 이력·이력 쿨다운은 남는다(수용).
      */
     private void awaitInFlightFrames() {
         if (inFlightFrames.get() == 0) {
@@ -357,7 +359,8 @@ public class AiLiveStreamSubscriber extends TextWebSocketHandler implements Smar
             }
             current = cause;
         }
-        return current.getClass().getSimpleName();
+        String name = current.getClass().getSimpleName();
+        return name.isEmpty() ? current.getClass().getName() : name;   // 익명 클래스는 단순 이름이 비어 있다
     }
 
     /**
