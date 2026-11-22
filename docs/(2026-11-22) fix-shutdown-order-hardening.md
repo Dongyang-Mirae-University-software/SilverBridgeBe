@@ -163,12 +163,12 @@
 
 ## 10. gosky 배포 확인
 
-(배포 후 채움)
+2026-11-22, PR #519 머지 `9906f152`. vkcs CD success(통합 테스트 포함). gosky는 `build api` 뒤 옛(#518) 컨테이너를 멈추고 `up -d api`. 그 뒤 새 코드 컨테이너를 한 번 더 `docker stop`해 새 종료 로그를 봤다(부하 없음).
 
 | 항목 | 결과 |
 |---|---|
-| 배포 커밋 · 컨테이너 | |
-| 종료 로그 순서(웹 종료 → AI WS 연결 종료 → `[SHUTDOWN-DRAIN]`) | |
-| `AI WS 연결 종료: code=1000` 레벨(INFO여야 함) | |
-| `[SHUTDOWN-AI-STREAM]` 로그(처리 중 프레임이 없으면 없음) | |
-| 재기동 뒤 `AI WS 연결됨` | |
+| 배포 커밋 · 컨테이너 | gosky·vkcs 모두 `9906f152`, `dmu-dev-api` healthy |
+| 종료 로그 순서(웹 종료 → AI WS 연결 종료 → `[SHUTDOWN-DRAIN]`) | 16:26:09.550 → .553 → .603(`waitedMs=50`) → .627 Hikari 종료. `docker stop` 1.7초 |
+| `AI WS 연결 종료: code=1000` 레벨(INFO여야 함) | INFO (옛 컨테이너 종료 때는 WARN - #518 코드) |
+| `[SHUTDOWN-AI-STREAM]` 로그(처리 중 프레임이 없으면 없음) | 없음(처리 중 프레임 없음) |
+| 재기동 뒤 `AI WS 연결됨` | 16:26:21 기동 9초, 연결됨 |
