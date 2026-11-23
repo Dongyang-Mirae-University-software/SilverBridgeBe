@@ -3546,3 +3546,4 @@ AI 챗 집계 점검 L-1에서 남겨 둔 공용 `GlobalExceptionHandler`의 `e.
 ### [2026-11-23] 말벗 하루 기분 턴 다수결 - 머지·배포·영향 범위 점검
 - BE #521 `d42d58f8`: 하루 기분 = 그날 마친 모든 대화의 판정된 턴 기분 중 가장 많이 나온 기분(같으면 우울>걱정>평온>기쁨, 사용자 결정 - 전에는 마지막 대화 기분). `CompanionTurnMoodReader`가 턴 기분을 대화 ID 묶음으로 한 번에 읽고, 대화를 마칠 때마다 `CompanionMoodRecordedEvent`를 낸다. vkcs-linux 통합 시험 통과(0557f5f6, 실제 실행), vkcs CD 성공, gosky dev 반영(기동 9초·AI WS 연결·ERROR 0). 통합 시험은 `vkcs`(.10, 키 인증 거절) 대신 `vkcs-linux`(.4)에서 돌린다.
 - 영향 범위 점검(C) 조건부 PASS: 알림·보호자·관리자 경로는 새 규칙 한 곳·D-1·하루 1번 유지. 🟡 M-1 FE 관리자 AI 통계 안내 문장 옛 규칙, 🟢 L-1 BE Swagger 2곳 옛 규칙, L-5 다수결 경로 실 DB 테스트 없음, L-2~L-4 수용. 문서 `(2026-11-23) audit-impact-companion-daily-mood.md`.
+- 점검 조치: M-1 FE #334(관리자 AI 통계 하루 기분 안내 문장), L-1·L-5 BE #522(Swagger 2곳 정정 + 턴 다수결 주의 알림 실 DB 시험, vkcs-linux 172 tests 0 failures). vkcs CD·gosky BE·FE 반영.
