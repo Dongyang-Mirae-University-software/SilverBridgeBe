@@ -120,6 +120,6 @@ public class CompanionPromptScheduler {
         Map<String, String> data = test
                 ? Map.of("type", "COMPANION_PROMPT", "slot", slot.code(), "test", "true")
                 : Map.of("type", "COMPANION_PROMPT", "slot", slot.code());
-        return NotificationContent.of("안부 말벗", body, data);
+        return NotificationContent.of("질문이 도착했습니다", body, data);
     }
 }
