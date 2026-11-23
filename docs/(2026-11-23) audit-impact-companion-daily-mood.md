@@ -51,6 +51,12 @@ companion 도메인 밖(dashboard·admin 서비스·notification·global)에서 
 2. `CompanionTurnRepositoryIntegrationTest.findMoodsBySessionIdIn_null_제외` - null 턴 제외·다른 대화 턴 미포함.
 3. (선택) L-1을 고칠 때 `CompanionGuardianApiDocTest` 형태로 "마지막으로 판정된" 문구가 week 설명에 없음을 단언.
 
+## 조치 (2026-11-23)
+
+- M-1: FE #334 (`99d0613`) - 관리자 AI 통계 안내 "하루 기분은 그날 모든 대화에서 가장 많이 나온 기분이며, 수가 같으면 걱정·우울 쪽으로 봅니다." + 브라우저 테스트 단언(22/22), gosky FE 반영.
+- L-1·L-5: BE #522 (`55453b62`) - Swagger 2곳 정정, `CompanionFullIntegrationTest.평온으로_끝나도_턴_다수가_걱정이면_주의_알림` 추가(vkcs-linux 172 tests 0 failures), vkcs CD·gosky 반영.
+- L-2~L-4: 수용(위 근거).
+
 ## 종합 판정
 
 **조건부 PASS** - 규칙을 쓰는 BE 코드 경로(알림·보호자·관리자)는 모두 새 규칙 한 곳을 쓰고 D-1·하루 1번이 지켜진다. 사용자에게 보이는 설명 2곳(FE 관리자 안내 M-1, BE Swagger L-1)이 옛 규칙이라 정정이 필요하다.
