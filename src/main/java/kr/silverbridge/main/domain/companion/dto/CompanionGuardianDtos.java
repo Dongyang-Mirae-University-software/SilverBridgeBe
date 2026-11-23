@@ -52,7 +52,7 @@ public final class CompanionGuardianDtos {
 
     public record DayMood(
             @Schema(description = "KST 날짜", example = "2026-11-11") String date,
-            @Schema(description = "하루 기분(그날 마지막으로 판정된 대화) JOY·CALM·WORRY·DEPRESSED. 판정된 대화가 없으면 null")
+            @Schema(description = "하루 기분(그날 마친 모든 대화의 턴 기분 중 가장 많이 나온 기분, 같으면 DEPRESSED > WORRY > CALM > JOY) JOY·CALM·WORRY·DEPRESSED. 판정된 대화가 없으면 null")
             String mood) {
     }
 

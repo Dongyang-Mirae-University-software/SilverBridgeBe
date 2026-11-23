@@ -53,7 +53,7 @@ public class GuardianCompanionController {
                     [요청 헤더] Authorization: Bearer {accessToken}
 
                     오늘 포함 최근 7일의 하루 기분입니다(오래된 날부터 7개). 지금 연결이 맺어진 뒤의 대화만 셉니다.
-                    - mood: 그날 마지막으로 판정된 대화의 기분 JOY·CALM·WORRY·DEPRESSED. 판정된 대화가 없으면 null("기록 없음")
+                    - mood: 그날 마친 모든 대화의 턴 기분 중 가장 많이 나온 기분 JOY·CALM·WORRY·DEPRESSED(같으면 DEPRESSED > WORRY > CALM > JOY). 판정된 대화가 없으면 null("기록 없음")
 
                     [오류 code] COMPANION_NOT_AUTHORIZED(403, 연결되지 않은 피보호자)
                     """)

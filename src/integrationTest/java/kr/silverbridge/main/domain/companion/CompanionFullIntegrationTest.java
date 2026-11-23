@@ -251,6 +251,41 @@ class CompanionFullIntegrationTest extends FullContextIntegrationTest {
     }
 
     @Test
+    @DisplayName("하루 기분 = 그날 턴 다수결(2026-11-23): 평온으로 끝난 대화라도 그날 턴 대부분이 걱정이면 3일째 주의 알림, "
+            + "보호자 7일 화면도 걱정 - 판단 보류(null) 턴과 다른 대화의 턴은 세지 않는다(영향 범위 점검 L-5)")
+    void 평온으로_끝나도_턴_다수가_걱정이면_주의_알림() throws Exception {
+        saveUser(GUARDIAN, Role.GUARDIAN, Status.ACTIVE);
+        saveUser(WARD, Role.WARD, Status.ACTIVE);
+        saveActiveConnection(GUARDIAN, WARD);
+        signedIn(GUARDIAN);
+        LocalDate today = LocalDate.now(ZoneId.of("Asia/Seoul"));
+        saveFinished(today.minusDays(2), CompanionSlot.S21, "WORRY");
+        saveFinished(today.minusDays(1), CompanionSlot.S21, "DEPRESSED");
+        long sessionId = openSession("d-majority-1");
+        // 걱정 3 · 평온 1 · 판단 보류 2 → 걱정 (마지막 대화 기분 CALM이면 예전 규칙으로는 평온)
+        String[] turnMoods = {"WORRY", "CALM", null, "WORRY", null, "WORRY"};
+        for (int i = 0; i < turnMoods.length; i++) {
+            jdbc.update("INSERT INTO companion_turn (session_id, turn_no, mood, created_at) VALUES (?, ?, ?, now())",
+                    sessionId, i + 1, turnMoods[i]);
+        }
+        when(aiCompanionClient.finish("d-majority-1")).thenReturn(json(
+                "{\"dialogueId\":\"d-majority-1\",\"endReason\":\"MAX_TURNS\",\"turnCount\":6,\"answeredCount\":6,"
+                        + "\"mood\":\"CALM\",\"riskFlag\":false,\"alertLevel\":\"INFO\"}"));
+
+        companionService.finish(WARD, sessionId);
+
+        eventually().untilAsserted(() -> assertThat(notificationLogs(GUARDIAN, NotificationType.COMPANION_NOTICE))
+                .as("평온으로 끝났어도 그날 턴 다수가 걱정이라 3일째").isEqualTo(1));
+        assertThat(count("SELECT count(*) FROM companion_notice_log WHERE ward_id = ? AND days = 3 AND mood = 'WORRY'",
+                WARD)).isEqualTo(1);
+        assertThat(companionGuardianService.week(GUARDIAN, WARD).days())
+                .last().satisfies(day -> assertThat(day.mood()).as("보호자 7일 화면 오늘").isEqualTo("WORRY"));
+        assertThat(companionGuardianService.today(GUARDIAN, WARD).attention())
+                .as("보호자 오늘 화면 주의 칸").isNotNull()
+                .satisfies(attention -> assertThat(attention.days()).isEqualTo(3));
+    }
+
+    @Test
     @DisplayName("PR-B 보호자 조회: 연결된 보호자는 오늘 기분을 보고, 연결되지 않은 보호자는 403")
     void 보호자_조회_권한() {
         saveUser(GUARDIAN, Role.GUARDIAN, Status.ACTIVE);
