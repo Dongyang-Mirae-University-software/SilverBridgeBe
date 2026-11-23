@@ -69,7 +69,7 @@ class CompanionGuardianViewTest {
                 new CompanionTurnSlots(properties), mock(RateLimitService.class), mock(CompanionPromptScheduler.class));
         companionService.setClock(Clock.fixed(NOW.toInstant(), CompanionService.KST));
         service = new CompanionGuardianService(companionService, sessionRepository, questionRepository,
-                connectionService, turnRepository, consentRepository, properties);
+                connectionService, turnRepository, consentRepository, properties, new CompanionTurnMoodReader(turnRepository));
         when(connectionService.findActiveConnectedAt(G, W)).thenReturn(Optional.of(OffsetDateTime.MIN));
     }
 

@@ -7,6 +7,7 @@ import java.time.LocalDate;
 import java.time.OffsetDateTime;
 import java.util.Collection;
 import java.util.Comparator;
+import java.util.EnumMap;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -16,7 +17,8 @@ import java.util.Optional;
  * 날짜별 기분과 걱정·우울 연속 일수(2026-11-04 사용자 결정, PR-B).
  *
  * <ul>
- *   <li><b>하루 기분</b> = 그날 마지막으로 판정된 대화의 기분. 판단 불가(null)는 건너뛴다.</li>
+ *   <li><b>하루 기분</b> = 그날 모든 대화의 판정된 턴 기분 중 가장 많이 나온 기분(2026-11-23 사용자 결정, 전에는 마지막 대화의 기분).
+ *       판단 불가(null)는 건너뛴다.</li>
  *   <li><b>연속 일수</b> = 기준일부터 거꾸로 하루 기분이 걱정·우울인 날 수. 대화가 없는(판정된 대화가 없는) 날은
  *       연속을 끊는다 - 관찰하지 못한 날을 "이어졌다"고 볼 수 없다.</li>
  *   <li><b>기준일</b> = 오늘 판정된 대화가 있으면 오늘, 없으면 어제(오늘은 아직 끝나지 않았다).</li>
@@ -48,21 +50,34 @@ public final class CompanionMoodDays {
         return sessions.stream().filter(s -> !s.getStartedAt().isBefore(connectedAt)).toList();
     }
 
-    /** 마친 대화들 → 날짜별 하루 기분(판정된 대화가 있는 날만). */
-    public static Map<LocalDate, CompanionMood> dailyMoods(Collection<CompanionSession> finished) {
-        Map<LocalDate, CompanionSession> last = new HashMap<>();
-        Comparator<CompanionSession> order = Comparator
-                .comparing(CompanionSession::getEndedAt, Comparator.nullsFirst(OffsetDateTime::compareTo))
-                .thenComparing(CompanionSession::getId, Comparator.nullsFirst(Long::compareTo));
+    /**
+     * 마친 대화들 → 날짜별 하루 기분(판정된 턴이 있는 날만).
+     *
+     * <p>그날 마친 모든 대화의 판정된 턴 기분 중 <b>가장 많이 나온 기분</b>(2026-11-23 사용자 결정 - 마지막 대화 1번으로 정하면
+     * 대화 한 번의 짧은 발화가 하루를 대표해 버렸다). 같은 수면 우울 > 걱정 > 평온 > 기쁨 순으로 고른다(걱정·우울을 놓치지 않게).
+     * 턴 기록이 없는 대화(턴 저장 V71 이전)는 대화 기분을 한 표로 센다.</p>
+     *
+     * @param turnMoods 대화 ID → 판정된 턴 기분들({@link CompanionTurnMoodReader})
+     */
+    public static Map<LocalDate, CompanionMood> dailyMoods(Collection<CompanionSession> finished,
+                                                         Map<Long, List<CompanionMood>> turnMoods) {
+        Map<LocalDate, EnumMap<CompanionMood, Integer>> counts = new HashMap<>();
         for (CompanionSession session : finished) {
-            if (session.getMood() == null) {
-                continue;
+            List<CompanionMood> moods = turnMoods.getOrDefault(session.getId(), List.of());
+            if (moods.isEmpty() && session.getMood() != null) {
+                moods = List.of(session.getMood());
             }
-            last.merge(session.getSessionDate(), session, (a, b) -> order.compare(a, b) >= 0 ? a : b);
+            for (CompanionMood mood : moods) {
+                counts.computeIfAbsent(session.getSessionDate(), d -> new EnumMap<>(CompanionMood.class))
+                        .merge(mood, 1, Integer::sum);
+            }
         }
-        Map<LocalDate, CompanionMood> moods = new HashMap<>();
-        last.forEach((date, session) -> moods.put(date, session.getMood()));
-        return moods;
+        Map<LocalDate, CompanionMood> daily = new HashMap<>();
+        counts.forEach((date, byMood) -> byMood.entrySet().stream()
+                .max(Comparator.<Map.Entry<CompanionMood, Integer>>comparingInt(Map.Entry::getValue)
+                        .thenComparingInt(e -> e.getKey().ordinal()))
+                .ifPresent(top -> daily.put(date, top.getKey())));
+        return daily;
     }
 
     public static Optional<Streak> streak(Map<LocalDate, CompanionMood> dailyMoods, LocalDate today) {

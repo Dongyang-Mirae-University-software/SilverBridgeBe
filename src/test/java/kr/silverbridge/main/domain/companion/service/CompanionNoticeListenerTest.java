@@ -65,7 +65,8 @@ class CompanionNoticeListenerTest {
         when(userRepository.findIdsByIdInAndStatus(any(), eq(Status.ACTIVE)))
                 .thenAnswer(invocation -> List.copyOf((java.util.Collection<String>) invocation.getArgument(0)));
         listener = new CompanionNoticeListener(sessionRepository, noticeLogRepository, connectionService,
-                preferenceService, dispatcher, userRepository);
+                preferenceService, dispatcher, userRepository,
+                new CompanionTurnMoodReader(mock(kr.silverbridge.main.domain.companion.repository.CompanionTurnRepository.class)));
         when(connectionService.getActiveGuardianIds(W)).thenReturn(List.of("GD0001", "GD0002"));
         when(preferenceService.companionNoticeDisabledGuardians()).thenReturn(Set.of("GD0002"));
         // 기본: 오래전에 맺은 연결(연결 이후 대화 전부가 보인다)

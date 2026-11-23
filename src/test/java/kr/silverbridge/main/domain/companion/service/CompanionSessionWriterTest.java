@@ -6,6 +6,7 @@ import kr.silverbridge.main.domain.companion.entity.CompanionMood;
 import kr.silverbridge.main.domain.companion.entity.CompanionSession;
 import kr.silverbridge.main.domain.companion.entity.CompanionSessionStatus;
 import kr.silverbridge.main.domain.companion.entity.CompanionSlot;
+import kr.silverbridge.main.domain.companion.event.CompanionMoodRecordedEvent;
 import kr.silverbridge.main.domain.companion.event.CompanionRiskDetectedEvent;
 import kr.silverbridge.main.domain.companion.event.CompanionRiskPatternCheckEvent;
 import kr.silverbridge.main.domain.companion.repository.CompanionSessionRepository;
@@ -87,6 +88,16 @@ class CompanionSessionWriterTest {
 
         assertThat(finished.getAlertLevel()).isEqualTo(CompanionSession.ALERT_URGENT);
         verify(publisher).publishEvent(new CompanionRiskDetectedEvent("CW0001", 3L));
+    }
+
+    @Test
+    @DisplayName("걱정·우울이 아닌 기분으로 끝나도 주의 알림 계산 이벤트를 낸다 - 하루 기분이 그날 모든 턴의 다수결이라(2026-11-23)")
+    void finishAlwaysPublishesMoodCheck() {
+        when(repository.findById(5L)).thenReturn(Optional.of(open(5L)));
+
+        writer.finish(5L, result(CompanionEndReason.MAX_TURNS, false), NOW);
+
+        verify(publisher).publishEvent(new CompanionMoodRecordedEvent("CW0001", LocalDate.of(2026, 11, 4)));
     }
 
     @Test

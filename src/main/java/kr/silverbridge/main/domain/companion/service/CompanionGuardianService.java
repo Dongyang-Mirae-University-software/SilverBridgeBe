@@ -61,6 +61,7 @@ public class CompanionGuardianService {
     private final CompanionTurnRepository turnRepository;
     private final CompanionTranscriptConsentRepository consentRepository;
     private final CompanionProperties properties;
+    private final CompanionTurnMoodReader turnMoodReader;
 
     public TodayResponse today(String guardianId, String wardId) {
         OffsetDateTime connectedAt = requireConnectedAt(guardianId, wardId);
@@ -82,7 +83,7 @@ public class CompanionGuardianService {
         OffsetDateTime connectedAt = requireConnectedAt(guardianId, wardId);
         LocalDate today = companionService.now().toLocalDate();
         LocalDate from = today.minusDays(VIEW_DAYS - 1);
-        Map<LocalDate, CompanionMood> moods = CompanionMoodDays.dailyMoods(CompanionMoodDays.startedSince(
+        Map<LocalDate, CompanionMood> moods = turnMoodReader.dailyMoods(CompanionMoodDays.startedSince(
                 sessionRepository.findFinishedSince(wardId, CompanionSessionStatus.FINISHED, from), connectedAt));
         List<DayMood> days = new ArrayList<>();
         for (LocalDate d = from; !d.isAfter(today); d = d.plusDays(1)) {
@@ -194,7 +195,7 @@ public class CompanionGuardianService {
 
         List<CompanionSession> recent = CompanionMoodDays.startedSince(sessionRepository.findFinishedSince(wardId,
                 CompanionSessionStatus.FINISHED, date.minusDays(CompanionMoodDays.LOOKBACK_DAYS)), connectedAt);
-        Attention attention = CompanionMoodDays.streak(CompanionMoodDays.dailyMoods(recent), date)
+        Attention attention = CompanionMoodDays.streak(turnMoodReader.dailyMoods(recent), date)
                 .filter(CompanionMoodDays.Streak::reachesNotice)
                 .map(streak -> new Attention(streak.mood().name(), streak.days()))
                 .orElse(null);
