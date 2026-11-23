@@ -65,7 +65,7 @@ class CompanionGuardianServiceTest {
                 new CompanionTurnSlots(properties), mock(RateLimitService.class), mock(CompanionPromptScheduler.class));
         companionService.setClock(Clock.fixed(AT_1310.toInstant(), CompanionService.KST));
         service = new CompanionGuardianService(companionService, sessionRepository, questionRepository,
-                connectionService, turnRepository, consentRepository, properties);
+                connectionService, turnRepository, consentRepository, properties, new CompanionTurnMoodReader(turnRepository));
     }
 
     @Test

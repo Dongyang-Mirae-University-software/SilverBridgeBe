@@ -59,7 +59,8 @@ class CompanionStatsServiceTest {
                 new CompanionTurnSlots(properties), mock(RateLimitService.class), mock(CompanionPromptScheduler.class));
         companionService.setClock(Clock.fixed(AT_2200.toInstant(), CompanionService.KST));
         service = new CompanionStatsService(companionService, sessionRepository, promptLogRepository,
-                noticeLogRepository, riskPatternNoticeRepository, userRepository);
+                noticeLogRepository, riskPatternNoticeRepository, userRepository,
+                new CompanionTurnMoodReader(mock(kr.silverbridge.main.domain.companion.repository.CompanionTurnRepository.class)));
     }
 
     @Test

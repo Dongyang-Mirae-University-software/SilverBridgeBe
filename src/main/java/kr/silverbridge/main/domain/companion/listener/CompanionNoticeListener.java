@@ -2,12 +2,14 @@ package kr.silverbridge.main.domain.companion.listener;
 
 import kr.silverbridge.main.global.util.ElderName;
 import kr.silverbridge.main.domain.companion.entity.CompanionNoticeLog;
+import kr.silverbridge.main.domain.companion.entity.CompanionMood;
 import kr.silverbridge.main.domain.companion.entity.CompanionSession;
 import kr.silverbridge.main.domain.companion.entity.CompanionSessionStatus;
 import kr.silverbridge.main.domain.companion.event.CompanionMoodRecordedEvent;
 import kr.silverbridge.main.domain.companion.repository.CompanionNoticeLogRepository;
 import kr.silverbridge.main.domain.companion.repository.CompanionSessionRepository;
 import kr.silverbridge.main.domain.companion.service.CompanionMoodDays;
+import kr.silverbridge.main.domain.companion.service.CompanionTurnMoodReader;
 import kr.silverbridge.main.domain.connection.service.ConnectionService;
 import kr.silverbridge.main.domain.notification.channel.NotificationContent;
 import kr.silverbridge.main.domain.notification.dispatch.NotificationDispatcher;
@@ -62,15 +64,18 @@ public class CompanionNoticeListener {
     private final GuardianNotificationPreferenceService preferenceService;
     private final NotificationDispatcher notificationDispatcher;
     private final UserRepository userRepository;
+    private final CompanionTurnMoodReader turnMoodReader;
 
     @Async("notificationExecutor")
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
     public void handleMoodRecorded(CompanionMoodRecordedEvent event) {
         List<CompanionSession> finished = sessionRepository.findFinishedSince(event.wardId(),
                 CompanionSessionStatus.FINISHED, event.sessionDate().minusDays(CompanionMoodDays.LOOKBACK_DAYS));
+        // 하루 기분은 그날 모든 턴으로 정한다(2026-11-23) - 턴 기분은 한 번만 읽어 피보호자·보호자 계산에 같이 쓴다
+        Map<Long, List<CompanionMood>> turnMoods = turnMoodReader.bySession(finished);
         // 피보호자 단위로도 3일이 안 되면 보호자별로 셀 필요가 없다(보호자별 일수는 이보다 클 수 없다)
         Optional<CompanionMoodDays.Streak> wardStreak = CompanionMoodDays.streak(
-                CompanionMoodDays.dailyMoods(finished), event.sessionDate());
+                CompanionMoodDays.dailyMoods(finished, turnMoods), event.sessionDate());
         if (wardStreak.isEmpty() || !wardStreak.get().reachesNotice()) {
             return;
         }
@@ -87,7 +92,7 @@ public class CompanionNoticeListener {
             }
             connectionService.findActiveConnectedAt(guardianId, event.wardId())
                     .flatMap(connectedAt -> CompanionMoodDays.streak(CompanionMoodDays.dailyMoods(
-                            CompanionMoodDays.startedSince(finished, connectedAt)), event.sessionDate()))
+                            CompanionMoodDays.startedSince(finished, connectedAt), turnMoods), event.sessionDate()))
                     .filter(CompanionMoodDays.Streak::reachesNotice)
                     .ifPresent(streak -> targets.put(guardianId, streak));
         }

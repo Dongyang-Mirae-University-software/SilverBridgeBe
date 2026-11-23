@@ -122,10 +122,9 @@ public class CompanionSessionWriter {
         if (result.needsRiskAlert()) {
             claimRiskAlert(session, now);
         }
-        // 걱정·우울로 끝난 대화 - 커밋 뒤 연속 일수를 보고 주의 알림을 정한다(PR-B, 결정 I)
-        if (CompanionMoodDays.isConcerning(result.mood())) {
-            eventPublisher.publishEvent(new CompanionMoodRecordedEvent(session.getWardId(), session.getSessionDate()));
-        }
+        // 마친 대화마다 커밋 뒤 연속 일수를 보고 주의 알림을 정한다(PR-B, 결정 I). 하루 기분이 그날 모든 턴의 다수결이라
+        // (2026-11-23) 평온으로 끝난 대화로도 그날이 걱정·우울이 될 수 있어 대화 기분으로 거르지 않는다
+        eventPublisher.publishEvent(new CompanionMoodRecordedEvent(session.getWardId(), session.getSessionDate()));
         return session;
     }
 

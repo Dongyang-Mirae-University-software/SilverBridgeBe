@@ -54,6 +54,7 @@ public class CompanionStatsService {
     private final CompanionNoticeLogRepository noticeLogRepository;
     private final CompanionRiskPatternNoticeRepository riskPatternNoticeRepository;
     private final UserRepository userRepository;
+    private final CompanionTurnMoodReader turnMoodReader;
 
     @Transactional(readOnly = true)
     public CompanionAdminStatsResponse today() {
@@ -85,12 +86,15 @@ public class CompanionStatsService {
 
         MoodDistribution distribution = distribution(todaySessions);
 
-        Map<String, List<CompanionSession>> recentByWard = sessionRepository
-                .findAllFinishedSince(CompanionSessionStatus.FINISHED, date.minusDays(CompanionMoodDays.LOOKBACK_DAYS))
-                .stream().collect(Collectors.groupingBy(CompanionSession::getWardId));
+        List<CompanionSession> recent = sessionRepository
+                .findAllFinishedSince(CompanionSessionStatus.FINISHED, date.minusDays(CompanionMoodDays.LOOKBACK_DAYS));
+        // 하루 기분은 그날 모든 턴으로 정한다(2026-11-23) - 턴 기분은 한 번에 읽는다
+        Map<Long, List<CompanionMood>> turnMoods = turnMoodReader.bySession(recent);
+        Map<String, List<CompanionSession>> recentByWard = recent.stream()
+                .collect(Collectors.groupingBy(CompanionSession::getWardId));
         // 피보호자 ID → 연속 결과(같은 일수·기분인 두 사람이 섞이지 않게 ID로 묶는다)
         Map<String, CompanionMoodDays.Streak> streaks = new HashMap<>();
-        recentByWard.forEach((wardId, sessions) -> CompanionMoodDays.streak(CompanionMoodDays.dailyMoods(sessions), date)
+        recentByWard.forEach((wardId, sessions) -> CompanionMoodDays.streak(CompanionMoodDays.dailyMoods(sessions, turnMoods), date)
                 .filter(CompanionMoodDays.Streak::reachesNotice)
                 .ifPresent(streak -> streaks.put(wardId, streak)));
 
