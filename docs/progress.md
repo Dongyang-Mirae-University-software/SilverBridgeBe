@@ -4,6 +4,10 @@
 
 ---
 
+### [2026-11-24] 기능 점검(B) - FE #338 마이크 켜기 실패 안내 - PASS
+- 단위 739·브라우저 853 · 변이 6종 모두 잡힘 · gosky dev(develop `ebb744f`) 실측: 보호자 챗봇 AbortError·옛 이름 2종, 피보호자 챗봇 [글자로 쓰기], 말벗 1180x820 큰 글자 [홈으로]+말하기 버튼(챗·대답 요청 0건).
+- 🟢 K-1: 말벗 가드 테스트가 block(=[홈으로] 유지)은 고정하지 않음 - 공용 문구 키별 기대 block 표 테스트 제안. 상세 `(2026-11-24) audit-fe-mic-open-failed-338.md`.
+
 ### [2026-11-24] FE #337 점검 조치 - FE #338
 - K-1 옛 오류 이름(`DevicesNotFoundError`·`TrackStartError`) · K-2 `AbortError`는 "마이크를 켜지 못했어요"(사용자 결정) · K-3은 도달 불가(말하기 버튼을 누를 때 안내를 지우고, 대화가 닫히려면 대답을 한 번 보내야 함)라 코드 변경 없이 기록(사용자 결정).
 - 단위 739·브라우저 850 · 변이 5종 모두 잡힘. gosky dev FE 폴더가 팀원 브랜치(`feat/companion-prompt-voice`)라 #338은 gosky dev 미반영·실측 못 함 - 실수로 만든 pull merge 커밋은 원래 커밋으로 되돌림. 상세 `(2026-11-24) fix-fe-mic-error-leftovers.md`.
