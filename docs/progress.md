@@ -4,6 +4,9 @@
 
 ---
 
+### [2026-11-24] 어르신 호칭(wardRelation) 보강 점검 - BE #524·FE #344
+- 같은 기능의 기존 점검(PASS)에 변이 검사·gosky 실측을 덧붙임. BE 단위 2961 · FE 단위 752·브라우저 856 통과, 변이 5/6 잡힘. gosky dev 보호자 화면 390px·글자 200% 넘침 없음, 기존 연결은 "어르신". 🟢 L-4 상단 어르신 탭 호칭 테스트 없음(제안). 상세 `(2026-11-24) audit-connection-ward-relation.md` E절.
+
 ### [2026-11-24] #338 점검 K-1 조치 - FE #343 (테스트만)
 - `companionVoiceNotice.test.ts`에 공용 음성 안내 키별 말벗 block 표(`Record<keyof typeof STT_MESSAGES, …>`) - 키를 더하면 tsc가, 매핑을 빠뜨리면 테스트가 실패. 단위 751·브라우저 853, 변이 4종 모두 잡힘. 제품 코드 변경 없음이라 gosky 반영 불필요.
 
