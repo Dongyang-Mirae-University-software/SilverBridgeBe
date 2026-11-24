@@ -1039,6 +1039,8 @@ class ConnectionServiceTest {
 
             assertThat(result.getStatus()).isEqualTo(ConnectionStatus.ACTIVE);
             verify(connectionRepository).save(any(Connection.class));
+            // 관리자는 가족 관계를 모른다 - 두 방향 모두 비워 두고 화면은 "어르신"으로 보인다(2026-11-24 점검 L-3)
+            assertThat(result).extracting(Connection::getRelation, Connection::getWardRelation).containsExactly(null, null);
         }
 
         @Test
