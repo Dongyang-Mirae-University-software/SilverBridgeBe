@@ -32,7 +32,7 @@
 
 | 번호 | 등급 | 위치 | 내용 | 제안 |
 |---|---|---|---|---|
-| K-1 | 🟢 | `companionVoiceNotice.test.ts` | 가드 테스트는 공용 문구가 말벗에서 "글로"를 내보내지 않는지만 본다. 장치 오류용 공용 문구가 새로 생기고 말벗 매핑을 빠뜨리면 일반 분기(`includes('글로')`)로 가 block이 null이 되어 [홈으로]가 조용히 사라진다(#338이 `micOpenFailed`에 매핑을 손으로 더한 이유) | `STT_MESSAGES` 키마다 기대 block을 적은 표(`Record<keyof typeof STT_MESSAGES, CompanionVoiceBlock>`)로 고정하는 테스트 - 새 키를 더하면 타입·테스트가 함께 실패한다 |
+| K-1 | 🟢 | `companionVoiceNotice.test.ts` | 가드 테스트는 공용 문구가 말벗에서 "글로"를 내보내지 않는지만 본다. 장치 오류용 공용 문구가 새로 생기고 말벗 매핑을 빠뜨리면 일반 분기(`includes('글로')`)로 가 block이 null이 되어 [홈으로]가 조용히 사라진다(#338이 `micOpenFailed`에 매핑을 손으로 더한 이유) | `STT_MESSAGES` 키마다 기대 block을 적은 표(`Record<keyof typeof STT_MESSAGES, CompanionVoiceBlock>`)로 고정하는 테스트 - 새 키를 더하면 타입·테스트가 함께 실패한다 - **2026-11-24 조치: FE #343(`76358f4`)** 테스트만 추가, 변이 4종(매핑 제거·block 바꿈 2·키 추가 tsc) 모두 잡힘 |
 
 ## 미확인
 
