@@ -28,7 +28,7 @@
 |---|---|---|---|---|
 | K-1 | 🟢 | `micOpenErrorMessage` | 옛 브라우저·웹뷰의 예전 오류 이름(`DevicesNotFoundError`·`TrackStartError`·`PermissionDeniedError`)은 이름표에 없어 모두 권한 안내가 된다. 지금 Chrome·Safari·Firefox는 표준 이름(NotAllowed·NotFound·NotReadable)을 쓴다(문서 기준, 실제 iOS·삼성 브라우저 기기 확인은 못 함) | 필요하면 `DevicesNotFoundError`→장치 없음, `TrackStartError`→사용 중을 더한다 |
 | K-2 | 🟢 | 같은 곳 | `AbortError`(Firefox에서 장치 시작 실패 전반)를 "다른 앱이 마이크를 쓰고 있어요"로 안내 - 다른 앱 때문이 아닐 수도 있다 | 그대로 두거나 "마이크를 켜지 못했어요"로 |
-| K-3 | 🟢 | `WardCompanionContent` | 마이크 안내(`voice.notice`)는 대화를 닫아도 지우지 않아, 같은 화면에서 새 대화를 열면 누르기 전부터 옛 안내(권한·장치)가 보인다(#335부터). 미지원은 기기가 그대로라 맞는 동작 | 대화를 열 때 `voice.clearNotice()` (미지원은 남긴다) |
+| K-3 | 🟢 | `WardCompanionContent` | 마이크 안내(`voice.notice`)는 대화를 닫아도 지우지 않아, 같은 화면에서 새 대화를 열면 누르기 전부터 옛 안내(권한·장치)가 보인다(#335부터). 미지원은 기기가 그대로라 맞는 동작 | 대화를 열 때 `voice.clearNotice()` (미지원은 남긴다) - **2026-11-24 정정: 도달 불가.** 대화가 닫히는 길(마침 카드·`leaveTalk`)은 모두 대답을 한 번 보낸 뒤이고, 말하기 버튼을 누를 때 안내를 먼저 지운다. 코드 변경 없음(사용자 결정, `(2026-11-24) fix-fe-mic-error-leftovers.md`) |
 
 ## 미확인
 
