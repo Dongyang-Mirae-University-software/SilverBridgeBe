@@ -38,6 +38,10 @@ public class Connection extends BaseTimeEntity {
     @Column(length = 10)
     private String relation;
 
+    // 보호자가 부르는 어르신 호칭 (예: 엄마, 할머니) - relation 과 방향이 반대. 선택값, 기존 데이터·관리자 강제 연결은 NULL (V74)
+    @Column(name = "ward_relation", length = 10)
+    private String wardRelation;
+
     @Column(name = "connected_at")
     private OffsetDateTime connectedAt;
 

@@ -52,6 +52,10 @@ public class ConnectionResponse {
     @Schema(description = "보호자가 입력한 피보호자와의 관계 (예: 아들). 기존 데이터(NULL)는 응답에서도 null", nullable = true, example = "아들")
     private final String relation;
 
+    @Schema(description = "보호자가 부르는 어르신 호칭 (예: 엄마) - 보호자 화면 응답에만 채운다. 피보호자 화면 응답·기존 데이터·"
+            + "관리자 강제 연결은 null (화면에서는 \"어르신\"으로 표시)", nullable = true, example = "엄마")
+    private final String wardRelation;
+
     @Schema(description = "연결 상태 (CANCELLED=보호자 취소, REFUSED=피보호자 거절, DISCONNECTED=연결 해제)",
             allowableValues = {"PENDING", "ACTIVE", "CANCELLED", "REFUSED", "DISCONNECTED"})
     private final String status;
@@ -70,7 +74,7 @@ public class ConnectionResponse {
                                String partnerAddress, String partnerAddressDetail,
                                String partnerPostcode, String partnerGender,
                                LocalDate partnerBirthDate, String partnerEmail,
-                               String relation, String status,
+                               String relation, String wardRelation, String status,
                                boolean isRequester, OffsetDateTime connectedAt,
                                OffsetDateTime createdAt) {
         this.id = id;
@@ -85,6 +89,7 @@ public class ConnectionResponse {
         this.partnerBirthDate = partnerBirthDate;
         this.partnerEmail = partnerEmail;
         this.relation = relation;
+        this.wardRelation = wardRelation;
         this.status = status;
         this.isRequester = isRequester;
         // 한국 시간 표기로 내린다 - 날짜만 잘라 쓰는 화면이 하루 틀리지 않게 (최종 QA CONN-A12)
@@ -113,6 +118,7 @@ public class ConnectionResponse {
                 revealContact ? ward.getBirthDate() : null,
                 revealContact ? ward.getEmail() : null,
                 connection.getRelation(),
+                connection.getWardRelation(),
                 connection.getStatus().name(),
                 connection.getGuardianId().equals(connection.getInitiatedBy()),
                 connection.getConnectedAt(),
@@ -136,6 +142,8 @@ public class ConnectionResponse {
                 revealContact ? guardian.getBirthDate() : null,
                 revealContact ? guardian.getEmail() : null,
                 connection.getRelation(),
+                // 보호자가 어르신을 부르는 호칭이라 어르신 본인 화면에는 싣지 않는다
+                null,
                 connection.getStatus().name(),
                 connection.getWardId().equals(connection.getInitiatedBy()),
                 connection.getConnectedAt(),
