@@ -67,7 +67,31 @@ class ConnectionResponseTest {
                 .status(status)
                 .initiatedBy(initiatedBy)
                 .relation("아들")
+                .wardRelation("엄마")
                 .build();
+    }
+
+    @org.junit.jupiter.api.Test
+    @DisplayName("어르신 호칭(wardRelation)은 보호자 뷰에만 싣고 피보호자 뷰에는 null - relation 은 양쪽 그대로")
+    void wardRelationOnlyInGuardianView() {
+        Connection connection = connection(ConnectionStatus.ACTIVE, GUARDIAN_ID);
+
+        ConnectionResponse guardianView = ConnectionResponse.fromGuardianView(connection, fullProfileUser(WARD_ID));
+        ConnectionResponse wardView = ConnectionResponse.fromWardView(connection, fullProfileUser(GUARDIAN_ID));
+
+        assertThat(guardianView.getWardRelation()).isEqualTo("엄마");
+        assertThat(guardianView.getRelation()).isEqualTo("아들");
+        assertThat(wardView.getWardRelation()).isNull();
+        assertThat(wardView.getRelation()).isEqualTo("아들");
+    }
+
+    @org.junit.jupiter.api.Test
+    @DisplayName("기존 연결(wardRelation NULL)은 보호자 뷰에서도 null - 화면이 \"어르신\"으로 대체")
+    void legacyConnectionHasNullWardRelation() {
+        Connection legacy = Connection.builder().id(11L).guardianId(GUARDIAN_ID).wardId(WARD_ID)
+                .status(ConnectionStatus.ACTIVE).initiatedBy(GUARDIAN_ID).relation("딸").build();
+
+        assertThat(ConnectionResponse.fromGuardianView(legacy, fullProfileUser(WARD_ID)).getWardRelation()).isNull();
     }
 
     @Nested

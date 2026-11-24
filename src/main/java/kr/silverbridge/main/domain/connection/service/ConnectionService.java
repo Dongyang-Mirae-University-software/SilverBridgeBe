@@ -154,12 +154,18 @@ public class ConnectionService {
 
         // 제로폭 문자·NBSP·전각공백을 걷어낸 값으로 저장한다 - DTO의 @VisibleText와 같은 기준(CONN-G14)
         String relation = TextSanitizer.sanitize(request.getRelation());
+        // 어르신 호칭은 선택값 - 정리 후 비면 저장하지 않는다(화면에는 "어르신"으로 보임)
+        String wardRelation = TextSanitizer.sanitize(request.getWardRelation());
+        if (wardRelation != null && wardRelation.isEmpty()) {
+            wardRelation = null;
+        }
         Connection connection = Connection.builder()
                 .guardianId(guardianId)
                 .wardId(wardId)
                 .status(ConnectionStatus.PENDING)
                 .initiatedBy(guardianId)
                 .relation(relation)
+                .wardRelation(wardRelation)
                 .build();
         // 위 exists 검사는 동시 요청 둘이 함께 통과할 수 있다. 그때는 uq_connections_live(부분 유니크)가 막는데,
         // 그대로 두면 범용 "중복된 값" 문구로 나가 입력 오류처럼 읽힌다 - 같은 뜻의 CONNECTION_ALREADY_EXISTS로 바꾼다(CONN-G11).

@@ -53,10 +53,37 @@ class ConnectionRequestDtoValidationTest {
         assertThat(validator.validate(dto(relation))).isEmpty();
     }
 
+    @org.junit.jupiter.api.Test
+    @DisplayName("어르신 호칭(wardRelation)은 선택값 - 없어도 위반 없음 (화면 업데이트 전 요청 호환)")
+    void wardRelationIsOptional() {
+        assertThat(validator.validate(dto("딸"))).isEmpty();
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"엄마", "외할아버지", "​아내"})
+    @DisplayName("보이는 글자가 있는 어르신 호칭 → 위반 없음")
+    void visibleWardRelationPasses(String wardRelation) {
+        assertThat(validator.validate(dto("딸", wardRelation))).isEmpty();
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"​", " ", "　", "가나다라마바사아자차카"})
+    @DisplayName("보이지 않는 문자만 있거나 10자를 넘는 어르신 호칭 → wardRelation 위반")
+    void invalidWardRelationRejected(String wardRelation) {
+        Set<ConstraintViolation<ConnectionRequestDto>> violations = validator.validate(dto("딸", wardRelation));
+
+        assertThat(violations).extracting(v -> v.getPropertyPath().toString()).containsExactly("wardRelation");
+    }
+
     private static ConnectionRequestDto dto(String relation) {
+        return dto(relation, null);
+    }
+
+    private static ConnectionRequestDto dto(String relation, String wardRelation) {
         ConnectionRequestDto dto = new ConnectionRequestDto();
         ReflectionTestUtils.setField(dto, "targetId", "WD0001");
         ReflectionTestUtils.setField(dto, "relation", relation);
+        ReflectionTestUtils.setField(dto, "wardRelation", wardRelation);
         return dto;
     }
 }

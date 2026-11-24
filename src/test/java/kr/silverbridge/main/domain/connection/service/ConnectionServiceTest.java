@@ -216,6 +216,27 @@ class ConnectionServiceTest {
             assertThat(event.wardId()).isEqualTo(WARD_ID);
             assertThat(event.guardianName()).isEqualTo("보호자");
             assertThat(event.relation()).isEqualTo(RELATION);
+            // 어르신 호칭을 보내지 않은 요청(화면 업데이트 전)은 비워 둔다
+            assertThat(saved.getWardRelation()).isNull();
+        }
+
+        @org.junit.jupiter.params.ParameterizedTest
+        @org.junit.jupiter.params.provider.CsvSource({"엄마,엄마", "'​할머니 ',할머니", "'​',"})
+        @DisplayName("어르신 호칭은 보이지 않는 문자를 정리해 저장하고, 정리 후 비면 NULL")
+        void 어르신호칭_정리후_저장(String input, String expected) {
+            ConnectionRequestDto dto = requestDto(WARD_ID, RELATION);
+            when(dto.getWardRelation()).thenReturn(input);
+            when(userRepository.findById(GUARDIAN_ID)).thenReturn(java.util.Optional.of(guardian()));
+            when(userRepository.findById(WARD_ID)).thenReturn(java.util.Optional.of(ward()));
+            when(connectionRepository.existsByGuardianIdAndWardIdAndStatusIn(
+                    GUARDIAN_ID, WARD_ID, List.of(ConnectionStatus.PENDING, ConnectionStatus.ACTIVE))).thenReturn(false);
+
+            connectionService.requestConnectionAsGuardian(GUARDIAN_ID, dto);
+
+            ArgumentCaptor<Connection> savedCaptor = ArgumentCaptor.forClass(Connection.class);
+            verify(connectionRepository).saveAndFlush(savedCaptor.capture());
+            assertThat(savedCaptor.getValue().getWardRelation()).isEqualTo(expected);
+            assertThat(savedCaptor.getValue().getRelation()).isEqualTo(RELATION);
         }
 
         @Test
