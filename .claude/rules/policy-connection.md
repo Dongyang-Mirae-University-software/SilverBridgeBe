@@ -24,6 +24,7 @@ paths:
 - **`wardRelation`**(`connection.ward_relation`, V74) = 어르신이 보호자에게 누구인지(엄마·아빠·할머니·할아버지·외할머니·외할아버지·삼촌·이모·고모·남편·아내·기타). **보호자 화면용**("이윤아 엄마")이라 `ConnectionResponse.fromGuardianView`에만 싣고 어르신 화면 응답은 null이다. 보호자 AI 챗의 예약 대상 선택지도 이 값으로 "이름 호칭"을 만든다(2026-11-25, BE #526·AI #350 - policy-chat "예약 대상 선택").
 - **하지 말 것**: 보호자 화면에서 어르신 이름 옆에 `relation`을 두지 말 것 - "이윤아 딸"이 "내 딸"로 거꾸로 읽혔다(2026-11-24 실제 사례). 성별을 모르므로 한쪽에서 다른 쪽을 계산하지 말 것.
 - 요청에서는 **선택값**이다(옛 화면 호환). 값이 없거나(기존 연결·관리자 강제 연결) "기타"면 FE가 "어르신"으로 보인다(사용자 결정). 기존 연결의 호칭을 바꾸는 API는 없다(수용 - 필요하면 별도 작업). 서버는 허용 목록을 강제하지 않는다(relation과 같음, `@VisibleText`·10자만).
+- **요청 화면 1단계 확인 조회(`/connection/preview`, 1분 10회)** (2026-11-25 FE #351): 상대 계정 오류(USER_NOT_FOUND·INVALID_CONNECTION_ROLE·CANNOT_CONNECT_SELF·CONNECTION_TARGET_NOT_ACTIVE·CONNECTION_ALREADY_EXISTS)만 [다음]을 막는다. **429·서버 오류를 "연결할 수 없어요"로 안내하거나 [다음]을 막지 말 것** - 확인만 못 한 것이고 실제 요청이 같은 검사를 다시 한다.
 - 상세: `docs/(2026-11-24) audit-connection-ward-relation.md`.
 
 ## 연결 요청 취소 - 알림은 없고 화면 갱신 신호만 간다 (2026-10-01 QA BE-3)
