@@ -68,8 +68,8 @@ public class GuardianChatController {
                     피보호자를 대신해 상담·예약하려면 context.wardId에 ACTIVE 연결된 피보호자 ID를 넣습니다. 연결이 아니면 403 CHAT_WARD_NOT_CONNECTED이며
                     wardName·wardPhone은 서버가 DB 값으로 채웁니다(보낸 값은 무시).
 
-                    예약 대상 선택(2026-11-11): 서버가 context.guardianWards에 ACTIVE 연결된 피보호자의 [{wardId, name, relation}]을 채워 AI로 보냅니다
-                    (이름·관계만, relation이 없으면 null, 없으면 빈 배열, 최신 연결순 최대 20명 - 보낸 값은 무시). AI가 예약을 시작할 때 "누구의 병원 예약인가요?"
+                    예약 대상 선택(2026-11-11): 서버가 context.guardianWards에 ACTIVE 연결된 피보호자의 [{wardId, name, relation, wardRelation}]을 채워 AI로 보냅니다
+                    (이름·관계·호칭만, 값이 없으면 null, 없으면 빈 배열, 최신 연결순 최대 20명 - 보낸 값은 무시). 선택지 글자는 보호자가 부르는 호칭(wardRelation)으로 "이름 호칭"이 됩니다(2026-11-25). AI가 예약을 시작할 때 "누구의 병원 예약인가요?"
                     선택지(field reservation_patient, value = 연결된 피보호자 wardId - 챗봇 예약은 피보호자만 대상이라 "나"는 없고, 목록이 비면 AI가 안내 문장)를 주면, 고른 값을 uiSelection으로 보내고 wardId면 그 턴부터
                     예약이 끝날 때까지 context.wardId에도 같은 값을 넣습니다. 연결되지 않은 wardId를 고르면 403 CHAT_WARD_NOT_CONNECTED,
                     같은 턴의 context.wardId와 다르면 400 CHAT_INVALID_REQUEST입니다(칸 이름에 reservation_patient가 들어 있으면 앞뒤 글자와 관계없이 검증). guardianWards는 응답·상담 기록에 나오지 않습니다.

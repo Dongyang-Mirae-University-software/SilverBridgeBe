@@ -209,13 +209,15 @@ public class ChatRelayService {
         context.remove(GUARDIAN_WARDS_KEY);
         context.put("role", role.name());
         if (guardianWards != null) {
-            // 이름·관계만. 관계가 없으면(관리자 강제 연결 등) null - 키는 항상 세 개다(AI·FE 계약)
+            // 이름·관계·호칭만. 값이 없으면(관리자 강제 연결·기존 연결 등) null - 키는 항상 네 개다(AI·FE 계약).
+            // AI 선택지 글자는 호칭(wardRelation)으로 만든다 - relation 은 옛 AI 호환으로 남긴다(2026-11-25)
             List<Map<String, Object>> wards = new java.util.ArrayList<>();
             for (ActiveWardSummary summary : guardianWards) {
                 Map<String, Object> item = new LinkedHashMap<>();
                 item.put("wardId", summary.wardId());
                 item.put("name", summary.name());
                 item.put("relation", summary.relation());
+                item.put("wardRelation", summary.wardRelation());
                 wards.add(item);
             }
             context.put(GUARDIAN_WARDS_KEY, wards);

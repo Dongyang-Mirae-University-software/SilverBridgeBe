@@ -72,32 +72,37 @@ public class ConnectionService {
                 .toList();
     }
 
-    // 보호자: 내 ACTIVE 피보호자의 이름·관계 (최신 연결순, 최대 limit명) - 챗봇 예약 대상 선택지용(2026-11-11).
+    // 보호자: 내 ACTIVE 피보호자의 이름·관계·호칭 (최신 연결순, 최대 limit명) - 챗봇 예약 대상 선택지용(2026-11-11).
     // ACTIVE 만 본다(getMyWards 금지 - PENDING 피보호자를 대신 예약할 수 있게 되면 안 된다). 회원 행이 없는 연결은 뺀다.
     // 전화·주소·생년월일은 싣지 않는다(AI 요청 context 로 나간다).
+    // 호칭(wardRelation)은 선택지 글자용이다(2026-11-25) - relation 과 방향이 반대라 서로 대신 쓰지 않는다(policy-connection).
     @Transactional(readOnly = true)
     public List<ActiveWardSummary> getActiveWardSummaries(String guardianId, int limit) {
         List<Connection> connections = connectionRepository
                 .findByGuardianIdAndStatusInOrderByCreatedAtDesc(guardianId, List.of(ConnectionStatus.ACTIVE));
-        Map<String, String> relationByWard = new java.util.LinkedHashMap<>();
+        Map<String, Connection> connectionByWard = new java.util.LinkedHashMap<>();
         for (Connection connection : connections) {
-            if (relationByWard.size() >= limit) {
+            if (connectionByWard.size() >= limit) {
                 break;
             }
-            relationByWard.putIfAbsent(connection.getWardId(), connection.getRelation());
+            connectionByWard.putIfAbsent(connection.getWardId(), connection);
         }
-        if (relationByWard.isEmpty()) {
+        if (connectionByWard.isEmpty()) {
             return List.of();
         }
         Map<String, String> nameById = new java.util.HashMap<>();
-        for (User ward : userRepository.findAllById(relationByWard.keySet())) {
+        for (User ward : userRepository.findAllById(connectionByWard.keySet())) {
             nameById.put(ward.getId(), ward.getName());
         }
-        return relationByWard.entrySet().stream()
+        return connectionByWard.entrySet().stream()
                 .filter(e -> nameById.containsKey(e.getKey()))
                 .map(e -> new ActiveWardSummary(e.getKey(), nameById.get(e.getKey()),
-                        e.getValue() == null || e.getValue().isBlank() ? null : e.getValue()))
+                        blankToNull(e.getValue().getRelation()), blankToNull(e.getValue().getWardRelation())))
                 .toList();
+    }
+
+    private static String blankToNull(String value) {
+        return value == null || value.isBlank() ? null : value;
     }
 
     // 보호자-피보호자 쌍이 현재 ACTIVE 연결인지 — 타 도메인(SOS 이력·ACK)의 IDOR 인가 판정용.
