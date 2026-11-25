@@ -104,10 +104,10 @@ class ChatRelayGuardianWardsTest {
     }
 
     @Test
-    @DisplayName("보호자 경로: guardianWards 는 클라이언트 값을 버리고 DB 의 ACTIVE 피보호자 이름·관계만 싣는다")
+    @DisplayName("보호자 경로: guardianWards 는 클라이언트 값을 버리고 DB 의 ACTIVE 피보호자 이름·관계·호칭만 싣는다")
     void 클라이언트_값_대신_DB_목록() throws Exception {
         when(connectionService.getActiveWardSummaries(GUARDIAN, ChatRelayService.MAX_GUARDIAN_WARDS)).thenReturn(List.of(
-                new ActiveWardSummary(WARD, "김영희", "어머니"), new ActiveWardSummary("WRD002", "김철수", null)));
+                new ActiveWardSummary(WARD, "김영희", "어머니", "엄마"), new ActiveWardSummary("WRD002", "김철수", null, null)));
         when(aiChatClient.send(any())).thenReturn(objectMapper.readTree("{}"));
 
         service.sendAsGuardian(GUARDIAN, request(forgedWards(), null));
@@ -119,8 +119,12 @@ class ChatRelayGuardianWardsTest {
         assertThat(wards.get(0).path("relation").asText()).isEqualTo("어머니");
         assertThat(wards.get(1).has("relation")).isTrue();
         assertThat(wards.get(1).path("relation").isNull()).isTrue();
-        // 이름·관계·ID 외의 칸은 없다(전화·주소·생년월일 금지)
-        wards.forEach(item -> assertThat(item.size()).isEqualTo(3));
+        // 호칭(AI 선택지 글자용) - 없으면 키는 있고 값만 null(2026-11-25)
+        assertThat(wards.get(0).path("wardRelation").asText()).isEqualTo("엄마");
+        assertThat(wards.get(1).has("wardRelation")).isTrue();
+        assertThat(wards.get(1).path("wardRelation").isNull()).isTrue();
+        // 이름·관계·호칭·ID 외의 칸은 없다(전화·주소·생년월일 금지)
+        wards.forEach(item -> assertThat(item.size()).isEqualTo(4));
         assertThat(wards.toString()).doesNotContain("VICTIM").doesNotContain("위조이름").doesNotContain("9999");
     }
 
@@ -270,7 +274,7 @@ class ChatRelayGuardianWardsTest {
     void 상한_20명은_8KB_안() throws Exception {
         List<ActiveWardSummary> many = new java.util.ArrayList<>();
         for (int i = 0; i < ChatRelayService.MAX_GUARDIAN_WARDS; i++) {
-            many.add(new ActiveWardSummary("W" + String.format("%05d", i), "가".repeat(20), "나".repeat(10))); // users.name 20 · connection.relation 10 최대
+            many.add(new ActiveWardSummary("W" + String.format("%05d", i), "가".repeat(20), "나".repeat(10), "다".repeat(10))); // users.name 20 · connection.relation 10 최대
         }
         when(connectionService.getActiveWardSummaries(any(), anyInt())).thenReturn(many);
         when(aiChatClient.send(any())).thenReturn(objectMapper.readTree("{}"));

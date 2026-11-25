@@ -32,7 +32,11 @@ class ConnectionActiveWardSummaryTest {
     @InjectMocks private ConnectionService connectionService;
 
     private static Connection active(String wardId, String relation) {
-        return Connection.builder().guardianId(GUARDIAN).wardId(wardId).relation(relation)
+        return active(wardId, relation, null);
+    }
+
+    private static Connection active(String wardId, String relation, String wardRelation) {
+        return Connection.builder().guardianId(GUARDIAN).wardId(wardId).relation(relation).wardRelation(wardRelation)
                 .status(ConnectionStatus.ACTIVE).build();
     }
 
@@ -41,17 +45,31 @@ class ConnectionActiveWardSummaryTest {
     }
 
     @Test
-    @DisplayName("ACTIVE 연결만 조회하고, 최신 연결순으로 이름·관계를 돌려준다(빈 관계는 null)")
+    @DisplayName("ACTIVE 연결만 조회하고, 최신 연결순으로 이름·관계·호칭을 돌려준다(빈 값은 null)")
     void ACTIVE만_이름_관계() {
         when(connectionRepository.findByGuardianIdAndStatusInOrderByCreatedAtDesc(GUARDIAN, List.of(ConnectionStatus.ACTIVE)))
-                .thenReturn(List.of(active("WRD002", "아버지"), active("WRD001", " ")));
+                .thenReturn(List.of(active("WRD002", "아들", "아빠"), active("WRD001", " ", " ")));
         when(userRepository.findAllById(any())).thenReturn(List.of(user("WRD001", "김영희"), user("WRD002", "김철수")));
 
         List<ActiveWardSummary> result = connectionService.getActiveWardSummaries(GUARDIAN, 20);
 
         assertThat(result).containsExactly(
-                new ActiveWardSummary("WRD002", "김철수", "아버지"),
-                new ActiveWardSummary("WRD001", "김영희", null));
+                new ActiveWardSummary("WRD002", "김철수", "아들", "아빠"),
+                new ActiveWardSummary("WRD001", "김영희", null, null));
+    }
+
+    @Test
+    @DisplayName("호칭과 관계는 각자 자기 칸에 들어간다 - 서로 대신 쓰지 않는다(방향이 반대)")
+    void 호칭과_관계는_따로() {
+        when(connectionRepository.findByGuardianIdAndStatusInOrderByCreatedAtDesc(GUARDIAN, List.of(ConnectionStatus.ACTIVE)))
+                .thenReturn(List.of(active("WRD001", "딸", null), active("WRD002", null, "엄마")));
+        when(userRepository.findAllById(any())).thenReturn(List.of(user("WRD001", "김영희"), user("WRD002", "박순자")));
+
+        List<ActiveWardSummary> result = connectionService.getActiveWardSummaries(GUARDIAN, 20);
+
+        assertThat(result).containsExactly(
+                new ActiveWardSummary("WRD001", "김영희", "딸", null),
+                new ActiveWardSummary("WRD002", "박순자", null, "엄마"));
     }
 
     @Test
@@ -73,6 +91,6 @@ class ConnectionActiveWardSummaryTest {
 
         List<ActiveWardSummary> result = connectionService.getActiveWardSummaries(GUARDIAN, 2);
 
-        assertThat(result).containsExactly(new ActiveWardSummary("WRD003", "박순자", "어머니"));
+        assertThat(result).containsExactly(new ActiveWardSummary("WRD003", "박순자", "어머니", null));
     }
 }
