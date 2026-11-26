@@ -61,7 +61,7 @@ class UserNotificationControllerSecurityTest {
     @WithMockUser(roles = "ADMIN")
     @DisplayName("관리자 → 네 API 모두 403 (관리자는 알림을 받지 않는다)")
     void admin_거부() {
-        assertThatThrownBy(() -> controller.getMyNotifications("AD0001", null, 0, 20)).isInstanceOf(AccessDeniedException.class);
+        assertThatThrownBy(() -> controller.getMyNotifications("AD0001", null, null, 0, 20)).isInstanceOf(AccessDeniedException.class);
         assertThatThrownBy(() -> controller.countUnread("AD0001")).isInstanceOf(AccessDeniedException.class);
         assertThatThrownBy(() -> controller.markRead("AD0001", 1L)).isInstanceOf(AccessDeniedException.class);
         assertThatThrownBy(() -> controller.markAllRead("AD0001")).isInstanceOf(AccessDeniedException.class);
@@ -87,7 +87,7 @@ class UserNotificationControllerSecurityTest {
     }
 
     private void assertAllAllowed(String userId) {
-        assertThatNoException().isThrownBy(() -> controller.getMyNotifications(userId, null, 0, 20));
+        assertThatNoException().isThrownBy(() -> controller.getMyNotifications(userId, null, null, 0, 20));
         assertThatNoException().isThrownBy(() -> controller.countUnread(userId));
         assertThatNoException().isThrownBy(() -> controller.markRead(userId, 1L));
         assertThatNoException().isThrownBy(() -> controller.markAllRead(userId));

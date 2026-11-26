@@ -91,6 +91,30 @@ class UserNotificationServiceTest {
     }
 
     @Test
+    @DisplayName("목록: 알림 종류 하나(type)를 주면 그 종류만 넘긴다 (2026-11-26)")
+    void 목록_종류_필터() {
+        given(repository.searchForRecipient(eq(GUARDIAN_ID), any(), anyBoolean(), anyCollection(), any(Pageable.class)))
+                .willReturn(new PageImpl<>(List.of()));
+
+        service.getMyNotifications(GUARDIAN_ID, null, NotificationType.MEDICATION_MISSED, 0, 20);
+
+        @SuppressWarnings("unchecked")
+        ArgumentCaptor<Collection<NotificationType>> types = ArgumentCaptor.forClass(Collection.class);
+        verify(repository).searchForRecipient(eq(GUARDIAN_ID), any(), eq(true), types.capture(), any(Pageable.class));
+        assertThat(types.getValue()).containsExactly(NotificationType.MEDICATION_MISSED);
+    }
+
+    @Test
+    @DisplayName("목록: 묶음과 종류를 함께 주면 둘 다 맞아야 한다 - 그 묶음에 없는 종류면 조회 없이 빈 목록")
+    void 목록_묶음과_종류_불일치() {
+        PageResponse<UserNotificationItem> page =
+                service.getMyNotifications(GUARDIAN_ID, UserNotificationCategory.URGENT, NotificationType.MEDICATION_MISSED, 0, 20);
+
+        assertThat(page.content()).isEmpty();
+        verify(repository, never()).searchForRecipient(any(), any(), anyBoolean(), anyCollection(), any(Pageable.class));
+    }
+
+    @Test
     @DisplayName("목록: 묶음이 없으면 전 종류를 넘기고(빈 IN 절 회피), 본인에 관한 알림은 이름 조회 없이 wardId·wardName이 null")
     void 목록_본인_알림() {
         NotificationLog reminder = log(3L, WARD_ID, WARD_ID, NotificationType.MEDICATION_REMINDER, null);
