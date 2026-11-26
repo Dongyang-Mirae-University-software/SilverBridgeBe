@@ -314,12 +314,12 @@ class NotificationDispatcherTest {
     }
 
     @Test
-    @DisplayName("문자 상한은 필수 알림 폴백에만 적용된다 - 설정 기반 문자(복약 요약 등)는 상한을 거치지 않는다")
+    @DisplayName("문자 상한은 필수 알림 폴백에만 적용된다 - 설정 기반 문자(복약 중지 안내 등)는 상한을 거치지 않는다")
     void 설정기반_문자는_상한미적용() {
         given(settingService.enabledChannels(USER_ID))
                 .willReturn(EnumSet.of(NotificationChannelType.FCM, NotificationChannelType.SMS));
 
-        dispatcher.dispatch(USER_ID, WARD_ID, NotificationType.MEDICATION_MISSED, content);
+        dispatcher.dispatch(USER_ID, WARD_ID, NotificationType.MEDICATION_STOPPED, content);
 
         verify(smsChannel).send(any(), any(), any());
         verify(smsFallbackLimiter, never()).tryAcquire(any(), any());
@@ -712,10 +712,22 @@ class NotificationDispatcherTest {
         given(settingService.enabledChannels(USER_ID))
                 .willReturn(EnumSet.of(NotificationChannelType.FCM, NotificationChannelType.SMS));
 
-        dispatcher.dispatch(USER_ID, NotificationType.MEDICATION_MISSED, content);
+        dispatcher.dispatch(USER_ID, NotificationType.MEDICATION_STOPPED, content);
 
         verify(fcmChannel).send(any(), any(), any());
         verify(smsChannel).send(any(), any(), any());
+    }
+
+    @Test
+    @DisplayName("보호자 미복용 요약은 문자를 켠 보호자에게도 문자로 나가지 않는다 - 푸시·이메일만 (2026-11-26)")
+    void 미복용요약은_문자미발송() {
+        given(settingService.enabledChannels(USER_ID))
+                .willReturn(EnumSet.of(NotificationChannelType.FCM, NotificationChannelType.SMS));
+
+        dispatcher.dispatch(USER_ID, WARD_ID, NotificationType.MEDICATION_MISSED, content);
+
+        verify(fcmChannel).send(any(), any(), any());
+        verify(smsChannel, never()).send(any(), any(), any());
     }
 
     @Test
@@ -738,14 +750,14 @@ class NotificationDispatcherTest {
                 .willReturn(EnumSet.of(NotificationChannelType.FCM, NotificationChannelType.SMS));
         when(smsChannel.send(any(), any(), any())).thenReturn(ChannelResult.failed(ChannelFailureReason.NO_PHONE));
 
-        dispatcher.dispatch(USER_ID, WARD_ID, NotificationType.MEDICATION_MISSED, content);
+        dispatcher.dispatch(USER_ID, WARD_ID, NotificationType.MEDICATION_STOPPED, content);
 
         NotificationLog log = recordedLog();
         assertThat(log.getResult()).isEqualTo(NotificationLogResult.DELIVERED);
         assertThat(log.getNotSentReason()).isNull();
         assertThat(log.getRecipientId()).isEqualTo(USER_ID);
         assertThat(log.getWardId()).isEqualTo(WARD_ID);
-        assertThat(log.getType()).isEqualTo(NotificationType.MEDICATION_MISSED);
+        assertThat(log.getType()).isEqualTo(NotificationType.MEDICATION_STOPPED);
         assertThat(log.getTitle()).isEqualTo("제목");
         assertThat(log.getBody()).isEqualTo("본문");
         assertThat(log.getChannelResults()).containsExactlyInAnyOrder(

@@ -63,5 +63,8 @@ class NotificationTypeEmailPolicyTest {
                 .containsExactly(NotificationChannelType.FCM);
         assertThat(NotificationType.ANOMALY_REVIEW_REQUIRED.allowedChannels())
                 .containsExactly(NotificationChannelType.FCM);
+        // 보호자 미복용 요약은 푸시·이메일만(2026-11-26) - 문자로 나가지 않는다
+        assertThat(NotificationType.MEDICATION_MISSED.allowedChannels())
+                .containsExactlyInAnyOrder(NotificationChannelType.FCM, NotificationChannelType.EMAIL);
     }
 }
