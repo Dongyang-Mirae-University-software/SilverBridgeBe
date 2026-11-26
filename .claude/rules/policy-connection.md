@@ -25,6 +25,7 @@ paths:
 - **하지 말 것**: 보호자 화면에서 어르신 이름 옆에 `relation`을 두지 말 것 - "이윤아 딸"이 "내 딸"로 거꾸로 읽혔다(2026-11-24 실제 사례). 성별을 모르므로 한쪽에서 다른 쪽을 계산하지 말 것.
 - 요청에서는 **선택값**이다(옛 화면 호환). 값이 없거나(기존 연결·관리자 강제 연결) "기타"면 FE가 "어르신"으로 보인다(사용자 결정). 기존 연결의 호칭을 바꾸는 API는 없다(수용 - 필요하면 별도 작업). 서버는 허용 목록을 강제하지 않는다(relation과 같음, `@VisibleText`·10자만).
 - **요청 화면 1단계 확인 조회(`/connection/preview`, 1분 10회)** (2026-11-25 FE #351): 상대 계정 오류(USER_NOT_FOUND·INVALID_CONNECTION_ROLE·CANNOT_CONNECT_SELF·CONNECTION_TARGET_NOT_ACTIVE·CONNECTION_ALREADY_EXISTS)만 [다음]을 막는다. **429·서버 오류를 "연결할 수 없어요"로 안내하거나 [다음]을 막지 말 것** - 확인만 못 한 것이고 실제 요청이 같은 검사를 다시 한다.
+- **요청 화면 단계 기록(`connectionStep`·`connectionDepth`·`connectionMount`)은 Next가 덮어쓸 수 있다** (2026-11-26 FE #355, 점검 I-1): `router.refresh()`·같은 주소 이동 때 Next가 지금 기록을 자기 값으로만 다시 쓴다(알림을 받으면 어느 화면에서든 refresh). 폼은 열려 있는 동안 `history.replaceState`를 감싸 같은 주소·이 회차 기록이면 단계 값을 이어 붙인다. 감싸기를 빼거나, 단계 기록을 새로 다루는 코드를 이 보호 없이 만들지 말 것 - 브라우저 테스트는 `next/navigation`을 목으로 바꿔 이 덮어쓰기를 거치지 않으므로 `{__NA, tree}`만 덮어쓰는 흉내로 고정한다.
 - 상세: `docs/(2026-11-24) audit-connection-ward-relation.md`.
 
 ## 연결 요청 취소 - 알림은 없고 화면 갱신 신호만 간다 (2026-10-01 QA BE-3)
