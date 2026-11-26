@@ -60,7 +60,7 @@ paths:
 
 ## 사용자 알림 기록 - 내가 받은 알림의 사본, 관리자 칼럼은 내리지 않는다 (2026-11-04)
 
-- **경위**: 웹 상단 종 아이콘용 `GET /api/user/me/notifications`(목록·`category` 필터)·`/unread-count`·`POST /{id}/read`·`/read-all`. 새 테이블 없이 `notification_log`에 `read_at`(V67) + 부분 인덱스 2개. GUARDIAN·WARD만(ADMIN 403). 상세 `docs/(2026-11-04) feature-user-notification-inbox.md`.
+- **경위**: 웹 상단 종 아이콘용 `GET /api/user/me/notifications`(목록·`category` 필터, 2026-11-26부터 알림 종류 하나 `type` 필터도 - 묶음과 함께면 교집합, 묶음에 없는 종류면 쿼리 없이 빈 목록. 보이는 행 범위는 그대로)·`/unread-count`·`POST /{id}/read`·`/read-all`. 새 테이블 없이 `notification_log`에 `read_at`(V67) + 부분 인덱스 2개. GUARDIAN·WARD만(ADMIN 403). 상세 `docs/(2026-11-04) feature-user-notification-inbox.md`.
 - **불변 규칙 ①(실제로 보낸 것만)**: 보이는 행 = `result <> 'NOT_SENT'` + 최근 `retention-days`(90일). `FAILED`는 포함한다 - 보냈지만 기기에 닿지 않았을 수 있는 SOS·화재를 앱 안에서라도 봐야 한다(시도 채널 0인 FAILED 포함). 쿼리의 `NOT_SENT` 조건은 V67 부분 인덱스와 같은 **리터럴**로 둔다(파라미터로 바꾸지 말 것).
 - **불변 규칙 ②(D-1을 적용하지 않는다)**: D-1(보호자 이력은 지금 연결 이후만)은 피보호자 기록의 **열람 권한**이고, 이 목록은 **내게 이미 도착한 메시지의 사본**이라 연결이 끝나도 보인다. 피보호자가 탈퇴하면 `ward_id` CASCADE로 함께 지워진다(⑤ 그대로). 이 목록에 연결 조건을 덧붙여 "이미 받은 알림"을 숨기지 말 것, 반대로 이 근거로 SOS·이상감지 이력 API의 D-1을 풀지 말 것.
 - **불변 규칙 ③(응답에 싣지 않는 칼럼)**: `result`·`channel_results`·`not_sent_reason`·`recipient_id`는 관리자용이다. 사용자 응답은 `UserNotificationItem` 9개 필드로 고정(`UserNotificationControllerSecurityTest`). 로그에 제목·본문을 남기지 않는다.

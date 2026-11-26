@@ -6,6 +6,7 @@ import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import kr.silverbridge.main.domain.notification.dispatch.NotificationType;
 import kr.silverbridge.main.domain.notification.dto.UserNotificationCategory;
 import kr.silverbridge.main.domain.notification.dto.UserNotificationItem;
 import kr.silverbridge.main.domain.notification.dto.UserNotificationReadAllResponse;
@@ -51,6 +52,7 @@ public class UserNotificationController {
             [정렬] 최신순 (발송 시각 내림차순)
             [category] URGENT(SOS·이상감지 발생·안부 말벗 위험 신호) / MEDICATION(복약 시각·미복용 요약·복약 일정 중지)
               / CONNECTION(연결 요청·수락·거절·해제·관리자 연결) / OTHER(이상감지 판정 요청·재확인·카메라 연결 확인·문의 답변·안부 말벗 안내·기분 변화)
+            [type] 알림 종류 하나(항목의 type 값과 같은 이름, 예: WARD_SOS·MEDICATION_MISSED). 묶음과 함께 주면 둘 다 맞는 것만 - 그 묶음에 없는 종류면 빈 목록
             [항목] id, type, category, title, body, createdAt, read, wardId, wardName
               - title·body는 휴대폰에 표시된 문구와 같습니다.
               - wardId·wardName은 다른 사람(피보호자)에 관한 알림일 때만 있습니다. 본인에 관한 알림·문의 답변·판정 하루 요약은 null.
@@ -58,7 +60,7 @@ public class UserNotificationController {
             """)
     @ApiResponses({
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "목록 (PageResponse)"),
-            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "category 값이 잘못됨", content = @Content),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "category·type 값이 잘못됨", content = @Content),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "인증 토큰 없음 또는 만료", content = @Content),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "보호자·피보호자가 아님(관리자)", content = @Content)
     })
@@ -66,9 +68,11 @@ public class UserNotificationController {
     public ApiResponse<PageResponse<UserNotificationItem>> getMyNotifications(
             @AuthenticationPrincipal String userId,
             @Parameter(description = "알림 묶음 (생략 시 전체)") @RequestParam(required = false) UserNotificationCategory category,
+            @Parameter(description = "알림 종류 하나 (생략 시 전체, 묶음과 함께 주면 둘 다 맞는 것만)")
+            @RequestParam(required = false) NotificationType type,
             @Parameter(description = "페이지 번호 (0-based)") @RequestParam(defaultValue = "0") int page,
             @Parameter(description = "페이지 크기 (기본 20, 최대 50)") @RequestParam(defaultValue = "20") int size) {
-        return ApiResponse.ok(userNotificationService.getMyNotifications(userId, category, page, size));
+        return ApiResponse.ok(userNotificationService.getMyNotifications(userId, category, type, page, size));
     }
 
     @Operation(summary = "안 읽은 알림 수", description = SCOPE + """

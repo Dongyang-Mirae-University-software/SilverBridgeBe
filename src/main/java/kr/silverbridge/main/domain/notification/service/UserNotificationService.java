@@ -51,11 +51,26 @@ public class UserNotificationService {
     @Transactional(readOnly = true)
     public PageResponse<UserNotificationItem> getMyNotifications(String userId, UserNotificationCategory category,
                                                                  int page, int size) {
+        return getMyNotifications(userId, category, null, page, size);
+    }
+
+    /**
+     * {@code type}(알림 종류 하나, 2026-11-26)을 주면 그 종류만 본다. 묶음과 함께 주면 둘 다 맞는 것만 - 종류가 그 묶음에
+     * 없으면 쿼리 없이 빈 목록이다(빈 IN 절을 만들지 않는다). 보이는 행 범위(NOT_SENT 제외·보관 기간)는 그대로다.
+     */
+    @Transactional(readOnly = true)
+    public PageResponse<UserNotificationItem> getMyNotifications(String userId, UserNotificationCategory category,
+                                                                 NotificationType type, int page, int size) {
+        // 빈 IN 절을 피하려고 묶음이 없을 때도 전 종류를 넘긴다(관리자 조회와 같은 방식).
+        Set<NotificationType> types = category == null ? EnumSet.allOf(NotificationType.class) : category.types();
+        if (type != null) {
+            if (!types.contains(type)) {
+                return PageResponse.of(Page.<UserNotificationItem>empty(AdminPaging.of(page, size)));
+            }
+            types = EnumSet.of(type);
+        }
         Page<NotificationLog> logs = notificationLogRepository.searchForRecipient(
-                userId, lowerBound(), category != null,
-                // 빈 IN 절을 피하려고 묶음이 없을 때도 전 종류를 넘긴다(관리자 조회와 같은 방식).
-                category == null ? EnumSet.allOf(NotificationType.class) : category.types(),
-                AdminPaging.of(page, size));
+                userId, lowerBound(), category != null || type != null, types, AdminPaging.of(page, size));
 
         // 피보호자 이름은 한 번에 읽는다(행마다 조회하면 페이지 크기만큼 쿼리가 늘어난다). 본인에 관한 알림은 이름이 필요 없다.
         Set<String> wardIds = logs.getContent().stream()
