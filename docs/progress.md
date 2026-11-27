@@ -4,6 +4,9 @@
 
 ---
 
+### [2026-11-27] 기능 점검(B) - AI 말벗 꼬리질문 고쳐 쓰기 날짜별 횟수 (AI #364) - PASS 조건부 (🟡 1·🟢 4)
+- 🟡 W-1: 같은 sqlite 검수 DB에 엔진 둘이 턴마다 쓰면서 동시 12건 이상에서 검수 쓰기가 `database is locked`로 실패하고 그 턴 요청이 오류로 끝남(#364 전에는 16건에서도 0건, 지금 BE 상한 8건에서는 0건). 개인정보·인증 PASS, 횟수 유실 0, 날짜는 서버 시간대와 무관하게 KST. 🟢 횟수 정의(판단한 후보 수)·KST 테스트 없음(변이 생존)·PostgreSQL 미검증·경합 때 지연 최대 3초. 상세 `docs/(2026-11-27) audit-companion-rewrite-counts.md`
+
 ### [2026-11-27] AI 말벗 꼬리질문 고쳐 쓰기 횟수 날짜별 저장·조회 (AI #364) - gosky 반영
 - 검수 DB(`./data` 볼륨 sqlite)에 `companion_rewrite_daily`(KST 날짜·종류·결과·개수 - 원문·피보호자 정보 없음), 턴마다 한 트랜잭션 UPSERT, 기록 실패는 대답을 막지 않음. `GET /companion/ops/rewrite-counts`(X-API-Key, 최대 90일), 보관 90일(사용자 결정 - 조회할 때 정리). 저장 위치·조회 방식도 사용자 결정(검수 DB + 조회 API). 새 테스트 7(동시 증가 200 일치 포함)·변이 2 잡음, gosky 47e6f52(롤백 `sb-ai-rollback:20261127-rewrite-counts`), 시험 대화 2턴으로 횟수 오름 확인(11/27 행의 2는 시험분), pytest 5,103 통과. 운영 점검 절차는 `docs/(2026-11-27) audit-companion-followup-rewrite-ops.md` "다시 볼 때"
 
