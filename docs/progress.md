@@ -4,6 +4,9 @@
 
 ---
 
+### [2026-11-27] 기능 점검(B) - AI 말벗 검수 DB 동시 쓰기 잠금 수정 (AI #365) - PASS (🟡 1·🟢 3)
+- 데이터 안전 문제 없음: 앱 두 저장소만 파일을 열고 작업자 1개·ext4 bind mount, `-wal`은 약 4MB에서 멈춤, `synchronous=NORMAL`은 프로세스·컨테이너 종료에는 손실 없음, gosky 기동 이후 쓰기 실패 0. 🟡 X-1: 검수·횟수 쓰기 실패가 경고 로그로만 남고 상태 API에 드러나지 않음(#365 전에는 턴 오류로 드러났다). 🟢 WAL 백업 주의·dialect 분기 테스트 없음·긴 읽기 측정 못 함. 상세 `docs/(2026-11-27) audit-companion-review-db-wal.md`
+
 ### [2026-11-27] AI 말벗 검수 DB 동시 쓰기 잠금 수정 (AI #365) - #364 점검 W-1·W-2·W-3·W-5 반영, gosky 반영
 - sqlite 검수 DB 엔진(검수 목록·고쳐 쓰기 횟수)에 WAL·busy_timeout 5초·synchronous=NORMAL, 검수 쓰기 실패해도 턴 응답은 그대로. 16스레드 검수 실패 1~3건 → 0, 한 턴 쓰기 최대 3.3초 → 334ms 이하. gosky 38361c3(롤백 `sb-ai-rollback:20261127-review-wal`, 검수 DB 백업 `data/companion_review.db.bak-20261127-wal` 12/04 이후 삭제 가능), WAL 전환·재시작 뒤 횟수 이어짐 확인, pytest 5,106 통과. 상세 `docs/(2026-11-27) audit-companion-rewrite-counts.md` "조치" 절
 
