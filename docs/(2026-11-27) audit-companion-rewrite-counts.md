@@ -78,3 +78,23 @@ fix: 말벗 검수 DB 동시 쓰기 잠금으로 턴이 실패하지 않게 (#36
 - sqlite 검수 DB 엔진에 WAL·busy_timeout, 검수 쓰기 실패는 경고 로그만 남기고 대답은 그대로
 - 고쳐 쓰기 횟수의 뜻(판단한 후보 수)을 엔드포인트 설명에 적고, KST 날짜 테스트 추가
 ```
+
+## 조치 (11/27, AI #365 `38361c3`, gosky 반영)
+
+| ID | 조치 |
+|---|---|
+| W-1 | `app/database/companion_base.create_review_engine`: sqlite 면 연결마다 `journal_mode=WAL`·`busy_timeout=5000`·`synchronous=NORMAL`. 검수 목록·고쳐 쓰기 횟수 두 엔진이 같이 쓴다. `_queue_for_review`는 검수 쓰기가 실패해도 경고 로그(클래스명)만 남기고 턴 응답을 내보낸다 |
+| W-2 | 조회 엔드포인트 설명에 `followup_checked` = 고쳐 쓰기를 판단한 후보 수(기본값에서는 규칙을 통과한 꼬리질문 턴 수와 같음) |
+| W-3 | KST 날짜 테스트(UTC 11/26 15:30 → 11/27) |
+| W-4 | 그대로 (운영은 sqlite) - PostgreSQL 로 옮기면 WAL 설정은 적용되지 않고 UPSERT 를 따로 확인한다고 AI 팀 문서에 적음 |
+| W-5 | W-1과 함께 줄었다 (아래 표) |
+
+| 동시 쓰기 (DGX, 3회) | 검수 실패 전 → 후 | 한 턴 쓰기 p95 | 최대 |
+|---|---|---|---|
+| 8 | 0 → 0 | 9~20ms | 74ms 이하 |
+| 16 | 1~3건 → 0 | 19~23ms | 334ms 이하 (전 3.3초) |
+| 24 | - → 0 | 54~57ms | 433ms 이하 |
+
+- WAL 만 켰을 때는 쓰기마다 디스크 동기화를 기다려 p95가 65~436ms로 늘었다. 그래서 `synchronous=NORMAL`을 더했다(전원이 끊기는 순간 마지막 몇 건을 잃을 수 있으나 DB는 깨지지 않는다). 횟수 유실은 모든 경우 0이다.
+- 테스트: WAL·잠금 대기·동기화 설정, 검수 쓰기 실패에도 턴 200, KST 날짜. DGX 말벗 테스트 1,204 통과(2 `av` 환경), gosky 전체 pytest 5,106 통과(1 `pgrep` 환경).
+- gosky 재시작(사용자 확인): 재시작 전 `data/companion_review.db`를 sqlite backup API로 `companion_review.db.bak-20261127-wal`에 백업(**12/04 이후 삭제 가능**), 롤백 `sb-ai-rollback:20261127-review-wal`(이전 태그 삭제). health 200·어댑터 4·5xx 0, `journal_mode=wal`·`-wal`·`-shm` 생성 확인. 시험 턴 200, 횟수가 재시작 전 2에서 3으로 이어서 오름(재시작 뒤에도 남음 확인, 11/27 행의 `followup_checked` 3·`vague_ok` 1은 모두 시험분). 디스크 84%.
