@@ -24,6 +24,10 @@
 ## 다시 볼 때
 
 - **시점**: 실사용(테스트 아닌) 대화가 하루 수십 턴 이상 며칠 쌓인 뒤. 그 전에 AI를 다시 재시작하면 로그가 사라지므로, 재시작 직전에 고쳐 쓰기 로그 횟수를 세어 두거나 BE DB 기준으로 본다.
-- **A**: `docker logs silverbridge-ai-server` 에서 `[COMPANION-REPLY-TENSE] action=`·`[COMPANION-REPLY-VAGUE-REWRITE] ok=` 개수와 `POST /companion/dialogues/.*/reply` 수.
+- **A (11/27 AI #364부터)**: 날짜별 횟수가 검수 DB에 남아 재시작해도 사라지지 않는다. gosky 에서
+  `docker exec silverbridge-ai-server python -c "..."`로 `GET http://127.0.0.1:6017/companion/ops/rewrite-counts?from=YYYY-MM-DD&to=YYYY-MM-DD`(X-API-Key, 최대 90일)를 부르면
+  KST 날짜별 `followup_checked`(고쳐 쓰기 검사에 들어온 꼬리질문 턴)·`tense_rewrite|keep`·`vague_ok|fail`이 나온다(원문 없음, 보관 90일).
+  **11/27 행의 `followup_checked` 2는 배포 확인용 시험 대화**다(피보호자 정보가 없어 시험 데이터를 지워도 남는다).
+- **A (로그로 볼 때)**: `docker logs silverbridge-ai-server` 에서 `[COMPANION-REPLY-TENSE] action=`·`[COMPANION-REPLY-VAGUE-REWRITE] ok=` 개수와 `POST /companion/dialogues/.*/reply` 수.
 - **B**: `companion_turn.bot_text`(동의한 피보호자만)에서 틀 질문 꼴(`이야기 조금 더 들려주시겠어요`·`에는/에서는/와는/과는 뭐 하실 거예요`·`실 건가요`·`어떠실 것 같으세요`) 개수와 판정. 원문은 문서에 옮기지 않는다.
 - **C**: `companion_session` 종료 이유별 비율과 대체 문장 비율, 켜기 전 같은 길이 기간과 비교.
