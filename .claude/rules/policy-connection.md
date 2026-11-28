@@ -24,7 +24,7 @@ paths:
 - **`wardRelation`**(`connection.ward_relation`, V74) = 어르신이 보호자에게 누구인지(엄마·아빠·할머니·할아버지·외할머니·외할아버지·삼촌·이모·고모·남편·아내·기타). **보호자 화면용**("이윤아 엄마")이라 `ConnectionResponse.fromGuardianView`에만 싣고 어르신 화면 응답은 null이다. 보호자 AI 챗의 예약 대상 선택지도 이 값으로 "이름 호칭"을 만든다(2026-11-25, BE #526·AI #350 - policy-chat "예약 대상 선택").
 - **하지 말 것**: 보호자 화면에서 어르신 이름 옆에 `relation`을 두지 말 것 - "이윤아 딸"이 "내 딸"로 거꾸로 읽혔다(2026-11-24 실제 사례). 성별을 모르므로 한쪽에서 다른 쪽을 계산하지 말 것.
 - 요청에서는 **선택값**이다(옛 화면 호환). 값이 없거나(기존 연결·관리자 강제 연결) "기타"면 FE가 "어르신"으로 보인다(사용자 결정). 기존 연결의 호칭을 바꾸는 API는 없다(수용 - 필요하면 별도 작업). 서버는 허용 목록을 강제하지 않는다(relation과 같음, `@VisibleText`·10자만).
-- **요청 화면 1단계 확인 조회(`/connection/preview`, 1분 10회)** (2026-11-25 FE #351): 상대 계정 오류(USER_NOT_FOUND·INVALID_CONNECTION_ROLE·CANNOT_CONNECT_SELF·CONNECTION_TARGET_NOT_ACTIVE·CONNECTION_ALREADY_EXISTS)만 [다음]을 막는다. **429·서버 오류를 "연결할 수 없어요"로 안내하거나 [다음]을 막지 말 것** - 확인만 못 한 것이고 실제 요청이 같은 검사를 다시 한다.
+- **요청 화면 1단계 확인 조회(`/connection/preview`, 1분 10회)** (2026-11-25 FE #351): 상대 계정 오류(USER_NOT_FOUND·INVALID_CONNECTION_ROLE·CANNOT_CONNECT_SELF·CONNECTION_TARGET_NOT_ACTIVE·CONNECTION_ALREADY_EXISTS)만 [다음]을 막는다(BE는 탈퇴 진행 대상을 404 `USER_NOT_FOUND`로 답하고 `CONNECTION_TARGET_NOT_ACTIVE`는 이 경로에서 내지 않는다 - FE 목록은 방어용으로 둔다, 아래 11-28 M-14). **429·서버 오류를 "연결할 수 없어요"로 안내하거나 [다음]을 막지 말 것** - 확인만 못 한 것이고 실제 요청이 같은 검사를 다시 한다.
 - **요청 화면 단계 기록(`connectionStep`·`connectionDepth`·`connectionMount`)은 Next가 덮어쓸 수 있다** (2026-11-26 FE #355, 점검 I-1): `router.refresh()`·같은 주소 이동 때 Next가 지금 기록을 자기 값으로만 다시 쓴다(알림을 받으면 어느 화면에서든 refresh). 폼은 열려 있는 동안 `history.replaceState`를 감싸 같은 주소·이 회차 기록이면 단계 값을 이어 붙인다. 감싸기를 빼거나, 단계 기록을 새로 다루는 코드를 이 보호 없이 만들지 말 것 - 브라우저 테스트는 `next/navigation`을 목으로 바꿔 이 덮어쓰기를 거치지 않으므로 `{__NA, tree}`만 덮어쓰는 흉내로 고정한다.
 - 상세: `docs/(2026-11-24) audit-connection-ward-relation.md`.
 
@@ -63,13 +63,14 @@ paths:
   - **탈퇴·역할 변경으로 끊긴 연결도 같은 규칙이다 (2026-09-30, 점검 M-2)**: 탈퇴 정리는 `DisconnectedBy.WITHDRAWN`("보호자가 탈퇴해 연결이 종료되었습니다." / "피보호자가 탈퇴해 연결이 종료되었습니다." - 받는 쪽이 피보호자면 떠난 쪽은 보호자), 관리자 역할 변경 정리는 `DisconnectedBy.ADMIN`("관리자가 연결을 해제했습니다.")으로 발행한다. 예전에는 둘 다 `GUARDIAN`/`WARD`를 재사용해 남은 쪽에게 "상대가 연결을 해제했습니다"가 나갔다 - 탈퇴 쪽은 H-1 때문에 실제로는 발송되지 않다가 2026-09-30 #259로 처음 보이게 됐고, 역할 변경 쪽은 그전부터 발송되고 있었다. `DisconnectedBy`는 이벤트 전용 enum이라 DB CHECK 대상이 아니다(마이그레이션 불요). 새 연결 종료 경로를 만들면 **누가 끊었는지**에 맞는 값을 고를 것.
 - **불변 규칙 ③(강제 해제는 양쪽에)**: 당사자가 끊을 때는 반대편에게만 알리지만, 관리자가 끊으면 **둘 다 자기가 끊지 않았다**. 한쪽만 알리면 나머지는 연결이 사라진 것을 모른다. "기존 해제와 같으니 한쪽만"으로 되돌리지 말 것.
 - **수락 대기 요청은 승격시킨다**: 같은 쌍의 PENDING이 있으면 새로 만들지 않고 `activate()`한다. 실제 시나리오가 "요청은 갔는데 수락을 못 누른 상태"라 관리자가 대신 수락해 주는 셈이고, 새로 만들면 같은 쌍의 연결이 둘이 된다.
-- **이용 제한·탈퇴 진행 계정은 연결 대상이 아니다**(400 `CONNECTION_TARGET_NOT_ACTIVE`, 피보호자 수락 때 보호자 쪽이면 `CONNECTION_REQUESTER_NOT_ACTIVE` - 아래 10-31 M-6) - 로그인도 알림도 되지 않는 계정이라 연결해 두어도 아무것도 동작하지 않는다.
+- **이용 제한·탈퇴 진행 계정은 연결 대상이 아니다**(관리자 강제 연결 = 400 `CONNECTION_TARGET_NOT_ACTIVE`, 보호자 요청·미리보기 = 404 `USER_NOT_FOUND`(존재 숨김, D-USER-3 - 아래 11-28 M-14), 피보호자 수락 때 보호자 쪽이면 400 `CONNECTION_REQUESTER_NOT_ACTIVE` - 아래 10-31 M-6) - 로그인도 알림도 되지 않는 계정이라 연결해 두어도 아무것도 동작하지 않는다.
   - **피보호자의 일반 수락 경로도 같은 기준이다 (2026-09-11 회귀 재점검 R-1)**: 요청 뒤 보호자가 정지·탈퇴 진행 상태가 되면 `acceptConnectionAsWard`가 같은 400으로 막는다. 그대로 수락하면 알림은 디스패처가 막지만 연결은 살아 있어 **정지 해제 즉시 SOS·카메라·복약 이력이 열린다.** 요청 시점 검사(`validateConnectionRequest`)만으로는 요청과 수락 사이의 상태 변화를 못 본다.
 - **연결 조회 API를 따로 만들지 않았다** - 회원 상세(`GET /api/admin/user/{userId}`)가 이미 그 회원의 연결 전체를 준다. 별도 "연결 관리" 화면이 생기면 그때 판단한다.
 
 ## 2026-10-31 전체 점검 반영 (M-6·L-3)
 
-- **피보호자 수락 시 보호자 정지·탈퇴 진행은 `CONNECTION_REQUESTER_NOT_ACTIVE`(400)**: 받는 사람이 피보호자라 요청 쪽 문구(`CONNECTION_TARGET_NOT_ACTIVE`)를 쓰면 뜻이 통하지 않는다(수신자 기준 문구 정책). 보호자 요청·관리자 강제 연결은 `CONNECTION_TARGET_NOT_ACTIVE` 그대로. FE 수락 화면은 모르는 코드면 서버 문구를 보여 준다.
+- **피보호자 수락 시 보호자 정지·탈퇴 진행은 `CONNECTION_REQUESTER_NOT_ACTIVE`(400)**: 받는 사람이 피보호자라 요청 쪽 문구(`CONNECTION_TARGET_NOT_ACTIVE`)를 쓰면 뜻이 통하지 않는다(수신자 기준 문구 정책). 관리자 강제 연결은 `CONNECTION_TARGET_NOT_ACTIVE` 그대로, 보호자 요청은 404 `USER_NOT_FOUND`(아래 11-28 M-14). FE 수락 화면은 모르는 코드면 서버 문구를 보여 준다.
+- **보호자 요청·미리보기의 탈퇴 진행 대상 = 404 `USER_NOT_FOUND` 유지 (2026-11-28 전체 점검 M-14, 사용자 결정 A)**: `validateConnectionRequest`가 대상 `!= ACTIVE`를 미존재로 답한다(D-USER-3, 2026-09-10 회귀 점검 PASS로 이어 온 동작). ID만 아는 사람에게 남의 계정 상태를 알리지 않고, 탈퇴 진행 계정은 곧 영구 삭제되므로 "없음"과 같다. 요청 대상은 항상 피보호자이고 피보호자는 이용 제한이 금지(`WARD_CANNOT_BE_RESTRICTED`)라 실제로 걸리는 건 탈퇴 진행뿐이다. "무슨 일인지 그대로 안내" 원칙으로 400으로 바꾸지 말 것 - 2026-11-28 이전 문서의 "보호자 요청도 400"은 코드와 다른 오기였다. 고정 테스트: `ConnectionServiceTest.대상_INACTIVE_USER_NOT_FOUND`(요청 경로만 - 미리보기 경로 고정은 후속 제안).
 - **강제 연결 알림은 수신자별로 격리한다 (2026-11-01, #425)**: `handleForced`가 보호자·피보호자 dispatch를 각각 try/catch한다. 보호자 쪽 설정 조회 실패로 피보호자 알림까지 빠지던 문제였다(불변 규칙 ① 위반, #424 통합 테스트로 발견). 두 dispatch를 다시 한 흐름으로 묶지 말 것.
 - **강제 연결도 요청 횟수를 지운다**: `forceConnect`가 일반 수락처럼 `ConnectionRequestLimiter.reset`을 부른다 - 강제 해제 뒤 보호자의 정상 재요청이 옛 횟수로 막히지 않게.
 - **피보호자 경로 IDOR 문구 분리 (2026-10-31 L-6)**: 피보호자가 남의 연결을 수락·거절·해제하려 하면 `CONNECTION_NOT_OWNED`(403, "본인에게 온 연결 요청만 처리할 수 있습니다."), 보호자 경로는 `CONNECTION_NOT_AUTHORIZED` 그대로. `[IDOR-ATTEMPT]` WARN 유지.
