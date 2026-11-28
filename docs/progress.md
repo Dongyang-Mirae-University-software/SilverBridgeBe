@@ -4,6 +4,10 @@
 
 ---
 
+### [2026-11-28] 전체 점검 H-2 - gosky 메모리 부족 dev API 멈춤 완화 (BE #529)
+- 다시 재 보니 힙 스왑이 아니었다(dev API refault_anon 1, 스왑 3MB). 호스트 스왑 8GB가 가득 차 회수가 파일 페이지에만 몰리고, JVM 파일 페이지 refault가 48시간 2,485만 회, 메모리 PSI full 1,466초(≈ 멈춤 25회 합계, 최대 3분 3초)였다. 스왑 금지는 효과가 없어 빼고, `mem_reservation`은 `system.slice` low=0이라 무효.
+- dev compose에만 `JAVA_TOOL_OPTIONS=-XX:+PerfDisableSharedMem -Xlog:gc:stdout:time`을 넣어 gosky·vkcs에 반영했다(prod 무변경). FE dev 빌드본 전환(약 1.7GB)은 보류했다(사용자 결정). 서버 관리자 요청문(스왑 비우기·gitlab 6.3GB·gitlab tail 약 70TB 읽기·slice 보호)은 초안만 썼다. 24시간 전후 비교는 예정 - `(2026-11-28) infra-gosky-memory.md`.
+
 ### [2026-11-27] 기능 점검(B) - AI 말벗 검수 DB 동시 쓰기 잠금 수정 (AI #365) - PASS (🟡 1·🟢 3)
 - 데이터 안전 문제 없음: 앱 두 저장소만 파일을 열고 작업자 1개·ext4 bind mount, `-wal`은 약 4MB에서 멈춤, `synchronous=NORMAL`은 프로세스·컨테이너 종료에는 손실 없음, gosky 기동 이후 쓰기 실패 0. 🟡 X-1: 검수·횟수 쓰기 실패가 경고 로그로만 남고 상태 API에 드러나지 않음(#365 전에는 턴 오류로 드러났다). 🟢 WAL 백업 주의·dialect 분기 테스트 없음·긴 읽기 측정 못 함. 상세 `docs/(2026-11-27) audit-companion-review-db-wal.md`
 
