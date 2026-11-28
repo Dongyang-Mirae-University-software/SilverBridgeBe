@@ -4,6 +4,10 @@
 
 ---
 
+### [2026-11-28] 전체 점검 H-1 - AI 의료 챗 숫자로 말한 과다 복용도 응급 (AI #366)
+- 응급 키워드의 과다 복용 꼴이 세 가지뿐이라 "수면제 5알 먹었는데 괜찮나요?"가 상담으로 남고 약 질문 119 빼기가 119 문장까지 지웠다(경고 박스·FE 119 버튼·보호자 SOS 없음). `chat_keywords.overdose_signals`(수량 3 이상·한꺼번에·최대 초과·위험 약 중복)를 `emergency_signals`에 더해 키워드 경로와 라우터 뒤 보강(`_force_emergency`) 모두 응급으로 올린다. 위험 약이 아닌 약의 중복은 응급이 아니고 119 문장만 지우지 않는다. 과다 복용 응급 답에 행동 한 줄(약 상자·봉지, 억지로 토하게 하지 않기)을 더했다.
+- 사용자 결정: 수량 3 이상(용법 `씩`·처방대로·하루 N번·영양제 제외) / 위험 약(당뇨약·인슐린·수면제·안정제·항응고제)만 중복을 응급으로 / 행동 문장 추가. 새 테스트 249개, 전체 5351 passed(기준 5102, 실패 0), 변이 9종 모두 잡힘, 기존 시험지 1,148문장 중 새 응급은 md.M4(당뇨약 한 번 더) 1문항뿐. gosky 반영 `7788c9a`(11-28 12:04, /health 200, BE AI WS 재연결), 롤백 `sb-ai-rollback:20261128-overdose-emergency`.
+
 ### [2026-11-28] 전체 점검 H-2 - gosky 메모리 부족 dev API 멈춤 완화 (BE #529)
 - 다시 재 보니 힙 스왑이 아니었다(dev API refault_anon 1, 스왑 3MB). 호스트 스왑 8GB가 가득 차 회수가 파일 페이지에만 몰리고, JVM 파일 페이지 refault가 48시간 2,485만 회, 메모리 PSI full 1,466초(≈ 멈춤 25회 합계, 최대 3분 3초)였다. 스왑 금지는 효과가 없어 빼고, `mem_reservation`은 `system.slice` low=0이라 무효.
 - dev compose에만 `JAVA_TOOL_OPTIONS=-XX:+PerfDisableSharedMem -Xlog:gc:stdout:time`을 넣어 gosky·vkcs에 반영했다(prod 무변경). FE dev 빌드본 전환(약 1.7GB)은 보류했다(사용자 결정). 서버 관리자 요청문(스왑 비우기·gitlab 6.3GB·gitlab tail 약 70TB 읽기·slice 보호)은 초안만 썼다. 24시간 전후 비교는 예정 - `(2026-11-28) infra-gosky-memory.md`.
