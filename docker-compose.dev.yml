@@ -12,6 +12,12 @@ services:
     stop_grace_period: 100s
     env_file:
       - .env.dev
+    # dev 전용 JVM 추가 옵션(2026-11-28, 전체 점검 H-2). Dockerfile의 JAVA_OPTS에 더해진다(prod 이미지·compose는 그대로).
+    # - PerfDisableSharedMem: /tmp/hsperfdata 공유 메모리 파일을 쓰지 않는다. 공용 서버(gosky)는 스왑이 가득 차 파일
+    #   페이지 회수·디스크 대기가 잦아, safepoint 중 이 파일 쓰기가 멈춤을 늘릴 수 있다(jstat만 못 쓰고 jcmd는 된다).
+    # - GC 로그: Hikari "Thread starvation" 멈춤이 GC 안에서인지 밖에서인지 가르는 근거. GC 1회 한 줄이라 양이 적다.
+    environment:
+      JAVA_TOOL_OPTIONS: "-XX:+PerfDisableSharedMem -Xlog:gc:stdout:time"
     # 호스트 루프백에만 publish (A-M2): 외부에서 6511 직접 접근을 차단해 X-Forwarded-For 위조로
     # RateLimit 우회·access_logs IP 오염을 막는다. nginx(같은 호스트)는 localhost:6511로 프록시하므로 영향 없음.
     # ※ Swagger·API는 nginx 도메인으로 접근(서버IP:6511 직접 접근은 차단됨).
